@@ -1,0 +1,555 @@
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import { useProjectContext } from "../components/shared/useProjectContext";
+import { PhoenixPanel } from "../components/shared/PhoenixPanel";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import StatusBadge from "../components/shared/StatusBadge";
+import { formatDate } from "../components/shared/formatters";
+import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Calendar, Filter } from "lucide-react";
+import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
+
+const PHASE_COLORS = {
+  "Pre-Construction": { bar: "linear-gradient(90deg, #7BD0FF, #4DA8D8)", solid: "#7BD0FF", bg: "rgba(123,208,255,0.10)" },
+  Detailing:          { bar: "linear-gradient(90deg, #44E2CD, #2ABFAC)", solid: "#44E2CD", bg: "rgba(68,226,205,0.10)" },
+  Procurement:        { bar: "linear-gradient(90deg, var(--secondary), #2ABFAC)", solid: "var(--secondary)", bg: "rgba(68,226,205,0.12)" },
+  Fabrication:        { bar: "linear-gradient(90deg, var(--status-warning), var(--status-warning))", solid: "var(--status-warning)", bg: "rgba(245,158,11,0.10)" },
+  Delivery:           { bar: "linear-gradient(90deg, #7BD0FF, #4DA8D8)", solid: "#7BD0FF",  bg: "rgba(123,208,255,0.10)" },
+  Installation:       { bar: "linear-gradient(90deg, #A8F0CB, #4AE176)",  solid: "#4AE176",  bg: "rgba(74,225,118,0.10)" },
+  Closeout:           { bar: "linear-gradient(90deg, #909095, #6B6F78)",  solid: "#909095",  bg: "rgba(144,144,149,0.10)" },
+};
+
+const STATUS_COLORS = {
+"Not Started": "var(--text-muted)",
+"In Progress": "var(--accent)",
+"Complete":    "var(--status-success)",
+"Delayed":     "var(--status-error)",
+};
+
+const ROW_HEIGHT = 40;
+const HEADER_HEIGHT = 52;
+const TASK_LIST_WIDTH = 360;
+
+const ZOOM_LEVELS = {
+  day:   { pxPerDay: 40, label: "Day" },
+  week:  { pxPerDay: 20, label: "Week" },
+  month: { pxPerDay: 6,  label: "Month" },
+};
+
+function getDaysBetween(d1, d2) {
+  const a = new Date(d1); a.setHours(0, 0, 0, 0);
+  const b = new Date(d2); b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function isWeekend(d) { const day = d.getDay(); return day === 0 || day === 6; }
+function isToday(d) { const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }
+function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }); }
+
+function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase }) {
+  return (
+    <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+      <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--accent-border)" }}>
+        {["Activity", "Start", "End", "Status"].map(h => (
+          <span key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>{h}</span>
+        ))}
+      </div>
+      <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 300px)" }}>
+        {tasks.map(task => {
+          if (task.isSummary) {
+            const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+            const isCollapsed = collapsedPhases.has(task.phase);
+            return (
+              <div
+                key={task.id}
+                onClick={() => onTogglePhase(task.phase)}
+                style={{
+                  height: ROW_HEIGHT,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 70px 70px 60px",
+                  alignItems: "center",
+                  padding: "0 12px",
+                  gap: 4,
+                  borderBottom: `1px solid ${phase.solid}22`,
+                  background: `${phase.solid}0D`,
+                  borderLeft: `3px solid ${phase.solid}`,
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: phase.solid, transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", display: "inline-block", lineHeight: 1 }}>▾</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: phase.solid }}>{task.phase}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginLeft: 4 }}>{task.childCount} items</span>
+                  {task.delayed > 0 && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "var(--status-error)", background: "var(--danger-muted)", padding: "1px 5px", borderRadius: 2 }}>
+                      {task.delayed} DELAYED
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", fontWeight: 600 }}>
+                  {task.planned_start
+                    ? new Date(task.planned_start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+                    : "—"}
+                </span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", fontWeight: 600 }}>
+                  {task.planned_end
+                    ? new Date(task.planned_end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+                    : "—"}
+                </span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: phase.solid, fontWeight: 700 }}>{task.avgPct}%</span>
+              </div>
+            );
+          }
+          const isActive = task.id === selectedId;
+          const isHovered = task.id === hoveredId;
+          const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+          return (
+            <div key={task.id} onClick={() => onSelect(task.id)} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
+              style={{ height: ROW_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", paddingLeft: 28, gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)", borderLeft: isActive ? `3px solid ${phase.solid}` : "3px solid transparent", background: isActive ? phase.bg : isHovered ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", transition: "background 0.1s" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: phase.solid, flexShrink: 0 }} />
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.activity}</span>
+              </div>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                {task.planned_start ? new Date(task.planned_start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                {task.planned_end ? new Date(task.planned_end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
+              </span>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[task.status] || "rgba(200,210,230,0.40)" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
+  const scrollRef = useRef(null);
+  const { minDate, maxDate } = dateRange;
+  const { pxPerDay } = ZOOM_LEVELS[zoom];
+
+  const rowIndex = useMemo(() => {
+    const map = new Map();
+    tasks.forEach((t, i) => map.set(t.id, i));
+    return map;
+  }, [tasks]);
+
+  const days = useMemo(() => {
+    const result = [];
+    let d = new Date(minDate);
+    while (d <= maxDate) { result.push(new Date(d)); d.setDate(d.getDate() + 1); }
+    return result;
+  }, [minDate, maxDate]);
+
+  const timelineWidth = days.length * pxPerDay;
+
+  const monthHeaders = useMemo(() => {
+    const headers = [];
+    let currentMonth = "";
+    days.forEach((d, i) => { const label = getMonthLabel(d); if (label !== currentMonth) { headers.push({ label, startIdx: i }); currentMonth = label; } });
+    return headers.map((h, i) => { const end = i + 1 < headers.length ? headers[i + 1].startIdx : days.length; return { ...h, width: (end - h.startIdx) * pxPerDay }; });
+  }, [days, pxPerDay]);
+
+  useEffect(() => {
+    if (scrollRef.current && days.length > 0) {
+      const todayIdx = days.findIndex(d => isToday(d));
+      if (todayIdx >= 0) scrollRef.current.scrollLeft = Math.max(0, todayIdx * pxPerDay - 200);
+    }
+  }, [days, pxPerDay]);
+
+  const getBarPosition = (task) => {
+    const start = task.planned_start || task.forecast_start;
+    const end = task.planned_end || task.forecast_end;
+    if (!start || !end) return null;
+    const daysFromStart = getDaysBetween(minDate, new Date(start + "T00:00:00Z"));
+    const duration = getDaysBetween(new Date(start + "T00:00:00Z"), new Date(end + "T00:00:00Z")) + 1;
+    return { left: daysFromStart * pxPerDay, width: Math.max(pxPerDay, duration * pxPerDay) };
+  };
+
+  const getForecastOverlay = (task) => {
+    if (!task.forecast_end || !task.planned_end || task.forecast_end <= task.planned_end) return null;
+    const daysFromStart = getDaysBetween(minDate, new Date(task.planned_end + "T00:00:00Z"));
+    const duration = getDaysBetween(new Date(task.planned_end + "T00:00:00Z"), new Date(task.forecast_end + "T00:00:00Z"));
+    if (duration <= 0) return null;
+    return { left: daysFromStart * pxPerDay, width: duration * pxPerDay };
+  };
+
+  const getAnchorForTask = (task) => {
+    if (!task || task.isSummary) return null;
+    const pos = getBarPosition(task);
+    const idx = rowIndex.get(task.id);
+    if (!pos || idx === undefined) return null;
+    return {
+      startX: pos.left,
+      endX: pos.left + pos.width,
+      y: idx * ROW_HEIGHT + ROW_HEIGHT / 2,
+    };
+  };
+
+  const todayLine = getDaysBetween(minDate, new Date()) * pxPerDay;
+  const totalHeight = tasks.length * ROW_HEIGHT;
+
+  return (
+    <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "hidden", position: "relative" }}>
+      <div style={{ width: timelineWidth, minHeight: "100%" }}>
+        <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--bg-sidebar)" }}>
+          <div style={{ display: "flex", height: 24, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            {monthHeaders.map((h, i) => (
+              <div key={i} style={{ width: h.width, padding: "0 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", display: "flex", alignItems: "center", borderRight: "1px solid rgba(255,255,255,0.06)" }}>{h.label}</div>
+            ))}
+          </div>
+          <div style={{ display: "flex", height: HEADER_HEIGHT - 24, borderBottom: "1px solid var(--accent-border)" }}>
+            {days.map((d, i) => (
+              <div key={i} style={{ width: pxPerDay, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: pxPerDay >= 20 ? 7 : 0, color: isToday(d) ? "var(--accent)" : isWeekend(d) ? "var(--text-muted)" : "var(--text-muted)", fontWeight: isToday(d) ? 700 : 400, borderRight: "1px solid rgba(255,255,255,0.03)" }}>
+                {pxPerDay >= 20 ? d.getDate() : ""}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ position: "relative" }}>
+          {days.map((d, i) => isWeekend(d) ? <div key={`we-${i}`} style={{ position: "absolute", top: 0, left: i * pxPerDay, width: pxPerDay, height: totalHeight, background: "rgba(255,255,255,0.015)", pointerEvents: "none" }} /> : null)}
+          {todayLine > 0 && todayLine < timelineWidth && (
+            <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: "linear-gradient(180deg, var(--accent), rgba(59,130,246,0.05))", zIndex: 3, pointerEvents: "none" }} />
+          )}
+
+          {tasks.map((task) => {
+            if (task.isSummary) {
+              const pos = getBarPosition(task);
+              const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+              if (!pos) {
+                return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid rgba(255,255,255,0.04)", background: `${phase.solid}08` }} />;
+              }
+              return (
+                <div key={task.id} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
+                  <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: pos.width, height: 8, background: phase.solid, opacity: 0.55 }} />
+                  <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
+                  <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left + pos.width - 3, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
+                </div>
+              );
+            }
+            const pos = getBarPosition(task);
+            if (!pos) return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid rgba(255,255,255,0.04)" }} />;
+            const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+            const isActive = task.id === selectedId;
+            const isHov = task.id === hoveredId;
+            const pct = Number(task.percent_complete) || 0;
+            const forecastOverlay = getForecastOverlay(task);
+
+            return (
+              <div key={task.id} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
+                style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid rgba(255,255,255,0.04)", background: isActive ? phase.bg : isHov ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "#00D68F" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
+                  {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "rgba(255,255,255,0.18)", borderRight: "2px solid rgba(255,255,255,0.40)" }} />}
+                  {pos.width > 50 && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{pct > 0 ? `${pct}%` : ""} {pos.width > 100 ? task.activity : ""}</span>}
+                </div>
+                {forecastOverlay && <div style={{ position: "absolute", top: 10, left: forecastOverlay.left, width: forecastOverlay.width, height: 20, borderRadius: "0 4px 4px 0", background: "repeating-linear-gradient(45deg, rgba(255,61,61,0.15), rgba(255,61,61,0.15) 3px, transparent 3px, transparent 6px)", border: "1px dashed rgba(255,61,61,0.40)", borderLeft: "none" }} />}
+                {task.constraints && <div style={{ position: "absolute", top: 6, left: pos.left + pos.width + 4, width: 14, height: 14, borderRadius: "50%", background: "var(--status-warning)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, color: "#111" }} title={task.constraints}>!</div>}
+              </div>
+            );
+          })}
+
+          {/* Dependency lines */}
+          <svg
+            width={timelineWidth}
+            height={totalHeight}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              pointerEvents: "none",
+              overflow: "visible",
+              zIndex: 2,
+            }}
+          >
+            <defs>
+              <marker id="gantt-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="rgba(255,255,255,0.45)" />
+              </marker>
+            </defs>
+            {tasks.map((task) => {
+              if (task.isSummary || !task.dependencies || task.dependencies.length === 0) return null;
+              const target = getAnchorForTask(task);
+              if (!target) return null;
+              return task.dependencies.map((depId) => {
+                const depTask = tasks.find((t) => t.id === depId);
+                const source = getAnchorForTask(depTask);
+                if (!source) return null;
+                const midX = (source.endX + target.startX) / 2;
+                return (
+                  <path
+                    key={`${depId}-${task.id}`}
+                    d={`M ${source.endX} ${source.y} H ${midX} V ${target.y} H ${target.startX}`}
+                    stroke="rgba(255,255,255,0.35)"
+                    strokeWidth="1.2"
+                    fill="none"
+                    markerEnd="url(#gantt-arrow)"
+                  />
+                );
+              });
+            })}
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailPanel({ task, onClose }) {
+  if (!task) return null;
+  const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+  const isSlipping = task.forecast_end && task.planned_end && task.forecast_end > task.planned_end;
+  const slipDays = isSlipping ? getDaysBetween(new Date(task.planned_end), new Date(task.forecast_end)) : 0;
+
+  return (
+    <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 320, background: "var(--bg-surface-low)", borderLeft: `3px solid ${phase.solid}`, padding: 20, overflowY: "auto", zIndex: 10, boxShadow: "-8px 0 32px rgba(0,0,0,0.5)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{task.activity}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phase.solid, letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 3 }}>{task.phase} • {task.crew || "No Crew"}</div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 18 }}>×</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        {[
+          { label: "Planned Start", value: formatDate(task.planned_start) },
+          { label: "Planned End", value: formatDate(task.planned_end) },
+          { label: "Forecast Start", value: formatDate(task.forecast_start) },
+          { label: "Forecast End", value: formatDate(task.forecast_end), warn: isSlipping },
+        ].map(({ label, value, warn }) => (
+          <div key={label}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: warn ? "#FF3D3D" : "#F2F4F8", fontWeight: warn ? 700 : 500 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 6 }}>Progress</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+            <div style={{ width: `${task.percent_complete || 0}%`, height: "100%", borderRadius: 4, background: phase.bar, transition: "width 0.3s" }} />
+          </div>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: phase.solid }}>{task.percent_complete || 0}%</span>
+        </div>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 6 }}>Status</div>
+        <StatusBadge status={task.status} />
+      </div>
+      {isSlipping && (
+        <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,23,68,0.08)", border: "1px solid rgba(255,23,68,0.25)", marginBottom: 16 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)", marginBottom: 3 }}>⚠ SCHEDULE SLIPPAGE</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-error)" }}>Forecast end is {slipDays} day{slipDays !== 1 ? "s" : ""} past planned completion.</div>
+        </div>
+      )}
+      {task.constraints && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 6 }}>Constraints</div>
+          <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(255,179,0,0.06)", border: "1px solid rgba(255,179,0,0.20)", fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,179,0,0.85)" }}>{task.constraints}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function GanttChart() {
+  const { activeProject } = useProjectContext();
+  const [zoom, setZoom] = useState("week");
+  const [selectedId, setSelectedId] = useState(null);
+  const [hoveredId, setHoveredId] = useState(null);
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showDetail, setShowDetail] = useState(false);
+  const [collapsedPhases, setCollapsedPhases] = useState(new Set());
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["lookahead-gantt", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_date")
+      : [],
+    enabled: !!activeProject?.id,
+    initialData: [],
+  });
+
+  const displayRows = useMemo(() => {
+    const base = items.filter(i => {
+      if (phaseFilter !== "all" && derivePhase(i) !== phaseFilter) return false;
+      if (statusFilter !== "all" && i.status !== statusFilter) return false;
+      return true;
+    });
+
+    const groups = groupByPhase(base);
+    const rows = [];
+    for (const phase of PHASES) {
+      const tasks = groups[phase];
+      if (!tasks || tasks.length === 0) continue;
+
+      const starts = tasks.map(t => t.planned_start || t.forecast_start).filter(Boolean);
+      const ends = tasks.map(t => t.planned_end || t.forecast_end).filter(Boolean);
+      const summaryStart = starts.length > 0 ? starts.reduce((a, b) => (a < b ? a : b)) : null;
+      const summaryEnd = ends.length > 0 ? ends.reduce((a, b) => (a > b ? a : b)) : null;
+
+      const complete = tasks.filter(t => t.status === "Complete").length;
+      const delayed = tasks.filter(t => t.status === "Delayed").length;
+      const avgPct = Math.round(tasks.reduce((s, t) => s + (Number(t.percent_complete) || 0), 0) / tasks.length);
+
+      rows.push({
+        id: `summary-${phase}`,
+        isSummary: true,
+        phase,
+        activity: phase.toUpperCase(),
+        planned_start: summaryStart,
+        planned_end: summaryEnd,
+        childCount: tasks.length,
+        complete,
+        delayed,
+        avgPct,
+      });
+
+      tasks.forEach(t => rows.push({ ...t, isSummary: false }));
+    }
+    return rows;
+  }, [items, phaseFilter, statusFilter]);
+
+  const filteredTasks = useMemo(() => displayRows.filter(r => !r.isSummary), [displayRows]);
+
+  const visibleRows = useMemo(() => {
+    return displayRows.filter(row => {
+      if (row.isSummary) return true;
+      return !collapsedPhases.has(derivePhase(row));
+    });
+  }, [displayRows, collapsedPhases]);
+
+  const dateRange = useMemo(() => {
+    const dates = [];
+    filteredTasks.forEach(t => {
+      if (t.planned_start) dates.push(new Date(t.planned_start + "T00:00:00Z"));
+      if (t.planned_end) dates.push(new Date(t.planned_end + "T00:00:00Z"));
+      if (t.forecast_start) dates.push(new Date(t.forecast_start + "T00:00:00Z"));
+      if (t.forecast_end) dates.push(new Date(t.forecast_end + "T00:00:00Z"));
+    });
+    if (dates.length === 0) { const today = new Date(); return { minDate: addDays(today, -7), maxDate: addDays(today, 21) }; }
+    return { minDate: addDays(new Date(Math.min(...dates)), -3), maxDate: addDays(new Date(Math.max(...dates)), 7) };
+  }, [filteredTasks]);
+
+  const selectedTask = filteredTasks.find(t => t.id === selectedId);
+
+  const stats = useMemo(() => {
+    const total = filteredTasks.length;
+    return {
+      total,
+      complete: filteredTasks.filter(t => t.status === "Complete").length,
+      delayed: filteredTasks.filter(t => t.status === "Delayed").length,
+      slipping: filteredTasks.filter(t => t.forecast_end && t.planned_end && t.forecast_end > t.planned_end).length,
+      avgProgress: total > 0 ? Math.round(filteredTasks.reduce((s, t) => s + (Number(t.percent_complete) || 0), 0) / total) : 0,
+    };
+  }, [filteredTasks]);
+
+  const togglePhase = (phase) => {
+    setCollapsedPhases(prev => {
+      const next = new Set(prev);
+      next.has(phase) ? next.delete(phase) : next.add(phase);
+      return next;
+    });
+  };
+
+  if (!activeProject?.id) return (
+    <div style={{ textAlign: "center", padding: "80px 24px" }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view Gantt Chart</div>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Gantt Chart</h1>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+            {filteredTasks.length} activities • {Object.values(groupByPhase(filteredTasks)).filter(g => g.length > 0).length} phases
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Phase" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Phases</SelectItem>
+              {PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              {["Not Started", "In Progress", "Complete", "Delayed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 6, overflow: "hidden" }}>
+            {Object.entries(ZOOM_LEVELS).map(([key, { label }]) => (
+              <button key={key} onClick={() => setZoom(key)} style={{ padding: "4px 10px", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoom === key ? "var(--accent)" : "rgba(200,210,230,0.55)", background: zoom === key ? "var(--info-muted)" : "transparent" }}>{label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
+        {[
+          { label: "Total Activities", value: stats.total, color: "var(--status-warning)" },
+          { label: "Complete", value: stats.complete, color: "var(--status-success)" },
+          { label: "Delayed", value: stats.delayed, color: "var(--status-error)" },
+          { label: "Slipping", value: stats.slipping, color: "var(--status-warning)" },
+          { label: "Avg Progress", value: `${stats.avgProgress}%`, color: "var(--accent)" },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: "var(--bg-surface-low)", border: "1px solid rgba(255,255,255,0.07)", borderTop: `2px solid ${color}`, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 16, marginBottom: 10, padding: "0 4px" }}>
+        {Object.entries(PHASE_COLORS).map(([phase, c]) => (
+          <div key={phase} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 6, borderRadius: 3, background: c.bar }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>{phase}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 16, height: 6, borderRadius: 3, background: "repeating-linear-gradient(45deg, rgba(255,61,61,0.3), rgba(255,61,61,0.3) 2px, transparent 2px, transparent 4px)", border: "1px dashed rgba(255,61,61,0.4)" }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>Slippage</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 2, height: 12, background: "var(--accent)" }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>Today</span>
+        </div>
+      </div>
+
+      <PhoenixPanel style={{ position: "relative" }}>
+        {isLoading ? (
+          <div style={{ textAlign: "center", padding: 48, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>Loading...</div>
+        ) : filteredTasks.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 48, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>No look-ahead items found. Add activities from the Look-Ahead Schedule page.</div>
+        ) : (
+          <div style={{ display: "flex", overflow: "hidden" }}>
+            <TaskList tasks={visibleRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id === selectedId ? null : id); setShowDetail(id !== selectedId); }} onHover={setHoveredId} hoveredId={hoveredId} collapsedPhases={collapsedPhases} onTogglePhase={togglePhase} />
+            <Timeline tasks={visibleRows} selectedId={selectedId} hoveredId={hoveredId} onHover={setHoveredId} zoom={zoom} dateRange={dateRange} />
+            {showDetail && selectedTask && <DetailPanel task={selectedTask} onClose={() => { setShowDetail(false); setSelectedId(null); }} />}
+          </div>
+        )}
+      </PhoenixPanel>
+    </div>
+  );
+}
