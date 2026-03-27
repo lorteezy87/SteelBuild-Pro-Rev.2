@@ -5,7 +5,7 @@ import { differenceInDays } from "date-fns";
 import { Plus, RefreshCw, Search, CheckCircle2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { parseUTCDate, formatDate } from "@/components/shared/formatters";
-import { getNextFormattedNumber } from "../components/shared/numberSequencing";
+import { getNextFormattedNumber, previewNextFormattedNumber } from "../components/shared/numberSequencing";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -305,31 +305,57 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
 }
 
 // ── New RFI Modal ──
-function NewRFIModal({ projects, onClose, onSave }) {
+function NewRFIModal({ projects, onClose, onSave, isSaving = false }) {
   const [form, setForm] = useState({ project_id: "", title: "", priority: "High", date_required: "", description: "", drawing_reference: "", ball_in_court: "GC", submitted_by: "", assigned_to: "" });
-  const [saving, setSaving] = useState(false);
+  const [numberPreview, setNumberPreview] = useState("");
+  const saving = isSaving;
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      if (!form.project_id) {
+        setNumberPreview("");
+        return;
+      }
+      try {
+        const nextNumber = await previewNextFormattedNumber({
+          projectId: form.project_id,
+          recordType: "RFI",
+          entityName: "RFI",
+          fieldName: "rfi_number",
+          prefix: "RFI #",
+        });
+        if (!cancelled) setNumberPreview(nextNumber || "");
+      } catch {
+        if (!cancelled) setNumberPreview("");
+      }
+    };
+
+    loadPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.project_id]);
 
   const iStyle = { width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", color: "var(--text-primary)", borderRadius: 2, padding: "8px 12px", fontSize: 12, outline: "none", fontFamily: "inherit", boxSizing: "border-box" };
   const labelStyle = { ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", display: "block", marginBottom: 5 };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!form.title.trim()) return;
-    setSaving(true);
     const selectedProject = projects.find(p => p.id === form.project_id);
-    await onSave({
+    await onSave?.({
       ...form,
       project_name: selectedProject?.name || "",
       status: "Open",
       submitted_date: new Date().toISOString().split("T")[0],
     });
-    setSaving(false);
     onClose();
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      onClick={e => { if (e.target === e.currentTarget && !isSaving) onClose(); }}>
       <div style={{ width: 580, maxHeight: "90vh", overflowY: "auto", background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: 4 }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
@@ -338,7 +364,11 @@ function NewRFIModal({ projects, onClose, onSave }) {
           </div>
           <button onClick={onClose} style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 20 }}>×</button>
         </div>
-        <form onSubmit={handleSubmit} style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>RFI Number</label>
+            <input style={{ ...iStyle, opacity: 0.7, cursor: "not-allowed" }} value={numberPreview || "Select project to preview"} disabled readOnly />
+          </div>
           <div style={{ gridColumn: "span 2" }}>
             <label style={labelStyle}>RFI Subject *</label>
             <input style={iStyle} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="e.g. Beam connection detail at Grid C-4" />
@@ -379,12 +409,12 @@ function NewRFIModal({ projects, onClose, onSave }) {
             <textarea style={{ ...iStyle, minHeight: 80, resize: "vertical", lineHeight: 1.6 }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the issue or question clearly..." />
           </div>
           <div style={{ gridColumn: "span 2", display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid var(--divider)" }}>
-            <button type="button" onClick={onClose} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "8px 20px", color: "var(--text-muted)", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>Cancel</button>
-            <button type="submit" disabled={saving || !form.title.trim()} style={{ background: "var(--accent)", color: "#002E6A", border: "none", borderRadius: 2, padding: "8px 24px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: saving || !form.title.trim() ? 0.4 : 1 }}>
+            <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "8px 20px", color: "var(--text-muted)", ...mono, fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>
+            <button type="button" onClick={handleSubmit} disabled={isSaving || !form.title.trim()} style={{ background: "var(--accent)", color: "#0A0A0B", border: "none", borderRadius: 2, padding: "8px 24px", ...mono, fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !form.title.trim() ? 0.4 : 1 }}>
               {saving ? "CREATING…" : "CREATE RFI"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
@@ -415,6 +445,7 @@ export default function RFIHub() {
 
   const createMut = useMutation({
     mutationFn: async (data) => {
+      const selectedProject = projects.find((project) => project.id === data.project_id);
       const rfiNumber = data.project_id
         ? await getNextFormattedNumber({
             projectId: data.project_id,
@@ -424,7 +455,11 @@ export default function RFIHub() {
             prefix: "RFI #",
           })
         : `RFI #${String(Date.now()).slice(-3)}`;
-      return base44.entities.RFI.create({ ...data, rfi_number: rfiNumber });
+      return base44.entities.RFI.create({
+        ...data,
+        project_name: selectedProject?.name || data.project_name || "",
+        rfi_number: rfiNumber,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rfis-hub"] });
@@ -650,6 +685,7 @@ export default function RFIHub() {
           projects={projects}
           onClose={() => setShowNewRFI(false)}
           onSave={createMut.mutateAsync}
+          isSaving={createMut.isPending}
         />
       )}
     </div>

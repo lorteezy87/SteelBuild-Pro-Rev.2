@@ -15,6 +15,11 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function normalizeRevisionNumber(value, fallback = "0") {
+  if (value == null || value === "") return fallback;
+  return String(value).trim() || fallback;
+}
+
 // Smart revision suggestions
 function getRevisionSuggestions(currentRev) {
   const rev = (currentRev || "").trim().toUpperCase();
@@ -620,7 +625,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           project_id: activeProject?.id,
           project_name: activeProject?.name,
           discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
-          revision_number: 0,
+          revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
           stage: "Not Started",
           issue_date: revMeta.issueDate,
           issued_by: revMeta.issuedBy,
@@ -633,7 +638,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       } else {
         if (existing) {
           await base44.entities.Drawing.update(existing.id, {
-            revision_number: (existing.revision_number || 0),
+            revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
             issue_date: revMeta.issueDate,
             issued_by: revMeta.issuedBy || existing.issued_by,
             file_url: newFileUrl,
