@@ -24,14 +24,35 @@ const extractNumericSuffix = (value) => {
   return match ? Number(match[1]) : null;
 };
 
-export const getNextFormattedNumber = async ({
-  projectId,
-  recordType,
-  entityName,
-  fieldName,
-  prefix,
-  padLength = 3,
-}) => {
+const normalizeArgs = (argsArray) => {
+  if (typeof argsArray[0] === "string") {
+    const [projectId, recordType, entityName, fieldName, prefix, padLength] = argsArray;
+    return { projectId, recordType, entityName, fieldName, prefix, padLength };
+  }
+  return argsArray[0] || {};
+};
+
+const formatSequenceValue = (value, prefix, padLength = 3) => {
+  const numericValue = extractNumericSuffix(value);
+  if (numericValue != null) {
+    return `${prefix}${String(numericValue).padStart(padLength, "0")}`;
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return null;
+};
+
+export const getNextFormattedNumber = async (...rawArgs) => {
+  const {
+    projectId,
+    recordType,
+    entityName,
+    fieldName,
+    prefix,
+    padLength = 3,
+  } = normalizeArgs(rawArgs);
+
   if (!projectId) throw new Error("projectId is required");
   if (!recordType) throw new Error("recordType is required");
   if (!entityName) throw new Error("entityName is required");
@@ -40,12 +61,9 @@ export const getNextFormattedNumber = async ({
 
   try {
     const nextValue = await getNextNumber(projectId, recordType);
-    const numericValue = extractNumericSuffix(nextValue);
-    if (numericValue != null) {
-      return `${prefix}${String(numericValue).padStart(padLength, "0")}`;
-    }
-    if (typeof nextValue === "string" && nextValue.trim()) {
-      return nextValue.trim();
+    const formatted = formatSequenceValue(nextValue, prefix, padLength);
+    if (formatted) {
+      return formatted;
     }
   } catch (error) {
     // Fall back to the highest existing number for the project.
@@ -75,6 +93,33 @@ export const previewNextNumber = async (projectId, recordType) => {
   });
 
   return response.data.number;
+};
+
+export const previewNextFormattedNumber = async ({
+  projectId,
+  recordType,
+  entityName,
+  fieldName,
+  prefix,
+  padLength = 3,
+}) => {
+  if (!projectId || !recordType || !entityName || !fieldName || !prefix) return null;
+
+  try {
+    const previewValue = await previewNextNumber(projectId, recordType);
+    const formatted = formatSequenceValue(previewValue, prefix, padLength);
+    if (formatted) return formatted;
+  } catch (error) {
+    // Fall through to non-mutating data scan.
+  }
+
+  const existing = await base44.entities[entityName].filter({ project_id: projectId });
+  const maxNumber = existing.reduce((max, item) => {
+    const numericValue = extractNumericSuffix(item?.[fieldName]);
+    return numericValue != null && numericValue > max ? numericValue : max;
+  }, 0);
+
+  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
 };
 
 /**

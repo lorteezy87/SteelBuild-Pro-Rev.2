@@ -17,6 +17,11 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function normalizeRevisionNumber(value, fallback = "0") {
+  if (value == null || value === "") return fallback;
+  return String(value).trim() || fallback;
+}
+
 // ─── Native Claude PDF extraction via Base44 proxy ───────────────────
 async function extractSheetsFromPDF(file, uploadedFileUrl) {
   const systemPrompt = `You are a drawing log parser for a structural steel construction management application.
@@ -639,7 +644,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         project_id:       activeProject?.id,
         project_name:     activeProject?.name,
         discipline:       sheet.discipline || meta.discipline,
-        revision_number:  parseInt(sheet.revision ?? meta.revision) || 0,
+        revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
         stage:            "Not Started",
         issue_date:       sheet.date || meta.issueDate,
         issued_by:        meta.issuedBy,
