@@ -474,6 +474,7 @@ export default function ResourceScheduling() {
       } catch (err) {
         console.error("Assignment failed:", err);
         qc.invalidateQueries({ queryKey: ["work-packages"] });
+        qc.invalidateQueries({ queryKey: ["wps-all"] });
         setUndoToast({ id: Date.now(), message: `Failed to assign ${d.wpName}` });
       }
       setTimeout(() => setUndoToast(null), 5000);
@@ -1437,6 +1438,7 @@ export default function ResourceScheduling() {
             <button key={res.id} onClick={async () => {
               await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: res.name });
               qc.invalidateQueries({ queryKey: ["work-packages"] });
+              qc.invalidateQueries({ queryKey: ["wps-all"] });
               setContextMenu(null);
               setUndoToast({ id: Date.now(), message: `${contextMenu.wp.wp_number} → ${res.name}` });
               setTimeout(() => setUndoToast(null), 5000);
@@ -1455,6 +1457,7 @@ export default function ResourceScheduling() {
           <button onClick={async () => {
             await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: "", released_date: "", startDate: "", endDate: "" });
             qc.invalidateQueries({ queryKey: ["work-packages"] });
+            qc.invalidateQueries({ queryKey: ["wps-all"] });
             setContextMenu(null);
             setUndoToast({ id: Date.now(), message: `${contextMenu.wp.wp_number} unassigned` });
             setTimeout(() => setUndoToast(null), 5000);

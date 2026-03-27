@@ -2,15 +2,15 @@ import React, { useState } from "react";
 import { Download, Eye, Edit3, Link2 } from "lucide-react";
 
 const FILE_TYPE_CONFIG = {
-  pdf: { icon: "📄", bg: "rgba(255,61,61,0.12)", color: "#FF3D3D" },
-  dwg: { icon: "📐", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
-  ifc: { icon: "△", bg: "rgba(139,92,246,0.12)", color: "#8B5CF6" },
-  gltf: { icon: "△", bg: "rgba(139,92,246,0.12)", color: "#8B5CF6" },
-  xlsx: { icon: "📊", bg: "rgba(0,214,143,0.12)", color: "#00D68F" },
-  docx: { icon: "📝", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
-  img: { icon: "🖼", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
-  zip: { icon: "📦", bg: "rgba(255,176,32,0.12)", color: "#FFB020" },
-  other: { icon: "📁", bg: "rgba(160,175,210,0.12)", color: "#A0AED2" }
+  pdf: { icon: "??", bg: "rgba(255,61,61,0.12)", color: "#FF3D3D" },
+  dwg: { icon: "??", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
+  ifc: { icon: "?", bg: "rgba(139,92,246,0.12)", color: "#8B5CF6" },
+  gltf: { icon: "?", bg: "rgba(139,92,246,0.12)", color: "#8B5CF6" },
+  xlsx: { icon: "??", bg: "rgba(0,214,143,0.12)", color: "#00D68F" },
+  docx: { icon: "??", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
+  img: { icon: "??", bg: "rgba(0,184,217,0.12)", color: "#00B8D9" },
+  zip: { icon: "??", bg: "rgba(255,176,32,0.12)", color: "#FFB020" },
+  other: { icon: "??", bg: "rgba(160,175,210,0.12)", color: "#A0AED2" }
 };
 
 import { useNavigate } from "react-router-dom";
@@ -106,7 +106,21 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink }
       </div>
 
       {/* Category and status badges */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            padding: "2px 6px",
+            borderRadius: 4,
+            border: "1px solid var(--divider)",
+            color: doc.is_current ? "var(--status-success)" : "var(--text-muted)",
+            background: doc.is_current ? "rgba(0,214,143,0.12)" : "rgba(255,255,255,0.04)",
+            letterSpacing: "0.06em"
+          }}
+        >
+          {doc.is_current ? "CURRENT" : "SUPERSEDED"}
+        </span>
         <span
           style={{
             fontFamily: "var(--font-mono)",
@@ -136,16 +150,19 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink }
       </div>
 
       {/* Links */}
-      {linkedCount > 0 && (
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
-          📎 Linked to {linkedCount} record{linkedCount !== 1 ? "s" : ""}
-        </div>
-      )}
+      {/* Links summary */}
+      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
+        📎 Linked to {linkedCount} record{linkedCount !== 1 ? "s" : ""}
+      </div>
 
       {/* File size and date */}
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-        {fileSizeMB} MB · {uploadDate}
-        {doc.uploadedBy && <span> · {doc.uploadedBy}</span>}
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{fileSizeMB} MB · {uploadDate}</span>
+        {doc.uploadedBy && <span>· {doc.uploadedBy}</span>}
+        <span style={{ color: "var(--border-strong)" }}>·</span>
+        <span style={{ color: linkedCount ? "var(--accent)" : "var(--text-muted)" }}>
+          {linkedCount} linked
+        </span>
       </div>
 
       {/* Hover action bar */}
@@ -251,3 +268,4 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink }
     </div>
   );
 }
+

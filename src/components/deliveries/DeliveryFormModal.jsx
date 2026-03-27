@@ -7,6 +7,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const qc = useQueryClient();
   const isEdit = !!delivery;
 
+  const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
+
   const emptyForm = {
     project_id: projectId || "",
     work_package_id: "",
@@ -65,8 +67,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!formData.project_id) {
       toast.error("Select a project");
       return;

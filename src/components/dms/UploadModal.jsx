@@ -1,21 +1,21 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 
 export default function UploadModal({ projectId, onClose }) {
   const [files, setFiles] = useState([]);
   const [metadata, setMetadata] = useState({});
+  const fileInputRef = useRef(null);
   const qc = useQueryClient();
 
   const uploadMutation = useMutation({
     mutationFn: async (filesToUpload) => {
       const created = [];
       for (const file of filesToUpload) {
-        // Upload file first
-        const { file_url } = await base44.integrations.Core.uploadFile({ file: file.file || file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-        // Create document record
         const meta = metadata[file.name] || {};
         const doc = await base44.entities.Document.create({
           project_id: projectId,
@@ -52,7 +52,11 @@ export default function UploadModal({ projectId, onClose }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents", projectId] });
-      onClose();
+      toast.success(`${files.length} document${files.length !== 1 ? "s" : ""} uploaded`);
+          onClose();
+    },
+    onError: (err) => {
+      toast.error("Upload failed: " + (err?.message || "Unknown error"));
     }
   });
 
@@ -67,6 +71,7 @@ export default function UploadModal({ projectId, onClose }) {
       delete updated[fileName];
       return updated;
     });
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const updateMetadata = (fileName, key, value) => {
@@ -88,6 +93,15 @@ export default function UploadModal({ projectId, onClose }) {
   };
 
   return (
+    <>
+      {/* Hidden file input — always mounted */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={(e) => handleFilesAdded(e.target.files)}
+        style={{ display: "none" }}
+      />
     <div
       style={{
         position: "fixed",
@@ -154,6 +168,7 @@ export default function UploadModal({ projectId, onClose }) {
             <div
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 border: "2px dashed var(--accent-border)",
                 borderRadius: 8,
@@ -171,15 +186,9 @@ export default function UploadModal({ projectId, onClose }) {
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(160,175,210,0.50)" }}>
                 PDF · DWG · IFC · GLTF · XLSX · DOCX · PNG · JPG · ZIP
               </div>
-              <input
-                type="file"
-                multiple
-                onChange={(e) => handleFilesAdded(e.target.files)}
-                style={{ display: "none" }}
-                id="fileInput"
-              />
-              <label
-                htmlFor="fileInput"
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
                 style={{
                   display: "inline-block",
                   marginTop: 12,
@@ -195,7 +204,7 @@ export default function UploadModal({ projectId, onClose }) {
                 }}
               >
                 BROWSE FILES
-              </label>
+              </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -340,24 +349,33 @@ export default function UploadModal({ projectId, onClose }) {
             CANCEL
           </button>
           <button
-            onClick={() => uploadMutation.mutate(files)}
-            disabled={files.length === 0}
+            onClick={() => {
+              if (!uploadMutation.isPending && files.length > 0) {
+                uploadMutation.mutate(files);
+              }
+            }}
+            disabled={files.length === 0 || uploadMutation.isPending}
             style={{
               padding: "8px 16px",
-              background: "var(--accent-muted)",
+              background: uploadMutation.isPending ? "var(--bg-surface-high)" : "var(--accent-muted)",
               border: "1px solid var(--accent-border)",
-              color: "var(--accent)",
+              color: uploadMutation.isPending ? "var(--text-muted)" : "var(--accent)",
               borderRadius: 6,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 600,
-              cursor: files.length === 0 ? "not-allowed" : "pointer"
+              cursor: (files.length === 0 || uploadMutation.isPending) ? "not-allowed" : "pointer",
+              opacity: (files.length === 0 || uploadMutation.isPending) ? 0.6 : 1,
+              transition: "all 0.15s",
             }}
           >
-            UPLOAD {files.length} FILE{files.length !== 1 ? "S" : ""}
+            {uploadMutation.isPending
+              ? `UPLOADING ${files.length} FILE${files.length !== 1 ? "S" : ""}...`
+              : `UPLOAD ${files.length} FILE${files.length !== 1 ? "S" : ""}`}
           </button>
         </div>
       </div>
     </div>
+    </>
   );
 }

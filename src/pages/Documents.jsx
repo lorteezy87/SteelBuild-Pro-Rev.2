@@ -7,6 +7,7 @@ import DocumentFilters from "../components/dms/DocumentFilters";
 import DocumentLeftPanel from "../components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "../components/dms/DocumentDetailPanel";
 import UploadModal from "../components/dms/UploadModal";
+import DocumentEditModal from "../components/dms/DocumentEditModal";
 import { Upload, Grid3x3, List, Folder } from "lucide-react";
 
 export default function Documents() {
@@ -16,6 +17,7 @@ export default function Documents() {
   const [activeFilters, setActiveFilters] = useState({});
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [editingDoc, setEditingDoc] = useState(null);
 
   const { data: rawDocuments = [], isLoading } = useQuery({
     queryKey: ["documents", activeProject?.id],
@@ -110,11 +112,12 @@ export default function Documents() {
   };
 
   const handleEditDoc = (doc) => {
-    // TODO: open edit modal
+    setEditingDoc(doc);
   };
 
   const handleLinkDoc = (doc) => {
-    // TODO: open link modal
+    // Link handled via edit modal (work package / rfi / delivery IDs)
+    setEditingDoc(doc);
   };
 
   if (!activeProject) {
@@ -274,6 +277,15 @@ export default function Documents() {
       {/* Document detail panel */}
       {selectedDoc && (
         <DocumentDetailPanel doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
+      )}
+
+      {/* Edit modal */}
+      {editingDoc && (
+        <DocumentEditModal
+          projectId={activeProject?.id}
+          doc={editingDoc}
+          onClose={() => setEditingDoc(null)}
+        />
       )}
 
       {/* Upload modal */}

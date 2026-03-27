@@ -14,13 +14,24 @@ export default function Dashboard() {
   const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis-all"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
   const { data: allCOs = [] } = useQuery({ queryKey: ["cos-all"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
   const { data: allCodes = [] } = useQuery({ queryKey: ["codes-all"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
-  const { data: allWPs = [] } = useQuery({ queryKey: ["wps-all"], queryFn: () => base44.entities.WorkPackage.list(), initialData: [] });
+  const { data: allWPs = [] } = useQuery({
+    queryKey: ["work-packages"],
+    queryFn: () => base44.entities.WorkPackage.list(),
+    initialData: [],
+    staleTime: 30000,
+  });
   const { data: allDeliveries = [] } = useQuery({ queryKey: ["deliveries-all"], queryFn: () => base44.entities.Delivery.list(), initialData: [] });
   const { data: allActionItems = [] } = useQuery({ queryKey: ["action-items-all"], queryFn: () => base44.entities.ActionItem.list(), initialData: [] });
   const { data: allExpenses = [] } = useQuery({ queryKey: ["expenses-all"], queryFn: () => base44.entities.Expense.list(), initialData: [] });
 
   // ── Project-scoped queries (only when a project is active) ──
-  const { data: drawings = [] } = useQuery({ queryKey: ["drawings", pid], queryFn: () => pid ? base44.entities.Drawing.filter({ project_id: pid }) : [], enabled: !!pid, initialData: [] });
+  const { data: drawings = [] } = useQuery({
+    queryKey: ["drawings", pid],
+    queryFn: () => pid ? base44.entities.Drawing.filter({ project_id: pid }) : [],
+    enabled: !!pid,
+    initialData: [],
+    staleTime: 30000,
+  });
   const { data: tasks = [] } = useQuery({ queryKey: ["schedule-tasks", pid], queryFn: () => pid ? base44.entities.ScheduleTask.filter({ project_id: pid }, "-start_date") : [], enabled: !!pid, initialData: [] });
   const { data: recentActivity = [] } = useQuery({
     queryKey: ["activity-feed", pid],

@@ -134,6 +134,7 @@ export default function ProductionNotes() {
       ),
     [allDeliveries]
   );
+  const openNotes = useMemo(() => notes.filter((n) => !n.is_resolved), [notes]);
   const highPriorityNotes = useMemo(
     () => notes.filter((n) => n.is_high_priority && !n.is_resolved),
     [notes]
@@ -263,7 +264,7 @@ export default function ProductionNotes() {
         <span
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 18,
+            fontSize: 22,
             fontWeight: 800,
             color,
             lineHeight: 1.1,
@@ -333,53 +334,59 @@ export default function ProductionNotes() {
         className={`note-row ${note.is_resolved ? "note-resolved" : ""}`}
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          flexDirection: "column",
           gap: 10,
-          padding: "10px 14px",
-          borderLeft: `3px solid ${CATEGORY_COLORS[note.category] || "var(--text-muted)"}`,
-          borderRadius: "0 4px 4px 0",
-          marginBottom: 4,
+          padding: "12px 14px",
+          border: "1px solid var(--divider)",
+          borderLeft: `4px solid ${CATEGORY_COLORS[note.category] || "var(--text-muted)"}`,
+          borderRadius: 6,
+          marginBottom: 10,
           position: "relative",
-          background: "transparent",
+          background: "var(--bg-surface)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = "var(--hover-bg)";
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.background = "var(--bg-surface)";
         }}
       >
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: `${(CATEGORY_COLORS[note.category] || "#999")}22`,
-                color: CATEGORY_COLORS[note.category] || "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              {note.category || "General"}
-            </span>
-            {note.is_high_priority && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)" }}>FLAG</span>
-            )}
-            {note.is_resolved && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)" }}>RESOLVED</span>
-            )}
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-              {note.note_date ? new Date(note.note_date).toLocaleDateString("en-US") : ""}
-            </span>
-            {note.author && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                {note.author}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  background: `${(CATEGORY_COLORS[note.category] || "#999")}22`,
+                  color: CATEGORY_COLORS[note.category] || "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {note.category || "General"}
               </span>
-            )}
+              {note.is_high_priority && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)" }}>FLAG</span>
+              )}
+              {note.is_resolved && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)" }}>RESOLVED</span>
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {note.author && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                  {note.author}
+                </span>
+              )}
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                {note.note_date ? new Date(note.note_date).toLocaleDateString("en-US") : ""}
+              </span>
+            </div>
           </div>
+
           <div
             className={`note-content ${note.is_resolved ? "note-resolved" : ""}`}
             contentEditable
@@ -412,7 +419,7 @@ export default function ProductionNotes() {
             {buffer || "Click to add notes..."}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6, opacity: 0.9 }}>
+        <div style={{ display: "flex", gap: 8, opacity: 0.9, justifyContent: "flex-end", alignItems: "center" }}>
           <button
             title={note.is_resolved ? "Reopen" : "Resolve"}
             onClick={() => handleResolveToggle(note)}
@@ -1025,3 +1032,4 @@ export default function ProductionNotes() {
     </div>
   );
 }
+
