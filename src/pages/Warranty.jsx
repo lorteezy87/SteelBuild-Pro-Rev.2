@@ -42,6 +42,7 @@ export default function Warranty() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Warranty created");
     },
     onError: (err) => toast.error(err.message),
@@ -60,8 +61,12 @@ export default function Warranty() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Warranty.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["warranties", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success("Warranty deleted");
     },
@@ -151,13 +156,13 @@ export default function Warranty() {
       </div>
 
       {/* Form Modal */}
-      {showForm && <WarrantyFormModal projectId={projectId} warranty={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
+      {showForm && <WarrantyFormModal projectId={projectId} warranty={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Warranties List */}
       <WarrantyList warranties={filtered} onEdit={(warranty) => {setEditing(warranty); setShowForm(true);}} onDelete={setDeleteTarget} />
 
       {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Warranty" description="Delete this record? This cannot be undone." />
+      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Warranty" description="Delete this record? This cannot be undone." />
     </div>
   );
 }

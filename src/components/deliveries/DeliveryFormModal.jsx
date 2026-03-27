@@ -102,7 +102,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     width: "100%",
     background: "var(--bg-input)",
     border: "1px solid var(--border-default)",
-    borderRadius: 10,
+    borderRadius: "var(--radius-input)",
     padding: "10px 12px",
     color: "var(--text-primary)",
     fontFamily: "var(--font-body)",
@@ -135,7 +135,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
-          borderRadius: 16,
+          borderRadius: "var(--radius-card)",
           maxWidth: 720,
           width: "92%",
           maxHeight: "90vh",
@@ -184,7 +184,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                   }
                   style={{
                     padding: "6px 10px",
-                    borderRadius: 8,
+                    borderRadius: "var(--radius-btn)",
                     border: "1px solid var(--border-default)",
                     background: formData.status === s ? "var(--accent)" : "transparent",
                     color: formData.status === s ? "#0b1021" : "var(--text-muted)",
@@ -204,7 +204,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <SectionLabel>Project & Assignment</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -306,7 +306,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                   background: "rgba(234,179,8,0.15)",
                   border: "1px solid rgba(234,179,8,0.4)",
                   padding: "8px 10px",
-                  borderRadius: 8,
+                  borderRadius: "var(--radius-btn)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
                   color: "var(--status-warning)",
@@ -399,7 +399,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               style={{ ...inputStyle, minHeight: 70, resize: "vertical" }}
               placeholder="Delivery notes, issues, exceptions"
             />
-          </form>
+          </div>
         </div>
 
         {/* Footer */}
@@ -419,7 +419,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderRadius: 8,
+              borderRadius: "var(--radius-btn)",
               padding: "10px 16px",
               color: "var(--text-primary)",
               fontFamily: "var(--font-mono)",
@@ -440,7 +440,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               background: "var(--accent)",
               color: "#0b1021",
               border: "1px solid var(--accent)",
-              borderRadius: 8,
+              borderRadius: "var(--radius-btn)",
               padding: "10px 20px",
               fontFamily: "var(--font-mono)",
               fontSize: 10,

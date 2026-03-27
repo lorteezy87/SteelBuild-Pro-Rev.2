@@ -69,6 +69,7 @@ export default function ExpenseFormModal({
   projects = [], workPackages = [],
   sovItems = [], expenses = [], costCodes = [], nextNumber,
   defaultProjectId,
+  isSaving = false,
 }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
@@ -379,27 +380,47 @@ export default function ExpenseFormModal({
             {expense ? `EDITING · ${expense.expense_number || ''}` : 'NEW EXPENSE'}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-btn)', padding: '9px 18px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em', cursor: 'pointer', transition: 'all 0.15s' }}>
+            <button
+              onClick={onClose}
+              disabled={isSaving}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-btn)',
+                padding: '9px 18px',
+                color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: '0.08em',
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s',
+                opacity: isSaving ? 0.6 : 1,
+              }}
+            >
               CANCEL
             </button>
             <button
-              onClick={handleSave}
-              disabled={!isFormValid}
+              onClick={() => {
+                if (!isSaving) {
+                  handleSave();
+                }
+              }}
+              disabled={!isFormValid || isSaving}
               style={{
-                background: isFormValid ? 'var(--accent)' : 'var(--bg-surface-highest)',
+                background: isFormValid && !isSaving ? 'var(--accent)' : 'var(--bg-surface-highest)',
                 border: 'none',
                 borderRadius: 'var(--radius-btn)',
                 padding: '9px 22px',
-                color: isFormValid ? 'var(--on-accent)' : 'var(--text-disabled)',
+                color: isFormValid && !isSaving ? 'var(--on-accent)' : 'var(--text-disabled)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: '0.08em',
-                cursor: isFormValid ? 'pointer' : 'not-allowed',
+                cursor: isFormValid && !isSaving ? 'pointer' : 'not-allowed',
                 transition: 'all 0.15s',
               }}
             >
-              {expense ? 'UPDATE EXPENSE' : 'CREATE EXPENSE'}
+              {isSaving ? (expense ? 'UPDATING...' : 'CREATING...') : (expense ? 'UPDATE EXPENSE' : 'CREATE EXPENSE')}
             </button>
           </div>
         </div>
@@ -408,3 +429,4 @@ export default function ExpenseFormModal({
     </div>
   );
 }
+

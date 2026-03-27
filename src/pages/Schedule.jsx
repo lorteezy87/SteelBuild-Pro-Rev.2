@@ -90,6 +90,38 @@ export default function Schedule() {
     onError: () => toast.error("Delete failed"),
   });
 
+  const bulkUpdateMut = useMutation({
+    mutationFn: async ({ ids, status }) =>
+      Promise.all(
+        ids.map((id) =>
+          base44.entities.ScheduleTask.update(id, {
+            status,
+            percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
+          })
+        )
+      ),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      setSelectedIds(new Set());
+      toast.success(`Updated ${variables.ids.length} tasks`);
+    },
+    onError: () => toast.error("Bulk update failed"),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids) => Promise.all(ids.map((id) => base44.entities.ScheduleTask.delete(id))),
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      setSelectedIds(new Set());
+      if (selectedTask?.id && ids.includes(selectedTask.id)) {
+        setSelectedTask(null);
+        setShowDrawer(false);
+      }
+      toast.success("Tasks deleted");
+    },
+    onError: () => toast.error("Bulk delete failed"),
+  });
+
   const parseMsProjectXml = (xml) => {
     const doc = new DOMParser().parseFromString(xml, "text/xml");
     const taskNodes = Array.from(doc.getElementsByTagName("Task"));
@@ -157,37 +189,16 @@ export default function Schedule() {
     });
   };
 
-  const bulkUpdateStatus = async (status) => {
+  const bulkUpdateStatus = (status) => {
     const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    try {
-      await Promise.all(
-        ids.map((id) =>
-          base44.entities.ScheduleTask.update(id, {
-            status,
-            percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
-          })
-        )
-      );
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      setSelectedIds(new Set());
-      toast.success(`Updated ${ids.length} tasks`);
-    } catch {
-      toast.error("Bulk update failed");
-    }
+    if (!ids.length || bulkUpdateMut.isPending || bulkDeleteMut.isPending) return;
+    bulkUpdateMut.mutate({ ids, status });
   };
 
-  const bulkDelete = async () => {
+  const bulkDelete = () => {
     const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    try {
-      await Promise.all(ids.map((id) => base44.entities.ScheduleTask.delete(id)));
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      setSelectedIds(new Set());
-      toast.success("Tasks deleted");
-    } catch {
-      toast.error("Bulk delete failed");
-    }
+    if (!ids.length || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
+    bulkDeleteMut.mutate(ids);
   };
 
   return (
@@ -359,7 +370,11 @@ export default function Schedule() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteTaskMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteTaskMut.isPending && deleteTarget?.id) {
+            deleteTaskMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Delete task?"
         description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
       />
@@ -383,19 +398,19 @@ export default function Schedule() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
             {selectedIds.size} SELECTED
           </span>
-          <button onClick={() => bulkUpdateStatus("Not Started")} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
+          <button onClick={() => bulkUpdateStatus("Not Started")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
             Set Not Started
           </button>
-          <button onClick={() => bulkUpdateStatus("In Progress")} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-warning)", background: "rgba(234,179,8,0.12)", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
+          <button onClick={() => bulkUpdateStatus("In Progress")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-warning)", background: "rgba(234,179,8,0.12)", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
             Set In Progress
           </button>
-          <button onClick={() => bulkUpdateStatus("Complete")} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-success)", background: "var(--success-muted)", color: "var(--status-success)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
+          <button onClick={() => bulkUpdateStatus("Complete")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-success)", background: "var(--success-muted)", color: "var(--status-success)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
             Mark Complete
           </button>
-          <button onClick={() => bulkUpdateStatus("Delayed")} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
+          <button onClick={() => bulkUpdateStatus("Delayed")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
             Mark Delayed
           </button>
-          <button onClick={bulkDelete} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
+          <button onClick={bulkDelete} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1 }}>
             Delete
           </button>
           <button onClick={() => setSelectedIds(new Set())} style={{ marginLeft: "auto", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>

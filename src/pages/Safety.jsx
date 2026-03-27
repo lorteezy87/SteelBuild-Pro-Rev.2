@@ -43,6 +43,7 @@ export default function Safety() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Incident created");
     },
     onError: (err) => toast.error(err.message),
@@ -61,8 +62,12 @@ export default function Safety() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.SafetyIncident.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["safety-incidents", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success("Incident deleted");
     },
@@ -152,13 +157,13 @@ export default function Safety() {
       </div>
 
       {/* Form Modal */}
-      {showForm && <SafetyIncidentFormModal projectId={projectId} incident={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
+      {showForm && <SafetyIncidentFormModal projectId={projectId} incident={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Incidents List */}
       <SafetyIncidentList incidents={filtered} onEdit={(incident) => {setEditing(incident); setShowForm(true);}} onDelete={setDeleteTarget} />
 
       {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Incident" description="Delete this record? This cannot be undone." />
+      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Incident" description="Delete this record? This cannot be undone." />
     </div>
   );
 }

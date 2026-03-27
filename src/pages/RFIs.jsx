@@ -96,6 +96,8 @@ export default function RFIs() {
     mutationFn: (data) => base44.entities.RFI.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rfis"] });
+      setShowForm(false);
+      setEditingRFI(null);
       toast.success("RFI created");
     },
     onError: (e) => toast.error(e.message),
@@ -105,6 +107,8 @@ export default function RFIs() {
     mutationFn: ({ id, data }) => base44.entities.RFI.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rfis"] });
+      setShowForm(false);
+      setEditingRFI(null);
       toast.success("RFI updated");
     },
     onError: (e) => toast.error(e.message),
@@ -1051,8 +1055,6 @@ export default function RFIs() {
               const num = data.rfi_number || (await getNextFormattedNumber(data.project_id || projectId, "RFI"));
               createMut.mutate({ ...data, rfi_number: num });
             }
-            setShowForm(false);
-            setEditingRFI(null);
           }}
           rfi={editingRFI}
           projectId={projectId}
@@ -1107,4 +1109,3 @@ function ContentBox({ children, accent, success }) {
     </div>
   );
 }
-

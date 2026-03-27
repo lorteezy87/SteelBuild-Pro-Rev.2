@@ -118,7 +118,17 @@ export default function ExpensesPage() {
 
   const deleteMut = useMutation({
     mutationFn: id => base44.entities.Expense.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses'] }); setDeleteTarget(null); toast.success('Expense deleted'); },
+    onSuccess: (_, deletedId) => {
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setModalOpen(false);
+      }
+      if (deleteTarget?.id === deletedId) {
+        setDeleteTarget(null);
+      }
+      toast.success('Expense deleted');
+    },
     onError: () => { toast.error('Failed to delete expense'); },
   });
 
@@ -561,13 +571,73 @@ export default function ExpensesPage() {
             {selected.length} SELECTED
           </span>
           <div style={{ flex: 1 }} />
-          <button onClick={() => bulkUpdateMut.mutate({ ids: selected, data: { payment_status: 'Paid' } })} style={{ background: 'var(--success-muted)', border: '1px solid var(--success-border)', borderRadius: 6, padding: '6px 14px', color: 'var(--status-success)', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em' }}>
+          <button
+            onClick={() => {
+              if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+                bulkUpdateMut.mutate({ ids: selected, data: { payment_status: 'Paid' } });
+              }
+            }}
+            disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
+            style={{
+              background: 'var(--success-muted)',
+              border: '1px solid var(--success-border)',
+              borderRadius: 6,
+              padding: '6px 14px',
+              color: 'var(--status-success)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              fontWeight: 700,
+              cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.08em',
+              opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1,
+            }}
+          >
             MARK PAID
           </button>
-          <button onClick={() => bulkUpdateMut.mutate({ ids: selected, data: { payment_status: 'Voided' } })} style={{ background: 'var(--warning-muted)', border: '1px solid var(--warning-border)', borderRadius: 6, padding: '6px 14px', color: 'var(--status-warning)', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em' }}>
+          <button
+            onClick={() => {
+              if (!bulkUpdateMut.isPending && !bulkDeleteMut.isPending) {
+                bulkUpdateMut.mutate({ ids: selected, data: { payment_status: 'Voided' } });
+              }
+            }}
+            disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending}
+            style={{
+              background: 'var(--warning-muted)',
+              border: '1px solid var(--warning-border)',
+              borderRadius: 6,
+              padding: '6px 14px',
+              color: 'var(--status-warning)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              fontWeight: 700,
+              cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.08em',
+              opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1,
+            }}
+          >
             MARK VOIDED
           </button>
-          <button onClick={() => { bulkDeleteMut.mutate(selected); }} style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger-border)', borderRadius: 6, padding: '6px 14px', color: 'var(--danger)', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.08em' }}>
+          <button
+            onClick={() => {
+              if (!bulkDeleteMut.isPending && !bulkUpdateMut.isPending) {
+                bulkDeleteMut.mutate(selected);
+              }
+            }}
+            disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending}
+            style={{
+              background: 'var(--danger-muted)',
+              border: '1px solid var(--danger-border)',
+              borderRadius: 6,
+              padding: '6px 14px',
+              color: 'var(--danger)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              fontWeight: 700,
+              cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.08em',
+              opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1,
+            }}
+          >
             DELETE SELECTED
           </button>
           <button onClick={() => setSelected([])} style={{ background: 'transparent', border: '1px solid var(--border-default)', borderRadius: 6, padding: '6px 10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 9, cursor: 'pointer' }}>
@@ -581,6 +651,7 @@ export default function ExpensesPage() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
         expense={editing}
         projects={projects}
         workPackages={workPackages}
@@ -595,7 +666,11 @@ export default function ExpensesPage() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Delete Expense"
         description={`Delete ${deleteTarget?.expense_number}? This cannot be undone.`}
       />

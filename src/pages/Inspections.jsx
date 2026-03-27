@@ -42,6 +42,7 @@ export default function Inspections() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Inspection created");
     },
     onError: (err) => toast.error(err.message),
@@ -60,8 +61,12 @@ export default function Inspections() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Inspection.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["inspections", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success("Inspection deleted");
     },
@@ -248,14 +253,30 @@ export default function Inspections() {
 
       {/* Form Modal */}
       {showForm && (
-        <InspectionFormModal projectId={projectId} inspection={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />
+        <InspectionFormModal
+          projectId={projectId}
+          inspection={editing}
+          onClose={() => {setShowForm(false); setEditing(null);}}
+          onSave={handleSave}
+          isSaving={createMut.isPending || updateMut.isPending}
+        />
       )}
 
       {/* Inspections List */}
       <InspectionList inspections={filtered} onEdit={(inspection) => {setEditing(inspection); setShowForm(true);}} onDelete={setDeleteTarget} />
 
       {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Inspection" description="Delete this record? This cannot be undone." />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
+        title="Delete Inspection"
+        description="Delete this record? This cannot be undone."
+      />
     </div>
   );
 }
