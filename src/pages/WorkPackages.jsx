@@ -108,6 +108,8 @@ export default function WorkPackages() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["work-packages"] });
       qc.invalidateQueries({ queryKey: ["wps-all"] });
+      setWPModalOpen(false);
+      setEditingWP(null);
       toast.success("Work package updated");
     },
     onError: (err) => toast.error(err.message),

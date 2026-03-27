@@ -43,6 +43,7 @@ export default function Punchlist() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Item created");
     },
     onError: (err) => toast.error(err.message),
@@ -61,8 +62,12 @@ export default function Punchlist() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.PunchlistItem.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success("Item deleted");
     },
@@ -175,13 +180,13 @@ export default function Punchlist() {
       </div>
 
       {/* Form Modal */}
-      {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
+      {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Punchlist */}
       <PunchlistList items={filtered} onEdit={(item) => {setEditing(item); setShowForm(true);}} onDelete={setDeleteTarget} />
 
       {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Item" description="Delete this record? This cannot be undone." />
+      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Item" description="Delete this record? This cannot be undone." />
     </div>
   );
 }

@@ -14,12 +14,13 @@ import ProgressBar from "../components/shared/ProgressBar";
 import PageHeader from "../components/shared/PageHeader";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
+import { toast } from "sonner";
 
 const PHASE_COLORS = { Detailing: "bg-indigo-100 text-indigo-700", Fabrication: "bg-amber-100 text-amber-700", Delivery: "bg-emerald-100 text-emerald-700", Erection: "bg-rose-100 text-rose-700" };
 
 const empty = { project_id: "", project_name: "", activity: "", phase: "Erection", crew: "", planned_start: "", planned_end: "", forecast_start: "", forecast_end: "", percent_complete: 0, constraints: "", status: "Not Started" };
 
-function LookAheadModal({ open, onClose, onSave, item, projects }) {
+function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = false }) {
   const [form, setForm] = useState(empty);
   React.useEffect(() => { setForm(item ? { ...empty, ...item } : empty); }, [item, open]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -61,8 +62,8 @@ function LookAheadModal({ open, onClose, onSave, item, projects }) {
           <div className="col-span-2"><Label>Constraints</Label><Input value={form.constraints} onChange={e => set("constraints", e.target.value)} placeholder="e.g. Pending RFI-005, material delay" /></div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} className="bg-slate-900 hover:bg-slate-800">{item ? "Update" : "Create"}</Button>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+          <Button onClick={save} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">{isSaving ? (item ? "Updating..." : "Creating...") : (item ? "Update" : "Create")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -87,9 +88,45 @@ export default function LookAheadSchedule() {
   });
   const projects = [activeProject].filter(Boolean);
 
-  const createMut = useMutation({ mutationFn: d => base44.entities.LookAhead.create(d), onSuccess: () => { qc.invalidateQueries(["lookahead"]); setModalOpen(false); setEditing(null); } });
-  const updateMut = useMutation({ mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data), onSuccess: () => { qc.invalidateQueries(["lookahead"]); setModalOpen(false); setEditing(null); } });
-  const deleteMut = useMutation({ mutationFn: id => base44.entities.LookAhead.delete(id), onSuccess: () => { qc.invalidateQueries(["lookahead"]); setDeleteTarget(null); } });
+  const createMut = useMutation({
+    mutationFn: d => base44.entities.LookAhead.create(d),
+    onSuccess: () => {
+      qc.invalidateQueries(["lookahead"]);
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Look-ahead item created");
+    },
+    onError: (err) => {
+      toast.error(`Failed to create look-ahead item: ${err?.message || "Unknown error"}`);
+    },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries(["lookahead"]);
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Look-ahead item updated");
+    },
+    onError: (err) => {
+      toast.error(`Failed to update look-ahead item: ${err?.message || "Unknown error"}`);
+    },
+  });
+  const deleteMut = useMutation({
+    mutationFn: id => base44.entities.LookAhead.delete(id),
+    onSuccess: (_, deletedId) => {
+      qc.invalidateQueries(["lookahead"]);
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setModalOpen(false);
+      }
+      setDeleteTarget(null);
+      toast.success("Look-ahead item deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete look-ahead item");
+    },
+  });
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
   // Compute 2-week window
@@ -189,8 +226,25 @@ export default function LookAheadSchedule() {
         </Table>
       </div>
 
-      <LookAheadModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={handleSave} item={editing} projects={projects} />
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Item" description={`Delete "${deleteTarget?.activity}"?`} />
+      <LookAheadModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSave={handleSave}
+        item={editing}
+        projects={projects}
+        isSaving={createMut.isPending || updateMut.isPending}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
+        title="Delete Item"
+        description={`Delete "${deleteTarget?.activity}"?`}
+      />
     </div>
   );
 }

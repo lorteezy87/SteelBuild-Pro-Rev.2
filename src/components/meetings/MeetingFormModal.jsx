@@ -52,8 +52,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
     initialData: [],
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     onSave(formData);
   };
 
@@ -98,7 +97,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
           {isEditing ? "Edit Meeting" : "New Meeting"}
         </h2>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Project */}
           <div>
             <label style={labelStyle}>Project</label>
@@ -173,6 +172,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               style={{
                 background: "var(--bg-surface)",
                 border: "1px solid var(--border-default)",
@@ -182,15 +182,21 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
                 fontFamily: "var(--font-mono)",
                 fontSize: "10px",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: isSaving ? "not-allowed" : "pointer",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
+                opacity: isSaving ? 0.5 : 1,
               }}
             >
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={() => {
+                if (!isSaving) {
+                  handleSubmit();
+                }
+              }}
               disabled={isSaving}
               style={{
                 background: "var(--accent)",
@@ -210,7 +216,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
               {isSaving ? "Saving..." : isEditing ? "Update Meeting" : "Create Meeting"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

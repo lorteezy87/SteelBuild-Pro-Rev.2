@@ -106,10 +106,31 @@ export default function Deliveries() {
     mutationFn: (id) => base44.entities.Delivery.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
+      if (detail?.id === deleteTarget?.id) setDetail(null);
+      if (editing?.id === deleteTarget?.id) setEditing(null);
       setDeleteTarget(null);
       toast.success("Delivery removed");
     },
     onError: () => toast.error("Delete failed"),
+  });
+
+  const bulkUpdateMut = useMutation({
+    mutationFn: async ({ ids, status }) => {
+      await Promise.all(
+        ids.map((id) =>
+          base44.entities.Delivery.update(id, {
+            status,
+            actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
+          })
+        )
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deliveries"] });
+      setSelectedIds(new Set());
+      toast.success("Deliveries updated");
+    },
+    onError: () => toast.error("Bulk update failed"),
   });
 
   const { data: deliveries = [] } = useQuery({
@@ -270,19 +291,8 @@ export default function Deliveries() {
   const bulkUpdate = (status) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
-    Promise.all(
-      ids.map((id) =>
-        base44.entities.Delivery.update(id, {
-          status,
-          actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
-        })
-      )
-    )
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ["deliveries"] });
-        toast.success("Deliveries updated");
-      })
-      .catch(() => toast.error("Bulk update failed"));
+    if (bulkUpdateMut.isPending) return;
+    bulkUpdateMut.mutate({ ids, status });
   };
 
   const handleAdvanceStatus = (delivery) => {
@@ -1158,6 +1168,7 @@ export default function Deliveries() {
           </span>
           <button
             onClick={() => bulkUpdate("In Transit")}
+            disabled={bulkUpdateMut.isPending}
             style={{
               padding: "6px 10px",
               borderRadius: 6,
@@ -1166,13 +1177,15 @@ export default function Deliveries() {
               color: "var(--status-info)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              cursor: "pointer",
+              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
+              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
             }}
           >
             → IN TRANSIT
           </button>
           <button
             onClick={() => bulkUpdate("Delivered")}
+            disabled={bulkUpdateMut.isPending}
             style={{
               padding: "6px 10px",
               borderRadius: 6,
@@ -1181,13 +1194,15 @@ export default function Deliveries() {
               color: "var(--status-success)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              cursor: "pointer",
+              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
+              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
             }}
           >
             ✓ DELIVERED
           </button>
           <button
             onClick={() => bulkUpdate("Partial")}
+            disabled={bulkUpdateMut.isPending}
             style={{
               padding: "6px 10px",
               borderRadius: 6,
@@ -1196,7 +1211,8 @@ export default function Deliveries() {
               color: "var(--status-warning)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              cursor: "pointer",
+              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
+              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
             }}
           >
             PARTIAL

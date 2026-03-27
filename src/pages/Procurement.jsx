@@ -104,6 +104,7 @@ export default function Procurement() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
       setShowForm(false);
+      setEditing(null);
       toast.success('Item added');
     },
     onError: (err) => toast.error(err.message),
@@ -122,8 +123,12 @@ export default function Procurement() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Delivery.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ['procurement'] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success('Item removed');
     },
@@ -434,13 +439,18 @@ export default function Procurement() {
               createMut.mutate(data);
             }
           }}
+          isSaving={createMut.isPending || updateMut.isPending}
         />
       )}
 
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Remove Item"
         description="Remove this procurement item? Cannot be undone."
       />
@@ -448,7 +458,7 @@ export default function Procurement() {
   );
 }
 
-function ProcurementFormModal({ projectId, item, vendors, onClose, onSave }) {
+function ProcurementFormModal({ projectId, item, vendors, onClose, onSave, isSaving = false }) {
   const [form, setForm] = useState(item ? { ...item } : {
     description: '',
     procurement_category: 'Other',
@@ -486,10 +496,7 @@ function ProcurementFormModal({ projectId, item, vendors, onClose, onSave }) {
           {item ? 'Edit Item' : 'Add Procurement Item'}
         </h2>
 
-        <form
-          onSubmit={e => { e.preventDefault(); onSave(form); }}
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}
-        >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ gridColumn: 'span 2' }}>
             <label style={labelStyle}>Item Description *</label>
             <input
@@ -592,30 +599,39 @@ function ProcurementFormModal({ projectId, item, vendors, onClose, onSave }) {
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-default)',
                 borderRadius: 8, padding: '8px 16px',
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-                cursor: 'pointer', textTransform: 'uppercase',
+                cursor: isSaving ? 'not-allowed' : 'pointer', textTransform: 'uppercase',
+                opacity: isSaving ? 0.6 : 1,
               }}
             >
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={() => {
+                if (!isSaving) {
+                  onSave(form);
+                }
+              }}
+              disabled={isSaving || !form.description?.trim()}
               style={{
                 background: 'var(--accent)', color: '#fff',
                 border: 'none', borderRadius: 8, padding: '8px 20px',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-                cursor: 'pointer', textTransform: 'uppercase',
+                cursor: isSaving || !form.description?.trim() ? 'not-allowed' : 'pointer', textTransform: 'uppercase',
+                opacity: isSaving || !form.description?.trim() ? 0.5 : 1,
               }}
             >
-              {item ? 'Save' : 'Add Item'}
+              {isSaving ? (item ? 'Saving...' : 'Adding...') : (item ? 'Save' : 'Add Item')}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

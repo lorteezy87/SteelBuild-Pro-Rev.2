@@ -58,8 +58,12 @@ export default function DailyLogs() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.DailyLog.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       toast.success("Daily log deleted");
       setDeleteTarget(null);
     },
@@ -155,7 +159,11 @@ export default function DailyLogs() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Delete Daily Log"
         description={`Delete log for ${deleteTarget?.date}? This cannot be undone.`}
       />

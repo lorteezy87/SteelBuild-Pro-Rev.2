@@ -864,6 +864,7 @@ export default function Submittals() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [approvalModal, setApprovalModal] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
+  const [savingBulk, setSavingBulk] = useState(false);
   const [sortByDue, setSortByDue] = useState(false);
   const [overdueAlertDismissed, setOverdueAlertDismissed] = useState(false);
   const [activeSetFilter, setActiveSetFilter] = useState(null);
@@ -963,17 +964,28 @@ export default function Submittals() {
   const nextId = `DWG-${String((drawings.length || 0) + 1).padStart(3, "0")}`;
 
   const handleSave = async (drawing) => {
-    if (editing) await base44.entities.Drawing.update(editing.id, drawing);
-    else await base44.entities.Drawing.create({ ...drawing, drawing_id: nextId });
-    setModalOpen(false);
-    setEditing(null);
-    loadDrawings();
+    try {
+      if (editing) await base44.entities.Drawing.update(editing.id, drawing);
+      else await base44.entities.Drawing.create({ ...drawing, drawing_id: nextId });
+      setModalOpen(false);
+      setEditing(null);
+      toast.success(editing ? "Drawing updated" : "Drawing created");
+      loadDrawings();
+    } catch (error) {
+      toast.error(error?.message || "Failed to save drawing");
+    }
   };
 
   const handleDelete = async () => {
-    await base44.entities.Drawing.delete(deleteTarget.id);
-    setDeleteTarget(null);
-    loadDrawings();
+    if (!deleteTarget?.id) return;
+    try {
+      await base44.entities.Drawing.delete(deleteTarget.id);
+      setDeleteTarget(null);
+      toast.success("Drawing deleted");
+      loadDrawings();
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete drawing");
+    }
   };
 
   const advanceStage = async (drawing, event) => {
@@ -1066,19 +1078,35 @@ export default function Submittals() {
 
   const applyBulkUpdate = async (field, value) => {
     const ids = [...selectedIds];
-    await Promise.all(ids.map((id) => base44.entities.Drawing.update(id, { [field]: value })));
-    toast.success(`Updated ${ids.length} drawings`);
-    clearSelection();
-    loadDrawings();
+    if (!ids.length || savingBulk) return;
+    setSavingBulk(true);
+    try {
+      await Promise.all(ids.map((id) => base44.entities.Drawing.update(id, { [field]: value })));
+      toast.success(`Updated ${ids.length} drawings`);
+      clearSelection();
+      loadDrawings();
+    } catch (error) {
+      toast.error(error?.message || "Bulk update failed");
+    } finally {
+      setSavingBulk(false);
+    }
   };
 
   const handleBulkDelete = async () => {
     const ids = [...selectedIds];
-    await Promise.all(ids.map((id) => base44.entities.Drawing.delete(id)));
-    toast.success(`Deleted ${ids.length} drawings`);
-    clearSelection();
-    setBulkDeleteOpen(false);
-    loadDrawings();
+    if (!ids.length || savingBulk) return;
+    setSavingBulk(true);
+    try {
+      await Promise.all(ids.map((id) => base44.entities.Drawing.delete(id)));
+      toast.success(`Deleted ${ids.length} drawings`);
+      clearSelection();
+      setBulkDeleteOpen(false);
+      loadDrawings();
+    } catch (error) {
+      toast.error(error?.message || "Bulk delete failed");
+    } finally {
+      setSavingBulk(false);
+    }
   };
 
   const openApprovalModal = (setKey, setDrawings) => {

@@ -55,6 +55,7 @@ export default function ChangeRequests() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Request created");
     },
     onError: (err) => toast.error(err.message),
@@ -73,8 +74,12 @@ export default function ChangeRequests() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.ChangeRequest.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["change-requests", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       setDeleteTarget(null);
       toast.success("Request deleted");
     },
@@ -135,13 +140,31 @@ export default function ChangeRequests() {
       </div>
 
       {/* Form Modal */}
-      {showForm && <ChangeRequestFormModal projectId={projectId} changeRequest={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
+      {showForm && (
+        <ChangeRequestFormModal
+          projectId={projectId}
+          changeRequest={editing}
+          onClose={() => {setShowForm(false); setEditing(null);}}
+          onSave={handleSave}
+          isSaving={createMut.isPending || updateMut.isPending}
+        />
+      )}
 
       {/* Change Requests List */}
       <ChangeRequestList requests={filtered} onEdit={(cr) => {setEditing(cr); setShowForm(true);}} onDelete={setDeleteTarget} />
 
       {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Request" description="Delete this record? This cannot be undone." />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
+        title="Delete Request"
+        description="Delete this record? This cannot be undone."
+      />
     </div>
   );
 }

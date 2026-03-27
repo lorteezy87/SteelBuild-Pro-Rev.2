@@ -60,8 +60,12 @@ export default function Meetings() {
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Meeting.delete(id),
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       qc.invalidateQueries({ queryKey: ["meetings", projectId] });
+      if (editing?.id === deletedId) {
+        setEditing(null);
+        setShowForm(false);
+      }
       toast.success("Meeting deleted");
       setDeleteTarget(null);
     },
@@ -295,7 +299,11 @@ export default function Meetings() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (!deleteMut.isPending && deleteTarget?.id) {
+            deleteMut.mutate(deleteTarget.id);
+          }
+        }}
         title="Delete Meeting"
         description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
       />
