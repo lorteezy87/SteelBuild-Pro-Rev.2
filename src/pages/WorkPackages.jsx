@@ -224,3 +224,108 @@ export default function WorkPackages() {
     setEditingWP({ wp_number: nextNum, project_id: projectId });
     setWPModalOpen(true);
   };
+
+  const pill = (active, label, onClick, color) => (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "6px 10px",
+        border: "none",
+        borderRadius: "var(--radius-btn)",
+        background: active ? color : "var(--bg-surface-low)",
+        color: active ? "#0A0A0B" : "var(--text-secondary)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  const renderKPI = (label, value, color) => (
+    <div
+      style={{
+        background: "var(--bg-surface)",
+        borderRadius: "var(--radius-card)",
+        borderTop: `2px solid ${color}`,
+        padding: 12,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 22,
+          fontWeight: 600,
+          color,
+          marginBottom: 4,
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: 8,
+          fontWeight: 700,
+          color: "var(--text-muted)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+
+  const renderTonnageBar = () => {
+    const total = Math.max(phaseTons.reduce((s, p) => s + p.tons, 0), 1);
+    return (
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          padding: 12,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.1em",
+            marginBottom: 8,
+          }}
+        >
+          TONNAGE PIPELINE
+        </div>
+        <div style={{ display: "flex", height: 10, overflow: "hidden", borderRadius: 4, marginBottom: 8 }}>
+          {phaseTons.map((p) => {
+            const width = Math.max(4, (p.tons / total) * 100);
+            return <div key={p.phase} style={{ width: `${width}%`, background: p.color, transition: "width 0.2s" }} />;
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {phaseTons.map((p) => (
+            <div
+              key={p.phase}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                color: "var(--text-secondary)",
+              }}
+            >
+              <span style={{ width: 10, height: 10, borderRadius: 6, background: p.color, display: "inline-block" }} />
+              {p.phase}: {(Number(p.tons) || 0).toFixed(1)}T
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
