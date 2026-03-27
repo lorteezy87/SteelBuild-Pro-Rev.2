@@ -51,6 +51,7 @@ const TAB_DEFAULT_PAGE = {
 const ALL_MODULES = [
 { icon: "◈", name: "Dashboard", group: "Overview", page: "Dashboard" },
 { icon: "◉", name: "Executive View", group: "Overview", page: "ExecutiveView" },
+{ icon: "⊕", name: "Import Data", group: "Overview", page: "ImportData" },
 { icon: "▤", name: "Projects", group: "Overview", page: "Projects" },
 { icon: "≡", name: "Scope & Exclusions", group: "Setup", page: "ScopeExclusions" },
 { icon: "☰", name: "Contacts", group: "Setup", page: "Contacts" },
@@ -147,7 +148,8 @@ const NAV_GROUPS = [
   label: "OVERVIEW",
   items: [
   { label: "Dashboard", icon: "◈", page: "Dashboard" },
-  { label: "Executive View", icon: "▤", page: "ExecutiveView" }]
+  { label: "Executive View", icon: "▤", page: "ExecutiveView" },
+  { label: "Import Data", icon: "⊕", page: "ImportData" }]
 
 },
 {
