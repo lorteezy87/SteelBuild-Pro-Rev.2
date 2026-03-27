@@ -89,3 +89,123 @@ const formatDate = (d) =>
   d
     ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : "—";
+
+export default function Constraints() {
+  const { project } = useProjectContext();
+  const [searchParams] = useSearchParams();
+  const projectId = searchParams.get("project") || project?.id || null;
+  const qc = useQueryClient();
+
+  const [view, setView] = useState("list");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("open");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [search, setSearch] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["constraints", projectId],
+    queryFn: () =>
+      projectId
+        ? base44.entities.ActionItem.filter({ project_id: projectId, category: "CONSTRAINT" })
+        : base44.entities.ActionItem.filter({ category: "CONSTRAINT" }),
+    initialData: [],
+  });
+
+  const { data: wps = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () =>
+      projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : base44.entities.WorkPackage.list(),
+    initialData: [],
+  });
+
+  useQuery({
+    queryKey: ["projects"],
+    queryFn: () => base44.entities.Project.list(),
+    initialData: [],
+  });
+
+  const createMut = useMutation({
+    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["constraints"] });
+      setShowForm(false);
+      toast.success("Constraint logged");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.ActionItem.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["constraints"] });
+      setShowForm(false);
+      setEditing(null);
+      toast.success("Constraint updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.ActionItem.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["constraints"] });
+      setDeleteTarget(null);
+      toast.success("Constraint deleted");
+    },
+    onError: () => toast.error("Delete failed"),
+  });
+
+  const kpis = useMemo(() => {
+    const open = items.filter((c) => !["Resolved", "Closed"].includes(c.status));
+    const resolved = items.filter((c) => c.status === "Resolved");
+    const closed = items.filter((c) => c.status === "Closed");
+    const overdue = open.filter((c) => c.due_date && new Date(`${c.due_date}T00:00:00Z`) < new Date());
+    const critical = open.filter((c) => c.priority === "Critical");
+    const inProg = items.filter((c) => c.status === "In Progress");
+    const byPriority = ["Critical", "High", "Medium", "Low"].map((p) => ({
+      priority: p,
+      count: open.filter((c) => c.priority === p).length,
+    }));
+    return { open, resolved, closed, overdue, critical, inProg, byPriority, total: items.length };
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return items
+      .filter((c) => {
+        if (filterType !== "all" && c.constraint_type !== filterType) return false;
+        if (filterStatus === "open" && ["Resolved", "Closed"].includes(c.status)) return false;
+        if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
+        if (filterPriority !== "all" && c.priority !== filterPriority) return false;
+        if (
+          q &&
+          ![c.title, c.description, c.project_area, c.assigned_to]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(q)
+        )
+          return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const PRIO = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+        const aResolved = ["Resolved", "Closed"].includes(a.status);
+        const bResolved = ["Resolved", "Closed"].includes(b.status);
+        if (aResolved !== bResolved) return aResolved ? 1 : -1;
+        const aP = PRIO[a.priority] ?? 2;
+        const bP = PRIO[b.priority] ?? 2;
+        if (aP !== bP) return aP - bP;
+        const aOver = a.due_date && new Date(`${a.due_date}T00:00:00Z`) < new Date();
+        const bOver = b.due_date && new Date(`${b.due_date}T00:00:00Z`) < new Date();
+        if (aOver !== bOver) return aOver ? -1 : 1;
+        if (a.due_date && b.due_date) return new Date(a.due_date) - new Date(b.due_date);
+        return 0;
+      });
+  }, [items, filterType, filterStatus, filterPriority, search]);
+
+  const priorityBarTotal = Math.max(kpis.open.length, 1);
