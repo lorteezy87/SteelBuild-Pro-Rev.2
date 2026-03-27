@@ -59,6 +59,49 @@ const IMPORT_ORDER = [
   "LookAhead",
 ];
 
+// Business key extractors for idempotent duplicate detection.
+// Falls back to full-row fingerprint for entities without specific keys.
+function buildFingerprint(entityName, row) {
+  const pid = row.project_id || "";
+  switch (entityName) {
+    case "RFI":
+      if (row.project_id && row.rfi_number) return `${pid}::rfi::${row.rfi_number}`;
+      break;
+    case "WorkPackage":
+      if (row.project_id && row.wp_number) return `${pid}::wp::${row.wp_number}`;
+      break;
+    case "ChangeOrder":
+      if (row.project_id && row.co_number) return `${pid}::co::${row.co_number}`;
+      break;
+    case "CostCode":
+      if (row.project_id && row.cost_code_number) return `${pid}::cc::${row.cost_code_number}`;
+      break;
+    case "Drawing":
+      if (row.project_id && row.sheet_number) return `${pid}::dwg::${row.sheet_number}`;
+      break;
+    case "Expense":
+      if (row.project_id && row.expense_number) return `${pid}::exp::${row.expense_number}`;
+      break;
+    case "Delivery":
+      if (row.project_id && row.delivery_id) return `${pid}::del::${row.delivery_id}`;
+      break;
+    case "Contact":
+      if (row.email) return `contact::email::${row.email.toLowerCase().trim()}`;
+      if (row.name && row.company) return `contact::name::${row.name.toLowerCase().trim()}::${row.company.toLowerCase().trim()}`;
+      break;
+    default:
+      break;
+  }
+  // Fallback: stable JSON fingerprint of all meaningful fields
+  const cleaned = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (!STRIP_FIELDS.has(k) && v !== "" && v !== null && v !== undefined) {
+      cleaned[k] = v;
+    }
+  }
+  return JSON.stringify(cleaned, Object.keys(cleaned).sort());
+}
+
 const STATUS_ICON = {
   idle: { icon: "○", color: "var(--text-muted)" },
   running: { icon: "▶", color: "var(--status-warning)" },
@@ -171,12 +214,28 @@ function cleanRow(row) {
   return cleaned;
 }
 
+function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ImportData() {
   const [files, setFiles] = useState({});
   const [status, setStatus] = useState({});
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [estimate, setEstimate] = useState(null); // { entity: { toCreate, toSkip } }
+  const [liveCounts, setLiveCounts] = useState(null); // { entity: number }
+  const [estimating, setEstimating] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [summary, setSummary] = useState(null); // final import/estimate run result
+  const [overridePreflight, setOverridePreflight] = useState(false);
   const fileInputRef = useRef(null);
   const logRef = useRef(null);
 
@@ -211,6 +270,9 @@ export default function ImportData() {
 
     setFiles(parsed);
     setLog(newLog);
+    setEstimate(null);
+    setLiveCounts(null);
+    setSummary(null);
   };
 
   const handleDrop = (e) => {
@@ -221,9 +283,96 @@ export default function ImportData() {
 
   const handleFileSelect = (e) => processFiles(e.target.files);
 
+  // ── Preflight ────────────────────────────────────────────────────────────────
+  const loadedEntities = new Set(Object.keys(files));
+  const requiredEntities = new Set(IMPORT_ORDER);
+  const missingEntities = IMPORT_ORDER.filter((e) => !loadedEntities.has(e));
+  const preflightClear = missingEntities.length === 0;
+  const importAllowed = preflightClear || overridePreflight;
+
+  // ── Estimate Import (dry run) ─────────────────────────────────────────────
+  const runEstimate = async () => {
+    setEstimating(true);
+    setLog([]);
+    addLog("▶ Estimate Import — fetching live records...");
+
+    const result = {};
+
+    for (const entityName of IMPORT_ORDER) {
+      const rows = files[entityName];
+      if (!rows || rows.length === 0) {
+        addLog(`⊘ ${entityName}: no file loaded — skipped`);
+        continue;
+      }
+
+      addLog(`  · ${entityName}: fetching live records...`);
+      let liveRecords = [];
+      try {
+        liveRecords = await base44.entities[entityName].list();
+      } catch (err) {
+        addLog(`  ⚠ ${entityName}: could not fetch live records — ${err?.message || "unknown"}`);
+      }
+
+      // Build fingerprint set from live records
+      const liveFingerprints = new Set(
+        liveRecords.map((rec) => buildFingerprint(entityName, rec))
+      );
+
+      let toCreate = 0;
+      let toSkip = 0;
+      for (const row of rows) {
+        const fp = buildFingerprint(entityName, row);
+        if (liveFingerprints.has(fp)) {
+          toSkip++;
+        } else {
+          toCreate++;
+        }
+      }
+
+      result[entityName] = { toCreate, toSkip, csvTotal: rows.length, liveTotal: liveRecords.length };
+      addLog(`  ✓ ${entityName}: ${toCreate} would create, ${toSkip} would skip (${liveRecords.length} live)`);
+    }
+
+    setEstimate(result);
+    setSummary({ type: "estimate", timestamp: new Date().toISOString(), entities: result });
+    addLog("═══════════════════════════");
+    addLog("Estimate complete — no records were written");
+    setEstimating(false);
+  };
+
+  // ── Verify Live Counts ────────────────────────────────────────────────────
+  const verifyLiveCounts = async () => {
+    setVerifying(true);
+    setLog([]);
+    addLog("▶ Verifying live record counts...");
+
+    const counts = {};
+    for (const entityName of IMPORT_ORDER) {
+      try {
+        const recs = await base44.entities[entityName].list();
+        counts[entityName] = recs.length;
+        const loaded = files[entityName]?.length || 0;
+        const match = loaded > 0 && recs.length === loaded ? " ✓ matches CSV" : loaded > 0 ? ` (CSV has ${loaded})` : "";
+        addLog(`  ${entityName}: ${recs.length} live${match}`);
+      } catch (err) {
+        counts[entityName] = null;
+        addLog(`  ⚠ ${entityName}: fetch failed — ${err?.message || "unknown"}`);
+      }
+    }
+
+    setLiveCounts(counts);
+    addLog("═══════════════════════════");
+    addLog("Verification complete");
+    setVerifying(false);
+  };
+
+  // ── Run Import ────────────────────────────────────────────────────────────
   const runImport = async () => {
     setRunning(true);
     setLog([]);
+    setSummary(null);
+
+    const runResult = {};
 
     for (const entityName of IMPORT_ORDER) {
       const rows = files[entityName];
@@ -234,46 +383,56 @@ export default function ImportData() {
 
       setStatus((prev) => ({
         ...prev,
-        [entityName]: {
-          done: 0,
-          total: rows.length,
-          errors: 0,
-          state: "running",
-        },
+        [entityName]: { done: 0, total: rows.length, skipped: 0, errors: 0, state: "running" },
       }));
       addLog(`▶ ${entityName}: importing ${rows.length} records...`);
 
+      // Fetch live fingerprints for idempotent create
+      let liveFingerprints = new Set();
+      try {
+        const liveRecords = await base44.entities[entityName].list();
+        liveFingerprints = new Set(liveRecords.map((rec) => buildFingerprint(entityName, rec)));
+      } catch {
+        addLog(`  ⚠ ${entityName}: could not fetch live records for dedup — proceeding without dedup`);
+      }
+
       let done = 0;
+      let skipped = 0;
       let errors = 0;
       const BATCH = 5;
 
       for (let i = 0; i < rows.length; i += BATCH) {
         const batch = rows.slice(i, i + BATCH);
         const results = await Promise.allSettled(
-          batch.map((row) => base44.entities[entityName].create(cleanRow(row)))
+          batch.map((row) => {
+            const fp = buildFingerprint(entityName, row);
+            if (liveFingerprints.has(fp)) {
+              return Promise.resolve({ __skipped: true });
+            }
+            return base44.entities[entityName].create(cleanRow(row));
+          })
         );
 
         results.forEach((r, idx) => {
           if (r.status === "fulfilled") {
-            done++;
+            if (r.value?.__skipped) {
+              skipped++;
+            } else {
+              done++;
+              // Add new fingerprint to prevent duplicate within this run
+              liveFingerprints.add(buildFingerprint(entityName, batch[idx]));
+            }
           } else {
             errors++;
             addLog(
-              `  ✕ ${entityName} row ${i + idx + 1}: ${
-                r.reason?.message || "unknown error"
-              }`
+              `  ✕ ${entityName} row ${i + idx + 1}: ${r.reason?.message || "unknown error"}`
             );
           }
         });
 
         setStatus((prev) => ({
           ...prev,
-          [entityName]: {
-            done,
-            total: rows.length,
-            errors,
-            state: "running",
-          },
+          [entityName]: { done, total: rows.length, skipped, errors, state: "running" },
         }));
 
         if (i + BATCH < rows.length) {
@@ -281,16 +440,18 @@ export default function ImportData() {
         }
       }
 
-      const state = errors === rows.length ? "error" : "done";
+      const state = errors === rows.length && rows.length > 0 ? "error" : "done";
       setStatus((prev) => ({
         ...prev,
-        [entityName]: { done, total: rows.length, errors, state },
+        [entityName]: { done, total: rows.length, skipped, errors, state },
       }));
+      runResult[entityName] = { done, skipped, errors, total: rows.length };
       addLog(
-        `${errors === 0 ? "✓" : "⚠"} ${entityName}: ${done} created, ${errors} failed`
+        `${errors === 0 ? "✓" : "⚠"} ${entityName}: ${done} created, ${skipped} skipped, ${errors} failed`
       );
     }
 
+    setSummary({ type: "import", timestamp: new Date().toISOString(), entities: runResult });
     setRunning(false);
     addLog("═══════════════════════════");
     addLog("Import complete");
@@ -298,6 +459,8 @@ export default function ImportData() {
 
   const totalRecords =
     Object.values(files).reduce((sum, rows) => sum + (rows?.length || 0), 0) || 0;
+
+  const anyRunning = running || estimating || verifying;
 
   return (
     <div
@@ -310,10 +473,11 @@ export default function ImportData() {
         background: "var(--bg-page)",
       }}
     >
+      {/* Header */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 12,
         }}
@@ -340,48 +504,55 @@ export default function ImportData() {
             One-time migration — reads CSV exports and creates all records in Base44
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={runEstimate}
+            disabled={anyRunning || Object.keys(files).length === 0}
+            style={btnStyle("var(--bg-surface-high)", "var(--text-secondary)", anyRunning || Object.keys(files).length === 0)}
+          >
+            {estimating ? "▶ ESTIMATING..." : "≈ ESTIMATE IMPORT"}
+          </button>
+          <button
+            type="button"
+            onClick={verifyLiveCounts}
+            disabled={anyRunning}
+            style={btnStyle("var(--bg-surface-high)", "var(--text-secondary)", anyRunning)}
+          >
+            {verifying ? "▶ VERIFYING..." : "⊛ VERIFY LIVE COUNTS"}
+          </button>
           <button
             type="button"
             onClick={runImport}
-            disabled={running || Object.keys(files).length === 0}
-            style={{
-              background: running
-                ? "var(--bg-surface-high)"
-                : "var(--accent)",
-              color: running ? "var(--text-muted)" : "#0A0A0B",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "10px 24px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor:
-                running || Object.keys(files).length === 0
-                  ? "not-allowed"
-                  : "pointer",
-              opacity: Object.keys(files).length === 0 ? 0.4 : 1,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              transition: "all 0.15s",
-            }}
+            disabled={anyRunning || Object.keys(files).length === 0 || !importAllowed}
+            style={btnStyle(
+              anyRunning ? "var(--bg-surface-high)" : "var(--accent)",
+              anyRunning ? "var(--text-muted)" : "#0A0A0B",
+              anyRunning || Object.keys(files).length === 0 || !importAllowed
+            )}
           >
             {running ? "▶ IMPORTING..." : "▶ RUN IMPORT"}
           </button>
-          {Object.keys(files).length > 0 && !running && (
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-muted)",
-              }}
+          {summary && (
+            <button
+              type="button"
+              onClick={() =>
+                downloadJSON(
+                  summary,
+                  `import-${summary.type}-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`
+                )
+              }
+              style={btnStyle("var(--bg-surface-high)", "var(--text-secondary)", false)}
             >
-              {totalRecords.toLocaleString()} total records ready
-            </span>
+              ↓ DOWNLOAD SUMMARY
+            </button>
           )}
         </div>
       </div>
 
+      {/* Warning banner */}
       <div
         style={{
           background: "var(--warning-muted)",
@@ -411,12 +582,77 @@ export default function ImportData() {
             lineHeight: 1.6,
           }}
         >
-          This importer creates NEW records. Running it multiple times will create duplicate
-          data. Projects, Alerts, and ScheduleTask records are excluded from import. Drop all
-          CSV files at once, verify counts match, then click Run Import.
+          Run <strong>Estimate Import</strong> first — it compares CSV rows against live records using business
+          keys and reports what would be created vs skipped without writing anything. Use{" "}
+          <strong>Verify Live Counts</strong> to confirm post-import state. Projects, Alerts, and
+          ScheduleTask records are excluded from import.
         </div>
       </div>
 
+      {/* Preflight panel */}
+      {Object.keys(files).length > 0 && (
+        <div
+          style={{
+            background: preflightClear ? "var(--success-muted, rgba(34,197,94,0.08))" : "var(--warning-muted)",
+            border: `1px solid ${preflightClear ? "var(--status-success)" : "var(--warning-border)"}`,
+            borderLeft: `4px solid ${preflightClear ? "var(--status-success)" : "var(--status-warning)"}`,
+            borderRadius: "var(--radius-card)",
+            padding: "12px 16px",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              color: preflightClear ? "var(--status-success)" : "var(--status-warning)",
+              marginBottom: 4,
+              letterSpacing: "0.08em",
+            }}
+          >
+            {preflightClear ? "✓ PREFLIGHT CLEAR" : "⚠ PREFLIGHT BLOCKED"}
+          </div>
+          {!preflightClear && (
+            <>
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 12,
+                  color: "var(--text-secondary)",
+                  marginBottom: 8,
+                }}
+              >
+                Missing CSVs: {missingEntities.join(", ")}
+              </div>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={overridePreflight}
+                  onChange={(e) => setOverridePreflight(e.target.checked)}
+                />
+                Override — proceed with partial CSV set
+              </label>
+            </>
+          )}
+          {preflightClear && (
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>
+              All {IMPORT_ORDER.length} required CSV files loaded — {totalRecords.toLocaleString()} total records
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Drop zone */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -425,9 +661,7 @@ export default function ImportData() {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         style={{
-          border: `2px dashed ${
-            isDragging ? "var(--accent)" : "var(--border-strong)"
-          }`,
+          border: `2px dashed ${isDragging ? "var(--accent)" : "var(--border-strong)"}`,
           borderRadius: "var(--radius-card)",
           padding: "40px",
           textAlign: "center",
@@ -487,10 +721,11 @@ export default function ImportData() {
         </button>
       </div>
 
+      {/* Entity table header */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "200px 80px 80px 1fr 100px",
+          gridTemplateColumns: "160px 70px 70px 70px 70px 1fr 100px",
           gap: "8px",
           alignItems: "center",
           padding: "8px 12px",
@@ -505,35 +740,30 @@ export default function ImportData() {
         }}
       >
         <div>Entity</div>
-        <div>Loaded</div>
-        <div>Created</div>
+        <div>CSV</div>
+        <div>Live</div>
+        <div>Create</div>
+        <div>Skip</div>
         <div>Progress</div>
         <div>Status</div>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}
-      >
+      {/* Entity rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {IMPORT_ORDER.map((entity) => {
           const loaded = files[entity]?.length || 0;
-          const s = status[entity] || {
-            done: 0,
-            total: loaded,
-            errors: 0,
-            state: "idle",
-          };
+          const live = liveCounts ? (liveCounts[entity] ?? "—") : "—";
+          const est = estimate?.[entity];
+          const s = status[entity] || { done: 0, total: loaded, skipped: 0, errors: 0, state: "idle" };
           const icon = STATUS_ICON[s.state] || STATUS_ICON.idle;
-          const pct = s.total ? Math.min(100, Math.round((s.done / s.total) * 100)) : 0;
+          const pct = s.total ? Math.min(100, Math.round(((s.done + (s.skipped || 0)) / s.total) * 100)) : 0;
+
           return (
             <div
               key={entity}
               style={{
                 display: "grid",
-                gridTemplateColumns: "200px 80px 80px 1fr 100px",
+                gridTemplateColumns: "160px 70px 70px 70px 70px 1fr 100px",
                 gap: "8px",
                 alignItems: "center",
                 padding: "10px 12px",
@@ -542,14 +772,23 @@ export default function ImportData() {
                 borderRadius: "var(--radius-card)",
               }}
             >
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-primary)" }}>
+                {entity}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
+                {loaded || "—"}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
+                {live}
+              </div>
               <div
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,
-                  color: "var(--text-primary)",
+                  color: est ? "var(--status-success)" : s.done ? "var(--status-success)" : "var(--text-muted)",
                 }}
               >
-                {entity}
+                {s.state !== "idle" ? s.done : est ? est.toCreate : "—"}
               </div>
               <div
                 style={{
@@ -558,19 +797,7 @@ export default function ImportData() {
                   color: "var(--text-muted)",
                 }}
               >
-                {loaded}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color:
-                    s.errors > 0
-                      ? "var(--status-warning)"
-                      : "var(--status-success)",
-                }}
-              >
-                {s.done || 0}
+                {s.state !== "idle" ? (s.skipped || 0) : est ? est.toSkip : "—"}
               </div>
               <div
                 style={{
@@ -608,9 +835,9 @@ export default function ImportData() {
                 <span>
                   {s.state || "idle"}
                   {s.errors > 0
-                    ? ` — ${s.done}/${s.total} (${s.errors} errors)`
-                    : s.total
-                    ? ` — ${s.done}/${s.total}`
+                    ? ` — ${s.done}/${s.total} (${s.errors} err)`
+                    : s.total && s.state !== "idle"
+                    ? ` — ${s.done + (s.skipped || 0)}/${s.total}`
                     : ""}
                 </span>
               </div>
@@ -619,6 +846,7 @@ export default function ImportData() {
         })}
       </div>
 
+      {/* Log */}
       <div
         style={{
           background: "var(--bg-surface-low)",
@@ -644,4 +872,23 @@ export default function ImportData() {
       </div>
     </div>
   );
+}
+
+function btnStyle(bg, color, disabled) {
+  return {
+    background: bg,
+    color: color,
+    border: "1px solid var(--border-default)",
+    borderRadius: "var(--radius-btn)",
+    padding: "10px 18px",
+    fontFamily: "var(--font-mono)",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    transition: "all 0.15s",
+    whiteSpace: "nowrap",
+  };
 }
