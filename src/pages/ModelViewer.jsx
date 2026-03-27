@@ -33,124 +33,162 @@ export default function ModelViewer() {
     const loadScripts = async () => {
       const scripts = [
         'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
-        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
-        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
-        'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.js',
+        'https://threejs.org/examples/js/controls/OrbitControls.js',
+        'https://threejs.org/examples/js/loaders/GLTFLoader.js',
       ];
 
       for (const src of scripts) {
-        await new Promise((resolve, reject) => {
-          // Skip if already loaded
-          if (document.querySelector(`script[src="${src}"]`)) {
-            resolve(); 
-            return;
-          }
+        await new Promise((resolve) => {
+          if (document.querySelector(`script[src=\"${src}\"]`)) { resolve(); return; }
           const script = document.createElement('script');
           script.src = src;
           script.onload = resolve;
-          script.onerror = () => reject(new Error(`Failed: ${src}`));
+          script.onerror = () => {
+            console.warn(`Failed to load: ${src}`);
+            resolve();
+          };
           document.head.appendChild(script);
         });
       }
-      window._IFC_WASM_PATH = 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.36/';
+
+      if (!window.THREE) {
+        setLoadError('THREE.js failed to load. Check network connectivity and try refreshing.');
+        return;
+      }
+
       setThreeReady(true);
     };
 
-    loadScripts().catch(err => {
-      setLoadError(err.message);
-      console.error('Script load failed:', err);
-    });
+    loadScripts();
   }, []);
+
+  let cachedIFCLoader = null;
+  const loadIFCScript = async () => {
+    if (cachedIFCLoader) return cachedIFCLoader;
+    const sources = [
+      'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/IFCLoader.js?module',
+      'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.module.js',
+      'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.js?module',
+    ];
+    for (const src of sources) {
+      try {
+        const mod = await import(/* @vite-ignore */ src);
+        const IFCLoaderClass = mod.IFCLoader || mod.default || mod;
+        if (IFCLoaderClass) {
+          cachedIFCLoader = IFCLoaderClass;
+          return IFCLoaderClass;
+        }
+      } catch (e) {
+        console.warn('IFC loader import failed from', src, e);
+      }
+    }
+    return null;
+  };
 
   // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────
   useEffect(() => {
     if (!threeReady || !mountRef.current) return;
     if (sceneRef.current.initialized) return;
 
-    const THREE = window.THREE;
-    const width = mountRef.current.clientWidth;
-    const height = mountRef.current.clientHeight;
+    let rafInit;
+    rafInit = requestAnimationFrame(() => {
+      if (!mountRef.current || sceneRef.current.initialized) return;
 
-    // Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x080B12);
-    scene.fog = new THREE.FogExp2(0x080B12, 0.003);
+      const THREE = window.THREE;
+      const width = mountRef.current.clientWidth || 800;
+      const height = mountRef.current.clientHeight || 600;
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 2000);
-    camera.position.set(30, 20, 30);
+      // Scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x080B12);
+      scene.fog = new THREE.FogExp2(0x080B12, 0.003);
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: false,
-      powerPreference: 'high-performance'
+      // Camera
+      const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 2000);
+      camera.position.set(30, 20, 30);
+
+      // Renderer
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: false,
+        powerPreference: 'high-performance'
+      });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      mountRef.current.appendChild(renderer.domElement);
+
+      // Controls
+      const OrbitControlsClass = THREE.OrbitControls || window.OrbitControls;
+      let controls;
+      if (OrbitControlsClass) {
+        controls = new OrbitControlsClass(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.minDistance = 0.5;
+        controls.maxDistance = 500;
+        controls.target.set(0, 0, 0);
+      } else {
+        console.warn('OrbitControls unavailable — orbit disabled');
+        controls = { update: () => {}, dispose: () => {}, target: new THREE.Vector3() };
+      }
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0x404060, 1.0));
+      const sun = new THREE.DirectionalLight(0xFFE8D0, 1.8);
+      sun.position.set(50, 100, 50);
+      sun.castShadow = true;
+      scene.add(sun);
+      scene.add(new THREE.HemisphereLight(0x303060, 0x101020, 0.5));
+
+      // Grid
+      const grid = new THREE.GridHelper(100, 20, 0x1A1E2A, 0x0E1220);
+      scene.add(grid);
+
+      // Animation loop
+      let animFrameId;
+      const animate = () => {
+        animFrameId = requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      };
+      animate();
+
+      // Resize handler
+      const onResize = () => {
+        if (!mountRef.current) return;
+        const w = mountRef.current.clientWidth || width;
+        const h = mountRef.current.clientHeight || height;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      };
+      window.addEventListener('resize', onResize);
+
+      // Store refs
+      sceneRef.current = { 
+        scene, camera, renderer, controls, 
+        initialized: true, animFrameId, onResize 
+      };
     });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    mountRef.current.appendChild(renderer.domElement);
-
-    // Controls
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.minDistance = 0.5;
-    controls.maxDistance = 500;
-    controls.target.set(0, 0, 0);
-
-    // Lights
-    scene.add(new THREE.AmbientLight(0x404060, 1.0));
-    const sun = new THREE.DirectionalLight(0xFFE8D0, 1.8);
-    sun.position.set(50, 100, 50);
-    sun.castShadow = true;
-    scene.add(sun);
-    scene.add(new THREE.HemisphereLight(0x303060, 0x101020, 0.5));
-
-    // Grid
-    const grid = new THREE.GridHelper(100, 20, 0x1A1E2A, 0x0E1220);
-    scene.add(grid);
-
-    // Animation loop
-    let animFrameId;
-    const animate = () => {
-      animFrameId = requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    // Resize handler
-    const onResize = () => {
-      if (!mountRef.current) return;
-      const w = mountRef.current.clientWidth;
-      const h = mountRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', onResize);
-
-    // Store refs
-    sceneRef.current = { 
-      scene, camera, renderer, controls, 
-      initialized: true, animFrameId 
-    };
 
     // Cleanup
     return () => {
-      cancelAnimationFrame(animFrameId);
-      window.removeEventListener('resize', onResize);
-      controls.dispose();
-      renderer.dispose();
-      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
+      cancelAnimationFrame(rafInit);
+      if (sceneRef.current.initialized) {
+        cancelAnimationFrame(sceneRef.current.animFrameId);
+        if (sceneRef.current.onResize) window.removeEventListener('resize', sceneRef.current.onResize);
+        sceneRef.current.controls?.dispose();
+        sceneRef.current.renderer?.dispose();
+        if (mountRef.current && sceneRef.current.renderer?.domElement?.parentNode === mountRef.current) {
+          mountRef.current.removeChild(sceneRef.current.renderer.domElement);
+        }
+        sceneRef.current = {};
       }
-      sceneRef.current = {};
     };
   }, [threeReady]);
 
@@ -228,7 +266,13 @@ export default function ModelViewer() {
     }
 
     const url = URL.createObjectURL(file);
-    const loader = new THREE.GLTFLoader();
+    const GLTFLoaderClass = THREE.GLTFLoader || window.GLTFLoader;
+    if (!GLTFLoaderClass) {
+      setUploadError('GLTF loader not available. Please refresh the page.');
+      setLoadingModel({ active: false });
+      return;
+    }
+    const loader = new GLTFLoaderClass();
 
     loader.load(
       url,
@@ -338,12 +382,12 @@ export default function ModelViewer() {
     }
 
     try {
-      if (!window.IFCLoader && !THREE.IFCLoader) {
+      const IFCLoaderClass = await loadIFCScript();
+      if (!IFCLoaderClass) {
         throw new Error('IFC loader not available. Try refreshing the page.');
       }
 
-      const IFCLoader = window.IFCLoader || THREE.IFCLoader;
-      const loader = new IFCLoader();
+      const loader = new IFCLoaderClass();
       sceneRef.current.ifcLoader = loader;
 
       await loader.ifcManager.setWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.36/');

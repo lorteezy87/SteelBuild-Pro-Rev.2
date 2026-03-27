@@ -90,6 +90,8 @@ export default function FabRelease() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wps-fab", projectId] });
+      qc.invalidateQueries({ queryKey: ["work-packages"] });
+      qc.invalidateQueries({ queryKey: ["wps-all"] });
       toast.success("Work package marked complete");
     },
     onError: () => toast.error("Update failed"),
