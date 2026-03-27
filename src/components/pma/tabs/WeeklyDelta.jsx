@@ -50,8 +50,8 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
           SINCE LAST WEEK
         </div>
         <div style={{
-          background: 'var(--accent-muted)',
-          border: '1px solid var(--accent-muted)',
+          background: 'rgba(139,92,246,0.06)',
+          border: '1px solid rgba(139,92,246,0.12)',
           borderRadius: 8,
           padding: 12,
           textAlign: 'center',
@@ -62,8 +62,8 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
           <button
             onClick={() => setShowUpdateConfirm(true)}
             style={{
-              background: 'linear-gradient(135deg,var(--accent),var(--secondary))',
-              border: '1px solid var(--accent-border)',
+              background: 'linear-gradient(135deg,#8B5CF6,#6D40D4)',
+              border: '1px solid rgba(139,92,246,0.5)',
               borderRadius: 6,
               padding: '6px 12px',
               color: 'white',
@@ -90,8 +90,8 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
       </div>
 
       <div style={{
-        background: 'var(--accent-muted)',
-        border: '1px solid var(--accent-muted)',
+        background: 'rgba(139,92,246,0.05)',
+        border: '1px solid rgba(139,92,246,0.12)',
         borderRadius: 8,
         padding: 12,
       }}>
@@ -136,10 +136,10 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
           style={{
             width: '100%',
             background: showUpdateConfirm ? 'rgba(0,214,143,0.15)' : 'transparent',
-            border: '1px solid var(--accent-border)',
+            border: '1px solid rgba(139,92,246,0.25)',
             borderRadius: 6,
             padding: '6px 12px',
-            color: showUpdateConfirm ? 'var(--status-success)' : 'var(--accent)',
+            color: showUpdateConfirm ? 'var(--status-success)' : '#A78BFA',
             fontFamily: 'var(--font-mono)',
             fontSize: 8,
             fontWeight: 700,

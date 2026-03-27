@@ -5,7 +5,7 @@ import { differenceInDays } from "date-fns";
 import { Plus, RefreshCw, Search, CheckCircle2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { parseUTCDate, formatDate } from "@/components/shared/formatters";
-import { getNextFormattedNumber } from "../components/shared/numberSequencing";
+import { getNextNumber } from "../components/shared/numberSequencing";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -416,13 +416,7 @@ export default function RFIHub() {
   const createMut = useMutation({
     mutationFn: async (data) => {
       const rfiNumber = data.project_id
-        ? await getNextFormattedNumber({
-            projectId: data.project_id,
-            recordType: "RFI",
-            entityName: "RFI",
-            fieldName: "rfi_number",
-            prefix: "RFI #",
-          })
+        ? await getNextNumber(data.project_id, "RFI")
         : `RFI #${String(Date.now()).slice(-3)}`;
       return base44.entities.RFI.create({ ...data, rfi_number: rfiNumber });
     },

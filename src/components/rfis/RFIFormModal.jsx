@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getNextFormattedNumber } from "../shared/numberSequencing";
+import { getNextNumber } from "../shared/numberSequencing";
 
 const iStyle = {
   width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-  borderRadius: 2, padding: "8px 12px", color: "var(--text-primary)",
+  borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)",
   fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
 };
 const labelStyle = {
@@ -14,8 +14,8 @@ const labelStyle = {
   letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: 4,
 };
 const SectionLabel = ({ children }) => (
-  <div style={{ gridColumn: "span 3", borderLeft: "3px solid var(--accent)", paddingLeft: 8, marginTop: 16, marginBottom: 8 }}>
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase", fontWeight: 700 }}>{children}</span>
+  <div style={{ gridColumn: "span 3", borderTop: "1px solid var(--divider)", paddingTop: 12, marginTop: 4 }}>
+    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--accent)", textTransform: "uppercase", fontWeight: 700 }}>{children}</span>
   </div>
 );
 const Field = ({ label, span = 1, children }) => (
@@ -59,15 +59,17 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
       if (rfi) {
         return base44.entities.RFI.update(rfi.id, data);
       }
-      const rfiNumber = data.project_id
-        ? await getNextFormattedNumber({
-            projectId: data.project_id,
-            recordType: "RFI",
-            entityName: "RFI",
-            fieldName: "rfi_number",
-            prefix: "RFI #",
-          })
-        : `RFI #${String(Date.now()).slice(-3)}`;
+      let rfiNumber;
+      try {
+        rfiNumber = data.project_id
+          ? await getNextNumber(data.project_id, "RFI")
+          : null;
+      } catch (e) {
+        rfiNumber = null;
+      }
+      if (!rfiNumber) {
+        rfiNumber = `RFI-${String(Date.now()).slice(-3)}`;
+      }
       return base44.entities.RFI.create({
         ...data,
         rfi_number: rfiNumber,
@@ -114,23 +116,26 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
     : "New RFI";
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 780, width: "96%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 16, padding: 24, maxWidth: 760, width: "95%", maxHeight: "92vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 24px 12px", borderBottom: "1px solid var(--divider)", background: "var(--bg-sidebar)", flexShrink: 0 }}>
-          <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>{title}</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>
+            {title}
+          </h2>
           {rfi && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {["Open", "Under Review", "Answered", "Closed"].map((s) => (
-                <button key={s} style={statusBtnStyle(s)} onClick={() => quickStatusMut.mutate(s)}>
-                  {s}
-                </button>
+                <button key={s} style={statusBtnStyle(s)} onClick={() => quickStatusMut.mutate(s)}>{s}</button>
               ))}
             </div>
           )}
         </div>
 
-        <form id="rfi-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: "auto", padding: "0 24px 16px" }}>
+        <form onSubmit={handleSubmit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
 
             {/* Section 1 — Identity */}
@@ -250,16 +255,16 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
 
           </div>
 
+          {/* Footer */}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--divider)" }}>
+            <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 8, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.6 : 1 }}>
+              {mutation.isPending ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
+            </button>
+          </div>
         </form>
-        {/* Footer */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 24px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
-          <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Cancel
-          </button>
-          <button type="submit" form="rfi-form" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.6 : 1 }}>
-            {mutation.isPending ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 import React from "react";
-import WorkflowBadge from "./WorkflowBadge";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -15,14 +14,7 @@ const STATUS_COLORS = {
   "On Hold": "var(--status-error)",
 };
 
-export default function WorkPackageList({
-  workPackages,
-  onSelectWP,
-  onEdit,
-  showProject = true,
-  allDrawings = [],
-  allDeliveries = [],
-}) {
+export default function WorkPackageList({ workPackages, onSelectWP, onEdit, showProject = true }) {
   if (workPackages.length === 0) {
     return (
       <div
@@ -138,9 +130,6 @@ export default function WorkPackageList({
                 {wp.project_name}
               </div>
             )}
-            <div style={{ marginTop: 6 }}>
-              <WorkflowBadge wp={wp} drawings={allDrawings} deliveries={allDeliveries} />
-            </div>
           </div>
 
           {/* Phase */}

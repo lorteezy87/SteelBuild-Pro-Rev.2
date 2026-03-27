@@ -15,50 +15,50 @@ const QUICK_PROMPT_CATEGORIES = [
     label: 'STATUS',
     color: 'var(--accent)',
     prompts: [
-      "What needs my attention today?",
-      "Summarize project status",
-      "What's behind schedule?",
-      "How is fabrication progressing?",
+      'What needs my attention today?',
+      'Summarize project status',
+      "What\'s behind schedule?",
+      'How is fabrication progressing?',
     ],
   },
   {
     label: 'RISK',
     color: 'var(--status-error)',
     prompts: [
-      "What are the top 3 risks right now?",
-      "What could delay erection start?",
-      "Which RFIs are blocking fab?",
-      "Flag anything that looks like a claim",
+      'What are the top 3 risks right now?',
+      'What could delay erection start?',
+      'Which RFIs are blocking fab?',
+      'Flag anything that looks like a claim',
     ],
   },
   {
     label: 'DRAFTS',
     color: 'var(--status-info)',
     prompts: [
-      "Draft a weekly update email",
-      "Write a GC update on RFI status",
-      "Compose a delivery delay notice",
-      "Draft a CO justification memo",
+      'Draft a weekly update email',
+      'Write a GC update on RFI status',
+      'Compose a delivery delay notice',
+      'Draft a CO justification memo',
     ],
   },
   {
     label: 'COST',
     color: 'var(--status-warning)',
     prompts: [
-      "What's our cost exposure?",
-      "Which cost codes are over budget?",
-      "Summarize pending change orders",
-      "What's our earned value?",
+      "What\'s our cost exposure?",
+      'Which cost codes are over budget?',
+      'Summarize pending change orders',
+      "What\'s our earned value?",
     ],
   },
   {
     label: 'LOOKAHEAD',
     color: '#8B5CF6',
     prompts: [
-      "What deliveries are due this week?",
-      "What WPs ship next?",
-      "Upcoming drawing submissions",
-      "Two-week lookahead summary",
+      'What deliveries are due this week?',
+      'What WPs ship next?',
+      'Upcoming drawing submissions',
+      'Two-week lookahead summary',
     ],
   },
 ];
@@ -80,9 +80,6 @@ export default function PMAChat() {
     sessionId,
     createAuditRecord,
     runPolicyChecks,
-    pinnedMessages,
-    setPinnedMessages,
-    setActiveTab,
   } = usePMA();
   const { activeProject } = useProjectContext();
   const [input, setInput] = useState('');
@@ -90,13 +87,11 @@ export default function PMAChat() {
   const [generatedEmail, setGeneratedEmail] = useState(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [createdTask, setCreatedTask] = useState(null);
+  const [activePromptCategory, setActivePromptCategory] = useState(QUICK_PROMPT_CATEGORIES[0]);
   const messagesEndRef = useRef(null);
   const [user, setUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('pm');
   const [confidenceMap, setConfidenceMap] = useState({});
-  const [quickCategory, setQuickCategory] = useState(QUICK_PROMPT_CATEGORIES[0]);
-  const [contextMode, setContextMode] = useState('PROJECT');
-  const [customContext, setCustomContext] = useState('');
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(console.error);
@@ -115,14 +110,11 @@ export default function PMAChat() {
     const text = input.trim();
     if (!text || isLoading) return;
 
-    // Intent detection
+    // Check if user is requesting weekly email
     const isWeeklyEmailRequest = /weekly\s+update|email|draft.*email/i.test(text);
+
+    // Check if user is creating a task (e.g., "create task", "assign", "add action item")
     const isCreateTaskRequest = /create\s+task|assign|add\s+action|remind\s+me|todo|task:/i.test(text);
-    const isLookaheadRequest = /lookahead|next week|upcoming|schedule.*week|two.week|this week/i.test(text);
-    const isBudgetQuestion = /cost|budget|exposure|over.budget|earned value|burn rate|cost code|variance/i.test(text);
-    const isClaimAlert = /claim|notice|delay|force majeure|differing site|change order|dispute|impact/i.test(text);
-    const isRFIQuestion = /rfi|request for information|ball in court|bic/i.test(text);
-    const isDeliveryQuestion = /deliver|material|shipment|vendor|procurement|PO/i.test(text);
 
     setConversationHistory((prev) => [
       ...prev,
@@ -314,42 +306,36 @@ IMPORTANT:
         const instructions = getPMAInstructions();
         const roleInstruction = getRoleInstruction(selectedRole);
 
-        const snapshot = activeProject ? await buildProjectSnapshot() : null;
-
-        // Context selector filtering
-        let scopedSnapshot = snapshot;
-        if (snapshot) {
-          if (contextMode === 'RFIS') {
-            scopedSnapshot = { project: snapshot.project, rfis: snapshot.rfis };
-          } else if (contextMode === 'FINANCIALS') {
-            scopedSnapshot = { project: snapshot.project, budget: snapshot.budget, changeOrders: snapshot.changeOrders, costCodes: snapshot.budget?.records };
-          } else if (contextMode === 'SCHEDULE') {
-            scopedSnapshot = { project: snapshot.project, workPackages: snapshot.workPackages, deliveries: snapshot.deliveries, submittals: snapshot.submittals };
-          } else if (contextMode === 'PORTFOLIO') {
-            // handled in future enhancement, for now use full snapshot
-            scopedSnapshot = snapshot;
-          }
+        let snapshot = null;
+        let dataWarning = '';
+        try {
+          snapshot = activeProject ? await buildProjectSnapshot() : null;
+        } catch (e) {
+          snapshot = null;
+          dataWarning = 'Live project data unavailable (network error). Respond with general guidance.';
+          console.warn('Snapshot load failed, continuing with fallback', e);
         }
 
-        const dataBlock = scopedSnapshot ? `
+        const dataBlock = snapshot ? `
 === LIVE PROJECT DATA ===
-Project: ${scopedSnapshot.project.name} ${pNum} | Phase: ${pPhase} | Health: ${scopedSnapshot.project.healthStatus || 'Not set'}
-Days to completion: ${scopedSnapshot.project.daysToEnd != null ? scopedSnapshot.project.daysToEnd + 'd' : 'not set'}
-Contract: $${(scopedSnapshot.budget?.contractValue || 0).toLocaleString()} | Committed: ${scopedSnapshot.budget?.pctUsed || 0}%
+Project: ${snapshot.project.name} ${pNum} | Phase: ${pPhase} | Health: ${snapshot.project.healthStatus || 'Not set'}
+Days to completion: ${snapshot.project.daysToEnd != null ? snapshot.project.daysToEnd + 'd' : 'not set'}
+Contract: $${(snapshot.budget.contractValue || 0).toLocaleString()} | Committed: ${snapshot.budget.pctUsed}%
 
-RFIs: ${scopedSnapshot.rfis?.open || 0} open | ${scopedSnapshot.rfis?.overdue || 0} overdue | ${scopedSnapshot.rfis?.critical || 0} critical
-${scopedSnapshot.rfis?.overdueItems?.length > 0 ? scopedSnapshot.rfis.overdueItems.map(r => `  OVERDUE: ${r.number} — ${r.subject} (due ${r.dueDate})`).join('\n') : ''}
+RFIs: ${snapshot.rfis.open} open | ${snapshot.rfis.overdue} overdue | ${snapshot.rfis.critical} critical
+${snapshot.rfis.overdueItems?.length > 0 ? snapshot.rfis.overdueItems.map(r => `  OVERDUE: ${r.number} — ${r.subject} (due ${r.dueDate})`).join('\n') : ''}
 
-Work Packages: ${scopedSnapshot.workPackages?.total || 0} total | avg ${scopedSnapshot.workPackages?.avgComplete || 0}% complete
-${scopedSnapshot.workPackages?.activeItems?.length > 0 ? scopedSnapshot.workPackages.activeItems.map(w => `  ${w.number} ${w.name}: ${w.progress}% (${w.phase})`).join('\n') : ''}
+Work Packages: ${snapshot.workPackages.total} total | avg ${snapshot.workPackages.avgComplete}% complete
+${snapshot.workPackages.activeItems?.length > 0 ? snapshot.workPackages.activeItems.map(w => `  ${w.number} ${w.name}: ${w.progress}% (${w.phase})`).join('\n') : ''}
 
-Deliveries: ${scopedSnapshot.deliveries?.upcoming || 0} upcoming | ${scopedSnapshot.deliveries?.late || 0} late
-${scopedSnapshot.deliveries?.lateItems?.length > 0 ? scopedSnapshot.deliveries.lateItems.map(d => `  LATE: ${d.name}`).join('\n') : ''}
+Deliveries: ${snapshot.deliveries.upcoming} upcoming | ${snapshot.deliveries.late} late
+${snapshot.deliveries.lateItems?.length > 0 ? snapshot.deliveries.lateItems.map(d => `  LATE: ${d.name}`).join('\n') : ''}
 
-Change Orders: ${scopedSnapshot.changeOrders?.pending || 0} pending | $${(scopedSnapshot.changeOrders?.totalValue || 0).toLocaleString()} total
-Submittals: ${scopedSnapshot.submittals?.pending || 0} pending | ${scopedSnapshot.submittals?.overdue || 0} overdue
-Action Items: ${scopedSnapshot.actionItems?.overdueCount || 0} overdue | ${scopedSnapshot.actionItems?.dueThisWeekCount || 0} due this week
+Change Orders: ${snapshot.changeOrders.pending} pending | $${(snapshot.changeOrders.totalValue || 0).toLocaleString()} total
+Submittals: ${snapshot.submittals.pending} pending | ${snapshot.submittals.overdue} overdue
+Action Items: ${snapshot.actionItems.overdueCount} overdue | ${snapshot.actionItems.dueThisWeekCount} due this week
 === END DATA ===` : '';
+        const dataNotice = dataWarning ? `\nNOTE: ${dataWarning}` : '';
 
         const systemPrompt = `You are the Project Manager Assistant (PMA) in SteelBuild Pro. You have LIVE data from the project database. Use it.
 
@@ -365,7 +351,7 @@ Project: ${pName} ${pNum}${pPhase ? ` | Phase: ${pPhase}` : ''}
 ${roleInstruction}
 ${instructions ? `\nPM INSTRUCTIONS:\n${instructions}` : ''}
 
-${dataBlock}`;
+${dataBlock}${dataNotice}`;
 
         const history = conversationHistory
           .filter(m => m.content && !m.isEmailGeneration && !m.isTaskCreation)
@@ -373,28 +359,38 @@ ${dataBlock}`;
           .map(m => ({ role: m.role, content: m.content }));
         history.push({ role: 'user', content: text });
 
-        // Intent-specific enrichment
-        let augmentedPrompt = text;
-        if (snapshot) {
-          if (isRFIQuestion) augmentedPrompt = `LIVE RFI DATA:\n${JSON.stringify(snapshot.rfis, null, 2)}\n\n${text}`;
-          if (isBudgetQuestion) augmentedPrompt = `BUDGET & COST DATA:\n${JSON.stringify(snapshot.budget, null, 2)}\nCHANGE ORDERS:\n${JSON.stringify(snapshot.changeOrders, null, 2)}\n\n${text}`;
-          if (isLookaheadRequest) augmentedPrompt = `LOOKAHEAD DATA (Deliveries + WPs + Submittals):\n${JSON.stringify({ deliveries: snapshot.deliveries, workPackages: snapshot.workPackages, submittals: snapshot.submittals }, null, 2)}\n\n${text}`;
-          if (isDeliveryQuestion) augmentedPrompt = `DELIVERY DATA:\n${JSON.stringify(snapshot.deliveries, null, 2)}\n\n${text}`;
-          if (isClaimAlert) augmentedPrompt = `POTENTIAL CLAIM CHECK:\n${JSON.stringify({ rfis: snapshot.rfis, changeOrders: snapshot.changeOrders, deliveries: snapshot.deliveries }, null, 2)}\n\n${text}`;
+        let reply = '';
+        let llmError = null;
+        try {
+          const replyResult = await base44.functions.invoke('anthropicProxy', {
+            prompt: text,
+            system: systemPrompt,
+            messages: history,
+          });
+          const replyRaw = (typeof replyResult === 'string'
+            ? replyResult
+            : replyResult?.text || replyResult?.content || replyResult?.response || '') || '';
+          reply = replyRaw.trim();
+        } catch (err) {
+          console.warn('PMA Chat LLM error', err);
+          llmError = err?.message || JSON.stringify(err);
+          reply = '';
         }
 
-        if (contextMode === 'CUSTOM' && customContext) {
-          augmentedPrompt = `CUSTOM CONTEXT:\n${customContext}\n\n${augmentedPrompt}`;
+        if (!reply) {
+          if (!llmError) {
+            llmError = 'anthropicProxy returned no content';
+          }
+          if (snapshot) {
+            const rfiLine = `RFIs: ${snapshot.rfis?.open ?? 0} open, ${snapshot.rfis?.overdue ?? 0} overdue`;
+            const wpLine = `Work Packages: ${snapshot.workPackages?.total ?? 0} total, avg ${snapshot.workPackages?.avgComplete ?? 0}%`;
+            const delLine = `Deliveries: ${snapshot.deliveries?.upcoming ?? 0} upcoming, ${snapshot.deliveries?.late ?? 0} late`;
+            const aiLine = `Action Items: ${snapshot.actionItems?.overdueCount ?? 0} overdue, ${snapshot.actionItems?.dueThisWeekCount ?? 0} due this week`;
+            reply = `⚠ AI response unavailable. Here's a quick snapshot from live data:\n- ${rfiLine}\n- ${wpLine}\n- ${delLine}\n- ${aiLine}\nTry again in a few seconds; if it persists, check VPN/firewall access to /api/anthropicProxy.${llmError ? `\nError: ${llmError}` : ''}`;
+          } else {
+            reply = `⚠ AI response unavailable and live project data could not be loaded. Please try again shortly. If it persists, verify VPN/firewall and that /api/anthropicProxy is reachable.${llmError ? `\nError: ${llmError}` : ''}`;
+          }
         }
-
-        const replyResult = await base44.functions.invoke('anthropicProxy', {
-          prompt: augmentedPrompt,
-          system: systemPrompt,
-          messages: history,
-        });
-        const reply = (typeof replyResult === 'string'
-          ? replyResult
-          : replyResult?.text || replyResult?.content || replyResult?.response || '') || 'No response.';
 
         setConversationHistory(prev => [
           ...prev,
@@ -455,13 +451,13 @@ ${dataBlock}`;
             <button
               onClick={copyEmail}
               style={{
-                background: copyFeedback ? 'var(--success-muted)' : 'var(--accent-border)',
-                border: '1px solid var(--accent-border)',
+                background: copyFeedback ? 'var(--success-muted)' : 'rgba(139,92,246,0.2)',
+                border: '1px solid rgba(139,92,246,0.3)',
                 borderRadius: 6,
                 padding: '4px 8px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 8,
-                color: copyFeedback ? 'var(--status-success)' : 'var(--accent)',
+                color: copyFeedback ? 'var(--status-success)' : '#A78BFA',
                 cursor: 'pointer',
                 fontWeight: 700,
                 transition: 'all 0.2s',
@@ -488,60 +484,56 @@ ${dataBlock}`;
         </div>
       )}
 
-      {/* Quick prompts categories */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
-          {QUICK_PROMPT_CATEGORIES.map((cat) => (
-            <button
-              key={cat.label}
-              onClick={() => setQuickCategory(cat)}
-              style={{
-                background: quickCategory.label === cat.label ? cat.color + '22' : 'var(--bg-surface-low)',
-                border: `1px solid ${quickCategory.label === cat.label ? cat.color + '55' : 'var(--border-default)'}`,
-                color: quickCategory.label === cat.label ? cat.color : 'var(--text-secondary)',
-                borderRadius: 999,
-                padding: '6px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                letterSpacing: '0.08em',
-              }}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8 }}>
-          {quickCategory.prompts.map((prompt) => (
-            <button
-              key={prompt}
-              onClick={() => setInput(prompt)}
-              style={{
-                background: 'var(--bg-surface-low)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 6,
-                padding: '8px 10px',
-                fontFamily: 'var(--font-body)',
-                fontSize: 10,
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
         {conversationHistory.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'rgba(160,175,210,0.4)', padding: '20px 0' }}>
+          <div style={{ textAlign: 'center', color: 'rgba(160,175,210,0.4)', padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, marginBottom: 6 }}>
               Ask PMA anything about this project
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {QUICK_PROMPT_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActivePromptCategory(cat)}
+                  style={{
+                    background: activePromptCategory.label === cat.label ? cat.color : 'var(--bg-surface-low)',
+                    color: activePromptCategory.label === cat.label ? '#002E6A' : 'var(--text-secondary)',
+                    border: activePromptCategory.label === cat.label ? `1px solid ${cat.color}` : '1px solid var(--border-default)',
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 6 }}>
+              {activePromptCategory.prompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => setInput(prompt)}
+                  style={{
+                    background: 'rgba(139,92,246,0.08)',
+                    border: '1px solid rgba(139,92,246,0.2)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 10,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -552,14 +544,13 @@ ${dataBlock}`;
                 display: 'flex',
                 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
                 gap: 8,
-                position: 'relative',
               }}
             >
               {msg.role === 'assistant' && (
                 <div
                   style={{
                     fontSize: 12,
-                    color: 'var(--accent)',
+                    color: '#A78BFA',
                     marginTop: 2,
                   }}
                 >
@@ -569,12 +560,12 @@ ${dataBlock}`;
               <div
                 style={{
                   maxWidth: '85%',
-                  background: msg.role === 'user' ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
+                  background: msg.role === 'user' ? 'rgba(139,92,246,0.20)' : 'var(--bg-surface-low)',
                   border:
                     msg.role === 'user'
                       ? 'none'
-                      : '1px solid var(--accent-border)',
-                  borderLeft: msg.role === 'user' ? 'none' : '3px solid var(--accent)',
+                      : '1px solid rgba(139,92,246,0.2)',
+                  borderLeft: msg.role === 'user' ? 'none' : '3px solid #8B5CF6',
                   borderRadius: 8,
                   padding: '8px 12px',
                   fontFamily: 'var(--font-body)',
@@ -583,7 +574,6 @@ ${dataBlock}`;
                   lineHeight: 1.4,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  position: 'relative',
                 }}
               >
                 {msg.content}
@@ -606,21 +596,6 @@ ${dataBlock}`;
                     {confidenceMap[conversationHistory.indexOf(msg)] && (
                       <ConfidenceDisplay confidence={confidenceMap[conversationHistory.indexOf(msg)]} />
                     )}
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <ActionButton label="📋 Copy" onClick={() => navigator.clipboard.writeText(msg.content)} />
-                      <ActionButton label="📌 Pin" onClick={() => setPinnedMessages([...pinnedMessages, msg])} />
-                      <ActionButton
-                        label="📝 Create Action Item"
-                        onClick={() => createActionItemFromChat(msg.content, 'team', null, 'Medium')}
-                      />
-                      <ActionButton
-                        label="📧 Use in Email"
-                        onClick={() => {
-                          setActiveTab?.('draft');
-                          localStorage.setItem('pma-draft-preload', msg.content);
-                        }}
-                      />
-                    </div>
                   </div>
                 )}
               </div>
@@ -633,7 +608,7 @@ ${dataBlock}`;
               display: 'flex',
               gap: 6,
               alignItems: 'center',
-              color: 'var(--accent)',
+              color: '#A78BFA',
               fontFamily: 'var(--font-body)',
               fontSize: 10,
             }}
@@ -646,63 +621,7 @@ ${dataBlock}`;
       </div>
 
       {/* Input */}
-      <div style={{ borderTop: '1px solid var(--accent-border)', paddingTop: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-            <span>Context:</span>
-            <select
-              value={contextMode}
-              onChange={(e) => setContextMode(e.target.value)}
-              style={{
-                background: 'var(--bg-surface-low)',
-                border: '1px solid var(--border-default)',
-                color: 'var(--text-primary)',
-                fontSize: 9,
-                fontFamily: 'var(--font-mono)',
-                borderRadius: 6,
-                padding: '4px 8px',
-              }}
-            >
-              {['PROJECT', 'PORTFOLIO', 'RFIS', 'FINANCIALS', 'SCHEDULE', 'CUSTOM'].map((mode) => (
-                <option key={mode} value={mode}>{mode}</option>
-              ))}
-            </select>
-            {contextMode === 'CUSTOM' && (
-              <input
-                value={customContext}
-                onChange={(e) => setCustomContext(e.target.value)}
-                placeholder="Describe custom context..."
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-default)',
-                  color: 'var(--text-primary)',
-                  fontSize: 9,
-                  fontFamily: 'var(--font-body)',
-                  borderRadius: 6,
-                  padding: '4px 8px',
-                  minWidth: 160,
-                }}
-              />
-            )}
-          </div>
-          <button
-            onClick={() => setConversationHistory([])}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border-default)',
-              color: 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 8,
-              borderRadius: 6,
-              padding: '4px 8px',
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}
-          >
-            Clear Chat
-          </button>
-        </div>
+      <div style={{ borderTop: '1px solid rgba(139,92,246,0.2)', paddingTop: 8 }}>
         {activeProject && (
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)',
@@ -723,7 +642,7 @@ ${dataBlock}`;
             gap: 6,
             alignItems: 'flex-end',
             background: 'var(--bg-input)',
-            border: '1px solid var(--accent-border)',
+            border: '1px solid rgba(139,92,246,0.25)',
             borderRadius: 8,
             padding: '6px 8px',
             marginBottom: 8,
@@ -758,7 +677,7 @@ ${dataBlock}`;
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
             style={{
-              background: 'linear-gradient(135deg,var(--accent),var(--secondary))',
+              background: 'linear-gradient(135deg,#8B5CF6,#6D40D4)',
               border: 'none',
               borderRadius: 6,
               padding: '5px 10px',
@@ -777,51 +696,58 @@ ${dataBlock}`;
 
         {/* Quick prompts */}
         {conversationHistory.length === 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {quickCategory.prompts.map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => setInput(prompt)}
-                style={{
-                  background: 'var(--accent-muted)',
-                  border: '1px solid var(--accent-border)',
-                  borderRadius: 6,
-                  padding: '3px 8px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 8,
-                  color: 'var(--accent)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {prompt}
-              </button>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {QUICK_PROMPT_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActivePromptCategory(cat)}
+                  style={{
+                    background: activePromptCategory.label === cat.label
+                      ? cat.color
+                      : 'var(--bg-surface-low)',
+                    color: activePromptCategory.label === cat.label ? '#002E6A' : 'var(--text-secondary)',
+                    border: activePromptCategory.label === cat.label
+                      ? `1px solid ${cat.color}`
+                      : '1px solid var(--border-default)',
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
+              {activePromptCategory.prompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => setInput(prompt)}
+                  style={{
+                    background: 'rgba(139,92,246,0.08)',
+                    border: '1px solid rgba(139,92,246,0.2)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 10,
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-function ActionButton({ label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        border: '1px solid var(--border-default)',
-        background: 'var(--bg-surface)',
-        color: 'var(--text-secondary)',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 8,
-        padding: '4px 8px',
-        borderRadius: 6,
-        cursor: 'pointer',
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {label}
-    </button>
   );
 }

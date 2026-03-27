@@ -6,7 +6,7 @@ import { flagLegalHold, exportAuditLogCSV, reproduceOutput } from '../auditUtils
 import { toast } from 'sonner';
 
 const ACTION_TYPE_COLORS = {
-  INSIGHT_GENERATED: 'var(--accent)',
+  INSIGHT_GENERATED: '#8B5CF6',
   EMAIL_GENERATED: 'var(--status-info)',
   CHAT_RESPONSE: 'var(--status-success)',
   DATA_RETRIEVED: 'var(--text-muted)',
@@ -15,7 +15,7 @@ const ACTION_TYPE_COLORS = {
   ACCESS_DENIED: 'var(--status-error)',
   LEGAL_HOLD_FLAGGED: 'var(--status-warning)',
   EXPORT_REQUESTED: 'var(--status-info)',
-  MEMORY_UPDATED: 'var(--accent)',
+  MEMORY_UPDATED: '#8B5CF6',
 };
 
 export default function PMAudit() {
@@ -713,10 +713,10 @@ function AuditEntryCard({
                 disabled={isReproducing}
                 style={{
                   padding: '6px 12px',
-                  background: 'var(--accent-muted)',
-                  border: '1px solid var(--accent-border)',
+                  background: 'rgba(139,92,246,0.10)',
+                  border: '1px solid rgba(139,92,246,0.25)',
                   borderRadius: 6,
-                  color: 'var(--accent)',
+                  color: '#A78BFA',
                   fontFamily: 'var(--font-body)',
                   fontSize: 10,
                   cursor: isReproducing ? 'not-allowed' : 'pointer',

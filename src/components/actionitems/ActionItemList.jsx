@@ -1,5 +1,4 @@
 import React from "react";
-import { Trash2 } from "lucide-react";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -15,12 +14,7 @@ const STATUS_COLORS = {
   Cancelled: "var(--text-muted)",
 };
 
-export default function ActionItemList({
-  actionItems,
-  onEdit,
-  onResolve,
-  onDelete,
-}) {
+export default function ActionItemList({ actionItems }) {
   if (actionItems.length === 0) {
     return (
       <div
@@ -65,7 +59,6 @@ export default function ActionItemList({
               borderRadius: "12px",
               padding: "16px",
               transition: "all 0.15s",
-              opacity: item.status === "Complete" ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent-border)";
@@ -92,7 +85,6 @@ export default function ActionItemList({
                     fontWeight: 600,
                     color: "var(--text-primary)",
                     marginBottom: "4px",
-                    textDecoration: item.status === "Complete" ? "line-through" : "none",
                   }}
                 >
                   {item.title}
@@ -105,31 +97,6 @@ export default function ActionItemList({
               </div>
 
               <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px" }}>
-                {(item.status === "Complete" || item.status === "Cancelled") && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete && onDelete(item);
-                    }}
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "transparent",
-                      border: "1px solid var(--danger-border)",
-                      borderRadius: "6px",
-                      color: "var(--status-error)",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                    title="Delete completed item"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
-
                 {/* Priority Badge */}
                 <div
                   style={{
@@ -193,12 +160,11 @@ export default function ActionItemList({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "auto auto auto 1fr",
+                gridTemplateColumns: "auto auto auto",
                 gap: "24px",
                 marginTop: "12px",
                 paddingTop: "12px",
                 borderTop: "1px solid var(--divider)",
-                alignItems: "center",
               }}
             >
               {item.assigned_to && (
@@ -270,90 +236,6 @@ export default function ActionItemList({
                   </div>
                 </div>
               )}
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  marginLeft: "auto",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResolve?.(item);
-                  }}
-                  title={item.status === "Complete" ? "Reopen" : "Mark Complete"}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 10px",
-                    borderRadius: 4,
-                    border: `1px solid ${
-                      item.status === "Complete" ? "var(--border-default)" : "rgba(0,214,143,0.35)"
-                    }`,
-                    background: item.status === "Complete" ? "transparent" : "rgba(0,214,143,0.10)",
-                    color: item.status === "Complete" ? "var(--text-muted)" : "var(--status-success)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  {item.status === "Complete" ? "↩ REOPEN" : "✓ RESOLVE"}
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit?.(item);
-                  }}
-                  title="Edit"
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 4,
-                    border: "1px solid var(--border-default)",
-                    background: "transparent",
-                    color: "var(--text-muted)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  EDIT
-                </button>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete?.(item);
-                  }}
-                  title="Delete"
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 4,
-                    border: "1px solid rgba(255,61,61,0.25)",
-                    background: "rgba(255,61,61,0.08)",
-                    color: "var(--status-error)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  DELETE
-                </button>
-              </div>
             </div>
           </div>
         );

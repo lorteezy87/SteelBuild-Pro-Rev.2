@@ -25,7 +25,7 @@ const sortByDate = (a, b) => {
 
 const fmtDate = (d) => formatDateShort(d);
 
-export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds = new Set(), onToggleSelect }) {
+export default function ScheduleTaskList({ tasks, onEdit, onDelete }) {
   const [sortBy, setSortBy] = useState("start_date");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -66,7 +66,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
     outline: "none",
   };
 
-  const GRID = "28px 2fr 90px 90px 1fr 80px 80px 110px";
+  const GRID = "2fr 90px 90px 1fr 80px 80px 110px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -178,7 +178,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                 gap: 12,
                 background: "var(--bg-surface-secondary)",
               }}>
-                {["", "Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
+                {["Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
                   <div key={col} style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
@@ -208,14 +208,6 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(task.id)}
-                      onChange={() => onToggleSelect && onToggleSelect(task.id)}
-                      style={{ width: 14, height: 14 }}
-                    />
-                  </div>
                   {/* Task name */}
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -298,7 +290,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDelete && onDelete(task);
+                        if (window.confirm(`Delete task "${task.task_name}"?`)) {
+                          onDelete && onDelete(task.id);
+                        }
                       }}
                       style={{
                         background: "transparent",

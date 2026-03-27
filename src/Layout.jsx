@@ -12,7 +12,7 @@ import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { PMAProvider } from "./components/pma/usePMAContext";
 import PMAPanel from "./components/pma/PMAPanel";
 import { usePMA } from "./components/pma/usePMAContext";
-import { AuthContext } from "@/lib/AuthContext";
+import { AuthContext } from "./components/shared/AuthContext";
 import { useTheme } from "./components/shared/ThemeContext";
 
 // ─── Tab → page mapping ───────────────────────────────────────────
@@ -170,7 +170,7 @@ const NAV_GROUPS = [
   label: "DOCUMENTS & DRAWINGS",
   items: [
   { label: "Document Repository", icon: "📁", page: "Documents" },
-  { label: "Drawing Log", icon: "⊞", page: "Submittals", badgeKey: "drawings" },
+  { label: "Drawing Log", icon: "⊞", page: "Submittals" },
   { label: "Drawing Viewer", icon: "📐", page: "DrawingViewer" },
   { label: "3D Model Viewer", icon: "△", page: "ModelViewer" }]
 
@@ -801,35 +801,20 @@ function ThemeToggleButton() {
 
 // ─── PMA Button Component ─────────────────────────────────────
 function PMAButton() {
-  const { isOpen, setIsOpen, unreadInsights, isLoadingInsights } = usePMA();
-
-  const statusLabel = isLoadingInsights
-    ? 'LOADING'
-    : unreadInsights > 0
-    ? 'READY'
-    : 'IDLE';
-
-  const pulseStyle =
-    unreadInsights > 0
-      ? {
-          animation: 'pma-pulse 2s infinite',
-          boxShadow: '0 0 0 0 rgba(139,92,246,0.6)',
-        }
-      : {};
+  const { isOpen, setIsOpen, unreadInsights } = usePMA();
 
   return (
     <button
       onClick={() => setIsOpen(!isOpen)}
-      title="Project Management Assistant · ⌘⇧P to open"
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 14px',
-        background: isOpen ? 'linear-gradient(135deg,var(--accent),var(--secondary))' : 'rgba(139,92,246,0.12)',
+        gap: 6,
+        padding: '5px 12px',
+        background: isOpen ? 'linear-gradient(135deg,#8B5CF6,#6D40D4)' : 'rgba(139,92,246,0.10)',
         border: '1px solid',
         borderColor: isOpen ? 'rgba(139,92,246,0.6)' : 'rgba(139,92,246,0.25)',
-        borderRadius: 16,
+        borderRadius: 20,
         cursor: 'pointer',
         fontFamily: 'IBM Plex Mono, monospace',
         fontSize: 9,
@@ -837,74 +822,27 @@ function PMAButton() {
         color: isOpen ? 'white' : '#A78BFA',
         letterSpacing: '0.08em',
         transition: 'all 0.2s',
-        position: 'relative',
-        ...pulseStyle,
-      }}
-    >
-      <style>{`
-        @keyframes pma-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(139,92,246,0.6); }
-          70% { box-shadow: 0 0 0 8px rgba(139,92,246,0); }
-          100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
-        }
-      `}</style>
+        boxShadow: isOpen ? '0 0 20px rgba(139,92,246,0.4)' : 'none'
+      }}>
+
       <span style={{ fontSize: 11 }}>✦</span>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-        <span>PMA</span>
-        <span
-          style={{
-            fontSize: 7,
-            color:
-              statusLabel === 'READY'
-                ? 'var(--status-success)'
-                : statusLabel === 'LOADING'
-                ? 'var(--status-warning)'
-                : 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background:
-                statusLabel === 'READY'
-                  ? 'var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? 'var(--status-warning)'
-                  : 'var(--text-muted)',
-              boxShadow:
-                statusLabel === 'READY'
-                  ? '0 0 6px var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? '0 0 6px var(--status-warning)'
-                  : 'none',
-              flexShrink: 0,
-            }}
-          />
-          {statusLabel}
-        </span>
-      </div>
-      {unreadInsights > 0 && (
-        <span
-          style={{
-            background: '#FF3D3D',
-            borderRadius: 10,
-            padding: '0 6px',
-            fontSize: 8,
-            color: 'white',
-            fontWeight: 800,
-            lineHeight: 1.4,
-          }}
-        >
+      PMA
+      {unreadInsights > 0 &&
+      <span
+        style={{
+          background: '#FF3D3D',
+          borderRadius: 10,
+          padding: '0 5px',
+          fontSize: 7,
+          color: 'white',
+          fontWeight: 700
+        }}>
+
           {unreadInsights}
         </span>
-      )}
-    </button>
-  );
+      }
+    </button>);
+
 }
 
 // ─── Main Layout ──────────────────────────────────────────────────
@@ -954,38 +892,10 @@ export default function Layout({ children, currentPageName }) {
     staleTime: 60000,
   });
 
-  const { data: navDrawings = [] } = useQuery({
-    queryKey: ["drawings-nav-count"],
-    queryFn: () => base44.entities.Drawing.list("-due_date", 500),
-    initialData: [],
-    refetchInterval: 120000,
-    staleTime: 60000,
-  });
-
-  const { data: navDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-nav-count"],
-    queryFn: () => base44.entities.Delivery.list("-scheduled_date", 500),
-    initialData: [],
-    refetchInterval: 120000,
-    staleTime: 60000,
-  });
-
   const overdueRFICount = navRFIs.filter(r =>
     r.date_required &&
     new Date(r.date_required) < new Date() &&
     !["Answered", "Closed"].includes(r.status)
-  ).length;
-
-  const overdueDrawingCount = navDrawings.filter((drawing) =>
-    drawing.due_date &&
-    new Date(drawing.due_date) < new Date() &&
-    drawing.stage !== "Released"
-  ).length;
-
-  const overdueDeliveryCount = navDeliveries.filter((d) =>
-    d.scheduled_date &&
-    new Date(d.scheduled_date) < new Date() &&
-    d.status !== "Delivered"
   ).length;
 
   const markAllReadMut = useMutation({
@@ -1106,30 +1016,6 @@ export default function Layout({ children, currentPageName }) {
                       {overdueRFICount}
                     </span>
                   )}
-                  {tab.label === "DRAWINGS" && overdueDrawingCount > 0 && (
-                    <span style={{
-                      position: "absolute", top: 8, right: 2,
-                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                      background: "var(--status-error)", color: "#fff",
-                      padding: "1px 4px", borderRadius: 2,
-                      minWidth: 14, textAlign: "center", lineHeight: "14px",
-                      pointerEvents: "none",
-                    }}>
-                      {overdueDrawingCount}
-                    </span>
-                  )}
-                  {tab.label === "DELIVERIES" && overdueDeliveryCount > 0 && (
-                    <span style={{
-                      position: "absolute", top: 8, right: 2,
-                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                      background: "var(--status-error)", color: "#fff",
-                      padding: "1px 4px", borderRadius: 2,
-                      minWidth: 14, textAlign: "center", lineHeight: "14px",
-                      pointerEvents: "none",
-                    }}>
-                      {overdueDeliveryCount}
-                    </span>
-                  )}
                 </div>
               ))}
             </div>
@@ -1201,13 +1087,8 @@ export default function Layout({ children, currentPageName }) {
                     userRole={user?.role}
                     alertCounts={{
                       unread: unreadCount,
-                      rfi: allAlerts.filter((a) =>
-                        (a.alert_type === "RFI Overdue" || a.alert_type === "RFI_Overdue") &&
-                        !a.is_dismissed
-                      ).length,
-                      co: allAlerts.filter((a) => a.alert_type === "CO Pending" && !a.is_dismissed).length,
-                      drawings: overdueDrawingCount,
-                      deliveries: overdueDeliveryCount,
+                      rfi: allAlerts.filter((a) => a.alert_type === "RFI Overdue" && !a.is_dismissed).length,
+                      co: allAlerts.filter((a) => a.alert_type === "CO Pending" && !a.is_dismissed).length
                     }} />
 
               </div>

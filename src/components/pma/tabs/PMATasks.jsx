@@ -1,10 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { usePMA } from "../usePMAContext";
-import { useProjectContext } from "../../shared/useProjectContext";
-import { getEscalationLevel, getEscalationStyle, countEscalations } from "../utils/escalationLogic";
-
-const mono = { fontFamily: "var(--font-mono)" };
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { usePMA } from '../usePMAContext';
+import { useProjectContext } from '../../shared/useProjectContext';
+import { getEscalationLevel, getEscalationStyle, countEscalations } from '../utils/escalationLogic';
 
 export default function PMATasks() {
   const { tasks, setTasks } = usePMA();
@@ -12,414 +10,419 @@ export default function PMATasks() {
   const [actionItems, setActionItems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [risks, setRisks] = useState([]);
-  const [byAssignee, setByAssignee] = useState(false);
-  const [quickTitle, setQuickTitle] = useState("");
-  const [quickDue, setQuickDue] = useState("");
-  const [quickWho, setQuickWho] = useState("");
 
+  // Load action items from entity
   useEffect(() => {
     if (!activeProject?.id) return;
-    const load = async () => {
+    const loadItems = async () => {
       try {
         setIsLoading(true);
         const items = await base44.entities.ActionItem.filter({ project_id: activeProject.id });
         setActionItems(items || []);
       } catch (e) {
-        console.error(e);
+        console.error('Failed to load action items:', e);
       } finally {
         setIsLoading(false);
       }
     };
-    load();
+    loadItems();
   }, [activeProject]);
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-  const in7 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 7);
-    return d;
-  }, [today]);
-
-  const openActionItems = actionItems.filter((a) => ["Open", "In Progress"].includes(a.status));
-  const overdue = openActionItems.filter((a) => a.due_date && new Date(a.due_date) < today);
-  const dueThisWeek = openActionItems.filter(
-    (a) => a.due_date && new Date(a.due_date) >= today && new Date(a.due_date) <= in7
-  );
-  const assignees = useMemo(() => {
-    const names = new Set(openActionItems.map((a) => a.assigned_to).filter(Boolean));
-    return Array.from(names);
-  }, [openActionItems]);
+  // Filter entity-backed tasks
+  const openActionItems = actionItems.filter((a) => a.status === 'Open' || a.status === 'In Progress');
+  const completedActionItems = actionItems.filter((a) => a.status === 'Complete');
+  const completedTasks = tasks.filter((t) => t.completed);
+  const pendingTasks = tasks.filter((t) => !t.completed);
 
   const updateActionItemStatus = async (id, status) => {
     try {
-      await base44.entities.ActionItem.update(id, {
-        status,
-        resolved_date: status === "Complete" ? new Date().toISOString().split("T")[0] : null,
-      });
+      await base44.entities.ActionItem.update(id, { status });
       setActionItems((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
     } catch (e) {
-      console.error("Failed to update action item:", e);
+      console.error('Failed to update action item:', e);
     }
   };
 
-  const toggleTask = (id) => setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
-  const removeTask = (id) => setTasks((prev) => prev.filter((t) => t.id !== id));
+  const toggleTask = (id) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+    );
+  };
 
-  const addQuickTask = async () => {
-    if (!quickTitle.trim()) return;
-    try {
-      const created = await base44.entities.ActionItem.create({
-        project_id: activeProject?.id,
-        title: quickTitle.trim(),
-        assigned_to: quickWho || null,
-        due_date: quickDue || null,
-        status: "Open",
-      });
-      setActionItems((prev) => [created, ...prev]);
-      setQuickTitle("");
-      setQuickDue("");
-      setQuickWho("");
-    } catch (e) {
-      console.error("Create failed", e);
-    }
+  const removeTask = (id) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
   const escalationCount = countEscalations(actionItems, risks);
 
   if ((tasks.length === 0 && actionItems.length === 0) || isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "20px 0", color: "rgba(160,175,210,0.4)" }}>
-        <div style={{ fontSize: 12, marginBottom: 8 }}>{isLoading ? "Loading action items..." : "No tasks yet"}</div>
-        <div style={{ fontSize: 10 }}>{isLoading ? "Please wait" : 'Create tasks by typing "assign X to Y"'}</div>
+      <div style={{ textAlign: 'center', padding: '20px 0', color: 'rgba(160,175,210,0.4)' }}>
+        <div style={{ fontSize: 12, marginBottom: 8 }}>
+          {isLoading ? 'Loading action items...' : 'No tasks yet'}
+        </div>
+        <div style={{ fontSize: 10 }}>
+          {isLoading ? 'Please wait' : 'Create tasks by typing "assign X to Y" or "due date Z"'}
+        </div>
       </div>
     );
   }
 
-  const groupedByAssignee = useMemo(() => {
-    return openActionItems.reduce((acc, a) => {
-      const key = a.assigned_to || "Unassigned";
-      acc[key] = acc[key] || [];
-      acc[key].push(a);
-      return acc;
-    }, {});
-  }, [openActionItems]);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {overdue.length > 0 && (
-        <div
-          style={{
-            background: "var(--danger-muted)",
-            border: "1px solid var(--danger-border)",
-            borderRadius: 8,
-            padding: "8px 12px",
-            ...mono,
-            fontSize: 10,
-            color: "var(--status-error)",
-          }}
-        >
-          ⚠ {overdue.length} ACTION ITEM{overdue.length > 1 ? "S" : ""} OVERDUE · {overdue.slice(0, 3).map((o) => o.title).join(" · ")}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Escalation summary */}
+      {escalationCount > 0 && (
+        <div style={{
+          background: 'rgba(255,61,61,0.10)',
+          border: '1px solid rgba(255,61,61,0.25)',
+          borderRadius: 8,
+          padding: '8px 12px',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          fontWeight: 700,
+          color: '#FF3D3D',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+        }}>
+          ⚡ {escalationCount} item{escalationCount > 1 ? 's' : ''} need escalation
         </div>
       )}
 
-      <Section title="Due This Week">
-        {dueThisWeek.length === 0 ? (
-          <Empty text="No items due in next 7 days" success />
-        ) : (
-          dueThisWeek.map((item) => {
-            const days = Math.max(0, Math.ceil((new Date(item.due_date) - today) / 86400000));
-            return (
-              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ ...mono, fontSize: 9, padding: "2px 6px", borderRadius: 4, background: "var(--bg-surface-high)", border: "1px solid var(--divider)" }}>
-                  {item.assigned_to || "Unassigned"}
-                </span>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>{item.title}</span>
-                <span
+      {/* Action Items from entity */}
+      {openActionItems.length > 0 && (
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              fontWeight: 700,
+              color: '#FF9A60',
+              letterSpacing: '0.08em',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}
+          >
+            ⚑ Active ({openActionItems.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {openActionItems.map((item) => {
+              const escalation = getEscalationLevel(item, risks);
+              const escalationStyle = getEscalationStyle(escalation);
+              return (
+                <div
+                  key={item.id}
                   style={{
-                    marginLeft: "auto",
-                    ...mono,
-                    fontSize: 9,
-                    color: days <= 3 ? "var(--status-error)" : "var(--status-warning)",
-                    background: "var(--bg-surface-high)",
-                    padding: "2px 6px",
-                    borderRadius: 4,
+                    background: escalationStyle.label ? escalationStyle.bg : 'rgba(255,122,47,0.06)',
+                    border: escalationStyle.label ? escalationStyle.border : '1px solid rgba(255,122,47,0.15)',
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    animation: escalationStyle.pulse ? 'pulse 2s infinite' : 'none',
                   }}
                 >
-                  {days === 0 ? "TODAY" : `${days}d`}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </Section>
-
-      {escalationCount > 0 && (
-        <div
-          style={{
-            background: "rgba(255,61,61,0.10)",
-            border: "1px solid rgba(255,61,61,0.25)",
-            borderRadius: 8,
-            padding: "8px 12px",
-            ...mono,
-            fontSize: 9,
-            fontWeight: 700,
-            color: "#FF3D3D",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
-          ⚡ {escalationCount} item{escalationCount > 1 ? "s" : ""} need escalation
-        </div>
-      )}
-
-      <Section title="Action Items">
-        {openActionItems.length === 0 ? (
-          <Empty text="No open action items" />
-        ) : byAssignee ? (
-          Object.entries(groupedByAssignee).map(([assignee, items]) => (
-            <div key={assignee} style={{ marginBottom: 8 }}>
-              <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginBottom: 6 }}>
-                {assignee} · {items.length}
-              </div>
-              {items.map((item) => renderActionItem(item))}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      checked={item.status === 'Complete'}
+                      onChange={() =>
+                        updateActionItemStatus(
+                          item.id,
+                          item.status === 'Complete' ? 'Open' : 'Complete'
+                        )
+                      }
+                      style={{ marginTop: 4, cursor: 'pointer' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-body)',
+                          fontSize: 11,
+                          color: '#F2F4F8',
+                          fontWeight: 500,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          fontSize: 8,
+                          marginBottom: 4,
+                          color: 'rgba(160,175,210,0.5)',
+                        }}
+                      >
+                        {item.assigned_to && (
+                          <div>👤 {item.assigned_to}</div>
+                        )}
+                        {item.due_date && (
+                          <div>📅 {new Date(item.due_date).toLocaleDateString()}</div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 7,
+                            background:
+                              item.priority === 'Critical' || item.priority === 'High'
+                                ? 'rgba(255,61,61,0.2)'
+                                : 'rgba(255,176,32,0.2)',
+                            color:
+                              item.priority === 'Critical' || item.priority === 'High'
+                                ? '#FF3D3D'
+                                : '#FFB020',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {item.priority || 'NORMAL'}
+                        </span>
+                        {escalationStyle.label && (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 7,
+                              background: escalationStyle.bg,
+                              color: escalationStyle.color,
+                              border: escalationStyle.border,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                            }}
+                          >
+                            {escalationStyle.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
             </div>
-          ))
-        ) : (
-          openActionItems.map((item) => renderActionItem(item))
-        )}
-      </Section>
+            </div>
+            )}
 
-      {tasks.filter((t) => !t.completed).length > 0 && (
-        <Section title="Quick Notes">
-          {tasks
-            .filter((t) => !t.completed)
-            .map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => removeTask(task.id)} />
+      {/* Pending local tasks */}
+      {pendingTasks.length > 0 && (
+        <div>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              fontWeight: 700,
+              color: '#A78BFA',
+              letterSpacing: '0.08em',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}
+          >
+            ✦ Pending ({pendingTasks.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pendingTasks.map((task) => (
+              <div
+                key={task.id}
+                style={{
+                  background: 'rgba(139,92,246,0.06)',
+                  border: '1px solid rgba(139,92,246,0.15)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => toggleTask(task.id)}
+                    style={{ marginTop: 4, cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 11,
+                        color: '#F2F4F8',
+                        fontWeight: 500,
+                        marginBottom: 4,
+                      }}
+                    >
+                      {task.title}
+                    </div>
+                    {task.dueDate && (
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 8,
+                          color: 'rgba(160,175,210,0.5)',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Due {new Date(task.dueDate).toLocaleDateString()}
+                      </div>
+                    )}
+                    {task.priority && (
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 7,
+                          background:
+                            task.priority === 'HIGH' ? 'rgba(255,61,61,0.2)' : 'rgba(255,176,32,0.2)',
+                          color:
+                            task.priority === 'HIGH' ? '#FF3D3D' : '#FFB020',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {task.priority}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeTask(task.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(160,175,210,0.4)',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
             ))}
-        </Section>
+          </div>
+        </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 8,
-          padding: 10,
-        }}
-      >
-        <input
-          value={quickTitle}
-          onChange={(e) => setQuickTitle(e.target.value)}
-          placeholder="Type a task..."
-          style={{
-            flex: 1,
-            background: "var(--bg-input)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 6,
-            color: "var(--text-primary)",
-            padding: "8px 10px",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-          }}
-        />
-        <select
-          value={quickWho}
-          onChange={(e) => setQuickWho(e.target.value)}
-          style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", padding: "8px 10px", fontSize: 11 }}
-        >
-          <option value="">WHO</option>
-          {assignees.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          value={quickDue}
-          onChange={(e) => setQuickDue(e.target.value)}
-          style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", padding: "8px 10px", fontSize: 11 }}
-        />
-        <button
-          onClick={addQuickTask}
-          style={{
-            background: "var(--accent)",
-            border: "1px solid var(--accent-border)",
-            color: "#0b1021",
-            borderRadius: 6,
-            padding: "8px 12px",
-            ...mono,
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            letterSpacing: "0.08em",
-          }}
-        >
-          ADD
-        </button>
-        <button
-          onClick={() => setByAssignee((p) => !p)}
-          style={{
-            background: byAssignee ? "var(--accent-muted)" : "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            color: byAssignee ? "var(--accent)" : "var(--text-secondary)",
-            borderRadius: 6,
-            padding: "8px 10px",
-            ...mono,
-            fontSize: 10,
-            cursor: "pointer",
-          }}
-        >
-          {byAssignee ? "BY ASSIGNEE" : "BY DUE DATE"}
-        </button>
-      </div>
-    </div>
-  );
-
-  function renderActionItem(item) {
-    const level = getEscalationLevel(item, risks);
-    const style = getEscalationStyle(level);
-    const due = item.due_date ? new Date(item.due_date) : null;
-    const days = due ? Math.ceil((due - today) / 86400000) : null;
-    return (
-      <div
-        key={item.id}
-        style={{
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.02)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          marginBottom: 8,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
+      {/* Completed action items */}
+      {completedActionItems.length > 0 && (
+        <details>
+          <summary
             style={{
-              ...mono,
-              fontSize: 9,
-              padding: "2px 8px",
-              borderRadius: 6,
-              background: style.bg,
-              color: style.color,
-              letterSpacing: "0.08em",
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              fontWeight: 700,
+              color: 'rgba(160,175,210,0.4)',
+              letterSpacing: '0.08em',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
             }}
           >
-            {level}
-          </span>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>{item.title}</span>
-          <span style={{ marginLeft: "auto", ...mono, fontSize: 9, color: "var(--text-muted)" }}>{item.assigned_to || "Unassigned"}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, ...mono, fontSize: 10, color: "var(--text-secondary)" }}>
-          <span>Due: {item.due_date || "—"}</span>
-          {days !== null && <span style={{ color: days < 0 ? "var(--status-error)" : days <= 3 ? "var(--status-warning)" : "var(--text-muted)" }}>{days < 0 ? `${Math.abs(days)}d late` : `${days}d`}</span>}
-          <span>Status: {item.status}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => updateActionItemStatus(item.id, item.status === "Complete" ? "Open" : "Complete")}
+            ✓ Completed ({completedActionItems.length})
+          </summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {completedActionItems.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  background: 'rgba(0, 214, 143, 0.06)',
+                  border: '1px solid rgba(0, 214, 143, 0.15)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  opacity: 0.6,
+                }}
+              >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    onChange={() => updateActionItemStatus(item.id, 'Open')}
+                    style={{ marginTop: 4, cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 11,
+                        color: '#F2F4F8',
+                        textDecoration: 'line-through',
+                        marginBottom: 4,
+                      }}
+                    >
+                      {item.title}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Completed local tasks */}
+      {completedTasks.length > 0 && (
+        <details>
+          <summary
             style={{
-              background: item.status === "Complete" ? "transparent" : "var(--success-muted)",
-              border: `1px solid ${item.status === "Complete" ? "var(--border-default)" : "var(--success-border)"}`,
-              color: item.status === "Complete" ? "var(--text-muted)" : "var(--status-success)",
-              borderRadius: 6,
-              padding: "6px 10px",
-              ...mono,
-              fontSize: 9,
-              cursor: "pointer",
+              fontFamily: 'var(--font-mono)',
+              fontSize: 8,
+              fontWeight: 700,
+              color: 'rgba(160,175,210,0.4)',
+              letterSpacing: '0.08em',
+              cursor: 'pointer',
+              textTransform: 'uppercase',
             }}
           >
-            {item.status === "Complete" ? "Reopen" : "✓ Complete"}
-          </button>
-          <button
-            onClick={() => updateActionItemStatus(item.id, "In Progress")}
-            style={{
-              background: "var(--accent-muted)",
-              border: "1px solid var(--accent-border)",
-              color: "var(--accent)",
-              borderRadius: 6,
-              padding: "6px 10px",
-              ...mono,
-              fontSize: 9,
-              cursor: "pointer",
-            }}
-          >
-            In Progress
-          </button>
-        </div>
-      </div>
-    );
-  }
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function Empty({ text, success = false }) {
-  return (
-    <div
-      style={{
-        textAlign: "left",
-        padding: "8px 10px",
-        border: "1px dashed var(--divider)",
-        borderRadius: 6,
-        ...mono,
-        fontSize: 10,
-        color: success ? "var(--status-success)" : "var(--text-muted)",
-      }}
-    >
-      {success ? "✓" : "—"} {text}
-    </div>
-  );
-}
-
-function TaskRow({ task, onToggle, onDelete }) {
-  return (
-    <div
-      style={{
-        background: "var(--accent-muted)",
-        border: "1px solid var(--accent-border)",
-        borderRadius: 8,
-        padding: "8px 12px",
-      }}
-    >
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-        <input type="checkbox" checked={task.completed} onChange={onToggle} style={{ marginTop: 2 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>{task.title}</div>
-          <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>{task.description}</div>
-        </div>
-        <button
-          onClick={onDelete}
-          style={{
-            background: "transparent",
-            border: "1px solid var(--danger-border)",
-            color: "var(--status-error)",
-            borderRadius: 6,
-            padding: "4px 8px",
-            ...mono,
-            fontSize: 9,
-            cursor: "pointer",
-          }}
-        >
-          Delete
-        </button>
-      </div>
+            ✓ Completed ({completedTasks.length})
+          </summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {completedTasks.map((task) => (
+              <div
+                key={task.id}
+                style={{
+                  background: 'rgba(0, 214, 143, 0.06)',
+                  border: '1px solid rgba(0, 214, 143, 0.15)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  opacity: 0.6,
+                }}
+              >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => toggleTask(task.id)}
+                    style={{ marginTop: 4, cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 11,
+                        color: '#F2F4F8',
+                        textDecoration: 'line-through',
+                        marginBottom: 4,
+                      }}
+                    >
+                      {task.title}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeTask(task.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(160,175,210,0.4)',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

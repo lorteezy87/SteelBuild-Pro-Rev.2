@@ -18,48 +18,6 @@ export const getNextNumber = async (projectId, recordType) => {
   return response.data.number;
 };
 
-const extractNumericSuffix = (value) => {
-  if (value == null) return null;
-  const match = String(value).match(/(\d+)(?!.*\d)/);
-  return match ? Number(match[1]) : null;
-};
-
-export const getNextFormattedNumber = async ({
-  projectId,
-  recordType,
-  entityName,
-  fieldName,
-  prefix,
-  padLength = 3,
-}) => {
-  if (!projectId) throw new Error("projectId is required");
-  if (!recordType) throw new Error("recordType is required");
-  if (!entityName) throw new Error("entityName is required");
-  if (!fieldName) throw new Error("fieldName is required");
-  if (!prefix) throw new Error("prefix is required");
-
-  try {
-    const nextValue = await getNextNumber(projectId, recordType);
-    const numericValue = extractNumericSuffix(nextValue);
-    if (numericValue != null) {
-      return `${prefix}${String(numericValue).padStart(padLength, "0")}`;
-    }
-    if (typeof nextValue === "string" && nextValue.trim()) {
-      return nextValue.trim();
-    }
-  } catch (error) {
-    // Fall back to the highest existing number for the project.
-  }
-
-  const existing = await base44.entities[entityName].filter({ project_id: projectId });
-  const maxNumber = existing.reduce((max, item) => {
-    const numericValue = extractNumericSuffix(item?.[fieldName]);
-    return numericValue != null && numericValue > max ? numericValue : max;
-  }, 0);
-
-  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
-};
-
 /**
  * Preview the next number without incrementing.
  * Used to show in create form UI.

@@ -13,37 +13,26 @@ export default function UploadModal({ projectId, onClose }) {
       const created = [];
       for (const file of filesToUpload) {
         // Upload file first
-        const { file_url } = await base44.integrations.Core.uploadFile({ file: file.file || file });
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: file.file });
 
         // Create document record
         const meta = metadata[file.name] || {};
         const doc = await base44.entities.Document.create({
-          project_id: projectId,
           projectId,
-          display_name: meta.displayName || file.name,
           displayName: meta.displayName || file.name,
           description: meta.description || "",
-          file_name: file.name,
           fileName: file.name,
-          file_url,
           fileUrl: file_url,
-          file_type: meta.fileType || "other",
           fileType: meta.fileType || "other",
-          file_size_kb: Math.round(file.size / 1024),
           fileSizeKb: Math.round(file.size / 1024),
-          mime_type: file.type,
           mimeType: file.type,
           category: meta.category || "Other",
           discipline: meta.discipline || "Other",
           status: "Draft",
-          revision_number: meta.revisionNumber || "0",
           revisionNumber: meta.revisionNumber || "0",
-          revision_date: new Date().toISOString().split("T")[0],
           revisionDate: new Date().toISOString().split("T")[0],
           tags: meta.tags || [],
-          uploaded_by: "Current User",
           uploadedBy: "Current User",
-          uploaded_date: new Date().toISOString(),
           uploadedDate: new Date().toISOString()
         });
         created.push(doc);

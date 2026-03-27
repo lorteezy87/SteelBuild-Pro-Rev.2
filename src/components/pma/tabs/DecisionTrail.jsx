@@ -43,7 +43,7 @@ export default function DecisionTrail({ projectId }) {
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'rgba(160,175,210,0.40)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          DECISION TRAIL <span style={{ background: 'var(--accent)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 7, marginLeft: 4 }}>{decisions.length}</span>
+          DECISION TRAIL <span style={{ background: '#8B5CF6', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 7, marginLeft: 4 }}>{decisions.length}</span>
         </div>
       </div>
 
@@ -68,12 +68,12 @@ function DecisionCard({ decision, expanded, onToggle }) {
   }
 
   const phaseColors = {
-    'Estimating': 'var(--accent)',
+    'Estimating': '#8B5CF6',
     'Preconstruction': '#00B8D9',
     'Procurement': '#00D68F',
     'Fabrication': 'var(--accent)',
     'Field Execution': '#FFB400',
-    'Closeout': 'var(--accent)',
+    'Closeout': '#A78BFA',
   };
 
   const statusColors = {
@@ -87,9 +87,9 @@ function DecisionCard({ decision, expanded, onToggle }) {
     <div
       onClick={onToggle}
       style={{
-        background: 'var(--accent-muted)',
-        border: '1px solid var(--accent-muted)',
-        borderLeft: '3px solid var(--accent)',
+        background: 'rgba(139,92,246,0.05)',
+        border: '1px solid rgba(139,92,246,0.12)',
+        borderLeft: '3px solid #8B5CF6',
         borderRadius: 8,
         padding: expanded ? 12 : 10,
         marginBottom: 6,
@@ -101,7 +101,7 @@ function DecisionCard({ decision, expanded, onToggle }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: expanded ? 8 : 4 }}>
             <div style={{
-              background: phaseColors[decision.phase] || 'var(--accent)',
+              background: phaseColors[decision.phase] || '#8B5CF6',
               color: 'white',
               fontFamily: 'var(--font-mono)',
               fontSize: 7,
@@ -113,7 +113,7 @@ function DecisionCard({ decision, expanded, onToggle }) {
               {decision.phase}
             </div>
             <div style={{
-              background: statusColors[decision.status] || 'var(--accent)',
+              background: statusColors[decision.status] || '#A78BFA',
               color: decision.status === 'Active' ? 'var(--bg-page)' : 'white',
               fontFamily: 'var(--font-mono)',
               fontSize: 7,
@@ -148,10 +148,10 @@ function DecisionCard({ decision, expanded, onToggle }) {
       </div>
 
       {expanded && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--accent-muted)' }}>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(139,92,246,0.12)' }}>
           {decision.rationale && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--accent)', fontWeight: 700, marginBottom: 3 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#8B5CF6', fontWeight: 700, marginBottom: 3 }}>
                 RATIONALE
               </div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'rgba(220,228,245,0.70)', lineHeight: 1.4 }}>

@@ -1,5 +1,3 @@
-import { createLocalDateFromDateOnly, todayLocalISO } from "@/lib/dateOnly";
-
 export const formatCurrency = (value) => {
   const num = Number(value);
   if (value == null || isNaN(num)) return "$0.00";
@@ -19,27 +17,25 @@ export const formatCurrencyShort = (value) => {
   return `$${num.toFixed(0)}`;
 };
 
+// Safe UTC date parser — avoids timezone off-by-one for YYYY-MM-DD strings
 export const parseUTCDate = (dateStr) => {
   if (!dateStr) return null;
   const str = String(dateStr).trim();
-  const d = createLocalDateFromDateOnly(str) || new Date(str);
+  const d = str.length === 10 ? new Date(str + "T00:00:00Z") : new Date(str);
   return isNaN(d.getTime()) ? null : d;
 };
 
 export const formatDate = (dateStr) => {
   const d = parseUTCDate(dateStr);
-  if (!d) return "-";
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  if (!d) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 };
 
+// Short format: "Mar 23"
 export const formatDateShort = (dateStr) => {
   const d = parseUTCDate(dateStr);
-  if (!d) return "-";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (!d) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 };
 
 export const formatPercent = (value, decimals = 0) => {
@@ -49,6 +45,7 @@ export const formatPercent = (value, decimals = 0) => {
   return decimals > 0 ? `${Number(clamped.toFixed(decimals))}%` : `${Math.round(clamped)}%`;
 };
 
+// Safely compute percentage with divide-by-zero guard, clamped 0-100
 export const safePct = (num, denom) => {
   const n = Number(num) || 0;
   const d = Number(denom) || 0;
@@ -74,5 +71,3 @@ export const isOverdue = (dueDate, status, closedStatuses = []) => {
   const due = parseUTCDate(dueDate);
   return due ? due < today : false;
 };
-
-export { todayLocalISO };

@@ -85,26 +85,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     setLinkedDrawingIds(linkedDrawingIds.filter(id => id !== drawingId));
   };
 
-  const projectDrawings = allDrawings.filter(d => !form.project_id || d.project_id === form.project_id);
-
-  const filteredDrawings = projectDrawings.filter(d =>
-    d.id &&
-    !linkedDrawingIds.includes(d.id) &&
-    (
-      !drawingSearch ||
+  const filteredDrawings = allDrawings.filter(d =>
+    d.id && !linkedDrawingIds.includes(d.id) && (
       d.sheet_number?.toLowerCase().includes(drawingSearch.toLowerCase()) ||
       d.title?.toLowerCase().includes(drawingSearch.toLowerCase())
     )
   );
 
-  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "FFF", "BFS", "Approved"];
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
-  const hasProjectSelected = !!form.project_id;
-  const projectDrawingCount = projectDrawings.length;
-  const hasApprovedLinkedDrawings = linkedDrawingIds.some(id => {
-    const d = allDrawings.find(dw => dw.id === id);
-    return d && APPROVED_STAGES.includes(d.stage || d.status);
-  });
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -137,13 +125,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={inputDisabledStyle} value={form.wp_number || nextNumber || ""} disabled readOnly />
         </FormField>
         <FormField label="Project">
-          <select
-            style={selectStyle}
-            value={form.project_id}
-            onChange={e => {
-              set("project_id", e.target.value);
-              setLinkedDrawingIds([]);
-            }}>
+          <select style={selectStyle} value={form.project_id} onChange={e => set("project_id", e.target.value)}>
             <option value="">Select project (optional)</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -161,22 +143,6 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
             {["Not Started", "In Progress", "Complete", "On Hold"].map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </FormField>
-
-        {form.phase === "Fabrication" && linkedDrawingIds.length === 0 && (
-          <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderLeft: "3px solid var(--status-error)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error)", letterSpacing: "0.08em" }}>
-            ⊘ NO DRAWINGS LINKED — Cannot advance to Fabrication without at least one linked drawing. Link drawings below first.
-          </div>
-        )}
-        {form.phase === "Fabrication" && linkedDrawingIds.length > 0 && !hasApprovedLinkedDrawings && (
-          <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.08em" }}>
-            ⚠ LINKED DRAWINGS NOT YET APPROVED — Fabrication should not begin until all linked drawings are Released/IFC. Proceeding will create a workflow flag.
-          </div>
-        )}
-        {["Erection", "Installation"].includes(form.phase) && (
-          <div style={{ gridColumn: "span 2", padding: "8px 12px", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderLeft: "3px solid var(--status-info)", borderRadius: "0 4px 4px 0", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-info)", letterSpacing: "0.08em" }}>
-            ⓘ ERECTION PHASE — Ensure material delivery is confirmed before field crews mobilize. Resources can be scheduled in advance of delivery.
-          </div>
-        )}
 
         {/* ── Section 2: Scope ── */}
         <SectionDivider label="Scope" />
@@ -230,20 +196,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
 
         <FormField label="Search & Add Drawings" span2>
           {/* No drawings warning */}
-          {(!hasProjectSelected) && (
-            <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>Select a project to see available drawings.</div>
-            </div>
-          )}
-          {hasProjectSelected && projectDrawingCount === 0 && (
-            <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
-              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>No drawings found for this project.</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 3 }}>
-                Upload drawings in the Drawing Log first.
-              </div>
-            </div>
-          )}
-          {hasProjectSelected && projectDrawingCount > 0 && linkedDrawingIds.length === 0 && (
+          {linkedDrawingIds.length === 0 && (
             <div style={{ marginBottom: 8, padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0" }}>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ NO DRAWINGS LINKED</div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 3 }}>

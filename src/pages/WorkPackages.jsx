@@ -41,17 +41,12 @@ export default function WorkPackages() {
     initialData: [],
   });
 
-  const { data: allProjectDrawings = [] } = useQuery({
-    queryKey: ["all-drawings-for-wps"],
-    queryFn: () => base44.entities.Drawing.list(),
+  const { data: drawings = [] } = useQuery({
+    queryKey: ["drawings", projectId],
+    queryFn: () =>
+      projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
     initialData: [],
-  });
-
-  const { data: allDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-for-wps"],
-    queryFn: () => base44.entities.Delivery.list(),
-    initialData: [],
-    staleTime: 30000,
   });
 
   const updateWPMut = useMutation({
@@ -258,8 +253,6 @@ export default function WorkPackages() {
           onSelectWP={setSelectedWP}
           onEdit={handleWPEdit}
           showProject={false}
-          allDrawings={allProjectDrawings}
-          allDeliveries={allDeliveries}
         />
       ) : (
         Object.entries(grouped || {}).map(([projectName, wps]) => (
@@ -278,8 +271,6 @@ export default function WorkPackages() {
               onSelectWP={setSelectedWP}
               onEdit={handleWPEdit}
               showProject={false}
-              allDrawings={allProjectDrawings}
-              allDeliveries={allDeliveries}
             />
           </div>
         ))
@@ -301,7 +292,7 @@ export default function WorkPackages() {
         wp={editingWP}
         projects={projects}
         nextNumber={`WP-${String((workPackages.length || 0) + 1).padStart(2, "0")}`}
-        allDrawings={allProjectDrawings}
+        allDrawings={drawings}
       />
     </div>
   );

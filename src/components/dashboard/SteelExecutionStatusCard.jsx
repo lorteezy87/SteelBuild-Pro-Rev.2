@@ -14,9 +14,7 @@ export default function SteelExecutionStatusCard({ wps, drawings }) {
   // Calculate tonnage per stage from WPs
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0) || 1;
 
-  const detailingTons = wps
-    .filter(w => w.phase === "Detailing")
-    .reduce((s, w) => s + ((Number(w.tonnage) || 0) * ((Number(w.percent_complete) || 0) / 100)), 0);
+  const detailingTons = wps.filter(w => w.phase === "Detailing").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const approvedDrawings = drawings.filter(d => ["OFS","BFS","FFF","Released"].includes(d.stage)).length;
   const totalDrawings = drawings.length || 1;
   const releasedTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);

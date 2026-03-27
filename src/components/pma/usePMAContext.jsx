@@ -15,19 +15,7 @@ export function PMAProvider({ children }) {
   const [unreadInsights, setUnreadInsights] = useState(0);
   const [projectSnapshot, setProjectSnapshot] = useState(null);
   const [insights, setInsights] = useState(null);
-  const [conversationHistory, setConversationHistory] = useState(() => {
-    try {
-      const key = `pma-chat-${activeProject?.id || 'global'}`;
-      const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [pinnedMessages, setPinnedMessages] = useState([]);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
-  const [topPriorityActions, setTopPriorityActions] = useState([]);
-  const [riskCount, setRiskCount] = useState(0);
+  const [conversationHistory, setConversationHistory] = useState([]);
   const [pmMemory, setPMMemory] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
@@ -280,44 +268,6 @@ export function PMAProvider({ children }) {
     }
   }, [activeProject]);
 
-  const buildPortfolioSnapshot = useCallback(async () => {
-    try {
-      const [projects, allRFIs, allCOs, allWPs, allDeliveries] = await Promise.all([
-        base44.entities.Project.list().catch(() => []),
-        base44.entities.RFI.list().catch(() => []),
-        base44.entities.ChangeOrder.list().catch(() => []),
-        base44.entities.WorkPackage.list().catch(() => []),
-        base44.entities.Delivery.list().catch(() => []),
-      ]);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      return {
-        projectCount: projects.length,
-        activeProjects: projects.filter(p => !['Closeout', 'Complete'].includes(p.phase)).length,
-        atRisk: projects.filter(p => p.health_status === 'At Risk').length,
-        overdueRFIs: allRFIs.filter(r => r.date_required && new Date(r.date_required) < today && !['Answered', 'Closed'].includes(r.status)).length,
-        openRFIs: allRFIs.filter(r => !['Answered', 'Closed'].includes(r.status)).length,
-        pendingCOs: allCOs.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length,
-        pendingCOValue: allCOs
-          .filter(c => ['Submitted', 'Under Review'].includes(c.status))
-          .reduce((s, c) => s + (Number(c.co_amount) || 0), 0),
-        lateDeliveries: allDeliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== 'Delivered').length,
-        activeWPs: allWPs.filter(w => w.status === 'In Progress').length,
-        projects: projects.map(p => ({
-          name: p.name,
-          number: p.project_number,
-          phase: p.phase,
-          health: p.health_status,
-        })),
-      };
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
-  }, []);
-
   const generateInsights = useCallback(async () => {
     console.log('PMA generateInsights called, activeProject:', activeProject?.name || 'NONE');
     if (!activeProject?.id) {
@@ -359,15 +309,7 @@ LIVE PROJECT DATA (as of ${today}):
 ${snap.rfis?.overdueItems?.length > 0 ? `- Overdue RFIs: ${snap.rfis.overdueItems.map(r => `RFI-${r.number} (${r.subject})`).join(', ')}` : ''}
 ${snap.deliveries?.lateItems?.length > 0 ? `- Late deliveries: ${snap.deliveries.lateItems.map(d => d.name).join(', ')}` : ''}` : '';
 
-      const systemPrompt = `You are the embedded Project Manager Assistant for SteelBuild Pro, a structural steel fabrication and erection management platform. You specialize in structural steel fabrication and erection. Key terms:
-- WP = Work Package (a fabrication release/sequence unit)
-- BFA/OFA = Bought For Approval / Out For Approval (drawing stages)
-- IFC = Issued For Construction
-- BIC = Ball In Court (RFI holder)
-- CO = Change Order
-- SOV = Schedule of Values
-- AISC = American Institute of Steel Construction
-When something is overdue, say specifically how many days and the consequence. When WPs are behind, connect it to erection sequence impact. You have been given LIVE project data from the database. Your job is to analyze it and produce a sharp, specific briefing.
+      const systemPrompt = `You are the embedded Project Manager Assistant for SteelBuild Pro, a structural steel fabrication and erection management platform. You have been given LIVE project data from the database. Your job is to analyze it and produce a sharp, specific briefing.
 
 RULES:
 - Reference ACTUAL numbers from the data — never say "several" when you have a count
@@ -423,12 +365,7 @@ FORMAT:
 [2-3 bullets referencing actual overdue items, late deliveries, or budget concerns from the data]
 
 **RECOMMENDED ACTION**
-[One specific recommendation based on the data]
-
-For each overdue or at-risk item, identify the DOWNSTREAM CONSEQUENCE. Example: "RFI-014 is 8 days overdue. This is blocking WP-06 fabrication which is on the critical path to erection start."
-
-**OUTREACH NEEDED TODAY**
-[1-2 bullets: who to call/email and what to say, based on the data]`;
+[One specific recommendation based on the data]`;
 
       const result = await base44.functions.invoke('anthropicProxy', {
         prompt: userPrompt,
@@ -439,32 +376,6 @@ For each overdue or at-risk item, identify the DOWNSTREAM CONSEQUENCE. Example: 
         : result?.text || result?.content || result?.response || 'No response generated.';
       setInsights(text || 'No response generated.');
       setUnreadInsights(text ? 1 : 0);
-      setLastRefreshed(new Date().toISOString());
-
-      // Priority extraction
-      const priorityPrompt = `
-From this briefing, extract the top 3 action items as JSON.
-Return ONLY a JSON array, no other text.
-BRIEFING: ${text}
-Format: [{
-  "priority": 1,
-  "action": "specific action",
-  "owner": "PM/GC/Vendor/etc",
-  "urgency": "Today/This Week"
-}]`;
-
-      try {
-        const priorityRes = await base44.functions.invoke('anthropicProxy', {
-          prompt: priorityPrompt,
-        });
-        const priorityText = typeof priorityRes === 'string'
-          ? priorityRes
-          : priorityRes?.text || priorityRes?.content || priorityRes?.response || '';
-        const parsed = JSON.parse(priorityText);
-        if (Array.isArray(parsed)) setTopPriorityActions(parsed.slice(0, 3));
-      } catch (e) {
-        console.warn('Priority extraction failed', e);
-      }
       
     } catch (err) {
       console.error('PMA Insights FULL ERROR:', err);
@@ -529,26 +440,6 @@ Format: [{
     }
   }, [isOpen, activeProject?.id]);
 
-  // Persist conversation history per project/global
-  useEffect(() => {
-    try {
-      const key = `pma-chat-${activeProject?.id || 'global'}`;
-      const toStore = conversationHistory.slice(-30);
-      localStorage.setItem(key, JSON.stringify(toStore));
-    } catch {}
-  }, [conversationHistory, activeProject?.id]);
-
-  useEffect(() => {
-    try {
-      const key = `pma-chat-${activeProject?.id || 'global'}`;
-      const stored = localStorage.getItem(key);
-      if (stored) setConversationHistory(JSON.parse(stored));
-      else setConversationHistory([]);
-    } catch {
-      setConversationHistory([]);
-    }
-  }, [activeProject?.id]);
-
   return (
     <PMAContext.Provider value={{
       isOpen, setIsOpen,
@@ -563,7 +454,6 @@ Format: [{
       tasks, setTasks,
       acknowledgedAlerts, setAcknowledgedAlerts,
       buildProjectSnapshot,
-      buildPortfolioSnapshot,
       createActionItemFromChat,
       sessionId,
       auditLogs, setAuditLogs,
@@ -571,10 +461,6 @@ Format: [{
       runPolicyChecks,
       weeklyBaseline,
       saveWeeklyBaseline,
-      lastRefreshed, setLastRefreshed,
-      topPriorityActions, setTopPriorityActions,
-      riskCount, setRiskCount,
-      pinnedMessages, setPinnedMessages,
     }}>
       {children}
     </PMAContext.Provider>

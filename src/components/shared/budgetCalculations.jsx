@@ -1,15 +1,10 @@
 // Budget calculation utilities for Expenses, SOV, and Cost Codes
 
-export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costCodes = []) {
-  const budgetFromCostCodes = costCodes
-    .filter(c => c.cost_code === costCode)
-    .reduce((sum, c) => sum + (Number(c.budget_amount) || 0), 0);
-
-  const budgetFromSov = sovItems
+export function getCostCodeSummary(costCode, sovItems = [], expenses = []) {
+  // Budget = sum of SOV items for this cost code
+  const budget = sovItems
     .filter(s => s.cost_code === costCode)
     .reduce((sum, s) => sum + (Number(s.scheduled_value) || 0), 0);
-
-  const budget = budgetFromCostCodes || budgetFromSov;
 
   // Committed = sum of non-voided expenses for this cost code
   const committed = expenses

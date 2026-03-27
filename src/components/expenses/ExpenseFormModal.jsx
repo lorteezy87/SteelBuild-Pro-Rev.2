@@ -67,7 +67,7 @@ const triggerStyle = {
 export default function ExpenseFormModal({
   open, onClose, onSave, expense,
   projects = [], workPackages = [],
-  sovItems = [], expenses = [], costCodes = [], nextNumber,
+  sovItems = [], expenses = [], nextNumber,
   defaultProjectId,
 }) {
   const [form, setForm] = useState(empty);
@@ -113,8 +113,7 @@ export default function ExpenseFormModal({
   const ccSummary = getCostCodeSummary(
     form.cost_code,
     sovItems.filter(s => s.project_id === form.project_id),
-    expenses.filter(e => e.project_id === form.project_id && (!expense || e.id !== expense.id)),
-    costCodes.filter(c => c.project_id === form.project_id)
+    expenses.filter(e => e.project_id === form.project_id && (!expense || e.id !== expense.id))
   );
   const newTotal = ccSummary.committed + (Number(form.amount) || 0);
   const willExceed = newTotal > ccSummary.budget;

@@ -1,14 +1,5 @@
 // Workflow validation utilities
 
-const APPROVED_STAGES = [
-  'Released',
-  'IFC',
-  'Issued for Construction',
-  'FFF',
-  'BFS',
-  'Approved',
-];
-
 export const validateWPCreate = (wp, linkedDrawings, projectDrawings = []) => {
   const errors = [];
 
@@ -54,19 +45,6 @@ export const canStartFabrication = (wp) => {
       allowed: false,
       reason: 'No drawings linked to this work package.',
       action: 'Link drawings first.',
-    };
-  }
-
-  // Must have approved drawings
-  const linkedIds = wp.linked_drawing_ids?.split(',').map(s => s.trim()).filter(Boolean) || [];
-  const approvedCount = (wp.linkedDrawings || [])
-    .filter(d => APPROVED_STAGES.includes(d.stage || d.status))
-    .length;
-  if (linkedIds.length > 0 && approvedCount < linkedIds.length) {
-    return {
-      allowed: false,
-      reason: `${linkedIds.length - approvedCount} drawing(s) not yet Released`,
-      action: 'Wait for all linked drawings to be approved.',
     };
   }
 
@@ -181,20 +159,6 @@ export const getWorkflowStatus = (wp, drawings = [], deliveries = []) => {
     };
   }
 
-  const linkedIds = wp.linked_drawing_ids?.split(',').map(s => s.trim()).filter(Boolean) || [];
-  const approvedDrawingCount = drawings.filter(d =>
-    linkedIds.includes(d.id) &&
-    APPROVED_STAGES.includes(d.stage || d.status)
-  ).length;
-
-  if (linkedIds.length > 0 && approvedDrawingCount < linkedIds.length) {
-    return {
-      step: 'Drawings Pending',
-      blocked: true,
-      message: `${linkedIds.length - approvedDrawingCount} drawing(s) not yet Released`,
-    };
-  }
-
   if (wp.phase === 'Erection' || wp.phase === 'Delivery' || wp.status?.toLowerCase().includes('install')) {
     const delivered = deliveries.filter(d =>
       d.work_package_id === wp.id && (d.status === 'Delivered' || d.status === 'Received')
@@ -221,7 +185,7 @@ export const getDraftDrawingsWarning = (linkedDrawingIds, allDrawings) => {
   const ids = linkedDrawingIds.split(',').map(s => s.trim()).filter(Boolean);
   const draftDrawings = ids.filter(id => {
     const dwg = allDrawings.find(d => d.id === id);
-    return dwg && !APPROVED_STAGES.includes(dwg.stage || dwg.status);
+    return dwg && !['IFC', 'Issued for Construction', 'Released'].includes(dwg.stage || dwg.status);
   });
 
   return draftDrawings.length > 0 ? draftDrawings : null;

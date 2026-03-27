@@ -59,11 +59,11 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
       <button
         onClick={() => setShowForm(true)}
         style={{
-          background: 'var(--accent-muted)',
-          border: '1px solid var(--accent-border)',
+          background: 'rgba(139,92,246,0.10)',
+          border: '1px solid rgba(139,92,246,0.22)',
           borderRadius: 6,
           padding: '4px 10px',
-          color: 'var(--accent)',
+          color: '#8B5CF6',
           fontFamily: 'var(--font-mono)',
           fontSize: 7,
           letterSpacing: '0.10em',
@@ -78,8 +78,8 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
 
   return (
     <div style={{
-      background: 'var(--accent-muted)',
-      border: '1px solid var(--accent-muted)',
+      background: 'rgba(139,92,246,0.06)',
+      border: '1px solid rgba(139,92,246,0.12)',
       borderRadius: 8,
       padding: 10,
       marginTop: 6,
@@ -92,7 +92,7 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
           onChange={(e) => setFormData({ ...formData, decidedBy: e.target.value })}
           style={{
             background: 'var(--bg-input)',
-            border: '1px solid var(--accent-border)',
+            border: '1px solid rgba(139,92,246,0.25)',
             borderRadius: 4,
             padding: '5px 8px',
             color: 'var(--text-primary)',
@@ -109,7 +109,7 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
           rows={2}
           style={{
             background: 'var(--bg-input)',
-            border: '1px solid var(--accent-border)',
+            border: '1px solid rgba(139,92,246,0.25)',
             borderRadius: 4,
             padding: '5px 8px',
             color: 'var(--text-primary)',
@@ -125,7 +125,7 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
           onChange={(e) => setFormData({ ...formData, phase: e.target.value })}
           style={{
             background: 'var(--bg-input)',
-            border: '1px solid var(--accent-border)',
+            border: '1px solid rgba(139,92,246,0.25)',
             borderRadius: 4,
             padding: '5px 8px',
             color: 'var(--text-primary)',
@@ -147,7 +147,7 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
             disabled={!formData.decidedBy || saving}
             style={{
               flex: 1,
-              background: 'linear-gradient(135deg,var(--accent),var(--secondary))',
+              background: 'linear-gradient(135deg,#8B5CF6,#6D40D4)',
               border: 'none',
               borderRadius: 4,
               padding: '6px 10px',
@@ -167,10 +167,10 @@ export default function DecisionCapture({ message, projectId, projectName, sessi
             style={{
               flex: 1,
               background: 'transparent',
-              border: '1px solid var(--accent-border)',
+              border: '1px solid rgba(139,92,246,0.25)',
               borderRadius: 4,
               padding: '6px 10px',
-              color: 'var(--accent)',
+              color: '#A78BFA',
               fontFamily: 'var(--font-mono)',
               fontSize: 8,
               fontWeight: 700,

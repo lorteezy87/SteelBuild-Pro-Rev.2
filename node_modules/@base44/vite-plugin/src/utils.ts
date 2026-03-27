@@ -1,0 +1,27 @@
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+
+export function filterPackagesInProject(
+  packages: string[],
+  root: string
+): string[] {
+  try {
+    const packageJsonPath = join(root, "package.json");
+    if (!existsSync(packageJsonPath)) {
+      return [];
+    }
+
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+    const allDeps = {
+      ...packageJson.dependencies,
+      ...packageJson.devDependencies,
+      ...packageJson.peerDependencies,
+    };
+
+    return packages.filter((pkg) => pkg in allDeps);
+  } catch (error) {
+    console.warn("Failed to read project package.json:", error);
+    return [];
+  }
+}
+

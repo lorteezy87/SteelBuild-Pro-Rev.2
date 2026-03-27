@@ -1,17 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export default function ActionItemFormModal({
-  projectId,
-  onClose,
-  onSave,
-  actionItem = null,
-}) {
+export default function ActionItemFormModal({ projectId, onClose }) {
   const qc = useQueryClient();
   const [formData, setFormData] = useState({
-    project_id: projectId || "",
+    project_id: projectId,
     title: "",
     description: "",
     assigned_to: "",
@@ -20,26 +15,6 @@ export default function ActionItemFormModal({
     status: "Open",
     meeting_reference: "",
   });
-
-  useEffect(() => {
-    if (actionItem) {
-      setFormData({
-        project_id: actionItem.project_id || "",
-        title: actionItem.title || "",
-        description: actionItem.description || "",
-        assigned_to: actionItem.assigned_to || "",
-        due_date: actionItem.due_date || "",
-        priority: actionItem.priority || "Medium",
-        status: actionItem.status || "Open",
-        meeting_reference: actionItem.meeting_reference || "",
-      });
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        project_id: projectId || "",
-      }));
-    }
-  }, [actionItem, projectId]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -59,11 +34,6 @@ export default function ActionItemFormModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (actionItem && onSave) {
-      onSave(formData);
-      onClose();
-      return;
-    }
     mutation.mutate(formData);
   };
 
@@ -84,50 +54,31 @@ export default function ActionItemFormModal({
     >
       <div
         style={{
-          background: "var(--bg-surface)",
+          background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          maxWidth: "640px",
+          borderRadius: "16px",
+          padding: "24px",
+          maxWidth: "600px",
           width: "90%",
           maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
+          overflowY: "auto",
         }}
       >
-        <div
+        <h2
           style={{
-            padding: "18px 24px 12px",
-            borderBottom: "1px solid var(--divider)",
-            flexShrink: 0,
+            fontFamily: "var(--font-mono)",
+            fontSize: "14px",
+            fontWeight: 700,
+            color: "var(--text-primary)",
+            margin: "0 0 20px 0",
+            textTransform: "uppercase",
+            letterSpacing: "0.10em",
           }}
         >
-          <h2
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "14px",
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.10em",
-            }}
-          >
-            {actionItem ? `Edit: ${actionItem.title}` : "New Action Item"}
-          </h2>
-        </div>
+          New Action Item
+        </h2>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            padding: "16px 24px",
-            flex: 1,
-            overflowY: "auto",
-          }}
-        >
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Project */}
           <div>
             <label
@@ -434,62 +385,52 @@ export default function ActionItemFormModal({
               />
             </div>
           </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-default)",
+                borderRadius: "8px",
+                padding: "8px 16px",
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "background 0.15s",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              style={{
+                background: "var(--accent)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                padding: "8px 16px",
+                fontFamily: "var(--font-mono)",
+                fontSize: "10px",
+                fontWeight: 700,
+                cursor: mutation.isPending ? "not-allowed" : "pointer",
+                transition: "background 0.15s",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                opacity: mutation.isPending ? 0.5 : 1,
+              }}
+            >
+              {mutation.isPending ? "Creating..." : "Create Item"}
+            </button>
+          </div>
         </form>
-        {/* Footer */}
-        <div
-          style={{
-            padding: "10px 24px",
-            borderTop: "1px solid var(--divider)",
-            display: "flex",
-            gap: "8px",
-            justifyContent: "flex-end",
-            background: "var(--bg-surface)",
-            flexShrink: 0,
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background 0.15s",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={mutation.isPending && !actionItem}
-            style={{
-              background: "var(--accent)",
-              color: "white",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: mutation.isPending && !actionItem ? "not-allowed" : "pointer",
-              transition: "background 0.15s",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              opacity: mutation.isPending && !actionItem ? 0.5 : 1,
-            }}
-          >
-            {actionItem ? "Update Action Item" : mutation.isPending ? "Creating..." : "Create Item"}
-          </button>
-        </div>
       </div>
     </div>
   );

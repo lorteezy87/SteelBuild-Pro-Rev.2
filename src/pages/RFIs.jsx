@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
-import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
+import { getNextNumber } from "@/components/shared/numberSequencing";
 import { parseUTCDate } from "@/components/shared/formatters";
 
 const mono = { fontFamily: "var(--font-mono)" };
@@ -1048,7 +1048,7 @@ export default function RFIs() {
             if (editingRFI) {
               updateMut.mutate({ id: editingRFI.id, data });
             } else {
-              const num = data.rfi_number || (await getNextFormattedNumber(data.project_id || projectId, "RFI"));
+              const num = data.rfi_number || (await getNextNumber(data.project_id || projectId, "RFI"));
               createMut.mutate({ ...data, rfi_number: num });
             }
             setShowForm(false);
