@@ -96,6 +96,7 @@ import UsersManagement from './pages/UsersManagement';
 import Vendors from './pages/Vendors';
 import Warranty from './pages/Warranty';
 import WorkPackages from './pages/WorkPackages';
+import ImportData from './pages/ImportData';
 import __Layout from './Layout.jsx';
 
 
@@ -149,6 +150,7 @@ export const PAGES = {
     "Vendors": Vendors,
     "Warranty": Warranty,
     "WorkPackages": WorkPackages,
+    "ImportData": ImportData,
 }
 
 export const pagesConfig = {
