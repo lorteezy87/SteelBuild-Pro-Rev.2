@@ -11,6 +11,7 @@ import LocalLoginForm from '@/components/LocalLoginForm';
 import { ThemeProvider } from '@/components/shared/ThemeContext';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
+import ImportData from './pages/ImportData';
 
 const { Pages, Layout } = pagesConfig;
 const mainPageKey = "Landing";
@@ -130,6 +131,7 @@ const AuthenticatedApp = () => {
       ))}
       <Route path="/Landing" element={<LayoutWrapper currentPageName="Landing"><Landing /></LayoutWrapper>} />
       <Route path="/RFIHub" element={<LayoutWrapper currentPageName="RFIHub"><RFIHub /></LayoutWrapper>} />
+      <Route path="/ImportData" element={<LayoutWrapper currentPageName="ImportData"><ImportData /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
