@@ -363,6 +363,7 @@ export default function Schedule() {
             percent_complete: 0,
           })
         }
+        isSaving={createTaskMut.isPending}
         projectName={selectedProject?.name || ""}
         prefilledDate={new Date().toISOString().split("T")[0]}
       />

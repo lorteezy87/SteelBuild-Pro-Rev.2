@@ -907,6 +907,30 @@ function PMAButton() {
   );
 }
 
+// ─── Project error banner (renders inside ProjectProvider) ────────
+function ProjectErrorBanner() {
+  const { projectLoadError } = useProjectContext();
+  if (!projectLoadError) return null;
+  return (
+    <div style={{
+      marginBottom: 16,
+      padding: "12px 16px",
+      background: "var(--warning-muted)",
+      border: "1px solid var(--warning-border)",
+      borderLeft: "4px solid var(--status-error)",
+      borderRadius: "var(--radius-card)",
+      fontFamily: "var(--font-mono)",
+      fontSize: 11,
+      color: "var(--status-error)",
+    }}>
+      <strong>⚠ Project data unavailable:</strong> {projectLoadError}
+      <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>
+        — Verify the Project entity schema exists in the Base44 app admin.
+      </span>
+    </div>
+  );
+}
+
 // ─── Main Layout ──────────────────────────────────────────────────
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
@@ -1283,6 +1307,7 @@ export default function Layout({ children, currentPageName }) {
 
         {/* CONTENT */}
         <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 16, background: "var(--bg-base)", color: "var(--text-primary)" }}>
+          <ProjectErrorBanner />
           {children}
         </main>
 
