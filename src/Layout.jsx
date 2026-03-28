@@ -124,7 +124,7 @@ function NavTab({ tab, active, onClick }) {
         fontWeight: active ? 700 : 600,
         letterSpacing: "0.10em",
         textTransform: "uppercase",
-        color: active ? "var(--accent)" : hovered ? "rgba(194,198,214,0.90)" : "rgba(194,198,214,0.55)",
+        color: active ? "var(--accent)" : hovered ? "rgba(229,233,238,0.92)" : "rgba(197,203,210,0.65)",
         padding: "12px 14px",
         height: 52,
         display: "flex", alignItems: "center",
@@ -813,7 +813,7 @@ function PMAButton() {
     unreadInsights > 0
       ? {
           animation: 'pma-pulse 2s infinite',
-          boxShadow: '0 0 0 0 rgba(139,92,246,0.6)',
+          boxShadow: '0 0 0 0 rgba(0,229,255,0.45)',
         }
       : {};
 
@@ -826,15 +826,15 @@ function PMAButton() {
         alignItems: 'center',
         gap: 8,
         padding: '6px 14px',
-        background: isOpen ? 'linear-gradient(135deg,var(--accent),var(--secondary))' : 'rgba(139,92,246,0.12)',
+        background: isOpen ? 'linear-gradient(135deg,var(--secondary),rgba(0,229,255,0.55))' : 'rgba(0,229,255,0.10)',
         border: '1px solid',
-        borderColor: isOpen ? 'rgba(139,92,246,0.6)' : 'rgba(139,92,246,0.25)',
+        borderColor: isOpen ? 'rgba(0,229,255,0.55)' : 'rgba(0,229,255,0.30)',
         borderRadius: 16,
         cursor: 'pointer',
         fontFamily: 'IBM Plex Mono, monospace',
         fontSize: 9,
         fontWeight: 700,
-        color: isOpen ? 'white' : '#A78BFA',
+        color: isOpen ? '#02181C' : 'var(--secondary)',
         letterSpacing: '0.08em',
         transition: 'all 0.2s',
         position: 'relative',
@@ -843,9 +843,9 @@ function PMAButton() {
     >
       <style>{`
         @keyframes pma-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(139,92,246,0.6); }
-          70% { box-shadow: 0 0 0 8px rgba(139,92,246,0); }
-          100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
+          0% { box-shadow: 0 0 0 0 rgba(0,229,255,0.45); }
+          70% { box-shadow: 0 0 0 8px rgba(0,229,255,0); }
+          100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
         }
       `}</style>
       <span style={{ fontSize: 11 }}>✦</span>
@@ -1060,7 +1060,7 @@ export default function Layout({ children, currentPageName }) {
         {/* TOP NAV */}
         <nav style={{
               height: 52,
-              background: "var(--bg-page)",
+              background: "rgba(12,14,17,0.78)",
               borderBottom: "1px solid var(--divider)",
               padding: "0 16px",
               display: "flex",
@@ -1070,7 +1070,7 @@ export default function Layout({ children, currentPageName }) {
               position: "relative",
               zIndex: 100,
               gap: 8,
-              backdropFilter: "blur(12px)"
+              backdropFilter: "blur(24px)"
             }}>
           {/* LEFT — Brand + Hamburger on mobile */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1153,9 +1153,9 @@ export default function Layout({ children, currentPageName }) {
                     title: "Search (Cmd+K)"
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(59,130,246,0.10)";
-                    e.currentTarget.style.borderColor = "rgba(59,130,246,0.30)";
-                    e.currentTarget.style.color = "var(--accent)";
+                    e.currentTarget.style.background = "var(--secondary-muted)";
+                    e.currentTarget.style.borderColor = "var(--secondary-border)";
+                    e.currentTarget.style.color = "var(--secondary)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "var(--hover-bg)";
