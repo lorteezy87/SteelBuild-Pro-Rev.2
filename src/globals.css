@@ -183,6 +183,28 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.tech-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] #root {
+  background: var(--bg-page) !important;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] #root {
+  background: var(--bg-page) !important;
+}
+
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -216,6 +238,14 @@ input::placeholder, textarea::placeholder {
 
 /* ── Buttons ── */
 button { cursor: pointer; outline: none; }
+
+/* Glass/HUD helpers */
+.glass-surface {
+  background: rgba(17, 19, 22, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-default);
+}
 
 /* ── Tailwind overrides ── */
 .bg-white { background: var(--bg-surface) !important; }
