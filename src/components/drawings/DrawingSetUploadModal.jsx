@@ -11,6 +11,13 @@ import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "luci
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const MAX_PDF_SIZE_MB = 32;
 
+function isPdfFile(file) {
+  if (!file) return false;
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return mime === "application/pdf" || mime.includes("pdf") || name.endsWith(".pdf");
+}
+
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -154,7 +161,7 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
   const fileInputRef = useRef();
 
   const addFiles = (newFiles) => {
-    const pdfs = Array.from(newFiles).filter(f => f.type === "application/pdf" || f.name.endsWith(".pdf"));
+    const pdfs = Array.from(newFiles).filter(isPdfFile);
     setFiles(prev => {
       const existingNames = new Set(prev.map(f => f.name));
       return [...prev, ...pdfs.filter(f => !existingNames.has(f.name))];

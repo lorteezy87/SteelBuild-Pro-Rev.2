@@ -119,12 +119,12 @@ function NavTab({ tab, active, onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "var(--font-mono)",
         fontSize: 10,
         fontWeight: active ? 700 : 600,
         letterSpacing: "0.10em",
         textTransform: "uppercase",
-        color: active ? "var(--accent)" : hovered ? "rgba(194,198,214,0.90)" : "rgba(194,198,214,0.55)",
+        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
         padding: "12px 14px",
         height: 52,
         display: "flex", alignItems: "center",
@@ -310,7 +310,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
             borderRadius: 6,
             padding: "6px 10px",
             color: "var(--text-primary)",
-            fontFamily: "'DM Sans', sans-serif",
+            fontFamily: "var(--font-body)",
             fontSize: 12,
             outline: "none",
             boxSizing: "border-box"
@@ -372,7 +372,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
                   }}
                   onMouseEnter={(e) => {
                     if (!isAdminOnly) {
-                      e.currentTarget.style.background = "rgba(173,198,255,0.08)";
+                      e.currentTarget.style.background = "var(--nav-hover-bg)";
                       e.currentTarget.style.borderLeft = "2px solid var(--accent)";
                       e.currentTarget.style.borderRadius = "0";
                     }
@@ -445,8 +445,8 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
               }}
               onMouseEnter={(e) => {
                 if (!isAdminOnly) {
-                  e.currentTarget.style.background = "rgba(59,130,246,0.06)";
-                  e.currentTarget.style.borderLeft = "2px solid rgba(59,130,246,0.5)";
+                  e.currentTarget.style.background = "var(--nav-hover-bg)";
+                  e.currentTarget.style.borderLeft = "2px solid var(--accent)";
                 }
               }}
               onMouseLeave={(e) => {
@@ -458,11 +458,11 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
                   <span style={{ fontSize: 13, width: 16, textAlign: "center", opacity: 0.65, flexShrink: 0 }}>
                     {item.icon}
                   </span>
-                  <span style={{
+              <span style={{
                 fontFamily: "var(--font-body)",
                 fontSize: 12,
                 fontWeight: 500,
-                color: "rgba(220,225,240,0.80)",
+                color: "var(--text-secondary)",
                 flex: 1,
                 lineHeight: 1.2
               }}>
@@ -526,7 +526,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
              STEELBUILD
            </span>
            <span style={{
-             fontFamily: "'JetBrains Mono', monospace",
+             fontFamily: "var(--font-mono)",
              fontSize: 8,
              fontWeight: 500,
              letterSpacing: '0.20em',
@@ -813,7 +813,7 @@ function PMAButton() {
     unreadInsights > 0
       ? {
           animation: 'pma-pulse 2s infinite',
-          boxShadow: '0 0 0 0 rgba(139,92,246,0.6)',
+          boxShadow: '0 0 0 0 rgba(0,229,255,0.45)',
         }
       : {};
 
@@ -826,26 +826,27 @@ function PMAButton() {
         alignItems: 'center',
         gap: 8,
         padding: '6px 14px',
-        background: isOpen ? 'linear-gradient(135deg,var(--accent),var(--secondary))' : 'rgba(139,92,246,0.12)',
+        background: isOpen ? 'rgba(0,229,255,0.15)' : 'rgba(0,229,255,0.06)',
         border: '1px solid',
-        borderColor: isOpen ? 'rgba(139,92,246,0.6)' : 'rgba(139,92,246,0.25)',
+        borderColor: isOpen ? 'rgba(0,229,255,0.50)' : 'rgba(0,229,255,0.20)',
         borderRadius: 16,
         cursor: 'pointer',
-        fontFamily: 'IBM Plex Mono, monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: 9,
         fontWeight: 700,
-        color: isOpen ? 'white' : '#A78BFA',
+        color: isOpen ? '#00E5FF' : 'rgba(0,229,255,0.65)',
         letterSpacing: '0.08em',
         transition: 'all 0.2s',
         position: 'relative',
+        boxShadow: isOpen ? '0 0 16px rgba(0,229,255,0.25)' : 'none',
         ...pulseStyle,
       }}
     >
       <style>{`
         @keyframes pma-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(139,92,246,0.6); }
-          70% { box-shadow: 0 0 0 8px rgba(139,92,246,0); }
-          100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); }
+          0% { box-shadow: 0 0 0 0 rgba(0,229,255,0.45); }
+          70% { box-shadow: 0 0 0 8px rgba(0,229,255,0); }
+          100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
         }
       `}</style>
       <span style={{ fontSize: 11 }}>✦</span>
@@ -1058,10 +1059,10 @@ export default function Layout({ children, currentPageName }) {
         }} />
 
         {/* TOP NAV */}
-        <nav style={{
+        <nav className="nav-glass" style={{
               height: 52,
-              background: "var(--bg-page)",
-              borderBottom: "1px solid var(--divider)",
+              background: "rgba(12,14,17,0.85)",
+              borderBottom: "1px solid rgba(51,53,56,0.60)",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
@@ -1070,7 +1071,8 @@ export default function Layout({ children, currentPageName }) {
               position: "relative",
               zIndex: 100,
               gap: 8,
-              backdropFilter: "blur(12px)"
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)"
             }}>
           {/* LEFT — Brand + Hamburger on mobile */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1153,9 +1155,9 @@ export default function Layout({ children, currentPageName }) {
                     title: "Search (Cmd+K)"
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(59,130,246,0.10)";
-                    e.currentTarget.style.borderColor = "rgba(59,130,246,0.30)";
-                    e.currentTarget.style.color = "var(--accent)";
+                    e.currentTarget.style.background = "var(--secondary-muted)";
+                    e.currentTarget.style.borderColor = "var(--secondary-border)";
+                    e.currentTarget.style.color = "var(--secondary)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "var(--hover-bg)";
@@ -1236,7 +1238,7 @@ export default function Layout({ children, currentPageName }) {
                   paddingRight: 0
                 }}>
               <div style={{
-                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontFamily: "var(--font-mono)",
                     fontSize: 8,
                     color: 'var(--text-muted)',
                     letterSpacing: '0.10em',
@@ -1252,7 +1254,7 @@ export default function Layout({ children, currentPageName }) {
                       borderRadius: 6,
                       padding: '4px 12px',
                       color: 'var(--text-muted)',
-                      fontFamily: "'IBM Plex Mono', monospace",
+                      fontFamily: "var(--font-mono)",
                       fontSize: 8,
                       letterSpacing: '0.10em',
                       cursor: 'pointer',
