@@ -37,7 +37,7 @@ const APPROVAL_BADGE = {
   approved: { bg: "rgba(0,214,143,0.10)", border: "rgba(0,214,143,0.25)", color: "#00D68F", label: "APPROVED" },
   pending: { bg: "rgba(255,180,0,0.10)", border: "rgba(255,180,0,0.25)", color: "#FFB020", label: "PENDING" },
   rejected: { bg: "rgba(255,61,61,0.10)", border: "rgba(255,61,61,0.25)", color: "#FF3D3D", label: "REJECTED" },
-  superseded: { bg: "rgba(200,210,230,0.08)", border: "rgba(200,210,230,0.20)", color: "rgba(200,210,230,0.55)", label: "SUPERSEDED" },
+  superseded: { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.10)", color: "var(--text-muted)", label: "SUPERSEDED" },
 };
 
 const STAGE_COLORS = {
@@ -60,7 +60,7 @@ const btnPrimary = {
   cursor: "pointer",
   background: "var(--accent)",
   border: "none",
-  color: "#fff",
+  color: "var(--on-accent)",
   fontFamily: "var(--font-body)",
   fontSize: 9,
   fontWeight: 700,
@@ -579,12 +579,12 @@ function DrawingSetGroup({
         onClick={() => onToggleCollapse(setKey)}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 12, color: "var(--accent-light)", transition: "transform 0.15s", transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", flexShrink: 0, display: "inline-block" }}>v</span>
+          <span style={{ fontSize: 12, color: "var(--accent)", transition: "transform 0.15s", transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", flexShrink: 0, display: "inline-block" }}>v</span>
           <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", background: "var(--bg-surface-high)", padding: "2px 7px", borderRadius: "var(--radius-badge)", flexShrink: 0 }}>{setDrawings.length} SHEETS</span>
-          {sample?.discipline && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, background: "var(--accent-muted)", color: "var(--accent-light)", borderRadius: "var(--radius-badge)", padding: "1px 6px", flexShrink: 0 }}>{sample.discipline.slice(0, 6).toUpperCase()}</span>}
+          {sample?.discipline && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, background: "var(--accent-muted)", color: "var(--accent)", borderRadius: "var(--radius-badge)", padding: "1px 6px", flexShrink: 0 }}>{sample.discipline.slice(0, 6).toUpperCase()}</span>}
           {!isUngrouped && (sample?.revision_number !== undefined || sample?.issue_date || sample?.issued_by) && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(220,225,240,0.55)", letterSpacing: "0.08em", flexShrink: 0, whiteSpace: "nowrap" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", letterSpacing: "0.08em", flexShrink: 0, whiteSpace: "nowrap" }}>
               {sample?.revision_number !== undefined && `REV ${sample.revision_number}`}
               {sample?.issue_date && ` - ${new Date(sample.issue_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
               {sample?.issued_by && ` - ${sample.issued_by}`}
@@ -598,7 +598,7 @@ function DrawingSetGroup({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }} onClick={(event) => event.stopPropagation()}>
           {drawingSetRecord && (
-            <button onClick={() => onOpenHistory(drawingSetRecord)} style={{ ...compactHeaderBtn, color: "rgba(200,210,230,0.55)" }}>
+            <button onClick={() => onOpenHistory(drawingSetRecord)} style={{ ...compactHeaderBtn, color: "var(--text-secondary)" }}>
               {revCount} REV{revCount !== 1 ? "S" : ""}
             </button>
           )}
@@ -715,7 +715,7 @@ function DrawingRow({
           fontFamily: "var(--font-mono)",
           fontSize: 10,
           fontWeight: 600,
-          color: "var(--accent-light)",
+          color: "var(--accent)",
           cursor: "pointer",
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -1147,8 +1147,8 @@ export default function Submittals() {
     return (
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>[]</div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view drawings</div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6 }}>Select a project to view drawings</div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
       </div>
     );
   }
@@ -1186,7 +1186,7 @@ export default function Submittals() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Drawing Log</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", background: "var(--bg-surface-high)", padding: "2px 7px", borderRadius: "var(--radius-badge)" }}>{drawings.length} SHEETS</span>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--accent-light)" }}>{activeProject.name}</span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--accent)" }}>{activeProject.name}</span>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => { setEditing(null); setModalOpen(true); }} style={btnSecondary}>+ SINGLE</button>
@@ -1244,16 +1244,16 @@ export default function Submittals() {
           <option value="all">All Disciplines</option>
           {disciplines.map((discipline) => <option key={discipline} value={discipline}>{discipline}</option>)}
         </select>
-        <button onClick={() => setSortByDue((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: sortByDue ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${sortByDue ? "rgba(59,130,246,0.40)" : "rgba(255,255,255,0.08)"}`, color: sortByDue ? "var(--accent)" : "rgba(200,210,230,0.40)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em", fontWeight: sortByDue ? 700 : 400 }}>
+        <button onClick={() => setSortByDue((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: sortByDue ? "var(--accent-muted)" : "rgba(255,255,255,0.04)", border: `1px solid ${sortByDue ? "var(--accent-border)" : "rgba(255,255,255,0.08)"}`, color: sortByDue ? "var(--accent)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em", fontWeight: sortByDue ? 700 : 400 }}>
           SORT BY DUE
         </button>
-        <button onClick={() => setShowSuperseded((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: showSuperseded ? "rgba(200,210,230,0.10)" : "rgba(255,255,255,0.04)", border: `1px solid ${showSuperseded ? "rgba(200,210,230,0.25)" : "rgba(255,255,255,0.08)"}`, color: showSuperseded ? "rgba(200,210,230,0.60)" : "rgba(200,210,230,0.35)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em" }}>
+        <button onClick={() => setShowSuperseded((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: showSuperseded ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${showSuperseded ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`, color: showSuperseded ? "var(--text-secondary)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em" }}>
           {showSuperseded ? "SHOW ALL" : "HIDE SUPERSEDED"}
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", overflow: "hidden" }}>
           {["TABLE", "THUMBNAIL", "KANBAN", "SCHEDULE"].map((mode) => (
-            <button key={mode} onClick={() => setView(mode)} style={{ padding: "0 10px", height: 28, background: view === mode ? "var(--accent-muted)" : "transparent", border: "none", color: view === mode ? "var(--accent-light)" : "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 700, cursor: "pointer", letterSpacing: "0.10em" }}>{mode}</button>
+            <button key={mode} onClick={() => setView(mode)} style={{ padding: "0 10px", height: 28, background: view === mode ? "var(--accent-muted)" : "transparent", border: "none", color: view === mode ? "var(--accent)" : "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 700, cursor: "pointer", letterSpacing: "0.10em" }}>{mode}</button>
           ))}
         </div>
       </div>
@@ -1286,7 +1286,7 @@ export default function Submittals() {
           )}
 
           {loading ? (
-            <div style={{ textAlign: "center", padding: 40, fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(200,210,230,0.35)", letterSpacing: "0.12em" }}>Loading drawings...</div>
+            <div style={{ textAlign: "center", padding: 40, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>Loading drawings...</div>
           ) : view === "KANBAN" ? (
             <DrawingKanban
               drawings={filtered}
@@ -1301,8 +1301,8 @@ export default function Submittals() {
           ) : displayDrawings.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 24px" }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>[]</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>No drawings found</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)", marginBottom: 18 }}>Upload a drawing set PDF to auto-populate the log</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 6 }}>No drawings found</div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 18 }}>Upload a drawing set PDF to auto-populate the log</div>
               <button onClick={() => setUploadSetOpen(true)} style={{ ...btnPrimary, display: "inline-flex" }}>
                 <Upload style={{ width: 12, height: 12 }} /> UPLOAD DRAWING SET
               </button>
