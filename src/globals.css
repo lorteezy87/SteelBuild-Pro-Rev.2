@@ -6,50 +6,50 @@
 
 :root,
 [data-theme="dark"] {
-  /* Surfaces */
-  --bg-void:                  #0D0E10;
-  --bg-page:                  #121315;
-  --bg-surface:               #121315;
-  --bg-surface-low:           #1B1C1E;
-  --bg-surface-mid:           #1F2022;
-  --bg-surface-high:          #292A2C;
-  --bg-surface-highest:       #343537;
-  --bg-surface-lowest:        #0D0E10;
-  --bg-input:                 #0D0E10;
-  --bg-sidebar:               #1B1C1E;
+  /* Surfaces — Executive Industrialism */
+  --bg-void:                  #090A0B;
+  --bg-page:                  #0C0E11;
+  --bg-surface:               #111316;
+  --bg-surface-low:           #111316;
+  --bg-surface-mid:           #1A1C1F;
+  --bg-surface-high:          #23262A;
+  --bg-surface-highest:       #2A2D31;
+  --bg-surface-lowest:        #090A0B;
+  --bg-input:                 #0F1113;
+  --bg-sidebar:               #1A1C1F;
 
   /* Legacy aliases — keep for backward compat */
-  --bg-base:                  #0D0E10;
-  --bg-card:                  #1B1C1E;
-  --bg-elevated:              #1F2022;
-  --bg-surface-secondary:     #1F2022;
+  --bg-base:                  #090A0B;
+  --bg-card:                  #111316;
+  --bg-elevated:              #1A1C1F;
+  --bg-surface-secondary:     #1A1C1F;
 
   /* Text */
-  --text-primary:             #E3E2E5;
-  --text-secondary:           #C6C6CB;
-  --text-muted:               #909095;
+  --text-primary:             #F3F5F7;
+  --text-secondary:           #C5CBD2;
+  --text-muted:               #8D959E;
   --text-disabled:            rgba(198,198,203,0.35);
 
   /* Borders — ghost only */
-  --border-default:           rgba(69,71,75,0.40);
-  --border-strong:            #45474B;
-  --border:                   rgba(69,71,75,0.40);
-  --divider:                  rgba(69,71,75,0.15);
+  --border-default:           rgba(51,53,56,0.55);
+  --border-strong:            #333538;
+  --border:                   rgba(40,42,45,0.9);
+  --divider:                  rgba(40,42,45,0.7);
   --outline:                  #909095;
 
-  /* Primary accent (Sky Blue) */
-  --accent:                   #7BD0FF;
-  --accent-light:             #7BD0FF;
-  --accent-hover:             #44E2CD;
-  --accent-muted:             rgba(123,208,255,0.10);
-  --accent-border:            rgba(123,208,255,0.25);
-  --accent-text:              #00354A;
-  --on-accent:                #00354A;
+  /* Primary accent (Safety Orange) */
+  --accent:                   #FF6B00;
+  --accent-light:             #FFB693;
+  --accent-hover:             #FF7F26;
+  --accent-muted:             rgba(255,107,0,0.14);
+  --accent-border:            rgba(255,107,0,0.4);
+  --accent-text:              #0B0B0C;
+  --on-accent:                #0B0B0C;
 
-  /* Secondary accent (Teal) */
-  --secondary:                #44E2CD;
-  --secondary-muted:          rgba(68,226,205,0.10);
-  --secondary-border:         rgba(68,226,205,0.25);
+  /* Secondary accent (Electric Cyan) */
+  --secondary:                #00E5FF;
+  --secondary-muted:          rgba(0,229,255,0.10);
+  --secondary-border:         rgba(0,229,255,0.30);
 
   /* Tertiary accent (Gold) */
   --tertiary:                 #FFB95F;
@@ -57,42 +57,42 @@
   --tertiary-border:          rgba(255,185,95,0.25);
 
   /* Phase colors */
-  --phase-detailing:          #7BD0FF;
-  --phase-fab:                #44E2CD;
-  --phase-delivery:           #A8F0CB;
-  --phase-erection:           #FFB95F;
+  --phase-detailing:          #00E5FF;
+  --phase-fab:                #FF6B00;
+  --phase-delivery:           #00C853;
+  --phase-erection:           #FFD600;
   --phase-closeout:           #909095;
 
   /* Status */
-  --status-success:           #A8F0CB;
-  --status-warning:           #FFB95F;
-  --status-error:             #FFB4AB;
-  --status-info:              #7BD0FF;
-  --success:                  #A8F0CB;
-  --success-muted:            rgba(168,240,203,0.12);
-  --success-border:           rgba(168,240,203,0.25);
-  --warning:                  #FFB95F;
-  --warning-muted:            rgba(255,185,95,0.12);
-  --warning-border:           rgba(255,185,95,0.25);
-  --danger:                   #FFB4AB;
-  --danger-muted:             rgba(255,180,171,0.12);
-  --danger-border:            rgba(255,180,171,0.25);
-  --info:                     #7BD0FF;
-  --info-muted:               rgba(123,208,255,0.08);
-  --info-border:              rgba(123,208,255,0.20);
+  --status-success:           #00C853;
+  --status-warning:           #FFD600;
+  --status-error:             #D50000;
+  --status-info:              #00E5FF;
+  --success:                  #00C853;
+  --success-muted:            rgba(0,200,83,0.15);
+  --success-border:           rgba(0,200,83,0.30);
+  --warning:                  #FFD600;
+  --warning-muted:            rgba(255,214,0,0.14);
+  --warning-border:           rgba(255,214,0,0.30);
+  --danger:                   #D50000;
+  --danger-muted:             rgba(213,0,0,0.12);
+  --danger-border:            rgba(213,0,0,0.30);
+  --info:                     #00E5FF;
+  --info-muted:               rgba(0,229,255,0.10);
+  --info-border:              rgba(0,229,255,0.30);
 
   /* Misc */
-  --shadow-card:              none;
-  --shadow-lg:                0 0 40px rgba(0,0,0,0.04);
-  --hover-bg:                 rgba(69,71,75,0.30);
-  --bg-hover:                 rgba(69,71,75,0.30);
-  --bg-row-hover:             rgba(255,255,255,0.025);
-  --nav-hover-bg:             rgba(123,208,255,0.08);
+  --shadow-card:              0 20px 45px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.02);
+  --shadow-lg:                0 24px 60px rgba(0,0,0,0.55);
+  --hover-bg:                 rgba(40,42,45,0.70);
+  --bg-hover:                 rgba(40,42,45,0.70);
+  --bg-row-hover:             #282A2D;
+  --nav-hover-bg:             rgba(255,107,0,0.12);
 
   /* Radius — industrial sharp */
-  --radius-card:              2px;
-  --radius-btn:               2px;
-  --radius-input:             2px;
+  --radius-card:              6px;
+  --radius-btn:               6px;
+  --radius-input:             6px;
   --radius-badge:             9999px;
 
   /* Fonts */
@@ -198,6 +198,18 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.tech-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
 [data-theme="dark"] body,
 [data-theme="dark"] #root {
   background: var(--bg-page) !important;
@@ -241,6 +253,14 @@ input::placeholder, textarea::placeholder {
 
 /* ── Buttons ── */
 button { cursor: pointer; outline: none; }
+
+/* Glass/HUD helpers */
+.glass-surface {
+  background: rgba(17, 19, 22, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-default);
+}
 
 /* ── Tailwind overrides ── */
 .bg-white { background: var(--bg-surface) !important; }
