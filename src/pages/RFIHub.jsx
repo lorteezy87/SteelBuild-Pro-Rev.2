@@ -143,7 +143,7 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
 
   const updateMut = useMutation({
     mutationFn: (data) => base44.entities.RFI.update(rfi.id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rfis-hub"] }); onStatusChange?.(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["rfis"] }); onStatusChange?.(); },
   });
 
   const prioCfg = PRIO[rfi.priority] || PRIO.Medium;
@@ -432,7 +432,7 @@ export default function RFIHub() {
   const [expandedProjects, setExpandedProjects] = useState(new Set(["__all"]));
 
   const { data: rfis = [], isLoading, refetch } = useQuery({
-    queryKey: ["rfis-hub"],
+    queryKey: ["rfis", "hub"],
     queryFn: () => base44.entities.RFI.list("-submitted_date", 500),
     initialData: [],
   });
@@ -462,7 +462,6 @@ export default function RFIHub() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rfis-hub"] });
       qc.invalidateQueries({ queryKey: ["rfis"] });
       toast.success("RFI created");
     },
@@ -674,7 +673,7 @@ export default function RFIHub() {
           <RFIDetailPanel
             rfi={selectedRFI}
             onClose={() => setSelectedRFI(null)}
-            onStatusChange={() => qc.invalidateQueries({ queryKey: ["rfis-hub"] })}
+            onStatusChange={() => qc.invalidateQueries({ queryKey: ["rfis"] })}
           />
         )}
       </div>

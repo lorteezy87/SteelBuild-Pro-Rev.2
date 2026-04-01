@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
+import { useSaveMutation } from '@/hooks/useSaveMutation';
 
 const iStyle = {
   width: '100%',
@@ -47,7 +47,6 @@ export default function DecisionLog() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get('project') || activeProject?.id || null;
-  const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState('decisions');
   const [showDecisionForm, setShowDecisionForm] = useState(false);
@@ -79,39 +78,34 @@ export default function DecisionLog() {
     initialData: [],
   });
 
-  const createDecision = useMutation({
-    mutationFn: (data) => base44.entities.PMADecision.create({ ...data, project_id: projectId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); setShowDecisionForm(false); setEditingDecision(null); toast.success('Decision logged'); },
-    onError: err => toast.error(err.message),
-  });
+  const decisionKeys = [['decisions', projectId]];
+  const assumptionKeys = [['assumptions', projectId]];
 
-  const updateDecision = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PMADecision.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); setShowDecisionForm(false); setEditingDecision(null); toast.success('Decision updated'); },
-    onError: err => toast.error(err.message),
-  });
+  const createDecision = useSaveMutation(
+    (data) => base44.entities.PMADecision.create({ ...data, project_id: projectId }),
+    { invalidateKeys: decisionKeys, successMsg: 'Decision logged', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } }
+  );
+  const updateDecision = useSaveMutation(
+    ({ id, data }) => base44.entities.PMADecision.update(id, data),
+    { invalidateKeys: decisionKeys, successMsg: 'Decision updated', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } }
+  );
+  const deleteDecision = useSaveMutation(
+    (id) => base44.entities.PMADecision.delete(id),
+    { invalidateKeys: decisionKeys, successMsg: 'Decision removed', onDone: () => setDeleteTarget(null) }
+  );
 
-  const deleteDecision = useMutation({
-    mutationFn: (id) => base44.entities.PMADecision.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); setDeleteTarget(null); toast.success('Decision removed'); },
-  });
-
-  const createAssumption = useMutation({
-    mutationFn: (data) => base44.entities.PMAAssumption.create({ ...data, project_id: projectId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); setShowAssumptionForm(false); setEditingAssumption(null); toast.success('Assumption logged'); },
-    onError: err => toast.error(err.message),
-  });
-
-  const updateAssumption = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.PMAAssumption.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); setShowAssumptionForm(false); setEditingAssumption(null); toast.success('Assumption updated'); },
-    onError: err => toast.error(err.message),
-  });
-
-  const deleteAssumption = useMutation({
-    mutationFn: (id) => base44.entities.PMAAssumption.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); setDeleteTarget(null); toast.success('Assumption removed'); },
-  });
+  const createAssumption = useSaveMutation(
+    (data) => base44.entities.PMAAssumption.create({ ...data, project_id: projectId }),
+    { invalidateKeys: assumptionKeys, successMsg: 'Assumption logged', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } }
+  );
+  const updateAssumption = useSaveMutation(
+    ({ id, data }) => base44.entities.PMAAssumption.update(id, data),
+    { invalidateKeys: assumptionKeys, successMsg: 'Assumption updated', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } }
+  );
+  const deleteAssumption = useSaveMutation(
+    (id) => base44.entities.PMAAssumption.delete(id),
+    { invalidateKeys: assumptionKeys, successMsg: 'Assumption removed', onDone: () => setDeleteTarget(null) }
+  );
 
   const today = new Date();
 

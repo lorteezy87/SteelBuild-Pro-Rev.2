@@ -11,7 +11,7 @@ export default function Dashboard() {
 
   // ── Portfolio-wide queries (always loaded) ──
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis-all"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
+  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
   const { data: allCOs = [] } = useQuery({ queryKey: ["cos-all"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
   const { data: allCodes = [] } = useQuery({ queryKey: ["codes-all"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
   const { data: allWPs = [] } = useQuery({

@@ -51,7 +51,7 @@ export default function PortfolioOverview() {
   const navigate = useNavigate();
 
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: allRFIs = [] } = useQuery({ queryKey: ["all-rfis-portfolio"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
+  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
   const { data: allCOs = [] } = useQuery({ queryKey: ["all-cos-portfolio"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
   const { data: allWPs = [] } = useQuery({ queryKey: ["all-wps-portfolio"], queryFn: () => base44.entities.WorkPackage.list(), initialData: [] });
   const { data: allCodes = [] } = useQuery({ queryKey: ["all-codes-portfolio"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
