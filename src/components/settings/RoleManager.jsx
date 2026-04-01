@@ -13,8 +13,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useAppSecurity }      from '../shared/useAppSecurity';
-import { useDestructiveAudit } from '../shared/useDestructiveAudit';
+import { useAppSecurity }      from '@/hooks/useAppSecurity';
+import { useDestructiveAudit } from '@/hooks/useDestructiveAudit';
 import { toast }               from 'sonner';
 
 const ROLES = ['viewer', 'field', 'pm', 'admin'];

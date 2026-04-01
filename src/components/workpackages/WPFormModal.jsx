@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { formatPercent } from "../shared/formatters";
-import { getDraftDrawingsWarning } from "../shared/workflowValidation";
+import { getDraftDrawingsWarning } from "@/services/workflowValidation";
+import { previewNextFormattedNumber } from "../shared/numberSequencing";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 
 const empty = {
@@ -35,23 +36,62 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const [linkedDrawingIds, setLinkedDrawingIds] = useState([]);
   const [drawingSearch, setDrawingSearch] = useState("");
   const [showDrawingDropdown, setShowDrawingDropdown] = useState(false);
+  const isEdit = !!wp?.id;
 
   useEffect(() => {
-    if (wp) {
-      setForm({ ...empty, ...wp });
-      const drawingIds = (wp.linked_drawing_ids || "").split(",").map(s => s.trim()).filter(Boolean);
-      setLinkedDrawingIds(drawingIds);
-    } else {
-      setForm({ ...empty, wp_number: nextNumber || "" });
-      setLinkedDrawingIds([]);
-    }
+    if (!open) return;
+
+    const initialForm = {
+      ...empty,
+      ...wp,
+      wp_number: wp?.wp_number || nextNumber || "",
+      project_id: wp?.project_id || "",
+      project_name: wp?.project_name || "",
+    };
+
+    setForm(initialForm);
+    const drawingIds = (wp?.linked_drawing_ids || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setLinkedDrawingIds(drawingIds);
     setErrors({});
     setDrawingSearch("");
+    setShowDrawingDropdown(false);
   }, [wp, open, nextNumber]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncPreviewNumber = async () => {
+      if (!open || isEdit || !form.project_id) return;
+      try {
+        const preview = await previewNextFormattedNumber({
+          projectId: form.project_id,
+          recordType: "WORK_PACKAGE",
+          entityName: "WorkPackage",
+          fieldName: "wp_number",
+          prefix: "WP-",
+          padLength: 3,
+        });
+        if (!cancelled && preview) {
+          setForm((prev) => ({ ...prev, wp_number: preview }));
+        }
+      } catch (error) {
+        // Keep the current fallback value when preview lookup fails.
+      }
+    };
+
+    syncPreviewNumber();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.project_id, open, isEdit]);
 
   const validate = () => {
     const e = {};
     if (!form.name?.trim()) e.name = "Required";
+    if (!form.project_id) e.project_id = "Project is required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -120,11 +160,11 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     <PhoenixModal
       open={open}
       onClose={onClose}
-      title={wp ? `Edit WP ${wp.wp_number || ""}` : "New Work Package"}
+      title={isEdit ? `Edit WP ${wp.wp_number || ""}` : "Create Work Package"}
       footer={<>
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
         <button style={btnPrimary} onClick={handleSave}>
-          {wp ? "Update" : "Create"}
+          {isEdit ? "Save Changes" : "Create Work Package"}
         </button>
       </>}
     >
@@ -144,9 +184,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
               set("project_id", e.target.value);
               setLinkedDrawingIds([]);
             }}>
-            <option value="">Select project (optional)</option>
+            <option value="">Select project...</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          {errors.project_id && (
+            <div style={{ marginTop: 4, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-error)" }}>
+              {errors.project_id}
+            </div>
+          )}
         </FormField>
         <FormField label="Name *" error={errors.name} span2>
           <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name..." />

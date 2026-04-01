@@ -1,6 +1,5 @@
 import React from 'react';
-import WorkflowStepIndicator from '../shared/WorkflowStepIndicator';
-import { getWorkflowStatus } from '../shared/workflowValidation';
+import { getWorkflowStatus } from '@/services/workflowValidation';
 
 export default function WorkflowSummary({ wps = [], deliveries = [], drawings = [] }) {
   // Categorize WPs by workflow step

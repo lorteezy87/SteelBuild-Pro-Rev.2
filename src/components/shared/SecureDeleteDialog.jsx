@@ -10,8 +10,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useAppSecurity }      from './useAppSecurity';
-import { useDestructiveAudit } from './useDestructiveAudit';
+import { useAppSecurity } from '@/hooks/useAppSecurity';
+import { useDestructiveAudit } from '@/hooks/useDestructiveAudit';
 
 export default function SecureDeleteDialog({
   open,

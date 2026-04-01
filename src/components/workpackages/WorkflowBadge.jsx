@@ -1,5 +1,5 @@
 import React from 'react';
-import { getWorkflowStatus } from '../shared/workflowValidation';
+import { getWorkflowStatus } from '@/services/workflowValidation';
 
 export default function WorkflowBadge({ wp, drawings = [], deliveries = [] }) {
   const status = getWorkflowStatus(wp, drawings, deliveries);
