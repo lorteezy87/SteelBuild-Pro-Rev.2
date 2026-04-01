@@ -53,11 +53,16 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
+  const resolveProjectName = (targetProjectId) => projects.find((project) => project.id === targetProjectId)?.name || "";
 
   const mutation = useMutation({
     mutationFn: async (data) => {
+      const payload = {
+        ...data,
+        project_name: resolveProjectName(data.project_id),
+      };
       if (rfi) {
-        return base44.entities.RFI.update(rfi.id, data);
+        return base44.entities.RFI.update(rfi.id, payload);
       }
       const rfiNumber = data.project_id
         ? await getNextFormattedNumber({
@@ -69,7 +74,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
           })
         : `RFI #${String(Date.now()).slice(-3)}`;
       return base44.entities.RFI.create({
-        ...data,
+        ...payload,
         rfi_number: rfiNumber,
       });
     },
@@ -102,7 +107,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
 
   const statusBtnStyle = (s) => ({
     background: formData.status === s ? "var(--accent)" : "var(--bg-surface)",
-    color: formData.status === s ? "white" : "var(--text-muted)",
+    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
     border: `1px solid ${formData.status === s ? "var(--accent)" : "var(--border-default)"}`,
     borderRadius: 6, padding: "4px 10px", fontFamily: "var(--font-mono)",
     fontSize: 8, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
@@ -110,8 +115,9 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
   });
 
   const title = rfi
-    ? `${rfi.rfi_number || "RFI"} — ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "…" : ""}`
-    : "New RFI";
+    ? `${rfi.rfi_number || "RFI"} - ${(rfi.title || "").slice(0, 30)}${(rfi.title || "").length > 30 ? "..." : ""}`
+    : "Create RFI";
+  const selectedProjectName = resolveProjectName(formData.project_id);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -133,24 +139,29 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
         <form id="rfi-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: "auto", padding: "0 24px 16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
 
-            {/* Section 1 — Identity */}
+            {/* Section 1 - Identity */}
             <SectionLabel>Identity</SectionLabel>
             <Field label="Project" span={3}>
               <select style={iStyle} value={formData.project_id} onChange={(e) => set("project_id", e.target.value)}>
                 <option value="">Select project...</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
+              {formData.project_id && !selectedProjectName && (
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-warning)", marginTop: 6 }}>
+                  Project record could not be resolved. Re-select the project before saving.
+                </div>
+              )}
             </Field>
             <Field label="Title *" span={3}>
               <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
             </Field>
 
-            {/* Section 2 — Details */}
+            {/* Section 2 - Details */}
             <SectionLabel>Details</SectionLabel>
             <Field label="RFI #">
               <input
                 style={{ ...iStyle, opacity: 0.7, cursor: "not-allowed" }}
-                value={rfi ? (rfi.rfi_number || "—") : "Auto-assigned on save"}
+                value={rfi ? (rfi.rfi_number || "-") : "Auto-assigned on save"}
                 disabled
                 readOnly
               />
@@ -168,7 +179,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
               <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.question} onChange={(e) => set("question", e.target.value)} />
             </Field>
 
-            {/* Section 3 — Routing */}
+            {/* Section 3 - Routing */}
             <SectionLabel>Routing</SectionLabel>
             <Field label="Priority">
               <select style={iStyle} value={formData.priority} onChange={(e) => set("priority", e.target.value)}>
@@ -195,7 +206,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
               <input type="date" style={iStyle} value={formData.date_required} onChange={(e) => set("date_required", e.target.value)} />
             </Field>
 
-            {/* Section 4 — Response */}
+            {/* Section 4 - Response */}
             <SectionLabel>Response</SectionLabel>
             <Field label="Assigned To">
               <input style={iStyle} value={formData.assigned_to} onChange={(e) => set("assigned_to", e.target.value)} />
@@ -213,7 +224,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
               <input type="date" style={iStyle} value={formData.date_answered} onChange={(e) => set("date_answered", e.target.value)} />
             </Field>
 
-            {/* Section 5 — Impact */}
+            {/* Section 5 - Impact */}
             <SectionLabel>Impact</SectionLabel>
             <div style={{ gridColumn: "span 3", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -256,7 +267,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>
-          <button type="submit" form="rfi-form" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.6 : 1 }}>
+          <button type="submit" form="rfi-form" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.6 : 1 }}>
             {mutation.isPending ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
@@ -264,3 +275,4 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
     </div>
   );
 }
+

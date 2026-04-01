@@ -15,8 +15,8 @@ const STATUS_COLORS = {
 };
 
 const BIC_COLORS = {
-  Contractor: { bg: "rgba(59,130,246,0.12)", text: "var(--accent)" },
-  GC: { bg: "rgba(139,92,246,0.12)", text: "#8B5CF6" },
+  Contractor: { bg: "rgba(255,107,0,0.12)", text: "var(--accent)" },
+  GC: { bg: "rgba(0,229,255,0.12)", text: "var(--secondary)" },
   Engineer: { bg: "rgba(245,158,11,0.12)", text: "var(--status-warning)" },
   Architect: { bg: "rgba(34,197,94,0.12)", text: "var(--status-success)" },
   Owner: { bg: "rgba(239,68,68,0.12)", text: "var(--status-error)" },
