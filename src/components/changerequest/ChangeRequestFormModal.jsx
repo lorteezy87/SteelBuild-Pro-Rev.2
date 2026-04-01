@@ -17,6 +17,7 @@ const emptyForm = {
   scope_impact: "",
 };
 
+/** @type {import('react').CSSProperties} */
 const inputStyle = {
   width: "100%",
   background: "var(--bg-input)",

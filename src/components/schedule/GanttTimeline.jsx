@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { getDateRangeForTasks, getTaskTypeColor, calculateTaskDuration, isToday, isWeekend, getDaysBetween, formatDateShort } from './scheduleUtils';
+import React, { useRef, useState } from 'react';
+import { getDateRangeForTasks, calculateTaskDuration, getDaysBetween, formatDateShort } from './scheduleUtils';
 
 const TASK_TYPE_COLORS = {
 Fabrication: { gradient: 'var(--accent)', solid: 'var(--accent)' },

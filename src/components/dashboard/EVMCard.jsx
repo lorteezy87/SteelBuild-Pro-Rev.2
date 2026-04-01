@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { formatCurrency } from "../shared/formatters";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 function EVMKpi({ label, value, subtext, color, formula }) {
   return (

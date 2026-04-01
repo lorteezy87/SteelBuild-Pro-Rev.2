@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatDateShort, getTaskTypeColor, calculateTaskDuration } from './scheduleUtils';
+import { formatDateShort, calculateTaskDuration } from './scheduleUtils';
 
 const TASK_TYPE_COLORS = {
   Fabrication: 'var(--accent)',

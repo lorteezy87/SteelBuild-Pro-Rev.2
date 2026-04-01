@@ -2,13 +2,12 @@ import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
-  X, TrendingUp, TrendingDown, Minus, Users,
-  Activity, DollarSign, AlertCircle, CheckCircle2,
-  Clock, FileText, Package, Loader2
+  X, TrendingUp, Users,
+  Activity, DollarSign, Package, Loader2
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar, Legend
+  Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { format, parseISO } from "date-fns";
 
@@ -88,53 +87,58 @@ const CustomTooltipBudget = ({ active, payload, label }) => {
 
 // ── Main Modal ─────────────────────────────────────────────────────
 export default function ProjectDrilldownModal({ project, onClose }) {
-  if (!project) return null;
-
-  const pid = project.id;
+  const pid = project?.id;
 
   const { data: wps = [], isLoading: wpsLoading } = useQuery({
     queryKey: ["modal-wps", pid],
     queryFn: () => base44.entities.WorkPackage.filter({ project_id: pid }),
     initialData: [],
+    enabled: !!pid,
   });
 
   const { data: cos = [], isLoading: cosLoading } = useQuery({
     queryKey: ["modal-cos", pid],
     queryFn: () => base44.entities.ChangeOrder.filter({ project_id: pid }),
     initialData: [],
+    enabled: !!pid,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["modal-rfis", pid],
     queryFn: () => base44.entities.RFI.filter({ project_id: pid }),
     initialData: [],
+    enabled: !!pid,
   });
 
   const { data: codes = [], isLoading: codesLoading } = useQuery({
     queryKey: ["modal-codes", pid],
     queryFn: () => base44.entities.CostCode.filter({ project_id: pid }),
     initialData: [],
+    enabled: !!pid,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["modal-logs", pid],
     queryFn: () => base44.entities.DailyLog.filter({ project_id: pid }, "-date", 20),
     initialData: [],
+    enabled: !!pid,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["modal-deliveries", pid],
     queryFn: () => base44.entities.Delivery.filter({ project_id: pid }, "-scheduled_date", 10),
     initialData: [],
+    enabled: !!pid,
   });
 
   const isLoading = wpsLoading || cosLoading || rfisLoading || codesLoading || logsLoading;
 
   // ── Budget trend data ──────────────────────────────────────────────
   const budgetTrendData = useMemo(() => {
+    if (!project) return null;
     const sortedCOs = [...cos]
       .filter(c => c.approved_date || c.submitted_date)
-      .sort((a, b) => new Date(a.approved_date || a.submitted_date) - new Date(b.approved_date || b.submitted_date));
+      .sort((a, b) => new Date(a.approved_date || a.submitted_date).getTime() - new Date(b.approved_date || b.submitted_date).getTime());
 
     let runningContract = Number(project.original_contract_value) || 0;
     const points = [{ month: "Original", contract: runningContract, actual: 0 }];
@@ -174,6 +178,8 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     return Object.entries(phaseMap).map(([phase, vals]) => ({ phase, ...vals }));
   }, [codes]);
 
+  if (!project) return null;
+
   // ── KPIs ───────────────────────────────────────────────────────────
   const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
   const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
@@ -210,7 +216,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
 
   // ── Recent activity from daily logs ───────────────────────────────
   const recentActivity = [...logs]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 8);
 
   return (

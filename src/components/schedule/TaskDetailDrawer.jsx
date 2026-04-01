@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { calculateTaskDuration, formatDateShort } from './scheduleUtils';
+import { calculateTaskDuration } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {

@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Download, Eye, Edit3, Link2 } from "lucide-react";
 
 const FILE_TYPE_CONFIG = {
   pdf: { icon: "??", bg: "rgba(255,61,61,0.12)", color: "#FF3D3D" },
