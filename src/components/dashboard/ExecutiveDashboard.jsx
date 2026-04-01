@@ -1,7 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { formatCurrency, formatPercent } from "@/components/shared/formatters";
 import KPICard from "./KPICard";
 import ProjectHealthTable from "./ProjectHealthTable";
 import RFIStatusChart from "./RFIStatusChart";

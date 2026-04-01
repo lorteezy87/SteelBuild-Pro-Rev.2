@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 
 const MAX_PDF_SIZE_MB = 32;
 

@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import { Toaster } from "sonner";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
-import { useProjectContext } from "./components/shared/useProjectContext";
 import { ProjectProvider } from "./components/shared/ProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { PMAProvider } from "./components/pma/usePMAContext";
@@ -1143,6 +1142,7 @@ export default function Layout({ children, currentPageName }) {
             {!isMobile &&
                 <div
                   onClick={() => setSearchOpen(true)}
+                  title="Search (Cmd+K)"
                   style={{
                     width: 32, height: 32,
                     borderRadius: 8,
@@ -1152,7 +1152,6 @@ export default function Layout({ children, currentPageName }) {
                     cursor: "pointer",
                     color: "var(--text-secondary)",
                     transition: "all 0.15s",
-                    title: "Search (Cmd+K)"
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--secondary-muted)";

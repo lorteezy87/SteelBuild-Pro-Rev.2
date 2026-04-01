@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, ReferenceLine
+  Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import { formatCurrencyShort } from "../shared/formatters";
 
