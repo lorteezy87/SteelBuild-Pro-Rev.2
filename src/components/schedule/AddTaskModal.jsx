@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
 
-export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate }) {
+export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, allTasks = [] }) {
   const [formData, setFormData] = useState({
     task_name: '',
     task_type: 'Task',
@@ -11,6 +11,7 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
     end_date: prefilledDate || new Date().toISOString().split('T')[0],
     status: 'Not Started',
     priority: 'Normal',
+    predecessor_wbs: '',
   });
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         end_date: new Date().toISOString().split('T')[0],
         status: 'Not Started',
         priority: 'Normal',
+        predecessor_wbs: '',
       });
     }
   };
@@ -75,7 +77,12 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
             <FormField label="Start Date *" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
             <FormField label="End Date *" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
             <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+            <FormField label="Predecessor WBS Codes" value={formData.predecessor_wbs} onChange={(v) => setFormData({ ...formData, predecessor_wbs: v })} placeholder="Comma-separated WBS codes" />
           </div>
+        </div>
+
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Available predecessor WBS: {allTasks.filter(task => task.wbs_code).slice(0, 12).map(task => task.wbs_code).join(', ') || 'None yet'}
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -87,7 +94,7 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
   );
 }
 
-function FormField({ label, type = 'text', value, onChange, options = [] }) {
+function FormField({ label, type = 'text', value, onChange, options = [], placeholder }) {
   return (
     <div>
       <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
@@ -117,6 +124,7 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           type={type}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
           style={{
             width: '100%',
             background: 'var(--bg-sidebar)',

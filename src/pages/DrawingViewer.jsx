@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import PDFRenderer from "../components/viewer/PDFRenderer.jsx";
 import ViewerToolbar from "../components/viewer/ViewerToolbar.jsx";
@@ -92,6 +92,11 @@ export default function DrawingViewer() {
     }
   }, [drawingRecord?.id, docRecord?.id]);
 
+  useEffect(() => {
+    const storedAnalysis = drawingRecord?.lastAnalysis || docRecord?.lastAnalysis;
+    setAnalysisResults(storedAnalysis || null);
+  }, [drawingRecord?.lastAnalysis, docRecord?.lastAnalysis]);
+
   // Auto-save markups (debounced)
   const saveTimerRef = useRef(null);
   const saveMarkups = (newMarkups) => {
@@ -182,24 +187,42 @@ export default function DrawingViewer() {
   }, [undoStack, handleUndoMarkups]);
 
   const handleRunAIAnalysis = async () => {
-    if (!docRecord) return;
+    if (!record || !fileUrl) return;
     setAnalysisRunning(true);
     try {
-      const pdfText = await extractPDFText(docRecord.fileUrl);
+      const pdfText = await extractPDFText(fileUrl);
       const response = await base44.functions.invoke("runDrawingAnalysis", {
         pdfText: pdfText.slice(0, 8000),
-        drawingNumber: docRecord.drawingNumber,
-        displayName: docRecord.displayName,
-        discipline: docRecord.discipline,
-        revisionNumber: docRecord.revisionNumber,
+        drawingNumber:
+          drawingRecord?.sheet_number ||
+          drawingRecord?.drawing_id ||
+          docRecord?.drawingNumber ||
+          recordTitle,
+        displayName:
+          drawingRecord
+            ? `${drawingRecord.sheet_number || ""} ${drawingRecord.title || ""}`.trim()
+            : docRecord?.displayName || recordTitle,
+        discipline: drawingRecord?.discipline || docRecord?.discipline,
+        revisionNumber: drawingRecord?.revision_number ?? docRecord?.revisionNumber ?? 0,
         markupCount: markups.length,
-        linkedRFIs: [],
+        linkedRFIs: drawingRecord?.linked_rfi_ids
+          ? String(drawingRecord.linked_rfi_ids)
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : [],
       });
-      setAnalysisResults(response.data);
-      await base44.entities.Document.update(docRecord.id, {
-        lastAnalysis: response.data,
+      const resultData = response?.data || response;
+      setAnalysisResults(resultData);
+      const analysisPatch = {
+        lastAnalysis: resultData,
         lastAnalysisDate: new Date().toISOString(),
-      });
+      };
+      if (drawingRecord) {
+        await base44.entities.Drawing.update(drawingRecord.id, analysisPatch);
+      } else if (docRecord) {
+        await base44.entities.Document.update(docRecord.id, analysisPatch);
+      }
     } catch (err) {
       console.error("Analysis failed:", err);
     } finally {
@@ -280,6 +303,7 @@ export default function DrawingViewer() {
         onZoom={setZoomLevel}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
+        totalPages={totalPages}
       />
 
       {/* Main content area */}

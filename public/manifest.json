@@ -7,9 +7,9 @@
   "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "https://base44.com/logo_v2.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69aa43d230072438d933f70b/fa3bd3f80_steelbuild-pro-logo-v3.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

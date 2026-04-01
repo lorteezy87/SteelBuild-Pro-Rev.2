@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",
-    "lint": "eslint . --quiet",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "tsc -p ./jsconfig.json",
+    "lint": "node ./node_modules/eslint/bin/eslint.js . --quiet",
+    "lint:fix": "node ./node_modules/eslint/bin/eslint.js . --fix",
+    "typecheck": "node ./node_modules/typescript/bin/tsc -p ./jsconfig.json",
     "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {

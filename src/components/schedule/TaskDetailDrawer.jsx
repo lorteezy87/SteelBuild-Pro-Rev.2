@@ -1,17 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { calculateTaskDuration, formatDateShort } from './scheduleUtils';
+import { calculateTaskDuration } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 
-export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
+export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete, formatPredecessorWbs }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
 
   useEffect(() => {
-    setFormData(task || {});
-  }, [task]);
+    if (!task) {
+      setFormData({});
+      return;
+    }
+
+    setFormData({
+      ...task,
+      predecessor_wbs: formatPredecessorWbs ? formatPredecessorWbs(task.predecessor_ids) : '',
+    });
+  }, [task, formatPredecessorWbs]);
 
   if (!open || !task) return null;
+  const safeTaskName = formData.task_name || task.task_name || "Untitled Task";
+  const safeTaskType = formData.task_type || task.task_type || "Task";
+  const safeWbsCode = formData.wbs_code || task.wbs_code || "WBS Pending";
 
   const handleSave = () => {
     if (onUpdate) onUpdate({ ...formData, id: task.id });
@@ -51,13 +61,16 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 4 }}>
-              {formData.task_type}
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 4 }}>
+                {safeTaskType}
+              </div>
+              <h2 style={{ fontFamily: 'var(--font-body)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                {safeTaskName}
+              </h2>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+              {safeWbsCode}
             </div>
-            <h2 style={{ fontFamily: 'var(--font-body)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              {formData.task_name}
-            </h2>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {onDelete && (
@@ -134,7 +147,8 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
                 <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
                 <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
-                <FormField label="WBS Code" value={formData.wbs_code} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
+                <FormField label="WBS Code" value={formData.wbs_code} readOnly={true} />
+                <FormField label="Predecessor WBS Codes" value={formData.predecessor_wbs} onChange={(v) => setFormData({ ...formData, predecessor_wbs: v })} placeholder="Comma-separated WBS codes" />
               </div>
             </div>
           )}
@@ -143,13 +157,26 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Predecessors</div>
-                {formData.predecessor_ids ? (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
-                    {formData.predecessor_ids}
-                  </div>
-                ) : (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>None</div>
-                )}
+                <textarea
+                  value={formData.predecessor_wbs || ''}
+                  onChange={(e) => setFormData({ ...formData, predecessor_wbs: e.target.value })}
+                  style={{
+                    width: '100%',
+                    minHeight: 96,
+                    background: 'var(--bg-sidebar)',
+                    border: '1px solid rgba(255,255,255,0.10)',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: 'var(--text-primary)',
+                    resize: 'vertical',
+                  }}
+                  placeholder="Enter comma-separated predecessor WBS codes"
+                />
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  Use WBS codes separated by commas. Example: <code>DET-001, FAB-003</code>
+                </div>
               </div>
               <div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Successors</div>
@@ -226,7 +253,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
   );
 }
 
-function FormField({ label, type = 'text', value, onChange, readOnly = false, options = [] }) {
+function FormField({ label, type = 'text', value, onChange, readOnly = false, options = [], placeholder }) {
   return (
     <div>
       <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
@@ -283,6 +310,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           readOnly={readOnly}
+          placeholder={placeholder}
           style={{
             width: '100%',
             background: readOnly ? 'rgba(255,255,255,0.03)' : 'var(--bg-sidebar)',

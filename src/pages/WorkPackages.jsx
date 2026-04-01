@@ -7,7 +7,8 @@ import WorkPackageList from "@/components/workpackages/WorkPackageList";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { getNextNumber } from "@/components/shared/numberSequencing";
+import { previewNextFormattedNumber } from "@/components/shared/numberSequencing";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -63,9 +64,11 @@ const formatDate = (d) =>
     : "—";
 
 export default function WorkPackages() {
+  const { activeProject } = useProjectContext();
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = searchParams.get("project") || activeProject?.id || "";
   const qc = useQueryClient();
+  const hasProject = !!projectId;
 
   const [view, setView] = useState("list");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -77,30 +80,72 @@ export default function WorkPackages() {
   const [expandedWP, setExpandedWP] = useState(null);
   const [drawingStageFilter, setDrawingStageFilter] = useState("all");
   const [selectedBoardWP, setSelectedBoardWP] = useState(null);
+  const [nextWpNumber, setNextWpNumber] = useState("WP-001");
 
-  const { data: workPackages = [] } = useQuery({
+  const { data: workPackages = [], isLoading: workPackagesLoading, isError: workPackagesError, error: workPackagesErrorDetails } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
-      if (projectId) {
-        return base44.entities.WorkPackage.filter({ project_id: projectId });
-      }
-      const all = await base44.entities.WorkPackage.list();
-      return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
+      if (!projectId) return [];
+      return base44.entities.WorkPackage.filter({ project_id: projectId });
     },
     initialData: [],
+    enabled: !!projectId,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isError: projectsError, error: projectsErrorDetails } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
 
-  const { data: drawings = [] } = useQuery({
+  const { data: drawings = [], isLoading: drawingsLoading, isError: drawingsError, error: drawingsErrorDetails } = useQuery({
     queryKey: ["drawings", projectId],
-    queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
-    enabled: !!projectId,
+    queryFn: () =>
+      projectId
+        ? base44.entities.Drawing.filter({ project_id: projectId })
+        : [],
     initialData: [],
+    enabled: !!projectId,
+  });
+
+  const selectedProject = projectId
+    ? projects.find((p) => p.id === projectId)
+    : activeProject || null;
+  const currentProjectLabel = selectedProject?.name || activeProject?.name || "Current Project";
+  const loadingWorkPackages = workPackagesLoading || projectsLoading || drawingsLoading;
+  const hasWorkPackagesError = workPackagesError || projectsError || drawingsError;
+  const workPackagesErrorMessage =
+    workPackagesErrorDetails?.message ||
+    projectsErrorDetails?.message ||
+    drawingsErrorDetails?.message ||
+    "Work package data could not be loaded.";
+
+  useQuery({
+    queryKey: ["next-wp-number", projectId, workPackages.length],
+    queryFn: async () => {
+      if (!projectId) {
+        const max = workPackages.reduce((highest, wp) => {
+          const match = String(wp.wp_number || "").match(/(\d+)(?!.*\d)/);
+          const numeric = match ? Number(match[1]) : 0;
+          return Math.max(highest, numeric);
+        }, 0);
+        const fallback = `WP-${String(max + 1).padStart(3, "0")}`;
+        setNextWpNumber(fallback);
+        return fallback;
+      }
+
+      const preview = await previewNextFormattedNumber({
+        projectId,
+        recordType: "WORK_PACKAGE",
+        entityName: "WorkPackage",
+        fieldName: "wp_number",
+        prefix: "WP-",
+        padLength: 3,
+      });
+      setNextWpNumber(preview || "WP-001");
+      return preview;
+    },
+    initialData: "WP-001",
   });
 
   const updateWPMut = useMutation({
@@ -222,8 +267,7 @@ export default function WorkPackages() {
   };
 
   const handleWPCreate = () => {
-    const nextNum = getNextNumber(workPackages, "wp_number", "WP-");
-    setEditingWP({ wp_number: nextNum, project_id: projectId });
+    setEditingWP({ wp_number: nextWpNumber, project_id: projectId || "" });
     setWPModalOpen(true);
   };
 
@@ -791,7 +835,7 @@ export default function WorkPackages() {
               textTransform: "uppercase",
             }}
           >
-            {projectId ? projects.find((p) => p.id === projectId)?.name || "Project" : "All Projects"} · {workPackages.length} packages ·{" "}
+            {currentProjectLabel} · {workPackages.length} packages ·{" "}
             {stats.totalTons.toFixed(1)}T
           </div>
         </div>
@@ -829,7 +873,7 @@ export default function WorkPackages() {
                   borderRadius: "var(--radius-btn)",
                   border: "none",
                   background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "#0A0A0B" : "var(--text-secondary)",
+                  color: view === v.id ? "#fff" : "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
                   fontWeight: 700,
@@ -846,7 +890,7 @@ export default function WorkPackages() {
             onClick={handleWPCreate}
             style={{
               background: "var(--accent)",
-              color: "#0A0A0B",
+              color: "#fff",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "8px 16px",
@@ -857,10 +901,107 @@ export default function WorkPackages() {
               cursor: "pointer",
             }}
           >
-            + NEW WP
+            Create Work Package
           </button>
         </div>
       </div>
+
+      {!hasProject && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            padding: "12px 14px",
+            background: "var(--warning-muted)",
+            border: "1px solid var(--warning-border)",
+            borderLeft: "3px solid var(--status-warning)",
+            borderRadius: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--status-warning)",
+              }}
+            >
+              Project not selected
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                marginTop: 4,
+              }}
+            >
+              You can still create a work package and choose the project in the form.
+            </div>
+          </div>
+          <button
+            onClick={handleWPCreate}
+            style={{
+              background: "var(--accent)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            Create Work Package
+          </button>
+        </div>
+      )}
+
+      {loadingWorkPackages && (
+        <div
+          style={{
+            padding: "16px 18px",
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-card)",
+          }}
+        >
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Loading Work Packages
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+            Pulling packages, linked drawings, and project context.
+          </div>
+        </div>
+      )}
+
+      {hasWorkPackagesError && !loadingWorkPackages && (
+        <div
+          style={{
+            padding: "16px 18px",
+            background: "var(--danger-muted)",
+            border: "1px solid var(--danger-border)",
+            borderLeft: "3px solid var(--status-error)",
+            borderRadius: 2,
+          }}
+        >
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Work Packages Failed To Load
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", marginTop: 6 }}>
+            {workPackagesErrorMessage}
+          </div>
+        </div>
+      )}
 
       {/* KPI strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
@@ -889,7 +1030,7 @@ export default function WorkPackages() {
       </div>
 
       {/* Views */}
-      {view === "list" && (
+      {!loadingWorkPackages && !hasWorkPackagesError && view === "list" && (
         <WorkPackageList
           workPackages={filtered}
           drawings={drawings}
@@ -897,13 +1038,14 @@ export default function WorkPackages() {
           onExpand={(wp) => setExpandedWP(expandedWP?.id === wp.id ? null : wp)}
           onEdit={handleWPEdit}
           onDelete={setDeleteTarget}
-          showProject={!projectId}
+          onCreate={handleWPCreate}
+          showProject={false}
         />
       )}
 
-      {view === "board" && renderBoard()}
+      {!loadingWorkPackages && !hasWorkPackagesError && view === "board" && renderBoard()}
 
-      {view === "drawings" && renderDrawingTracker()}
+      {!loadingWorkPackages && !hasWorkPackagesError && view === "drawings" && renderDrawingTracker()}
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
@@ -921,7 +1063,7 @@ export default function WorkPackages() {
           }}
           wp={editingWP}
           projects={projects}
-          nextNumber={getNextNumber(workPackages, "wp_number", "WP-")}
+          nextNumber={nextWpNumber}
           allDrawings={drawings}
         />
       )}

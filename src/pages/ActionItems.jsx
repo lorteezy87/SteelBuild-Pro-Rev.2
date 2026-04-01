@@ -45,8 +45,9 @@ export default function ActionItems() {
     queryFn: () =>
       projectId
         ? base44.entities.ActionItem.filter({ project_id: projectId }, "-due_date")
-        : base44.entities.ActionItem.list("-due_date"),
+        : [],
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -58,6 +59,7 @@ export default function ActionItems() {
   const selectedProject = projectId
     ? projects.find((p) => p.id === projectId)
     : null;
+  const currentProjectLabel = selectedProject?.name || activeProject?.name || "Current Project";
 
   const filtered = actionItems.filter((ai) => {
     const statusMatch = filterStatus === "all" || ai.status === filterStatus;
@@ -93,7 +95,6 @@ export default function ActionItems() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h1
@@ -120,7 +121,7 @@ export default function ActionItems() {
               textTransform: "uppercase",
             }}
           >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Items
+            {currentProjectLabel} • {filtered.length} Items
           </p>
         </div>
 
@@ -142,11 +143,10 @@ export default function ActionItems() {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + New Action Item
+          Create Action Item
         </button>
       </div>
 
-      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px" }}>
         {[
           { label: "Total", value: stats.total, color: "var(--accent)" },
@@ -193,7 +193,6 @@ export default function ActionItems() {
         ))}
       </div>
 
-      {/* Filters */}
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "8px" }}>
           <span
@@ -268,7 +267,6 @@ export default function ActionItems() {
         </div>
       </div>
 
-      {/* Form Modal */}
       {(showForm || editingItem) && (
         <ActionItemFormModal
           projectId={editingItem?.project_id || projectId}
@@ -285,7 +283,6 @@ export default function ActionItems() {
         />
       )}
 
-      {/* Action Items List */}
       <ActionItemList
         actionItems={filtered}
         onEdit={handleEdit}

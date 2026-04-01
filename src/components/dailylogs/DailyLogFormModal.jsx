@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -42,7 +42,7 @@ export default function DailyLogFormModal({
   workPackages = [],
 }) {
   const today = new Date().toISOString().split('T')[0];
-  const isMobile = window.innerWidth < 640;
+  const isMobile = typeof window !== "undefined" ? window.innerWidth < 640 : false;
   const gridStyle = isMobile
     ? { display: "flex", flexDirection: "column", gap: 12 }
     : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
@@ -187,6 +187,9 @@ export default function DailyLogFormModal({
         maxHeight: '90vh',
         overflowY: 'auto',
       }}>
+        <DialogDescription style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
+          Review daily conditions, labor, progress, and supporting notes before saving the log.
+        </DialogDescription>
         {/* Sticky header */}
         <div style={{
           position: "sticky", top: 0, zIndex: 10,
@@ -361,7 +364,7 @@ export default function DailyLogFormModal({
                     cursor: "pointer", fontWeight: 700,
                   }}
                 >
-                  <Plus style={{ width: 12, height: 12 }} /> ADD WP
+                  <Plus style={{ width: 12, height: 12 }} /> CREATE WP ENTRY
                 </button>
               </div>
               {(form.wp_progress || []).map((row, idx) => {
@@ -398,7 +401,7 @@ export default function DailyLogFormModal({
                 );
               })}
               {(form.wp_progress || []).length === 0 && (
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.25)", padding: "10px 0" }}>No WP progress entries. Click + ADD WP to track progress.</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.25)", padding: "10px 0" }}>No WP progress entries. Use Create WP Entry to track progress.</div>
               )}
             </div>
           )}
@@ -501,7 +504,7 @@ export default function DailyLogFormModal({
               color: '#fff',
             }}
           >
-            Submit Log
+            {log ? "Save Changes" : "Create Daily Log"}
           </Button>
         </DialogFooter>
       </DialogContent>

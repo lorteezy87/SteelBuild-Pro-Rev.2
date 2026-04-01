@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 
@@ -86,11 +86,14 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
         <DialogHeader>
           <DialogTitle style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>
             <Zap style={{ width: 16, height: 16, color: "#FFB300" }} />
-            Quick Log
+            Create Daily Log
             {activeProject?.name && (
               <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 4 }}>{activeProject.name}</span>
             )}
           </DialogTitle>
+          <DialogDescription style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            Capture a quick field update and optionally tie it to a work package.
+          </DialogDescription>
         </DialogHeader>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 0" }}>
@@ -163,7 +166,7 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
             style={{ background: "var(--accent)", color: "#fff", fontWeight: 700, minHeight: 44 }}
           >
             <Zap style={{ width: 14, height: 14, marginRight: 6 }} />
-            Quick Save
+            Create Daily Log
           </Button>
         </DialogFooter>
       </DialogContent>

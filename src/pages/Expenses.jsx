@@ -286,7 +286,7 @@ export default function ExpensesPage() {
         subtitle={`${expenses.length} entries · ${activeProject?.name}`}
         onAdd={() => { setEditing(null); setModalOpen(true); }}
         onRefresh={refetch}
-        addLabel="+ New Expense"
+        addLabel="Create Expense"
       />
 
       {/* ── KPI Strip ── */}

@@ -1,22 +1,36 @@
 import React, { useEffect, useRef } from "react";
 
-export default function PDFRenderer({ fileUrl, currentPage, zoomLevel, canvasRef, onTotalPages }) {
-  const pdfDocRef = useRef(null);
+let pdfJsLoaderPromise = null;
 
-  useEffect(() => {
-    if (!window.pdfjsLib) {
-      // Load PDF.js from CDN
+function ensurePdfJs() {
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    return Promise.resolve(window.pdfjsLib);
+  }
+  if (!pdfJsLoaderPromise) {
+    pdfJsLoaderPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
       script.onload = () => {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-        loadPDF();
+        resolve(window.pdfjsLib);
       };
+      script.onerror = reject;
       document.head.appendChild(script);
-    } else {
-      loadPDF();
-    }
+    });
+  }
+  return pdfJsLoaderPromise;
+}
+
+export default function PDFRenderer({ fileUrl, currentPage, zoomLevel, canvasRef, onTotalPages }) {
+  const pdfDocRef = useRef(null);
+
+  useEffect(() => {
+    ensurePdfJs().then(loadPDF).catch((err) => {
+      console.error("Failed to initialize PDF.js:", err);
+    });
   }, [fileUrl]);
 
   const loadPDF = async () => {

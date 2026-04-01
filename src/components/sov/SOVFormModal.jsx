@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ const empty = {
   retainage_percent: 10, status: "Draft",
 };
 
-export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, activeProject }) {
+export default function SOVFormModal({ open, onClose, onSave, sov, projects = [], nextId, nextLineItemNumber = 1, activeProject }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
@@ -27,10 +27,11 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         sov_id: nextId || "",
         project_id: activeProject?.id || "",
         project_name: activeProject?.name || "",
+        line_item_number: nextLineItemNumber,
       });
     }
     setErrors({});
-  }, [sov, open, nextId, activeProject?.id]);
+  }, [sov, open, nextId, nextLineItemNumber, activeProject?.id, activeProject?.name]);
 
   const validate = () => {
     const e = {};
@@ -48,8 +49,10 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     if (!validate()) return;
     const data = {
       ...form,
+      project_id: form.project_id || activeProject?.id || "",
+      project_name: form.project_name || activeProject?.name || "",
       application_number: Number(form.application_number) || 1,
-      line_item_number: Number(form.line_item_number) || 1,
+      line_item_number: Number(form.line_item_number) || nextLineItemNumber || 1,
       scheduled_value: Number(form.scheduled_value) || 0,
       previous_percent_complete: Number(form.previous_percent_complete) || 0,
       current_percent_complete: Number(form.current_percent_complete) || 0,
@@ -77,7 +80,10 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{sov ? "Edit SOV Line Item" : "New SOV Line Item"}</DialogTitle>
+          <DialogTitle>{sov ? "Edit SOV Line Item" : "Create SOV Item"}</DialogTitle>
+          <DialogDescription>
+            Define the SOV line item, billing values, and progress percentages for the selected project.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
@@ -164,7 +170,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} style={{ background: "var(--accent)", color: "#fff" }}>{sov ? "Update" : "Create"}</Button>
+          <Button onClick={handleSave} style={{ background: "var(--accent)", color: "#fff" }}>{sov ? "Save Changes" : "Create SOV Item"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

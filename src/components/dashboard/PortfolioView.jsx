@@ -419,7 +419,7 @@ export default function PortfolioView({
             onClick={() => navigate("/Projects")}
             style={{
               background: "var(--accent)",
-              color: "#002E6A",
+              color: "var(--on-accent)",
               borderRadius: "var(--radius-btn)",
               border: "1px solid var(--accent-border)",
               fontFamily: "var(--font-mono)",
@@ -431,7 +431,7 @@ export default function PortfolioView({
               cursor: "pointer",
             }}
           >
-            New Project
+            Create Project
           </button>
         </div>
       </div>
@@ -656,12 +656,12 @@ export default function PortfolioView({
                           <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--text-muted)" />
                           <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--text-muted)" />
                         </svg>
-                        NO ACTIVE PROJECTS — Add a project to begin tracking
+                        NO ACTIVE PROJECTS — Create a project to begin tracking
                         <button
                           onClick={() => navigate("/Projects")}
                           style={{
                             background: "var(--accent)",
-                            color: "#002E6A",
+                            color: "var(--on-accent)",
                             borderRadius: "var(--radius-btn)",
                             border: "1px solid var(--accent-border)",
                             fontFamily: "var(--font-mono)",
@@ -672,7 +672,7 @@ export default function PortfolioView({
                             cursor: "pointer",
                           }}
                         >
-                          + New Project
+                          Create Project
                         </button>
                       </div>
                     </td>

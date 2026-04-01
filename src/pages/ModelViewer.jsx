@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────────
 export default function ModelViewer() {
   const mountRef = useRef(null);
+  const fileInputRef = useRef(null);
   const sceneRef = useRef({});
-  const [threeReady, setThreeReady] = useState(false);
-  const [loadError, setLoadError] = useState(null);
+  const ifcLoaderClassRef = useRef(null);
 
   // State
   const [members, setMembers] = useState([]);
@@ -29,42 +32,11 @@ export default function ModelViewer() {
   });
 
   // ─── SCRIPT LOADING (Sequential) ───────────────────────────────
-  useEffect(() => {
-    const loadScripts = async () => {
-      const scripts = [
-        'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
-        'https://threejs.org/examples/js/controls/OrbitControls.js',
-        'https://threejs.org/examples/js/loaders/GLTFLoader.js',
-      ];
+  const threeReady = true;
+  const loadError = null;
 
-      for (const src of scripts) {
-        await new Promise((resolve) => {
-          if (document.querySelector(`script[src=\"${src}\"]`)) { resolve(); return; }
-          const script = document.createElement('script');
-          script.src = src;
-          script.onload = resolve;
-          script.onerror = () => {
-            console.warn(`Failed to load: ${src}`);
-            resolve();
-          };
-          document.head.appendChild(script);
-        });
-      }
-
-      if (!window.THREE) {
-        setLoadError('THREE.js failed to load. Check network connectivity and try refreshing.');
-        return;
-      }
-
-      setThreeReady(true);
-    };
-
-    loadScripts();
-  }, []);
-
-  let cachedIFCLoader = null;
   const loadIFCScript = async () => {
-    if (cachedIFCLoader) return cachedIFCLoader;
+    if (ifcLoaderClassRef.current) return ifcLoaderClassRef.current;
     const sources = [
       'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/IFCLoader.js?module',
       'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.module.js',
@@ -75,7 +47,7 @@ export default function ModelViewer() {
         const mod = await import(/* @vite-ignore */ src);
         const IFCLoaderClass = mod.IFCLoader || mod.default || mod;
         if (IFCLoaderClass) {
-          cachedIFCLoader = IFCLoaderClass;
+          ifcLoaderClassRef.current = IFCLoaderClass;
           return IFCLoaderClass;
         }
       } catch (e) {
@@ -94,7 +66,6 @@ export default function ModelViewer() {
     rafInit = requestAnimationFrame(() => {
       if (!mountRef.current || sceneRef.current.initialized) return;
 
-      const THREE = window.THREE;
       const width = mountRef.current.clientWidth || 800;
       const height = mountRef.current.clientHeight || 600;
 
@@ -117,25 +88,19 @@ export default function ModelViewer() {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.2;
       mountRef.current.appendChild(renderer.domElement);
 
       // Controls
-      const OrbitControlsClass = THREE.OrbitControls || window.OrbitControls;
-      let controls;
-      if (OrbitControlsClass) {
-        controls = new OrbitControlsClass(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.minDistance = 0.5;
-        controls.maxDistance = 500;
-        controls.target.set(0, 0, 0);
-      } else {
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 0.5;
+      controls.maxDistance = 500;
+      controls.target.set(0, 0, 0);
         console.warn('OrbitControls unavailable — orbit disabled');
-        controls = { update: () => {}, dispose: () => {}, target: new THREE.Vector3() };
-      }
 
       // Lights
       scene.add(new THREE.AmbientLight(0x404060, 1.0));
@@ -190,7 +155,7 @@ export default function ModelViewer() {
         sceneRef.current = {};
       }
     };
-  }, [threeReady]);
+  }, []);
 
   // ─── MEMBER TYPE INFERENCE ────────────────────────────────────
   const inferMemberType = (name = '') => {
@@ -223,7 +188,7 @@ export default function ModelViewer() {
   // ─── COLOR MODE APPLICATION ───────────────────────────────────
   const applyColorMode = useCallback((memberList, mode) => {
     if (!sceneRef.current.scene || !memberList) return;
-    const THREE = window.THREE;
+    setUploadError(null);
 
     memberList.forEach((member) => {
       let color = TYPE_COLORS[member.type] || TYPE_COLORS.MEMBER;
@@ -243,7 +208,7 @@ export default function ModelViewer() {
       return;
     }
 
-    const THREE = window.THREE;
+    setUploadError(null);
     const { scene, camera, controls } = sceneRef.current;
 
     // Validate file
@@ -266,13 +231,7 @@ export default function ModelViewer() {
     }
 
     const url = URL.createObjectURL(file);
-    const GLTFLoaderClass = THREE.GLTFLoader || window.GLTFLoader;
-    if (!GLTFLoaderClass) {
-      setUploadError('GLTF loader not available. Please refresh the page.');
-      setLoadingModel({ active: false });
-      return;
-    }
-    const loader = new GLTFLoaderClass();
+    const loader = new GLTFLoader();
 
     loader.load(
       url,
@@ -371,7 +330,6 @@ export default function ModelViewer() {
       return;
     }
 
-    const THREE = window.THREE;
     const { scene, camera, controls } = sceneRef.current;
 
     setLoadingModel({ active: true, progress: 0, status: 'Initializing IFC loader...', fileName: file.name });
@@ -477,6 +435,7 @@ export default function ModelViewer() {
   const handleFileInputChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
     const ext = file.name.split('.').pop().toLowerCase();
     if (ext === 'ifc') {
       handleIFCUpload(file);
@@ -502,6 +461,7 @@ export default function ModelViewer() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    setUploadError(null);
     const files = e.dataTransfer.files;
     if (!files.length) return;
     const file = files[0];
@@ -521,7 +481,6 @@ export default function ModelViewer() {
   const handleCanvasClick = useCallback(async (e) => {
     if (!sceneRef.current.camera || !sceneRef.current.renderer || members.length === 0) return;
 
-    const THREE = window.THREE;
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -635,6 +594,7 @@ export default function ModelViewer() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input
+            ref={fileInputRef}
             type="file"
             accept=".gltf,.glb,.ifc"
             onChange={handleFileInputChange}

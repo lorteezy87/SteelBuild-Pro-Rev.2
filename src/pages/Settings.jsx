@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { AuthContext } from "@/components/shared/AuthContext";
 import { toast } from "sonner";
@@ -22,36 +22,36 @@ const TABS = [
 export default function Settings() {
   const authCtx = useContext(AuthContext);
   const user = authCtx?.user;
+  const checkAppState = authCtx?.checkAppState;
+  const logout = authCtx?.logout;
   const [activeTab, setActiveTab] = useState('profile');
   const [userPrefs, setUserPrefs] = useState({});
   const qc = useQueryClient();
 
-  const { data: userSettings } = useQuery({
-    queryKey: ['user-settings', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return {};
-      const me = await base44.auth.me();
-      return me || {};
-    },
-    enabled: !!user?.id,
-  });
-
   useEffect(() => {
-    if (userSettings) setUserPrefs(userSettings);
-  }, [userSettings]);
+    if (user) setUserPrefs(user);
+  }, [user]);
 
   const updatePrefsMut = useMutation({
     mutationFn: async (prefs) => base44.auth.updateMe(prefs),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-settings'] });
+      checkAppState?.();
       toast.success('Settings saved');
     },
-    onError: () => toast.error('Failed to save settings'),
+    onError: async (error) => {
+      if (error?.status === 401) {
+        toast.error('Your session expired. Please sign in again.');
+        await logout?.();
+        return;
+      }
+      toast.error('Failed to save settings');
+    },
   });
 
   const handleSavePrefs = (prefs) => {
     setUserPrefs((prev) => ({ ...prev, ...prefs }));
-    updatePrefsMut.mutate(prefs);
+    return updatePrefsMut.mutateAsync(prefs);
   };
 
   if (!user) {

@@ -4,11 +4,11 @@ import { createPageUrl } from "@/utils";
 import { useNavigate } from "react-router-dom";
 
 const QUICK_ADD_OPTIONS = [
-  { icon: "⚑", label: "New RFI", action: "rfi" },
-  { icon: "$", label: "New CO", action: "changeorder" },
-  { icon: "📋", label: "Daily Log", action: "dailylog" },
-  { icon: "☰", label: "Work Pkg", action: "workpackage" },
-  { icon: "📝", label: "Prod Note", action: "productionnote" },
+  { icon: "⚑", label: "Create RFI", action: "rfi" },
+  { icon: "$", label: "Create CO", action: "changeorder" },
+  { icon: "📋", label: "Create Daily Log", action: "dailylog" },
+  { icon: "☰", label: "Create Work Package", action: "workpackage" },
+  { icon: "📝", label: "Create Note", action: "productionnote" },
   { icon: "📷", label: "Upload Photo", action: "photo" },
 ];
 
@@ -18,8 +18,6 @@ export default function QuickAddFAB() {
 
   const handleOptionClick = (action) => {
     setExpanded(false);
-    // These would integrate with modal systems in each page
-    // For now, navigate to relevant page
     const pageMap = {
       rfi: "RFIs",
       changeorder: "ChangeOrders",
@@ -30,8 +28,6 @@ export default function QuickAddFAB() {
     };
     navigate(createPageUrl(pageMap[action]));
   };
-
-  const angle = (360 / QUICK_ADD_OPTIONS.length) * (Math.PI / 180);
 
   return (
     <>
@@ -54,7 +50,6 @@ export default function QuickAddFAB() {
           zIndex: 500,
         }}
       >
-        {/* Quick Add Options */}
         {expanded && (
           <div
             style={{
@@ -68,7 +63,7 @@ export default function QuickAddFAB() {
           >
             {QUICK_ADD_OPTIONS.map((opt, i) => (
               <div
-                key={i}
+                key={opt.action}
                 onClick={() => handleOptionClick(opt.action)}
                 style={{
                   display: "flex",
@@ -108,7 +103,6 @@ export default function QuickAddFAB() {
           </div>
         )}
 
-        {/* FAB Button */}
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
@@ -138,19 +132,6 @@ export default function QuickAddFAB() {
         >
           <Plus size={24} strokeWidth={2.5} />
         </button>
-
-        <style>{`
-          @keyframes slideIn {
-            from {
-              opacity: 0;
-              transform: translateX(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-        `}</style>
       </div>
     </>
   );

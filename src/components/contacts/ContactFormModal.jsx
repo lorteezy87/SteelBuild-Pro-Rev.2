@@ -125,7 +125,7 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
               letterSpacing: "0.10em",
             }}
           >
-            {isEdit ? `Edit — ${contact.first_name} ${contact.last_name}` : "New Contact"}
+            {isEdit ? `Edit Contact — ${contact.first_name} ${contact.last_name}` : "Create Contact"}
           </h2>
           <button
             onClick={onClose}
@@ -267,7 +267,7 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
               disabled={createMut.isPending}
               style={{
                 background: "var(--accent)",
-                color: "#0A0A0B",
+                color: "var(--on-accent)",
                 border: "none",
                 borderRadius: "var(--radius-btn)",
                 padding: "8px 20px",
@@ -288,3 +288,4 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
     </div>
   );
 }
+

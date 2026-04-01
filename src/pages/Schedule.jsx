@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -10,8 +10,26 @@ import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
-import { PHASES } from "@/utils/phases";
+import CalendarView from "@/components/schedule/CalendarView";
+import { PHASES, PHASE_ORDER, derivePhase, sortByPhase } from "@/utils/phases";
 import { useRef } from "react";
+import BulkEditTasksModal from "@/components/schedule/BulkEditTasksModal";
+
+const STATUS_OPTIONS = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold"];
+const PRIORITY_OPTIONS = ["Critical", "High", "Normal", "Low"];
+const TASK_TYPE_OPTIONS = ["Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone", "Task"];
+
+const fileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const [, base64 = ""] = result.split(",");
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -23,13 +41,17 @@ export default function Schedule() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [createdTaskFocusId, setCreatedTaskFocusId] = useState(null);
   const fileInputRef = useRef(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const qc = useQueryClient();
+  const normalizedProjectRef = useRef(null);
 
-  const { data: scheduleTasks = [] } = useQuery({
+  const { data: scheduleTasks = [], isLoading: scheduleTasksLoading, isError: scheduleTasksError, error: scheduleTasksErrorDetails } = useQuery({
     queryKey: ["schedule-tasks", projectId],
     queryFn: () =>
       projectId
@@ -39,17 +61,169 @@ export default function Schedule() {
     initialData: [],
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isError: projectsError, error: projectsErrorDetails } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
+  const currentProjectLabel = selectedProject?.name || activeProject?.name || "Current Project";
   const hasProject = !!(projectId || activeProject?.id);
+  const loadingSchedule = scheduleTasksLoading || projectsLoading;
+  const hasScheduleError = scheduleTasksError || projectsError;
+  const scheduleErrorMessage =
+    scheduleTasksErrorDetails?.message ||
+    projectsErrorDetails?.message ||
+    "Schedule data could not be loaded.";
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setShowBulkEdit(false);
+    setShowBulkDeleteDialog(false);
+    setCreatedTaskFocusId(null);
+  }, [projectId]);
+
+  const normalizePredecessorTokens = (value = "") =>
+    String(value)
+      .split(/[\n,;]+/)
+      .map((token) => token.trim().toUpperCase())
+      .filter(Boolean);
+
+  const formatPredecessorWbs = (predecessorIds, tasks = []) => {
+    const taskMap = new Map(tasks.map((task) => [task.id, task]));
+    const labels = String(predecessorIds || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => taskMap.get(id)?.wbs_code)
+      .filter(Boolean);
+
+    return labels.join(", ");
+  };
+
+  const resolvePredecessorIds = (predecessorWbs, tasks = [], currentTaskId = null) => {
+    const wbsMap = new Map(
+      tasks
+        .filter((task) => task.id !== currentTaskId && task.wbs_code)
+        .map((task) => [String(task.wbs_code).trim().toUpperCase(), task.id])
+    );
+
+    return normalizePredecessorTokens(predecessorWbs)
+      .map((token) => wbsMap.get(token))
+      .filter(Boolean)
+      .join(",");
+  };
+
+  const applyTaskPatchRules = (patch = {}) => {
+    const nextPatch = { ...patch };
+
+    if (nextPatch.status === "Complete" && (nextPatch.percent_complete === undefined || nextPatch.percent_complete === null)) {
+      nextPatch.percent_complete = 100;
+    }
+
+    if (nextPatch.status === "Not Started" && (nextPatch.percent_complete === undefined || nextPatch.percent_complete === null)) {
+      nextPatch.percent_complete = 0;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "predecessor_wbs")) {
+      nextPatch.predecessor_ids = resolvePredecessorIds(nextPatch.predecessor_wbs, scheduleTasks, nextPatch.id || null);
+      delete nextPatch.predecessor_wbs;
+    }
+
+    return nextPatch;
+  };
+
+  const getPhaseWbsBase = (phase) => {
+    const resolvedPhase = phase || PHASES[0];
+    const index = PHASE_ORDER[resolvedPhase] ?? 0;
+    return index + 1;
+  };
+
+  const getTaskWbsDepth = (task) => {
+    const match = String(task?.wbs_code || "").match(/^\d+\.(\d+)$/);
+    if (match?.[1]) {
+      return Math.max(1, match[1].length);
+    }
+    return 1;
+  };
+
+  const buildWbsCode = (phase, sequence) => {
+    const base = getPhaseWbsBase(phase);
+    return `${base}.${sequence}`;
+  };
+
+  const patchRequiresWbsRebalance = (patch = {}) =>
+    ["phase", "start_date", "end_date"].some((key) =>
+      Object.prototype.hasOwnProperty.call(patch, key)
+    );
+
+  const rebalanceWbsCodes = async (pid) => {
+    if (!pid) return;
+
+    const latestTasks = await base44.entities.ScheduleTask.filter({ project_id: pid });
+    const orderedTasks = sortByPhase(latestTasks);
+    const phaseStacks = {};
+    const updates = [];
+
+    orderedTasks.forEach((task) => {
+      const phase = derivePhase(task);
+      const depth = Math.max(1, Math.min(3, getTaskWbsDepth(task)));
+      const stack = phaseStacks[phase] ? [...phaseStacks[phase]] : [];
+      while (stack.length > depth) stack.pop();
+      while (stack.length < depth) stack.push(0);
+      stack[depth - 1] = (stack[depth - 1] || 0) + 1;
+      phaseStacks[phase] = stack;
+
+      const nextWbs = buildWbsCode(phase, stack.join(""));
+
+      if (task.wbs_code !== nextWbs) {
+        updates.push(base44.entities.ScheduleTask.update(task.id, { wbs_code: nextWbs }));
+      }
+    });
+
+    if (updates.length) {
+      await Promise.all(updates);
+    }
+  };
+
+  useEffect(() => {
+    if (!projectId || !scheduleTasks.length) return;
+
+    const orderedTasks = sortByPhase(scheduleTasks);
+    const phaseStacks = {};
+    const hasMismatch = orderedTasks.some((task) => {
+      const phase = derivePhase(task);
+      const depth = Math.max(1, Math.min(3, getTaskWbsDepth(task)));
+      const stack = phaseStacks[phase] ? [...phaseStacks[phase]] : [];
+      while (stack.length > depth) stack.pop();
+      while (stack.length < depth) stack.push(0);
+      stack[depth - 1] = (stack[depth - 1] || 0) + 1;
+      phaseStacks[phase] = stack;
+      return task.wbs_code !== buildWbsCode(phase, stack.join(""));
+    });
+
+    if (!hasMismatch || normalizedProjectRef.current === projectId) return;
+
+    normalizedProjectRef.current = projectId;
+    rebalanceWbsCodes(projectId)
+      .then(() => qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] }))
+      .catch(() => {
+        normalizedProjectRef.current = null;
+        toast.error("Failed to normalize WBS codes");
+      });
+  }, [projectId, scheduleTasks, qc]);
 
   const updateTaskMut = useMutation({
-    mutationFn: (data) => base44.entities.ScheduleTask.update(data.id, data),
+    mutationFn: async (data) => {
+      const pid = data.project_id || projectId || activeProject?.id;
+      const patch = applyTaskPatchRules(data);
+      const updatedTask = await base44.entities.ScheduleTask.update(data.id, patch);
+      if (patchRequiresWbsRebalance(patch)) {
+        await rebalanceWbsCodes(pid);
+      }
+      return updatedTask;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setShowDrawer(false);
@@ -60,29 +234,53 @@ export default function Schedule() {
   });
 
   const createTaskMut = useMutation({
-    mutationFn: (data) => {
+    mutationFn: async (data) => {
       const pid = data.project_id || projectId || activeProject?.id;
       if (!pid) throw new Error("Select a project first");
-      return base44.entities.ScheduleTask.create({ ...data, project_id: pid });
+      const createdTask = await base44.entities.ScheduleTask.create({
+        ...applyTaskPatchRules(data),
+        project_id: pid,
+      });
+      await rebalanceWbsCodes(pid);
+      return createdTask;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+    onSuccess: async (createdTask) => {
+      await qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setShowAddTask(false);
+      setPhaseFilter("all");
+      setView("list");
+      setCreatedTaskFocusId(createdTask.id);
       toast.success("Task created");
     },
     onError: (err) => toast.error("Create failed: " + err.message),
   });
 
+  useEffect(() => {
+    if (!createdTaskFocusId || !scheduleTasks.length) return;
+    const createdTask = scheduleTasks.find((task) => task.id === createdTaskFocusId);
+    if (!createdTask) return;
+
+    setSelectedTask(createdTask);
+    setShowDrawer(true);
+    setSelectedIds(new Set([createdTask.id]));
+    setCreatedTaskFocusId(null);
+  }, [createdTaskFocusId, scheduleTasks]);
+
   const deleteTaskMut = useMutation({
-    mutationFn: (id) => base44.entities.ScheduleTask.delete(id),
-    onSuccess: () => {
+    mutationFn: async (id) => {
+      const pid = projectId || activeProject?.id;
+      await base44.entities.ScheduleTask.delete(id);
+      await rebalanceWbsCodes(pid);
+      return id;
+    },
+    onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setShowDrawer(false);
       setSelectedTask(null);
       setDeleteTarget(null);
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        if (selectedTask?.id) next.delete(selectedTask.id);
+        if (id) next.delete(id);
         return next;
       });
       toast.success("Task deleted");
@@ -91,28 +289,38 @@ export default function Schedule() {
   });
 
   const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, status }) =>
-      Promise.all(
+    mutationFn: async ({ ids, patch }) => {
+      const pid = projectId || activeProject?.id;
+      const results = await Promise.all(
         ids.map((id) =>
-          base44.entities.ScheduleTask.update(id, {
-            status,
-            percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
-          })
+          base44.entities.ScheduleTask.update(id, patch)
         )
-      ),
+      );
+      if (patchRequiresWbsRebalance(patch)) {
+        await rebalanceWbsCodes(pid);
+      }
+      return results;
+    },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setSelectedIds(new Set());
-      toast.success(`Updated ${variables.ids.length} tasks`);
+      setShowBulkEdit(false);
+      toast.success(variables.label || `Updated ${variables.ids.length} tasks`);
     },
     onError: () => toast.error("Bulk update failed"),
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids) => Promise.all(ids.map((id) => base44.entities.ScheduleTask.delete(id))),
+    mutationFn: async (ids) => {
+      const pid = projectId || activeProject?.id;
+      await Promise.all(ids.map((id) => base44.entities.ScheduleTask.delete(id)));
+      await rebalanceWbsCodes(pid);
+      return ids;
+    },
     onSuccess: (_, ids) => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setSelectedIds(new Set());
+      setShowBulkDeleteDialog(false);
       if (selectedTask?.id && ids.includes(selectedTask.id)) {
         setSelectedTask(null);
         setShowDrawer(false);
@@ -142,6 +350,56 @@ export default function Schedule() {
     return tasks;
   };
 
+  const importParsedTasks = async (tasks, sourceName) => {
+    const pid = projectId || activeProject?.id;
+    if (!pid) throw new Error("Select a project before importing");
+
+    const importableTasks = tasks.filter((task) => !task.isSummary);
+    if (!importableTasks.length) {
+      throw new Error("No importable tasks were found in the selected file.");
+    }
+
+    const createdBySourceId = new Map();
+
+    for (const task of importableTasks) {
+      const created = await base44.entities.ScheduleTask.create({
+        project_id: pid,
+        task_name: task.name || "Task",
+        task_type: "Task",
+        phase: derivePhase({ task_name: task.name }),
+        start_date: task.start || new Date().toISOString().split("T")[0],
+        end_date: task.finish || task.start || new Date().toISOString().split("T")[0],
+        status: task.pct >= 100 ? "Complete" : task.pct > 0 ? "In Progress" : "Not Started",
+        percent_complete: Number(task.pct) || 0,
+        priority: "Normal",
+        notes: `Imported from ${sourceName}`,
+      });
+      createdBySourceId.set(String(task.uid), created.id);
+    }
+
+    const predecessorUpdates = importableTasks
+      .map((task) => {
+        const createdId = createdBySourceId.get(String(task.uid));
+        if (!createdId || !task.preds?.length) return null;
+
+        const predecessorIds = task.preds
+          .map((pred) => createdBySourceId.get(String(pred)))
+          .filter(Boolean)
+          .join(",");
+
+        if (!predecessorIds) return null;
+        return base44.entities.ScheduleTask.update(createdId, { predecessor_ids: predecessorIds });
+      })
+      .filter(Boolean);
+
+    if (predecessorUpdates.length) {
+      await Promise.all(predecessorUpdates);
+    }
+
+    await rebalanceWbsCodes(pid);
+    return importableTasks.length;
+  };
+
   const handleImportMPP = async (file) => {
     if (!projectId && !activeProject?.id) {
       toast.error("Select a project before importing");
@@ -149,30 +407,24 @@ export default function Schedule() {
     }
     setImporting(true);
     try {
+      const ext = String(file.name || "").split(".").pop()?.toLowerCase();
+      if (ext === "mpp") {
+        const response = await base44.functions.invoke("importScheduleMpp", {
+          project_id: projectId || activeProject?.id,
+          file_name: file.name,
+          file_base64: await fileToBase64(file),
+        });
+        await rebalanceWbsCodes(projectId || activeProject?.id);
+        qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        toast.success(`Imported ${response.imported_count || 0} tasks from ${file.name}`);
+        return;
+      }
+
       const text = await file.text();
       const tasks = parseMsProjectXml(text);
-      if (!tasks.length) {
-        throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
-      }
-      const creates = tasks
-        .filter((t) => !t.isSummary)
-        .map((t) =>
-          base44.entities.ScheduleTask.create({
-            project_id: projectId || activeProject?.id,
-            task_name: t.name,
-            task_type: "Task",
-            phase: PHASES.includes("Fabrication") ? "Fabrication" : PHASES[0],
-            start_date: t.start || new Date().toISOString().split("T")[0],
-            end_date: t.finish || t.start || new Date().toISOString().split("T")[0],
-            status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
-            percent_complete: t.pct,
-            priority: "Normal",
-            notes: t.preds && t.preds.length ? `Predecessors: ${t.preds.join(", ")}` : undefined,
-          })
-        );
-      await Promise.all(creates);
+      const importedCount = await importParsedTasks(tasks, file.name);
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      toast.success(`Imported ${creates.length} tasks from ${file.name}`);
+      toast.success(`Imported ${importedCount} tasks from ${file.name}`);
     } catch (e) {
       toast.error(e.message || "Import failed");
     } finally {
@@ -189,10 +441,25 @@ export default function Schedule() {
     });
   };
 
-  const bulkUpdateStatus = (status) => {
+  const toggleSelectAll = (ids, checked) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (checked) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
+
+  const applyBulkUpdate = (patch, label) => {
     const ids = Array.from(selectedIds);
     if (!ids.length || bulkUpdateMut.isPending || bulkDeleteMut.isPending) return;
-    bulkUpdateMut.mutate({ ids, status });
+    bulkUpdateMut.mutate({
+      ids,
+      patch: applyTaskPatchRules(patch),
+      label,
+    });
   };
 
   const bulkDelete = () => {
@@ -200,6 +467,60 @@ export default function Schedule() {
     if (!ids.length || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
     bulkDeleteMut.mutate(ids);
   };
+
+  const bulkBusy = bulkUpdateMut.isPending || bulkDeleteMut.isPending;
+
+  if (!hasProject) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Select a project to view schedule
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          The scheduling workspace is project-specific.
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingSchedule) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Loading schedule
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Pulling tasks, WBS, and predecessor relationships.
+        </div>
+      </div>
+    );
+  }
+
+  if (hasScheduleError) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Schedule Failed To Load
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          {scheduleErrorMessage}
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedProject) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--status-warning)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Project Data Missing
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          The selected project record could not be resolved for Schedule.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -211,7 +532,7 @@ export default function Schedule() {
               Schedule
             </h1>
             <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              {selectedProject ? selectedProject.name : "All Projects"} &middot; {scheduleTasks.length} Tasks
+              {currentProjectLabel} &middot; {scheduleTasks.length} Tasks
             </p>
           </div>
           <button
@@ -219,7 +540,7 @@ export default function Schedule() {
             disabled={!hasProject}
             style={{
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--on-accent)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "7px 16px",
@@ -232,7 +553,7 @@ export default function Schedule() {
               opacity: hasProject ? 1 : 0.45,
             }}
           >
-            + Add Task
+            Create Task
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -299,6 +620,7 @@ export default function Schedule() {
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--divider)" }}>
         {[
           { id: "gantt", label: "Gantt Chart" },
+          { id: "calendar", label: "Calendar" },
           { id: "lookahead", label: "6-Week Lookahead" },
           { id: "list", label: "Task List" },
         ].map((tab) => (
@@ -327,6 +649,17 @@ export default function Schedule() {
           setExpandedTask={setExpandedTask}
           onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
           phaseFilter={phaseFilter}
+          onInlineUpdate={(taskId, patch) => updateTaskMut.mutate({ id: taskId, ...patch })}
+          formatPredecessorWbs={(value) => formatPredecessorWbs(value, scheduleTasks)}
+        />
+      )}
+
+      {view === "calendar" && (
+        <CalendarView
+          tasks={scheduleTasks}
+          onSelectTask={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+          onAddTask={() => setShowAddTask(true)}
+          onSelectDate={() => {}}
         />
       )}
 
@@ -339,6 +672,7 @@ export default function Schedule() {
           onDelete={(task) => setDeleteTarget(task)}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
+          onToggleSelectAll={toggleSelectAll}
         />
       )}
 
@@ -350,6 +684,7 @@ export default function Schedule() {
         onUpdate={(data) => updateTaskMut.mutate(data)}
         onDelete={(id) => deleteTaskMut.mutate(id)}
         allTasks={scheduleTasks}
+        formatPredecessorWbs={(value) => formatPredecessorWbs(value, scheduleTasks)}
       />
 
       {/* Add Task Modal */}
@@ -365,6 +700,7 @@ export default function Schedule() {
         }
         projectName={selectedProject?.name || ""}
         prefilledDate={new Date().toISOString().split("T")[0]}
+        allTasks={scheduleTasks}
       />
 
       <DeleteDialog
@@ -377,6 +713,22 @@ export default function Schedule() {
         }}
         title="Delete task?"
         description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
+      />
+
+      <DeleteDialog
+        open={showBulkDeleteDialog}
+        onClose={() => setShowBulkDeleteDialog(false)}
+        onConfirm={bulkDelete}
+        title="Delete selected tasks?"
+        description={`This will remove ${selectedIds.size} selected ${selectedIds.size === 1 ? "task" : "tasks"}.`}
+      />
+
+      <BulkEditTasksModal
+        open={showBulkEdit}
+        onClose={() => setShowBulkEdit(false)}
+        onApply={(patch) => applyBulkUpdate(patch, `Updated ${selectedIds.size} selected ${selectedIds.size === 1 ? "task" : "tasks"}`)}
+        count={selectedIds.size}
+        isSubmitting={bulkUpdateMut.isPending}
       />
 
       {selectedIds.size > 0 && (
@@ -398,19 +750,131 @@ export default function Schedule() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
             {selectedIds.size} SELECTED
           </span>
-          <button onClick={() => bulkUpdateStatus("Not Started")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
-            Set Not Started
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Quick status:
+          </span>
+          {STATUS_OPTIONS.map((status) => (
+            <button
+              key={status}
+              onClick={() => applyBulkUpdate({ status }, `${status} applied to ${selectedIds.size} ${selectedIds.size === 1 ? "task" : "tasks"}`)}
+              disabled={bulkBusy}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--border-default)",
+                background: status === "Complete" ? "var(--success-muted)" : status === "Delayed" ? "var(--danger-muted)" : status === "In Progress" ? "rgba(234,179,8,0.12)" : "var(--bg-surface)",
+                color: status === "Complete" ? "var(--status-success)" : status === "Delayed" ? "var(--status-error)" : status === "In Progress" ? "var(--status-warning)" : "var(--text-primary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                cursor: bulkBusy ? "not-allowed" : "pointer",
+                opacity: bulkBusy ? 0.6 : 1,
+              }}
+            >
+              {status}
+            </button>
+          ))}
+          <select
+            value=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              applyBulkUpdate({ phase: value }, `${value} phase applied to ${selectedIds.size} ${selectedIds.size === 1 ? "task" : "tasks"}`);
+              e.target.value = "";
+            }}
+            disabled={bulkBusy}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-surface)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              cursor: bulkBusy ? "not-allowed" : "pointer",
+              opacity: bulkBusy ? 0.6 : 1,
+            }}
+          >
+            <option value="">Set Phase</option>
+            {PHASES.map((phase) => (
+              <option key={phase} value={phase}>
+                {phase}
+              </option>
+            ))}
+          </select>
+          <select
+            value=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              applyBulkUpdate({ priority: value }, `${value} priority applied to ${selectedIds.size} ${selectedIds.size === 1 ? "task" : "tasks"}`);
+              e.target.value = "";
+            }}
+            disabled={bulkBusy}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-surface)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              cursor: bulkBusy ? "not-allowed" : "pointer",
+              opacity: bulkBusy ? 0.6 : 1,
+            }}
+          >
+            <option value="">Set Priority</option>
+            {PRIORITY_OPTIONS.map((priority) => (
+              <option key={priority} value={priority}>
+                {priority}
+              </option>
+            ))}
+          </select>
+          <select
+            value=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              applyBulkUpdate({ task_type: value }, `${value} task type applied to ${selectedIds.size} ${selectedIds.size === 1 ? "task" : "tasks"}`);
+              e.target.value = "";
+            }}
+            disabled={bulkBusy}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-surface)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              cursor: bulkBusy ? "not-allowed" : "pointer",
+              opacity: bulkBusy ? 0.6 : 1,
+            }}
+          >
+            <option value="">Set Task Type</option>
+            {TASK_TYPE_OPTIONS.map((taskType) => (
+              <option key={taskType} value={taskType}>
+                {taskType}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowBulkEdit(true)}
+            disabled={bulkBusy}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid var(--accent-border)",
+              background: "var(--accent-muted)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              cursor: bulkBusy ? "not-allowed" : "pointer",
+              opacity: bulkBusy ? 0.6 : 1,
+            }}
+          >
+            Bulk Edit
           </button>
-          <button onClick={() => bulkUpdateStatus("In Progress")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-warning)", background: "rgba(234,179,8,0.12)", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
-            Set In Progress
-          </button>
-          <button onClick={() => bulkUpdateStatus("Complete")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-success)", background: "var(--success-muted)", color: "var(--status-success)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
-            Mark Complete
-          </button>
-          <button onClick={() => bulkUpdateStatus("Delayed")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
-            Mark Delayed
-          </button>
-          <button onClick={bulkDelete} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1 }}>
+          <button onClick={() => setShowBulkDeleteDialog(true)} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1 }}>
             Delete
           </button>
           <button onClick={() => setSelectedIds(new Set())} style={{ marginLeft: "auto", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>

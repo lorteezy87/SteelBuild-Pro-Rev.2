@@ -457,13 +457,19 @@ export default function DrilldownView({
     const revisedValue = contractValue + approvedCOVal;
     const activeExpenses = expenses.filter((expense) => expense.payment_status !== "Voided");
     const budgetCommitted = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-    const actualSpend = activeExpenses
+    const paidExpenseActual = activeExpenses
       .filter((expense) => expense.payment_status === "Paid")
       .reduce((s, expense) => s + (Number(expense.amount) || 0), 0);
-    const committedCosts = activeExpenses.reduce(
+    const committedExpenseCosts = activeExpenses.reduce(
       (s, expense) => s + (Number(expense.amount) || 0),
       0
     );
+    const codedActualSpend = codes.reduce((s, code) => s + (Number(code.actual_cost) || 0), 0);
+    const codedCommittedCosts = codes.reduce((s, code) => s + (Number(code.committed_cost) || 0), 0);
+    const forecastRemainder = codes.reduce((s, code) => s + (Number(code.forecast_to_complete) || 0), 0);
+    const actualSpend = Math.max(codedActualSpend, paidExpenseActual);
+    const committedCosts = Math.max(codedCommittedCosts, committedExpenseCosts, actualSpend);
+    const forecastAtCompletion = Math.max(actualSpend + forecastRemainder, committedCosts, actualSpend);
     const pendingCOVal = cos
       .filter((c) => ["Submitted", "Under Review"].includes(c.status))
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
@@ -474,6 +480,7 @@ export default function DrilldownView({
       budgetCommitted,
       actualSpend,
       committedCosts,
+      forecastAtCompletion,
       pendingCOVal,
     };
   }, [project, cos, codes, expenses]);
@@ -943,7 +950,7 @@ export default function DrilldownView({
         summary={{
           budget: financials.budgetCommitted,
           actual: financials.actualSpend,
-          forecast: financials.committedCosts,
+          forecast: financials.forecastAtCompletion,
         }}
       />
     </div>

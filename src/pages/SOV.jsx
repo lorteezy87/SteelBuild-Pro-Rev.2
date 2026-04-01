@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2 } from "lucide-react";
 import StatusBadge from "../components/shared/StatusBadge";
-import PageHeader from "../components/shared/PageHeader";
 import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
@@ -15,7 +14,6 @@ import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
-import ProgressBar from "../components/shared/ProgressBar";
 
 export default function SOV() {
   const qc = useQueryClient();
@@ -173,6 +171,10 @@ export default function SOV() {
 
   // Compute a sensible next ID to show in the form
   const nextSovId = `SOV-${String((sovs.length || 0) + 1).padStart(3, '0')}`;
+  const nextLineItemNumber = useMemo(() => {
+    const maxLine = sovs.reduce((max, item) => Math.max(max, Number(item.line_item_number) || 0), 0);
+    return maxLine + 1;
+  }, [sovs]);
 
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
@@ -217,7 +219,7 @@ export default function SOV() {
             onClick={() => { setEditing(null); setModalOpen(true); }}
             style={{ background: "var(--accent)", color: "#fff", border: "none" }}
           >
-            + New Item
+            Create SOV Item
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
           <Button variant="outline" size="sm" onClick={refetch}>Refresh</Button>
@@ -317,6 +319,7 @@ export default function SOV() {
         sov={editing}
         projects={projects}
         nextId={nextSovId}
+        nextLineItemNumber={nextLineItemNumber}
         activeProject={activeProject}
       />
       <DeleteDialog

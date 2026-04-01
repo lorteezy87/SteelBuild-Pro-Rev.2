@@ -115,6 +115,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     formData.required_date &&
     formData.scheduled_date &&
     new Date(formData.scheduled_date) > new Date(formData.required_date);
+  const selectedProjectName = projects.find((project) => project.id === formData.project_id)?.name || "";
 
   return (
     <div
@@ -167,7 +168,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               textTransform: "uppercase",
             }}
           >
-            {isEdit ? "Edit Delivery" : "New Delivery"}
+            {isEdit ? "Edit Delivery" : "Create Delivery"}
           </h2>
           {isEdit && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -187,7 +188,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                     borderRadius: "var(--radius-btn)",
                     border: "1px solid var(--border-default)",
                     background: formData.status === s ? "var(--accent)" : "transparent",
-                    color: formData.status === s ? "#0b1021" : "var(--text-muted)",
+                    color: formData.status === s ? "var(--on-accent)" : "var(--text-muted)",
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
                     fontWeight: 700,
@@ -217,6 +218,11 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                     </option>
                   ))}
                 </select>
+                {formData.project_id && !selectedProjectName && (
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-warning)", marginTop: 6 }}>
+                    Project record could not be resolved. Re-select the project before saving.
+                  </div>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Work Package</label>
@@ -411,6 +417,9 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             display: "flex",
             justifyContent: "flex-end",
             gap: 8,
+            position: "sticky",
+            bottom: 0,
+            zIndex: 2,
           }}
         >
           <button
@@ -438,7 +447,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             disabled={mutation.isPending}
             style={{
               background: "var(--accent)",
-              color: "#0b1021",
+              color: "var(--on-accent)",
               border: "1px solid var(--accent)",
               borderRadius: "var(--radius-btn)",
               padding: "10px 20px",

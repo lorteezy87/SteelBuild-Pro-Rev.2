@@ -15,21 +15,21 @@ import {
 const SERIES = [
   {
     key: "Budget",
-    color: "var(--accent)",
-    softColor: "rgba(173,198,255,0.22)",
-    textColor: "var(--accent-light)",
+    color: "#9AA4B2",
+    softColor: "rgba(154,164,178,0.22)",
+    textColor: "#D4DAE2",
   },
   {
     key: "Actual",
-    color: "var(--status-warning)",
-    softColor: "rgba(245,158,11,0.22)",
-    textColor: "var(--status-warning)",
+    color: "var(--accent)",
+    softColor: "rgba(255,107,0,0.22)",
+    textColor: "var(--accent-light)",
   },
   {
     key: "Forecast",
-    color: "var(--status-success)",
-    softColor: "rgba(74,225,118,0.18)",
-    textColor: "var(--status-success)",
+    color: "var(--secondary)",
+    softColor: "rgba(0,229,255,0.18)",
+    textColor: "var(--secondary)",
   },
 ];
 
@@ -112,8 +112,8 @@ function ChartTooltip({ active, payload }) {
 export default function BudgetOverviewChart({ summary }) {
   const budget = Number(summary?.budget) || 0;
   const actual = Number(summary?.actual) || 0;
-  const forecast = Number(summary?.forecast) || 0;
-  const variance = budget - actual;
+  const forecast = Number(summary?.forecast) || actual;
+  const variance = budget - forecast;
   const burnPct = budget > 0 ? Math.round((actual / budget) * 100) : 0;
 
   const data = [
@@ -137,7 +137,7 @@ export default function BudgetOverviewChart({ summary }) {
   return (
     <div
       style={{
-        background: "linear-gradient(180deg, rgba(173,198,255,0.03) 0%, rgba(19,19,20,0) 100%), var(--bg-surface)",
+        background: "linear-gradient(180deg, rgba(255,107,0,0.04) 0%, rgba(0,229,255,0.02) 45%, rgba(19,19,20,0) 100%), var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderRadius: "12px",
         padding: "18px",
@@ -343,7 +343,7 @@ export default function BudgetOverviewChart({ summary }) {
             { label: "Actual", value: actual, ...SERIES[1] },
             { label: "Forecast", value: forecast, ...SERIES[2] },
             {
-              label: variance >= 0 ? "Variance" : "Overrun",
+              label: variance >= 0 ? "Forecast Variance" : "Forecast Overrun",
               value: Math.abs(variance),
               color: variance >= 0 ? "var(--status-success)" : "var(--status-error)",
               softColor: variance >= 0 ? "rgba(74,225,118,0.16)" : "rgba(255,180,171,0.16)",

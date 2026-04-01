@@ -5,7 +5,6 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
-import StatusBadge from "../components/shared/StatusBadge";
 
 const FAB_STAGES = [
   { id: "drawings_approved", label: "Drawings Approved", short: "DWG APRVD", color: "var(--accent)" },
@@ -677,7 +676,7 @@ export default function FabRelease() {
               cursor: "pointer",
             }}
           >
-            + Log Update
+            Create Work Package
           </button>
           <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
             {[

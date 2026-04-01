@@ -69,10 +69,12 @@ function exportToCSV(deliveries, filename = "deliveries.csv") {
 export default function Deliveries() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const defaultProjectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
 
   const [view, setView] = useState("TABLE");
+  const scopeView = "project";
+  const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("DUE");
@@ -83,6 +85,10 @@ export default function Deliveries() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [collapsedProjects, setCollapsedProjects] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useEffect(() => {
+    setSelectedProjectId(defaultProjectId || null);
+  }, [defaultProjectId]);
 
   const quickCompleteMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
@@ -133,10 +139,9 @@ export default function Deliveries() {
     onError: () => toast.error("Bulk update failed"),
   });
 
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["deliveries", projectId],
+  const { data: deliveries = [], isLoading: deliveriesLoading, isError: deliveriesError, error: deliveriesErrorDetails } = useQuery({
+    queryKey: ["deliveries"],
     queryFn: async () => {
-      if (projectId) return base44.entities.Delivery.filter({ project_id: projectId });
       const all = await base44.entities.Delivery.list();
       return all;
     },
@@ -144,16 +149,52 @@ export default function Deliveries() {
     refetchInterval: 30000,
   });
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isError: projectsError, error: projectsErrorDetails } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
+  const { data: workPackages = [], isLoading: workPackagesLoading, isError: workPackagesError, error: workPackagesErrorDetails } = useQuery({
+    queryKey: ["work-packages"],
+    queryFn: () => base44.entities.WorkPackage.list(),
+    initialData: [],
+  });
+  const loadingDeliveries = deliveriesLoading || projectsLoading || workPackagesLoading;
+  const hasDeliveriesError = deliveriesError || projectsError || workPackagesError;
+  const deliveriesErrorMessage =
+    deliveriesErrorDetails?.message ||
+    projectsErrorDetails?.message ||
+    workPackagesErrorDetails?.message ||
+    "Delivery data could not be loaded.";
 
+  const projectNameById = useMemo(() => new Map(projects.map((project) => [project.id, project.name || ""])), [projects]);
+  const workPackageNameById = useMemo(
+    () =>
+      new Map(
+        workPackages.map((workPackage) => [
+          workPackage.id,
+          workPackage.wp_number ? `${workPackage.wp_number} - ${workPackage.name || "Work Package"}` : workPackage.name || "Work Package",
+        ])
+      ),
+    [workPackages]
+  );
+  const normalizedDeliveries = useMemo(
+    () =>
+      deliveries.map((delivery) => ({
+        ...delivery,
+        project_name: delivery.project_name || projectNameById.get(delivery.project_id) || "",
+        work_package_name: workPackageNameById.get(delivery.work_package_id) || "",
+      })),
+    [deliveries, projectNameById, workPackageNameById]
+  );
+  const scopedDeliveries = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return normalizedDeliveries.filter((delivery) => delivery.project_id === selectedProjectId);
+  }, [normalizedDeliveries, selectedProjectId]);
   const projectCount = useMemo(() => {
-    const ids = new Set(deliveries.map((d) => d.project_id));
+    const ids = new Set(scopedDeliveries.map((d) => d.project_id));
     return ids.size;
-  }, [deliveries]);
+  }, [scopedDeliveries]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -165,6 +206,7 @@ export default function Deliveries() {
     d.setDate(d.getDate() + 7);
     return d;
   }, [today]);
+
   const in30 = useMemo(() => {
     const d = new Date(today);
     d.setDate(d.getDate() + 30);
@@ -172,7 +214,7 @@ export default function Deliveries() {
   }, [today]);
 
   const filtered = useMemo(() => {
-    return deliveries
+    return scopedDeliveries
       .filter((d) => {
         if (filterStatus !== "ALL" && d.status !== filterStatus) return false;
         const q = search.trim().toLowerCase();
@@ -203,52 +245,46 @@ export default function Deliveries() {
         }
         return (aDate?.getTime() || 0) - (bDate?.getTime() || 0);
       });
-  }, [deliveries, filterStatus, search, sortBy, overdueFirst, today]);
+  }, [scopedDeliveries, filterStatus, search, sortBy, overdueFirst, today]);
 
   const grouped = useMemo(() => {
-    if (projectId) return null;
-    return filtered.reduce((acc, d) => {
-      const key = d.project_name || d.project_id || "Project";
-      acc[key] = acc[key] || [];
-      acc[key].push(d);
-      return acc;
-    }, {});
-  }, [filtered, projectId]);
+    return null;
+  }, []);
 
   const kpis = useMemo(() => {
-    const scheduled = deliveries.filter((d) => d.status === "Scheduled").length;
-    const inTransit = deliveries.filter((d) => d.status === "In Transit").length;
-    const delivered = deliveries.filter((d) => d.status === "Delivered").length;
-    const partial = deliveries.filter((d) => ["Partial", "Rejected"].includes(d.status)).length;
-    const overdue = deliveries.filter(
+    const scheduled = scopedDeliveries.filter((d) => d.status === "Scheduled").length;
+    const inTransit = scopedDeliveries.filter((d) => d.status === "In Transit").length;
+    const delivered = scopedDeliveries.filter((d) => d.status === "Delivered").length;
+    const partial = scopedDeliveries.filter((d) => ["Partial", "Rejected"].includes(d.status)).length;
+    const overdue = scopedDeliveries.filter(
       (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
     ).length;
-    const dueWeek = deliveries.filter((d) => {
+    const dueWeek = scopedDeliveries.filter((d) => {
       if (!d.scheduled_date) return false;
       const dt = new Date(d.scheduled_date);
       return dt >= today && dt <= in7 && d.status !== "Delivered";
     }).length;
-    const dueMonth = deliveries.filter((d) => {
+    const dueMonth = scopedDeliveries.filter((d) => {
       if (!d.scheduled_date) return false;
       const dt = new Date(d.scheduled_date);
       return dt >= today && dt <= in30 && d.status !== "Delivered";
     }).length;
-    const tonsPending = deliveries
+    const tonsPending = scopedDeliveries
       .filter((d) => d.status !== "Delivered")
       .reduce((s, d) => s + (Number(d.weight_tons) || 0), 0)
       .toFixed(1);
     return { scheduled, inTransit, delivered, partial, overdue, dueWeek, dueMonth, tonsPending };
-  }, [deliveries, today, in7, in30]);
+  }, [scopedDeliveries, today, in7, in30]);
 
   useEffect(() => {
-    if (!deliveries.length) return;
+    if (!normalizedDeliveries.length) return;
     const createDeliveryAlerts = async () => {
       try {
         const existing = await base44.entities.Alert.filter({ alert_type: "Delivery_Overdue" });
         const existingIds = new Set(existing.map((a) => a.related_record_id));
         const todayZero = new Date();
         todayZero.setHours(0, 0, 0, 0);
-        for (const d of deliveries) {
+        for (const d of normalizedDeliveries) {
           if (d.status === "Delivered") continue;
           if (!d.scheduled_date) continue;
           const sched = new Date(d.scheduled_date);
@@ -277,7 +313,7 @@ export default function Deliveries() {
     };
     const t = setTimeout(createDeliveryAlerts, 4000);
     return () => clearTimeout(t);
-  }, [deliveries.length]);
+  }, [normalizedDeliveries]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -320,6 +356,8 @@ export default function Deliveries() {
   );
 
   const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  const resolveProjectName = (targetProjectId) => projectNameById.get(targetProjectId) || "";
+  const getLookaheadTitle = (delivery) => delivery.work_package_name || delivery.description || "Delivery";
 
   const renderStatusPill = (status) => {
     const colors = STATUS_COLORS[status] || STATUS_COLORS.Scheduled;
@@ -366,11 +404,11 @@ export default function Deliveries() {
         <input type="checkbox" checked={selectedIds.has(delivery.id)} onChange={() => toggleSelect(delivery.id)} style={{ width: 16, height: 16 }} />
         <div>{renderStatusPill(delivery.status)}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {delivery.project_name || "Project"}
+          {delivery.project_name || resolveProjectName(delivery.project_id) || "Unassigned Project"}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.description || "Material"}
+            {getLookaheadTitle(delivery)}
             {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
             {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
           </div>
@@ -500,7 +538,9 @@ export default function Deliveries() {
             {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </div>
         ))}
-        {(projectId ? [{ name: filtered[0]?.project_name || "Project", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
+        {((scopeView === "project" && selectedProjectId)
+          ? [{ name: resolveProjectName(selectedProjectId) || filtered[0]?.project_name || "Project", list: filtered }]
+          : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
           <React.Fragment key={grp.name}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{grp.name}</div>
             {timelineDays.map((day, idx) => {
@@ -512,7 +552,7 @@ export default function Deliveries() {
                     return (
                       <div
                         key={d.id}
-                        title={`${d.vendor} · ${d.description || ""}`}
+                        title={`${d.work_package_name || d.description || "Delivery"} | ${d.project_name || ""}`}
                         style={{
                           position: "absolute",
                           top: 2 + i2 * 14,
@@ -532,7 +572,7 @@ export default function Deliveries() {
                         }}
                         onClick={() => setDetail(d)}
                       >
-                        {d.vendor} · {(d.weight_tons || 0) + "T"}
+                        {(d.work_package_name || d.description || "Delivery")} | {d.project_name || "Project"}
                       </div>
                     );
                   })}
@@ -659,7 +699,7 @@ export default function Deliveries() {
                   borderRadius: 8,
                   border: "1px solid var(--divider)",
                   background: detail.status === s ? "var(--accent)" : "var(--bg-surface)",
-                  color: detail.status === s ? "#0b1021" : "var(--text-primary)",
+                  color: detail.status === s ? "var(--on-accent)" : "var(--text-primary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
                   cursor: "pointer",
@@ -709,6 +749,45 @@ export default function Deliveries() {
     );
   };
 
+  if (!selectedProjectId) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Select a project to view deliveries
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          The delivery tracker runs as a project workspace.
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingDeliveries) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Loading deliveries
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Pulling shipments, work packages, and project context.
+        </div>
+      </div>
+    );
+  }
+
+  if (hasDeliveriesError) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Delivery Tracker Failed To Load
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          {deliveriesErrorMessage}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "calc(100vh - 92px)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-page)" }}>
       {/* Command bar */}
@@ -727,10 +806,13 @@ export default function Deliveries() {
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-primary)" }}>DELIVERY TRACKER</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-            {deliveries.length} shipments across {projectCount} projects
+            {(resolveProjectName(selectedProjectId) || activeProject?.name || "Current Project")} · {scopedDeliveries.length} shipments
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ padding: "8px 12px", border: "1px solid var(--accent-border)", borderRadius: 8, background: "var(--accent-muted)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em" }}>
+            PROJECT WORKSPACE
+          </div>
           <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
             {["TABLE", "TIMELINE"].map((v) => (
               <button
@@ -740,7 +822,7 @@ export default function Deliveries() {
                   padding: "8px 12px",
                   border: "none",
                   background: view === v ? "var(--accent)" : "transparent",
-                  color: view === v ? "#0b1021" : "var(--text-primary)",
+                  color: view === v ? "var(--on-accent)" : "var(--text-primary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
                   cursor: "pointer",
@@ -776,14 +858,14 @@ export default function Deliveries() {
               borderRadius: 8,
               border: "1px solid var(--accent)",
               background: "var(--accent)",
-              color: "#0b1021",
+              color: "var(--on-accent)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,
               cursor: "pointer",
             }}
           >
-            + New Delivery
+            Create Delivery
           </button>
         </div>
       </div>
@@ -849,7 +931,7 @@ export default function Deliveries() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.12em" }}>
             ATTENTION REQUIRED
           </span>
-          {deliveries
+          {scopedDeliveries
             .filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered")
             .slice(0, 4)
             .map((d) => {
@@ -871,7 +953,7 @@ export default function Deliveries() {
                     cursor: "pointer",
                   }}
                 >
-                  {d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
+                  {getLookaheadTitle(d)} | {d.project_name || "Project"} | {daysLate}d overdue
                 </span>
               );
             })}
@@ -908,31 +990,6 @@ export default function Deliveries() {
             fontSize: 12,
           }}
         />
-        {!projectId && (
-          <select
-            value={projectId || ""}
-            onChange={(e) => {
-              const val = e.target.value;
-              window.location.href = val ? `?project=${val}` : window.location.pathname;
-            }}
-            style={{
-              height: 32,
-              background: "var(--bg-input)",
-              border: "1px solid var(--border-default)",
-              borderRadius: 8,
-              padding: "0 10px",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
         {["ALL", "Scheduled", "In Transit", "Delivered", "Partial", "Rejected"].map((s) => (
           <button
             key={s}
@@ -942,7 +999,7 @@ export default function Deliveries() {
               borderRadius: 999,
               border: "1px solid var(--divider)",
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface)",
-              color: filterStatus === s ? "#0b1021" : "var(--text-primary)",
+              color: filterStatus === s ? "var(--on-accent)" : "var(--text-primary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer",
@@ -977,7 +1034,7 @@ export default function Deliveries() {
               borderRadius: 8,
               border: "1px solid var(--divider)",
               background: overdueFirst ? "var(--accent)" : "var(--bg-surface)",
-              color: overdueFirst ? "#0b1021" : "var(--text-primary)",
+              color: overdueFirst ? "var(--on-accent)" : "var(--text-primary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer",
@@ -1007,7 +1064,7 @@ export default function Deliveries() {
             </div>
           </div>
           {dayList.map((day, idx) => {
-            const dayDeliveries = deliveries.filter(
+            const dayDeliveries = scopedDeliveries.filter(
               (d) => d.scheduled_date && isSameDay(new Date(d.scheduled_date), day) && d.status !== "Delivered"
             );
             const isToday = isSameDay(day, today);
@@ -1070,14 +1127,15 @@ export default function Deliveries() {
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>{d.vendor}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>{getLookaheadTitle(d)}</span>
                           {renderStatusPill(d.status)}
                         </div>
                         <div style={{ fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {d.description}
+                          {d.vendor || "Vendor pending"}
                         </div>
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                          {d.pieces || 0} pcs · {d.weight_tons || 0}T · {d.project_name || ""}
+                          {d.project_name || "Project"}
+                          {d.weight_tons ? ` | ${d.weight_tons}T` : ""}
                           {isLate && <span style={{ marginLeft: 6, color: "var(--status-error)" }}>{Math.ceil((today - new Date(d.scheduled_date)) / 86400000)}d late</span>}
                         </div>
                       </div>
@@ -1100,7 +1158,7 @@ export default function Deliveries() {
             .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date))
             .map((d) => (
               <div key={d.id} style={{ padding: "6px 16px", borderBottom: "1px solid var(--divider)", fontSize: 10, color: "var(--text-primary)" }}>
-                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.description} · {d.weight_tons || 0}T
+                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} | {getLookaheadTitle(d)} | {d.project_name || "Project"}
               </div>
             ))}
         </div>
@@ -1139,7 +1197,7 @@ export default function Deliveries() {
                 <div>Required</div>
                 <div>Actions</div>
               </div>
-              {projectId ? filtered.map(renderRow) : Object.entries(grouped || {}).map(([name, list]) => renderProjectGroup(name, list))}
+              {scopeView === "project" && selectedProjectId ? filtered.map(renderRow) : Object.entries(grouped || {}).map(([name, list]) => renderProjectGroup(name, list))}
             </div>
           ) : (
             <TimelineView />
@@ -1252,8 +1310,8 @@ export default function Deliveries() {
       )}
 
       {/* Modals */}
-      {showForm && <DeliveryFormModal projectId={projectId} onClose={() => setShowForm(false)} />}
-      {editing && <DeliveryFormModal projectId={editing.project_id || projectId} delivery={editing} onClose={() => setEditing(null)} />}
+      {showForm && <DeliveryFormModal projectId={selectedProjectId || defaultProjectId} onClose={() => setShowForm(false)} />}
+      {editing && <DeliveryFormModal projectId={editing.project_id || selectedProjectId || defaultProjectId} delivery={editing} onClose={() => setEditing(null)} />}
       <DetailDrawer />
       <DeleteDialog
         open={!!deleteTarget}
@@ -1293,3 +1351,4 @@ function GridRow({ label, value, action, actionLabel }) {
     </div>
   );
 }
+

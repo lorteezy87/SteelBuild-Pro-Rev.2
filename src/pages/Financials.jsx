@@ -63,6 +63,22 @@ function varianceColor(value) {
   return "var(--text-muted)";
 }
 
+function buildCostCodePayload(data, projects = []) {
+  const project = projects.find((item) => item.id === data.project_id);
+  return {
+    cost_code_number: data.cost_code_number || "",
+    description: data.description || "",
+    budget_amount: safeNumber(data.budget_amount),
+    actual_cost: safeNumber(data.actual_cost),
+    committed_cost: safeNumber(data.committed_cost),
+    forecast_to_complete: safeNumber(data.forecast_to_complete),
+    project_id: data.project_id || "",
+    project_name: project?.name || data.project_name || "",
+    notes: data.notes || "",
+    phase: data.phase || "Materials",
+  };
+}
+
 function SummaryCard({ label, value, detail, tone = "var(--accent)" }) {
   return (
     <div
@@ -202,34 +218,34 @@ export default function Financials() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const qc = useQueryClient();
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading, isError: projectsError, error: projectsErrorDetails } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
 
-  const { data: costCodes = [] } = useQuery({
+  const { data: costCodes = [], isLoading: costCodesLoading, isError: costCodesError, error: costCodesErrorDetails } = useQuery({
     queryKey: ["cost-codes", projectId],
     queryFn: () => (projectId ? base44.entities.CostCode.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     initialData: [],
   });
 
-  const { data: changeOrders = [] } = useQuery({
+  const { data: changeOrders = [], isLoading: changeOrdersLoading, isError: changeOrdersError, error: changeOrdersErrorDetails } = useQuery({
     queryKey: ["change-orders", projectId],
     queryFn: () => (projectId ? base44.entities.ChangeOrder.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     initialData: [],
   });
 
-  const { data: expenses = [] } = useQuery({
+  const { data: expenses = [], isLoading: expensesLoading, isError: expensesError, error: expensesErrorDetails } = useQuery({
     queryKey: ["expenses", projectId],
     queryFn: () => (projectId ? base44.entities.Expense.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
     initialData: [],
   });
 
-  const { data: sovItems = [] } = useQuery({
+  const { data: sovItems = [], isLoading: sovItemsLoading, isError: sovItemsError, error: sovItemsErrorDetails } = useQuery({
     queryKey: ["sov-items", projectId],
     queryFn: () => (projectId ? base44.entities.SOVItem.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
@@ -239,7 +255,7 @@ export default function Financials() {
   const costCodeQueryKeys = [["cost-codes", projectId], ["cost-codes"]];
 
   const createMut = useMutation({
-    mutationFn: (data) => base44.entities.CostCode.create(data),
+    mutationFn: (data) => base44.entities.CostCode.create(buildCostCodePayload(data, projects)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, costCodeQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, costCodeQueryKeys);
@@ -250,7 +266,7 @@ export default function Financials() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
+    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, buildCostCodePayload(data, projects)),
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, costCodeQueryKeys, updated);
       await invalidateCrudQueries(qc, costCodeQueryKeys);
@@ -273,6 +289,15 @@ export default function Financials() {
   const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null;
   const approvedChangeOrders = useMemo(() => changeOrders.filter((changeOrder) => changeOrder.status === "Approved"), [changeOrders]);
   const activeExpenses = useMemo(() => expenses.filter((expense) => expense.payment_status !== "Voided"), [expenses]);
+  const loadingFinancials = projectsLoading || costCodesLoading || changeOrdersLoading || expensesLoading || sovItemsLoading;
+  const financialsError =
+    projectsErrorDetails ||
+    costCodesErrorDetails ||
+    changeOrdersErrorDetails ||
+    expensesErrorDetails ||
+    sovItemsErrorDetails ||
+    null;
+  const hasFinancialsError = projectsError || costCodesError || changeOrdersError || expensesError || sovItemsError;
 
   const costCodeRows = useMemo(() => {
     const byCostCodeId = approvedChangeOrders.reduce((acc, changeOrder) => {
@@ -284,15 +309,23 @@ export default function Financials() {
 
     return costCodes.map((costCode) => {
       const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number || expense.cost_code_id === costCode.id);
-      const actual = relatedExpenses
+      const expenseActual = relatedExpenses
         .filter((expense) => expense.payment_status === "Paid")
         .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
-      const committed = relatedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
+      const expenseCommitted = relatedExpenses
+        .filter((expense) => expense.payment_status !== "Paid")
+        .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
+      const manualActual = safeNumber(costCode.actual_cost);
+      const manualCommitted = safeNumber(costCode.committed_cost);
+      const manualForecast = safeNumber(costCode.forecast_to_complete);
+      const actual = Math.max(manualActual, expenseActual);
+      const committed = Math.max(manualCommitted, expenseCommitted);
       const signedExtras = safeNumber(byCostCodeId[costCode.id]);
       const revisedBudget = safeNumber(costCode.budget_amount);
       const originalEstimate = revisedBudget - signedExtras;
       const exposure = actual + committed;
-      const remainingBudget = revisedBudget - exposure;
+      const forecastTotal = Math.max(manualForecast, exposure);
+      const remainingBudget = revisedBudget - forecastTotal;
       const usedPct = revisedBudget > 0 ? (exposure / revisedBudget) * 100 : 0;
       const family = getFamilyMeta(`${costCode.phase || ""} ${costCode.description || ""}`);
 
@@ -304,6 +337,7 @@ export default function Financials() {
         original_estimate: originalEstimate,
         revised_budget: revisedBudget,
         exposure,
+        forecast_total: forecastTotal,
         remaining_budget: remainingBudget,
         used_pct: usedPct,
         family_label: family.label,
@@ -324,6 +358,13 @@ export default function Financials() {
       return [row.cost_code_number, row.description, row.phase, row.family_label].some((value) => String(value || "").toLowerCase().includes(q));
     });
   }, [costCodeRows, filterPhase, search]);
+
+  const handleSaveCostCode = async (data) => {
+    if (editingCostCode) {
+      return updateMut.mutateAsync({ id: editingCostCode.id, data });
+    }
+    return createMut.mutateAsync(data);
+  };
 
   const groupedSovRows = useMemo(() => {
     const familyTotals = {};
@@ -402,11 +443,12 @@ export default function Financials() {
     const actual = costCodeRows.reduce((sum, row) => sum + safeNumber(row.actual_cost), 0);
     const committed = costCodeRows.reduce((sum, row) => sum + safeNumber(row.committed_cost), 0);
     const exposure = costCodeRows.reduce((sum, row) => sum + safeNumber(row.exposure), 0);
-    const remainingBudget = revisedBudget - exposure;
+    const forecastTotal = costCodeRows.reduce((sum, row) => sum + safeNumber(row.forecast_total), 0);
+    const remainingBudget = revisedBudget - forecastTotal;
     const approvedExtras = approvedChangeOrders.reduce((sum, changeOrder) => sum + safeNumber(changeOrder.co_amount), 0);
-    const budgetSpentPct = revisedBudget > 0 ? (exposure / revisedBudget) * 100 : 0;
+    const budgetSpentPct = revisedBudget > 0 ? (forecastTotal / revisedBudget) * 100 : 0;
     const sovVsContract = contractValue > 0 ? sovTotal - contractValue : 0;
-    const marginAtRisk = contractValue - exposure;
+    const marginAtRisk = contractValue - forecastTotal;
 
     return {
       contractValue,
@@ -416,6 +458,7 @@ export default function Financials() {
       actual,
       committed,
       exposure,
+      forecastTotal,
       remainingBudget,
       approvedExtras,
       budgetSpentPct,
@@ -471,6 +514,45 @@ export default function Financials() {
     );
   }
 
+  if (loadingFinancials) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ ...mono, fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Loading Budget Control
+        </div>
+        <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Pulling cost codes, expenses, change orders, and SOV data.
+        </div>
+      </div>
+    );
+  }
+
+  if (hasFinancialsError) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ ...mono, fontSize: 12, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Budget Control Failed To Load
+        </div>
+        <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          {financialsError?.message || "One or more financial datasets could not be loaded."}
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedProject) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ ...mono, fontSize: 12, color: "var(--status-warning)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Project Data Missing
+        </div>
+        <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          The selected project record could not be resolved for Budget Control.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <PageHeader
@@ -486,7 +568,7 @@ export default function Financials() {
           qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
           qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
         }}
-        addLabel="New Cost Code"
+        addLabel="Create Cost Code"
       />
 
       <SectionTabs active={activeView} onChange={setActiveView} />
@@ -495,8 +577,8 @@ export default function Financials() {
         <SummaryCard label="Contract Value" value={formatCurrencyShort(summary.contractValue)} detail={`Project ${selectedProject?.project_number || "—"}`} />
         <SummaryCard label="SOV Total" value={formatCurrencyShort(summary.sovTotal)} detail={`Variance to contract ${formatSigned(summary.sovVsContract)}`} tone={Math.abs(summary.sovVsContract) > 1 ? "var(--status-warning)" : "var(--accent)"} />
         <SummaryCard label="Revised Budget" value={formatCurrencyShort(summary.revisedBudget)} detail={`Approved extras ${formatCurrencyShort(summary.approvedExtras)}`} tone="var(--status-info)" />
-        <SummaryCard label="Actual Cost" value={formatCurrencyShort(summary.actual)} detail={`Committed ${formatCurrencyShort(summary.committed)}`} tone="var(--status-warning)" />
-        <SummaryCard label="Exposure" value={formatCurrencyShort(summary.exposure)} detail={`Budget used ${formatPercent(summary.budgetSpentPct, 1)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-warning)"} />
+        <SummaryCard label="Actual Cost" value={formatCurrencyShort(summary.actual)} detail={`Open commitments ${formatCurrencyShort(summary.committed)}`} tone="var(--status-warning)" />
+        <SummaryCard label="Exposure" value={formatCurrencyShort(summary.exposure)} detail={`Forecast ${formatCurrencyShort(summary.forecastTotal)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-warning)"} />
         <SummaryCard label="Budget Remaining" value={formatSigned(summary.remainingBudget)} detail={`Margin at risk ${formatCurrencyShort(summary.marginAtRisk)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-success)"} />
       </div>
 
@@ -699,11 +781,7 @@ export default function Financials() {
           setModalOpen(false);
           setEditingCostCode(null);
         }}
-        onSave={(data) => {
-          const payload = { ...data, project_id: data.project_id || projectId };
-          if (editingCostCode?.id) updateMut.mutate({ id: editingCostCode.id, data: payload });
-          else createMut.mutate(payload);
-        }}
+        onSave={(data) => handleSaveCostCode({ ...data, project_id: data.project_id || projectId })}
         costCode={editingCostCode}
         projects={projects}
         existingCodes={costCodes}
@@ -712,7 +790,7 @@ export default function Financials() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget && deleteMut.mutateAsync(deleteTarget.id)}
         title="Delete Cost Code"
         description={`Delete ${deleteTarget?.cost_code_number || "cost code"}?`}
       />

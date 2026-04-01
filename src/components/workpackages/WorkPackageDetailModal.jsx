@@ -38,6 +38,8 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   const phaseColor = PHASE_COLORS[wp.phase] || "var(--text-muted)";
   const statusColor = STATUS_COLORS[wp.status] || "var(--text-muted)";
   const percent = Math.min(100, Math.max(0, Number(wp.percent_complete) || 0));
+  const safeName = wp.name || "Untitled Work Package";
+  const safeNumber = wp.wp_number || "WP-—";
 
   return (
     <>
@@ -75,10 +77,10 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
-                {wp.wp_number}
+                {safeNumber}
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
-                {wp.name}
+                {safeName}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <Pill text={wp.phase || "—"} color={phaseColor} />
@@ -181,7 +183,7 @@ function DrawingsTab({ wp, drawingMap }) {
   if (!ids.length) {
     return (
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
-        No drawings linked — add via Edit.
+        No drawings linked — use Save Changes in Edit Work Package.
       </div>
     );
   }

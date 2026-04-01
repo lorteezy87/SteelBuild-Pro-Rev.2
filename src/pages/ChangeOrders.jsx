@@ -16,6 +16,28 @@ import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 
+function buildChangeOrderPayload(data, activeProject, projects = []) {
+  const projectId = data.project_id || activeProject?.id || "";
+  const project = projects.find((item) => item.id === projectId);
+
+  return {
+    project_id: projectId,
+    project_name: project?.name || data.project_name || "",
+    co_number: data.co_number || "",
+    title: data.title || "",
+    description: data.description || "",
+    reason_code: data.reason_code || "Owner Request",
+    status: data.status || "Draft",
+    cost_code_id: data.cost_code_id || "",
+    submitted_date: data.submitted_date || "",
+    approved_date: data.approved_date || "",
+    co_amount: Number(data.co_amount) || 0,
+    approved_by: data.approved_by || "",
+    notes: data.notes || "",
+    attachments: data.attachments || "",
+  };
+}
+
 export default function ChangeOrders() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
@@ -54,17 +76,23 @@ export default function ChangeOrders() {
       if (!coNumber) {
         coNumber = `CO-${String((cos.length || 0) + 1).padStart(3, "0")}`;
       }
-      return base44.entities.ChangeOrder.create({
-        ...d,
-        co_number: coNumber,
-        project_id: d.project_id || activeProject?.id,
-      });
+      return base44.entities.ChangeOrder.create(
+        buildChangeOrderPayload(
+          {
+            ...d,
+            co_number: coNumber,
+            project_id: d.project_id || activeProject?.id,
+          },
+          activeProject,
+          projects
+        )
+      );
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Change order created"); },
     onError: (err) => { toast.error("Failed to create change order: " + (err?.message || "Unknown error")); },
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ChangeOrder.update(id, data),
+    mutationFn: ({ id, data }) => base44.entities.ChangeOrder.update(id, buildChangeOrderPayload(data, activeProject, projects)),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Change order updated"); },
     onError: (err) => { toast.error("Failed to update change order: " + (err?.message || "Unknown error")); },
   });
@@ -73,8 +101,17 @@ export default function ChangeOrders() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); setDeleteTarget(null); toast.success("Change order deleted"); },
     onError: () => { toast.error("Failed to delete change order"); },
   });
+  const handleSave = async (data) => {
+    if (editing) {
+      return updateMut.mutateAsync({ id: editing.id, data });
+    }
+    return createMut.mutateAsync(data);
+  };
 
-  const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
+  const handleDelete = async () => {
+    if (!deleteTarget?.id || deleteMut.isPending) return;
+    return deleteMut.mutateAsync(deleteTarget.id);
+  };
 
   const approvedVal = cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
   const pendingVal = cos.filter(c => c.status === "Submitted" || c.status === "Under Review").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
@@ -127,7 +164,7 @@ export default function ChangeOrders() {
 
   return (
     <div>
-      <PageHeader title="Change Orders" subtitle={`${cos.length} change orders`} onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
+      <PageHeader title="Change Orders" subtitle={`${cos.length} change orders`} onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="Create CO" />
       <KPIStrip items={kpis} />
 
       {/* Contract Waterfall */}
@@ -205,7 +242,7 @@ export default function ChangeOrders() {
       </PhoenixPanel>
 
       <COFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={handleSave} co={editing} projects={projects} nextNumber={`CO-${String((cos.length || 0) + 1).padStart(3, "0")}`} />
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Change Order" description={`Delete ${deleteTarget?.co_number}?`} />
+      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Change Order" description={`Delete ${deleteTarget?.co_number}?`} />
     </div>
   );
 }

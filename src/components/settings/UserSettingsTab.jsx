@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
 const S = {
@@ -29,8 +28,7 @@ export default function UserSettingsTab({ user, onSave }) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await base44.auth.updateMe(form);
-      onSave(form);
+      await onSave(form);
       toast.success('Profile updated');
     } catch (err) {
       toast.error('Failed to update profile');

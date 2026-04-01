@@ -91,7 +91,7 @@ export default function WarrantyFormModal({ projectId, warranty = null, onClose,
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}>
       <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "700px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
-        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{isEditing ? "Edit Warranty" : "Add Warranty"}</h2>
+        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{isEditing ? "Edit Warranty" : "Create Warranty"}</h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
@@ -175,7 +175,7 @@ export default function WarrantyFormModal({ projectId, warranty = null, onClose,
 
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>
-            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim()} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim() ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim() ? 0.5 : 1 }}>{isSaving ? (isEditing ? "Saving..." : "Adding...") : (isEditing ? "Save Warranty" : "Add Warranty")}</button>
+            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim()} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim() ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.component_description?.trim() || !formData.vendor_name?.trim() ? 0.5 : 1 }}>{isSaving ? "Saving..." : (isEditing ? "Save Changes" : "Create Warranty")}</button>
           </div>
         </div>
       </div>

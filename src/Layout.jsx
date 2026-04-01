@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
@@ -26,7 +26,7 @@ const PRIMARY_TABS = [
 { label: "SCHEDULE", pages: ["Schedule", "GanttChart", "LookAheadSchedule"] },
 { label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes"] },
 { label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV"] },
-{ label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
+{ label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement", "Equipment"] },
 { label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "DecisionLog", "AlertsCenter", "Activity"] },
 { label: "QUALITY", pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
 { label: "CLOSEOUT", pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] }];
@@ -47,6 +47,40 @@ const TAB_DEFAULT_PAGE = {
   "QUALITY": "Inspections",
   "CLOSEOUT": "ProjectCloseout"
 };
+
+const PROJECT_REQUIRED_PAGES = new Set([
+  "Submittals",
+  "DrawingViewer",
+  "ModelViewer",
+  "RFIs",
+  "RFIHub",
+  "Deliveries",
+  "Schedule",
+  "WorkPackages",
+  "Constraints",
+  "FabRelease",
+  "Procurement",
+  "DailyLogs",
+  "ProductionNotes",
+  "Financials",
+  "CostDashboard",
+  "SOV",
+  "ChangeOrders",
+  "Documents",
+  "ResourceScheduling",
+  "ResourceManagement",
+  "Equipment",
+  "Inspections",
+  "Safety",
+  "Punchlist",
+  "QualityControl",
+  "ProjectCloseout",
+  "Warranty",
+  "ChangeRequests",
+  "Meetings",
+  "ActionItems",
+  "Expenses"
+]);
 
 const ALL_MODULES = [
 { icon: "◈", name: "Dashboard", group: "Overview", page: "Dashboard" },
@@ -77,6 +111,7 @@ const ALL_MODULES = [
 { icon: "📊", name: "SOV", group: "Cost", page: "SOV" },
 { icon: "$", name: "Change Orders", group: "Cost", page: "ChangeOrders" },
 { icon: "👥", name: "Resources", group: "Resources", page: "ResourceManagement" },
+{ icon: "⚙", name: "Equipment", group: "Resources", page: "Equipment" },
 { icon: "▨", name: "Crew Scheduling", group: "Resources", page: "ResourceScheduling" },
 { icon: "📋", name: "Job Status Report", group: "Reporting", page: "JobStatusReport" },
 { icon: "✨", name: "Portfolio Overview", group: "Reporting", page: "AIInsights" },
@@ -208,6 +243,7 @@ const NAV_GROUPS = [
   items: [
   { label: "Gantt Schedule", icon: "▥", page: "Schedule" },
   { label: "Resource Board", icon: "👥", page: "ResourceManagement" },
+  { label: "Equipment Tracker", icon: "⚙", page: "Equipment" },
   { label: "Weekly Look-Ahead", icon: "📅", page: "LookAheadSchedule" }]
 
 },
@@ -244,7 +280,9 @@ const getColumn = (groupLabel) => {
 function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {} }) {
   const ref = useRef(null);
   const [search, setSearch] = useState("");
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -909,6 +947,53 @@ function PMAButton() {
 }
 
 // ─── Main Layout ──────────────────────────────────────────────────
+function ProjectScopedContent({ currentPageName, children }) {
+  const { activeProject } = useProjectContext();
+  const requiresProject = PROJECT_REQUIRED_PAGES.has(currentPageName);
+
+  if (!requiresProject || activeProject) return children;
+
+  return (
+    <div style={{
+      minHeight: "calc(100vh - 84px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24
+    }}>
+      <div className="sbp-panel" style={{ maxWidth: 720, width: "100%", padding: 32 }}>
+        <div className="section-divider" style={{ marginBottom: 20 }}>
+          <span className="section-divider-title">Project Required</span>
+          <div className="section-divider-line" />
+        </div>
+        <h1 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 28,
+          lineHeight: 1,
+          margin: "0 0 14px 0",
+          color: "var(--text-primary)",
+          textTransform: "uppercase",
+          letterSpacing: "-0.02em"
+        }}>
+          Select a Project to Open {currentPageName}
+        </h1>
+        <p style={{
+          margin: "0 0 20px 0",
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: "var(--text-secondary)",
+          maxWidth: 560
+        }}>
+          Operational modules are project-scoped. Portfolio rollups stay on the dashboard and portfolio overview pages.
+        </p>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          Use the project pill in the header to switch into a project workspace.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   
@@ -919,7 +1004,9 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 900 : false
+  );
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 900);
@@ -980,7 +1067,8 @@ export default function Layout({ children, currentPageName }) {
   const overdueDrawingCount = navDrawings.filter((drawing) =>
     drawing.due_date &&
     new Date(drawing.due_date) < new Date() &&
-    drawing.stage !== "Released"
+    drawing.stage !== "Released" &&
+    !drawing.is_superseded
   ).length;
 
   const overdueDeliveryCount = navDeliveries.filter((d) =>
@@ -1285,7 +1373,9 @@ export default function Layout({ children, currentPageName }) {
 
         {/* CONTENT */}
         <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 16, background: "var(--bg-base)", color: "var(--text-primary)" }}>
-          {children}
+          <ProjectScopedContent currentPageName={currentPageName}>
+            {children}
+          </ProjectScopedContent>
         </main>
 
         {/* Global Search Modal */}

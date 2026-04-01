@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { differenceInDays } from "date-fns";
 import { Plus, RefreshCw, Search, CheckCircle2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import { parseUTCDate, formatDate } from "@/components/shared/formatters";
 import { getNextFormattedNumber, previewNextFormattedNumber } from "../components/shared/numberSequencing";
 
@@ -247,7 +249,7 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
                   updateMut.mutate({ response_text: answerText });
                   setEditingAnswer(false);
                   toast.success("Response saved");
-                }} style={{ background: "var(--accent)", color: "#002E6A", border: "none", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
+                }} style={{ background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
                   Save
                 </button>
                 <button onClick={() => { setEditingAnswer(false); setAnswerText(rfi.response_text || ""); }}
@@ -306,7 +308,7 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
 
 // ── New RFI Modal ──
 function NewRFIModal({ projects, onClose, onSave, isSaving = false }) {
-  const [form, setForm] = useState({ project_id: "", title: "", priority: "High", date_required: "", description: "", drawing_reference: "", ball_in_court: "GC", submitted_by: "", assigned_to: "" });
+  const [form, setForm] = useState({ project_id: projects[0]?.id || "", title: "", priority: "High", date_required: "", description: "", drawing_reference: "", ball_in_court: "GC", submitted_by: "", assigned_to: "" });
   const [numberPreview, setNumberPreview] = useState("");
   const saving = isSaving;
 
@@ -376,7 +378,6 @@ function NewRFIModal({ projects, onClose, onSave, isSaving = false }) {
           <div>
             <label style={labelStyle}>Project</label>
             <select style={iStyle} value={form.project_id} onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}>
-              <option value="">No project</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -423,18 +424,21 @@ function NewRFIModal({ projects, onClose, onSave, isSaving = false }) {
 // ── Main Page ──
 export default function RFIHub() {
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [selectedRFI, setSelectedRFI] = useState(null);
   const [showNewRFI, setShowNewRFI] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const [projectFilter, setProjectFilter] = useState("all");
-  const [expandedProjects, setExpandedProjects] = useState(new Set(["__all"]));
+  const [expandedProjects, setExpandedProjects] = useState(new Set());
 
   const { data: rfis = [], isLoading, refetch } = useQuery({
-    queryKey: ["rfis-hub"],
-    queryFn: () => base44.entities.RFI.list("-submitted_date", 500),
+    queryKey: ["rfis-hub", projectId],
+    queryFn: () => (projectId ? base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date") : []),
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -442,13 +446,15 @@ export default function RFIHub() {
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
+  const currentProject = projectId ? projects.find((project) => project.id === projectId) || activeProject || null : activeProject || null;
 
   const createMut = useMutation({
     mutationFn: async (data) => {
-      const selectedProject = projects.find((project) => project.id === data.project_id);
-      const rfiNumber = data.project_id
+      const targetProjectId = data.project_id || projectId;
+      const selectedProject = projects.find((project) => project.id === targetProjectId) || currentProject;
+      const rfiNumber = targetProjectId
         ? await getNextFormattedNumber({
-            projectId: data.project_id,
+            projectId: targetProjectId,
             recordType: "RFI",
             entityName: "RFI",
             fieldName: "rfi_number",
@@ -457,6 +463,7 @@ export default function RFIHub() {
         : `RFI #${String(Date.now()).slice(-3)}`;
       return base44.entities.RFI.create({
         ...data,
+        project_id: targetProjectId,
         project_name: selectedProject?.name || data.project_name || "",
         rfi_number: rfiNumber,
       });
@@ -503,7 +510,6 @@ export default function RFIHub() {
       if (statusFilter === "answered" && !isClosedStatus(r.status)) return false;
       if (statusFilter === "review" && r.status !== "Under Review") return false;
       if (priorityFilter !== "all" && r.priority !== priorityFilter) return false;
-      if (projectFilter !== "all" && r.project_id !== projectFilter) return false;
       if (q && !(
         r.rfi_number?.toLowerCase().includes(q) ||
         r.title?.toLowerCase().includes(q) ||
@@ -556,14 +562,16 @@ export default function RFIHub() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
           <div>
             <h1 style={{ fontFamily: "Space Grotesk, var(--font-display), sans-serif", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", margin: 0 }}>RFI HUB</h1>
-            <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.14em", marginTop: 3 }}>REQUEST FOR INFORMATION · {rfis.length} TOTAL</div>
+            <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.14em", marginTop: 3 }}>
+              {currentProject?.name || "Current Project"} · REQUEST FOR INFORMATION · {rfis.length} TOTAL
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => refetch()} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "7px 10px", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center" }}>
               <RefreshCw size={14} />
             </button>
-            <button onClick={() => setShowNewRFI(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--accent)", color: "#002E6A", border: "none", borderRadius: 2, ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              <Plus size={14} /> NEW RFI
+            <button onClick={() => setShowNewRFI(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--accent)", color: "var(--on-accent)", border: "none", borderRadius: 2, ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <Plus size={14} /> CREATE RFI
             </button>
           </div>
         </div>
@@ -606,10 +614,9 @@ export default function RFIHub() {
             <option value="all">All Priority</option>
             {["Critical", "High", "Medium", "Low"].map(p => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "7px 10px", fontSize: 11, color: "var(--text-primary)", outline: "none", ...mono, cursor: "pointer" }}>
-            <option value="all">All Projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "0 6px" }}>
+            Project Workspace
+          </div>
         </div>
       </div>
 
@@ -682,7 +689,7 @@ export default function RFIHub() {
       {/* New RFI modal */}
       {showNewRFI && (
         <NewRFIModal
-          projects={projects}
+          projects={currentProject ? [currentProject] : []}
           onClose={() => setShowNewRFI(false)}
           onSave={createMut.mutateAsync}
           isSaving={createMut.isPending}

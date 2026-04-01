@@ -11,26 +11,60 @@ const STAGES = [
 ];
 
 export default function SteelExecutionStatusCard({ wps, drawings }) {
-  // Calculate tonnage per stage from WPs
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0) || 1;
-
-  const detailingTons = wps
-    .filter(w => w.phase === "Detailing")
-    .reduce((s, w) => s + ((Number(w.tonnage) || 0) * ((Number(w.percent_complete) || 0) / 100)), 0);
-  const approvedDrawings = drawings.filter(d => ["OFS","BFS","FFF","Released"].includes(d.stage)).length;
+  const approvedDrawings = drawings.filter((d) => ["OFS", "BFS", "FFF", "Released", "IFC", "Issued for Construction", "Approved"].includes(String(d.stage || d.status || "").trim())).length;
   const totalDrawings = drawings.length || 1;
-  const releasedTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const fabTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase) && (w.status === "In Progress" || w.status === "Complete")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const shippedTons = wps.filter(w => w.phase === "Delivery" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const erectedTons = wps.filter(w => w.phase === "Erection" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+
+  const phaseRank = (phase) => ({ Detailing: 1, Fabrication: 2, Delivery: 3, Erection: 4 }[phase] || 0);
+
+  const stageProgress = (wp, targetRank) => {
+    const tonnage = Number(wp.tonnage) || 0;
+    if (tonnage <= 0) return 0;
+
+    const rank = phaseRank(wp.phase);
+    const rawPct = Math.min(100, Math.max(0, Number(wp.percent_complete) || 0)) / 100;
+    const status = String(wp.status || "");
+    const shopBudget = Number(wp.shop_hours_budget) || 0;
+    const shopActual = Number(wp.shop_hours_actual) || 0;
+    const fieldBudget = Number(wp.field_hours_budget) || 0;
+    const fieldActual = Number(wp.field_hours_actual) || 0;
+
+    if (rank > targetRank) return tonnage;
+
+    if (targetRank === 1) return rank > 1 ? tonnage : tonnage * rawPct;
+    if (targetRank === 2) {
+      if (rank < 2) return 0;
+      if (rank > 2 || status === "Complete") return tonnage;
+      if (shopBudget > 0) return tonnage * Math.min(1, shopActual / shopBudget);
+      return tonnage * rawPct;
+    }
+    if (targetRank === 3) {
+      if (rank < 3) return 0;
+      if (rank > 3 || status === "Complete") return tonnage;
+      return tonnage * Math.max(rawPct, 0.5);
+    }
+    if (targetRank === 4) {
+      if (rank < 4) return 0;
+      if (status === "Complete") return tonnage;
+      if (fieldBudget > 0) return tonnage * Math.min(1, fieldActual / fieldBudget);
+      return tonnage * rawPct;
+    }
+    return 0;
+  };
+
+  const detailingTons = wps.reduce((s, wp) => s + stageProgress(wp, 1), 0);
+  const releasedTons = wps.reduce((s, wp) => s + (phaseRank(wp.phase) >= 2 ? (Number(wp.tonnage) || 0) : 0), 0);
+  const fabTons = wps.reduce((s, wp) => s + stageProgress(wp, 2), 0);
+  const shippedTons = wps.reduce((s, wp) => s + stageProgress(wp, 3), 0);
+  const erectedTons = wps.reduce((s, wp) => s + stageProgress(wp, 4), 0);
 
   const metrics = [
-    { key: "Detailing",   value: detailingTons, pct: Math.round(detailingTons / totalTons * 100), unit: "T", color: "var(--phase-detailing)" },
+    { key: "Detailing",   value: Math.round(detailingTons * 10) / 10, pct: Math.round(detailingTons / totalTons * 100), unit: "T", color: "var(--phase-detailing)" },
     { key: "Approval",    value: approvedDrawings, pct: Math.round(approvedDrawings / totalDrawings * 100), unit: "DWG", color: "var(--accent)" },
-    { key: "Released",    value: releasedTons, pct: Math.round(releasedTons / totalTons * 100), unit: "T", color: "var(--status-warning)" },
-    { key: "Fabrication", value: fabTons, pct: Math.round(fabTons / totalTons * 100), unit: "T", color: "var(--status-warning)" },
-    { key: "Shipped",     value: shippedTons, pct: Math.round(shippedTons / totalTons * 100), unit: "T", color: "var(--status-warning)" },
-    { key: "Erected",     value: erectedTons, pct: Math.round(erectedTons / totalTons * 100), unit: "T", color: "var(--phase-erection)" },
+    { key: "Released",    value: Math.round(releasedTons * 10) / 10, pct: Math.round(releasedTons / totalTons * 100), unit: "T", color: "var(--status-warning)" },
+    { key: "Fabrication", value: Math.round(fabTons * 10) / 10, pct: Math.round(fabTons / totalTons * 100), unit: "T", color: "var(--secondary)" },
+    { key: "Shipped",     value: Math.round(shippedTons * 10) / 10, pct: Math.round(shippedTons / totalTons * 100), unit: "T", color: "var(--status-success)" },
+    { key: "Erected",     value: Math.round(erectedTons * 10) / 10, pct: Math.round(erectedTons / totalTons * 100), unit: "T", color: "var(--phase-erection)" },
   ];
 
   return (

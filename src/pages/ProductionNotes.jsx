@@ -1,6 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Printer,
@@ -13,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
 const CATEGORY_COLORS = {
   General: "var(--text-muted)",
@@ -34,6 +36,9 @@ const PHASE_COLORS = {
 const healthOrder = { "At Risk": 0, Watch: 1, "On Track": 2 };
 export default function ProductionNotes() {
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
 
   const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split("T")[0]);
   const [showDateInput, setShowDateInput] = useState(false);
@@ -51,36 +56,42 @@ export default function ProductionNotes() {
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
   });
+  const selectedProject = projectId ? projects.find((project) => project.id === projectId) || activeProject || null : activeProject || null;
 
   const { data: notes = [] } = useQuery({
-    queryKey: ["production-notes"],
-    queryFn: () => base44.entities.ProductionNote.list("-note_date"),
+    queryKey: ["production-notes", projectId],
+    queryFn: () => (projectId ? base44.entities.ProductionNote.filter({ project_id: projectId }, "-note_date") : []),
     initialData: [],
     refetchInterval: 30000,
+    enabled: !!projectId,
   });
 
   const { data: allWPs = [] } = useQuery({
-    queryKey: ["wps-all"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryKey: ["wps-production", projectId],
+    queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: allRFIs = [] } = useQuery({
-    queryKey: ["rfis-all"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryKey: ["rfis-production", projectId],
+    queryFn: () => (projectId ? base44.entities.RFI.filter({ project_id: projectId }) : []),
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: allDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-all"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryKey: ["deliveries-production", projectId],
+    queryFn: () => (projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : []),
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: allCOs = [] } = useQuery({
-    queryKey: ["cos-all"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryKey: ["cos-production", projectId],
+    queryFn: () => (projectId ? base44.entities.ChangeOrder.filter({ project_id: projectId }) : []),
     initialData: [],
+    enabled: !!projectId,
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ProductionNote.update(id, data),
@@ -151,11 +162,8 @@ export default function ProductionNotes() {
   );
 
   const activeProjects = useMemo(
-    () =>
-      projects.filter(
-        (p) => (!["Closeout", "Complete"].includes(p.phase)) || showClosed
-      ),
-    [projects, showClosed]
+    () => (selectedProject ? [selectedProject] : []),
+    [selectedProject]
   );
 
   const sortedProjects = useMemo(() => {
@@ -416,7 +424,7 @@ export default function ProductionNotes() {
               lineHeight: 1.7,
             }}
           >
-            {buffer || "Click to add notes..."}
+            {buffer || "Create note..."}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, opacity: 0.9, justifyContent: "flex-end", alignItems: "center" }}>
@@ -582,7 +590,7 @@ export default function ProductionNotes() {
               letterSpacing: "0.04em",
             }}
           >
-            <Plus size={16} /> ADD NOTE
+            <Plus size={16} /> CREATE NOTE
           </button>
           <button
             onClick={() => setAllCollapsed((v) => !v)}
@@ -922,7 +930,7 @@ export default function ProductionNotes() {
                           padding: "8px 4px",
                         }}
                       >
-                        — No notes yet. Click + to add the first note for this meeting.
+                        — No notes yet. Use Create Note to add the first note for this meeting.
                       </div>
                     )}
 

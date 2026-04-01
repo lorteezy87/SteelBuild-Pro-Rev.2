@@ -2,13 +2,12 @@ import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
-  X, TrendingUp, TrendingDown, Minus, Users,
-  Activity, DollarSign, AlertCircle, CheckCircle2,
-  Clock, FileText, Package, Loader2
+  X, TrendingUp, Users,
+  Activity, DollarSign, Package, Loader2
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar, Legend
+  Tooltip, ResponsiveContainer, BarChart, Bar
 } from "recharts";
 import { format, parseISO } from "date-fns";
 
@@ -32,12 +31,6 @@ const HEALTH_CFG = {
   "On Track": { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
   "Watch":    { color: "var(--status-warning)", bg: "var(--warning-muted)",  border: "var(--warning-border)" },
   "At Risk":  { color: "var(--status-error)",   bg: "var(--danger-muted)",   border: "var(--danger-border)" },
-};
-
-const STATUS_COLOR = {
-  "Approved": "var(--status-success)", "Answered": "var(--status-success)", "Closed": "var(--status-success)", "Complete": "var(--status-success)", "Paid": "var(--status-success)",
-  "Submitted": "var(--status-warning)", "Under Review": "var(--status-warning)", "Open": "var(--status-warning)", "In Progress": "var(--status-warning)",
-  "Rejected": "var(--status-error)", "At Risk": "var(--status-error)", "Critical": "var(--status-error)",
 };
 
 function SectionHeader({ title, icon: Icon }) {
@@ -88,44 +81,50 @@ const CustomTooltipBudget = ({ active, payload, label }) => {
 
 // ── Main Modal ─────────────────────────────────────────────────────
 export default function ProjectDrilldownModal({ project, onClose }) {
-  if (!project) return null;
-
-  const pid = project.id;
+  const safeProject = project || {};
+  const pid = safeProject.id || "";
+  const hasProject = !!project;
 
   const { data: wps = [], isLoading: wpsLoading } = useQuery({
     queryKey: ["modal-wps", pid],
     queryFn: () => base44.entities.WorkPackage.filter({ project_id: pid }),
     initialData: [],
+    enabled: hasProject,
   });
 
   const { data: cos = [], isLoading: cosLoading } = useQuery({
     queryKey: ["modal-cos", pid],
     queryFn: () => base44.entities.ChangeOrder.filter({ project_id: pid }),
     initialData: [],
+    enabled: hasProject,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["modal-rfis", pid],
     queryFn: () => base44.entities.RFI.filter({ project_id: pid }),
     initialData: [],
+    enabled: hasProject,
   });
 
   const { data: codes = [], isLoading: codesLoading } = useQuery({
     queryKey: ["modal-codes", pid],
     queryFn: () => base44.entities.CostCode.filter({ project_id: pid }),
     initialData: [],
+    enabled: hasProject,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["modal-logs", pid],
     queryFn: () => base44.entities.DailyLog.filter({ project_id: pid }, "-date", 20),
     initialData: [],
+    enabled: hasProject,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["modal-deliveries", pid],
     queryFn: () => base44.entities.Delivery.filter({ project_id: pid }, "-scheduled_date", 10),
     initialData: [],
+    enabled: hasProject,
   });
 
   const isLoading = wpsLoading || cosLoading || rfisLoading || codesLoading || logsLoading;
@@ -136,7 +135,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
       .filter(c => c.approved_date || c.submitted_date)
       .sort((a, b) => new Date(a.approved_date || a.submitted_date) - new Date(b.approved_date || b.submitted_date));
 
-    let runningContract = Number(project.original_contract_value) || 0;
+    let runningContract = Number(safeProject.original_contract_value) || 0;
     const points = [{ month: "Original", contract: runningContract, actual: 0 }];
 
     sortedCOs.forEach((co) => {
@@ -160,7 +159,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     if (points.length > 1) points[points.length - 1].actual = totalActual;
 
     return points.length > 1 ? points : null;
-  }, [cos, codes, project]);
+  }, [cos, codes, safeProject.original_contract_value]);
 
   // ── Cost breakdown by phase ────────────────────────────────────────
   const costByPhase = useMemo(() => {
@@ -178,7 +177,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
   const totalBudget = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
   const totalActual = codes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
   const approvedCOTotal = cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  const revisedContract = (Number(project.original_contract_value) || 0) + approvedCOTotal;
+  const revisedContract = (Number(safeProject.original_contract_value) || 0) + approvedCOTotal;
   const openRFIs = rfis.filter(r => !["Answered", "Closed"].includes(r.status)).length;
   const criticalRFIs = rfis.filter(r => r.priority === "Critical" && !["Answered", "Closed"].includes(r.status)).length;
   const wpsComplete = wps.filter(w => w.status === "Complete").length;
@@ -195,7 +194,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     s + (Number(wp.actual_labor_cost_to_date) || 0) + (Number(wp.actual_material_cost_to_date) || 0), 0);
   const cpi = ac > 0 ? ev / ac : null;
 
-  const health = HEALTH_CFG[project.health_status] || { color: "var(--text-muted)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
+  const health = HEALTH_CFG[safeProject.health_status] || { color: "var(--text-muted)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
 
   // ── Team assignments from WPs ──────────────────────────────────────
   const teamMap = {};
@@ -212,6 +211,8 @@ export default function ProjectDrilldownModal({ project, onClose }) {
   const recentActivity = [...logs]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 8);
+
+  if (!hasProject) return null;
 
   return (
     <div
@@ -251,35 +252,35 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                 fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                 color: health.color, letterSpacing: "0.10em",
               }}>
-                {project.health_status || "UNKNOWN"}
+                {safeProject.health_status || "UNKNOWN"}
               </div>
-              {project.phase && (
+              {safeProject.phase && (
                 <div style={{
                   background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
                   borderRadius: 6, padding: "3px 10px",
                   fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", letterSpacing: "0.08em",
                 }}>
-                  {project.phase}
+                  {safeProject.phase}
                 </div>
               )}
             </div>
             <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: 0, letterSpacing: "0.02em" }}>
-              {project.name}
+              {safeProject.name}
             </h2>
             <div style={{ display: "flex", gap: 16, marginTop: 5 }}>
-              {project.project_number && (
+              {safeProject.project_number && (
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-                  # {project.project_number}
+                  # {safeProject.project_number}
                 </span>
               )}
-              {project.client && (
+              {safeProject.client && (
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>
-                  {project.client}
+                  {safeProject.client}
                 </span>
               )}
-              {project.project_manager && (
+              {safeProject.project_manager && (
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)" }}>
-                  PM: {project.project_manager}
+                  PM: {safeProject.project_manager}
                 </span>
               )}
             </div>

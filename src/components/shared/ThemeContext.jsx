@@ -5,6 +5,7 @@ const ThemeContext = createContext({ theme: "dark", toggleTheme: () => {} });
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     try {
+      if (typeof window === "undefined") return "dark";
       return localStorage.getItem("sbp-theme") || "dark";
     } catch {
       return "dark";
@@ -12,6 +13,7 @@ export function ThemeProvider({ children }) {
   });
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const root = document.documentElement;
     root.setAttribute("data-theme", theme);
     try {

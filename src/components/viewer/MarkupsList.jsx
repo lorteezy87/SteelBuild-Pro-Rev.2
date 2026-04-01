@@ -3,8 +3,12 @@ import { Trash2 } from "lucide-react";
 
 const TYPE_ICON = {
   rect:     "□",
+  circle:   "◯",
+  cloud:    "☁",
   line:     "╱",
   arrow:    "→",
+  measure:  "↔",
+  callout:  "💬",
   freehand: "✏",
   text:     "T",
   stamp:    "■",

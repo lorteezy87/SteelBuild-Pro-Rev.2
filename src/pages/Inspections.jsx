@@ -3,13 +3,15 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function Inspections() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -19,8 +21,9 @@ export default function Inspections() {
     queryFn: () =>
       projectId
         ? base44.entities.Inspection.filter({ project_id: projectId })
-        : base44.entities.Inspection.list("-inspection_date"),
+        : [],
     initialData: [],
+    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -162,7 +165,7 @@ export default function Inspections() {
            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
          >
-           + New Inspection
+           Create Inspection
          </button>
       </div>
 

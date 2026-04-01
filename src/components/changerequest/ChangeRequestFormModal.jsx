@@ -132,7 +132,7 @@ export default function ChangeRequestFormModal({
             letterSpacing: "0.10em",
           }}
         >
-          {isEdit ? "Edit Change Request" : "Submit Change Request"}
+          {isEdit ? "Edit Change Request" : "Create Request"}
         </h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -278,7 +278,7 @@ export default function ChangeRequestFormModal({
                 opacity: isSaving || !formData.project_id || !formData.title?.trim() || !formData.description?.trim() ? 0.5 : 1,
               }}
             >
-              {isSaving ? (isEdit ? "Saving..." : "Submitting...") : (isEdit ? "Save Changes" : "Submit Request")}
+              {isSaving ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Changes" : "Create Request")}
             </button>
           </div>
         </div>

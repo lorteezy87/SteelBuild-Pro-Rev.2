@@ -28,9 +28,9 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
-    onSave({
+    await onSave({
       ...form,
       original_contract_value: Number(form.original_contract_value) || 0,
       retainage_percent: Number(form.retainage_percent) || 0,
@@ -45,10 +45,10 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
     <PhoenixModal
       open={open}
       onClose={onClose}
-      title={project ? "Edit Project" : "New Project"}
+      title={project ? "Edit Project" : "Create Project"}
       footer={<>
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave}>{project ? "Update" : "Create"}</button>
+        <button style={btnPrimary} onClick={handleSave}>{project ? "Save Changes" : "Create Project"}</button>
       </>}
     >
       <div style={grid}>

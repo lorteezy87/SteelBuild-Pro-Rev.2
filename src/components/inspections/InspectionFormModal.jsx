@@ -110,7 +110,7 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
             letterSpacing: "0.10em",
           }}
         >
-          {isEdit ? "Edit Inspection" : "New Inspection"}
+          {isEdit ? "Edit Inspection" : "Create Inspection"}
         </h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -210,7 +210,7 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
           {/* Actions */}
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>
-            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.inspection_date} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.inspection_date ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.inspection_date ? 0.5 : 1 }}>{isSaving ? (isEdit ? "Saving..." : "Creating...") : (isEdit ? "Save Inspection" : "Create Inspection")}</button>
+            <button type="button" onClick={handleSubmit} disabled={isSaving || !formData.project_id || !formData.inspection_date} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving || !formData.project_id || !formData.inspection_date ? "not-allowed" : "pointer", transition: "background 0.15s", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !formData.project_id || !formData.inspection_date ? 0.5 : 1 }}>{isSaving ? "Saving..." : (isEdit ? "Save Changes" : "Create Inspection")}</button>
           </div>
         </div>
       </div>

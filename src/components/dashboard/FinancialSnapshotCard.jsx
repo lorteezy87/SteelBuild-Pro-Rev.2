@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency } from "../shared/formatters";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 function FinRow({ label, value, valueColor, isTotal = false }) {
   return (
@@ -21,9 +21,9 @@ function FinRow({ label, value, valueColor, isTotal = false }) {
 
 export default function FinancialSnapshotCard({ financials, cos }) {
   const navigate = useNavigate();
-  const { contractValue, approvedCOVal, revisedValue, actualSpend, pendingCOVal, budgetCommitted, committedCosts } = financials;
+  const { contractValue, approvedCOVal, revisedValue, actualSpend, pendingCOVal, budgetCommitted, committedCosts, forecastAtCompletion } = financials;
 
-  const variance = revisedValue - actualSpend;
+  const variance = revisedValue - forecastAtCompletion;
   const costPct = budgetCommitted > 0 ? Math.round(actualSpend / budgetCommitted * 100) : 0;
   const varianceColor = variance >= 0 ? "var(--status-success)" : "var(--status-error)";
 
@@ -54,8 +54,9 @@ export default function FinancialSnapshotCard({ financials, cos }) {
         <FinRow label="Budget Committed" value={formatCurrency(budgetCommitted).replace(/\.\d+/, "")} />
         <FinRow label="Cost to Date" value={`${formatCurrency(actualSpend).replace(/\.\d+/, "")} (${costPct}%)`} valueColor={costPct > 100 ? "var(--status-error)" : costPct > 85 ? "var(--status-warning)" : "var(--text-secondary)"} />
         <FinRow label="Committed Costs" value={formatCurrency(committedCosts).replace(/\.\d+/, "")} valueColor="var(--chart-4)" />
+        <FinRow label="Forecast at Completion" value={formatCurrency(forecastAtCompletion).replace(/\.\d+/, "")} valueColor={forecastAtCompletion > budgetCommitted ? "var(--status-warning)" : "var(--status-success)"} />
         {pendingCOVal > 0 && <FinRow label="Pending CO Exposure" value={formatCurrency(pendingCOVal).replace(/\.\d+/, "")} valueColor="var(--status-warning)" />}
-        <FinRow label="Cost Variance" value={`${variance >= 0 ? "+" : ""}${formatCurrency(variance).replace(/\.\d+/, "")}`} valueColor={varianceColor} isTotal />
+        <FinRow label="Forecast Variance" value={`${variance >= 0 ? "+" : ""}${formatCurrency(variance).replace(/\.\d+/, "")}`} valueColor={varianceColor} isTotal />
 
         {/* Cost burn bar */}
         {budgetCommitted > 0 && (

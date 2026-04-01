@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { COST_CODES, COST_CODES_GROUPED } from "../shared/costCodes";
 
@@ -57,7 +55,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       actual_cost: Number(form.actual_cost) || 0,
       committed_cost: Number(form.committed_cost) || 0,
       forecast_to_complete: Number(form.forecast_to_complete) || 0,
-      phase: form.phase || "Materials"
+      phase: COST_CODES.find((c) => c.code === selectedCode)?.category || form.phase || "Materials"
     };
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
@@ -100,8 +98,11 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
             fontSize: 20,
             fontWeight: 700
           }}>
-            {costCode ? "Edit Cost Code" : "New Cost Code"}
+            {costCode ? "Edit Cost Code" : "Create Cost Code"}
           </DialogTitle>
+          <DialogDescription style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 12 }}>
+            Configure budget, actuals, commitments, and forecast values for this project cost bucket.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div className="sm:col-span-2">
@@ -475,7 +476,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               boxShadow: '0 4px 14px var(--accent-muted)'
             }}>
 
-            {costCode ? "UPDATE" : "CREATE"}
+            {costCode ? "SAVE CHANGES" : "CREATE COST CODE"}
           </button>
           </DialogFooter>
       </DialogContent>

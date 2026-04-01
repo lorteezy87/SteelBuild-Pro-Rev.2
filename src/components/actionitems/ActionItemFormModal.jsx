@@ -113,7 +113,7 @@ export default function ActionItemFormModal({
               letterSpacing: "0.10em",
             }}
           >
-            {actionItem ? `Edit: ${actionItem.title}` : "New Action Item"}
+            {actionItem ? `Edit: ${actionItem.title}` : "Create Action Item"}
           </h2>
         </div>
 
@@ -487,7 +487,7 @@ export default function ActionItemFormModal({
               opacity: mutation.isPending && !actionItem ? 0.5 : 1,
             }}
           >
-            {actionItem ? "Update Action Item" : mutation.isPending ? "Creating..." : "Create Item"}
+            {actionItem ? "Save Changes" : mutation.isPending ? "Creating..." : "Create Action Item"}
           </button>
         </div>
       </div>

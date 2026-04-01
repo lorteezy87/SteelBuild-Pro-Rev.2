@@ -2,10 +2,11 @@ import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
 import { formatCurrency } from "@/components/shared/formatters";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
 
 const PHASE_CONFIG = {
@@ -45,7 +46,7 @@ function StatPill({ label, value, color = "var(--text-muted)" }) {
   );
 }
 
-function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdit }) {
+function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdit, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG["On Track"];
@@ -150,6 +151,12 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         >
           EDIT
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(project); }}
+          style={{ background: "transparent", border: "1px solid rgba(255,61,61,0.18)", borderRadius: 6, padding: "3px 8px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 8, cursor: "pointer", transition: "all 0.15s" }}
+        >
+          DELETE
+        </button>
       </div>
     </div>
   );
@@ -158,6 +165,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
 export default function Projects() {
   const navigate  = useNavigate();
   const qc        = useQueryClient();
+  const { activeProject, setActiveProject, refreshProjects } = useProjectContext();
   const [search,       setSearch]       = useState("");
   const [phaseFilter,  setPhaseFilter]  = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -165,25 +173,80 @@ export default function Projects() {
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editing,      setEditing]      = useState(null);
   const [detailProject, setDetailProject] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_date"),    initialData: [] });
   const { data: workPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list(),                initialData: [] });
   const { data: rfis         = [] } = useQuery({ queryKey: ["rfis-all"],          queryFn: () => base44.entities.RFI.list(),                        initialData: [] });
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list(),                initialData: [] });
 
+  const buildProjectPayload = (data) => ({
+    project_number: data.project_number || "",
+    name: data.name || "",
+    client: data.client || "",
+    general_contractor: data.general_contractor || "",
+    engineer_of_record: data.engineer_of_record || "",
+    project_manager: data.project_manager || "",
+    superintendent: data.superintendent || "",
+    contract_type: data.contract_type || "Lump Sum",
+    original_contract_value: Number(data.original_contract_value) || 0,
+    start_date: data.start_date || "",
+    target_completion_date: data.target_completion_date || "",
+    forecast_completion_date: data.forecast_completion_date || "",
+    phase: data.phase || "Detailing",
+    health_status: data.health_status || "On Track",
+    retainage_percent: Number(data.retainage_percent) || 0,
+    contingency_amount: Number(data.contingency_amount) || 0,
+    address: data.address || "",
+    notes: data.notes || "",
+  });
+
   const createMut = useMutation({
-    mutationFn: (d) => base44.entities.Project.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
+    mutationFn: (data) => base44.entities.Project.create(buildProjectPayload(data)),
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      await refreshProjects();
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Project created");
+    },
     onError: (err) => toast.error(err.message),
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Project.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
+    mutationFn: ({ id, data }) => base44.entities.Project.update(id, buildProjectPayload(data)),
+    onSuccess: async (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      await refreshProjects();
+      if (detailProject?.id === variables.id) {
+        setDetailProject((prev) => prev ? { ...prev, ...variables.data } : prev);
+      }
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Project updated");
+    },
     onError: (err) => toast.error(err.message),
   });
-  const handleSave = (d) => {
-    if (editing) updateMut.mutate({ id: editing.id, data: d });
-    else createMut.mutate(d);
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.Project.delete(id),
+    onSuccess: async (_, id) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      if (detailProject?.id === id) setDetailProject(null);
+      if (activeProject?.id === id) setActiveProject(null);
+      await refreshProjects();
+      setDeleteTarget(null);
+      toast.success("Project deleted");
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete project"),
+  });
+  const handleSave = async (data) => {
+    if (editing) {
+      return updateMut.mutateAsync({ id: editing.id, data });
+    }
+    return createMut.mutateAsync(data);
+  };
+  const handleDelete = () => {
+    if (!deleteTarget?.id || deleteMut.isPending) return;
+    deleteMut.mutate(deleteTarget.id);
   };
 
   const kpis = useMemo(() => {
@@ -227,7 +290,7 @@ export default function Projects() {
             onClick={() => { setEditing(null); setModalOpen(true); }}
             style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
           >
-            + New Project
+            Create Project
           </button>
         </div>
       </div>
@@ -302,6 +365,7 @@ export default function Projects() {
                 changeOrders={changeOrders}
                 onClick={() => setDetailProject(p)}
                 onEdit={(proj) => { setEditing(proj); setModalOpen(true); }}
+                onDelete={setDeleteTarget}
               />
             ))}
           </div>
@@ -314,8 +378,8 @@ export default function Projects() {
       ) : (
         /* List View */
         <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px", gap: 12, padding: "10px 16px", background: "var(--bg-surface-secondary)", borderBottom: "1px solid var(--border-default)" }}>
-            {["Project","GC / Client","Phase","Progress","Contract","Health","Due","RFIs"].map(col => (
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px 110px", gap: 12, padding: "10px 16px", background: "var(--bg-surface-secondary)", borderBottom: "1px solid var(--border-default)" }}>
+            {["Project","GC / Client","Phase","Progress","Contract","Health","Due","RFIs","Actions"].map(col => (
               <div key={col} style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{col}</div>
             ))}
           </div>
@@ -331,7 +395,7 @@ export default function Projects() {
             return (
               <div key={p.id}
                 onClick={() => setDetailProject(p)}
-                style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px", gap: 12, padding: "11px 16px", borderBottom: "1px solid var(--divider)", borderLeft: `3px solid ${phase.color}`, cursor: "pointer", transition: "background 0.1s", alignItems: "center" }}
+                style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px 110px", gap: 12, padding: "11px 16px", borderBottom: "1px solid var(--divider)", borderLeft: `3px solid ${phase.color}`, cursor: "pointer", transition: "background 0.1s", alignItems: "center" }}
                 onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
@@ -356,6 +420,14 @@ export default function Projects() {
                 </div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{target}</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: pRFIs > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>{pRFIs}</div>
+                <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => { setEditing(p); setModalOpen(true); }} style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 6, padding: "4px 8px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, cursor: "pointer" }}>
+                    EDIT
+                  </button>
+                  <button onClick={() => setDeleteTarget(p)} style={{ background: "transparent", border: "1px solid rgba(255,61,61,0.18)", borderRadius: 6, padding: "4px 8px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 8, cursor: "pointer" }}>
+                    DELETE
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -370,6 +442,14 @@ export default function Projects() {
           project={editing}
         />
       )}
+
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Project"
+        description={`Delete ${deleteTarget?.name || "this project"}? This cannot be undone.`}
+      />
 
       {detailProject && (
         <ProjectDetailView

@@ -31,6 +31,7 @@ export default function WorkPackageList({
   onExpand,
   onEdit,
   onDelete,
+  onCreate,
   showProject = false,
 }) {
   const drawingMap = useMemo(() => {
@@ -65,6 +66,26 @@ export default function WorkPackageList({
         </div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
           Create a work package to get started.
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <button
+            onClick={() => onCreate?.()}
+            style={{
+              background: "var(--accent)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            Create Work Package
+          </button>
         </div>
       </div>
     );

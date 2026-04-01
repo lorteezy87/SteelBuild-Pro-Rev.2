@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { PHASES, PHASE_COLORS, sortByPhase, derivePhase } from "../../utils/phases";
 import { formatDateShort } from "../shared/formatters";
 
@@ -25,10 +25,18 @@ const sortByDate = (a, b) => {
 
 const fmtDate = (d) => formatDateShort(d);
 
-export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds = new Set(), onToggleSelect }) {
+export default function ScheduleTaskList({
+  tasks,
+  onEdit,
+  onDelete,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleSelectAll,
+}) {
   const [sortBy, setSortBy] = useState("start_date");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const selectAllRef = useRef(null);
 
   // Apply filters first
   const filtered = tasks.filter((t) => {
@@ -55,6 +63,17 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
     tasks: sortTasks(filtered.filter((t) => derivePhase(t) === phase)),
   })).filter((g) => g.tasks.length > 0);
 
+  const filteredIds = filtered.map((task) => task.id);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const someFilteredSelected = filteredIds.some((id) => selectedIds.has(id));
+  const selectedVisibleCount = filteredIds.filter((id) => selectedIds.has(id)).length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someFilteredSelected && !allFilteredSelected;
+    }
+  }, [allFilteredSelected, someFilteredSelected]);
+
   const selectStyle = {
     background: "var(--bg-input)",
     border: "1px solid var(--border-default)",
@@ -71,7 +90,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Filters */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={selectStyle}>
           <option value="phase">Sort: Phase</option>
           <option value="start_date">Sort: Start Date</option>
@@ -91,6 +110,61 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
           <option value="Complete">Status: Complete</option>
           <option value="Delayed">Status: Delayed</option>
         </select>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              color: someFilteredSelected ? "var(--accent)" : "var(--text-muted)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            {selectedVisibleCount}/{filtered.length} visible selected
+          </span>
+          <button
+            onClick={() => onToggleSelectAll?.(filteredIds, true)}
+            disabled={filteredIds.length === 0 || allFilteredSelected}
+            style={{
+              padding: "7px 10px",
+              border: "1px solid var(--border-default)",
+              borderRadius: 6,
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              cursor: filteredIds.length === 0 || allFilteredSelected ? "not-allowed" : "pointer",
+              opacity: filteredIds.length === 0 || allFilteredSelected ? 0.5 : 1,
+            }}
+          >
+            Select Visible
+          </button>
+          <button
+            onClick={() => onToggleSelectAll?.(filteredIds, false)}
+            disabled={!someFilteredSelected}
+            style={{
+              padding: "7px 10px",
+              border: "1px solid var(--border-default)",
+              borderRadius: 6,
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              cursor: !someFilteredSelected ? "not-allowed" : "pointer",
+              opacity: !someFilteredSelected ? 0.5 : 1,
+            }}
+          >
+            Clear Visible
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -178,15 +252,28 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                 gap: 12,
                 background: "var(--bg-surface-secondary)",
               }}>
-                {["", "Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
-                  <div key={col} style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: "var(--text-muted)",
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                  }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={(e) => onToggleSelectAll?.(filteredIds, e.target.checked)}
+                    disabled={filteredIds.length === 0}
+                    style={{ width: 14, height: 14 }}
+                  />
+                </div>
+                {["Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
+                  <div
+                    key={col}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "var(--text-muted)",
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                    }}
+                  >
                     {col}
                   </div>
                 ))}
@@ -204,7 +291,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                     gap: 12,
                     alignItems: "center",
                     transition: "background 0.1s",
+                    cursor: "pointer",
                   }}
+                  onClick={() => onEdit && onEdit(task)}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
@@ -212,6 +301,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                     <input
                       type="checkbox"
                       checked={selectedIds.has(task.id)}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => onToggleSelect && onToggleSelect(task.id)}
                       style={{ width: 14, height: 14 }}
                     />
@@ -222,7 +312,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, selectedIds 
                       {task.task_name}
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-                      {task.task_number}
+                      {(task.wbs_code || task.task_number || "WBS Pending")} · {task.task_type || "Task"}
                     </div>
                   </div>
 
