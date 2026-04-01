@@ -30,6 +30,13 @@ export default function PMASummary() {
   const [portfolioBrief, setPortfolioBrief] = useState(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
 
+  // Load snapshot if needed
+  useEffect(() => {
+    if (currentProject?.id && !projectSnapshot) {
+      buildProjectSnapshot();
+    }
+  }, [currentProject, projectSnapshot, buildProjectSnapshot]);
+
   // Score risks
   useEffect(() => {
     if (projectSnapshot) {
@@ -74,7 +81,7 @@ FORMAT:
 **RECOMMENDED FOCUS**
 [1 recommendation]`;
       try {
-        const res = await base44.functions.invoke('invokeLLM', { prompt });
+        const res = await base44.functions.invoke('anthropicProxy', { prompt });
         const text = typeof res === 'string' ? res : res?.text || res?.content || res?.response || 'No response';
         setPortfolioBrief(text);
       } catch (e) {
@@ -183,6 +190,7 @@ FORMAT:
         </div>
         <button
           onClick={async () => {
+            await buildProjectSnapshot();
             await generateInsights();
           }}
           style={{

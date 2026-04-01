@@ -154,7 +154,7 @@ export default function ExpenseFormModal({
         <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-default)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              {expense ? `Edit Expense` : 'Create Expense'}
+              {expense ? `Edit Expense` : 'New Expense'}
             </div>
             {proj && <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{proj.name}</div>}
           </div>
@@ -377,7 +377,7 @@ export default function ExpenseFormModal({
           justifyContent: 'space-between',
         }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-            {expense ? `EDITING · ${expense.expense_number || ''}` : 'CREATE EXPENSE'}
+            {expense ? `EDITING · ${expense.expense_number || ''}` : 'NEW EXPENSE'}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button
@@ -420,7 +420,7 @@ export default function ExpenseFormModal({
                 transition: 'all 0.15s',
               }}
             >
-              {isSaving ? 'SAVING...' : (expense ? 'SAVE CHANGES' : 'CREATE EXPENSE')}
+              {isSaving ? (expense ? 'UPDATING...' : 'CREATING...') : (expense ? 'UPDATE EXPENSE' : 'CREATE EXPENSE')}
             </button>
           </div>
         </div>

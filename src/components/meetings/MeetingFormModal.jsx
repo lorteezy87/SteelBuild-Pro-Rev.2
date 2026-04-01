@@ -94,7 +94,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
             letterSpacing: "0.10em",
           }}
         >
-          {isEditing ? "Edit Meeting" : "Create Meeting"}
+          {isEditing ? "Edit Meeting" : "New Meeting"}
         </h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -213,7 +213,7 @@ export default function MeetingFormModal({ projectId, meeting, onSave, onClose, 
                 opacity: isSaving ? 0.5 : 1,
               }}
             >
-              {isSaving ? "Saving..." : isEditing ? "Save Changes" : "Create Meeting"}
+              {isSaving ? "Saving..." : isEditing ? "Update Meeting" : "Create Meeting"}
             </button>
           </div>
         </div>

@@ -1,35 +1,5 @@
 import { base44 } from "@/api/base44Client";
 
-const SEQUENCE_FALLBACKS = {
-  CO: { entityName: "ChangeOrder", fieldName: "co_number", prefix: "CO-", padLength: 3 },
-  EXPENSE: { entityName: "Expense", fieldName: "expense_number", prefix: "EXP-", padLength: 3 },
-  SOV: { entityName: "SOV", fieldName: "sov_id", prefix: "SOV-", padLength: 3 },
-  RFI: { entityName: "RFI", fieldName: "rfi_number", prefix: "RFI-", padLength: 3 },
-  DRAWING: { entityName: "Drawing", fieldName: "drawing_id", prefix: "DWG-", padLength: 3 },
-  WORK_PACKAGE: { entityName: "WorkPackage", fieldName: "wp_number", prefix: "WP-", padLength: 3 },
-  DAILY_LOG: { entityName: "DailyLog", fieldName: "log_id", prefix: "LOG-", padLength: 4 },
-  DELIVERY: { entityName: "Delivery", fieldName: "delivery_id", prefix: "DEL-", padLength: 3 },
-  MEETING: { entityName: "Meeting", fieldName: "meeting_number", prefix: "MTG-", padLength: 3 },
-  ACTION_ITEM: { entityName: "ActionItem", fieldName: "action_item_number", prefix: "AI-", padLength: 3 },
-  PRODUCTION_NOTE: { entityName: "ProductionNote", fieldName: "note_number", prefix: "PN-", padLength: 3 },
-  LOOK_AHEAD: { entityName: "LookAhead", fieldName: "lookahead_number", prefix: "LA-", padLength: 3 },
-  CONTACT: { entityName: "Contact", fieldName: "contact_id", prefix: "CON-", padLength: 3 },
-};
-
-const hasAuthToken = () => {
-  if (typeof window === "undefined") return false;
-  try {
-    return Boolean(
-      window.localStorage.getItem("base44_access_token") ||
-      window.localStorage.getItem("token") ||
-      window.sessionStorage.getItem("base44_access_token") ||
-      window.sessionStorage.getItem("token")
-    );
-  } catch {
-    return false;
-  }
-};
-
 /**
  * Get the next number in sequence for a project + record type.
  * Routes through the secureNumberSequence backend function — never touches
@@ -38,29 +8,14 @@ const hasAuthToken = () => {
 export const getNextNumber = async (projectId, recordType) => {
   if (!projectId) throw new Error("projectId is required");
   if (!recordType) throw new Error("recordType is required");
-  const fallbackConfig = SEQUENCE_FALLBACKS[recordType];
 
-  if (!hasAuthToken()) {
-    if (!fallbackConfig) {
-      throw new Error("Authentication required for secure number sequencing");
-    }
-    return getFallbackNumber({ projectId, ...fallbackConfig });
-  }
+  const response = await base44.functions.invoke('secureNumberSequence', {
+    action: 'next',
+    project_id: projectId,
+    record_type: recordType,
+  });
 
-  try {
-    const response = await base44.functions.invoke('secureNumberSequence', {
-      action: 'next',
-      project_id: projectId,
-      record_type: recordType,
-    });
-
-    return response.data.number;
-  } catch (error) {
-    if (!fallbackConfig) {
-      throw error;
-    }
-    return getFallbackNumber({ projectId, ...fallbackConfig });
-  }
+  return response.data.number;
 };
 
 const extractNumericSuffix = (value) => {
@@ -86,16 +41,6 @@ const formatSequenceValue = (value, prefix, padLength = 3) => {
     return value.trim();
   }
   return null;
-};
-
-const getFallbackNumber = async ({ projectId, entityName, fieldName, prefix, padLength = 3 }) => {
-  const existing = await base44.entities[entityName].filter({ project_id: projectId });
-  const maxNumber = existing.reduce((max, item) => {
-    const numericValue = extractNumericSuffix(item?.[fieldName]);
-    return numericValue != null && numericValue > max ? numericValue : max;
-  }, 0);
-
-  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
 };
 
 export const getNextFormattedNumber = async (...rawArgs) => {
@@ -124,7 +69,13 @@ export const getNextFormattedNumber = async (...rawArgs) => {
     // Fall back to the highest existing number for the project.
   }
 
-  return getFallbackNumber({ projectId, entityName, fieldName, prefix, padLength });
+  const existing = await base44.entities[entityName].filter({ project_id: projectId });
+  const maxNumber = existing.reduce((max, item) => {
+    const numericValue = extractNumericSuffix(item?.[fieldName]);
+    return numericValue != null && numericValue > max ? numericValue : max;
+  }, 0);
+
+  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
 };
 
 /**
@@ -134,25 +85,14 @@ export const getNextFormattedNumber = async (...rawArgs) => {
 export const previewNextNumber = async (projectId, recordType) => {
   if (!projectId) return null;
   if (!recordType) return null;
-  const fallbackConfig = SEQUENCE_FALLBACKS[recordType];
 
-  if (!hasAuthToken()) {
-    if (!fallbackConfig) return null;
-    return getFallbackNumber({ projectId, ...fallbackConfig });
-  }
+  const response = await base44.functions.invoke('secureNumberSequence', {
+    action: 'preview',
+    project_id: projectId,
+    record_type: recordType,
+  });
 
-  try {
-    const response = await base44.functions.invoke('secureNumberSequence', {
-      action: 'preview',
-      project_id: projectId,
-      record_type: recordType,
-    });
-
-    return response.data.number;
-  } catch (error) {
-    if (!fallbackConfig) return null;
-    return getFallbackNumber({ projectId, ...fallbackConfig });
-  }
+  return response.data.number;
 };
 
 export const previewNextFormattedNumber = async ({
@@ -173,7 +113,13 @@ export const previewNextFormattedNumber = async ({
     // Fall through to non-mutating data scan.
   }
 
-  return getFallbackNumber({ projectId, entityName, fieldName, prefix, padLength });
+  const existing = await base44.entities[entityName].filter({ project_id: projectId });
+  const maxNumber = existing.reduce((max, item) => {
+    const numericValue = extractNumericSuffix(item?.[fieldName]);
+    return numericValue != null && numericValue > max ? numericValue : max;
+  }, 0);
+
+  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
 };
 
 /**

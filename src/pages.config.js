@@ -64,7 +64,6 @@ import Deliveries from './pages/Deliveries';
 import Documents from './pages/Documents';
 import DrawingViewer from './pages/DrawingViewer';
 import Drawings from './pages/Drawings';
-import Equipment from './pages/Equipment';
 import ExecutiveView from './pages/ExecutiveView';
 import Expenses from './pages/Expenses';
 import DecisionLog from './pages/DecisionLog';
@@ -118,7 +117,6 @@ export const PAGES = {
     "Documents": Documents,
     "DrawingViewer": DrawingViewer,
     "Drawings": Drawings,
-    "Equipment": Equipment,
     "ExecutiveView": ExecutiveView,
     "Expenses": Expenses,
     "DecisionLog": DecisionLog,

@@ -5,6 +5,7 @@
  * Prevents forged decision attribution.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { assertProjectAccess } from './projectAccess.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -19,6 +20,11 @@ Deno.serve(async (req) => {
     const { action, decision_id, ...decisionData } = body;
 
     if (action === 'create') {
+      const projectAccess = await assertProjectAccess(base44, user, String(decisionData.project_id || '').trim());
+      if (projectAccess instanceof Response) {
+        return projectAccess;
+      }
+
       // Force decided_by to authenticated user — cannot be spoofed
       const safeDecision = {
         ...decisionData,
@@ -43,6 +49,16 @@ Deno.serve(async (req) => {
 
       if (!decision_id) {
         return Response.json({ error: 'decision_id is required' }, { status: 400 });
+      }
+
+      const existingDecision = await base44.asServiceRole.entities.PMADecision.get(decision_id);
+      if (!existingDecision) {
+        return Response.json({ error: 'Decision not found' }, { status: 404 });
+      }
+
+      const projectAccess = await assertProjectAccess(base44, user, String(existingDecision.project_id || '').trim());
+      if (projectAccess instanceof Response) {
+        return projectAccess;
       }
 
       const newStatus = action === 'supersede' ? 'Superseded' : 'Reversed';

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { usePMA } from "../usePMAContext";
 import { base44 } from "@/api/base44Client";
@@ -17,7 +17,7 @@ const DRAFT_TYPES = [
 
 export default function PMADraft() {
   const { activeProject } = useProjectContext();
-  const { projectSnapshot } = usePMA();
+  const { projectSnapshot, generateInsights } = usePMA();
 
   const [draftType, setDraftType] = useState("weekly");
   const [recipient, setRecipient] = useState(DRAFT_TYPES[0].recipient);
@@ -25,17 +25,6 @@ export default function PMADraft() {
   const [draftContent, setDraftContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    const preload = localStorage.getItem("pma-draft-preload");
-    if (!preload) return;
-
-    setDraftType("custom");
-    setCustomContext(preload);
-    setDraftContent(preload);
-    setIsEditing(true);
-    localStorage.removeItem("pma-draft-preload");
-  }, []);
 
   const buildPrompt = () => {
     const data = JSON.stringify(projectSnapshot || {}, null, 2);
@@ -64,15 +53,10 @@ export default function PMADraft() {
   };
 
   const generate = async () => {
-    if (!activeProject?.id) {
-      setDraftContent("Select a project to generate a draft.");
-      return;
-    }
-
     setIsGenerating(true);
     try {
       const prompt = buildPrompt();
-      const res = await base44.functions.invoke("invokeLLM", { prompt });
+      const res = await base44.functions.invoke("anthropicProxy", { prompt });
       const text = typeof res === "string" ? res : res?.text || res?.content || res?.response || "";
       setDraftContent(text);
       setIsEditing(false);
@@ -84,27 +68,9 @@ export default function PMADraft() {
   };
 
   const selected = DRAFT_TYPES.find((d) => d.id === draftType);
-  const mono = { fontFamily: "var(--font-mono)" };
-  const isProjectReady = !!activeProject?.id;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {!isProjectReady && (
-        <div
-          style={{
-            background: "var(--warning-muted)",
-            border: "1px solid var(--warning-border)",
-            borderRadius: 8,
-            padding: "10px 12px",
-            color: "var(--text-secondary)",
-            fontFamily: "var(--font-body)",
-            fontSize: 11,
-          }}
-        >
-          Select a project to generate PMA drafts. Draft generation depends on live project data.
-        </div>
-      )}
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         {DRAFT_TYPES.map((type) => (
           <button
@@ -138,20 +104,20 @@ export default function PMADraft() {
 
         <button
           onClick={generate}
-          disabled={isGenerating || !isProjectReady}
+          disabled={isGenerating}
           style={{
             marginTop: 6,
             background: "var(--accent)",
             border: "1px solid var(--accent-border)",
-            color: "var(--on-accent)",
+            color: "#002E6A",
             borderRadius: 8,
             padding: "10px 16px",
             ...mono,
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: "0.08em",
-            cursor: isGenerating || !isProjectReady ? "not-allowed" : "pointer",
-            opacity: isGenerating || !isProjectReady ? 0.6 : 1,
+            cursor: isGenerating ? "not-allowed" : "pointer",
+            opacity: isGenerating ? 0.6 : 1,
           }}
         >
           {isGenerating ? "Generating..." : `✦ Generate ${selected?.label || "Draft"}`}

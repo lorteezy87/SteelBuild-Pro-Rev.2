@@ -304,4 +304,3 @@ const ListView = ({ contacts, onEdit, onDelete }) => (
     })}
   </div>
 );
-

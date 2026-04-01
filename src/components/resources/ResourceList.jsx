@@ -7,32 +7,11 @@ const STATUS_COLORS = {
   "On Leave": "var(--text-muted)",
 };
 
-export default function ResourceList({ resources, onCreate }) {
+export default function ResourceList({ resources }) {
   if (resources.length === 0) {
     return (
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12 }}>No resources</p>
-        {onCreate && (
-          <button
-            type="button"
-            onClick={onCreate}
-            style={{
-              background: "var(--accent)",
-              color: "var(--on-accent)",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            Create Resource
-          </button>
-        )}
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No resources</p>
       </div>
     );
   }

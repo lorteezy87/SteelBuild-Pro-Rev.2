@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { usePMA } from '../usePMAContext';
 
 const buildDelta = (current, baseline) => {
   if (!baseline) return null;
@@ -30,7 +29,6 @@ const buildDelta = (current, baseline) => {
 
 export default function WeeklyDelta({ snapshot, pmMemory }) {
   const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
-  const { saveWeeklyBaseline, savePMMemory } = usePMA();
 
   let baseline = null;
   if (pmMemory?.weekly_baseline) {
@@ -44,17 +42,6 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
   }
 
   const delta = baseline ? buildDelta(snapshot, baseline) : null;
-
-  const handleUpdateBaseline = () => {
-    if (!snapshot) return;
-    saveWeeklyBaseline?.(snapshot);
-    savePMMemory?.({
-      ...(pmMemory || {}),
-      weekly_baseline: snapshot,
-    });
-    setShowUpdateConfirm(true);
-    window.setTimeout(() => setShowUpdateConfirm(false), 1800);
-  };
 
   if (!delta) {
     return (
@@ -73,7 +60,7 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
             No baseline set yet
           </div>
           <button
-            onClick={handleUpdateBaseline}
+            onClick={() => setShowUpdateConfirm(true)}
             style={{
               background: 'linear-gradient(135deg,var(--accent),var(--secondary))',
               border: '1px solid var(--accent-border)',
@@ -145,7 +132,7 @@ export default function WeeklyDelta({ snapshot, pmMemory }) {
         </div>
 
         <button
-          onClick={handleUpdateBaseline}
+          onClick={() => setShowUpdateConfirm(true)}
           style={{
             width: '100%',
             background: showUpdateConfirm ? 'rgba(0,214,143,0.15)' : 'transparent',

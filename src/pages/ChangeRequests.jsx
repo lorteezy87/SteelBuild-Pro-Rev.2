@@ -3,15 +3,13 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestFormModal";
 import ChangeRequestList from "@/components/changerequest/ChangeRequestList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function ChangeRequests() {
   const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = searchParams.get("project");
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -24,9 +22,8 @@ export default function ChangeRequests() {
     queryFn: () =>
       projectId
         ? base44.entities.ChangeRequest.filter({ project_id: projectId })
-        : [],
+        : base44.entities.ChangeRequest.list("-request_date"),
     initialData: [],
-    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -109,7 +106,7 @@ export default function ChangeRequests() {
           <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Requests</p>
         </div>
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>Create Request</button>
+        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ New Request</button>
       </div>
 
       {/* Stats Grid */}

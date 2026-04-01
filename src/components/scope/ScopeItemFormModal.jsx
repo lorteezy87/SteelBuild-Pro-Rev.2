@@ -73,7 +73,7 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
             letterSpacing: "0.10em",
           }}
         >
-          Create Scope Item
+          New Scope Item
         </h2>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -356,7 +356,7 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
                 opacity: mutation.isPending ? 0.5 : 1,
               }}
             >
-              {mutation.isPending ? "Creating..." : "Create Scope Item"}
+              {mutation.isPending ? "Creating..." : "Create Item"}
             </button>
           </div>
         </form>

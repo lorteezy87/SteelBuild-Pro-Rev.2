@@ -1,15 +1,10 @@
-import { appParams } from "@/lib/app-params";
-
-const { appId } = appParams;
-const PROJECT_ENTITY_BASE = appId ? `/api/apps/${appId}/entities/Project` : "/api/entities/Project";
+const APP_ID = "69c68aaf23533aadb23e1857";
+const PROJECT_ENTITY_BASE = `/api/apps/${APP_ID}/entities/Project`;
 
 function getApiKey() {
   try {
-    if (typeof window === "undefined") return "";
     return (
       window.localStorage.getItem("base44_api_key") ||
-      window.localStorage.getItem("base44_access_token") ||
-      window.localStorage.getItem("token") ||
       window.localStorage.getItem("api_key") ||
       ""
     );
@@ -22,7 +17,7 @@ function buildHeaders() {
   const apiKey = getApiKey();
   return {
     "Content-Type": "application/json",
-    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    ...(apiKey ? { api_key: apiKey } : {}),
   };
 }
 

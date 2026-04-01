@@ -5,6 +5,7 @@
  * Prevents self-approval.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { assertProjectAccess } from './projectAccess.ts';
 
 const ADMIN_ONLY_STATUSES = ['Paid', 'Disputed', 'Voided'];
 
@@ -21,6 +22,16 @@ Deno.serve(async (req) => {
 
     if (!expense_id || !payment_status) {
       return Response.json({ error: 'expense_id and payment_status are required' }, { status: 400 });
+    }
+
+    const expense = await base44.asServiceRole.entities.Expense.get(expense_id);
+    if (!expense) {
+      return Response.json({ error: 'Expense not found' }, { status: 404 });
+    }
+
+    const projectAccess = await assertProjectAccess(base44, user, String(expense.project_id || '').trim());
+    if (projectAccess instanceof Response) {
+      return projectAccess;
     }
 
     // Only admins can approve/pay/void expenses

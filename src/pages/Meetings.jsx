@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -7,9 +7,6 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-
-const TYPES = ["OAC", "Internal", "Safety", "Kickoff", "Progress", "Other"];
-const STATUSES = ["Scheduled", "In Progress", "Complete", "Cancelled"];
 
 export default function Meetings() {
   const [searchParams] = useSearchParams();
@@ -21,7 +18,6 @@ export default function Meetings() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [search, setSearch] = useState("");
 
   const qc = useQueryClient();
 
@@ -30,9 +26,8 @@ export default function Meetings() {
     queryFn: () =>
       projectId
         ? base44.entities.Meeting.filter({ project_id: projectId })
-        : [],
+        : base44.entities.Meeting.list("-meeting_date"),
     initialData: [],
-    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -78,179 +73,229 @@ export default function Meetings() {
   });
 
   const handleSave = (data) => {
-    if (editing?.id) {
+    if (editing) {
       updateMut.mutate({ id: editing.id, data });
     } else {
       createMut.mutate(data);
     }
   };
 
-  const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
+  const selectedProject = projectId
+    ? projects.find((p) => p.id === projectId)
+    : null;
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return meetings
-      .filter((meeting) => {
-        const typeMatch = filterType === "all" || meeting.meeting_type === filterType;
-        const statusMatch = filterStatus === "all" || meeting.status === filterStatus;
-        const searchMatch =
-          !query ||
-          [meeting.title, meeting.meeting_number, meeting.location, meeting.attendees, meeting.minutes]
-            .some((value) => String(value || "").toLowerCase().includes(query));
-        return typeMatch && statusMatch && searchMatch;
-      })
-      .sort((a, b) => String(b.meeting_date || "").localeCompare(String(a.meeting_date || "")));
-  }, [meetings, filterStatus, filterType, search]);
+  const filtered = meetings.filter((m) => {
+    const typeMatch = filterType === "all" || m.meeting_type === filterType;
+    const statusMatch = filterStatus === "all" || m.status === filterStatus;
+    return typeMatch && statusMatch;
+  });
 
-  const today = new Date().toISOString().split("T")[0];
   const stats = {
     total: meetings.length,
     scheduled: meetings.filter((m) => m.status === "Scheduled").length,
     inProgress: meetings.filter((m) => m.status === "In Progress").length,
     complete: meetings.filter((m) => m.status === "Complete").length,
     cancelled: meetings.filter((m) => m.status === "Cancelled").length,
-    upcoming: meetings.filter((m) => m.meeting_date && m.meeting_date >= today && m.status !== "Cancelled").length,
   };
 
+  const types = ["OAC", "Internal", "Safety", "Kickoff", "Progress", "Other"];
+  const statuses = ["Scheduled", "In Progress", "Complete", "Cancelled"];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="sbp-panel" style={{ overflow: "hidden" }}>
-        <div
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 24,
+              fontWeight: 800,
+              color: "var(--text-primary)",
+              margin: 0,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            Meetings
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--text-muted)",
+              marginTop: 4,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+            }}
+          >
+            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Meetings
+          </p>
+        </div>
+
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.35fr) minmax(320px, 0.9fr)",
-            gap: 0,
+            background: "var(--accent)",
+            color: "white",
+            border: "none",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 16px",
+            fontFamily: "var(--font-body)",
+            fontSize: "10px",
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          <div style={{ padding: "22px 24px", background: "linear-gradient(135deg, rgba(255,107,0,0.14), rgba(255,107,0,0.04) 55%, transparent 100%)" }}>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-              Meeting Command
+          + New Meeting
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
+        {[
+          { label: "Total", value: stats.total, color: "var(--accent)" },
+          { label: "Scheduled", value: stats.scheduled, color: "var(--status-info)" },
+          { label: "In Progress", value: stats.inProgress, color: "var(--status-warning)" },
+          { label: "Complete", value: stats.complete, color: "var(--status-success)" },
+          { label: "Cancelled", value: stats.cancelled, color: "var(--status-error)" },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            style={{
+              background: "var(--bg-surface)",
+              border: "none",
+              borderRadius: "var(--radius-card)",
+              padding: "12px",
+              borderTop: `2px solid ${stat.color}`,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "20px",
+                fontWeight: 600,
+                color: stat.color,
+                marginBottom: "4px",
+              }}
+            >
+              {stat.value}
             </div>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: 30, lineHeight: 1, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
-              Meetings
-            </h1>
-            <div style={{ marginTop: 10, fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", maxWidth: 680 }}>
-              Run coordination, OAC, kickoff, and field meetings from a single surface with searchable minutes, roster visibility, and direct edit/delete controls.
-            </div>
-            <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span className="badge badge-info">{selectedProject ? selectedProject.name : "All Projects"}</span>
-              <span className="badge badge-neutral">{filtered.length} visible</span>
-              <span className="badge badge-warning">{stats.upcoming} upcoming</span>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "8px",
+                fontWeight: 700,
+                color: "var(--text-muted)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}
+            >
+              {stat.label}
             </div>
           </div>
+        ))}
+      </div>
 
-          <div style={{ padding: "22px 24px", background: "var(--bg-surface-mid)", borderLeft: "1px solid var(--divider)", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div className="section-divider" style={{ marginBottom: 0 }}>
-              <div className="section-divider-title">Actions</div>
-              <div className="section-divider-line" />
-            </div>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              color: "var(--text-muted)",
+              alignSelf: "center",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Type:
+          </span>
+          {["all", ...types].map((type) => (
+            <button
+              key={type}
+              onClick={() => setFilterType(type)}
+              style={{
+                background: filterType === type ? "var(--accent)" : "var(--bg-surface-low)",
+                color: filterType === type ? "white" : "var(--text-secondary)",
+                border: "none",
+                borderRadius: "var(--radius-btn)",
+                padding: "5px 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: "8px",
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {type === "all" ? "All" : type}
+            </button>
+          ))}
+        </div>
 
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, location, attendees, or minutes"
-              style={{ width: "100%" }}
-            />
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="btn-primary"
-                style={{ flex: 1, color: "var(--on-accent)" }}
-                onClick={() => {
-                  setEditing(null);
-                  setShowForm(true);
-                }}
-              >
-                Create Meeting
-              </button>
-              <button
-                className="btn-ghost"
-                style={{ flex: 1 }}
-                onClick={() => {
-                  setFilterType("all");
-                  setFilterStatus("all");
-                  setSearch("");
-                }}
-              >
-                Reset Filters
-              </button>
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "9px",
+              color: "var(--text-muted)",
+              alignSelf: "center",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Status:
+          </span>
+          {["all", ...statuses].map((status) => (
+            <button
+              key={status}
+              onClick={() => setFilterStatus(status)}
+              style={{
+                background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)",
+                color: filterStatus === status ? "white" : "var(--text-secondary)",
+                border: "none",
+                borderRadius: "var(--radius-btn)",
+                padding: "5px 12px",
+                fontFamily: "var(--font-body)",
+                fontSize: "8px",
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {status === "all" ? "All" : status}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 10 }}>
-        <StatTile label="Total" value={stats.total} color="var(--accent)" />
-        <StatTile label="Upcoming" value={stats.upcoming} color="var(--status-info)" />
-        <StatTile label="Scheduled" value={stats.scheduled} color="var(--status-info)" />
-        <StatTile label="In Progress" value={stats.inProgress} color="var(--status-warning)" />
-        <StatTile label="Complete" value={stats.complete} color="var(--status-success)" />
-        <StatTile label="Cancelled" value={stats.cancelled} color="var(--status-error)" />
-      </div>
-
-      <div className="sbp-panel" style={{ padding: 14 }}>
-        <div className="section-divider">
-          <div className="section-divider-title">Filters</div>
-          <div className="section-divider-line" />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div>
-            <div style={filterLabelStyle}>Meeting Type</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {["all", ...TYPES].map((type) => (
-                <button
-                  key={type}
-                  className={filterType === type ? "btn-primary" : "btn-ghost"}
-                  style={filterType === type ? activePillStyle : inactivePillStyle}
-                  onClick={() => setFilterType(type)}
-                >
-                  {type === "all" ? "All Types" : type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div style={filterLabelStyle}>Meeting Status</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {["all", ...STATUSES].map((status) => (
-                <button
-                  key={status}
-                  className={filterStatus === status ? "btn-primary" : "btn-ghost"}
-                  style={filterStatus === status ? activePillStyle : inactivePillStyle}
-                  onClick={() => setFilterStatus(status)}
-                >
-                  {status === "all" ? "All Status" : status}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* Form Modal */}
       {showForm && (
         <MeetingFormModal
           projectId={projectId}
           meeting={editing}
           onSave={handleSave}
-          onClose={() => {
-            setShowForm(false);
-            setEditing(null);
-          }}
+          onClose={() => { setShowForm(false); setEditing(null); }}
           isSaving={createMut.isPending || updateMut.isPending}
         />
       )}
 
+      {/* Meetings List */}
       <MeetingList
         meetings={filtered}
-        onEdit={(meeting) => {
-          setEditing(meeting);
-          setShowForm(true);
-        }}
-        onDelete={setDeleteTarget}
+        onEdit={(m) => { setEditing(m); setShowForm(true); }}
+        onDelete={(m) => setDeleteTarget(m)}
       />
 
+      {/* Delete Confirmation */}
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -265,31 +310,3 @@ export default function Meetings() {
     </div>
   );
 }
-
-function StatTile({ label, value, color }) {
-  return (
-    <div className="kpi-card" style={{ padding: "16px 18px", borderTop: `2px solid ${color}` }}>
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value" style={{ fontSize: 24, color }}>{value}</div>
-    </div>
-  );
-}
-
-const filterLabelStyle = {
-  fontFamily: "var(--font-body)",
-  fontSize: 9,
-  fontWeight: 700,
-  color: "var(--text-muted)",
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  marginBottom: 10,
-};
-
-const activePillStyle = {
-  padding: "7px 12px",
-  color: "var(--on-accent)",
-};
-
-const inactivePillStyle = {
-  padding: "7px 12px",
-};

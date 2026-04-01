@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, Share2, Download } from "lucide-react";
+import { ChevronLeft, Zap, Share2, Download } from "lucide-react";
 
 export default function ViewerToolbar({
   document,
@@ -11,8 +11,7 @@ export default function ViewerToolbar({
   zoomLevel,
   onZoom,
   currentPage,
-  onPageChange,
-  totalPages = 1,
+  onPageChange
 }) {
   const zoomLevels = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
@@ -46,10 +45,10 @@ export default function ViewerToolbar({
         </button>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {document.documentNumber || document.sheet_number || "DRAWING"} · {document.displayName || document.title || "Viewer"}
+            {document.documentNumber} · {document.displayName}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)" }}>
-            Rev {document.revisionNumber ?? document.revision_number ?? 0}
+            Rev {document.revisionNumber}
           </div>
         </div>
       </div>
@@ -120,33 +119,29 @@ export default function ViewerToolbar({
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 10 }}>
           <button
             onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-            disabled={currentPage <= 1}
             style={{
               padding: "4px 8px",
               background: "var(--accent-muted)",
               border: "1px solid var(--accent-border)",
               color: "var(--accent)",
               borderRadius: 4,
-              cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-              opacity: currentPage <= 1 ? 0.45 : 1,
+              cursor: "pointer"
             }}
           >
             ←
           </button>
           <span style={{ color: "var(--text-muted)", minWidth: 40, textAlign: "center" }}>
-            Page {currentPage} / {Math.max(totalPages, 1)}
+            Page {currentPage}
           </span>
           <button
-            onClick={() => onPageChange(Math.min(currentPage + 1, Math.max(totalPages, 1)))}
-            disabled={currentPage >= Math.max(totalPages, 1)}
+            onClick={() => onPageChange(currentPage + 1)}
             style={{
               padding: "4px 8px",
               background: "var(--accent-muted)",
               border: "1px solid var(--accent-border)",
               color: "var(--accent)",
               borderRadius: 4,
-              cursor: currentPage >= Math.max(totalPages, 1) ? "not-allowed" : "pointer",
-              opacity: currentPage >= Math.max(totalPages, 1) ? 0.45 : 1,
+              cursor: "pointer"
             }}
           >
             →
@@ -179,9 +174,9 @@ export default function ViewerToolbar({
           disabled={analysisRunning}
           style={{
             padding: "6px 12px",
-            background: analysisRunning ? "rgba(0,229,255,0.08)" : "rgba(0,229,255,0.14)",
-            border: "1px solid rgba(0,229,255,0.30)",
-            color: "var(--secondary)",
+            background: "linear-gradient(135deg,#8B5CF6,#6D40D4)",
+            border: "none",
+            color: "#fff",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",
             fontSize: 10,
@@ -201,7 +196,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: "transparent",
-            border: "1px solid var(--border-default)",
+            border: "1px solid rgba(255,255,255,0.12)",
             color: "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",
@@ -221,7 +216,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: "transparent",
-            border: "1px solid var(--border-default)",
+            border: "1px solid rgba(255,255,255,0.12)",
             color: "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",

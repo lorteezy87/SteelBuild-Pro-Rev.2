@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, Mail } from "lucide-react";
+import AdminRoute from "../components/shared/AdminRoute";
 import PageHeader from "../components/shared/PageHeader";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import UserEditModal from "../components/users/UserEditModal";
@@ -50,12 +51,7 @@ function UsersManagementContent() {
       <PageHeader
         title="User Management"
         subtitle={`${users.length} total users`}
-        onAdd={() => {
-          setEditingUser(null);
-          setEditModalOpen(true);
-        }}
         onRefresh={refetch}
-        addLabel="Create User"
       />
 
       <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden" }}>
@@ -140,5 +136,9 @@ function UsersManagementContent() {
 }
 
 export default function UsersManagement() {
-  return <UsersManagementContent />;
+  return (
+    <AdminRoute>
+      <UsersManagementContent />
+    </AdminRoute>
+  );
 }

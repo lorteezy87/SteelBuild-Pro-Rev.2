@@ -5,6 +5,7 @@
  * Prevents self-approval and field spoofing.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { assertProjectAccess } from './projectAccess.ts';
 
 const ADMIN_ONLY_STATUSES = ['Approved', 'Rejected', 'Void'];
 
@@ -21,6 +22,16 @@ Deno.serve(async (req) => {
 
     if (!co_id || !status) {
       return Response.json({ error: 'co_id and status are required' }, { status: 400 });
+    }
+
+    const changeOrder = await base44.asServiceRole.entities.ChangeOrder.get(co_id);
+    if (!changeOrder) {
+      return Response.json({ error: 'Change order not found' }, { status: 404 });
+    }
+
+    const projectAccess = await assertProjectAccess(base44, user, String(changeOrder.project_id || '').trim());
+    if (projectAccess instanceof Response) {
+      return projectAccess;
     }
 
     // Only admins can approve, reject, or void

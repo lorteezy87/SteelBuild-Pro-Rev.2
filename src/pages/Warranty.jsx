@@ -3,15 +3,13 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
 import WarrantyList from "@/components/warranty/WarrantyList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function Warranty() {
   const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = searchParams.get("project");
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -21,9 +19,8 @@ export default function Warranty() {
     queryFn: () =>
       projectId
         ? base44.entities.Warranty.filter({ project_id: projectId })
-        : [],
+        : base44.entities.Warranty.list("-start_date"),
     initialData: [],
-    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -126,7 +123,7 @@ export default function Warranty() {
           <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Records</p>
         </div>
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>Create Warranty</button>
+        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ Add Warranty</button>
       </div>
 
       {/* Stats Grid */}

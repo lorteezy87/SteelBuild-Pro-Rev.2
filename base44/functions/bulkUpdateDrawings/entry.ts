@@ -1,4 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
+import { assertProjectAccess } from "./projectAccess.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -45,6 +46,25 @@ Deno.serve(async (req) => {
 
     if (!updates.length) {
       return Response.json({ error: "updates array is required" }, { status: 400 });
+    }
+
+    const drawings = await Promise.all(
+      updates
+        .map((item: any) => String(item?.id || "").trim())
+        .filter(Boolean)
+        .map((id) => base44.asServiceRole.entities.Drawing.get(id))
+    );
+
+    const projectIds = [...new Set(drawings.map((drawing: any) => String(drawing?.project_id || "").trim()).filter(Boolean))];
+    if (!projectIds.length) {
+      return Response.json({ error: "No matching drawings found" }, { status: 404 });
+    }
+
+    for (const projectId of projectIds) {
+      const projectAccess = await assertProjectAccess(base44, user, projectId);
+      if (projectAccess instanceof Response) {
+        return projectAccess;
+      }
     }
 
     const results = [];

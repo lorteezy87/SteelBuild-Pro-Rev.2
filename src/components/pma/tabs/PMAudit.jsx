@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { usePMA } from '../usePMAContext';
 import { useProjectContext } from '../../shared/useProjectContext';
-import { PMA_AUDIT_ENABLED, flagLegalHold, exportAuditLogCSV, reproduceOutput } from '../auditUtils';
+import { flagLegalHold, exportAuditLogCSV, reproduceOutput } from '../auditUtils';
 import { toast } from 'sonner';
 
 const ACTION_TYPE_COLORS = {
@@ -30,26 +31,20 @@ export default function PMAudit() {
 
   // Load audit logs
   useEffect(() => {
-    if (!activeProject?.id || !PMA_AUDIT_ENABLED) return;
+    if (!activeProject?.id) return;
     loadAuditLogs();
   }, [activeProject]);
 
   const loadAuditLogs = async () => {
-    if (!PMA_AUDIT_ENABLED) {
-      setEntries([]);
-      setIsLoading(false);
-      return;
-    }
     try {
       setIsLoading(true);
-      const response = await base44.functions.invoke('writeAuditLog', {
-        action: 'list',
+      const logs = await base44.entities.PMAuditLog.filter({
         project_id: activeProject.id,
       });
-      const logs = Array.isArray(response?.logs) ? response.logs : [];
-      setEntries(logs);
+      setEntries(logs || []);
     } catch (error) {
-      setEntries([]);
+      console.error('Failed to load audit logs:', error);
+      toast.error('Failed to load audit logs');
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +69,8 @@ export default function PMAudit() {
 
   const handleLegalHold = async (entryId, reason) => {
     try {
-      const success = await flagLegalHold(entryId, reason, null);
+      const user = await base44.auth.me();
+      const success = await flagLegalHold(entryId, reason, user?.email);
       if (success) {
         loadAuditLogs();
         toast.success('Entry flagged for legal hold');
@@ -107,25 +103,6 @@ export default function PMAudit() {
       toast.error('Failed to export audit log');
     }
   };
-
-  if (!activeProject?.id) {
-    return (
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '24px 16px',
-          color: 'var(--text-secondary)',
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          fontFamily: 'var(--font-body)',
-          fontSize: 11,
-        }}
-      >
-        Select a project to view the PMA audit log.
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -278,32 +255,13 @@ export default function PMAudit() {
           <div
             style={{
               textAlign: 'center',
-              padding: '32px 16px',
-              color: 'rgba(160,175,210,0.35)',
+              padding: '20px',
+              color: 'rgba(160,175,210,0.4)',
+              fontFamily: 'var(--font-body)',
+              fontSize: 11,
             }}
           >
-            <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 9,
-                letterSpacing: '0.10em',
-                marginBottom: 6,
-              }}
-            >
-              NO AUDIT LOGS
-            </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: 11,
-                lineHeight: 1.5,
-              }}
-            >
-              {PMA_AUDIT_ENABLED
-                ? 'Audit logs will appear here as you use PMA Chat and generate insights.'
-                : 'Audit logging is not enabled in this environment yet.'}
-            </div>
+            No audit entries match your filters
           </div>
         ) : (
           filteredEntries.map((entry) => (

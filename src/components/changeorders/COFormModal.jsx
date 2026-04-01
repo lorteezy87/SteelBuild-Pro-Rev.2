@@ -29,12 +29,12 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!validate()) return;
     const data = { ...form, co_amount: Number(form.co_amount) || 0 };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
-    await onSave(data);
+    onSave(data);
   };
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -45,10 +45,10 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     <PhoenixModal
       open={open}
       onClose={onClose}
-      title={co ? `Edit ${co.co_number || "CO"}` : "Create Change Order"}
+      title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"}
       footer={<>
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave}>{co ? "Save Changes" : "Create Change Order"}</button>
+        <button style={btnPrimary} onClick={handleSave}>{co ? "Update" : "Create"}</button>
       </>}
     >
       <div style={grid}>

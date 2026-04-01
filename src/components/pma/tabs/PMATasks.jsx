@@ -89,14 +89,6 @@ export default function PMATasks() {
   };
 
   const escalationCount = countEscalations(actionItems, risks);
-  const groupedByAssignee = useMemo(() => {
-    return openActionItems.reduce((acc, a) => {
-      const key = a.assigned_to || "Unassigned";
-      acc[key] = acc[key] || [];
-      acc[key].push(a);
-      return acc;
-    }, {});
-  }, [openActionItems]);
 
   if ((tasks.length === 0 && actionItems.length === 0) || isLoading) {
     return (
@@ -106,6 +98,15 @@ export default function PMATasks() {
       </div>
     );
   }
+
+  const groupedByAssignee = useMemo(() => {
+    return openActionItems.reduce((acc, a) => {
+      const key = a.assigned_to || "Unassigned";
+      acc[key] = acc[key] || [];
+      acc[key].push(a);
+      return acc;
+    }, {});
+  }, [openActionItems]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

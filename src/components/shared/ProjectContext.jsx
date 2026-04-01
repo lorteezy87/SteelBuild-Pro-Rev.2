@@ -6,7 +6,6 @@ export const ProjectContext = createContext({
   setActiveProject: () => {},
   projects: [],
   loading: false,
-  refreshProjects: async () => {},
 });
 
 export function ProjectProvider({ children }) {
@@ -14,33 +13,32 @@ export function ProjectProvider({ children }) {
   const [activeProject, setActiveProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const data = await base44.entities.Project.list("-created_date");
-      setProjects(data);
-
-      const savedId = localStorage.getItem("activeProjectId");
-      const saved = data.find((p) => p.id === savedId);
-      const current = activeProject ? data.find((p) => p.id === activeProject.id) : null;
-      const defaultProject = current || saved || data.find((p) => p.health_status) || data[0] || null;
-
-      if (defaultProject) {
-        setActiveProject(defaultProject);
-        localStorage.setItem("activeProjectId", defaultProject.id);
-      } else {
-        setActiveProject(null);
-        localStorage.removeItem("activeProjectId");
-      }
-    } catch (err) {
-      console.error("Failed to load projects:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Load projects on mount
   useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoading(true);
+        const data = await base44.entities.Project.list("-created_date");
+        setProjects(data);
+
+        // Try to restore last selected project
+        const savedId = localStorage.getItem("activeProjectId");
+        const saved = data.find((p) => p.id === savedId);
+
+        // Default selection: saved → first active → first in list
+        const defaultProject = saved || data.find((p) => p.health_status) || data[0] || null;
+
+        if (defaultProject) {
+          setActiveProject(defaultProject);
+          localStorage.setItem("activeProjectId", defaultProject.id);
+        }
+      } catch (err) {
+        console.error("Failed to load projects:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadProjects();
   }, []);
 
@@ -55,7 +53,7 @@ export function ProjectProvider({ children }) {
   };
 
   return (
-    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading, refreshProjects: loadProjects }}>
+    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading }}>
       {children}
     </ProjectContext.Provider>
   );

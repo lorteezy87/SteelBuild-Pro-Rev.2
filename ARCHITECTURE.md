@@ -108,6 +108,8 @@ Examples:
 - query client setup
 - date shims
 - app params
+- fetch/transform/save orchestration helpers
+- mutation feedback wrappers
 - shared state utilities
 
 Do not place module-specific workflow logic here unless it is truly shared
@@ -197,6 +199,9 @@ Do not reintroduce:
 - `@/*` resolves to `src/*`
 - `index.html` boots the app from `/src/main.jsx`
 - build and deploy verification must pass after any structural cleanup
+- standard save flows should prefer `src/lib/fetch-transform-save.js`
+- standard mutation toasts should prefer `withMutationFeedback(...)`
+- project access should prefer explicit `project_members` over legacy scattered team fields
 
 ## Next Cleanup Priorities
 

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { X, Download, Eye, Share2 } from "lucide-react";
 
 export default function DocumentDetailPanel({ doc, onClose }) {
   const [activeTab, setActiveTab] = useState("details");

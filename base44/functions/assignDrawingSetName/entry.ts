@@ -1,4 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
+import { assertProjectAccess } from "./projectAccess.ts";
 
 function normalizeSetName(value: unknown) {
   return String(value || "").trim();
@@ -43,9 +44,27 @@ Deno.serve(async (req) => {
     const issuedBy = String(body?.issued_by || "").trim();
     const fileUrl = String(body?.file_url || "").trim();
 
+    const sourceDrawings = await Promise.all(
+      drawingIds.map((id: string) => base44.asServiceRole.entities.Drawing.get(id))
+    );
+    const existingDrawings = sourceDrawings.filter(Boolean);
+    if (!existingDrawings.length) {
+      return Response.json({ error: "No matching drawings found" }, { status: 404 });
+    }
+
+    const resolvedExistingProjectId = String(existingDrawings[0]?.project_id || "").trim();
+    if (existingDrawings.some((drawing: any) => String(drawing?.project_id || "").trim() !== resolvedExistingProjectId)) {
+      return Response.json({ error: "All drawings in an assignment batch must belong to the same project" }, { status: 400 });
+    }
+
+    const projectAccess = await assertProjectAccess(base44, user, projectId || resolvedExistingProjectId);
+    if (projectAccess instanceof Response) {
+      return projectAccess;
+    }
+
     const updatedDrawings = await Promise.all(
-      drawingIds.map((id: string) =>
-        base44.asServiceRole.entities.Drawing.update(id, { drawing_set_name: setName })
+      existingDrawings.map((drawing: any) =>
+        base44.asServiceRole.entities.Drawing.update(drawing.id, { drawing_set_name: setName })
       )
     );
 

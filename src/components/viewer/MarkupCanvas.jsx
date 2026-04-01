@@ -2,60 +2,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 
 const HIT_RADIUS = 8; // px for hit testing
 
-function getDistanceToSegment(px, py, p1, p2) {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len === 0) return Math.hypot(px - p1.x, py - p1.y);
-  const t = Math.max(0, Math.min(1, ((px - p1.x) * dx + (py - p1.y) * dy) / (len * len)));
-  const cx = p1.x + t * dx;
-  const cy = p1.y + t * dy;
-  return Math.hypot(px - cx, py - cy);
-}
-
-function drawArrowHead(ctx, from, to, size) {
-  const angle = Math.atan2(to.y - from.y, to.x - from.x);
-  ctx.beginPath();
-  ctx.moveTo(to.x, to.y);
-  ctx.lineTo(
-    to.x - size * Math.cos(angle - Math.PI / 6),
-    to.y - size * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.moveTo(to.x, to.y);
-  ctx.lineTo(
-    to.x - size * Math.cos(angle + Math.PI / 6),
-    to.y - size * Math.sin(angle + Math.PI / 6)
-  );
-  ctx.stroke();
-}
-
-function getCloudPoints(x, y, width, height) {
-  const segments = Math.max(4, Math.round((Math.abs(width) + Math.abs(height)) / 50));
-  const points = [];
-  for (let i = 0; i <= segments; i++) points.push({ x: x + (width * i) / segments, y });
-  for (let i = 1; i <= segments; i++) points.push({ x: x + width, y: y + (height * i) / segments });
-  for (let i = 1; i <= segments; i++) points.push({ x: x + width - (width * i) / segments, y: y + height });
-  for (let i = 1; i < segments; i++) points.push({ x, y: y + height - (height * i) / segments });
-  return points;
-}
-
-function drawCloudPath(ctx, x, y, width, height, scale) {
-  const points = getCloudPoints(x, y, width, height);
-  if (!points.length) return;
-  const radius = 10 * scale;
-  ctx.beginPath();
-  ctx.moveTo(points[0].x * scale, points[0].y * scale);
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const midX = ((prev.x + curr.x) / 2) * scale;
-    const midY = ((prev.y + curr.y) / 2) * scale;
-    ctx.quadraticCurveTo(prev.x * scale, prev.y * scale, midX, midY);
-    ctx.arcTo(prev.x * scale, prev.y * scale, curr.x * scale, curr.y * scale, radius);
-  }
-  ctx.closePath();
-}
-
 function getCanvasPoint(e, canvasEl, zoom) {
   const rect = canvasEl.getBoundingClientRect();
   // coords in logical CSS pixels, normalized by zoom so stored values are zoom-independent
@@ -95,32 +41,6 @@ function hitTestMarkup(markup, px, py, zoom) {
       }
       return false;
     }
-    case "circle":
-    case "cloud": {
-      const { x, y, width, height } = markup;
-      return px >= x - tol && px <= x + width + tol && py >= y - tol && py <= y + height + tol;
-    }
-    case "measure": {
-      const [p1, p2] = markup.points || [];
-      if (!p1 || !p2) return false;
-      return getDistanceToSegment(px, py, p1, p2) <= tol * 1.5;
-    }
-    case "callout": {
-      const [p1, p2] = markup.points || [];
-      if (!p1 || !p2) return false;
-      const textBox = {
-        x: Math.min(p1.x, p2.x) - 4,
-        y: Math.min(p1.y, p2.y) - 24,
-        w: 128,
-        h: 32,
-      };
-      const hitsText =
-        px >= textBox.x - tol &&
-        px <= textBox.x + textBox.w + tol &&
-        py >= textBox.y - tol &&
-        py <= textBox.y + textBox.h + tol;
-      return hitsText || getDistanceToSegment(px, py, p1, p2) <= tol * 1.5;
-    }
     case "text":
     case "stamp": {
       const { x, y, text = "", fontSize = 14 } = markup;
@@ -157,31 +77,6 @@ function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
       }
       break;
     }
-    case "circle": {
-      const { x, y, width, height } = markup;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth * dpr;
-      ctx.beginPath();
-      ctx.ellipse(
-        (x + width / 2) * scale,
-        (y + height / 2) * scale,
-        Math.abs(width / 2) * scale,
-        Math.abs(height / 2) * scale,
-        0,
-        0,
-        Math.PI * 2
-      );
-      ctx.stroke();
-      break;
-    }
-    case "cloud": {
-      const { x, y, width, height } = markup;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth * dpr;
-      drawCloudPath(ctx, x, y, width, height, scale);
-      ctx.stroke();
-      break;
-    }
     case "line": {
       const [p1, p2] = markup.points || [];
       if (p1 && p2) {
@@ -209,67 +104,6 @@ function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
           );
           ctx.stroke();
         }
-      }
-      break;
-    }
-    case "measure": {
-      const [p1, p2] = markup.points || [];
-      if (p1 && p2) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth * dpr;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(p1.x * scale, p1.y * scale);
-        ctx.lineTo(p2.x * scale, p2.y * scale);
-        ctx.stroke();
-        drawArrowHead(ctx, { x: p2.x * scale, y: p2.y * scale }, { x: p1.x * scale, y: p1.y * scale }, 10 * dpr);
-        drawArrowHead(ctx, { x: p1.x * scale, y: p1.y * scale }, { x: p2.x * scale, y: p2.y * scale }, 10 * dpr);
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
-        const labelX = ((p1.x + p2.x) / 2) * scale;
-        const labelY = ((p1.y + p2.y) / 2) * scale - 10 * dpr;
-        const label = markup.label || `${Math.round(length)} px`;
-        ctx.fillStyle = "rgba(9,10,11,0.88)";
-        const labelWidth = Math.max(56, label.length * 7) * dpr;
-        ctx.fillRect(labelX - labelWidth / 2, labelY - 10 * dpr, labelWidth, 18 * dpr);
-        ctx.fillStyle = color;
-        ctx.font = `bold ${11 * dpr}px var(--font-mono)`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(label, labelX, labelY);
-        ctx.textAlign = "left";
-        ctx.textBaseline = "alphabetic";
-      }
-      break;
-    }
-    case "callout": {
-      const [p1, p2] = markup.points || [];
-      if (p1 && p2) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth * dpr;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(p1.x * scale, p1.y * scale);
-        ctx.lineTo(p2.x * scale, p2.y * scale);
-        ctx.stroke();
-        drawArrowHead(ctx, { x: p1.x * scale, y: p1.y * scale }, { x: p2.x * scale, y: p2.y * scale }, 10 * dpr);
-
-        const boxX = Math.min(p1.x, p2.x) * scale - 4 * dpr;
-        const boxY = (Math.min(p1.y, p2.y) - 28) * scale;
-        const boxW = 132 * dpr;
-        const boxH = 34 * dpr;
-        ctx.fillStyle = "rgba(9,10,11,0.88)";
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5 * dpr;
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxW, boxH, 6 * dpr);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.font = `bold ${11 * dpr}px var(--font-body)`;
-        ctx.textBaseline = "middle";
-        ctx.fillText(markup.text || "CALLOUT", boxX + 10 * dpr, boxY + boxH / 2);
       }
       break;
     }
@@ -357,20 +191,9 @@ function getBoundingBox(markup) {
   switch (markup.type) {
     case "rect":
       return { x: markup.x, y: markup.y, w: markup.width, h: markup.height };
-    case "circle":
-    case "cloud":
-      return { x: markup.x, y: markup.y, w: markup.width, h: markup.height };
     case "line": {
       const [p1, p2] = markup.points || [{ x: 0, y: 0 }, { x: 0, y: 0 }];
       return { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y), w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y) };
-    }
-    case "measure": {
-      const [p1, p2] = markup.points || [{ x: 0, y: 0 }, { x: 0, y: 0 }];
-      return { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y) - 20, w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y) + 24 };
-    }
-    case "callout": {
-      const [p1, p2] = markup.points || [{ x: 0, y: 0 }, { x: 0, y: 0 }];
-      return { x: Math.min(p1.x, p2.x) - 4, y: Math.min(p1.y, p2.y) - 28, w: Math.abs(p2.x - p1.x) + 136, h: Math.abs(p2.y - p1.y) + 36 };
     }
     case "freehand": {
       const pts = markup.points || [];
@@ -448,8 +271,7 @@ export default function MarkupCanvas({
     if (isDrawing && activeTool === "freehand" && currentPath.length > 1) {
       ctx.save();
       ctx.strokeStyle = activeColor || "var(--accent)";
-      ctx.lineWidth = (activeLineWidth || 2) * dpr;
-      ctx.globalAlpha = (activeOpacity ?? 100) / 100;
+      ctx.lineWidth = 2 * dpr;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
@@ -467,8 +289,7 @@ export default function MarkupCanvas({
       const h = Math.abs(livePoint.y - startPoint.y) * scale;
       ctx.save();
       ctx.strokeStyle = activeColor || "var(--accent)";
-      ctx.lineWidth = (activeLineWidth || 2) * dpr;
-      ctx.globalAlpha = (activeOpacity ?? 100) / 100;
+      ctx.lineWidth = 2 * dpr;
       ctx.setLineDash([6 * dpr, 3 * dpr]);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
@@ -476,52 +297,20 @@ export default function MarkupCanvas({
     }
 
     // Draw in-progress line/arrow preview
-    if (isDrawing && (activeTool === "line" || activeTool === "arrow" || activeTool === "measure" || activeTool === "callout") && startPoint && livePoint) {
+    if (isDrawing && (activeTool === "line" || activeTool === "arrow") && startPoint && livePoint) {
       ctx.save();
       ctx.strokeStyle = activeColor || "var(--accent)";
-      ctx.lineWidth = (activeLineWidth || 2) * dpr;
-      ctx.globalAlpha = (activeOpacity ?? 100) / 100;
+      ctx.lineWidth = 2 * dpr;
       ctx.lineCap = "round";
       ctx.setLineDash([6 * dpr, 3 * dpr]);
       ctx.beginPath();
       ctx.moveTo(startPoint.x * scale, startPoint.y * scale);
       ctx.lineTo(livePoint.x * scale, livePoint.y * scale);
       ctx.stroke();
-      if (activeTool === "measure" || activeTool === "callout") {
-        drawArrowHead(ctx, { x: startPoint.x * scale, y: startPoint.y * scale }, { x: livePoint.x * scale, y: livePoint.y * scale }, 10 * dpr);
-      }
       ctx.setLineDash([]);
       ctx.restore();
     }
-    if (isDrawing && (activeTool === "circle" || activeTool === "cloud") && startPoint && livePoint) {
-      const x = Math.min(startPoint.x, livePoint.x);
-      const y = Math.min(startPoint.y, livePoint.y);
-      const w = Math.abs(livePoint.x - startPoint.x);
-      const h = Math.abs(livePoint.y - startPoint.y);
-      ctx.save();
-      ctx.strokeStyle = activeColor || "var(--accent)";
-      ctx.lineWidth = (activeLineWidth || 2) * dpr;
-      ctx.globalAlpha = (activeOpacity ?? 100) / 100;
-      ctx.setLineDash([6 * dpr, 3 * dpr]);
-      if (activeTool === "circle") {
-        ctx.beginPath();
-        ctx.ellipse(
-          (x + w / 2) * scale,
-          (y + h / 2) * scale,
-          (w / 2) * scale,
-          (h / 2) * scale,
-          0,
-          0,
-          Math.PI * 2
-        );
-      } else {
-        drawCloudPath(ctx, x, y, w, h, scale);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-  }, [markups, selectedMarkup, zoomLevel, isDrawing, currentPath, activeColor, activeTool, startPoint, livePoint, activeLineWidth, activeOpacity]);
+  }, [markups, selectedMarkup, zoomLevel, isDrawing, currentPath, activeColor, activeTool, startPoint, livePoint]);
 
   const getPoint = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -564,8 +353,7 @@ export default function MarkupCanvas({
         text: activeStamp?.label || "APPROVED",
         color: activeStamp?.color || "#00D68F",
         fontSize: 16,
-        opacity: activeOpacity ?? 100,
-        lineWidth: activeLineWidth || 2,
+        opacity: 100,
       });
       return;
     }
@@ -591,9 +379,9 @@ export default function MarkupCanvas({
       const deltaY = dy - bb.y;
 
       // Translate markup
-      if (markup.type === "rect" || markup.type === "circle" || markup.type === "cloud") {
+      if (markup.type === "rect") {
         onUpdateMarkup(markup.id, { x: markup.x + deltaX, y: markup.y + deltaY });
-      } else if (markup.type === "line" || markup.type === "measure" || markup.type === "callout") {
+      } else if (markup.type === "line") {
         onUpdateMarkup(markup.id, {
           points: markup.points.map((p) => ({ x: p.x + deltaX, y: p.y + deltaY })),
         });
@@ -635,27 +423,9 @@ export default function MarkupCanvas({
             width: Math.abs(w),
             height: Math.abs(h),
             color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
+            opacity: 100,
+            lineWidth: 2,
             fill: false,
-          });
-        }
-        break;
-      }
-      case "circle":
-      case "cloud": {
-        const w = endPoint.x - startPoint.x;
-        const h = endPoint.y - startPoint.y;
-        if (Math.abs(w) > 4 && Math.abs(h) > 4) {
-          onAddMarkup({
-            type: activeTool,
-            x: Math.min(startPoint.x, endPoint.x),
-            y: Math.min(startPoint.y, endPoint.y),
-            width: Math.abs(w),
-            height: Math.abs(h),
-            color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
           });
         }
         break;
@@ -667,34 +437,9 @@ export default function MarkupCanvas({
             type: "line",
             points: [startPoint, endPoint],
             color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
+            opacity: 100,
+            lineWidth: 2,
             arrow: activeTool === "arrow",
-          });
-        }
-        break;
-      }
-      case "measure": {
-        if (Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 4) {
-          onAddMarkup({
-            type: "measure",
-            points: [startPoint, endPoint],
-            color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
-          });
-        }
-        break;
-      }
-      case "callout": {
-        if (Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 4) {
-          onAddMarkup({
-            type: "callout",
-            points: [startPoint, endPoint],
-            text: "CALLOUT",
-            color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
           });
         }
         break;
@@ -705,8 +450,8 @@ export default function MarkupCanvas({
             type: "freehand",
             points: currentPath,
             color: activeColor,
-            opacity: activeOpacity ?? 100,
-            lineWidth: activeLineWidth || 2,
+            opacity: 100,
+            lineWidth: 2,
           });
         }
         setCurrentPath([]);
@@ -729,8 +474,7 @@ export default function MarkupCanvas({
         text: text.trim(),
         color: activeColor,
         fontSize: 14,
-        opacity: activeOpacity ?? 100,
-        lineWidth: activeLineWidth || 2,
+        opacity: 100,
       });
     }
     setTextInput(null);
@@ -786,7 +530,7 @@ export default function MarkupCanvas({
               if (e.key === "Escape") setTextInput(null);
             }}
             style={{
-              background: "rgba(12,14,17,0.92)",
+              background: "rgba(var(--bg-sidebar), 0.92)",
               border: `1px solid ${activeColor}`,
               color: activeColor,
               padding: "4px 8px",

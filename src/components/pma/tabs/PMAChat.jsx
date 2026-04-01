@@ -8,6 +8,7 @@ import AssumptionTracker from './AssumptionTracker';
 import RoleSelector from './RoleSelector';
 import ConfidenceDisplay from './ConfidenceDisplay';
 import { getRoleInstruction, getSelectedRole } from '../utils/roleDefinitions';
+import { addConfidenceScore } from '../utils/confidenceScoring';
 
 const QUICK_PROMPT_CATEGORIES = [
   {
@@ -70,74 +71,6 @@ const getPMAInstructions = () => {
   }
 };
 
-function compactSnapshot(snapshot) {
-  if (!snapshot) return null;
-  return {
-    project: snapshot.project,
-    rfis: snapshot.rfis
-      ? {
-          total: snapshot.rfis.total,
-          open: snapshot.rfis.open,
-          overdue: snapshot.rfis.overdue,
-          critical: snapshot.rfis.critical,
-          newThisWeek: snapshot.rfis.newThisWeek,
-          overdueItems: snapshot.rfis.overdueItems?.slice(0, 5) || [],
-        }
-      : undefined,
-    budget: snapshot.budget
-      ? {
-          contractValue: snapshot.budget.contractValue,
-          committed: snapshot.budget.committed,
-          pctUsed: snapshot.budget.pctUsed,
-          remaining: snapshot.budget.remaining,
-        }
-      : undefined,
-    changeOrders: snapshot.changeOrders
-      ? {
-          pending: snapshot.changeOrders.pending,
-          totalValue: snapshot.changeOrders.totalValue,
-          approvedThisWeek: snapshot.changeOrders.approvedThisWeek,
-          approvedValue: snapshot.changeOrders.approvedValue,
-          pendingItems: snapshot.changeOrders.pendingItems?.slice(0, 5) || [],
-        }
-      : undefined,
-    workPackages: snapshot.workPackages
-      ? {
-          total: snapshot.workPackages.total,
-          onTrack: snapshot.workPackages.onTrack,
-          delayed: snapshot.workPackages.delayed,
-          avgComplete: snapshot.workPackages.avgComplete,
-          completedThisWeek: snapshot.workPackages.completedThisWeek,
-          activeItems: snapshot.workPackages.activeItems?.slice(0, 6) || [],
-        }
-      : undefined,
-    deliveries: snapshot.deliveries
-      ? {
-          upcoming: snapshot.deliveries.upcoming,
-          recent: snapshot.deliveries.recent,
-          late: snapshot.deliveries.late,
-          upcomingItems: snapshot.deliveries.upcomingItems?.slice(0, 5) || [],
-          lateItems: snapshot.deliveries.lateItems?.slice(0, 5) || [],
-        }
-      : undefined,
-    submittals: snapshot.submittals
-      ? {
-          overdue: snapshot.submittals.overdue,
-          pending: snapshot.submittals.pending,
-          approved: snapshot.submittals.approved,
-          overdueItems: snapshot.submittals.overdueItems?.slice(0, 5) || [],
-        }
-      : undefined,
-    actionItems: snapshot.actionItems
-      ? {
-          overdueCount: snapshot.actionItems.overdueCount,
-          dueThisWeekCount: snapshot.actionItems.dueThisWeekCount,
-          overdueItems: snapshot.actionItems.overdueItems?.slice(0, 5) || [],
-        }
-      : undefined,
-  };
-}
-
 export default function PMAChat() {
   const {
     conversationHistory,
@@ -158,14 +91,15 @@ export default function PMAChat() {
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [createdTask, setCreatedTask] = useState(null);
   const messagesEndRef = useRef(null);
+  const [user, setUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('pm');
   const [confidenceMap, setConfidenceMap] = useState({});
   const [quickCategory, setQuickCategory] = useState(QUICK_PROMPT_CATEGORIES[0]);
   const [contextMode, setContextMode] = useState('PROJECT');
   const [customContext, setCustomContext] = useState('');
-  const [activeAssistantIndex, setActiveAssistantIndex] = useState(null);
 
   useEffect(() => {
+    base44.auth.me().then(setUser).catch(console.error);
     setSelectedRole(getSelectedRole());
   }, []);
 
@@ -175,14 +109,6 @@ export default function PMAChat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [conversationHistory]);
-
-  useEffect(() => {
-    const lastAssistantIndex = [...conversationHistory]
-      .map((msg, index) => ({ msg, index }))
-      .reverse()
-      .find(({ msg }) => msg.role === 'assistant')?.index ?? null;
-    setActiveAssistantIndex(lastAssistantIndex);
   }, [conversationHistory]);
 
   const sendMessage = async () => {
@@ -221,7 +147,7 @@ Return exactly this format:
   "priority": "High" or "Medium" or "Low"
 }`;
 
-        const parseResult = await base44.functions.invoke('invokeLLM', {
+        const parseResult = await base44.functions.invoke('anthropicProxy', {
           prompt: parsePrompt,
         });
         const parsed = typeof parseResult === 'string'
@@ -247,19 +173,17 @@ Return exactly this format:
           const snapshot = await buildProjectSnapshot();
           
           // Create audit record
-          try {
-            await createAuditRecord({
-              actionType: 'DECISION_RECORDED',
-              triggeredBy: text,
-              outputSummary: `Action item created: ${created.title}`,
-              snapshot: snapshot || {},
-              projectId: activeProject.id,
-              projectName: activeProject.name,
-              sessionId,
-              userId: null,
-              userRole: null,
-            });
-          } catch {}
+          await createAuditRecord({
+            actionType: 'DECISION_RECORDED',
+            triggeredBy: text,
+            outputSummary: `Action item created: ${created.title}`,
+            snapshot: snapshot || {},
+            projectId: activeProject.id,
+            projectName: activeProject.name,
+            sessionId,
+            userId: user?.id,
+            userRole: user?.role,
+          });
 
           setConversationHistory((prev) => [
             ...prev,
@@ -347,7 +271,7 @@ IMPORTANT:
 - Use actual numbers, names, and dates from data above
 - Professional construction industry tone`;
 
-        const emailResult = await base44.functions.invoke('invokeLLM', {
+        const emailResult = await base44.functions.invoke('anthropicProxy', {
           prompt: weeklyEmailPrompt,
         });
         const emailContent = (typeof emailResult === 'string'
@@ -363,19 +287,17 @@ IMPORTANT:
         setGeneratedEmail({ subject, body, fullText: emailContent });
         
         // Create audit record
-        try {
-          await createAuditRecord({
-            actionType: 'EMAIL_GENERATED',
-            triggeredBy: text,
-            outputSummary: `Weekly update email for ${activeProject.name}`,
-            snapshot,
-            projectId: activeProject.id,
-            projectName: activeProject.name,
-            sessionId,
-            userId: null,
-            userRole: null,
-          });
-        } catch {}
+        await createAuditRecord({
+          actionType: 'EMAIL_GENERATED',
+          triggeredBy: text,
+          outputSummary: `Weekly update email for ${activeProject.name}`,
+          snapshot,
+          projectId: activeProject.id,
+          projectName: activeProject.name,
+          sessionId,
+          userId: user?.id,
+          userRole: user?.role,
+        });
 
         setConversationHistory((prev) => [
           ...prev,
@@ -392,7 +314,7 @@ IMPORTANT:
         const instructions = getPMAInstructions();
         const roleInstruction = getRoleInstruction(selectedRole);
 
-        const snapshot = activeProject ? compactSnapshot(await buildProjectSnapshot()) : null;
+        const snapshot = activeProject ? await buildProjectSnapshot() : null;
 
         // Context selector filtering
         let scopedSnapshot = snapshot;
@@ -400,7 +322,7 @@ IMPORTANT:
           if (contextMode === 'RFIS') {
             scopedSnapshot = { project: snapshot.project, rfis: snapshot.rfis };
           } else if (contextMode === 'FINANCIALS') {
-            scopedSnapshot = { project: snapshot.project, budget: snapshot.budget, changeOrders: snapshot.changeOrders };
+            scopedSnapshot = { project: snapshot.project, budget: snapshot.budget, changeOrders: snapshot.changeOrders, costCodes: snapshot.budget?.records };
           } else if (contextMode === 'SCHEDULE') {
             scopedSnapshot = { project: snapshot.project, workPackages: snapshot.workPackages, deliveries: snapshot.deliveries, submittals: snapshot.submittals };
           } else if (contextMode === 'PORTFOLIO') {
@@ -465,7 +387,7 @@ ${dataBlock}`;
           augmentedPrompt = `CUSTOM CONTEXT:\n${customContext}\n\n${augmentedPrompt}`;
         }
 
-        const replyResult = await base44.functions.invoke('invokeLLM', {
+        const replyResult = await base44.functions.invoke('anthropicProxy', {
           prompt: augmentedPrompt,
           system: systemPrompt,
           messages: history,
@@ -480,19 +402,17 @@ ${dataBlock}`;
         ]);
 
         if (activeProject) {
-          try {
-            await createAuditRecord({
-              actionType: 'CHAT_RESPONSE',
-              triggeredBy: text,
-              outputSummary: reply.substring(0, 80),
-              snapshot: snapshot || {},
-              projectId: activeProject.id,
-              projectName: activeProject.name,
-              sessionId,
-              userId: null,
-              userRole: null,
-            });
-          } catch {}
+          createAuditRecord({
+            actionType: 'CHAT_RESPONSE',
+            triggeredBy: text,
+            outputSummary: reply.substring(0, 80),
+            snapshot: snapshot || {},
+            projectId: activeProject.id,
+            projectName: activeProject.name,
+            sessionId,
+            userId: user?.id,
+            userRole: user?.role,
+          }).catch(console.warn);
         }
       }
     } catch (err) {
@@ -668,7 +588,7 @@ ${dataBlock}`;
               >
                 {msg.content}
 
-                {msg.role === 'assistant' && activeAssistantIndex === i && (
+                {msg.role === 'assistant' && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <DecisionCapture
                       message={msg.content}
@@ -683,8 +603,8 @@ ${dataBlock}`;
                       projectName={activeProject?.name}
                       sessionId={sessionId}
                     />
-                    {confidenceMap[i] && (
-                      <ConfidenceDisplay confidence={confidenceMap[i]} />
+                    {confidenceMap[conversationHistory.indexOf(msg)] && (
+                      <ConfidenceDisplay confidence={confidenceMap[conversationHistory.indexOf(msg)]} />
                     )}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <ActionButton label="📋 Copy" onClick={() => navigator.clipboard.writeText(msg.content)} />
@@ -702,24 +622,6 @@ ${dataBlock}`;
                       />
                     </div>
                   </div>
-                )}
-                {msg.role === 'assistant' && activeAssistantIndex !== i && (
-                  <button
-                    onClick={() => setActiveAssistantIndex(i)}
-                    style={{
-                      marginTop: 8,
-                      background: 'transparent',
-                      border: '1px solid var(--border-default)',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 8,
-                      borderRadius: 6,
-                      padding: '4px 8px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Show Actions
-                  </button>
                 )}
               </div>
             </div>

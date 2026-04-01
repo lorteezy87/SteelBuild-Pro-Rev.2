@@ -3,7 +3,6 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -56,8 +55,7 @@ const StatCard = ({ label, value, color }) => (
 
 export default function Contacts() {
   const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = searchParams.get("project");
   const qc = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
@@ -72,9 +70,8 @@ export default function Contacts() {
     queryFn: () =>
       projectId
         ? base44.entities.Contact.filter({ project_id: projectId })
-        : [],
+        : base44.entities.Contact.list(),
     initialData: [],
-    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -183,8 +180,8 @@ export default function Contacts() {
             }}
           >
             <span>{selectedProject ? selectedProject.name : "All Projects"}</span>
-            <span style={{ color: "var(--border-strong)" }}>|</span>
-            <span>{filtered.length} {filtered.length === 1 ? "Contact" : "Contacts"}</span>
+            <span style={{ color: "var(--border-strong)" }}>·</span>
+            <span>{filtered.length} {filtered.length === 1 ? "Note" : "Notes"}</span>
             {stats.owner + stats.gc + stats.engineer + stats.subcontractor + stats.supplier + stats.inspector + stats.internal - filtered.length > 0 && (
               <span style={{
                 fontFamily: "var(--font-mono)",
@@ -197,7 +194,7 @@ export default function Contacts() {
                 borderRadius: "var(--radius-badge)",
                 letterSpacing: "0.08em",
               }}>
-                {contacts.length - filtered.length} FILTERED OUT
+                {contacts.length - filtered.length} OPEN
               </span>
             )}
           </p>
@@ -219,7 +216,7 @@ export default function Contacts() {
             textTransform: "uppercase",
           }}
         >
-          Create Contact
+          + New Contact
         </button>
       </div>
 
@@ -348,4 +345,3 @@ export default function Contacts() {
     </div>
   );
 }
-

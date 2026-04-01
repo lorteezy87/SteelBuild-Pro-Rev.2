@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.20";
 import { parseMPP } from "npm:@tensor-estate/tsmpp@0.1.0";
+import { assertProjectAccess } from "./projectAccess.ts";
 
 const PHASES = [
   "Pre-Construction",
@@ -73,6 +74,11 @@ Deno.serve(async (req) => {
 
     if (!projectId || !fileBase64) {
       return Response.json({ error: "project_id and file_base64 are required" }, { status: 400 });
+    }
+
+    const projectAccess = await assertProjectAccess(base44, user, projectId);
+    if (projectAccess instanceof Response) {
+      return projectAccess;
     }
 
     const bytes = decodeBase64(fileBase64);

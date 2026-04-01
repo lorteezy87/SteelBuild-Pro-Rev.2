@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { X, AlertCircle, CheckCircle, Lightbulb } from "lucide-react";
 
 export default function AIAnalysisPanel({ results, document, onClose, onCreateRFI }) {
   const [expandedSection, setExpandedSection] = useState("priority");

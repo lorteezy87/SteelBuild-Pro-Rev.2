@@ -1,990 +1,249 @@
-import React, { useEffect } from "react";
+import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
-const problemPoints = [
-  "Missed revisions",
-  "Slow RFI follow-up",
-  "Poor visibility into fabrication and delivery status",
-  "Field issues discovered too late",
-  "PMs spending too much time chasing updates",
-  "Leadership lacking a clear view of project risk",
+const highlightStats = [
+  { label: "Projects under management", value: "220+", detail: "Steel, tilt-up, and mixed structural delivery" },
+  { label: "Schedule risk reduction", value: "18%", detail: "Average reduction in critical path slip" },
+  { label: "QA / QC close-out", value: "99.2%", detail: "Digital traceability from fab to field" },
 ];
 
-const solutionPoints = [
-  "Drawings and revisions",
-  "RFIs and submittals",
-  "Fabrication status",
-  "Deliveries",
-  "Schedule and look-ahead planning",
-  "Field issues and feedback loops",
-  "Cost and project controls",
-  "Executive reporting and job health",
-];
-
-const outcomePoints = [
-  "Reduce confusion around current drawings and revisions",
-  "Catch field and coordination issues earlier",
-  "Improve handoff between office, shop, and field",
-  "Give PMs a clearer view of job status",
-  "Help leadership spot schedule, cost, and execution risk sooner",
-  "Spend less time hunting for answers across disconnected systems",
-];
-
-const audiencePoints = [
-  "Structural steel fabricators",
-  "Structural steel erectors",
-  "PMs and project executives",
-  "Shop and field coordination teams",
-  "Operations leaders who need better project visibility",
-];
-
-const pilotPoints = [
-  "Direct onboarding support",
-  "Hands-on workflow setup",
-  "Priority feedback and issue resolution",
-  "Influence on product direction",
-  "Early partner pricing",
-];
-
-const workflow = ["Detailing", "Fabrication", "Delivery", "Erection"];
-
-const solutionCards = [
+const modules = [
   {
-    code: "01",
-    title: "Drawing Management",
-    body: "Track revision history, active set status, approvers, and release state without bouncing between PDFs, emails, and cloud folders.",
-    tone: "var(--accent)",
+    title: "Fabrication Command",
+    body: "Weld maps, cut lists, and NCRs in one pane. Live release gates sync to shop work packages.",
+    tag: "Shop Ready",
   },
   {
-    code: "02",
-    title: "Integrated RFI Workflow",
-    body: "Connect RFIs, due dates, discipline ownership, and follow-up pressure directly to the project team running the job.",
-    tone: "var(--secondary)",
+    title: "Field Execution",
+    body: "Erection sequencing, crane picks, and lift plans tied to weather and access constraints.",
+    tag: "Site Safe",
   },
   {
-    code: "03",
-    title: "Fabrication + Delivery Control",
-    body: "Monitor work packages, fabrication progress, trucking readiness, and field handoff from one command surface.",
-    tone: "var(--status-warning)",
+    title: "Quality & Compliance",
+    body: "Inspection punchlists, photo evidence, torque logs, and turnover packages generated automatically.",
+    tag: "Traceable",
   },
   {
-    code: "04",
-    title: "Schedule + Risk Visibility",
-    body: "See execution pressure earlier through look-ahead planning, field issues, cost exposure, and executive-level health signals.",
-    tone: "var(--status-success)",
+    title: "Financial Control",
+    body: "SOV, COs, RFIs, and cost codes linked to progress curves. Executive dashboards without spreadsheets.",
+    tag: "Commercial Clarity",
   },
+];
+
+const workflows = [
+  { step: "01", title: "Coordinate", text: "Sync drawings, RFIs, and submittals; route actions to accountable roles." },
+  { step: "02", title: "Execute", text: "Release work packages to shop and field with milestone checks and alerts." },
+  { step: "03", title: "Verify", text: "Capture QC evidence, inspections, and safety with linked photos and forms." },
+  { step: "04", title: "Report", text: "Live status for owners and execs; export sealed close-out without rework." },
 ];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const goTo = (page) => navigate(createPageUrl(page));
+  const modulesRef = useRef(null);
 
-  useEffect(() => {
-    document.title = "SteelBuild-Pro";
-  }, []);
+  const goDashboard = () => navigate(createPageUrl("Dashboard"));
+  const scrollModules = () => modulesRef.current?.scrollIntoView({ behavior: "smooth" });
 
   return (
-    <div style={pageShell}>
-      <style>{responsiveCss}</style>
+    <div style={{ background: "var(--bg-page)", color: "var(--text-primary)", minHeight: "100vh", fontFamily: "var(--font-body)" }}>
+      {/* Header */}
+      <header style={{
+        position: "sticky", top: 0, zIndex: 20,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 28px", borderBottom: "1px solid var(--border-default)", background: "rgba(12,14,17,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 6,
+            background: "linear-gradient(135deg,var(--accent),var(--accent-light))",
+            display: "grid", placeItems: "center", color: "var(--on-accent)", fontWeight: 800, fontSize: 14, letterSpacing: "0.06em",
+            boxShadow: "var(--shadow-orange-glow)"
+          }}>
+            SB
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+            <span style={{ fontWeight: 800, letterSpacing: "0.14em", fontSize: 12 }}>STEELBUILD PRO</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Fabrication + Field Command</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
+          <button onClick={scrollModules} style={linkBtn}>Platform</button>
+          <button onClick={() => navigate(createPageUrl("Projects"))} style={linkBtn}>Projects</button>
+          <button onClick={() => navigate(createPageUrl("RFIs"))} style={linkBtn}>RFIs</button>
+          <button onClick={() => navigate(createPageUrl("DrawingViewer"))} style={linkBtn}>Drawings</button>
+          <button onClick={goDashboard} style={ctaBtn}>Launch App</button>
+        </div>
+      </header>
 
-      <section style={heroSection}>
-        <div style={heroTexture} />
-        <div style={heroGlowLeft} />
-        <div style={heroGlowRight} />
-
-        <div className="landing-hero-grid" style={heroGrid}>
-          <div style={heroLeft}>
-            <div style={brandRow}>
-              <div style={brandMark}>SB</div>
-              <div>
-                <div style={{ ...eyebrow, color: "var(--secondary)", marginBottom: 4 }}>SteelBuild-Pro</div>
-                <div style={brandSub}>Structural steel project controls and operations software</div>
-              </div>
-            </div>
-
-            <div style={statusPill}>
-              <span style={statusDot} />
-              <span>System Status: Operational</span>
-            </div>
-
-            <div style={{ ...eyebrow, color: "var(--accent)", marginBottom: 16 }}>Industrial precision assured</div>
-            <h1 style={heroTitle}>
-              Built for <span style={{ color: "var(--accent)" }}>Steel</span>.
-              <br />
-              Designed for Control.
-            </h1>
-            <p style={heroBody}>
-              Project controls and operations software for structural steel contractors. Manage drawings, RFIs, fabrication,
-              deliveries, field issues, schedule, and job risk in one system.
+      {/* Hero */}
+      <section style={{
+        padding: "96px 28px 64px",
+        position: "relative",
+        overflow: "hidden",
+        background: "radial-gradient(circle at 20% 20%, rgba(255,107,0,0.18), transparent 40%), radial-gradient(circle at 80% 0%, rgba(0,229,255,0.10), transparent 45%), var(--bg-page)"
+      }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 32, alignItems: "center" }}>
+          <div>
+            <p style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--secondary)", margin: "0 0 12px" }}>
+              End-to-end steel delivery, one command surface.
             </p>
-
-            <div style={ctaRow}>
-              <button onClick={() => goTo("Projects")} style={primaryBtn}>
-                Book a Demo
-              </button>
-              <button onClick={() => goTo("Dashboard")} style={ghostBtn}>
-                Join the Founding Pilot Program
-              </button>
-            </div>
-
-            <div className="landing-metric-grid" style={metricGrid}>
-              <MetricBlock label="Workflow" value="Steel-First" accent="var(--accent)" />
-              <MetricBlock label="Control Surface" value="Unified" accent="var(--text-primary)" />
-              <MetricBlock label="Risk Visibility" value="Live" accent="var(--secondary)" />
-              <MetricBlock label="Office / Shop / Field" value="1 System" accent="var(--status-success)" />
+            <h1 style={{
+              fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "clamp(42px,6vw,74px)",
+              lineHeight: 1.05, margin: "0 0 18px"
+            }}>
+              The operating system for structural steel.
+            </h1>
+            <p style={{ fontSize: 18, color: "var(--text-secondary)", lineHeight: 1.6, margin: "0 0 28px" }}>
+              SteelBuild Pro unifies fabrication, erection, QA/QC, RFIs, and commercial control so project teams move with precision and evidence.
+            </p>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button onClick={goDashboard} style={primaryBtn}>Request a walkthrough</button>
+              <button onClick={scrollModules} style={ghostBtn}>View platform modules</button>
             </div>
           </div>
 
-          <div style={heroPanel}>
-            <div style={panelHeader}>
-              <div>
-                <div style={{ ...eyebrow, color: "var(--secondary)", marginBottom: 4 }}>Execution sequence</div>
-                <div style={panelHeaderSub}>A steel-native terminal for project control</div>
+          <div style={{
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, padding: 20,
+            boxShadow: "var(--shadow-card)"
+          }}>
+            <div className="ai-texture" style={{ border: "1px solid var(--secondary-border)", borderRadius: 10, padding: 20, background: "var(--bg-void)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--secondary)" }}>Live Controls</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-secondary)" }}>SteelBuild Terminal</span>
               </div>
-              <div style={monoPill}>Live Workflow</div>
-            </div>
-
-            <div style={heroPanelBody}>
-              <div style={workflowBlock}>
-                <div style={{ ...sectionCaption, marginBottom: 12 }}>The real sequence of work</div>
-                <div style={{ display: "grid", gap: 10 }}>
-                  {workflow.map((step, index) => (
-                    <div key={step} style={workflowRow}>
-                      <div style={{ ...workflowIndex, color: index % 2 === 0 ? "var(--accent)" : "var(--secondary)" }}>
-                        0{index + 1}
-                      </div>
-                      <div
-                        style={{
-                          ...workflowName,
-                          borderLeft: `4px solid ${index % 2 === 0 ? "var(--accent)" : "var(--secondary)"}`,
-                        }}
-                      >
-                        {step}
-                      </div>
-                      <div style={workflowArrow}>{index < workflow.length - 1 ? "→" : ""}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={terminalBlock}>
-                <div style={terminalHeader}>Operational reality</div>
-                <div style={terminalLine}>
-                  <span style={{ color: "var(--status-error)" }}>$</span>
-                  <span>Generic construction platforms were not built around steel workflow.</span>
-                </div>
-                <div style={terminalLine}>
-                  <span style={{ color: "var(--secondary)" }}>{">"}</span>
-                  <span>Better visibility, fewer missed handoffs, faster decisions.</span>
-                </div>
-                <div style={terminalLine}>
-                  <span style={{ color: "var(--status-warning)" }}>{">"}</span>
-                  <span>Track the office, shop, and field from one execution system.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="problem" style={surfaceSection}>
-        <div style={sectionWrap}>
-          <div className="landing-two-col" style={twoCol}>
-            <div>
-              <div style={{ ...sectionCaption, borderLeftColor: "var(--status-error)" }}>Critical system inefficiencies</div>
-              <h2 style={sectionTitle}>Structural steel teams do not work in a straight line.</h2>
-              <p style={sectionBody}>
-                Information moves from estimating to detailing to fabrication to delivery to erection, and most teams are still
-                managing it across emails, spreadsheets, PDFs, and disconnected software.
-              </p>
-            </div>
-            <div className="landing-stack-grid" style={stackGrid}>
-              {problemPoints.map((item, index) => (
-                <StripCard
-                  key={item}
-                  code={`0${index + 1}`}
-                  title={item}
-                  body="This failure point compounds across schedule, coordination, and execution risk when the team is operating in disconnected tools."
-                  tone="var(--status-error)"
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="solution" style={darkSection}>
-        <div style={sectionWrap}>
-          <div className="landing-two-col" style={twoCol}>
-            <div>
-              <div style={sectionCaption}>Architectural solution</div>
-              <h2 style={sectionTitle}>One place to manage the workflows that actually drive execution.</h2>
-              <p style={sectionBody}>
-                SteelBuild-Pro gives structural steel contractors one place to manage the workflows that actually drive execution.
-              </p>
-            </div>
-            <div style={{ display: "grid", gap: 10 }}>
-              {solutionCards.map((item) => (
-                <StripCard key={item.title} code={item.code} title={item.title} body={item.body} tone={item.tone} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="different" style={terminalSection}>
-        <div style={sectionWrap}>
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ ...eyebrow, color: "var(--secondary)", marginBottom: 12 }}>Specialized tooling vs generic platforms</div>
-            <h2 style={{ ...sectionTitle, maxWidth: 860, margin: "0 auto" }}>SteelBuild-Pro is designed around the real sequence of work.</h2>
-          </div>
-
-          <div className="landing-bento-grid" style={bentoGrid}>
-            <div style={bentoLarge}>
-              <div style={sectionCaption}>Steel-first architecture</div>
-              <p style={{ ...sectionBody, marginTop: 0, maxWidth: "100%" }}>
-                Generic construction platforms were not built around steel workflow. SteelBuild-Pro is designed around the real
-                sequence of work: Detailing → Fabrication → Delivery → Erection.
-              </p>
-              <div style={{ display: "grid", gap: 8, marginTop: 18 }}>
-                {workflow.map((step, index) => (
-                  <div key={step} style={bentoStepRow}>
-                    <span style={{ ...eyebrow, color: "var(--accent)" }}>Step 0{index + 1}</span>
-                    <span style={bentoStepText}>{step}</span>
+              <div style={{ display: "grid", gap: 12 }}>
+                {[
+                  { label: "Work packages released", value: "312", accent: "var(--secondary)" },
+                  { label: "Erection tasks in flight", value: "58", accent: "var(--accent)" },
+                  { label: "QA / QC exceptions open", value: "4", accent: "var(--danger)" },
+                ].map(({ label, value, accent }) => (
+                  <div key={label} style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "rgba(255,255,255,0.02)" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 28, color: accent }}>{value}</div>
                   </div>
                 ))}
               </div>
             </div>
-
-            <div style={bentoAccent}>
-              <div style={{ ...eyebrow, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>Differentiator</div>
-              <div style={accentTitle}>Fewer missed handoffs. Faster decisions.</div>
-              <p style={accentBody}>
-                The workflow model is steel-native, so the system matches how jobs actually move instead of forcing teams into
-                generic construction abstractions.
-              </p>
-            </div>
-
-            <div style={bentoSmall}>
-              <div style={bentoSmallLabel}>Data Density</div>
-              <div style={bentoSmallTitle}>Terminal-speed visibility</div>
-              <div style={bentoSmallBody}>Dense operational context without relying on endless dashboards and disconnected reports.</div>
-            </div>
-
-            <div style={bentoSmall}>
-              <div style={bentoSmallLabel}>Workflow Continuity</div>
-              <div style={bentoSmallTitle}>Office, shop, field</div>
-              <div style={bentoSmallBody}>Better handoff across the people actually responsible for steel execution.</div>
-            </div>
           </div>
         </div>
       </section>
 
-      <section style={surfaceSection}>
-        <div style={sectionWrap}>
-          <div className="landing-two-col" style={twoCol}>
-            <div>
-              <div style={{ ...sectionCaption, borderLeftColor: "var(--status-success)" }}>Outcomes</div>
-              <h2 style={sectionTitle}>Hard outcomes for teams running steel jobs.</h2>
-              <p style={sectionBody}>
-                With SteelBuild-Pro, your team can reduce confusion, improve handoff, and surface schedule, cost, and execution
-                risk sooner.
-              </p>
+      {/* Stats */}
+      <section style={{ padding: "40px 28px", borderTop: "1px solid var(--border-default)", borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 18 }}>
+          {highlightStats.map(({ label, value, detail }) => (
+            <div key={label} style={{ padding: 18, border: "1px solid var(--border-default)", borderRadius: 10, background: "var(--bg-void)", boxShadow: "var(--shadow-card)" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--secondary)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: 30, color: "var(--text-primary)", marginBottom: 6 }}>{value}</div>
+              <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>{detail}</div>
             </div>
-            <Checklist items={outcomePoints} tone="var(--status-success)" />
-          </div>
+          ))}
         </div>
       </section>
 
-      <section style={darkSection}>
-        <div style={sectionWrap}>
-          <div className="landing-two-col" style={twoCol}>
+      {/* Modules */}
+      <section ref={modulesRef} style={{ padding: "96px 28px", background: "var(--bg-page)" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
             <div>
-              <div style={{ ...sectionCaption, borderLeftColor: "var(--secondary)" }}>Who it is for</div>
-              <h2 style={sectionTitle}>Built for the teams actually running steel work.</h2>
-              <p style={sectionBody}>
-                Built for structural steel fabricators, erectors, PMs, project executives, and operations leaders who need better
-                project visibility.
-              </p>
-            </div>
-            <div className="landing-audience-grid" style={audienceGrid}>
-              {audiencePoints.map((item, index) => (
-                <AudienceTile
-                  key={item}
-                  title={item}
-                  tone={[ "var(--accent)", "var(--secondary)", "var(--status-warning)", "var(--text-secondary)", "var(--status-success)" ][index % 5]}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="pilot" style={pilotSection}>
-        <div style={pilotGlow} />
-        <div style={sectionWrap}>
-          <div className="landing-two-col" style={twoCol}>
-            <div>
-              <div style={pilotBadge}>Enrollment Open</div>
-              <h2 style={sectionTitle}>Join the founding pilot program.</h2>
-              <p style={sectionBody}>
-                We are looking for a small number of structural steel contractors to join our founding pilot program.
-              </p>
-              <div style={ctaRow}>
-                <button onClick={() => goTo("Projects")} style={primaryBtn}>
-                  Apply for a Pilot
-                </button>
-                <button onClick={() => goTo("Projects")} style={ghostBtn}>
-                  Book a Demo
-                </button>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--secondary)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
+                Built for heavy steel delivery
               </div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "clamp(32px,5vw,52px)", margin: 0 }}>
+                Core modules for fabrication, field, and finance.
+              </h2>
             </div>
-
-            <div style={pilotCard}>
-              <div style={sectionCaption}>Pilot partners receive</div>
-              <Checklist items={pilotPoints} tone="var(--status-warning)" compact />
-            </div>
+            <button onClick={goDashboard} style={ghostBtn}>Open dashboard</button>
           </div>
 
-          <div style={closingBlock}>
-            <h2 style={{ ...sectionTitle, maxWidth: 820 }}>Steel is too complex to manage with disconnected tools.</h2>
-            <p style={{ ...sectionBody, maxWidth: 760 }}>
-              Run your jobs with a system built for the way steel actually gets done.
-            </p>
-            <button onClick={() => goTo("Projects")} style={primaryBtn}>
-              Book a Demo
-            </button>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
+            {modules.map((m) => (
+              <div key={m.title} style={{ padding: 20, border: "1px solid var(--border-default)", borderRadius: 10, background: "var(--bg-surface)", boxShadow: "var(--shadow-card)" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{m.tag}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 22, marginBottom: 10 }}>{m.title}</div>
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--text-secondary)" }}>{m.body}</p>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* Workflow */}
+      <section style={{ padding: "72px 28px", background: "var(--bg-surface)" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16 }}>
+          {workflows.map(({ step, title, text }) => (
+            <div key={step} style={{ padding: 18, border: "1px solid var(--border-default)", borderRadius: 10, background: "var(--bg-page)" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--secondary)", letterSpacing: "0.12em", marginBottom: 6 }}>Step {step}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, marginBottom: 8 }}>{title}</div>
+              <div style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6 }}>{text}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={{ padding: "88px 28px", background: "linear-gradient(135deg,var(--bg-surface),var(--bg-page))" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", textAlign: "center", border: "1px solid var(--border-default)", borderRadius: 12, padding: 36, background: "var(--bg-void)", boxShadow: "var(--shadow-card)" }}>
+          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 900, fontSize: "clamp(28px,4vw,44px)", margin: "0 0 12px" }}>
+            Build the safest, fastest steel projects of your portfolio.
+          </h3>
+          <p style={{ margin: "0 0 26px", fontSize: 16, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+            Request a guided session with our team to see your project data inside SteelBuild Pro in under a day.
+          </p>
+          <button onClick={goDashboard} style={primaryBtn}>Schedule a session</button>
         </div>
       </section>
     </div>
   );
 }
 
-function MetricBlock({ label, value, accent }) {
-  return (
-    <div style={metricBlock}>
-      <div style={{ ...eyebrow, color: "var(--text-muted)", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 800, color: accent, lineHeight: 1 }}>{value}</div>
-    </div>
-  );
-}
-
-function StripCard({ code, title, body, tone }) {
-  return (
-    <div style={{ ...stripCard, borderLeftColor: tone }}>
-      <div style={stripCode}>{code}</div>
-      <div style={stripTitle}>{title}</div>
-      <div style={stripBody}>{body}</div>
-    </div>
-  );
-}
-
-function AudienceTile({ title, tone }) {
-  return (
-    <div style={{ ...audienceTile, borderBottom: `2px solid ${tone}` }}>
-      <div style={{ ...eyebrow, color: tone, marginBottom: 10 }}>Role</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.15 }}>{title}</div>
-    </div>
-  );
-}
-
-function Checklist({ items, tone, compact = false }) {
-  return (
-    <div style={{ display: "grid", gap: compact ? 8 : 10 }}>
-      {items.map((item) => (
-        <div key={item} style={{ ...checkRow, padding: compact ? "8px 0" : "10px 0" }}>
-          <div style={{ ...checkDot, background: tone, boxShadow: `0 0 8px ${tone}` }} />
-          <div style={checkText}>{item}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const pageShell = {
-  minHeight: "100vh",
-  background: "var(--bg-page)",
-  color: "var(--text-primary)",
-};
-
-const heroSection = {
-  position: "relative",
-  minHeight: "calc(100vh - 52px)",
-  padding: "0 24px",
-  overflow: "hidden",
-  background: "linear-gradient(180deg, #090A0B 0%, #0C0E11 58%, #111316 100%)",
-};
-
-const heroTexture = {
-  position: "absolute",
-  inset: 0,
-  backgroundImage:
-    "linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)",
-  backgroundSize: "48px 48px",
-  opacity: 0.08,
-  pointerEvents: "none",
-};
-
-const heroGlowLeft = {
-  position: "absolute",
-  left: "-12%",
-  top: "8%",
-  width: 420,
-  height: 420,
-  background: "radial-gradient(circle, rgba(255,107,0,0.18), transparent 68%)",
-  pointerEvents: "none",
-};
-
-const heroGlowRight = {
-  position: "absolute",
-  right: "-10%",
-  top: "12%",
-  width: 380,
-  height: 380,
-  background: "radial-gradient(circle, rgba(0,229,255,0.14), transparent 68%)",
-  pointerEvents: "none",
-};
-
-const heroGrid = {
-  position: "relative",
-  maxWidth: 1360,
-  margin: "0 auto",
-  minHeight: "calc(100vh - 52px)",
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1.08fr) minmax(360px, 0.92fr)",
-  gap: 28,
-  alignItems: "stretch",
-  padding: "42px 0 64px",
-};
-
-const heroLeft = {
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "space-between",
-  gap: 28,
-};
-
-const brandRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: 22,
-};
-
-const brandMark = {
-  width: 46,
-  height: 46,
-  borderRadius: 2,
-  background: "linear-gradient(135deg, var(--accent), var(--accent-light))",
-  display: "grid",
-  placeItems: "center",
-  color: "#fff",
-  fontFamily: "var(--font-display)",
-  fontSize: 16,
-  fontWeight: 900,
-  letterSpacing: "0.1em",
-};
-
-const brandSub = {
-  fontSize: 12,
-  color: "var(--text-muted)",
-};
-
-const statusPill = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "6px 10px",
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 2,
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.16em",
+const linkBtn = {
+  background: "none",
+  border: "none",
   color: "var(--text-secondary)",
-  textTransform: "uppercase",
-  marginBottom: 16,
-  width: "fit-content",
-};
-
-const statusDot = {
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  background: "var(--secondary)",
-  boxShadow: "0 0 10px rgba(0,229,255,0.6)",
-};
-
-const heroTitle = {
-  margin: 0,
-  fontFamily: "var(--font-display)",
-  fontSize: "clamp(48px, 8vw, 92px)",
-  lineHeight: 0.9,
-  letterSpacing: "-0.06em",
-  fontWeight: 900,
-  textTransform: "uppercase",
-  maxWidth: 900,
-};
-
-const heroBody = {
-  margin: "18px 0 0",
-  maxWidth: 700,
-  fontSize: 17,
-  lineHeight: 1.75,
-  color: "var(--text-secondary)",
-};
-
-const ctaRow = {
-  display: "flex",
-  gap: 12,
-  flexWrap: "wrap",
-  marginTop: 28,
-};
-
-const metricGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: 12,
-  maxWidth: 840,
-};
-
-const metricBlock = {
-  background: "rgba(255,255,255,0.03)",
-  padding: "14px 14px 12px",
-  borderLeft: "4px solid rgba(255,255,255,0.08)",
-};
-
-const heroPanel = {
-  background: "rgba(13,14,16,0.84)",
-  backdropFilter: "blur(20px)",
-  WebkitBackdropFilter: "blur(20px)",
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 0,
-};
-
-const panelHeader = {
-  padding: "16px 18px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  background: "rgba(255,255,255,0.02)",
-};
-
-const panelHeaderSub = {
-  fontSize: 12,
-  color: "var(--text-muted)",
-};
-
-const heroPanelBody = {
-  padding: 18,
-  display: "grid",
-  gap: 14,
-  flex: 1,
-};
-
-const workflowBlock = {
-  background: "var(--bg-surface)",
-  padding: "14px 14px 16px",
-};
-
-const workflowRow = {
-  display: "grid",
-  gridTemplateColumns: "56px minmax(0,1fr) 20px",
-  gap: 12,
-  alignItems: "center",
-};
-
-const workflowIndex = {
-  fontFamily: "var(--font-display)",
-  fontSize: 26,
-  fontWeight: 800,
-};
-
-const workflowName = {
-  padding: "10px 12px",
-  background: "var(--bg-surface-mid)",
-  fontFamily: "var(--font-display)",
-  fontSize: 18,
-  fontWeight: 700,
-  color: "var(--text-primary)",
-};
-
-const workflowArrow = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 12,
-  color: "var(--text-muted)",
-};
-
-const terminalBlock = {
-  background: "var(--bg-void)",
-  padding: "16px 16px 14px",
-  minHeight: 180,
-};
-
-const terminalHeader = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 8,
-  fontWeight: 700,
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  color: "var(--text-muted)",
-  marginBottom: 10,
-};
-
-const terminalLine = {
-  display: "grid",
-  gridTemplateColumns: "16px minmax(0,1fr)",
-  gap: 10,
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  lineHeight: 1.8,
-  color: "var(--text-secondary)",
-  marginBottom: 8,
-};
-
-const surfaceSection = {
-  padding: "80px 24px",
-  background: "var(--bg-surface-low)",
-};
-
-const darkSection = {
-  padding: "80px 24px",
-  background: "var(--bg-page)",
-};
-
-const terminalSection = {
-  padding: "84px 24px",
-  background: "var(--bg-void)",
-};
-
-const sectionWrap = {
-  maxWidth: 1360,
-  margin: "0 auto",
-};
-
-const twoCol = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0,0.92fr) minmax(0,1.08fr)",
-  gap: 28,
-  alignItems: "start",
-};
-
-const stackGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-};
-
-const stripCard = {
-  background: "var(--bg-surface)",
-  padding: "16px 16px 18px",
-  borderLeft: "4px solid var(--accent)",
-  minHeight: 144,
-};
-
-const stripCode = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 28,
-  lineHeight: 1,
-  color: "rgba(255,255,255,0.14)",
-  marginBottom: 18,
-};
-
-const stripTitle = {
-  fontFamily: "var(--font-display)",
-  fontSize: 21,
-  fontWeight: 800,
-  letterSpacing: "-0.03em",
-  marginBottom: 10,
-};
-
-const stripBody = {
-  fontSize: 13,
-  lineHeight: 1.7,
-  color: "var(--text-secondary)",
-};
-
-const bentoGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gridTemplateRows: "minmax(180px, auto) minmax(180px, auto)",
-  gap: 12,
-};
-
-const bentoLarge = {
-  gridColumn: "span 2",
-  gridRow: "span 2",
-  background: "var(--bg-surface)",
-  padding: 24,
-};
-
-const bentoAccent = {
-  gridColumn: "span 2",
-  background: "linear-gradient(135deg, rgba(255,107,0,0.9), rgba(255,140,56,0.86))",
-  color: "#fff",
-  padding: 24,
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "flex-end",
-  minHeight: 180,
-};
-
-const accentTitle = {
-  fontFamily: "var(--font-display)",
-  fontSize: 30,
-  lineHeight: 0.95,
-  fontWeight: 900,
-  letterSpacing: "-0.04em",
-  textTransform: "uppercase",
-  marginBottom: 10,
-};
-
-const accentBody = {
+  fontFamily: "var(--font-body)",
+  fontWeight: 600,
   fontSize: 14,
-  lineHeight: 1.7,
-  color: "rgba(255,255,255,0.86)",
-  maxWidth: 500,
+  letterSpacing: "0.04em",
+  cursor: "pointer",
+  padding: 0,
 };
 
-const bentoSmall = {
-  background: "var(--bg-surface-mid)",
-  padding: 20,
-};
-
-const bentoSmallLabel = {
-  ...{
-    fontFamily: "var(--font-mono)",
-    fontSize: 8,
-    fontWeight: 700,
-    letterSpacing: "0.14em",
-    textTransform: "uppercase",
-    color: "var(--secondary)",
-    marginBottom: 10,
-  },
-};
-
-const bentoSmallTitle = {
-  fontFamily: "var(--font-display)",
-  fontSize: 18,
-  fontWeight: 800,
-  lineHeight: 1.05,
-  letterSpacing: "-0.03em",
-  marginBottom: 8,
-};
-
-const bentoSmallBody = {
-  fontSize: 12,
-  lineHeight: 1.7,
-  color: "var(--text-secondary)",
-};
-
-const bentoStepRow = {
-  display: "grid",
-  gridTemplateColumns: "88px minmax(0,1fr)",
-  gap: 12,
-  alignItems: "center",
-  padding: "8px 0",
-  borderTop: "1px solid rgba(255,255,255,0.05)",
-};
-
-const bentoStepText = {
-  fontFamily: "var(--font-display)",
-  fontSize: 15,
-  fontWeight: 700,
-  letterSpacing: "-0.02em",
-};
-
-const audienceGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-};
-
-const audienceTile = {
-  background: "var(--bg-surface-mid)",
-  padding: 18,
-};
-
-const pilotSection = {
-  position: "relative",
-  padding: "84px 24px 96px",
-  background: "linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-page) 100%)",
-  overflow: "hidden",
-};
-
-const pilotGlow = {
-  position: "absolute",
-  top: 0,
-  right: "-10%",
-  width: "48%",
-  height: "100%",
-  background: "linear-gradient(135deg, rgba(255,107,0,0.06), rgba(0,229,255,0.03))",
-  transform: "skewX(-14deg)",
-  pointerEvents: "none",
-};
-
-const pilotBadge = {
-  display: "inline-block",
+const ctaBtn = {
   background: "var(--accent)",
-  color: "#fff",
-  padding: "6px 10px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.18em",
+  color: "var(--on-accent)",
+  fontWeight: 800,
+  border: "none",
+  borderRadius: "var(--radius-btn)",
+  padding: "10px 18px",
+  cursor: "pointer",
+  boxShadow: "var(--shadow-orange-glow)",
   textTransform: "uppercase",
-  marginBottom: 18,
-};
-
-const pilotCard = {
-  background: "var(--bg-void)",
-  padding: 20,
-  borderLeft: "4px solid var(--status-warning)",
-};
-
-const closingBlock = {
-  marginTop: 40,
-  paddingTop: 26,
-  borderTop: "1px solid var(--divider)",
-  display: "grid",
-  gap: 12,
+  letterSpacing: "0.08em",
 };
 
 const primaryBtn = {
   background: "var(--accent)",
-  color: "#FFFFFF",
+  color: "var(--on-accent)",
+  fontWeight: 800,
   border: "none",
-  borderRadius: 2,
-  padding: "14px 20px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.18em",
-  textTransform: "uppercase",
+  borderRadius: "var(--radius-btn)",
+  padding: "14px 26px",
   cursor: "pointer",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  boxShadow: "var(--shadow-orange-glow)",
 };
 
 const ghostBtn = {
   background: "transparent",
   color: "var(--text-primary)",
+  fontWeight: 700,
   border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  padding: "14px 20px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: "0.18em",
-  textTransform: "uppercase",
+  borderRadius: "var(--radius-btn)",
+  padding: "14px 26px",
   cursor: "pointer",
-};
-
-const monoPill = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 8,
-  fontWeight: 700,
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  color: "var(--accent)",
-};
-
-const eyebrow = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: "0.18em",
+  letterSpacing: "0.08em",
   textTransform: "uppercase",
 };
-
-const sectionCaption = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 8,
-  fontWeight: 700,
-  color: "var(--text-muted)",
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  borderLeft: "3px solid var(--accent)",
-  paddingLeft: 8,
-  marginBottom: 14,
-};
-
-const sectionTitle = {
-  margin: 0,
-  fontFamily: "var(--font-display)",
-  fontSize: "clamp(30px, 4.8vw, 58px)",
-  lineHeight: 0.94,
-  fontWeight: 900,
-  letterSpacing: "-0.05em",
-  textTransform: "uppercase",
-  color: "var(--text-primary)",
-};
-
-const sectionBody = {
-  margin: "16px 0 0",
-  fontSize: 15,
-  lineHeight: 1.8,
-  color: "var(--text-secondary)",
-  maxWidth: 720,
-};
-
-const checkRow = {
-  display: "grid",
-  gridTemplateColumns: "12px minmax(0,1fr)",
-  gap: 10,
-  alignItems: "start",
-  borderBottom: "1px solid var(--divider)",
-};
-
-const checkDot = {
-  width: 7,
-  height: 7,
-  borderRadius: "50%",
-  marginTop: 7,
-};
-
-const checkText = {
-  fontSize: 14,
-  lineHeight: 1.65,
-  color: "var(--text-secondary)",
-};
-
-const responsiveCss = `
-  .landing-hero-grid {
-    grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
-  }
-  .landing-two-col {
-    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  }
-  .landing-bento-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .landing-metric-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .landing-stack-grid,
-  .landing-audience-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  @media (max-width: 1120px) {
-    .landing-hero-grid,
-    .landing-two-col {
-      grid-template-columns: 1fr !important;
-    }
-    .landing-bento-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-  }
-
-  @media (max-width: 760px) {
-    .landing-metric-grid,
-    .landing-stack-grid,
-    .landing-audience-grid,
-    .landing-bento-grid {
-      grid-template-columns: 1fr !important;
-    }
-  }
-`;

@@ -109,7 +109,7 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
         )}
 
         {/* Font size for text */}
-        {["text", "callout"].includes(markup.type) && (
+        {markup.type === "text" && (
           <div>
             {label("Font Size")}
             <div style={{ display: "flex", gap: 4 }}>
@@ -134,9 +134,9 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
         )}
 
         {/* Text content for text markups */}
-        {["text", "callout"].includes(markup.type) && (
+        {markup.type === "text" && (
           <div>
-            {label(markup.type === "callout" ? "Callout Text" : "Text")}
+            {label("Text")}
             <input
               type="text"
               value={markup.text || ""}

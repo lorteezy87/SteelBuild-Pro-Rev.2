@@ -440,14 +440,12 @@ export default function ResourceScheduling() {
     // Find target resource
     let newResourceId = d.fromResourceId;
     let newResourceName = d.fromResourceName;
-    let hitResourceRow = false;
     boardRef.current?.querySelectorAll("[data-resource-id]").forEach((row) => {
       const r = row.getBoundingClientRect();
       const hit = e.clientY >= r.top && e.clientY <= r.bottom;
       if (hit) {
         newResourceId = row.getAttribute("data-resource-id");
         newResourceName = row.getAttribute("data-resource-name");
-        hitResourceRow = true;
       }
     });
 
@@ -456,9 +454,6 @@ export default function ResourceScheduling() {
 
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
-      if (!hitResourceRow || !newResourceName) {
-        return;
-      }
       qc.setQueryData(["work-packages", activeProject?.id], (prev) =>
         prev?.map((wp) => wp.id === d.wpId ? {
           ...wp,

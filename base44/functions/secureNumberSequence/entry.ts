@@ -7,6 +7,7 @@
  * Only admins can reset or force-set sequence values.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { assertProjectAccess } from './projectAccess.ts';
 
 const VALID_TYPES = ['RFI', 'CO', 'DRAWING', 'SUBMITTAL', 'WORK_PACKAGE', 'DAILY_LOG',
   'DELIVERY', 'MEETING', 'ACTION_ITEM', 'PRODUCTION_NOTE', 'LOOK_AHEAD', 'CONTACT', 'EXPENSE', 'SOV'];
@@ -51,6 +52,11 @@ Deno.serve(async (req) => {
 
     if (!VALID_TYPES.includes(record_type)) {
       return Response.json({ error: `Invalid record_type. Must be one of: ${VALID_TYPES.join(', ')}` }, { status: 400 });
+    }
+
+    const projectAccess = await assertProjectAccess(base44, user, project_id);
+    if (projectAccess instanceof Response) {
+      return projectAccess;
     }
 
     const config = PREFIXES[record_type];
