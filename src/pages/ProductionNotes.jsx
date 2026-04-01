@@ -66,7 +66,7 @@ export default function ProductionNotes() {
   });
 
   const { data: allRFIs = [] } = useQuery({
-    queryKey: ["rfis-all"],
+    queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list(),
     initialData: [],
   });
