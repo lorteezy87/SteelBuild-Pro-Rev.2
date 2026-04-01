@@ -6,6 +6,7 @@ import { formatCurrency } from "@/components/shared/formatters";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
 import { toast } from "sonner";
+import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
 
 const PHASE_CONFIG = {
   Detailing:   { color: "var(--accent)", bg: "var(--accent-muted)", order: 1 },
@@ -49,31 +50,16 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
   const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG["On Track"];
 
-  const projectWPs   = workPackages.filter(w => w.project_id === project.id);
-  const completeWPs  = projectWPs.filter(w => w.status === "Complete").length;
-  const wpPct        = projectWPs.length > 0 ? Math.round((completeWPs / projectWPs.length) * 100) : 0;
-  const totalTons    = projectWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const completeTons = projectWPs.filter(w => w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const projectWPs = workPackages.filter(w => w.project_id === project.id);
+  const projectRFIs = rfis.filter(r => r.project_id === project.id);
+  const projectCOs  = changeOrders.filter(c => c.project_id === project.id);
 
-  const projectRFIs  = rfis.filter(r => r.project_id === project.id);
-  const openRFIs     = projectRFIs.filter(r => r.status === "Open" || r.status === "Under Review").length;
-  const overdueRFIs  = projectRFIs.filter(r => r.date_required && new Date(r.date_required) < new Date() && !["Answered","Closed"].includes(r.status)).length;
-
-  const projectCOs   = changeOrders.filter(c => c.project_id === project.id);
-  const approvedCOs  = projectCOs.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  const pendingCOs   = projectCOs.filter(c => ["Submitted","Under Review"].includes(c.status)).length;
-
-  const originalContract = Number(project.original_contract_value) || 0;
-  const revisedContract  = originalContract + approvedCOs;
-
-  const targetDate = project.target_completion_date ? new Date(project.target_completion_date) : null;
-  const daysLeft   = targetDate ? Math.ceil((targetDate - new Date()) / 86400000) : null;
-
-  const shopBudget   = projectWPs.reduce((s,w) => s + (Number(w.shop_hours_budget)||0), 0);
-  const shopActual   = projectWPs.reduce((s,w) => s + (Number(w.shop_hours_actual)||0), 0);
-  const laborBurn    = shopBudget > 0 ? Math.round((shopActual / shopBudget) * 100) : 0;
-  const isOverBudget = laborBurn > 100;
-  const hasIssues    = overdueRFIs > 0 || pendingCOs > 0 || isOverBudget;
+  const { pct: wpPct, totalTons, completeTons, completeCount: completeWPs } = calcWpProgress(projectWPs);
+  const { openCount: openRFIs, overdueCount: overdueRFIs } = calcRfiHealth(projectRFIs);
+  const { approvedCOTotal: approvedCOs, revised: revisedContract, original: originalContract, pendingCOCount: pendingCOs } = calcContractValue(project, projectCOs);
+  const { daysLeft, isOverdue: _isOverdue } = calcDaysToDeadline(project);
+  const { burnPct: laborBurn, isOverBudget } = calcLaborBurn(projectWPs);
+  const hasIssues = overdueRFIs > 0 || pendingCOs > 0 || isOverBudget;
 
   return (
     <div
@@ -167,7 +153,7 @@ export default function Projects() {
 
   const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_date"),    initialData: [] });
   const { data: workPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list(),                initialData: [] });
-  const { data: rfis         = [] } = useQuery({ queryKey: ["rfis-all"],          queryFn: () => base44.entities.RFI.list(),                        initialData: [] });
+  const { data: rfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list(),                        initialData: [] });
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list(),                initialData: [] });
 
   const createMut = useMutation({
