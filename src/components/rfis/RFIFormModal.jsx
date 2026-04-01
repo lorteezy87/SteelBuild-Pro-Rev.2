@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
 
+/** @type {import('react').CSSProperties} */
 const iStyle = {
   width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
   borderRadius: 2, padding: "8px 12px", color: "var(--text-primary)",

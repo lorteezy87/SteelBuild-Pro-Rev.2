@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2 } from "lucide-react";
 import StatusBadge from "../components/shared/StatusBadge";
-import PageHeader from "../components/shared/PageHeader";
 import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
@@ -15,7 +14,6 @@ import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
-import ProgressBar from "../components/shared/ProgressBar";
 
 export default function SOV() {
   const qc = useQueryClient();

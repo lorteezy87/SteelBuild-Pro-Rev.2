@@ -12,7 +12,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
   const today = new Date(); today.setHours(0,0,0,0);
 
   const daysToEnd = project.target_completion_date
-    ? Math.ceil((new Date(project.target_completion_date) - today) / 86400000) : null;
+    ? Math.ceil((new Date(project.target_completion_date).getTime() - today.getTime()) / 86400000) : null;
 
   const totalTonnage = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const fabTonnage = wps.filter(w => ["Fabrication", "Delivery", "Erection"].includes(w.phase) && w.status === "Complete")

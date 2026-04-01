@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
-import { Search, X, ChevronRight } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 const ICON_MAP = {
   Project: "▤",
@@ -61,7 +61,7 @@ export default function GlobalSearchModal({ open, onClose }) {
     if (query.length < 2) { setResults([]); return; }
     const t = setTimeout(() => runSearch(query), 250);
     return () => clearTimeout(t);
-  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query]);  
 
   const runSearch = useCallback(async (q) => {
     const ql = q.toLowerCase();
