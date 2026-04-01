@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,24 +8,67 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 
 const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+function normalizeRevisionNumber(value, fallback = "0") {
+  if (value == null || value === "") return fallback;
+  return String(value).trim() || fallback;
+}
+
+function incrementRevisionLabel(value) {
+  const current = normalizeRevisionNumber(value, "0");
+  if (/^\d+$/.test(current)) return String(Number(current) + 1);
+  if (/^[A-Z]$/i.test(current)) {
+    const code = current.toUpperCase().charCodeAt(0);
+    return code >= 65 && code < 90 ? String.fromCharCode(code + 1) : `${current}-1`;
+  }
+  const numericTail = current.match(/^(.*?)(\d+)$/);
+  if (numericTail) {
+    const [, prefix, digits] = numericTail;
+    return `${prefix}${String(Number(digits) + 1).padStart(digits.length, "0")}`;
+  }
+  return `${current} Rev 2`;
+}
 
 const empty = {
   sheet_number: "", title: "", project_id: "", project_name: "",
-  discipline: "Structural", revision_number: 0, stage: "Not Started",
+  discipline: "Structural", revision_number: "0", stage: "Not Started",
   submitted_date: "", return_date: "", due_date: "",
   reviewer: "", spec_section: "", notes: "", linked_rfi_ids: "",
-  priority_flag: false, override_reason: "",
+  priority_flag: false, override_reason: "", drawing_set_name: "",
 };
 
-export default function DrawingFormModal({ open, onClose, onSave, drawing, projects = [], nextId }) {
+export default function DrawingFormModal({ open, onClose, onSave, drawing, projects = [], nextId, activeProject }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (drawing) setForm({ ...empty, ...drawing, priority_flag: drawing.priority_flag || false });
-    else setForm({ ...empty, drawing_id: nextId || "" });
+    if (!open) return;
+    if (drawing) {
+      setForm({
+        ...empty,
+        ...drawing,
+        project_id: drawing.project_id || activeProject?.id || "",
+        project_name: drawing.project_name || activeProject?.name || "",
+        submitted_date: drawing.submitted_date || "",
+        return_date: drawing.return_date || "",
+        due_date: drawing.due_date || "",
+        linked_rfi_ids: drawing.linked_rfi_ids || "",
+        notes: drawing.notes || "",
+        reviewer: drawing.reviewer || "",
+        spec_section: drawing.spec_section || "",
+        override_reason: drawing.override_reason || "",
+        priority_flag: !!drawing.priority_flag,
+        drawing_set_name: drawing.drawing_set_name || "",
+      });
+    } else {
+      setForm({
+        ...empty,
+        drawing_id: nextId || "",
+        project_id: activeProject?.id || "",
+        project_name: activeProject?.name || "",
+      });
+    }
     setErrors({});
-  }, [drawing, open, nextId]);
+  }, [drawing, open, nextId, activeProject?.id, activeProject?.name]);
 
   const validate = () => {
     const e = {};
@@ -33,6 +76,7 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
     if (!form.title.trim()) e.title = "Required";
     if (!form.project_id) e.project_id = "Required";
     if (!form.discipline) e.discipline = "Required";
+    if (!form.drawing_set_name?.trim()) e.drawing_set_name = "Required";
 
     if (drawing && form.stage !== drawing.stage) {
       if (drawing.stage === "Released" && !form.override_reason?.trim()) {
@@ -51,13 +95,29 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = { ...form, revision_number: Number(form.revision_number) || 0 };
+    const proj = projects.find(p => p.id === form.project_id) || activeProject;
+    const data = {
+      ...form,
+      sheet_number: form.sheet_number.trim(),
+      title: form.title.trim(),
+      reviewer: form.reviewer?.trim() || "",
+      spec_section: form.spec_section?.trim() || "",
+      notes: form.notes?.trim() || "",
+      linked_rfi_ids: form.linked_rfi_ids?.trim() || "",
+      override_reason: form.override_reason?.trim() || "",
+      drawing_set_name: form.drawing_set_name?.trim() || "",
+      revision_number: normalizeRevisionNumber(form.revision_number),
+      priority_flag: !!form.priority_flag,
+      project_id: form.project_id || activeProject?.id || "",
+      project_name: proj?.name || form.project_name || "",
+      submitted_date: form.submitted_date || "",
+      return_date: form.return_date || "",
+      due_date: form.due_date || "",
+    };
     // Increment rev on BFA or BFS transition (return from review)
     if (drawing && (form.stage === "BFA" || form.stage === "BFS") && drawing.stage !== form.stage) {
-      data.revision_number = (Number(drawing.revision_number) || 0) + 1;
+      data.revision_number = incrementRevisionLabel(drawing.revision_number);
     }
-    const proj = projects.find(p => p.id === form.project_id);
-    if (proj) data.project_name = proj.name;
     onSave(data);
   };
 
@@ -76,7 +136,10 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{drawing ? `Edit Drawing ${drawing.sheet_number}` : "New Drawing"}</DialogTitle>
+          <DialogTitle>{drawing ? `Edit Drawing ${drawing.sheet_number}` : "Create Drawing"}</DialogTitle>
+          <DialogDescription>
+            Maintain the drawing record, required metadata, set assignment, and current submittal stage.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
@@ -92,6 +155,11 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
             <Label>Title *</Label>
             <Input value={form.title} onChange={e => set("title", e.target.value)} />
             {errors.title && <p className="text-xs text-rose-500 mt-1">{errors.title}</p>}
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Drawing Set Name *</Label>
+            <Input value={form.drawing_set_name} onChange={e => set("drawing_set_name", e.target.value)} placeholder="Anchor Bolts / Main Steel / Stair 1 / etc." />
+            {errors.drawing_set_name && <p className="text-xs text-rose-500 mt-1">{errors.drawing_set_name}</p>}
           </div>
           <div>
             <Label>Project *</Label>
@@ -112,7 +180,7 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
           </div>
           <div>
             <Label>Revision #</Label>
-            <Input type="number" value={form.revision_number} onChange={e => set("revision_number", e.target.value)} />
+            <Input value={form.revision_number} onChange={e => set("revision_number", e.target.value)} placeholder="0 / A / IFC Rev 1" />
           </div>
           <div>
             <Label>Stage</Label>
@@ -164,7 +232,7 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} className="bg-teal-600 hover:bg-teal-700">{drawing ? "Update" : "Create"}</Button>
+          <Button onClick={handleSave} className="bg-teal-600 hover:bg-teal-700">{drawing ? "Save Changes" : "Create Drawing"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

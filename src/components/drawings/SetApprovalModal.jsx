@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const today = () => new Date().toISOString().split("T")[0];
 
@@ -25,6 +25,9 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           <DialogTitle style={{ fontFamily: "var(--font-body)", fontSize: 18, color: "var(--text-primary)", letterSpacing: "0.06em" }}>
             Approve Drawing Set
           </DialogTitle>
+          <DialogDescription style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>
+            Confirm set approval status, revision, approver, and whether the decision should update all included sheets.
+          </DialogDescription>
           <p style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 2 }}>
             {setName} · {sheetCount} SHEETS
           </p>

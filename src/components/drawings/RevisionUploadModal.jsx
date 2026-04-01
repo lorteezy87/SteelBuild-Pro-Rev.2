@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { getDrawingSetName, normalizeSetKey, PLACEHOLDER_SET_NAMES, UNASSIGNED_KEY } from "./submittalsUtils";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -512,32 +513,70 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
 
 // ── Main Modal ─────────────────────────────────────────────────────
 export default function RevisionUploadModal({ open, onClose, onComplete, activeProject, preSelectedSet, drawingSets = [] }) {
-  // Derive virtual sets from drawings if drawingSets is sparse
-  const [derivedSets, setDerivedSets] = React.useState([]);
+  const [availableSets, setAvailableSets] = React.useState([]);
   useEffect(() => {
     if (!open || !activeProject?.id) return;
     base44.entities.Drawing.filter({ project_id: activeProject.id }).then(drawings => {
-      // Build a map of set_name -> virtual set objects for any set_name not already in drawingSets
-      const existingNames = new Set(drawingSets.map(ds => ds.set_name));
-      const byName = {};
-      drawings.filter(d => d.drawing_set_name && !d.is_superseded).forEach(d => {
-        if (!existingNames.has(d.drawing_set_name)) {
-          if (!byName[d.drawing_set_name]) {
-            byName[d.drawing_set_name] = {
+      const validSetRecords = drawingSets.filter((set) => {
+        const name = String(set?.set_name || "").trim();
+        return name && !PLACEHOLDER_SET_NAMES.has(name.toLowerCase());
+      });
+
+      const mergedBySet = new Map();
+
+      validSetRecords.forEach((set) => {
+        mergedBySet.set(normalizeSetKey(set.set_name), {
+          ...set,
+          current_revision: set.current_revision != null ? String(set.current_revision) : "—",
+          revision_history: set.revision_history || "[]",
+          sheet_count: Number(set.sheet_count || 0),
+        });
+      });
+
+      const drawingCounts = new Map();
+
+      drawings
+        .filter((drawing) => !drawing.is_superseded)
+        .forEach((drawing) => {
+          const resolvedSetName = getDrawingSetName(drawing, validSetRecords);
+          if (!resolvedSetName || resolvedSetName === UNASSIGNED_KEY) return;
+          const key = normalizeSetKey(resolvedSetName);
+          drawingCounts.set(key, (drawingCounts.get(key) || 0) + 1);
+          const existing = mergedBySet.get(key);
+          if (existing) {
+            mergedBySet.set(key, {
+              ...existing,
+              current_revision: existing.current_revision || (drawing.revision_number != null ? String(drawing.revision_number) : "—"),
+              current_issue_date: existing.current_issue_date || drawing.issue_date || null,
+              current_issued_by: existing.current_issued_by || drawing.issued_by || "",
+              current_file_url: existing.current_file_url || drawing.file_url || null,
+            });
+          } else {
+            mergedBySet.set(key, {
               id: null,
-              set_name: d.drawing_set_name,
-              current_revision: d.revision_number != null ? String(d.revision_number) : "—",
-              current_issue_date: d.issue_date || null,
-              current_issued_by: d.issued_by || "",
-              current_file_url: d.file_url || null,
+              set_name: resolvedSetName,
+              current_revision: drawing.revision_number != null ? String(drawing.revision_number) : "—",
+              current_issue_date: drawing.issue_date || null,
+              current_issued_by: drawing.issued_by || "",
+              current_file_url: drawing.file_url || null,
               sheet_count: 0,
               revision_history: "[]",
-            };
+            });
           }
-          byName[d.drawing_set_name].sheet_count++;
-        }
-      });
-      setDerivedSets(Object.values(byName));
+        });
+
+      const mergedSets = [...mergedBySet.values()]
+        .filter((set) => {
+          const name = String(set?.set_name || "").trim();
+          return name && !PLACEHOLDER_SET_NAMES.has(name.toLowerCase());
+        })
+        .map((set) => ({
+          ...set,
+          sheet_count: drawingCounts.get(normalizeSetKey(set.set_name)) || Number(set.sheet_count || 0),
+        }))
+        .sort((a, b) => String(a.set_name || "").localeCompare(String(b.set_name || ""), undefined, { numeric: true, sensitivity: "base" }));
+
+      setAvailableSets(mergedSets);
     }).catch(() => {});
   }, [open, activeProject?.id, drawingSets]);
   const [step, setStep] = useState("selectSet");
@@ -726,6 +765,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               )}
             </div>
           </DialogTitle>
+          <DialogDescription style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            Upload a revised set PDF, review detected sheet changes, and supersede the prior revision records.
+          </DialogDescription>
         </DialogHeader>
 
         <div style={{ paddingTop: 8 }}>
@@ -744,7 +786,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             </div>
           )}
           {step === "selectSet" && (
-            <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.current_issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
+            <StepSelectSet drawingSets={availableSets} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.current_issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
           )}
           {step === "revMeta" && selectedSet && (
             <StepRevMeta selectedSet={selectedSet} revMeta={revMeta} setRevMeta={setRevMeta} onBack={() => preSelectedSet ? handleClose() : setStep("selectSet")} onNext={() => setStep("dropPDF")} />

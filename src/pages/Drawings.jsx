@@ -49,6 +49,131 @@ const BADGE_STYLES = {
   },
 };
 
+const DRAWING_CATEGORY_RULES = [
+  { label: "Anchor Bolts", keywords: ["anchor bolt", "anchor bolts", "ab "] },
+  { label: "Main Steel", keywords: ["main steel", "gravity", "moment", "column", "beam", "frame"] },
+  { label: "Joists / Deck", keywords: ["joist", "deck", "metal deck", "roof deck"] },
+  { label: "Misc Steel", keywords: ["misc", "miscellaneous", "rail", "stair", "ladder", "canopy"] },
+  { label: "Embeds / Plates", keywords: ["embed", "plate", "embedment"] },
+  { label: "Connections", keywords: ["connection", "connections", "conn "] },
+  { label: "Field / Erection", keywords: ["erection", "field", "installation", "install"] },
+];
+
+function deriveSetCategory(setName, sheets) {
+  const corpus = [
+    setName,
+    ...sheets.map((sheet) =>
+      [sheet?.description, sheet?.title, sheet?.notes, sheet?.drawing_set_name]
+        .filter(Boolean)
+        .join(" ")
+    ),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const matchedRule = DRAWING_CATEGORY_RULES.find((rule) =>
+    rule.keywords.some((keyword) => corpus.includes(keyword))
+  );
+
+  if (matchedRule) return matchedRule.label;
+
+  const discipline = sheets[0]?.discipline;
+  if (discipline === "Structural") return "General Structural";
+  return discipline || "Other";
+}
+
+function normalizeAlphaNumeric(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeFileUrlForMatch(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return raw.split("?")[0].split("#")[0].replace(/\/+$/, "").toLowerCase();
+  }
+}
+
+function deriveDisplaySetName(drawing, drawingSetRecords = []) {
+  const explicitSetName = drawing?.drawing_set_name?.trim();
+  const isGenericSetName = !explicitSetName || [
+    "ungrouped",
+    "individual drawings",
+    "individual drawing",
+    "misc",
+    "misc drawings",
+  ].includes(explicitSetName?.toLowerCase());
+
+  if (explicitSetName && !isGenericSetName) return explicitSetName;
+
+  const fileUrl = normalizeFileUrlForMatch(drawing?.file_url);
+  const issueDate = String(drawing?.issue_date || "").trim();
+  const revision = String(drawing?.revision_number ?? "").trim();
+  const sheetNumber = normalizeAlphaNumeric(drawing?.sheet_number);
+  const titleText = normalizeAlphaNumeric(drawing?.title);
+
+  const fileMatch = drawingSetRecords.filter(
+    (set) =>
+      set?.set_name &&
+      ![
+        "ungrouped",
+        "individual drawings",
+        "individual drawing",
+        "misc",
+        "misc drawings",
+      ].includes(String(set.set_name).trim().toLowerCase()) &&
+      String(set.current_file_url || "").trim() &&
+      normalizeFileUrlForMatch(set.current_file_url) === fileUrl
+  );
+  if (fileMatch.length === 1) return fileMatch[0].set_name;
+
+  const revisionMatch = drawingSetRecords.filter(
+    (set) =>
+      set?.set_name &&
+      ![
+        "ungrouped",
+        "individual drawings",
+        "individual drawing",
+        "misc",
+        "misc drawings",
+      ].includes(String(set.set_name).trim().toLowerCase()) &&
+      String(set.current_issue_date || "").trim() === issueDate &&
+      String(set.current_revision ?? "").trim() === revision
+  );
+  if (revisionMatch.length === 1) return revisionMatch[0].set_name;
+
+  const sheetMatch = drawingSetRecords.filter(
+    (set) => {
+      const setName = String(set?.set_name || "").trim();
+      const normalizedSetName = normalizeAlphaNumeric(setName);
+      if (
+        !setName ||
+        !normalizedSetName ||
+        [
+          "ungrouped",
+          "individual drawings",
+          "individual drawing",
+          "misc",
+          "misc drawings",
+        ].includes(setName.toLowerCase())
+      ) {
+        return false;
+      }
+      return (
+        (sheetNumber && (sheetNumber === normalizedSetName || sheetNumber.includes(normalizedSetName) || normalizedSetName.includes(sheetNumber))) ||
+        (titleText && titleText.includes(normalizedSetName))
+      );
+    }
+  );
+  if (sheetMatch.length === 1) return sheetMatch[0].set_name;
+
+  return "Set Name Required";
+}
+
 const StatusBadge = ({ status }) => {
   const s = BADGE_STYLES[status] || BADGE_STYLES["Not Started"];
   return (
@@ -117,8 +242,17 @@ export default function Drawings() {
   const [revisionPreselectedSet, setRevisionPreselectedSet] = useState(null);
   const [approvalOpen, setApprovalOpen] = useState(null);
 
+  const refreshDrawingQueries = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["drawings", activeProject?.id] }),
+      qc.invalidateQueries({ queryKey: ["drawing-set-records", activeProject?.id] }),
+      qc.invalidateQueries({ queryKey: ["drawings"] }),
+      qc.invalidateQueries({ queryKey: ["drawing-set-records"] }),
+    ]);
+  };
+
   // Fetch drawings
-  const { data: drawings = [], isLoading } = useQuery({
+  const { data: drawings = [], isLoading, isError, error } = useQuery({
     queryKey: ["drawings", activeProject?.id],
     queryFn: () =>
       activeProject?.id
@@ -128,11 +262,21 @@ export default function Drawings() {
     initialData: [],
   });
 
+  const { data: drawingSetRecords = [], isError: isSetError, error: setError } = useQuery({
+    queryKey: ["drawing-set-records", activeProject?.id],
+    queryFn: () =>
+      activeProject?.id
+        ? base44.entities.DrawingSet.filter({ project_id: activeProject.id })
+        : [],
+    enabled: !!activeProject?.id,
+    initialData: [],
+  });
+
   // Group by drawing set
   const groupedBySet = useMemo(() => {
     const groups = {};
     drawings.forEach((d) => {
-      const setName = d.drawing_set_name || "Ungrouped";
+      const setName = deriveDisplaySetName(d, drawingSetRecords);
       if (!groups[setName]) groups[setName] = [];
       groups[setName].push(d);
     });
@@ -140,8 +284,10 @@ export default function Drawings() {
     // Apply filters
     Object.keys(groups).forEach((setName) => {
       groups[setName] = groups[setName].filter((d) => {
+        const packageName = setName.toLowerCase();
         const matchSearch =
           !search ||
+          packageName.includes(search.toLowerCase()) ||
           d.title?.toLowerCase().includes(search.toLowerCase()) ||
           d.sheet_number?.toLowerCase().includes(search.toLowerCase());
         const matchStage = stageFilter === "all" || d.stage === stageFilter;
@@ -158,7 +304,7 @@ export default function Drawings() {
     );
 
     return groups;
-  }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded]);
+  }, [drawings, drawingSetRecords, search, stageFilter, disciplineFilter, hideSuperseeded]);
 
   const sortedSetKeys = Object.keys(groupedBySet).sort();
   const drawingSets = useMemo(() => {
@@ -178,6 +324,19 @@ export default function Drawings() {
         notes: lead.notes || "",
       };
     });
+  }, [groupedBySet, sortedSetKeys]);
+
+  const orderedSetEntries = useMemo(() => {
+    return sortedSetKeys
+      .map((setName) => ({
+        setName,
+        category: deriveSetCategory(setName, groupedBySet[setName] || []),
+      }))
+      .sort((a, b) => {
+        const categoryCompare = a.category.localeCompare(b.category);
+        if (categoryCompare !== 0) return categoryCompare;
+        return a.setName.localeCompare(b.setName);
+      });
   }, [groupedBySet, sortedSetKeys]);
 
   const stages = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
@@ -205,8 +364,8 @@ export default function Drawings() {
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.Drawing.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["drawings"] });
+    onSuccess: async () => {
+      await refreshDrawingQueries();
       setFormOpen(false);
       setEditingDrawing(null);
       toast.success("Drawing created");
@@ -216,8 +375,8 @@ export default function Drawings() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) =>
       base44.entities.Drawing.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["drawings"] });
+    onSuccess: async () => {
+      await refreshDrawingQueries();
       setFormOpen(false);
       toast.success("Drawing updated");
     },
@@ -249,6 +408,96 @@ export default function Drawings() {
     display: "flex",
     alignItems: "center",
   };
+
+  if (!activeProject?.id) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+          DRAWINGS
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Select a project to view the drawing log
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Loading drawing log
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Pulling sheets and set records for {activeProject.name}.
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || isSetError) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Drawing log failed to load
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          {(error || setError)?.message || "The drawing sheets or set records could not be loaded."}
+        </div>
+      </div>
+    );
+  }
+
+  if (!drawings.length) {
+    return (
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.04em" }}>
+          DRAWINGS
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", marginTop: 10, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          No sheets loaded for {activeProject.name}
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Upload a drawing set or create a single drawing to start the log.
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+          <button onClick={() => setUploadSetOpen(true)} style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+            Upload Set
+          </button>
+          <button onClick={() => setFormOpen(true)} style={{ background: "var(--bg-surface-high)", color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+            Create Drawing
+          </button>
+        </div>
+        {formOpen && (
+          <DrawingFormModal
+            open={formOpen}
+            onClose={() => {
+              setFormOpen(false);
+              setEditingDrawing(null);
+            }}
+            onSave={handleSave}
+            drawing={editingDrawing}
+          />
+        )}
+        {uploadSetOpen && (
+          <DrawingSetUploadModal
+            open={uploadSetOpen}
+            onClose={() => setUploadSetOpen(false)}
+            onComplete={async () => {
+              await refreshDrawingQueries();
+              setUploadSetOpen(false);
+            }}
+            activeProject={activeProject}
+            onNewRevision={() => {
+              setUploadSetOpen(false);
+              setRevisionPreselectedSet(null);
+              setRevisionUploadOpen(true);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -396,7 +645,7 @@ export default function Drawings() {
             ⌕
           </span>
           <input
-            placeholder="Search drawings..."
+            placeholder="Search package names or drawings..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -601,15 +850,46 @@ export default function Drawings() {
             No drawings found
           </div>
         ) : (
-          sortedSetKeys.map((setName) => {
+          orderedSetEntries.map(({ setName, category }, index) => {
             const sheets = groupedBySet[setName];
             const isCollapsed = collapsedSets.has(setName);
             const currentRevision = sheets[0]?.set_approval_revision;
             const currentIssueDate = sheets[0]?.issue_date;
             const setApprovalStatus = sheets[0]?.set_approval_status;
+            const prevCategory = index > 0 ? orderedSetEntries[index - 1]?.category : null;
+            const showCategoryHeader = category !== prevCategory;
 
             return (
-              <div key={setName} style={{ marginTop: 16 }}>
+              <div key={setName} style={{ marginTop: showCategoryHeader ? 20 : 16 }}>
+                {showCategoryHeader && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "0 20px",
+                      height: 32,
+                      background: "rgba(255,107,0,0.06)",
+                      borderTop: "1px solid rgba(255,107,0,0.22)",
+                      borderBottom: "1px solid rgba(255,107,0,0.12)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 8,
+                        fontWeight: 700,
+                        letterSpacing: "0.14em",
+                        textTransform: "uppercase",
+                        color: "var(--accent)",
+                      }}
+                    >
+                      {category}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: "rgba(255,107,0,0.16)" }} />
+                  </div>
+                )}
                 {/* GROUP SEPARATOR LINE */}
                 <div
                   style={{
@@ -1103,8 +1383,8 @@ export default function Drawings() {
         <DrawingSetUploadModal
           open={uploadSetOpen}
           onClose={() => setUploadSetOpen(false)}
-          onComplete={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
+          onComplete={async () => {
+            await refreshDrawingQueries();
             setUploadSetOpen(false);
           }}
           activeProject={activeProject}
@@ -1130,8 +1410,8 @@ export default function Drawings() {
             setRevisionUploadOpen(false);
             setRevisionPreselectedSet(null);
           }}
-          onComplete={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
+          onComplete={async () => {
+            await refreshDrawingQueries();
             setRevisionUploadOpen(false);
             setRevisionPreselectedSet(null);
           }}
@@ -1145,8 +1425,8 @@ export default function Drawings() {
         <SetApprovalModal
           setName={approvalOpen}
           onClose={() => setApprovalOpen(null)}
-          onSuccess={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
+          onSuccess={async () => {
+            await refreshDrawingQueries();
             setApprovalOpen(null);
           }}
         />

@@ -143,6 +143,76 @@ function RevisionPopover({ onApply, count }) {
   );
 }
 
+function DatePopover({ label, onApply, count }) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          padding: "2px 8px", height: 22, borderRadius: 5, cursor: "pointer",
+          background: open ? "var(--accent-muted)" : "rgba(255,255,255,0.05)",
+          border: `1px solid ${open ? "var(--accent-border)" : "rgba(255,255,255,0.10)"}`,
+          color: open ? "var(--accent)" : "var(--text-secondary)", fontFamily: "var(--font-mono)",
+          fontSize: 8, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 3
+        }}
+      >
+        {label} ▾
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
+          background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
+          borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.7)",
+          minWidth: 210, padding: 12
+        }}>
+          <input
+            autoFocus
+            type="date"
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { onApply(""); setVal(""); setOpen(false); }}
+              style={{
+                flex: 1, padding: "6px 0", borderRadius: 6, cursor: "pointer",
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
+                color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em"
+              }}
+            >
+              CLEAR
+            </button>
+            <button
+              onClick={() => { if (val) { onApply(val); setVal(""); setOpen(false); } }}
+              disabled={!val}
+              style={{
+                flex: 1, padding: "6px 0", borderRadius: 6, cursor: val ? "pointer" : "not-allowed",
+                background: val ? "var(--accent)" : "rgba(255,255,255,0.04)",
+                border: "none", color: val ? "#fff" : "var(--text-muted)",
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em"
+              }}
+            >
+              Apply to {count}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const bulkBtn = {
   background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 5, padding: "2px 8px", height: 22, cursor: "pointer",
@@ -168,6 +238,9 @@ export default function BulkActionBar({ count, onBulkUpdate, onBulkDelete, onCle
       <RevisionPopover onApply={v => onBulkUpdate("revision_number", v)} count={count} compact />
       <DropPopover label="DISCIPLINE" options={DISCIPLINES} onApply={v => onBulkUpdate("discipline", v)} count={count} compact />
       <DropPopover label="IFC" options={IFC_STATUSES} onApply={v => onBulkUpdate("ifc_status", v)} count={count} compact />
+      <DatePopover label="SUBMITTED" onApply={v => onBulkUpdate("submitted_date", v)} count={count} />
+      <DatePopover label="RETURN" onApply={v => onBulkUpdate("return_date", v)} count={count} />
+      <DatePopover label="DUE" onApply={v => onBulkUpdate("due_date", v)} count={count} />
       <div style={{ flex: 1 }} />
       <button onClick={onBulkDelete} style={{ ...bulkBtn, color: "rgba(255,100,100,0.75)", borderColor: "rgba(255,61,61,0.22)" }}>
         <Trash2 style={{ width: 9, height: 9 }} /> DELETE

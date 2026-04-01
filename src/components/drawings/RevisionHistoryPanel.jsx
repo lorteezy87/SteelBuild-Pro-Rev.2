@@ -1,14 +1,13 @@
 import React from "react";
 import { X, Upload } from "lucide-react";
 import { formatDate } from "../shared/formatters";
+import { parseRevisionHistory } from "./submittalsUtils";
 
 export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewRevision }) {
   if (!drawingSet) return null;
 
-  let history = [];
-  try {
-    history = JSON.parse(drawingSet.revision_history || "[]");
-  } catch {}
+  let history = parseRevisionHistory(drawingSet.revision_history);
+  history = history.filter((entry) => !entry?.__assignment_map);
 
   // Build full list: history (old) + current (newest)
   const allRevisions = [

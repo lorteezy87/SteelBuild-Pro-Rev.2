@@ -1,12 +1,12 @@
 import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const MAX_PDF_SIZE_MB = 32;
@@ -27,6 +27,10 @@ function formatBytes(bytes) {
 function normalizeRevisionNumber(value, fallback = "0") {
   if (value == null || value === "") return fallback;
   return String(value).trim() || fallback;
+}
+
+function normalizeManualSetName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
 }
 
 // ─── Native Claude PDF extraction via Base44 proxy ───────────────────
@@ -234,6 +238,7 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
 // ─── Step 2: Metadata ────────────────────────────────────────────────
 function StepMeta({ meta, setMeta, onBack, onUpload, projectName }) {
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
+  const hasSetName = !!meta.setName?.trim();
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
@@ -269,9 +274,15 @@ function StepMeta({ meta, setMeta, onBack, onUpload, projectName }) {
           <Textarea rows={2} value={meta.notes} onChange={e => set("notes", e.target.value)} />
         </div>
       </div>
+      {!hasSetName && (
+        <div style={{ marginBottom: 12, fontSize: 11, color: "var(--warning)" }}>
+          Enter the released package or set name exactly as your team uses it before extraction.
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
         <Button onClick={onUpload}
+          disabled={!hasSetName}
           style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
           Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
@@ -643,7 +654,14 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
+    const resolvedSetName = normalizeManualSetName(meta.setName);
+    if (!resolvedSetName) {
+      setStep(2);
+      return;
+    }
+
     let created = 0;
+    const uploadedFileUrls = [...new Set(selectedSheets.map((sheet) => String(sheet.sourceFileUrl || "").trim()).filter(Boolean))];
     for (const sheet of selectedSheets) {
       await base44.entities.Drawing.create({
         sheet_number:     sheet.sheetNumber,
@@ -656,7 +674,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         issue_date:       sheet.date || meta.issueDate,
         issued_by:        meta.issuedBy,
         file_url:         sheet.sourceFileUrl,
-        drawing_set_name: meta.setName || meta.revision || "Drawing Set",
+        drawing_set_name: resolvedSetName,
         notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
       });
       created++;
@@ -665,6 +683,60 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         progress: Math.round((created / selectedSheets.length) * 100),
         message: `Creating entries… ${created} of ${selectedSheets.length}`,
       }));
+    }
+
+    const latestIssueDate = [...selectedSheets]
+      .map((sheet) => sheet.date || meta.issueDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || null;
+    const currentRevision = normalizeRevisionNumber(selectedSheets[0]?.revision ?? meta.revision);
+    const currentFileUrl = selectedSheets.find((sheet) => sheet.sourceFileUrl)?.sourceFileUrl || null;
+    const existingSets = await base44.entities.DrawingSet.filter({
+      project_id: activeProject?.id,
+      set_name: resolvedSetName,
+    }).catch(() => []);
+
+    if (existingSets[0]?.id) {
+      await base44.entities.DrawingSet.update(existingSets[0].id, {
+        set_name: resolvedSetName,
+        current_revision: currentRevision,
+        current_issue_date: latestIssueDate,
+        current_issued_by: meta.issuedBy || "",
+        current_file_url: currentFileUrl,
+        sheet_count: selectedSheets.length,
+      });
+    } else {
+      await base44.entities.DrawingSet.create({
+        project_id: activeProject?.id,
+        project_name: activeProject?.name,
+        set_name: resolvedSetName,
+        current_revision: currentRevision,
+        current_issue_date: latestIssueDate,
+        current_issued_by: meta.issuedBy || "",
+        current_file_url: currentFileUrl,
+        sheet_count: selectedSheets.length,
+        revision_history: "[]",
+      });
+    }
+
+    // Reconcile the uploaded sheets back to the manually entered set name by file URL.
+    // This prevents fresh uploads from falling into generic grouping buckets if the
+    // sheet rows were created without a persisted set label somewhere in the flow.
+    if (uploadedFileUrls.length) {
+      const projectDrawings = await base44.entities.Drawing.filter({ project_id: activeProject?.id }).catch(() => []);
+      const drawingsToNormalize = projectDrawings.filter((drawing) =>
+        uploadedFileUrls.includes(String(drawing.file_url || "").trim()) &&
+        String(drawing.drawing_set_name || "").trim() !== resolvedSetName
+      );
+
+      if (drawingsToNormalize.length) {
+        await Promise.all(
+          drawingsToNormalize.map((drawing) =>
+            base44.entities.Drawing.update(drawing.id, { drawing_set_name: resolvedSetName })
+          )
+        );
+      }
     }
 
     setCreatedCount(created);
@@ -688,6 +760,9 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
               )}
             </div>
           </DialogTitle>
+          <DialogDescription style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            Upload a drawing set PDF, confirm set metadata, and create sheet records from the extracted index.
+          </DialogDescription>
         </DialogHeader>
 
         <div style={{ paddingTop: 8 }}>
