@@ -1,5 +1,0 @@
-
-> base44-app@0.0.0 dev
-> node ./node_modules/vite/bin/vite.js --host --port 4173 --clearScreen false
-
-[base44] Proxy enabled: /api -> https://steelbuild-pro.base44.app
