@@ -7,7 +7,7 @@ import { formatCurrency, formatDate, isOverdue } from "../components/shared/form
 import StatusBadge from "../components/shared/StatusBadge";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, LineChart, Line, Legend
+  PieChart, Pie, Cell, Legend
 } from "recharts";
 
 const M = {

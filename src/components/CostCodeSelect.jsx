@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { COST_CODES_GROUPED, COST_CODES, getCostCodeLabel } from "./shared/costCodes";
+import { COST_CODES_GROUPED, COST_CODES } from "./shared/costCodes";
 
 /**
  * CostCodeSelect

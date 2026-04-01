@@ -8,6 +8,7 @@ const empty = {
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
   submitted_date: new Date().toISOString().split("T")[0],
   approved_date: "", co_amount: 0, approved_by: "", notes: "", attachments: "",
+  co_number: "",
 };
 
 export default function COFormModal({ open, onClose, onSave, co, projects = [], nextNumber }) {

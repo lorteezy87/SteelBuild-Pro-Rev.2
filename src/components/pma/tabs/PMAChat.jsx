@@ -8,7 +8,6 @@ import AssumptionTracker from './AssumptionTracker';
 import RoleSelector from './RoleSelector';
 import ConfidenceDisplay from './ConfidenceDisplay';
 import { getRoleInstruction, getSelectedRole } from '../utils/roleDefinitions';
-import { addConfidenceScore } from '../utils/confidenceScoring';
 
 const QUICK_PROMPT_CATEGORIES = [
   {

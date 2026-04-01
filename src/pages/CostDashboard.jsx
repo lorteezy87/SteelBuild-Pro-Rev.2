@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
@@ -10,9 +10,9 @@ import { formatCurrency, formatCurrencyShort, formatPercent } from "../component
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, ReferenceLine, Area, AreaChart
+  PieChart, Pie, Cell, Line, ReferenceLine, Area, AreaChart
 } from "recharts";
-import { AlertTriangle, TrendingUp, TrendingDown, DollarSign, ShieldAlert, Download } from "lucide-react";
+import { AlertTriangle, ShieldAlert, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const CustomTooltip = ({ active, payload, label }) => {
