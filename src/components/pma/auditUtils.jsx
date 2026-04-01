@@ -1,5 +1,7 @@
 import { base44 } from '@/api/base44Client';
 
+export const PMA_AUDIT_ENABLED = false;
+
 // ─── Session ID Generation ─────────────────────────────────────
 export const generateSessionId = () => {
   return (
@@ -80,6 +82,7 @@ export const createAuditRecord = async ({
   userId,
   userRole,
 }) => {
+  if (!PMA_AUDIT_ENABLED) return null;
   try {
     const hash = generateHash(snapshot);
     const recordCount = snapshot._lineage?.length || 0;
@@ -136,18 +139,20 @@ export const createAuditRecord = async ({
       app_version: '2.0',
     };
 
-    await base44.entities.PMAuditLog.create(record);
+    await base44.functions.invoke('writeAuditLog', record);
     return record;
-  } catch (error) {
-    console.error('Failed to create audit record:', error);
+  } catch {
     return null;
   }
 };
 
 // ─── Legal Hold Flag ────────────────────────────────────────────
 export const flagLegalHold = async (auditEntryId, reason, userEmail) => {
+  if (!PMA_AUDIT_ENABLED) return false;
   try {
-    await base44.entities.PMAuditLog.update(auditEntryId, {
+    await base44.functions.invoke('writeAuditLog', {
+      action: 'legal_hold',
+      log_id: auditEntryId,
       legal_hold_flag: true,
       legal_hold_reason: reason,
       legal_hold_flagged_by: userEmail,

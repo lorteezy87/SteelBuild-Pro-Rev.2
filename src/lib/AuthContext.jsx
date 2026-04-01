@@ -52,6 +52,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const clearLocalAuthState = () => {
+    if (typeof window === 'undefined') return;
+    const localKeys = [
+      'base44_access_token',
+      'base44_refresh_token',
+      'token',
+      'refresh_token',
+      'api_key',
+      'base44_api_key',
+    ];
+    const sessionKeys = [
+      'base44_access_token',
+      'base44_refresh_token',
+      'token',
+      'refresh_token',
+    ];
+
+    try {
+      localKeys.forEach((key) => window.localStorage.removeItem(key));
+    } catch (error) {
+      console.error('Failed to clear local auth state:', error);
+    }
+
+    try {
+      sessionKeys.forEach((key) => window.sessionStorage.removeItem(key));
+    } catch (error) {
+      console.error('Failed to clear session auth state:', error);
+    }
+  };
+
   useEffect(() => {
     checkAppState();
   }, []);
@@ -110,8 +140,11 @@ export const AuthProvider = ({ children }) => {
       clearLoginAttempt();
     } catch (error) {
       console.error('User auth check failed:', error);
+      setUser(null);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
+      clearLocalAuthState();
+      clearLoginAttempt();
 
       setAuthError(mapAuthError(error, 'Authentication required'));
     }
@@ -137,17 +170,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = (shouldRedirect = true) => {
+  const logout = async (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
     clearLoginAttempt();
-    
-    if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      base44.auth.logout(window.location.href);
-    } else {
-      // Just remove the token without redirect
-      base44.auth.logout();
+
+    try {
+      if (shouldRedirect) {
+        await base44.auth.logout(window.location.origin);
+      } else {
+        await base44.auth.logout();
+      }
+    } catch (error) {
+      console.error('SDK logout failed, using local fallback:', error);
+    } finally {
+      clearLocalAuthState();
+
+      if (shouldRedirect && typeof window !== 'undefined') {
+        window.location.replace('/');
+      }
     }
   };
 

@@ -60,7 +60,7 @@ export default function RiskRegister({ risks = [], onRescore, isScoring = false 
   const requestRecommendation = async (risk) => {
     try {
       const prompt = `For this structural steel project risk: ${risk.title} with score ${risk.score} driven by ${risk.drivers?.join(", ")}, what is the single most effective next action a PM can take right now? Be specific. Max 2 sentences.`;
-      const res = await base44.functions.invoke("anthropicProxy", { prompt });
+      const res = await base44.functions.invoke("invokeLLM", { prompt });
       const text = typeof res === "string" ? res : res?.text || res?.content || res?.response || "";
       setRecommendations((prev) => ({ ...prev, [risk.id]: text }));
     } catch (e) {

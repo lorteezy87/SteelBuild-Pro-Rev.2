@@ -13,7 +13,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     if (!user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,9 +33,42 @@ Deno.serve(async (req) => {
       return Response.json({ logs });
     }
 
-    // POST — append a new audit entry (any authenticated user, but fields are enforced)
+    // POST — append a new audit entry (default), or list / legal-hold via action
     if (req.method === 'POST') {
       const body = await req.json();
+
+      if (body.action === 'list') {
+        if (user.role !== 'admin') {
+          return Response.json({ error: 'Forbidden: Only admins can read audit logs' }, { status: 403 });
+        }
+        const logs = await base44.asServiceRole.entities.PMAuditLog.list('-timestamp', 200);
+        const filtered = body.project_id
+          ? logs.filter((log: any) => log.project_id === body.project_id)
+          : logs;
+        return Response.json({ logs: filtered });
+      }
+
+      if (body.action === 'legal_hold') {
+        if (user.role !== 'admin') {
+          return Response.json({ error: 'Forbidden: Only admins can update audit log legal hold status' }, { status: 403 });
+        }
+
+        const { log_id, legal_hold_flag, legal_hold_reason } = body;
+
+        if (!log_id) {
+          return Response.json({ error: 'log_id is required' }, { status: 400 });
+        }
+
+        const updateData = {
+          legal_hold_flag: !!legal_hold_flag,
+          legal_hold_reason: legal_hold_reason || null,
+          legal_hold_flagged_by: user.email,
+          legal_hold_flagged_at: new Date().toISOString(),
+        };
+
+        const updated = await base44.asServiceRole.entities.PMAuditLog.update(log_id, updateData);
+        return Response.json({ success: true, updated });
+      }
 
       if (!body.project_id || !body.session_id || !body.action_type) {
         return Response.json({ error: 'project_id, session_id, and action_type are required' }, { status: 400 });

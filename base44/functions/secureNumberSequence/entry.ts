@@ -16,7 +16,7 @@ const PREFIXES = {
   CO: { prefix: 'CO', pad: 3 },
   DRAWING: { prefix: 'DWG', pad: 3 },
   SUBMITTAL: { prefix: 'SUB', pad: 3 },
-  WORK_PACKAGE: { prefix: 'WP', pad: 2 },
+  WORK_PACKAGE: { prefix: 'WP', pad: 3 },
   DAILY_LOG: { prefix: 'LOG', pad: 4 },
   DELIVERY: { prefix: 'DEL', pad: 3 },
   MEETING: { prefix: 'MTG', pad: 3 },
@@ -31,7 +31,12 @@ const PREFIXES = {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     if (!user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });

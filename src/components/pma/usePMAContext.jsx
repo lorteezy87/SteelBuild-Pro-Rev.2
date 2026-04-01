@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 
 import { useProjectContext } from '@/components/shared/useProjectContext';
@@ -35,6 +35,7 @@ export function PMAProvider({ children }) {
   const [sessionId] = useState(() => generateSessionId());
   const [auditLogs, setAuditLogs] = useState([]);
   const [weeklyBaseline, setWeeklyBaseline] = useState(null);
+  const snapshotCacheRef = useRef({ projectId: null, timestamp: 0, snapshot: null });
 
   // ── 2. HELPER ───────────────────────────────────────────────
   const getInstructions = () => {
@@ -42,10 +43,39 @@ export function PMAProvider({ children }) {
     catch { return ''; }
   };
 
+  const safeParsePriorities = (raw) => {
+    try {
+      if (!raw || !String(raw).trim()) return [];
+      let clean = String(raw).trim();
+      clean = clean
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+      const start = clean.indexOf('[');
+      const end = clean.lastIndexOf(']');
+      if (start === -1 || end === -1 || end <= start) return [];
+      const jsonStr = clean.slice(start, end + 1);
+      const parsed = JSON.parse(jsonStr);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
   // ── 3. ALL CALLBACKS ────────────────────────────────────────
 
-  const buildProjectSnapshot = useCallback(async () => {
+  const buildProjectSnapshot = useCallback(async (options = {}) => {
     if (!activeProject) return null;
+    const now = Date.now();
+    if (
+      !options.force &&
+      snapshotCacheRef.current.projectId === activeProject.id &&
+      snapshotCacheRef.current.snapshot &&
+      now - snapshotCacheRef.current.timestamp < 20000
+    ) {
+      return snapshotCacheRef.current.snapshot;
+    }
     try {
       const [
         rfis, changeOrders, drawings, workPkgs,
@@ -273,6 +303,11 @@ export function PMAProvider({ children }) {
         _projectName: activeProject.name,
       };
       setProjectSnapshot(snap);
+      snapshotCacheRef.current = {
+        projectId: activeProject.id,
+        timestamp: now,
+        snapshot: snap,
+      };
       return snap;
     } catch (e) {
       console.error('Error building project snapshot:', e);
@@ -430,7 +465,7 @@ For each overdue or at-risk item, identify the DOWNSTREAM CONSEQUENCE. Example: 
 **OUTREACH NEEDED TODAY**
 [1-2 bullets: who to call/email and what to say, based on the data]`;
 
-      const result = await base44.functions.invoke('anthropicProxy', {
+      const result = await base44.functions.invoke('invokeLLM', {
         prompt: userPrompt,
         system: systemPrompt,
       });
@@ -454,16 +489,17 @@ Format: [{
 }]`;
 
       try {
-        const priorityRes = await base44.functions.invoke('anthropicProxy', {
+        const priorityRes = await base44.functions.invoke('invokeLLM', {
           prompt: priorityPrompt,
         });
-        const priorityText = typeof priorityRes === 'string'
-          ? priorityRes
-          : priorityRes?.text || priorityRes?.content || priorityRes?.response || '';
-        const parsed = JSON.parse(priorityText);
-        if (Array.isArray(parsed)) setTopPriorityActions(parsed.slice(0, 3));
+        const priorities = safeParsePriorities(
+          typeof priorityRes === 'string'
+            ? priorityRes
+            : priorityRes?.text || priorityRes?.content || priorityRes?.response || ''
+        );
+        setTopPriorityActions(priorities.slice(0, 3));
       } catch (e) {
-        console.warn('Priority extraction failed', e);
+        setTopPriorityActions([]);
       }
       
     } catch (err) {
@@ -521,6 +557,10 @@ Format: [{
       console.error('Error loading PM memory:', e);
     }
   }, [activeProject]);
+
+  useEffect(() => {
+    snapshotCacheRef.current = { projectId: null, timestamp: 0, snapshot: null };
+  }, [activeProject?.id]);
 
   useEffect(() => {
     if (isOpen && activeProject?.id) {

@@ -39,21 +39,17 @@ export default function PMAMemory() {
 
   const contextSummary = useMemo(() => {
     if (!projectSnapshot) return null;
-    const overdueRFIs = projectSnapshot.rfis?.filter((r) => r.date_required && new Date(r.date_required) < new Date() && !["Answered", "Closed"].includes(r.status)) || [];
-    const activeWPs = projectSnapshot.workPackages?.filter((w) => w.status === "In Progress") || [];
-    const lateDeliveries = projectSnapshot.deliveries?.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < new Date() && d.status !== "Delivered") || [];
-    const pendingCOs = projectSnapshot.changeOrders?.filter((c) => ["Submitted", "Under Review"].includes(c.status)) || [];
     return {
       project: projectSnapshot.project?.name,
       phase: projectSnapshot.project?.phase,
-      rfis: projectSnapshot.rfis?.length || 0,
-      overdueRFIs: overdueRFIs.length,
-      wps: projectSnapshot.workPackages?.length || 0,
-      activeWPs: activeWPs.length,
-      deliveries: projectSnapshot.deliveries?.length || 0,
-      lateDeliveries: lateDeliveries.length,
-      changeOrders: projectSnapshot.changeOrders?.length || 0,
-      pendingCOs: pendingCOs.length,
+      rfis: projectSnapshot.rfis?.total || 0,
+      overdueRFIs: projectSnapshot.rfis?.overdue || 0,
+      wps: projectSnapshot.workPackages?.total || 0,
+      activeWPs: projectSnapshot.workPackages?.onTrack || 0,
+      deliveries: (projectSnapshot.deliveries?.upcoming || 0) + (projectSnapshot.deliveries?.late || 0) + (projectSnapshot.deliveries?.recent || 0),
+      lateDeliveries: projectSnapshot.deliveries?.late || 0,
+      changeOrders: (projectSnapshot.changeOrders?.approved || 0) + (projectSnapshot.changeOrders?.pending || 0),
+      pendingCOs: projectSnapshot.changeOrders?.pending || 0,
       lastRefreshed,
       chatMessages: conversationHistory.length,
       role: pmMemory?.role,

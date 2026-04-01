@@ -14,7 +14,6 @@ export default function PMAPanel() {
     unreadInsights,
     sessionId,
     projectSnapshot,
-    riskCount,
   } = usePMA();
   const panelRef = useRef(null);
 
@@ -236,20 +235,6 @@ export default function PMAPanel() {
                     {projectSnapshot.actionItems.overdueCount}
                   </span>
                 )}
-                {tab.id === 'risks' && riskCount > 0 && (
-                  <span
-                    style={{
-                      marginLeft: 4,
-                      background: 'var(--status-warning)',
-                      borderRadius: 10,
-                      padding: '0 4px',
-                      fontSize: 7,
-                      color: '#000',
-                    }}
-                  >
-                    {riskCount}
-                  </span>
-                )}
               </button>
             ))}
           </div>
@@ -280,7 +265,7 @@ export default function PMAPanel() {
         )}
 
         {/* Content */}
-        <PanelBoundary>
+        <PanelBoundary resetKey={`${activeTab}-${isOpen ? 'open' : 'closed'}`}>
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
             {activeTab === 'insights' && <PMASummary />}
             {activeTab === 'chat' && <PMAChat />}
@@ -324,6 +309,11 @@ class PanelBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false };
+  }
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
   }
   static getDerivedStateFromError() {
     return { hasError: true };
