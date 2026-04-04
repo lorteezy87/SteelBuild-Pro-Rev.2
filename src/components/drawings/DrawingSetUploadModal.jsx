@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { persistDrawingSetAssignment, upsertDrawingSetScheduleTask } from "./submittalsMutations";
+import { toast } from "sonner";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
-const MAX_PDF_SIZE_MB = 32;
+const MAX_PDF_SIZE_MB = 50;
 
 function isPdfFile(file) {
   if (!file) return false;
@@ -654,51 +656,72 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
-    const resolvedSetName = normalizeManualSetName(meta.setName);
-    if (!resolvedSetName) {
+  const resolvedSetName = normalizeManualSetName(meta.setName);
+  if (!resolvedSetName) {
+    setStep(2);
+    return;
+  }
+
+  const latestIssueDate = [...selectedSheets]
+    .map((sheet) => sheet.date || meta.issueDate)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+  const currentRevision = normalizeRevisionNumber(selectedSheets[0]?.revision ?? meta.revision);
+  const currentFileUrl = selectedSheets.find((sheet) => sheet.sourceFileUrl)?.sourceFileUrl || null;
+  const existingSets = await base44.entities.DrawingSet.filter({
+    project_id: activeProject?.id,
+    set_name: resolvedSetName,
+  }).catch(() => []);
+
+  if (existingSets[0]?.id) {
+    const existingProjectDrawings = await base44.entities.Drawing
+      .filter({ project_id: activeProject?.id })
+      .catch(() => []);
+    const existingActiveSheets = existingProjectDrawings.filter(
+      (drawing) =>
+        !drawing?.is_superseded &&
+        normalizeSetKey(drawing?.drawing_set_name) === normalizeSetKey(resolvedSetName)
+    );
+
+    if (existingActiveSheets.length) {
       setStep(2);
+      setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
+      toast.error(`"${resolvedSetName}" already exists. Use New Revision instead of Upload Set.`);
       return;
     }
+  }
 
-    let created = 0;
-    const uploadedFileUrls = [...new Set(selectedSheets.map((sheet) => String(sheet.sourceFileUrl || "").trim()).filter(Boolean))];
-    for (const sheet of selectedSheets) {
-      await base44.entities.Drawing.create({
-        sheet_number:     sheet.sheetNumber,
-        title:            sheet.sheetTitle,
-        project_id:       activeProject?.id,
-        project_name:     activeProject?.name,
-        discipline:       sheet.discipline || meta.discipline,
-        revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-        stage:            "Not Started",
-        issue_date:       sheet.date || meta.issueDate,
-        issued_by:        meta.issuedBy,
-        file_url:         sheet.sourceFileUrl,
-        drawing_set_name: resolvedSetName,
-        notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
-      });
-      created++;
-      setProcessingStatus(prev => ({
-        ...prev,
-        progress: Math.round((created / selectedSheets.length) * 100),
-        message: `Creating entries… ${created} of ${selectedSheets.length}`,
+  let created = 0;
+  const createdDrawingIds = [];
+  const uploadedFileUrls = [...new Set(selectedSheets.map((sheet) => String(sheet.sourceFileUrl || "").trim()).filter(Boolean))];
+  for (const sheet of selectedSheets) {
+    const createdDrawing = await base44.entities.Drawing.create({
+      sheet_number:     sheet.sheetNumber,
+      title:            sheet.sheetTitle,
+      project_id:       activeProject?.id,
+      project_name:     activeProject?.name,
+      discipline:       sheet.discipline || meta.discipline,
+      revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
+      stage:            "Not Started",
+      issue_date:       sheet.date || meta.issueDate,
+      submitted_date:   meta.issueDate || sheet.date || "",
+      issued_by:        meta.issuedBy,
+      file_url:         sheet.sourceFileUrl,
+      drawing_set_name: resolvedSetName,
+      notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
+    });
+    if (createdDrawing?.id) createdDrawingIds.push(createdDrawing.id);
+    created++;
+    setProcessingStatus(prev => ({
+      ...prev,
+      progress: Math.round((created / selectedSheets.length) * 100),
+      message: `Creating entries… ${created} of ${selectedSheets.length}`,
       }));
     }
-
-    const latestIssueDate = [...selectedSheets]
-      .map((sheet) => sheet.date || meta.issueDate)
-      .filter(Boolean)
-      .sort()
-      .at(-1) || null;
-    const currentRevision = normalizeRevisionNumber(selectedSheets[0]?.revision ?? meta.revision);
-    const currentFileUrl = selectedSheets.find((sheet) => sheet.sourceFileUrl)?.sourceFileUrl || null;
-    const existingSets = await base44.entities.DrawingSet.filter({
-      project_id: activeProject?.id,
-      set_name: resolvedSetName,
-    }).catch(() => []);
-
+    let syncedSetRecord = null;
     if (existingSets[0]?.id) {
-      await base44.entities.DrawingSet.update(existingSets[0].id, {
+      syncedSetRecord = await base44.entities.DrawingSet.update(existingSets[0].id, {
         set_name: resolvedSetName,
         current_revision: currentRevision,
         current_issue_date: latestIssueDate,
@@ -707,7 +730,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         sheet_count: selectedSheets.length,
       });
     } else {
-      await base44.entities.DrawingSet.create({
+      syncedSetRecord = await base44.entities.DrawingSet.create({
         project_id: activeProject?.id,
         project_name: activeProject?.name,
         set_name: resolvedSetName,
@@ -720,6 +743,22 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
       });
     }
 
+    if (createdDrawingIds.length) {
+      await persistDrawingSetAssignment({
+        setName: resolvedSetName,
+        sourceDrawing: {
+          project_id: activeProject?.id || "",
+          project_name: activeProject?.name || "",
+          revision_number: currentRevision,
+          issue_date: latestIssueDate || meta.issueDate || "",
+          issued_by: meta.issuedBy || "",
+          file_url: currentFileUrl || "",
+        },
+        drawingIds: createdDrawingIds,
+        activeProject,
+      }).catch(() => null);
+    }
+
     // Reconcile the uploaded sheets back to the manually entered set name by file URL.
     // This prevents fresh uploads from falling into generic grouping buckets if the
     // sheet rows were created without a persisted set label somewhere in the flow.
@@ -727,17 +766,40 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
       const projectDrawings = await base44.entities.Drawing.filter({ project_id: activeProject?.id }).catch(() => []);
       const drawingsToNormalize = projectDrawings.filter((drawing) =>
         uploadedFileUrls.includes(String(drawing.file_url || "").trim()) &&
-        String(drawing.drawing_set_name || "").trim() !== resolvedSetName
+        (
+          String(drawing.drawing_set_name || "").trim() !== resolvedSetName ||
+          String(drawing.submitted_date || "").trim() !== String(meta.issueDate || "").trim()
+        )
       );
 
       if (drawingsToNormalize.length) {
         await Promise.all(
           drawingsToNormalize.map((drawing) =>
-            base44.entities.Drawing.update(drawing.id, { drawing_set_name: resolvedSetName })
+            base44.entities.Drawing.update(drawing.id, {
+              drawing_set_name: resolvedSetName,
+              submitted_date: drawing.submitted_date || meta.issueDate || "",
+            })
           )
         );
       }
     }
+
+    await upsertDrawingSetScheduleTask({
+      activeProject,
+      setRecord: syncedSetRecord,
+      setName: resolvedSetName,
+      sourceDrawing: {
+        project_id: activeProject?.id || "",
+        project_name: activeProject?.name || "",
+        issue_date: latestIssueDate || meta.issueDate || "",
+        submitted_date: meta.issueDate || latestIssueDate || "",
+        due_date: "",
+        return_date: "",
+      },
+      submittedDate: meta.issueDate || latestIssueDate || "",
+      sheetCount: selectedSheets.length,
+      percentComplete: 0,
+    }).catch(() => null);
 
     setCreatedCount(created);
     setStep(5);

@@ -11,6 +11,7 @@ import MarkupPropertiesPanel from "../components/viewer/MarkupPropertiesPanel.js
 import MarkupsList from "../components/viewer/MarkupsList.jsx";
 import AIAnalysisPanel from "../components/viewer/AIAnalysisPanel.jsx";
 import { extractPDFText } from "../components/shared/pdfHandling";
+import { toast } from "sonner";
 
 const STAMPS = [
   { id: "approved", label: "APPROVED", color: "#00D68F" },
@@ -73,6 +74,11 @@ export default function DrawingViewer() {
   const recordMeta = drawingRecord
     ? `${drawingRecord.drawing_set_name || ""} Rev ${drawingRecord.revision_number || 0}`
     : `${docRecord?.drawingNumber || ""} Rev ${docRecord?.revisionNumber || 0}`;
+  const viewerDocument = {
+    documentNumber: drawingRecord?.sheet_number || docRecord?.drawingNumber || "",
+    displayName: recordTitle,
+    revisionNumber: drawingRecord?.revision_number || docRecord?.revisionNumber || 0,
+  };
 
   // Load markups from record
   useEffect(() => {
@@ -182,26 +188,37 @@ export default function DrawingViewer() {
   }, [undoStack, handleUndoMarkups]);
 
   const handleRunAIAnalysis = async () => {
-    if (!docRecord) return;
+    if (!record || !fileUrl) return;
     setAnalysisRunning(true);
     try {
-      const pdfText = await extractPDFText(docRecord.fileUrl);
+      const pdfText = await extractPDFText(fileUrl);
+      if (!pdfText.trim()) {
+        throw new Error("Unable to extract readable text from this PDF.");
+      }
       const response = await base44.functions.invoke("runDrawingAnalysis", {
         pdfText: pdfText.slice(0, 8000),
-        drawingNumber: docRecord.drawingNumber,
-        displayName: docRecord.displayName,
-        discipline: docRecord.discipline,
-        revisionNumber: docRecord.revisionNumber,
+        drawingNumber: drawingRecord?.sheet_number || docRecord?.drawingNumber || recordTitle,
+        displayName: drawingRecord?.title || docRecord?.displayName || recordTitle,
+        discipline: drawingRecord?.discipline || docRecord?.discipline || "Structural",
+        revisionNumber: drawingRecord?.revision_number || docRecord?.revisionNumber || 0,
         markupCount: markups.length,
         linkedRFIs: [],
       });
-      setAnalysisResults(response.data);
-      await base44.entities.Document.update(docRecord.id, {
-        lastAnalysis: response.data,
-        lastAnalysisDate: new Date().toISOString(),
-      });
+      const results = response?.data || response;
+      if (!results || typeof results !== "object") {
+        throw new Error("Analysis returned an invalid response.");
+      }
+      setAnalysisResults(results);
+      if (docRecord?.id) {
+        await base44.entities.Document.update(docRecord.id, {
+          lastAnalysis: results,
+          lastAnalysisDate: new Date().toISOString(),
+        });
+      }
+      toast.success("Drawing analysis complete");
     } catch (err) {
       console.error("Analysis failed:", err);
+      toast.error(err?.message || "AI analysis failed");
     } finally {
       setAnalysisRunning(false);
     }
@@ -270,7 +287,7 @@ export default function DrawingViewer() {
     >
       {/* Top toolbar */}
       <ViewerToolbar
-        document={docRecord || { displayName: recordTitle }}
+        document={viewerDocument}
         markupMode={markupMode}
         onToggleMarkupMode={() => { setMarkupMode((m) => !m); setSelectedMarkup(null); }}
         onRunAIAnalysis={handleRunAIAnalysis}

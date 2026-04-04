@@ -14,6 +14,7 @@ import CalendarView from "@/components/schedule/CalendarView";
 import { PHASES, PHASE_ORDER, derivePhase, sortByPhase } from "@/utils/phases";
 import { useRef } from "react";
 import BulkEditTasksModal from "@/components/schedule/BulkEditTasksModal";
+import { sortTasksHierarchically } from "@/components/schedule/scheduleUtils";
 
 const STATUS_OPTIONS = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Normal", "Low"];
@@ -41,6 +42,7 @@ export default function Schedule() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [addTaskMode, setAddTaskMode] = useState("single");
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [importing, setImporting] = useState(false);
   const [createdTaskFocusId, setCreatedTaskFocusId] = useState(null);
@@ -83,6 +85,19 @@ export default function Schedule() {
     setShowBulkDeleteDialog(false);
     setCreatedTaskFocusId(null);
   }, [projectId]);
+
+  const visibleTasks =
+    phaseFilter === "all"
+      ? scheduleTasks
+      : scheduleTasks.filter((task) => derivePhase(task) === phaseFilter);
+
+  useEffect(() => {
+    const visibleTaskIds = new Set(visibleTasks.map((task) => task.id));
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => visibleTaskIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleTasks]);
 
   const normalizePredecessorTokens = (value = "") =>
     String(value)
@@ -140,21 +155,46 @@ export default function Schedule() {
     return index + 1;
   };
 
-  const getTaskWbsDepth = (task) => {
-    const match = String(task?.wbs_code || "").match(/^\d+\.(\d+)$/);
-    if (match?.[1]) {
-      return Math.max(1, match[1].length);
-    }
-    return 1;
-  };
-
   const buildWbsCode = (phase, sequence) => {
     const base = getPhaseWbsBase(phase);
     return `${base}.${sequence}`;
   };
 
+  const getNextSortOrder = (tasks = []) => {
+    const orders = tasks
+      .map((task) => Number(task.sort_order))
+      .filter((value) => Number.isFinite(value));
+
+    if (!orders.length) return 100;
+    return Math.max(...orders) + 100;
+  };
+
+  const buildExpectedWbsMap = (tasks = []) => {
+    const expected = new Map();
+    const orderedTasks = sortTasksHierarchically(tasks);
+    const childCounters = new Map();
+
+    orderedTasks.forEach((task) => {
+      const phase = derivePhase(task);
+      const parentId = task.parent_task_id;
+
+      if (parentId && expected.has(parentId)) {
+        const current = (childCounters.get(parentId) || 0) + 1;
+        childCounters.set(parentId, current);
+        expected.set(task.id, `${expected.get(parentId)}${current}`);
+        return;
+      }
+
+      const phaseRoots = (childCounters.get(`phase:${phase}`) || 0) + 1;
+      childCounters.set(`phase:${phase}`, phaseRoots);
+      expected.set(task.id, buildWbsCode(phase, phaseRoots));
+    });
+
+    return expected;
+  };
+
   const patchRequiresWbsRebalance = (patch = {}) =>
-    ["phase", "start_date", "end_date"].some((key) =>
+    ["phase", "start_date", "end_date", "parent_task_id"].some((key) =>
       Object.prototype.hasOwnProperty.call(patch, key)
     );
 
@@ -162,21 +202,11 @@ export default function Schedule() {
     if (!pid) return;
 
     const latestTasks = await base44.entities.ScheduleTask.filter({ project_id: pid });
-    const orderedTasks = sortByPhase(latestTasks);
-    const phaseStacks = {};
+    const expectedWbsMap = buildExpectedWbsMap(latestTasks);
     const updates = [];
 
-    orderedTasks.forEach((task) => {
-      const phase = derivePhase(task);
-      const depth = Math.max(1, Math.min(3, getTaskWbsDepth(task)));
-      const stack = phaseStacks[phase] ? [...phaseStacks[phase]] : [];
-      while (stack.length > depth) stack.pop();
-      while (stack.length < depth) stack.push(0);
-      stack[depth - 1] = (stack[depth - 1] || 0) + 1;
-      phaseStacks[phase] = stack;
-
-      const nextWbs = buildWbsCode(phase, stack.join(""));
-
+    latestTasks.forEach((task) => {
+      const nextWbs = expectedWbsMap.get(task.id);
       if (task.wbs_code !== nextWbs) {
         updates.push(base44.entities.ScheduleTask.update(task.id, { wbs_code: nextWbs }));
       }
@@ -190,18 +220,8 @@ export default function Schedule() {
   useEffect(() => {
     if (!projectId || !scheduleTasks.length) return;
 
-    const orderedTasks = sortByPhase(scheduleTasks);
-    const phaseStacks = {};
-    const hasMismatch = orderedTasks.some((task) => {
-      const phase = derivePhase(task);
-      const depth = Math.max(1, Math.min(3, getTaskWbsDepth(task)));
-      const stack = phaseStacks[phase] ? [...phaseStacks[phase]] : [];
-      while (stack.length > depth) stack.pop();
-      while (stack.length < depth) stack.push(0);
-      stack[depth - 1] = (stack[depth - 1] || 0) + 1;
-      phaseStacks[phase] = stack;
-      return task.wbs_code !== buildWbsCode(phase, stack.join(""));
-    });
+    const expectedWbsMap = buildExpectedWbsMap(scheduleTasks);
+    const hasMismatch = scheduleTasks.some((task) => task.wbs_code !== expectedWbsMap.get(task.id));
 
     if (!hasMismatch || normalizedProjectRef.current === projectId) return;
 
@@ -240,6 +260,9 @@ export default function Schedule() {
       const createdTask = await base44.entities.ScheduleTask.create({
         ...applyTaskPatchRules(data),
         project_id: pid,
+        sort_order: Number.isFinite(Number(data.sort_order))
+          ? Number(data.sort_order)
+          : getNextSortOrder(scheduleTasks),
       });
       await rebalanceWbsCodes(pid);
       return createdTask;
@@ -253,6 +276,18 @@ export default function Schedule() {
       toast.success("Task created");
     },
     onError: (err) => toast.error("Create failed: " + err.message),
+  });
+
+  const bulkCreateTaskMut = useMutation({
+    mutationFn: async (bulkPayload) => createBulkTasks(bulkPayload),
+    onSuccess: async (count) => {
+      await qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      setShowAddTask(false);
+      setPhaseFilter("all");
+      setView("list");
+      toast.success(`Created ${count} ${count === 1 ? "task" : "tasks"}`);
+    },
+    onError: (err) => toast.error("Bulk create failed: " + err.message),
   });
 
   useEffect(() => {
@@ -400,6 +435,77 @@ export default function Schedule() {
     return importableTasks.length;
   };
 
+  const parseBulkTaskDrafts = (bulkPayload) => {
+    const lines = String(bulkPayload.bulk_text || "")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\t/g, "  "))
+      .filter((line) => line.trim());
+
+    return lines.map((line) => {
+      const leadingSpaces = line.match(/^\s*/)?.[0].length || 0;
+      const indentLevel = Math.floor(leadingSpaces / 2);
+      const content = line.trim();
+      const [task_name, phase, start_date, end_date, status, priority, predecessor_wbs] = content
+        .split("|")
+        .map((part) => part.trim());
+
+      return {
+        indentLevel,
+        task_name,
+        phase: phase || bulkPayload.phase,
+        start_date: start_date || bulkPayload.start_date,
+        end_date: end_date || bulkPayload.end_date,
+        status: status || bulkPayload.status,
+        priority: priority || bulkPayload.priority,
+        predecessor_wbs: predecessor_wbs || "",
+        task_type: bulkPayload.task_type || "Task",
+      };
+    }).filter((draft) => draft.task_name);
+  };
+
+  const createBulkTasks = async (bulkPayload) => {
+    const pid = projectId || activeProject?.id;
+    if (!pid) throw new Error("Select a project first");
+
+    const drafts = parseBulkTaskDrafts(bulkPayload);
+    if (!drafts.length) {
+      throw new Error("Enter at least one task line to bulk add.");
+    }
+
+    const createdIdByLevel = new Map();
+    let nextSortOrder = getNextSortOrder(scheduleTasks);
+
+    for (const draft of drafts) {
+      const parentTaskId = draft.indentLevel > 0 ? createdIdByLevel.get(draft.indentLevel - 1) || null : null;
+      const createdTask = await base44.entities.ScheduleTask.create({
+        ...applyTaskPatchRules({
+          task_name: draft.task_name,
+          phase: draft.phase,
+          start_date: draft.start_date,
+          end_date: draft.end_date,
+          status: draft.status,
+          priority: draft.priority,
+          predecessor_wbs: draft.predecessor_wbs,
+          task_type: draft.task_type,
+          parent_task_id: parentTaskId,
+          percent_complete: 0,
+          sort_order: nextSortOrder,
+        }),
+        project_id: pid,
+      });
+
+      nextSortOrder += 100;
+
+      createdIdByLevel.set(draft.indentLevel, createdTask.id);
+      Array.from(createdIdByLevel.keys())
+        .filter((key) => key > draft.indentLevel)
+        .forEach((key) => createdIdByLevel.delete(key));
+    }
+
+    await rebalanceWbsCodes(pid);
+    return drafts.length;
+  };
+
   const handleImportMPP = async (file) => {
     if (!projectId && !activeProject?.id) {
       toast.error("Select a project before importing");
@@ -536,7 +642,10 @@ export default function Schedule() {
             </p>
           </div>
           <button
-            onClick={() => setShowAddTask(true)}
+            onClick={() => {
+              setAddTaskMode("single");
+              setShowAddTask(true);
+            }}
             disabled={!hasProject}
             style={{
               background: "var(--accent)",
@@ -554,6 +663,30 @@ export default function Schedule() {
             }}
           >
             Create Task
+          </button>
+          <button
+            onClick={() => {
+              setAddTaskMode("bulk");
+              setShowAddTask(true);
+            }}
+            disabled={!hasProject}
+            style={{
+              marginLeft: 8,
+              background: "var(--bg-surface)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent-border)",
+              borderRadius: "var(--radius-btn)",
+              padding: "7px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: hasProject ? "pointer" : "not-allowed",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              opacity: hasProject ? 1 : 0.45,
+            }}
+          >
+            Bulk Add
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -656,18 +789,18 @@ export default function Schedule() {
 
       {view === "calendar" && (
         <CalendarView
-          tasks={scheduleTasks}
+          tasks={visibleTasks}
           onSelectTask={(task) => { setSelectedTask(task); setShowDrawer(true); }}
           onAddTask={() => setShowAddTask(true)}
           onSelectDate={() => {}}
         />
       )}
 
-      {view === "lookahead" && <LookaheadPlanner tasks={scheduleTasks} />}
+      {view === "lookahead" && <LookaheadPlanner tasks={visibleTasks} />}
 
       {view === "list" && (
         <ScheduleTaskList
-          tasks={scheduleTasks}
+          tasks={visibleTasks}
           onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
           onDelete={(task) => setDeleteTarget(task)}
           selectedIds={selectedIds}
@@ -683,6 +816,11 @@ export default function Schedule() {
         onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
         onUpdate={(data) => updateTaskMut.mutate(data)}
         onDelete={(id) => deleteTaskMut.mutate(id)}
+        onCreateSubtask={(task) => {
+          setSelectedTask(task);
+          setAddTaskMode("single");
+          setShowAddTask(true);
+        }}
         allTasks={scheduleTasks}
         formatPredecessorWbs={(value) => formatPredecessorWbs(value, scheduleTasks)}
       />
@@ -698,9 +836,12 @@ export default function Schedule() {
             percent_complete: 0,
           })
         }
+        onBulkSubmit={(payload) => bulkCreateTaskMut.mutate(payload)}
         projectName={selectedProject?.name || ""}
         prefilledDate={new Date().toISOString().split("T")[0]}
         allTasks={scheduleTasks}
+        initialMode={addTaskMode}
+        initialParentTaskId={selectedTask?.id || ""}
       />
 
       <DeleteDialog

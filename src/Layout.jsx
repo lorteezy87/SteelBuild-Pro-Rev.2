@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,9 +9,6 @@ import QuickAddFAB from "./components/shared/QuickAddFAB";
 import { useProjectContext } from "./components/shared/useProjectContext";
 import { ProjectProvider } from "./components/shared/ProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
-import { PMAProvider } from "./components/pma/usePMAContext";
-import PMAPanel from "./components/pma/PMAPanel";
-import { usePMA } from "./components/pma/usePMAContext";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "./components/shared/ThemeContext";
 
@@ -26,8 +23,8 @@ const PRIMARY_TABS = [
 { label: "SCHEDULE", pages: ["Schedule", "GanttChart", "LookAheadSchedule"] },
 { label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes"] },
 { label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV"] },
-{ label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
-{ label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "DecisionLog", "AlertsCenter", "Activity"] },
+{ label: "RESOURCES", pages: ["ResourceManagement", "ResourceScheduling"] },
+{ label: "REPORTS", pages: ["ProjectControlCenter", "AIInsights", "JobStatusReport", "DecisionLog", "AlertsCenter", "Activity"] },
 { label: "QUALITY", pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
 { label: "CLOSEOUT", pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] }];
 
@@ -42,8 +39,8 @@ const TAB_DEFAULT_PAGE = {
   "SCHEDULE": "Schedule",
   "FIELD": "DailyLogs",
   "COST": "Financials",
-  "RESOURCES": "ResourceScheduling",
-  "REPORTS": "AIInsights",
+  "RESOURCES": "ResourceManagement",
+  "REPORTS": "ProjectControlCenter",
   "QUALITY": "Inspections",
   "CLOSEOUT": "ProjectCloseout"
 };
@@ -77,7 +74,8 @@ const ALL_MODULES = [
 { icon: "📊", name: "SOV", group: "Cost", page: "SOV" },
 { icon: "$", name: "Change Orders", group: "Cost", page: "ChangeOrders" },
 { icon: "👥", name: "Resources", group: "Resources", page: "ResourceManagement" },
-{ icon: "▨", name: "Crew Scheduling", group: "Resources", page: "ResourceScheduling" },
+{ icon: "▨", name: "Assignments", group: "Resources", page: "ResourceScheduling" },
+{ icon: "🎯", name: "Project Control Center", group: "Reporting", page: "ProjectControlCenter" },
 { icon: "📋", name: "Job Status Report", group: "Reporting", page: "JobStatusReport" },
 { icon: "✨", name: "Portfolio Overview", group: "Reporting", page: "AIInsights" },
 { icon: "📊", name: "Activity Log", group: "Reporting", page: "Activity" },
@@ -207,7 +205,7 @@ const NAV_GROUPS = [
   label: "SCHEDULING",
   items: [
   { label: "Gantt Schedule", icon: "▥", page: "Schedule" },
-  { label: "Resource Board", icon: "👥", page: "ResourceManagement" },
+  { label: "Resources", icon: "👥", page: "ResourceManagement" },
   { label: "Weekly Look-Ahead", icon: "📅", page: "LookAheadSchedule" }]
 
 },
@@ -223,6 +221,7 @@ const NAV_GROUPS = [
 {
   label: "REPORTING",
   items: [
+  { label: "Project Control Center", icon: "🎯", page: "ProjectControlCenter" },
   { label: "Job Status Report", icon: "📋", page: "JobStatusReport" },
   { label: "Decision Log", icon: "📋", page: "DecisionLog" },
   { label: "Portfolio Overview", icon: "✦", page: "AIInsights" },
@@ -799,111 +798,44 @@ function ThemeToggleButton() {
   );
 }
 
-// ─── PMA Button Component ─────────────────────────────────────
-function PMAButton() {
-  const { isOpen, setIsOpen, unreadInsights, isLoadingInsights } = usePMA();
-
-  const statusLabel = isLoadingInsights
-    ? 'LOADING'
-    : unreadInsights > 0
-    ? 'READY'
-    : 'IDLE';
-
-  const pulseStyle =
-    unreadInsights > 0
-      ? {
-          animation: 'pma-pulse 2s infinite',
-          boxShadow: '0 0 0 0 rgba(0,229,255,0.45)',
-        }
-      : {};
+// ─── Project Control Center Button ──────────────────────────────
+function ProjectControlCenterButton() {
+  const navigate = useNavigate();
 
   return (
     <button
-      onClick={() => setIsOpen(!isOpen)}
-      title="Project Management Assistant · ⌘⇧P to open"
+      onClick={() => navigate(createPageUrl("ProjectControlCenter"))}
+      title="Project Control Center"
       style={{
-        display: 'flex',
-        alignItems: 'center',
+        display: "flex",
+        alignItems: "center",
         gap: 8,
-        padding: '6px 14px',
-        background: isOpen ? 'rgba(0,229,255,0.15)' : 'rgba(0,229,255,0.06)',
-        border: '1px solid',
-        borderColor: isOpen ? 'rgba(0,229,255,0.50)' : 'rgba(0,229,255,0.20)',
+        padding: "6px 14px",
+        background: "rgba(255,122,0,0.10)",
+        border: "1px solid rgba(255,122,0,0.28)",
         borderRadius: 16,
-        cursor: 'pointer',
-        fontFamily: 'var(--font-mono)',
+        cursor: "pointer",
+        fontFamily: "var(--font-mono)",
         fontSize: 9,
         fontWeight: 700,
-        color: isOpen ? '#00E5FF' : 'rgba(0,229,255,0.65)',
-        letterSpacing: '0.08em',
-        transition: 'all 0.2s',
-        position: 'relative',
-        boxShadow: isOpen ? '0 0 16px rgba(0,229,255,0.25)' : 'none',
-        ...pulseStyle,
+        color: "var(--accent)",
+        letterSpacing: "0.08em",
+        transition: "all 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255,122,0,0.18)";
+        e.currentTarget.style.borderColor = "rgba(255,122,0,0.42)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(255,122,0,0.10)";
+        e.currentTarget.style.borderColor = "rgba(255,122,0,0.28)";
       }}
     >
-      <style>{`
-        @keyframes pma-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(0,229,255,0.45); }
-          70% { box-shadow: 0 0 0 8px rgba(0,229,255,0); }
-          100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
-        }
-      `}</style>
-      <span style={{ fontSize: 11 }}>✦</span>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-        <span>PMA</span>
-        <span
-          style={{
-            fontSize: 7,
-            color:
-              statusLabel === 'READY'
-                ? 'var(--status-success)'
-                : statusLabel === 'LOADING'
-                ? 'var(--status-warning)'
-                : 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background:
-                statusLabel === 'READY'
-                  ? 'var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? 'var(--status-warning)'
-                  : 'var(--text-muted)',
-              boxShadow:
-                statusLabel === 'READY'
-                  ? '0 0 6px var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? '0 0 6px var(--status-warning)'
-                  : 'none',
-              flexShrink: 0,
-            }}
-          />
-          {statusLabel}
-        </span>
+      <span style={{ fontSize: 11 }}>🎯</span>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1 }}>
+        <span>PCC</span>
+        <span style={{ fontSize: 7, color: "var(--text-muted)" }}>PROJECT CONTROL</span>
       </div>
-      {unreadInsights > 0 && (
-        <span
-          style={{
-            background: '#FF3D3D',
-            borderRadius: 10,
-            padding: '0 6px',
-            fontSize: 8,
-            color: 'white',
-            fontWeight: 800,
-            lineHeight: 1.4,
-          }}
-        >
-          {unreadInsights}
-        </span>
-      )}
     </button>
   );
 }
@@ -1023,7 +955,6 @@ export default function Layout({ children, currentPageName }) {
   // Noise texture SVG data URI
   return (
     <ProjectProvider>
-      <PMAProvider>
         <div style={{
           minHeight: "100vh",
           width: "100%",
@@ -1218,8 +1149,8 @@ export default function Layout({ children, currentPageName }) {
             {/* Theme Toggle */}
             {!isMobile && <ThemeToggleButton />}
 
-            {/* PMA Button */}
-            {!isMobile && <PMAButton />}
+            {/* Project Control Center */}
+            {!isMobile && <ProjectControlCenterButton />}
 
             {/* Bell with dropdown */}
             <BellDropdown
@@ -1294,9 +1225,6 @@ export default function Layout({ children, currentPageName }) {
         {/* Quick Add FAB */}
         <QuickAddFAB />
 
-        {/* PMA Panel */}
-        <PMAPanel />
-
         {/* Toast notifications */}
         <Toaster
               position="bottom-right"
@@ -1314,7 +1242,6 @@ export default function Layout({ children, currentPageName }) {
 
       </div>
     </div>
-      </PMAProvider>
     </ProjectProvider>
   );
 

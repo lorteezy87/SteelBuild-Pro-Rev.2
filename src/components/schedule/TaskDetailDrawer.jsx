@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { calculateTaskDuration } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 
-export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete, formatPredecessorWbs }) {
+export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete, onCreateSubtask, formatPredecessorWbs }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
 
@@ -73,6 +73,24 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {onCreateSubtask && (
+              <button
+                onClick={() => onCreateSubtask(task)}
+                style={{
+                  background: 'var(--accent-muted)',
+                  border: '1px solid var(--accent-border)',
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  color: 'var(--accent)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                ADD SUBTASK
+              </button>
+            )}
             {onDelete && (
               <button
                 onClick={() => {
@@ -148,6 +166,18 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
                 <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
                 <FormField label="WBS Code" value={formData.wbs_code} readOnly={true} />
+                <FormField
+                  label="Parent Task"
+                  type="select"
+                  value={formData.parent_task_id || ''}
+                  onChange={(v) => setFormData({ ...formData, parent_task_id: v || null })}
+                  options={allTasks
+                    .filter((candidate) => candidate.id !== task.id)
+                    .map((candidate) => ({
+                      value: candidate.id,
+                      label: `${candidate.wbs_code || 'WBS Pending'} · ${candidate.task_name}`,
+                    }))}
+                />
                 <FormField label="Predecessor WBS Codes" value={formData.predecessor_wbs} onChange={(v) => setFormData({ ...formData, predecessor_wbs: v })} placeholder="Comma-separated WBS codes" />
               </div>
             </div>
@@ -275,9 +305,14 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           }}
         >
           <option value="">—</option>
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
+          {options.map((opt) => {
+            const option = typeof opt === 'string' ? { value: opt, label: opt } : opt;
+            return (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            );
+          })}
         </select>
       ) : type === 'date' ? (
         <input

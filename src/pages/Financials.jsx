@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ExpenseFormModal from "@/components/expenses/ExpenseFormModal";
+import SOVFormModal from "@/components/sov/SOVFormModal";
 import PageHeader from "@/components/shared/PageHeader";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent } from "@/components/shared/formatters";
+import { getNextNumber } from "@/components/shared/numberSequencing";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -22,8 +25,9 @@ const body = { fontFamily: "var(--font-body)" };
 
 const VIEW_TABS = [
   { key: "summary", label: "Project Summary" },
-  { key: "sov", label: "SOV Analysis" },
   { key: "budget", label: "Budget Control" },
+  { key: "sov", label: "SOV Control" },
+  { key: "expenses", label: "Expense Ledger" },
   { key: "unmapped", label: "Unmapped Costs" },
 ];
 
@@ -206,16 +210,57 @@ function ReviewFlags({ flags }) {
   );
 }
 
+function ToolbarButton({ label, onClick, tone = "default" }) {
+  const styles = {
+    default: {
+      background: "var(--bg-surface-low)",
+      border: "1px solid var(--border-default)",
+      color: "var(--text-secondary)",
+    },
+    accent: {
+      background: "var(--accent)",
+      border: "1px solid var(--accent-border)",
+      color: "#0A0A0B",
+    },
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles[tone],
+        borderRadius: "var(--radius-btn)",
+        padding: "8px 12px",
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function Financials() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
+  const navigate = useNavigate();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [filterPhase, setFilterPhase] = useState("all");
   const [search, setSearch] = useState("");
   const [activeView, setActiveView] = useState("summary");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [costCodeModalOpen, setCostCodeModalOpen] = useState(false);
   const [editingCostCode, setEditingCostCode] = useState(null);
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [sovModalOpen, setSovModalOpen] = useState(false);
+  const [editingSov, setEditingSov] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteMode, setDeleteMode] = useState(null);
   const qc = useQueryClient();
 
   const { data: projects = [], isLoading: projectsLoading, isError: projectsError, error: projectsErrorDetails } = useQuery({
@@ -252,14 +297,23 @@ export default function Financials() {
     initialData: [],
   });
 
+  const { data: workPackages = [], isLoading: workPackagesLoading, isError: workPackagesError, error: workPackagesErrorDetails } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
+    enabled: !!projectId,
+    initialData: [],
+  });
+
   const costCodeQueryKeys = [["cost-codes", projectId], ["cost-codes"]];
+  const expenseQueryKeys = [["expenses", projectId], ["expenses"]];
+  const sovQueryKeys = [["sov-items", projectId], ["sov-items"]];
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.CostCode.create(buildCostCodePayload(data, projects)),
     onSuccess: async (created) => {
       appendRecordToCaches(qc, costCodeQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
       await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setModalOpen(false);
+      setCostCodeModalOpen(false);
       setEditingCostCode(null);
     },
     onError: (error) => toastCrudError(error, "Failed to create cost code"),
@@ -270,34 +324,103 @@ export default function Financials() {
     onSuccess: async (updated) => {
       replaceRecordInCaches(qc, costCodeQueryKeys, updated);
       await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setModalOpen(false);
+      setCostCodeModalOpen(false);
       setEditingCostCode(null);
     },
     onError: (error) => toastCrudError(error, "Failed to update cost code"),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.CostCode.delete(id),
-    onSuccess: async (_, deletedId) => {
-      removeRecordFromCaches(qc, costCodeQueryKeys, deletedId);
-      await invalidateCrudQueries(qc, costCodeQueryKeys);
-      setDeleteTarget(null);
+  const createExpenseMut = useMutation({
+    mutationFn: (data) => base44.entities.Expense.create(data),
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, expenseQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
+      await invalidateCrudQueries(qc, expenseQueryKeys);
+      setExpenseModalOpen(false);
+      setEditingExpense(null);
     },
-    onError: (error) => toastCrudError(error, "Failed to delete cost code"),
+    onError: (error) => toastCrudError(error, "Failed to create expense"),
+  });
+
+  const updateExpenseMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Expense.update(id, data),
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, expenseQueryKeys, updated);
+      await invalidateCrudQueries(qc, expenseQueryKeys);
+      setExpenseModalOpen(false);
+      setEditingExpense(null);
+    },
+    onError: (error) => toastCrudError(error, "Failed to update expense"),
+  });
+
+  const createSovMut = useMutation({
+    mutationFn: async (data) => {
+      let sovId;
+      try {
+        sovId = projectId ? await getNextNumber(projectId, "SOV") : null;
+      } catch {
+        sovId = null;
+      }
+      return base44.entities.SOVItem.create({
+        ...data,
+        sov_id: data.sov_id || sovId || `SOV-${String(sovItems.length + 1).padStart(3, "0")}`,
+      });
+    },
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, sovQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
+      await invalidateCrudQueries(qc, sovQueryKeys);
+      setSovModalOpen(false);
+      setEditingSov(null);
+    },
+    onError: (error) => toastCrudError(error, "Failed to create SOV item"),
+  });
+
+  const updateSovMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.SOVItem.update(id, data),
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, sovQueryKeys, updated);
+      await invalidateCrudQueries(qc, sovQueryKeys);
+      setSovModalOpen(false);
+      setEditingSov(null);
+    },
+    onError: (error) => toastCrudError(error, "Failed to update SOV item"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: ({ id, mode }) => {
+      if (mode === "cost-code") return base44.entities.CostCode.delete(id);
+      if (mode === "expense") return base44.entities.Expense.delete(id);
+      return base44.entities.SOVItem.delete(id);
+    },
+    onSuccess: async (_, payload) => {
+      if (payload.mode === "cost-code") {
+        removeRecordFromCaches(qc, costCodeQueryKeys, payload.id);
+        await invalidateCrudQueries(qc, costCodeQueryKeys);
+      } else if (payload.mode === "expense") {
+        removeRecordFromCaches(qc, expenseQueryKeys, payload.id);
+        await invalidateCrudQueries(qc, expenseQueryKeys);
+      } else {
+        removeRecordFromCaches(qc, sovQueryKeys, payload.id);
+        await invalidateCrudQueries(qc, sovQueryKeys);
+      }
+      setDeleteTarget(null);
+      setDeleteMode(null);
+    },
+    onError: (error) => toastCrudError(error, "Failed to delete record"),
   });
 
   const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null;
   const approvedChangeOrders = useMemo(() => changeOrders.filter((changeOrder) => changeOrder.status === "Approved"), [changeOrders]);
   const activeExpenses = useMemo(() => expenses.filter((expense) => expense.payment_status !== "Voided"), [expenses]);
-  const loadingFinancials = projectsLoading || costCodesLoading || changeOrdersLoading || expensesLoading || sovItemsLoading;
+  const loadingFinancials = projectsLoading || costCodesLoading || changeOrdersLoading || expensesLoading || sovItemsLoading || workPackagesLoading;
   const financialsError =
     projectsErrorDetails ||
     costCodesErrorDetails ||
     changeOrdersErrorDetails ||
     expensesErrorDetails ||
     sovItemsErrorDetails ||
+    workPackagesErrorDetails ||
     null;
-  const hasFinancialsError = projectsError || costCodesError || changeOrdersError || expensesError || sovItemsError;
+  const hasFinancialsError = projectsError || costCodesError || changeOrdersError || expensesError || sovItemsError || workPackagesError;
 
   const costCodeRows = useMemo(() => {
     const byCostCodeId = approvedChangeOrders.reduce((acc, changeOrder) => {
@@ -348,6 +471,8 @@ export default function Financials() {
 
   const families = useMemo(() => [...new Set(costCodeRows.map((row) => row.phase).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [costCodeRows]);
   const costCodeMap = useMemo(() => new Map(costCodeRows.map((row) => [row.cost_code_number, row])), [costCodeRows]);
+  const workPackageMap = useMemo(() => new Map(workPackages.map((row) => [row.id, row])), [workPackages]);
+  const sovMap = useMemo(() => new Map(sovItems.map((row) => [row.id, row])), [sovItems]);
 
   const filteredCostCodeRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -358,13 +483,6 @@ export default function Financials() {
       return [row.cost_code_number, row.description, row.phase, row.family_label].some((value) => String(value || "").toLowerCase().includes(q));
     });
   }, [costCodeRows, filterPhase, search]);
-
-  const handleSaveCostCode = async (data) => {
-    if (editingCostCode) {
-      return updateMut.mutateAsync({ id: editingCostCode.id, data });
-    }
-    return createMut.mutateAsync(data);
-  };
 
   const groupedSovRows = useMemo(() => {
     const familyTotals = {};
@@ -392,12 +510,10 @@ export default function Financials() {
       const family = getFamilyMeta(item.description);
       const totals = familyTotals[family.key] || { scheduled: 0, budget: 0, actual: 0, committed: 0, remaining: 0 };
       const share = totals.scheduled > 0 ? scheduledValue / totals.scheduled : 0;
-      const percentOfContract = safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value) > 0
-        ? (scheduledValue / safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value)) * 100
-        : 0;
-      const expenseActual = activeExpenses
-        .filter((expense) => expense.sov_line_item_id === item.id)
-        .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
+      const contractValue = safeNumber(selectedProject?.revised_contract_value || selectedProject?.original_contract_value);
+      const percentOfContract = contractValue > 0 ? (scheduledValue / contractValue) * 100 : 0;
+      const linkedExpenses = activeExpenses.filter((expense) => expense.sov_line_item_id === item.id);
+      const expenseActual = linkedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
 
       return {
         ...item,
@@ -409,6 +525,7 @@ export default function Financials() {
         allocated_actual: expenseActual || totals.actual * share,
         allocated_committed: totals.committed * share,
         allocated_remaining: totals.remaining * share,
+        linked_expense_count: linkedExpenses.length,
       };
     });
   }, [activeExpenses, costCodeRows, selectedProject, sovItems]);
@@ -417,6 +534,38 @@ export default function Financials() {
     const q = search.trim().toLowerCase();
     return groupedSovRows.filter((row) => !q || [row.line_item_number, row.description, row.family_label].some((value) => String(value || "").toLowerCase().includes(q)));
   }, [groupedSovRows, search]);
+
+  const expenseRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return activeExpenses
+      .map((expense) => {
+        const linkedCostCode = costCodeMap.get(expense.cost_code);
+        const linkedSov = expense.sov_line_item_id ? sovMap.get(expense.sov_line_item_id) : null;
+        const linkedWorkPackage = expense.work_package_id ? workPackageMap.get(expense.work_package_id) : null;
+        const family = getFamilyMeta(`${linkedCostCode?.phase || ""} ${linkedCostCode?.description || ""} ${expense.description || ""}`);
+        return {
+          ...expense,
+          linked_cost_code: linkedCostCode,
+          linked_sov: linkedSov,
+          linked_work_package: linkedWorkPackage,
+          family_label: family.label,
+        };
+      })
+      .filter((expense) => {
+        const phaseMatch = filterPhase === "all" || expense.linked_cost_code?.phase === filterPhase;
+        if (!phaseMatch) return false;
+        if (!q) return true;
+        return [
+          expense.expense_number,
+          expense.description,
+          expense.vendor,
+          expense.cost_code,
+          expense.sov_line_item_name,
+          expense.linked_sov?.description,
+          expense.linked_work_package?.name,
+        ].some((value) => String(value || "").toLowerCase().includes(q));
+      });
+  }, [activeExpenses, costCodeMap, filterPhase, search, sovMap, workPackageMap]);
 
   const unmappedExpenses = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -449,6 +598,10 @@ export default function Financials() {
     const budgetSpentPct = revisedBudget > 0 ? (forecastTotal / revisedBudget) * 100 : 0;
     const sovVsContract = contractValue > 0 ? sovTotal - contractValue : 0;
     const marginAtRisk = contractValue - forecastTotal;
+    const openExpenses = activeExpenses.filter((item) => item.payment_status !== "Paid").length;
+    const unmappedCount = unmappedExpenses.length;
+    const linkedExpenses = activeExpenses.filter((item) => item.sov_line_item_id).length;
+    const directCosts = costCodeRows.filter((item) => item.direct_billable).reduce((sum, item) => sum + safeNumber(item.exposure), 0);
 
     return {
       contractValue,
@@ -463,15 +616,19 @@ export default function Financials() {
       approvedExtras,
       budgetSpentPct,
       marginAtRisk,
+      openExpenses,
+      unmappedCount,
+      linkedExpenses,
+      directCosts,
     };
-  }, [approvedChangeOrders, costCodeRows, selectedProject, sovItems]);
+  }, [activeExpenses, approvedChangeOrders, costCodeRows, selectedProject, sovItems, unmappedExpenses.length]);
 
   const reviewFlags = useMemo(() => {
     const flags = [];
     if (Math.abs(summary.sovVsContract) > 1) {
       flags.push({
         title: "SOV mismatch",
-        body: `Schedule of values totals ${formatSigned(summary.sovVsContract)} against the project contract. The workbook treats this as a review item before billing.`,
+        body: `Schedule of values totals ${formatSigned(summary.sovVsContract)} against the project contract. Review billing alignment before pay app cut-off.`,
         tone: "warning",
       });
     }
@@ -485,7 +642,7 @@ export default function Financials() {
     if (unmappedExpenses.length > 0) {
       flags.push({
         title: "Unmapped costs",
-        body: `${unmappedExpenses.length} expense ${unmappedExpenses.length === 1 ? "record needs" : "records need"} review before they can be tied to a billable SOV line.`,
+        body: `${unmappedExpenses.length} expense ${unmappedExpenses.length === 1 ? "record needs" : "records need"} review before cost and billing are reconciled.`,
         tone: "warning",
       });
     }
@@ -493,19 +650,76 @@ export default function Financials() {
     if (zeroCommitted.length > 0) {
       flags.push({
         title: "Committed cost gap",
-        body: `${zeroCommitted.length} cost buckets have revised budget but no actual or committed cost. The spreadsheet treats this as a control check for missing POs or buyouts.`,
+        body: `${zeroCommitted.length} cost buckets have revised budget but no actual or committed cost. Review buyout coverage and missing invoices.`,
+        tone: "warning",
+      });
+    }
+    const unlinkedSov = groupedSovRows.filter((row) => row.linked_expense_count === 0 && row.allocated_actual > 0);
+    if (unlinkedSov.length > 0) {
+      flags.push({
+        title: "SOV not tied to actuals",
+        body: `${unlinkedSov.length} SOV lines show allocated cost but no direct expense linkage. Add expense mappings before billing review.`,
         tone: "warning",
       });
     }
     return flags;
-  }, [costCodeRows, summary, unmappedExpenses.length]);
+  }, [costCodeRows, groupedSovRows, summary, unmappedExpenses.length]);
+
+  const nextSovId = useMemo(() => `SOV-${String((sovItems.length || 0) + 1).padStart(3, "0")}`, [sovItems.length]);
+  const nextLineItemNumber = useMemo(() => sovItems.reduce((max, item) => Math.max(max, Number(item.line_item_number) || 0), 0) + 1, [sovItems]);
+
+  const handleSaveCostCode = async (data) => {
+    if (editingCostCode) {
+      return updateMut.mutateAsync({ id: editingCostCode.id, data });
+    }
+    return createMut.mutateAsync(data);
+  };
+
+  const handleSaveExpense = async (data) => {
+    const linkedSov = data.sov_line_item_id ? sovMap.get(data.sov_line_item_id) : null;
+    const linkedWorkPackage = data.work_package_id ? workPackageMap.get(data.work_package_id) : null;
+    const payload = {
+      ...data,
+      project_id: data.project_id || projectId,
+      project_name: selectedProject?.name || data.project_name || "",
+      sov_line_item_name: linkedSov?.description || data.sov_line_item_name || "",
+      work_package_name: linkedWorkPackage ? `${linkedWorkPackage.wp_number} - ${linkedWorkPackage.name}` : data.work_package_name || "",
+    };
+
+    if (editingExpense) {
+      return updateExpenseMut.mutateAsync({ id: editingExpense.id, data: payload });
+    }
+    return createExpenseMut.mutateAsync(payload);
+  };
+
+  const handleSaveSov = async (data) => {
+    const payload = {
+      ...data,
+      project_id: data.project_id || projectId,
+      project_name: selectedProject?.name || data.project_name || "",
+    };
+    if (editingSov) {
+      return updateSovMut.mutateAsync({ id: editingSov.id, data: payload });
+    }
+    return createSovMut.mutateAsync(payload);
+  };
+
+  const openExpenseModal = (expense = null) => {
+    setEditingExpense(expense);
+    setExpenseModalOpen(true);
+  };
+
+  const openSovModal = (sov = null) => {
+    setEditingSov(sov);
+    setSovModalOpen(true);
+  };
 
   if (!projectId) {
     return (
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>$</div>
         <div style={{ ...body, fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>
-          Select a project to view financial control
+          Select a project to view cost control
         </div>
         <div style={{ ...body, fontSize: 12, color: "var(--text-muted)" }}>
           Use the project selector in the top right.
@@ -518,10 +732,10 @@ export default function Financials() {
     return (
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ ...mono, fontSize: 12, color: "var(--accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Loading Budget Control
+          Loading Cost Control
         </div>
         <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-          Pulling cost codes, expenses, change orders, and SOV data.
+          Pulling budgets, expenses, SOV lines, change orders, and work package ties.
         </div>
       </div>
     );
@@ -531,7 +745,7 @@ export default function Financials() {
     return (
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
         <div style={{ ...mono, fontSize: 12, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Budget Control Failed To Load
+          Cost Control Failed To Load
         </div>
         <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
           {financialsError?.message || "One or more financial datasets could not be loaded."}
@@ -547,7 +761,7 @@ export default function Financials() {
           Project Data Missing
         </div>
         <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-          The selected project record could not be resolved for Budget Control.
+          The selected project record could not be resolved for Cost Control.
         </div>
       </div>
     );
@@ -557,122 +771,122 @@ export default function Financials() {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <PageHeader
         title="Budget Control"
-        subtitle={`${selectedProject?.name || "Project"} • workbook-style financial control`}
-        onAdd={() => {
-          setEditingCostCode(null);
-          setModalOpen(true);
-        }}
+        subtitle={`${selectedProject?.name || "Project"} • integrated cost, SOV, and expense control`}
         onRefresh={() => {
           invalidateCrudQueries(qc, costCodeQueryKeys);
-          qc.invalidateQueries({ queryKey: ["expenses", projectId] });
-          qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
+          invalidateCrudQueries(qc, expenseQueryKeys);
+          invalidateCrudQueries(qc, sovQueryKeys);
           qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
+          qc.invalidateQueries({ queryKey: ["work-packages", projectId] });
         }}
-        addLabel="Create Cost Code"
       />
 
-      <SectionTabs active={activeView} onChange={setActiveView} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <SectionTabs active={activeView} onChange={setActiveView} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <ToolbarButton label="Add Expense" tone="accent" onClick={() => openExpenseModal()} />
+          <ToolbarButton label="Add SOV Item" onClick={() => openSovModal()} />
+          <ToolbarButton
+            label="Add Cost Code"
+            onClick={() => {
+              setEditingCostCode(null);
+              setCostCodeModalOpen(true);
+            }}
+          />
+          <ToolbarButton label="Open Expenses Page" onClick={() => navigate(`/Expenses?project=${projectId}`)} />
+          <ToolbarButton label="Open SOV Page" onClick={() => navigate(`/SOV?project=${projectId}`)} />
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <SummaryCard label="Contract Value" value={formatCurrencyShort(summary.contractValue)} detail={`Project ${selectedProject?.project_number || "—"}`} />
         <SummaryCard label="SOV Total" value={formatCurrencyShort(summary.sovTotal)} detail={`Variance to contract ${formatSigned(summary.sovVsContract)}`} tone={Math.abs(summary.sovVsContract) > 1 ? "var(--status-warning)" : "var(--accent)"} />
         <SummaryCard label="Revised Budget" value={formatCurrencyShort(summary.revisedBudget)} detail={`Approved extras ${formatCurrencyShort(summary.approvedExtras)}`} tone="var(--status-info)" />
-        <SummaryCard label="Actual Cost" value={formatCurrencyShort(summary.actual)} detail={`Open commitments ${formatCurrencyShort(summary.committed)}`} tone="var(--status-warning)" />
         <SummaryCard label="Exposure" value={formatCurrencyShort(summary.exposure)} detail={`Forecast ${formatCurrencyShort(summary.forecastTotal)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-warning)"} />
-        <SummaryCard label="Budget Remaining" value={formatSigned(summary.remainingBudget)} detail={`Margin at risk ${formatCurrencyShort(summary.marginAtRisk)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-success)"} />
+        <SummaryCard label="Open Expenses" value={String(summary.openExpenses)} detail={`${summary.unmappedCount} unmapped • ${summary.linkedExpenses} linked to SOV`} tone="var(--status-warning)" />
+        <SummaryCard label="Budget Remaining" value={formatSigned(summary.remainingBudget)} detail={`Direct billable exposure ${formatCurrencyShort(summary.directCosts)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-success)"} />
       </div>
 
       <FilterBar search={search} setSearch={setSearch} filterPhase={filterPhase} setFilterPhase={setFilterPhase} phases={families} />
 
       {activeView === "summary" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: 16 }}>
-          <PhoenixPanel title="Project Summary" count={selectedProject?.project_number || "—"}>
-            <PhoenixTable
-              columns={[
-                { label: "Project" },
-                { label: "Job #" },
-                { label: "Manager" },
-                { label: "Superintendent" },
-                { label: "Contract", right: true },
-                { label: "SOV Total", right: true },
-                { label: "Revised Budget", right: true },
-                { label: "Actual", right: true },
-                { label: "Committed", right: true },
-                { label: "Exposure", right: true },
-                { label: "Remaining", right: true },
-              ]}
-            >
-              <PTR>
-                <PTD bold>{selectedProject?.name}</PTD>
-                <PTD mono>{selectedProject?.project_number || "—"}</PTD>
-                <PTD>{selectedProject?.project_manager || "—"}</PTD>
-                <PTD>{selectedProject?.superintendent || "—"}</PTD>
-                <PTD right mono>{formatCurrency(summary.contractValue)}</PTD>
-                <PTD right mono>{formatCurrency(summary.sovTotal)}</PTD>
-                <PTD right mono>{formatCurrency(summary.revisedBudget)}</PTD>
-                <PTD right mono>{formatCurrency(summary.actual)}</PTD>
-                <PTD right mono>{formatCurrency(summary.committed)}</PTD>
-                <PTD right mono>{formatCurrency(summary.exposure)}</PTD>
-                <PTD right mono style={{ color: varianceColor(summary.remainingBudget) }}>{formatSigned(summary.remainingBudget)}</PTD>
-              </PTR>
-            </PhoenixTable>
-          </PhoenixPanel>
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.9fr", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <PhoenixPanel title="Cost Control Summary" count={selectedProject?.project_number || "—"}>
+              <PhoenixTable
+                columns={[
+                  { label: "Project" },
+                  { label: "Contract", right: true },
+                  { label: "SOV Total", right: true },
+                  { label: "Revised Budget", right: true },
+                  { label: "Actual", right: true },
+                  { label: "Committed", right: true },
+                  { label: "Exposure", right: true },
+                  { label: "Remaining", right: true },
+                  { label: "Budget Used", right: true },
+                ]}
+              >
+                <PTR>
+                  <PTD bold>{selectedProject?.name}</PTD>
+                  <PTD right mono>{formatCurrency(summary.contractValue)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.sovTotal)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.revisedBudget)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.actual)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.committed)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.exposure)}</PTD>
+                  <PTD right mono style={{ color: varianceColor(summary.remainingBudget) }}>{formatSigned(summary.remainingBudget)}</PTD>
+                  <PTD right mono>{formatPercent(summary.budgetSpentPct, 1)}</PTD>
+                </PTR>
+              </PhoenixTable>
+            </PhoenixPanel>
+
+            <PhoenixPanel title="Workflow Reconciliation" count={3}>
+              <PhoenixTable
+                columns={[
+                  { label: "Control Area" },
+                  { label: "Live Value", right: true },
+                  { label: "Expectation", right: true },
+                  { label: "Gap", right: true },
+                  { label: "Action" },
+                ]}
+              >
+                <PTR warn={Math.abs(summary.sovVsContract) > 1}>
+                  <PTD bold>SOV vs Contract</PTD>
+                  <PTD right mono>{formatCurrency(summary.sovTotal)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.contractValue)}</PTD>
+                  <PTD right mono style={{ color: varianceColor(-summary.sovVsContract) }}>{formatSigned(-summary.sovVsContract)}</PTD>
+                  <PTD><button type="button" onClick={() => setActiveView("sov")} style={{ background: "transparent", border: "none", color: "var(--accent)", cursor: "pointer", ...mono, fontSize: 9 }}>Review SOV lines</button></PTD>
+                </PTR>
+                <PTR warn={summary.unmappedCount > 0}>
+                  <PTD bold>Mapped Expenses</PTD>
+                  <PTD right mono>{summary.linkedExpenses}</PTD>
+                  <PTD right mono>{activeExpenses.length}</PTD>
+                  <PTD right mono>{summary.unmappedCount}</PTD>
+                  <PTD><button type="button" onClick={() => setActiveView("unmapped")} style={{ background: "transparent", border: "none", color: "var(--accent)", cursor: "pointer", ...mono, fontSize: 9 }}>Resolve gaps</button></PTD>
+                </PTR>
+                <PTR warn={summary.remainingBudget < 0}>
+                  <PTD bold>Forecast vs Budget</PTD>
+                  <PTD right mono>{formatCurrency(summary.forecastTotal)}</PTD>
+                  <PTD right mono>{formatCurrency(summary.revisedBudget)}</PTD>
+                  <PTD right mono style={{ color: varianceColor(summary.remainingBudget) }}>{formatSigned(summary.remainingBudget)}</PTD>
+                  <PTD><button type="button" onClick={() => setActiveView("budget")} style={{ background: "transparent", border: "none", color: "var(--accent)", cursor: "pointer", ...mono, fontSize: 9 }}>Review buckets</button></PTD>
+                </PTR>
+              </PhoenixTable>
+            </PhoenixPanel>
+          </div>
 
           <ReviewFlags flags={reviewFlags} />
         </div>
-      )}
-
-      {activeView === "sov" && (
-        <PhoenixPanel title="SOV Analysis" count={filteredSovRows.length}>
-          <PhoenixTable
-            columns={[
-              { label: "SOV Seq" },
-              { label: "Description" },
-              { label: "SOV Value", right: true },
-              { label: "% Contract", right: true },
-              { label: "Recommended Cost Family" },
-              { label: "Alloc. Share", right: true },
-              { label: "Allocated Revised Budget", right: true },
-              { label: "Allocated Actual", right: true },
-              { label: "Allocated Committed", right: true },
-              { label: "Allocated Remaining", right: true },
-            ]}
-            empty="NO SOV ITEMS FOUND"
-          >
-            {filteredSovRows.map((row) => (
-              <PTR key={row.id}>
-                <PTD mono accent>{row.line_item_number || "—"}</PTD>
-                <PTD style={{ maxWidth: 220, whiteSpace: "normal" }}>{row.description || "—"}</PTD>
-                <PTD right mono>{formatCurrency(row.scheduled_value)}</PTD>
-                <PTD right mono>{formatPercent(row.percent_of_contract, 1)}</PTD>
-                <PTD>{row.family_label}</PTD>
-                <PTD right mono>{formatPercent(row.allocation_share * 100, 1)}</PTD>
-                <PTD right mono>{formatCurrency(row.allocated_budget)}</PTD>
-                <PTD right mono>{formatCurrency(row.allocated_actual)}</PTD>
-                <PTD right mono>{formatCurrency(row.allocated_committed)}</PTD>
-                <PTD right mono style={{ color: varianceColor(row.allocated_remaining) }}>{formatSigned(row.allocated_remaining)}</PTD>
-              </PTR>
-            ))}
-          </PhoenixTable>
-        </PhoenixPanel>
       )}
 
       {activeView === "budget" && (
         <PhoenixPanel title="Budget Control" count={filteredCostCodeRows.length}>
           <PhoenixTable
             columns={[
-              { label: "Cost Bucket" },
-              { label: "Original Estimate", right: true },
-              { label: "Signed Extras", right: true },
-              { label: "Revised Budget", right: true },
-              { label: "Actual Cost", right: true },
-              { label: "Committed Cost", right: true },
-              { label: "Exposure", right: true },
-              { label: "Remaining Budget", right: true },
-              { label: "Used %", right: true },
-              { label: "Suggested SOV Family" },
-              { label: "Direct Billable?" },
-              { label: "Actions", right: true },
+              { label: "Cost Bucket" }, { label: "Original Estimate", right: true }, { label: "Signed Extras", right: true },
+              { label: "Revised Budget", right: true }, { label: "Actual Cost", right: true }, { label: "Committed Cost", right: true },
+              { label: "Exposure", right: true }, { label: "Remaining Budget", right: true }, { label: "Used %", right: true },
+              { label: "Suggested SOV Family" }, { label: "Direct Billable?" }, { label: "Actions", right: true },
             ]}
             empty="NO COST BUCKETS FOUND"
           >
@@ -693,51 +907,76 @@ export default function Financials() {
                 <PTD right mono style={{ color: row.used_pct > 100 ? "var(--status-error)" : row.used_pct > 85 ? "var(--status-warning)" : "var(--text-secondary)" }}>{formatPercent(row.used_pct, 1)}</PTD>
                 <PTD>{row.family_label}</PTD>
                 <PTD mono>{row.direct_billable ? "YES" : "REVIEW"}</PTD>
-                <PTD right>
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingCostCode(row);
-                        setModalOpen(true);
-                      }}
-                      style={{
-                        background: "var(--bg-surface-low)",
-                        border: "1px solid var(--border-default)",
-                        borderRadius: "var(--radius-btn)",
-                        padding: "6px 8px",
-                        color: "var(--text-secondary)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeleteTarget(row);
-                      }}
-                      style={{
-                        background: "var(--danger-muted)",
-                        border: "1px solid var(--danger-border)",
-                        borderRadius: "var(--radius-btn)",
-                        padding: "6px 8px",
-                        color: "var(--status-error)",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                <PTD right><div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                  <button type="button" onClick={() => { setEditingCostCode(row); setCostCodeModalOpen(true); }} style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Edit</button>
+                  <button type="button" onClick={() => { setDeleteTarget(row); setDeleteMode("cost-code"); }} style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Delete</button>
+                </div></PTD>
+              </PTR>
+            ))}
+          </PhoenixTable>
+        </PhoenixPanel>
+      )}
+
+      {activeView === "sov" && (
+        <PhoenixPanel title="SOV Control" count={filteredSovRows.length}>
+          <PhoenixTable
+            columns={[
+              { label: "Line #" }, { label: "Description" }, { label: "SOV Value", right: true }, { label: "% Contract", right: true },
+              { label: "Cost Family" }, { label: "Linked Expenses", right: true }, { label: "Allocated Budget", right: true },
+              { label: "Actual Cost", right: true }, { label: "Committed", right: true }, { label: "Remaining", right: true }, { label: "Actions", right: true },
+            ]}
+            empty="NO SOV ITEMS FOUND"
+          >
+            {filteredSovRows.map((row) => (
+              <PTR key={row.id}>
+                <PTD mono accent>{row.line_item_number || "—"}</PTD>
+                <PTD style={{ maxWidth: 220, whiteSpace: "normal" }}>
+                  <div style={{ ...body, fontSize: 12 }}>{row.description || "—"}</div>
+                  <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>{row.status || "Draft"}</div>
                 </PTD>
+                <PTD right mono>{formatCurrency(row.scheduled_value)}</PTD>
+                <PTD right mono>{formatPercent(row.percent_of_contract, 1)}</PTD>
+                <PTD>{row.family_label}</PTD>
+                <PTD right mono>{row.linked_expense_count}</PTD>
+                <PTD right mono>{formatCurrency(row.allocated_budget)}</PTD>
+                <PTD right mono>{formatCurrency(row.allocated_actual)}</PTD>
+                <PTD right mono>{formatCurrency(row.allocated_committed)}</PTD>
+                <PTD right mono style={{ color: varianceColor(row.allocated_remaining) }}>{formatSigned(row.allocated_remaining)}</PTD>
+                <PTD right><div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                  <button type="button" onClick={() => openExpenseModal({ project_id: projectId, sov_line_item_id: row.id, sov_line_item_name: row.description })} style={{ background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Add Expense</button>
+                  <button type="button" onClick={() => openSovModal(row)} style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Edit</button>
+                  <button type="button" onClick={() => { setDeleteTarget(row); setDeleteMode("sov"); }} style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Delete</button>
+                </div></PTD>
+              </PTR>
+            ))}
+          </PhoenixTable>
+        </PhoenixPanel>
+      )}
+
+      {activeView === "expenses" && (
+        <PhoenixPanel title="Expense Ledger" count={expenseRows.length}>
+          <PhoenixTable
+            columns={[
+              { label: "Expense #" }, { label: "Date" }, { label: "Vendor" }, { label: "Description" }, { label: "Cost Code" },
+              { label: "SOV Link" }, { label: "Work Package" }, { label: "Amount", right: true }, { label: "Status" }, { label: "Actions", right: true },
+            ]}
+            empty="NO EXPENSES FOUND"
+          >
+            {expenseRows.map((row) => (
+              <PTR key={row.id} warn={!row.linked_cost_code}>
+                <PTD mono accent>{row.expense_number || "—"}</PTD>
+                <PTD mono>{row.expense_date || "—"}</PTD>
+                <PTD>{row.vendor || "—"}</PTD>
+                <PTD style={{ maxWidth: 220, whiteSpace: "normal" }}>{row.description || "—"}</PTD>
+                <PTD mono>{row.cost_code || "—"}</PTD>
+                <PTD style={{ maxWidth: 180, whiteSpace: "normal" }}>{row.linked_sov?.description || row.sov_line_item_name || "Unlinked"}</PTD>
+                <PTD style={{ maxWidth: 160, whiteSpace: "normal" }}>{row.linked_work_package?.name || row.work_package_name || "—"}</PTD>
+                <PTD right mono>{formatCurrency(row.amount)}</PTD>
+                <PTD mono>{row.payment_status || "—"}</PTD>
+                <PTD right><div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                  <button type="button" onClick={() => openExpenseModal(row)} style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Edit</button>
+                  <button type="button" onClick={() => { setDeleteTarget(row); setDeleteMode("expense"); }} style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Delete</button>
+                </div></PTD>
               </PTR>
             ))}
           </PhoenixTable>
@@ -748,14 +987,8 @@ export default function Financials() {
         <PhoenixPanel title="Unmapped Costs" count={unmappedExpenses.length}>
           <PhoenixTable
             columns={[
-              { label: "Expense #" },
-              { label: "Vendor" },
-              { label: "Description" },
-              { label: "Amount", right: true },
-              { label: "Status" },
-              { label: "Cost Code" },
-              { label: "Reason" },
-              { label: "Invoice Date" },
+              { label: "Expense #" }, { label: "Vendor" }, { label: "Description" }, { label: "Amount", right: true }, { label: "Status" },
+              { label: "Cost Code" }, { label: "Reason" }, { label: "Invoice Date" }, { label: "Action" },
             ]}
             empty="NO UNMAPPED COSTS FOUND"
           >
@@ -769,6 +1002,7 @@ export default function Financials() {
                 <PTD mono>{expense.cost_code || "—"}</PTD>
                 <PTD>{expense.reason}</PTD>
                 <PTD mono>{expense.invoice_date || "—"}</PTD>
+                <PTD><button type="button" onClick={() => openExpenseModal(expense)} style={{ background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-btn)", padding: "6px 8px", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, textTransform: "uppercase", cursor: "pointer" }}>Fix Mapping</button></PTD>
               </PTR>
             ))}
           </PhoenixTable>
@@ -776,23 +1010,46 @@ export default function Financials() {
       )}
 
       <CostCodeFormModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingCostCode(null);
-        }}
+        open={costCodeModalOpen}
+        onClose={() => { setCostCodeModalOpen(false); setEditingCostCode(null); }}
         onSave={(data) => handleSaveCostCode({ ...data, project_id: data.project_id || projectId })}
         costCode={editingCostCode}
         projects={projects}
         existingCodes={costCodes}
       />
 
+      <ExpenseFormModal
+        open={expenseModalOpen}
+        onClose={() => { setExpenseModalOpen(false); setEditingExpense(null); }}
+        onSave={handleSaveExpense}
+        isSaving={createExpenseMut.isPending || updateExpenseMut.isPending}
+        expense={editingExpense}
+        projects={projects}
+        workPackages={workPackages}
+        sovItems={sovItems}
+        expenses={expenses}
+        costCodes={costCodes}
+        nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, "0")}`}
+        defaultProjectId={projectId}
+      />
+
+      <SOVFormModal
+        open={sovModalOpen}
+        onClose={() => { setSovModalOpen(false); setEditingSov(null); }}
+        onSave={handleSaveSov}
+        sov={editingSov}
+        projects={projects}
+        nextId={nextSovId}
+        nextLineItemNumber={nextLineItemNumber}
+        activeProject={selectedProject}
+      />
+
       <DeleteDialog
         open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutateAsync(deleteTarget.id)}
-        title="Delete Cost Code"
-        description={`Delete ${deleteTarget?.cost_code_number || "cost code"}?`}
+        onClose={() => { setDeleteTarget(null); setDeleteMode(null); }}
+        onConfirm={() => deleteTarget && deleteMode && deleteMut.mutateAsync({ id: deleteTarget.id, mode: deleteMode })}
+        title={`Delete ${deleteMode === "expense" ? "Expense" : deleteMode === "sov" ? "SOV Item" : "Cost Code"}`}
+        description={deleteMode === "expense" ? `Delete ${deleteTarget?.expense_number || "expense"}?` : deleteMode === "sov" ? `Delete ${deleteTarget?.sov_id || "SOV item"}?` : `Delete ${deleteTarget?.cost_code_number || "cost code"}?`}
       />
     </div>
   );

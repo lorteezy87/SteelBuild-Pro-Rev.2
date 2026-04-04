@@ -3,8 +3,10 @@ import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { getDrawingSetName, normalizeSetKey, PLACEHOLDER_SET_NAMES, UNASSIGNED_KEY } from "./submittalsUtils";
+import { upsertDrawingSetScheduleTask } from "./submittalsMutations";
 
-const MAX_PDF_SIZE_MB = 32;
+const MAX_PDF_SIZE_MB = 50;
+const MAX_AI_EXTRACTION_SIZE_MB = 10;
 
 function isPdfFile(file) {
   if (!file) return false;
@@ -81,6 +83,26 @@ Return ONLY a JSON array starting with [. Nothing else.`,
   } catch {
     return [];
   }
+}
+
+async function loadExistingSetSheets(activeProject, selectedSet, drawingSetRecords = []) {
+  if (!activeProject?.id || !selectedSet?.set_name) return [];
+
+  const projectDrawings = await base44.entities.Drawing.filter({ project_id: activeProject.id });
+  const targetKey = normalizeSetKey(selectedSet.set_name);
+
+  return (projectDrawings || [])
+    .filter((drawing) => !drawing?.is_superseded)
+    .filter((drawing) => normalizeSetKey(getDrawingSetName(drawing, drawingSetRecords)) === targetKey)
+    .map((drawing) => ({
+      id: drawing.id,
+      sheetNumber: drawing.sheet_number,
+      sheetTitle: drawing.title,
+      fileUrl: drawing.file_url,
+      discipline: drawing.discipline,
+      revision: drawing.revision_number,
+      drawing,
+    }));
 }
 
 // ── Step A: Select existing drawing set ────────────────────────────
@@ -297,6 +319,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
   const [dragOver, setDragOver] = useState(false);
   const [localError, setLocalError] = useState("");
   const fileInputRef = useRef();
+  const exceedsAiLimit = file && file.size > MAX_AI_EXTRACTION_SIZE_MB * 1024 * 1024;
 
   const handleFile = (f) => {
     if (!f) return;
@@ -347,6 +370,22 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
           </>
         )}
       </div>
+      {exceedsAiLimit && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid rgba(255,180,0,0.20)",
+            background: "rgba(255,180,0,0.08)",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            color: "var(--status-warning)",
+          }}
+        >
+          Large PDF detected. Sheet diff extraction is limited above {MAX_AI_EXTRACTION_SIZE_MB}MB, so this revision will be applied to the existing sheets in the set without AI sheet comparison.
+        </div>
+      )}
       <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: "none" }}
         onChange={e => { handleFile(e.target.files[0]); e.target.value = ""; }} />
       {localError && (
@@ -366,7 +405,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
         }}>
-          Extract Sheets <ChevronRight style={{ width: 13, height: 13 }} />
+          {exceedsAiLimit ? "Apply To Existing Sheets" : "Extract Sheets"} <ChevronRight style={{ width: 13, height: 13 }} />
         </button>
       </div>
     </div>
@@ -593,6 +632,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const [processingMsg, setProcessingMsg] = useState("");
   const [processingPct, setProcessingPct] = useState(0);
   const [flowError, setFlowError] = useState("");
+  const [fallbackMode, setFallbackMode] = useState("");
   const [applyStats, setApplyStats] = useState({ updated: 0, added: 0, removed: 0 });
   useEffect(() => {
     if (preSelectedSet) { setSelectedSet(preSelectedSet); setStep("revMeta"); }
@@ -608,26 +648,54 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const handleExtract = async () => {
     try {
       setFlowError("");
+      setFallbackMode("");
       setStep("processing");
       setProcessingMsg("Uploading PDF...");
       setProcessingPct(10);
       const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
-      setProcessingMsg("AI is reading the drawing set...");
-      setProcessingPct(40);
-      const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
-      setProcessingMsg("Comparing sheets...");
-      setProcessingPct(80);
 
-    // Get old sheets from existing Drawing records
-    let oldSheets = [];
-    try {
-      const existing = await base44.entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
-      oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
-    } catch (e) { console.error("Failed to fetch existing drawings:", e); }
+      // Get old sheets from existing Drawing records
+      let oldSheets = [];
+      try {
+        oldSheets = await loadExistingSetSheets(activeProject, selectedSet, availableSets);
+      } catch (e) {
+        console.error("Failed to fetch existing drawings:", e);
+      }
 
-      const matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
-      // Store uploaded fileUrl on each new sheet match
-      matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
+      let matched = [];
+      if (pdfFile.size > MAX_AI_EXTRACTION_SIZE_MB * 1024 * 1024) {
+        if (!oldSheets.length) {
+          throw new Error("No active sheets were found in this drawing set, so the large-file fallback cannot apply a revision.");
+        }
+        setProcessingMsg("Large PDF detected. Preparing revision update without AI sheet diff...");
+        setProcessingPct(60);
+        setFallbackMode("existing-sheets");
+        matched = oldSheets.map((sheet) => ({
+          sheetNumber: sheet.sheetNumber,
+          oldSheet: { sheetNumber: sheet.sheetNumber, sheetTitle: sheet.sheetTitle, fileUrl: sheet.fileUrl },
+          newSheet: {
+            sheetNumber: sheet.sheetNumber,
+            sheetTitle: sheet.sheetTitle,
+            discipline: sheet.discipline || selectedSet.discipline || "Structural",
+            revision: revMeta.revisionLabel,
+            fileUrl: res.file_url,
+            sourceFileUrl: res.file_url,
+          },
+          change: "revised",
+        }));
+      } else {
+        setProcessingMsg("AI is reading the drawing set...");
+        setProcessingPct(40);
+        const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
+        setProcessingMsg("Comparing sheets...");
+        setProcessingPct(80);
+        matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
+        matched.forEach(m => {
+          if (m.newSheet) m.newSheet.fileUrl = res.file_url;
+          if (m.newSheet) m.newSheet.sourceFileUrl = res.file_url;
+        });
+      }
+
       setMatchedSheets(matched);
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 400));
@@ -665,8 +733,9 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.current_file_url;
 
     // Update DrawingSet (only if a real DrawingSet record exists)
+    let syncedSetRecord = selectedSet;
     if (selectedSet.id) {
-      await base44.entities.DrawingSet.update(selectedSet.id, {
+      syncedSetRecord = await base44.entities.DrawingSet.update(selectedSet.id, {
         current_revision: revMeta.revisionLabel,
         current_issue_date: revMeta.issueDate,
         current_issued_by: revMeta.issuedBy || selectedSet.current_issued_by,
@@ -681,10 +750,13 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     setProcessingMsg("Updating drawing records...");
 
     // Load existing drawings for this set
-    let existingDrawings = [];
-    try {
-      existingDrawings = await base44.entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
-    } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
+      let existingDrawings = [];
+      try {
+        const existingSetSheets = await loadExistingSetSheets(activeProject, selectedSet, availableSets);
+        existingDrawings = existingSetSheets.map((sheet) => sheet.drawing).filter(Boolean);
+      } catch (e) {
+        console.error("Failed to fetch drawings for apply:", e);
+      }
 
     let updated = 0, added = 0, removed = 0;
     for (const match of matchedSheets) {
@@ -723,6 +795,23 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setProcessingPct(30 + Math.round((updated + added + removed) / matchedSheets.length * 60));
     }
 
+      await upsertDrawingSetScheduleTask({
+        activeProject,
+        setRecord: syncedSetRecord,
+        setName: selectedSet.set_name,
+        sourceDrawing: {
+          project_id: activeProject?.id || "",
+          project_name: activeProject?.name || "",
+          issue_date: revMeta.issueDate || "",
+          submitted_date: revMeta.issueDate || "",
+        },
+        submittedDate: revMeta.issueDate || "",
+        sheetCount: newSheetCount,
+        percentComplete: matchedSheets.length
+          ? Math.round((matchedSheets.filter((match) => match.change !== "removed").length / matchedSheets.length) * 100)
+          : 0,
+      }).catch(() => null);
+
       setApplyStats({ updated, added, removed });
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 500));
@@ -741,6 +830,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     setRevMeta({ revisionLabel: "", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "", disposition: "superseded" });
     setPdfFile(null); setMatchedSheets([]);
     setFlowError("");
+    setFallbackMode("");
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -783,6 +873,22 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               color: "var(--danger)"
             }}>
               {flowError}
+            </div>
+          )}
+          {fallbackMode === "existing-sheets" && step === "comparison" && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,180,0,0.20)",
+                background: "rgba(255,180,0,0.08)",
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                color: "var(--status-warning)",
+              }}
+            >
+              This revision was uploaded using the large-file fallback. Existing sheets will receive the new revision metadata and file, but added/removed sheets were not AI-compared.
             </div>
           )}
           {step === "selectSet" && (

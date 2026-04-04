@@ -1,3 +1,5 @@
+import { sortByPhase } from "../../utils/phases";
+
 // Schedule utility functions for data mapping and calculations
 
 export function mapWorkPackagesToTasks(workPackages) {
@@ -139,4 +141,60 @@ export function isWeekend(date) {
   const d = new Date(date);
   const day = d.getDay();
   return day === 0 || day === 6;
+}
+
+function compareTasks(a, b) {
+  const startA = a.start_date ? new Date(a.start_date).getTime() : Number.MAX_SAFE_INTEGER;
+  const startB = b.start_date ? new Date(b.start_date).getTime() : Number.MAX_SAFE_INTEGER;
+  if (startA !== startB) return startA - startB;
+
+  const endA = a.end_date ? new Date(a.end_date).getTime() : Number.MAX_SAFE_INTEGER;
+  const endB = b.end_date ? new Date(b.end_date).getTime() : Number.MAX_SAFE_INTEGER;
+  if (endA !== endB) return endA - endB;
+
+  return String(a.task_name || '').localeCompare(String(b.task_name || ''));
+}
+
+export function getTaskHierarchyDepth(task, tasks = []) {
+  if (!task?.parent_task_id) return 0;
+  const taskMap = new Map(tasks.map((entry) => [entry.id, entry]));
+  let depth = 0;
+  let parentId = task.parent_task_id;
+  const visited = new Set();
+
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    const parent = taskMap.get(parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parent_task_id;
+  }
+
+  return depth;
+}
+
+export function sortTasksHierarchically(tasks = []) {
+  const byParent = new Map();
+  const roots = [];
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+
+  tasks.forEach((task) => {
+    const parentId = task.parent_task_id;
+    if (parentId && taskMap.has(parentId)) {
+      if (!byParent.has(parentId)) byParent.set(parentId, []);
+      byParent.get(parentId).push(task);
+    } else {
+      roots.push(task);
+    }
+  });
+
+  const ordered = [];
+  const visit = (task) => {
+    ordered.push(task);
+    const children = [...(byParent.get(task.id) || [])].sort(compareTasks);
+    children.forEach(visit);
+  };
+
+  sortByPhase(roots).forEach(visit);
+  return ordered;
 }

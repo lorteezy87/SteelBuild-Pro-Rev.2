@@ -65,6 +65,15 @@ export function sortByPhase(tasks) {
     const pb = PHASE_ORDER[derivePhase(b)] ?? 0;
     if (pa !== pb) return pa - pb;
 
+    const orderA = Number(a.sort_order);
+    const orderB = Number(b.sort_order);
+    const hasOrderA = Number.isFinite(orderA);
+    const hasOrderB = Number.isFinite(orderB);
+
+    if (hasOrderA && hasOrderB && orderA !== orderB) return orderA - orderB;
+    if (hasOrderA && !hasOrderB) return -1;
+    if (!hasOrderA && hasOrderB) return 1;
+
     const dateA = a.end_date
       ? new Date(a.end_date)
       : a.start_date

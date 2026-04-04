@@ -18,6 +18,11 @@ function hitTestMarkup(markup, px, py, zoom) {
       const { x, y, width, height } = markup;
       return px >= x - tol && px <= x + width + tol && py >= y - tol && py <= y + height + tol;
     }
+    case "circle":
+    case "cloud": {
+      const { x, y, width, height } = markup;
+      return px >= x - tol && px <= x + width + tol && py >= y - tol && py <= y + height + tol;
+    }
     case "line": {
       const [p1, p2] = markup.points || [];
       if (!p1 || !p2) return false;
@@ -41,6 +46,16 @@ function hitTestMarkup(markup, px, py, zoom) {
       }
       return false;
     }
+    case "measure": {
+      const [p1, p2] = markup.points || [];
+      if (!p1 || !p2) return false;
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) return false;
+      const t = Math.max(0, Math.min(1, ((px - p1.x) * dx + (py - p1.y) * dy) / (len * len)));
+      const cx = p1.x + t * dx, cy = p1.y + t * dy;
+      return Math.hypot(px - cx, py - cy) <= tol;
+    }
     case "text":
     case "stamp": {
       const { x, y, text = "", fontSize = 14 } = markup;
@@ -48,9 +63,37 @@ function hitTestMarkup(markup, px, py, zoom) {
       const h = fontSize * 1.5 / zoom;
       return px >= x - tol && px <= x + w + tol && py >= y - h - tol && py <= y + tol;
     }
+    case "callout": {
+      const { x, y, text = "" } = markup;
+      const w = Math.max(120, text.length * 6);
+      const h = 34;
+      return px >= x - tol && px <= x + w + tol && py >= y - tol && py <= y + h + tol;
+    }
     default:
       return false;
   }
+}
+
+function drawCloudShape(ctx, x, y, width, height, dpr) {
+  const scallop = Math.max(10 * dpr, Math.min(width, height) / 6);
+  const right = x + width;
+  const bottom = y + height;
+
+  ctx.beginPath();
+  ctx.moveTo(x + scallop, y);
+  for (let px = x + scallop; px < right - scallop; px += scallop) {
+    ctx.arc(px, y, scallop / 2, Math.PI, 0, false);
+  }
+  for (let py = y + scallop; py < bottom - scallop; py += scallop) {
+    ctx.arc(right, py, scallop / 2, -Math.PI / 2, Math.PI / 2, false);
+  }
+  for (let px = right - scallop; px > x + scallop; px -= scallop) {
+    ctx.arc(px, bottom, scallop / 2, 0, Math.PI, false);
+  }
+  for (let py = bottom - scallop; py > y + scallop; py -= scallop) {
+    ctx.arc(x, py, scallop / 2, Math.PI / 2, -Math.PI / 2, false);
+  }
+  ctx.closePath();
 }
 
 function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
@@ -75,6 +118,31 @@ function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
         ctx.fillStyle = color + "33";
         ctx.fillRect(x * scale, y * scale, width * scale, height * scale);
       }
+      break;
+    }
+    case "circle": {
+      const { x, y, width, height } = markup;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth * dpr;
+      ctx.beginPath();
+      ctx.ellipse(
+        (x + width / 2) * scale,
+        (y + height / 2) * scale,
+        (Math.abs(width) / 2) * scale,
+        (Math.abs(height) / 2) * scale,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+      break;
+    }
+    case "cloud": {
+      const { x, y, width, height } = markup;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth * dpr;
+      drawCloudShape(ctx, x * scale, y * scale, width * scale, height * scale, dpr);
+      ctx.stroke();
       break;
     }
     case "line": {
@@ -104,6 +172,38 @@ function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
           );
           ctx.stroke();
         }
+      }
+      break;
+    }
+    case "measure": {
+      const [p1, p2] = markup.points || [];
+      if (p1 && p2) {
+        const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth * dpr;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(p1.x * scale, p1.y * scale);
+        ctx.lineTo(p2.x * scale, p2.y * scale);
+        ctx.stroke();
+
+        const midX = ((p1.x + p2.x) / 2) * scale;
+        const midY = ((p1.y + p2.y) / 2) * scale;
+        const label = `${Math.round(length)} px`;
+        ctx.fillStyle = "rgba(17,20,26,0.88)";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1 * dpr;
+        ctx.beginPath();
+        ctx.roundRect(midX - 26 * dpr, midY - 12 * dpr, 52 * dpr, 18 * dpr, 4 * dpr);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = `${10 * dpr}px var(--font-mono)`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, midX, midY - 3 * dpr);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
       }
       break;
     }
@@ -151,6 +251,22 @@ function drawMarkupOnCtx(ctx, markup, zoom, isSelected) {
       ctx.textBaseline = "alphabetic";
       break;
     }
+    case "callout": {
+      const { x, y, text = "Callout", fontSize = 12 } = markup;
+      const boxW = Math.max(140, text.length * fontSize * 0.55);
+      const boxH = 34;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2 * dpr;
+      ctx.fillStyle = "rgba(17,20,26,0.88)";
+      ctx.beginPath();
+      ctx.roundRect(x * scale, y * scale, boxW * scale, boxH * scale, 6 * dpr);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.font = `${fontSize * dpr}px var(--font-body)`;
+      ctx.fillText(text, (x + 10) * scale, (y + 21) * scale);
+      break;
+    }
     default:
       break;
   }
@@ -191,6 +307,9 @@ function getBoundingBox(markup) {
   switch (markup.type) {
     case "rect":
       return { x: markup.x, y: markup.y, w: markup.width, h: markup.height };
+    case "circle":
+    case "cloud":
+      return { x: markup.x, y: markup.y, w: markup.width, h: markup.height };
     case "line": {
       const [p1, p2] = markup.points || [{ x: 0, y: 0 }, { x: 0, y: 0 }];
       return { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y), w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y) };
@@ -203,9 +322,15 @@ function getBoundingBox(markup) {
       const minY = Math.min(...ys), maxY = Math.max(...ys);
       return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
     }
+    case "measure": {
+      const [p1, p2] = markup.points || [{ x: 0, y: 0 }, { x: 0, y: 0 }];
+      return { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y), w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y) };
+    }
     case "text":
     case "stamp":
       return { x: markup.x, y: markup.y - 28, w: 100, h: 32 };
+    case "callout":
+      return { x: markup.x, y: markup.y, w: Math.max(140, (markup.text || "").length * 6), h: 34 };
     default:
       return null;
   }
@@ -230,7 +355,7 @@ export default function MarkupCanvas({
   const [currentPath, setCurrentPath] = useState([]);
   const [dragging, setDragging] = useState(null); // { markupId, offsetX, offsetY }
   const [livePoint, setLivePoint] = useState(null); // current mouse pos while drawing
-  const [textInput, setTextInput] = useState(null); // { x, y, visible }
+  const [textInput, setTextInput] = useState(null); // { x, y, visible, type }
   const textRef = useRef(null);
 
   // Sync canvas size to the PDF canvas
@@ -282,7 +407,7 @@ export default function MarkupCanvas({
     }
 
     // Draw in-progress rect preview
-    if (isDrawing && activeTool === "rect" && startPoint && livePoint) {
+    if (isDrawing && ["rect", "circle", "cloud"].includes(activeTool) && startPoint && livePoint) {
       const x = Math.min(startPoint.x, livePoint.x) * scale;
       const y = Math.min(startPoint.y, livePoint.y) * scale;
       const w = Math.abs(livePoint.x - startPoint.x) * scale;
@@ -297,7 +422,7 @@ export default function MarkupCanvas({
     }
 
     // Draw in-progress line/arrow preview
-    if (isDrawing && (activeTool === "line" || activeTool === "arrow") && startPoint && livePoint) {
+    if (isDrawing && (activeTool === "line" || activeTool === "arrow" || activeTool === "measure") && startPoint && livePoint) {
       ctx.save();
       ctx.strokeStyle = activeColor || "var(--accent)";
       ctx.lineWidth = 2 * dpr;
@@ -336,10 +461,10 @@ export default function MarkupCanvas({
     }
 
     // Text tool — show input overlay
-    if (activeTool === "text") {
+    if (activeTool === "text" || activeTool === "callout") {
       const canvas = canvasRef.current;
       const rect = canvas.getBoundingClientRect();
-      setTextInput({ x: pt.x, y: pt.y, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top });
+      setTextInput({ x: pt.x, y: pt.y, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top, type: activeTool });
       setTimeout(() => textRef.current?.focus(), 50);
       return;
     }
@@ -379,9 +504,9 @@ export default function MarkupCanvas({
       const deltaY = dy - bb.y;
 
       // Translate markup
-      if (markup.type === "rect") {
+      if (markup.type === "rect" || markup.type === "circle" || markup.type === "cloud") {
         onUpdateMarkup(markup.id, { x: markup.x + deltaX, y: markup.y + deltaY });
-      } else if (markup.type === "line") {
+      } else if (markup.type === "line" || markup.type === "measure") {
         onUpdateMarkup(markup.id, {
           points: markup.points.map((p) => ({ x: p.x + deltaX, y: p.y + deltaY })),
         });
@@ -389,7 +514,7 @@ export default function MarkupCanvas({
         onUpdateMarkup(markup.id, {
           points: markup.points.map((p) => ({ x: p.x + deltaX, y: p.y + deltaY })),
         });
-      } else if (markup.type === "text" || markup.type === "stamp") {
+      } else if (markup.type === "text" || markup.type === "stamp" || markup.type === "callout") {
         onUpdateMarkup(markup.id, { x: markup.x + deltaX, y: markup.y + deltaY });
       }
       setDragging({ ...dragging, offsetX: pt.x - (getBoundingBox({ ...markup, x: markup.x + deltaX, y: markup.y + deltaY })?.x ?? 0), offsetY: pt.y - (getBoundingBox({ ...markup, x: markup.x + deltaX, y: markup.y + deltaY })?.y ?? 0) });
@@ -412,12 +537,14 @@ export default function MarkupCanvas({
     const endPoint = getPoint(e);
 
     switch (activeTool) {
-      case "rect": {
+      case "rect":
+      case "circle":
+      case "cloud": {
         const w = endPoint.x - startPoint.x;
         const h = endPoint.y - startPoint.y;
         if (Math.abs(w) > 4 && Math.abs(h) > 4) {
           onAddMarkup({
-            type: "rect",
+            type: activeTool,
             x: Math.min(startPoint.x, endPoint.x),
             y: Math.min(startPoint.y, endPoint.y),
             width: Math.abs(w),
@@ -431,10 +558,11 @@ export default function MarkupCanvas({
         break;
       }
       case "line":
-      case "arrow": {
+      case "arrow":
+      case "measure": {
         if (Math.hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 4) {
           onAddMarkup({
-            type: "line",
+            type: activeTool === "measure" ? "measure" : "line",
             points: [startPoint, endPoint],
             color: activeColor,
             opacity: 100,
@@ -468,7 +596,7 @@ export default function MarkupCanvas({
   const handleTextSubmit = (text) => {
     if (text.trim() && textInput) {
       onAddMarkup({
-        type: "text",
+        type: textInput.type === "callout" ? "callout" : "text",
         x: textInput.x,
         y: textInput.y,
         text: text.trim(),
@@ -487,6 +615,7 @@ export default function MarkupCanvas({
       case "select": return "default";
       case "freehand": return "crosshair";
       case "text": return "text";
+      case "callout": return "text";
       case "stamp": return "copy";
       default: return "crosshair";
     }

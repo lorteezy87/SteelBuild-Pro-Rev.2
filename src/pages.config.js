@@ -79,6 +79,7 @@ import ModelViewer from './pages/ModelViewer';
 import Photos from './pages/Photos';
 import ProductionNotes from './pages/ProductionNotes';
 import ProjectCloseout from './pages/ProjectCloseout';
+import ProjectControlCenter from './pages/ProjectControlCenter';
 import ProjectDetail from './pages/ProjectDetail';
 import Projects from './pages/Projects';
 import Punchlist from './pages/Punchlist';
@@ -132,6 +133,7 @@ export const PAGES = {
     "Photos": Photos,
     "ProductionNotes": ProductionNotes,
     "ProjectCloseout": ProjectCloseout,
+    "ProjectControlCenter": ProjectControlCenter,
     "ProjectDetail": ProjectDetail,
     "Projects": Projects,
     "Punchlist": Punchlist,

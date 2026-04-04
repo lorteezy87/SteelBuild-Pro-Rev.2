@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { sortByPhase, PHASES, PHASE_ORDER, derivePhase } from "../../utils/phases";
+import { getTaskHierarchyDepth, sortTasksHierarchically } from "./scheduleUtils";
 
 const STATUS_OPTIONS = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold"];
 const WEEK_PX = 260;
 const ROW_H = 78;
 const HEADER_H = 52;
+const LEFT_GRID_TEMPLATE = "minmax(240px,1.35fr) 136px 136px 84px 124px 124px 84px";
 
 const PHASE_BADGE = {
   "Pre-Construction": { bg: "rgba(255,107,0,0.12)", color: "var(--accent)" },
@@ -54,11 +56,9 @@ function subLabelColor(status) {
   return "var(--text-muted)";
 }
 
-function getHierarchyDepth(task) {
+function getHierarchyDepth(task, tasks = []) {
   if (isSummaryLike(task) && task.summaryDepth != null) return task.summaryDepth;
-  const match = String(task?.wbs_code || "").match(/^\d+\.(\d+)$/);
-  if (!match?.[1]) return 1;
-  return Math.max(1, Math.min(3, match[1].length));
+  return getTaskHierarchyDepth(task, tasks) + 1;
 }
 
 function isSummaryLike(task) {
@@ -286,7 +286,10 @@ export default function ScheduleGantt({
 }) {
   const tasks = useMemo(() => {
     const filtered = phaseFilter === "all" ? rawTasks : rawTasks.filter((task) => derivePhase(task) === phaseFilter);
-    return sortByPhase(filtered);
+    const groupedByPhase = PHASES.flatMap((phase) =>
+      sortTasksHierarchically(filtered.filter((task) => derivePhase(task) === phase))
+    );
+    return groupedByPhase.length ? groupedByPhase : sortByPhase(filtered);
   }, [rawTasks, phaseFilter]);
 
   const predecessorLabels = useMemo(() => {
@@ -510,7 +513,7 @@ export default function ScheduleGantt({
               padding: "0 14px",
               height: HEADER_H,
               display: "grid",
-              gridTemplateColumns: "minmax(240px,1.65fr) 96px 96px 84px 124px 124px 56px",
+              gridTemplateColumns: LEFT_GRID_TEMPLATE,
               alignItems: "center",
               gap: 8,
               flexShrink: 0,
@@ -545,7 +548,7 @@ export default function ScheduleGantt({
             ) : (
               displayRows.map((task) => {
                 const summaryLike = isSummaryLike(task);
-                const depth = getHierarchyDepth(task);
+                const depth = getHierarchyDepth(task, displayRows);
                 const statusIcon = STATUS_ICON[task.status] || STATUS_ICON["Not Started"];
                 const phaseValue = derivePhase(task);
                 const phaseBadge = PHASE_BADGE[phaseValue] || { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
@@ -559,7 +562,7 @@ export default function ScheduleGantt({
                     style={{
                       height: ROW_H,
                       display: "grid",
-                      gridTemplateColumns: "minmax(240px,1.65fr) 96px 96px 84px 124px 124px 56px",
+                      gridTemplateColumns: LEFT_GRID_TEMPLATE,
                       padding: "0 14px",
                       alignItems: "center",
                       gap: 8,
