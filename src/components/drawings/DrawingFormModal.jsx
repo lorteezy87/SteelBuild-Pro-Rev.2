@@ -14,10 +14,10 @@ const empty = {
   discipline: "Structural", revision_number: 0, stage: "Not Started",
   submitted_date: "", return_date: "", due_date: "",
   reviewer: "", spec_section: "", notes: "", linked_rfi_ids: "",
-  priority_flag: false, override_reason: "",
+  priority_flag: false, override_reason: "", drawing_set_name: "",
 };
 
-export default function DrawingFormModal({ open, onClose, onSave, drawing, projects = [], nextId }) {
+export default function DrawingFormModal({ open, onClose, onSave, drawing, projects = [], nextId, drawingSets = [] }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
@@ -92,6 +92,20 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
             <Label>Title *</Label>
             <Input value={form.title} onChange={e => set("title", e.target.value)} />
             {errors.title && <p className="text-xs text-rose-500 mt-1">{errors.title}</p>}
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Drawing Set Name</Label>
+            {drawingSets.length > 0 ? (
+              <Select value={form.drawing_set_name || "__none__"} onValueChange={v => set("drawing_set_name", v === "__none__" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Select set (optional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— No set —</SelectItem>
+                  {drawingSets.map(ds => <SelectItem key={ds.set_name} value={ds.set_name}>{ds.set_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input value={form.drawing_set_name} onChange={e => set("drawing_set_name", e.target.value)} placeholder="e.g. IFC Package Rev 2" />
+            )}
           </div>
           <div>
             <Label>Project *</Label>
