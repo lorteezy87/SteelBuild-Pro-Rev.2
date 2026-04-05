@@ -9,12 +9,12 @@ import { formatDate } from "../components/shared/formatters";
 import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
 
 const PHASE_COLORS = {
-  "Pre-Construction": { bar: "linear-gradient(90deg, #7BD0FF, #4DA8D8)", solid: "#7BD0FF", bg: "rgba(123,208,255,0.10)" },
-  Detailing:          { bar: "linear-gradient(90deg, #44E2CD, #2ABFAC)", solid: "#44E2CD", bg: "rgba(68,226,205,0.10)" },
+  "Pre-Construction": { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)", bg: "rgba(0,229,255,0.10)" },
+  Detailing:          { bar: "linear-gradient(90deg, var(--secondary), #2ABFAC)", solid: "var(--secondary)", bg: "rgba(68,226,205,0.10)" },
   Procurement:        { bar: "linear-gradient(90deg, var(--secondary), #2ABFAC)", solid: "var(--secondary)", bg: "rgba(68,226,205,0.12)" },
   Fabrication:        { bar: "linear-gradient(90deg, var(--status-warning), var(--status-warning))", solid: "var(--status-warning)", bg: "rgba(245,158,11,0.10)" },
-  Delivery:           { bar: "linear-gradient(90deg, #7BD0FF, #4DA8D8)", solid: "#7BD0FF",  bg: "rgba(123,208,255,0.10)" },
-  Installation:       { bar: "linear-gradient(90deg, #A8F0CB, #4AE176)",  solid: "#4AE176",  bg: "rgba(74,225,118,0.10)" },
+  Delivery:           { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)",  bg: "rgba(0,229,255,0.10)" },
+  Installation:       { bar: "linear-gradient(90deg, var(--success), #4AE176)",  solid: "#4AE176",  bg: "rgba(74,225,118,0.10)" },
   Closeout:           { bar: "linear-gradient(90deg, #909095, #6B6F78)",  solid: "#909095",  bg: "rgba(144,144,149,0.10)" },
 };
 
@@ -220,7 +220,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
         <div style={{ position: "relative" }}>
           {days.map((d, i) => isWeekend(d) ? <div key={`we-${i}`} style={{ position: "absolute", top: 0, left: i * pxPerDay, width: pxPerDay, height: totalHeight, background: "rgba(255,255,255,0.015)", pointerEvents: "none" }} /> : null)}
           {todayLine > 0 && todayLine < timelineWidth && (
-            <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: "linear-gradient(180deg, var(--accent), rgba(59,130,246,0.05))", zIndex: 3, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: "linear-gradient(180deg, var(--accent), rgba(0,229,255,0.06))", zIndex: 3, pointerEvents: "none" }} />
           )}
 
           {tasks.map((task) => {

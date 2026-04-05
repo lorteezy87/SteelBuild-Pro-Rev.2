@@ -59,13 +59,13 @@ const PRIORITY_CONFIG = {
     color: "var(--status-warning)",
     bg: "var(--warning-muted)",
     border: "var(--warning-border)",
-    dot: "#FFB95F",
+    dot: "var(--tertiary)",
   },
   Medium: {
     color: "var(--accent)",
     bg: "var(--accent-muted)",
     border: "var(--accent-border)",
-    dot: "#7BD0FF",
+    dot: "var(--accent)",
   },
   Low: {
     color: "var(--text-muted)",
