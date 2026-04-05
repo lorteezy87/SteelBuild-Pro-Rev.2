@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
@@ -334,7 +334,7 @@ export default function CostDashboard() {
           <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>{codes.length} cost codes • {project?.name || ""}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Button size="sm" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }} style={{ background: "var(--accent)", color: "#0A0A0B", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>+ Add Cost Code</Button>
+          <Button size="sm" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }} style={{ background: "var(--accent)", color: "var(--accent-text)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>+ Add Cost Code</Button>
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
         </div>
       </div>

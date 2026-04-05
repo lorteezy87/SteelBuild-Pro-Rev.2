@@ -187,7 +187,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                     borderRadius: "var(--radius-btn)",
                     border: "1px solid var(--border-default)",
                     background: formData.status === s ? "var(--accent)" : "transparent",
-                    color: formData.status === s ? "#0b1021" : "var(--text-muted)",
+                    color: formData.status === s ? "var(--accent-text)" : "var(--text-muted)",
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
                     fontWeight: 700,
@@ -438,7 +438,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
             disabled={mutation.isPending}
             style={{
               background: "var(--accent)",
-              color: "#0b1021",
+              color: "var(--accent-text)",
               border: "1px solid var(--accent)",
               borderRadius: "var(--radius-btn)",
               padding: "10px 20px",

@@ -267,7 +267,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
               padding: "8px 16px",
               background: "var(--accent)",
               border: "1px solid var(--accent-border)",
-              color: "#0A0A0B",
+              color: "var(--accent-text)",
               borderRadius: "var(--radius-btn)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
