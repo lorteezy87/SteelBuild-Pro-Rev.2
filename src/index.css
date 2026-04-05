@@ -17,8 +17,8 @@
     --secondary-foreground: 20 5% 90%;
     --muted: 0 0% 11%;               /* #1C1B1B */
     --muted-foreground: 220 9% 46%;  /* #6B7280 */
-    --accent: 186 100% 50%;          /* #00E5FF cyan */
-    --accent-foreground: 0 0% 2%;
+    --tw-accent: 186 100% 50%;       /* #00E5FF cyan — Tailwind hsl() token, avoids conflict with NC hex --accent */
+    --tw-accent-foreground: 0 0% 2%;
     --destructive: 0 84% 60%;        /* #EF4444 */
     --destructive-foreground: 20 5% 90%;
     --border: 224 64% 33% / 0.2;     /* rgba(30,64,175,0.2) */
