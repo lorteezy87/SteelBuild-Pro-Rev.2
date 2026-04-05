@@ -128,11 +128,32 @@ export default function Drawings() {
     initialData: [],
   });
 
+  // Fetch DrawingSet entities to resolve set names for drawings that only have drawing_set_id
+  const { data: drawingSetEntities = [] } = useQuery({
+    queryKey: ["drawingSets", activeProject?.id],
+    queryFn: () =>
+      activeProject?.id
+        ? base44.entities.DrawingSet.filter({ project_id: activeProject.id })
+        : [],
+    enabled: !!activeProject?.id,
+    initialData: [],
+  });
+
+  // Build a lookup map: drawing_set_id -> set_name
+  const setNameById = useMemo(() => {
+    const map = {};
+    drawingSetEntities.forEach((ds) => {
+      if (ds.id && ds.set_name) map[ds.id] = ds.set_name;
+    });
+    return map;
+  }, [drawingSetEntities]);
+
   // Group by drawing set
   const groupedBySet = useMemo(() => {
     const groups = {};
     drawings.forEach((d) => {
-      const setName = d.drawing_set_name || "Ungrouped";
+      // Resolve set name: prefer drawing_set_name, fall back to DrawingSet entity, then "Ungrouped"
+      const setName = d.drawing_set_name || (d.drawing_set_id && setNameById[d.drawing_set_id]) || "Ungrouped";
       if (!groups[setName]) groups[setName] = [];
       groups[setName].push(d);
     });
@@ -158,27 +179,37 @@ export default function Drawings() {
     );
 
     return groups;
-  }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded]);
+  }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded, setNameById]);
 
   const sortedSetKeys = Object.keys(groupedBySet).sort();
+
+  // Build a lookup: set_name -> DrawingSet entity record
+  const drawingSetByName = useMemo(() => {
+    const map = {};
+    drawingSetEntities.forEach((ds) => { if (ds.set_name) map[ds.set_name] = ds; });
+    return map;
+  }, [drawingSetEntities]);
+
   const drawingSets = useMemo(() => {
     return sortedSetKeys.map((setName) => {
       const sheets = groupedBySet[setName] || [];
       const lead = sheets[0] || {};
+      // Prefer the canonical DrawingSet entity record for metadata if it exists
+      const dsEntity = drawingSetByName[setName] || null;
       return {
-        id: lead.drawing_set_id || null,
+        id: dsEntity?.id || lead.drawing_set_id || null,
         set_name: setName,
-        current_revision: lead.set_approval_revision || String(lead.revision_number || "0"),
-        current_issue_date: lead.issue_date || null,
-        current_issued_by: lead.issued_by || "",
-        current_file_url: lead.file_url || null,
+        current_revision: dsEntity?.current_revision || lead.set_approval_revision || String(lead.revision_number || "0"),
+        current_issue_date: dsEntity?.current_issue_date || lead.issue_date || null,
+        current_issued_by: dsEntity?.current_issued_by || lead.issued_by || "",
+        current_file_url: dsEntity?.current_file_url || lead.file_url || null,
         sheet_count: sheets.filter((sheet) => !sheet.is_superseded).length,
-        revision_history: lead.revision_history || "[]",
-        discipline: lead.discipline || "Structural",
-        notes: lead.notes || "",
+        revision_history: dsEntity?.revision_history || lead.revision_history || "[]",
+        discipline: dsEntity?.discipline || lead.discipline || "Structural",
+        notes: dsEntity?.notes || lead.notes || "",
       };
     });
-  }, [groupedBySet, sortedSetKeys]);
+  }, [groupedBySet, sortedSetKeys, drawingSetByName]);
 
   const stages = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const disciplines = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
@@ -207,6 +238,7 @@ export default function Drawings() {
     mutationFn: (data) => base44.entities.Drawing.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawingSets"] });
       setFormOpen(false);
       setEditingDrawing(null);
       toast.success("Drawing created");
@@ -218,6 +250,7 @@ export default function Drawings() {
       base44.entities.Drawing.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawingSets"] });
       setFormOpen(false);
       toast.success("Drawing updated");
     },
@@ -1096,6 +1129,7 @@ export default function Drawings() {
           }}
           onSave={handleSave}
           drawing={editingDrawing}
+          drawingSets={drawingSets}
         />
       )}
 
