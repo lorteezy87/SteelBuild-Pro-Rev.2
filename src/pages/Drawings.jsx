@@ -571,38 +571,40 @@ export default function Drawings() {
         }}
       />
 
-      {/* ===== COLUMN HEADERS ===== */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
-          alignItems: "center",
-          padding: "0 20px",
-          height: 28,
-          background: "rgba(255,255,255,0.025)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        {["", "#", "TITLE", "DISC", "REV", "STATUS", "IFC", "APPV", ""].map(
-          (col, i) => (
-            <div
-              key={i}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 7,
-                color: "rgba(160,175,210,0.30)",
-                letterSpacing: "0.14em",
-                userSelect: "none",
-              }}
-            >
-              {col}
-            </div>
-          )
-        )}
-      </div>
+      {/* ===== COLUMN HEADERS (table only) ===== */}
+      {view === "table" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
+            alignItems: "center",
+            padding: "0 20px",
+            height: 28,
+            background: "rgba(255,255,255,0.025)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          {["", "#", "TITLE", "DISC", "REV", "STATUS", "IFC", "APPV", ""].map(
+            (col, i) => (
+              <div
+                key={i}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 7,
+                  color: "rgba(160,175,210,0.30)",
+                  letterSpacing: "0.14em",
+                  userSelect: "none",
+                }}
+              >
+                {col}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* ===== SCROLLABLE CONTENT ===== */}
       <div
@@ -632,6 +634,129 @@ export default function Drawings() {
             }}
           >
             No drawings found
+          </div>
+        ) : view === "cards" ? (
+          /* ===== CARDS / THUMBNAIL VIEW ===== */
+          <div style={{ padding: "16px 20px" }}>
+            {sortedSetKeys.map((setName) => {
+              const sheets = groupedBySet[setName];
+              const isCollapsed = collapsedSets.has(setName);
+              return (
+                <div key={setName} style={{ marginBottom: 28 }}>
+                  {/* Set header */}
+                  <div
+                    onClick={() => toggleCollapse(setName)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "6px 12px", marginBottom: 12, cursor: "pointer",
+                      borderLeft: "3px solid var(--accent)",
+                      background: "rgba(232,101,10,0.05)",
+                      borderRadius: "0 4px 4px 0",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span style={{ color: "var(--accent)", fontSize: 10, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{setName}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "1px 7px", borderRadius: 3 }}>
+                      {sheets.length} SHEETS
+                    </span>
+                  </div>
+                  {!isCollapsed && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                      gap: 10,
+                    }}>
+                      {sheets.map((drawing) => {
+                        const s = BADGE_STYLES[drawing.stage] || BADGE_STYLES["Not Started"];
+                        return (
+                          <div
+                            key={drawing.id}
+                            onClick={() => { setEditingDrawing(drawing); setFormOpen(true); }}
+                            style={{
+                              background: "var(--bg-surface)",
+                              border: `1px solid ${selectedIds.has(drawing.id) ? "var(--accent)" : "var(--border-default)"}`,
+                              borderRadius: 4,
+                              overflow: "hidden",
+                              cursor: "pointer",
+                              transition: "border-color 0.15s",
+                            }}
+                          >
+                            {/* PDF thumbnail area */}
+                            <div style={{
+                              height: 110, background: "#0D0D0D",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              position: "relative", overflow: "hidden",
+                              borderBottom: "1px solid var(--border-default)",
+                            }}>
+                              {drawing.file_url ? (
+                                <iframe
+                                  src={`${drawing.file_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                  style={{ width: "100%", height: "200%", border: "none", pointerEvents: "none", marginTop: "-50%" }}
+                                  title={drawing.sheet_number}
+                                />
+                              ) : (
+                                <div style={{ textAlign: "center" }}>
+                                  <div style={{ fontSize: 28, opacity: 0.12 }}>📐</div>
+                                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.20)", letterSpacing: "0.1em", marginTop: 4 }}>NO FILE</div>
+                                </div>
+                              )}
+                              {/* Sheet number overlay */}
+                              <div style={{
+                                position: "absolute", top: 6, left: 6,
+                                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                                color: "#fff", background: "rgba(0,0,0,0.65)",
+                                padding: "2px 6px", borderRadius: 3, letterSpacing: "0.06em",
+                              }}>
+                                {drawing.sheet_number || "—"}
+                              </div>
+                              {/* Selection checkbox */}
+                              <div
+                                onClick={(e) => { e.stopPropagation(); toggleSelect(drawing.id); }}
+                                style={{
+                                  position: "absolute", top: 6, right: 6, width: 16, height: 16,
+                                  background: selectedIds.has(drawing.id) ? "var(--accent)" : "rgba(0,0,0,0.5)",
+                                  border: `1px solid ${selectedIds.has(drawing.id) ? "var(--accent)" : "rgba(255,255,255,0.25)"}`,
+                                  borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {selectedIds.has(drawing.id) && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
+                              </div>
+                            </div>
+                            {/* Card body */}
+                            <div style={{ padding: "8px 10px" }}>
+                              <div style={{
+                                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500,
+                                color: "var(--text-primary)", marginBottom: 4,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }} title={drawing.title}>
+                                {drawing.title || "Untitled"}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                <span style={{
+                                  fontFamily: "var(--font-mono)", fontSize: 7,
+                                  color: "var(--text-muted)", letterSpacing: "0.08em",
+                                }}>
+                                  {drawing.discipline?.slice(0, 4).toUpperCase()} · Rev {drawing.revision_number ?? "0"}
+                                </span>
+                                <span style={{
+                                  background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+                                  fontFamily: "var(--font-mono)", fontSize: 6, letterSpacing: "0.08em",
+                                  padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap",
+                                }}>
+                                  {s.label}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           sortedSetKeys.map((setName) => {

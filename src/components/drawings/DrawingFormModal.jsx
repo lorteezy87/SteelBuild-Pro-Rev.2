@@ -95,17 +95,17 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
           </div>
           <div className="sm:col-span-2">
             <Label>Drawing Set Name</Label>
-            {drawingSets.length > 0 ? (
-              <Select value={form.drawing_set_name || "__none__"} onValueChange={v => set("drawing_set_name", v === "__none__" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Select set (optional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— No set —</SelectItem>
-                  {drawingSets.map(ds => <SelectItem key={ds.set_name} value={ds.set_name}>{ds.set_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input value={form.drawing_set_name} onChange={e => set("drawing_set_name", e.target.value)} placeholder="e.g. IFC Package Rev 2" />
-            )}
+            <Input
+              list="drawing-set-options"
+              value={form.drawing_set_name || ""}
+              onChange={e => set("drawing_set_name", e.target.value)}
+              placeholder="e.g. IFC Package Rev 2"
+            />
+            <datalist id="drawing-set-options">
+              {drawingSets.filter(ds => ds.set_name && ds.set_name !== "Ungrouped").map(ds => (
+                <option key={ds.set_name} value={ds.set_name} />
+              ))}
+            </datalist>
           </div>
           <div>
             <Label>Project *</Label>
