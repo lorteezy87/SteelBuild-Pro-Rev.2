@@ -14,12 +14,19 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
   });
 
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      start_date: prefilledDate || new Date().toISOString().split('T')[0],
-      end_date: prefilledDate || new Date().toISOString().split('T')[0],
-    }));
-  }, [prefilledDate, open]);
+    if (open) {
+      // Full reset each time the modal opens so stale values don't persist
+      setFormData({
+        task_name: '',
+        task_type: 'Task',
+        phase: 'Fabrication',
+        start_date: prefilledDate || new Date().toISOString().split('T')[0],
+        end_date: prefilledDate || new Date().toISOString().split('T')[0],
+        status: 'Not Started',
+        priority: 'Normal',
+      });
+    }
+  }, [open, prefilledDate]);
 
   const handleSubmit = () => {
     if (!isSaving && formData.task_name && formData.start_date && formData.end_date) {
