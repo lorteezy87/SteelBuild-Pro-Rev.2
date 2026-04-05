@@ -252,7 +252,7 @@ export default function PMATasks() {
           style={{
             background: "var(--accent)",
             border: "1px solid var(--accent-border)",
-            color: "#0b1021",
+            color: "var(--accent-text)",
             borderRadius: 6,
             padding: "8px 12px",
             ...mono,

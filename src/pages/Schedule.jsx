@@ -26,6 +26,7 @@ export default function Schedule() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const qc = useQueryClient();
 
@@ -198,7 +199,13 @@ export default function Schedule() {
   const bulkDelete = () => {
     const ids = Array.from(selectedIds);
     if (!ids.length || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const confirmBulkDelete = () => {
+    const ids = Array.from(selectedIds);
     bulkDeleteMut.mutate(ids);
+    setShowBulkDeleteConfirm(false);
   };
 
   return (
@@ -378,6 +385,14 @@ export default function Schedule() {
         }}
         title="Delete task?"
         description={deleteTarget ? `This will remove "${deleteTarget.task_name}".` : ""}
+      />
+
+      <DeleteDialog
+        open={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={confirmBulkDelete}
+        title={`Delete ${selectedIds.size} task${selectedIds.size !== 1 ? "s" : ""}?`}
+        description={`This will permanently remove ${selectedIds.size} selected task${selectedIds.size !== 1 ? "s" : ""}. This cannot be undone.`}
       />
 
       {selectedIds.size > 0 && (

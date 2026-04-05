@@ -158,10 +158,8 @@ export default function RFIs() {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () =>
-      projectId
-        ? base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date")
-        : base44.entities.RFI.list("-submitted_date"),
+    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+    enabled: !!projectId,
     initialData: [],
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
@@ -525,7 +523,7 @@ export default function RFIs() {
                 style={{
                   padding: "6px 12px",
                   background: view === v ? "var(--accent)" : "transparent",
-                  color: view === v ? "#002E6A" : "var(--text-secondary)",
+                  color: view === v ? "var(--accent-text)" : "var(--text-secondary)",
                   border: "none",
                   ...mono,
                   fontSize: 9,
@@ -545,7 +543,7 @@ export default function RFIs() {
             }}
             style={{
               background: "var(--accent)",
-              color: "#002E6A",
+              color: "var(--accent-text)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "10px 16px",
@@ -615,7 +613,7 @@ export default function RFIs() {
             onClick={() => setFilterStatus(s)}
             style={{
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterStatus === s ? "#002E6A" : "var(--text-secondary)",
+              color: filterStatus === s ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: 6,
               padding: "6px 10px",
@@ -635,7 +633,7 @@ export default function RFIs() {
             onClick={() => setFilterPriority(p)}
             style={{
               background: filterPriority === p ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterPriority === p ? "#002E6A" : "var(--text-secondary)",
+              color: filterPriority === p ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: 6,
               padding: "6px 10px",
@@ -682,7 +680,7 @@ export default function RFIs() {
           onClick={() => setOverdueFirst((v) => !v)}
           style={{
             background: overdueFirst ? "var(--accent)" : "var(--bg-surface-low)",
-            color: overdueFirst ? "#002E6A" : "var(--text-secondary)",
+            color: overdueFirst ? "var(--accent-text)" : "var(--text-secondary)",
             border: "1px solid var(--border-default)",
             borderRadius: 6,
             padding: "6px 10px",
@@ -1032,7 +1030,7 @@ export default function RFIs() {
                       const active = selectedRFI.status === s;
                       const past = statusColumns.indexOf(selectedRFI.status) > statusColumns.indexOf(s);
                       const bg = active ? "var(--accent)" : past ? "var(--success-muted)" : "var(--bg-surface-low)";
-                      const color = active ? "#002E6A" : past ? "var(--status-success)" : "var(--text-secondary)";
+                      const color = active ? "var(--accent-text)" : past ? "var(--status-success)" : "var(--text-secondary)";
                       return (
                         <button
                           key={s}
@@ -1146,7 +1144,7 @@ export default function RFIs() {
                     style={{
                       flex: 1,
                       background: "var(--accent)",
-                      color: "#002E6A",
+                      color: "var(--accent-text)",
                       border: "none",
                       borderRadius: 4,
                       padding: "10px 12px",

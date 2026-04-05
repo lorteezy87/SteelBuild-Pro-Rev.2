@@ -17,49 +17,33 @@ export default function AuthCallbackError({ authError, hasToken, onRetry }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-6">
-      <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/90 p-8 text-slate-100 shadow-2xl">
-        <div className="mb-6">
-          <p className="mb-3 text-xs uppercase tracking-[0.25em] text-amber-400">Auth Check Failed</p>
-          <h1 className="mb-3 text-3xl font-semibold text-white">The login callback did not complete cleanly.</h1>
-          <p className="text-sm leading-6 text-slate-300">
-            The app stopped the redirect loop so we can see the actual post-login state.
+    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg-page)", padding: "0 24px" }}>
+      <div style={{ width: "100%", maxWidth: 600, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, padding: 32 }}>
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.25em", color: "var(--nc-accent-orange)", marginBottom: 10 }}>AUTH_CHECK_FAILED</p>
+          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Login callback did not complete cleanly.</h1>
+          <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
+            The app stopped the redirect loop. See debug info below.
           </p>
         </div>
 
-        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950/70 p-5 text-sm text-slate-300">
-          <div className="mb-2">
-            <span className="font-medium text-slate-100">Auth reason:</span> {authError?.type || 'unknown'}
-          </div>
-          <div className="mb-2">
-            <span className="font-medium text-slate-100">Message:</span> {authError?.message || 'No message returned'}
-          </div>
-          <div>
-            <span className="font-medium text-slate-100">Access token present locally:</span> {hasToken ? 'yes' : 'no'}
-          </div>
+        <div style={{ marginBottom: 20, background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          <div style={{ marginBottom: 6 }}><span style={{ color: "var(--text-muted)" }}>AUTH_REASON: </span><span style={{ color: "var(--text-primary)" }}>{authError?.type || 'unknown'}</span></div>
+          <div style={{ marginBottom: 6 }}><span style={{ color: "var(--text-muted)" }}>MESSAGE: </span><span style={{ color: "var(--text-primary)" }}>{authError?.message || 'No message returned'}</span></div>
+          <div><span style={{ color: "var(--text-muted)" }}>TOKEN_PRESENT: </span><span style={{ color: hasToken ? "var(--nc-accent-cyan)" : "var(--nc-accent-red)" }}>{hasToken ? 'YES' : 'NO'}</span></div>
         </div>
 
-        <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm leading-6 text-amber-100">
-          <p className="mb-2 font-medium">What this usually means</p>
-          <p>
-            If the token says <strong>no</strong>, the hosted Base44 login page likely authenticated you but did not send an
-            `access_token` back to `localhost`. If it says <strong>yes</strong>, the token came back but the app backend rejected it or your
-            app user record still needs attention.
-          </p>
+        <div style={{ marginBottom: 24, background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 2, padding: "12px 16px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, fontFamily: "var(--font-body)" }}>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--nc-accent-orange)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>WHAT_THIS_MEANS</p>
+          <p>If token says <strong style={{ color: "var(--text-primary)" }}>NO</strong> — the login page authenticated but didn't send a token back. If <strong style={{ color: "var(--text-primary)" }}>YES</strong> — the token was rejected by the backend or your user record needs attention.</p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-amber-300"
-            onClick={onRetry}
-          >
-            Try Sign In Again
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          <button style={{ padding: "8px 18px", background: "var(--nc-accent-orange)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer" }} onClick={onRetry}>
+            TRY SIGN IN AGAIN
           </button>
-          <button
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-            onClick={handleReset}
-          >
-            Clear Local Session
+          <button style={{ padding: "8px 18px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer" }} onClick={handleReset}>
+            CLEAR LOCAL SESSION
           </button>
         </div>
       </div>

@@ -419,7 +419,7 @@ export default function PortfolioView({
             onClick={() => navigate("/Projects")}
             style={{
               background: "var(--accent)",
-              color: "#002E6A",
+              color: "var(--accent-text)",
               borderRadius: "var(--radius-btn)",
               border: "1px solid var(--accent-border)",
               fontFamily: "var(--font-mono)",
@@ -661,7 +661,7 @@ export default function PortfolioView({
                           onClick={() => navigate("/Projects")}
                           style={{
                             background: "var(--accent)",
-                            color: "#002E6A",
+                            color: "var(--accent-text)",
                             borderRadius: "var(--radius-btn)",
                             border: "1px solid var(--accent-border)",
                             fontFamily: "var(--font-mono)",

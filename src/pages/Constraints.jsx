@@ -411,7 +411,7 @@ export default function Constraints() {
                 onClick={() => setView(v)}
                 style={{
                   background: view === v ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v ? "#0A0A0B" : "var(--text-secondary)",
+                  color: view === v ? "var(--accent-text)" : "var(--text-secondary)",
                   border: "none",
                   borderRadius: "var(--radius-btn)",
                   padding: "7px 12px",
@@ -705,7 +705,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
             onClick={() => setFilterStatus(s)}
             style={{
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterStatus === s ? "#0A0A0B" : "var(--text-secondary)",
+              color: filterStatus === s ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "5px 12px",
@@ -731,7 +731,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
             onClick={() => setFilterPriority(p)}
             style={{
               background: filterPriority === p ? PRIORITY_CONFIG[p]?.bg || "var(--accent)" : "var(--bg-surface-low)",
-              color: filterPriority === p ? PRIORITY_CONFIG[p]?.color || "#0A0A0B" : "var(--text-secondary)",
+              color: filterPriority === p ? PRIORITY_CONFIG[p]?.color || "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "5px 12px",

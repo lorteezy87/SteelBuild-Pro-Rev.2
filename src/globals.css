@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Material+Symbols+Outlined:wght@100..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Material+Symbols+Outlined:wght@100..700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,61 +10,62 @@
 :root,
 [data-theme="dark"] {
   /* ── NC primary tokens ── */
-  --nc-bg-primary:      #0D0D0D;
-  --nc-bg-secondary:    #141414;
-  --nc-bg-tertiary:     #1A1A1A;
-  --nc-bg-panel:        #111111;
+  --nc-bg-primary:      #050505;
+  --nc-bg-secondary:    #131313;
+  --nc-bg-tertiary:     #1C1B1B;
+  --nc-bg-panel:        #0E0E0E;
   --nc-accent-cyan:     #00E5FF;
   --nc-accent-orange:   #FF6B00;
+  --nc-accent-blue:     #1E40AF;
   --nc-accent-green:    #22C55E;
   --nc-accent-red:      #EF4444;
-  --nc-text-primary:    #FFFFFF;
+  --nc-text-primary:    #E5E2E1;
   --nc-text-muted:      #6B7280;
   --nc-text-cyan:       #00E5FF;
   --nc-text-orange:     #FF6B00;
-  --nc-border-default:  rgba(255, 255, 255, 0.06);
-  --nc-border-cyan:     rgba(0, 229, 255, 0.25);
+  --nc-border-default:  rgba(30, 64, 175, 0.2);
+  --nc-border-cyan:     rgba(0, 229, 255, 0.2);
   --nc-border-orange:   rgba(255, 107, 0, 0.4);
 
   /* ── Surface aliases (map existing var names → NC values) ── */
-  --bg-void:                  #0D0D0D;
-  --bg-page:                  #0D0D0D;
-  --bg-surface:               #141414;
-  --bg-surface-low:           #1A1A1A;
-  --bg-surface-mid:           #1A1A1A;
-  --bg-surface-high:          #1F1F1F;
-  --bg-surface-highest:       #242424;
-  --bg-surface-lowest:        #0D0D0D;
-  --bg-input:                 #1A1A1A;
-  --bg-sidebar:               #111111;
+  --bg-void:                  #050505;
+  --bg-page:                  #050505;
+  --bg-surface:               #1C1B1B;
+  --bg-surface-low:           #131313;
+  --bg-surface-mid:           #201F1F;
+  --bg-surface-high:          #2A2A2A;
+  --bg-surface-highest:       #353534;
+  --bg-surface-lowest:        #0E0E0E;
+  --bg-input:                 #1C1B1B;
+  --bg-sidebar:               #0E0E0E;
 
   /* Legacy aliases */
-  --bg-base:                  #0D0D0D;
-  --bg-card:                  #141414;
-  --bg-elevated:              #1A1A1A;
-  --bg-surface-secondary:     #1A1A1A;
+  --bg-base:                  #050505;
+  --bg-card:                  #1C1B1B;
+  --bg-elevated:              #201F1F;
+  --bg-surface-secondary:     #1C1B1B;
 
   /* ── Text ── */
-  --text-primary:             #FFFFFF;
-  --text-secondary:           rgba(255, 255, 255, 0.80);
+  --text-primary:             #E5E2E1;
+  --text-secondary:           #BAC9CC;
   --text-muted:               #6B7280;
   --text-disabled:            rgba(107, 114, 128, 0.50);
 
   /* ── Borders ── */
-  --border-default:           rgba(255, 255, 255, 0.06);
-  --border-strong:            rgba(255, 255, 255, 0.12);
-  --border:                   rgba(255, 255, 255, 0.06);
-  --divider:                  rgba(255, 255, 255, 0.04);
-  --outline:                  #6B7280;
+  --border-default:           rgba(30, 64, 175, 0.2);
+  --border-strong:            rgba(0, 229, 255, 0.2);
+  --border:                   rgba(30, 64, 175, 0.2);
+  --divider:                  rgba(30, 64, 175, 0.1);
+  --outline:                  #849396;
 
   /* ── Primary accent: CYAN ── */
   --accent:                   #00E5FF;
   --accent-light:             #00E5FF;
   --accent-hover:             #33ECFF;
   --accent-muted:             rgba(0, 229, 255, 0.08);
-  --accent-border:            rgba(0, 229, 255, 0.25);
-  --accent-text:              #0D0D0D;
-  --on-accent:                #0D0D0D;
+  --accent-border:            rgba(0, 229, 255, 0.2);
+  --accent-text:              #050505;
+  --on-accent:                #050505;
 
   /* ── Secondary accent: ORANGE ── */
   --secondary:                #FF6B00;
@@ -106,7 +107,7 @@
   --shadow-lg:                0 0 40px rgba(0, 0, 0, 0.60);
   --hover-bg:                 rgba(255, 255, 255, 0.04);
   --bg-hover:                 rgba(255, 255, 255, 0.04);
-  --bg-row-hover:             #1A1A1A;
+  --bg-row-hover:             #1C1B1B;
   --nav-hover-bg:             rgba(0, 229, 255, 0.05);
 
   /* ── Radius — sharp industrial ── */
@@ -118,49 +119,50 @@
   /* ── Fonts ── */
   --font-display:             'Space Grotesk', sans-serif;
   --font-body:                'Space Grotesk', 'Inter', sans-serif;
-  --font-mono:                'JetBrains Mono', 'Courier New', 'Consolas', monospace;
+  --font-mono:                'IBM Plex Mono', 'Courier New', 'Consolas', monospace;
 }
 
 /* Light mode — force dark (NC is dark-only; override any light toggle) */
 [data-theme="light"] {
-  --nc-bg-primary:      #0D0D0D;
-  --nc-bg-secondary:    #141414;
-  --nc-bg-tertiary:     #1A1A1A;
-  --nc-bg-panel:        #111111;
+  --nc-bg-primary:      #050505;
+  --nc-bg-secondary:    #131313;
+  --nc-bg-tertiary:     #1C1B1B;
+  --nc-bg-panel:        #0E0E0E;
+  --nc-accent-blue:     #1E40AF;
 
-  --bg-void:            #0D0D0D;
-  --bg-page:            #0D0D0D;
-  --bg-surface:         #141414;
-  --bg-surface-low:     #1A1A1A;
-  --bg-surface-mid:     #1A1A1A;
-  --bg-surface-high:    #1F1F1F;
-  --bg-surface-highest: #242424;
-  --bg-surface-lowest:  #0D0D0D;
-  --bg-input:           #1A1A1A;
-  --bg-sidebar:         #111111;
-  --bg-base:            #0D0D0D;
-  --bg-card:            #141414;
-  --bg-elevated:        #1A1A1A;
-  --bg-surface-secondary: #1A1A1A;
+  --bg-void:            #050505;
+  --bg-page:            #050505;
+  --bg-surface:         #1C1B1B;
+  --bg-surface-low:     #131313;
+  --bg-surface-mid:     #201F1F;
+  --bg-surface-high:    #2A2A2A;
+  --bg-surface-highest: #353534;
+  --bg-surface-lowest:  #0E0E0E;
+  --bg-input:           #1C1B1B;
+  --bg-sidebar:         #0E0E0E;
+  --bg-base:            #050505;
+  --bg-card:            #1C1B1B;
+  --bg-elevated:        #201F1F;
+  --bg-surface-secondary: #1C1B1B;
 
-  --text-primary:       #FFFFFF;
-  --text-secondary:     rgba(255, 255, 255, 0.80);
+  --text-primary:       #E5E2E1;
+  --text-secondary:     #BAC9CC;
   --text-muted:         #6B7280;
   --text-disabled:      rgba(107, 114, 128, 0.50);
 
-  --border-default:     rgba(255, 255, 255, 0.06);
-  --border-strong:      rgba(255, 255, 255, 0.12);
-  --border:             rgba(255, 255, 255, 0.06);
-  --divider:            rgba(255, 255, 255, 0.04);
-  --outline:            #6B7280;
+  --border-default:     rgba(30, 64, 175, 0.2);
+  --border-strong:      rgba(0, 229, 255, 0.2);
+  --border:             rgba(30, 64, 175, 0.2);
+  --divider:            rgba(30, 64, 175, 0.1);
+  --outline:            #849396;
 
   --accent:             #00E5FF;
   --accent-light:       #00E5FF;
   --accent-hover:       #33ECFF;
   --accent-muted:       rgba(0, 229, 255, 0.08);
-  --accent-border:      rgba(0, 229, 255, 0.25);
-  --accent-text:        #0D0D0D;
-  --on-accent:          #0D0D0D;
+  --accent-border:      rgba(0, 229, 255, 0.2);
+  --accent-text:        #050505;
+  --on-accent:          #050505;
 
   --secondary:          #FF6B00;
   --secondary-muted:    rgba(255, 107, 0, 0.10);
@@ -197,7 +199,7 @@
   --shadow-lg:          0 0 40px rgba(0, 0, 0, 0.60);
   --hover-bg:           rgba(255, 255, 255, 0.04);
   --bg-hover:           rgba(255, 255, 255, 0.04);
-  --bg-row-hover:       #1A1A1A;
+  --bg-row-hover:       #1C1B1B;
   --nav-hover-bg:       rgba(0, 229, 255, 0.05);
 
   --radius-card:        2px;
@@ -207,7 +209,7 @@
 
   --font-display:       'Space Grotesk', sans-serif;
   --font-body:          'Space Grotesk', 'Inter', sans-serif;
-  --font-mono:          'JetBrains Mono', 'Courier New', 'Consolas', monospace;
+  --font-mono:          'IBM Plex Mono', 'Courier New', 'Consolas', monospace;
 }
 
 /* ── Base ── */
@@ -225,14 +227,20 @@ html, body, #root {
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-track { background: #050505; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: #1E40AF;
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--nc-accent-cyan);
 }
+
+/* ── Glow utilities ── */
+.glow-cyan { text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
+.glow-orange { filter: drop-shadow(0 0 4px rgba(255, 107, 0, 0.8)); }
+.shadow-cyan { box-shadow: 0 0 15px rgba(0, 229, 255, 0.15); }
+.shadow-orange { box-shadow: 0 0 15px rgba(255, 107, 0, 0.3); }
 
 /* ── Inputs ── */
 input, textarea, select {
@@ -278,6 +286,13 @@ button { cursor: pointer; outline: none; }
 .border-gray-200, .border-slate-200 {
   border-color: var(--border-default) !important;
 }
+.text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
+.text-slate-300 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-muted) !important; }
+.bg-slate-800 { background: var(--bg-surface) !important; }
+.bg-slate-900, .bg-slate-950 { background: var(--bg-surface-low) !important; }
+.hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
+.hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
 
 /* ── KPI cards ── */
 .kpi-card {

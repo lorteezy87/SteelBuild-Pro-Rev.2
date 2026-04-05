@@ -197,7 +197,7 @@ function QuickActionRail({ actions, onNavigate }) {
           onClick={() => onNavigate(action.page)}
           style={{
             background: action.primary ? "var(--accent)" : "var(--bg-surface-low)",
-            color: action.primary ? "#0A0A0B" : "var(--text-secondary)",
+            color: action.primary ? "var(--accent-text)" : "var(--text-secondary)",
             border: action.primary ? "none" : "1px solid var(--border-default)",
             borderRadius: "var(--radius-btn)",
             padding: "12px 10px",
@@ -224,7 +224,7 @@ function QuickActionRail({ actions, onNavigate }) {
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 11,
-              color: action.primary ? "#0A0A0B" : "var(--text-muted)",
+              color: action.primary ? "var(--accent-text)" : "var(--text-muted)",
             }}
           >
             {action.detail}
