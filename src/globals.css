@@ -72,6 +72,13 @@
   --secondary-muted:          rgba(255, 107, 0, 0.10);
   --secondary-border:         rgba(255, 107, 0, 0.40);
 
+  /* ── Orange explicit aliases (for FAB, critical path, today marker) ── */
+  --accent-orange:            #FF6B00;
+  --accent-orange-light:      #FF8C38;
+  --accent-orange-hover:      #E55E00;
+  --accent-orange-muted:      rgba(255, 107, 0, 0.10);
+  --accent-orange-border:     rgba(255, 107, 0, 0.30);
+
   /* ── Tertiary: GREEN ── */
   --tertiary:                 #22C55E;
   --tertiary-muted:           rgba(34, 197, 94, 0.10);
@@ -102,9 +109,13 @@
   --info-muted:               rgba(0, 229, 255, 0.07);
   --info-border:              rgba(0, 229, 255, 0.25);
 
-  /* ── Misc ── */
+  /* ── Shadows ── */
   --shadow-card:              none;
   --shadow-lg:                0 0 40px rgba(0, 0, 0, 0.60);
+  --shadow-orange-glow:       0 0 20px rgba(255, 107, 0, 0.20);
+  --shadow-cyan-glow:         0 0 20px rgba(0, 229, 255, 0.20);
+
+  /* ── Interaction ── */
   --hover-bg:                 rgba(255, 255, 255, 0.04);
   --bg-hover:                 rgba(255, 255, 255, 0.04);
   --bg-row-hover:             #1C1B1B;
@@ -168,6 +179,12 @@
   --secondary-muted:    rgba(255, 107, 0, 0.10);
   --secondary-border:   rgba(255, 107, 0, 0.40);
 
+  --accent-orange:          #FF6B00;
+  --accent-orange-light:    #FF8C38;
+  --accent-orange-hover:    #E55E00;
+  --accent-orange-muted:    rgba(255, 107, 0, 0.10);
+  --accent-orange-border:   rgba(255, 107, 0, 0.30);
+
   --tertiary:           #22C55E;
   --tertiary-muted:     rgba(34, 197, 94, 0.10);
   --tertiary-border:    rgba(34, 197, 94, 0.30);
@@ -223,6 +240,30 @@ html, body, #root {
   margin: 0;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.tech-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] #root {
+  background: var(--bg-page) !important;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] #root {
+  background: var(--bg-page) !important;
+  color: var(--text-primary) !important;
 }
 
 /* ── Scrollbars ── */
@@ -236,24 +277,57 @@ html, body, #root {
   background: var(--nc-accent-cyan);
 }
 
-/* ── Glow utilities ── */
-.glow-cyan { text-shadow: 0 0 8px rgba(0, 229, 255, 0.6); }
-.glow-orange { filter: drop-shadow(0 0 4px rgba(255, 107, 0, 0.8)); }
+/* ── Neon Command glow utilities ── */
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+  color: var(--accent);
+}
+.glow-orange {
+  filter: drop-shadow(0 0 4px rgba(255, 107, 0, 0.8));
+  color: var(--accent-orange);
+}
 .shadow-cyan { box-shadow: 0 0 15px rgba(0, 229, 255, 0.15); }
 .shadow-orange { box-shadow: 0 0 15px rgba(255, 107, 0, 0.3); }
+.border-cyan {
+  border-color: rgba(0, 229, 255, 0.30) !important;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.08);
+}
+.border-orange {
+  border-color: rgba(255, 107, 0, 0.30) !important;
+  box-shadow: 0 0 12px rgba(255, 107, 0, 0.10);
+}
+
+/* ── Card glow variants ── */
+.card-active {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.10), 0 0 0 1px rgba(0, 229, 255, 0.20);
+}
+.card-critical {
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.12), 0 0 0 1px rgba(255, 107, 0, 0.25);
+}
+.card-intel {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.08), 0 0 0 1px rgba(0, 229, 255, 0.15);
+}
+
+/* Diamond milestone marker (Gantt) */
+.diamond-milestone {
+  width: 10px;
+  height: 10px;
+  background: var(--accent-orange);
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px var(--accent-orange);
+}
 
 /* ── Inputs ── */
 input, textarea, select {
   background:    var(--bg-input)        !important;
-  border:        1px solid
-                 var(--border-default)  !important;
+  border:        1px solid var(--border-default) !important;
   color:         var(--text-primary)    !important;
   border-radius: var(--radius-input)    !important;
-  padding:       8px 12px              !important;
-  font-size:     13px                  !important;
-  font-family:   var(--font-mono)      !important;
-  outline:       none                  !important;
-  transition:    border-color 0.15s    !important;
+  padding:       8px 12px               !important;
+  font-size:     13px                   !important;
+  font-family:   var(--font-mono)       !important;
+  outline:       none                   !important;
+  transition:    border-color 0.15s     !important;
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--nc-accent-cyan) !important;
@@ -267,25 +341,23 @@ input::placeholder, textarea::placeholder {
 /* ── Buttons ── */
 button { cursor: pointer; outline: none; }
 
+/* Glass/HUD helpers */
+.glass-surface {
+  background: rgba(19, 19, 19, 0.80);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-default);
+}
+
 /* ── Tailwind overrides ── */
 .bg-white { background: var(--bg-surface) !important; }
-.bg-gray-50, .bg-slate-50 {
-  background: var(--bg-surface-low) !important;
-}
+.bg-gray-50, .bg-slate-50 { background: var(--bg-surface-low) !important; }
 .bg-gray-100, .bg-slate-100 { background: var(--bg-surface) !important; }
 .text-white { color: var(--text-primary) !important; }
-.text-gray-900, .text-slate-900, .text-black {
-  color: var(--text-primary) !important;
-}
-.text-gray-600, .text-slate-600 {
-  color: var(--text-secondary) !important;
-}
-.text-gray-400, .text-slate-400 {
-  color: var(--text-muted) !important;
-}
-.border-gray-200, .border-slate-200 {
-  border-color: var(--border-default) !important;
-}
+.text-gray-900, .text-slate-900, .text-black { color: var(--text-primary) !important; }
+.text-gray-600, .text-slate-600 { color: var(--text-secondary) !important; }
+.text-gray-400, .text-slate-400 { color: var(--text-muted) !important; }
+.border-gray-200, .border-slate-200 { border-color: var(--border-default) !important; }
 .text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
 .text-slate-300 { color: var(--text-secondary) !important; }
 .text-slate-500 { color: var(--text-muted) !important; }
@@ -294,12 +366,13 @@ button { cursor: pointer; outline: none; }
 .hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
 .hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
 
-/* ── KPI cards ── */
+/* ── KPI cards — Iron Forge style ── */
 .kpi-card {
-  background: var(--nc-bg-secondary);
+  background: var(--bg-surface);
   border: 1px solid var(--nc-border-cyan);
   padding: 20px 24px;
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .kpi-label {
   font-family: var(--font-mono);
@@ -313,13 +386,13 @@ button { cursor: pointer; outline: none; }
 .kpi-value {
   font-family: var(--font-mono);
   font-size: 32px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
+  color: var(--accent);
+  letter-spacing: -0.01em;
 }
-.kpi-value.critical {
-  color: var(--nc-accent-orange);
-}
+.kpi-value.critical { color: var(--nc-accent-orange); }
+.kpi-value.accent   { color: var(--nc-accent-cyan); }
 .kpi-sub {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -327,7 +400,7 @@ button { cursor: pointer; outline: none; }
   margin-top: 6px;
 }
 
-/* ── Status badges — OUTLINED style ── */
+/* ── Status badges — outlined style ── */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -341,28 +414,24 @@ button { cursor: pointer; outline: none; }
   white-space: nowrap;
   background: transparent;
 }
-/* APPROVED / RELEASED / ON TRACK / INFO */
 .badge-success, .badge-info {
   border: 1px solid var(--nc-accent-cyan);
   color: var(--nc-accent-cyan);
 }
-/* PENDING / OFA / IFA / AT RISK / WARNING */
 .badge-warning {
   border: 1px solid var(--nc-accent-orange);
   color: var(--nc-accent-orange);
 }
-/* REJECTED / OVERDUE / DELAYED / CRITICAL / ERROR */
 .badge-error {
   border: 1px solid var(--nc-accent-red);
   color: var(--nc-accent-red);
 }
-/* COMPLETE / VERIFIED */
 .badge-neutral {
   border: 1px solid var(--nc-text-muted);
   color: var(--nc-text-muted);
 }
 
-/* ── Phase badges — outlined ── */
+/* ── Phase badges ── */
 .badge-detailing {
   border: 1px solid var(--nc-accent-cyan);
   color: var(--nc-accent-cyan);
@@ -382,9 +451,7 @@ button { cursor: pointer; outline: none; }
 
 /* ── Data tables ── */
 .sbp-table { width: 100%; border-collapse: collapse; }
-.sbp-table thead tr {
-  background: transparent;
-}
+.sbp-table thead tr { background: transparent; }
 .sbp-table thead th {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -404,18 +471,11 @@ button { cursor: pointer; outline: none; }
   transition: background 0.1s;
   border-bottom: 1px solid var(--nc-border-default);
 }
-.sbp-table tbody tr:hover {
-  background: var(--nc-bg-tertiary);
-}
-/* Row-level status tinting */
+.sbp-table tbody tr:hover { background: var(--bg-row-hover); }
 .sbp-table tbody tr.row-pending,
 .sbp-table tbody tr.row-at-risk,
-.sbp-table tbody tr.row-overdue {
-  background: rgba(255, 107, 0, 0.07);
-}
-.sbp-table tbody tr.row-rejected {
-  background: rgba(239, 68, 68, 0.07);
-}
+.sbp-table tbody tr.row-overdue { background: rgba(255, 107, 0, 0.07); }
+.sbp-table tbody tr.row-rejected { background: rgba(239, 68, 68, 0.07); }
 .sbp-table tbody td {
   font-size: 13px;
   color: var(--text-secondary);
@@ -425,7 +485,6 @@ button { cursor: pointer; outline: none; }
   font-family: var(--font-mono);
   font-size: 12px;
 }
-/* ID / Sheet number cells */
 .sbp-table tbody td.accent {
   color: var(--nc-accent-cyan);
   font-family: var(--font-mono);
@@ -434,9 +493,11 @@ button { cursor: pointer; outline: none; }
 
 /* ── Panel / card containers ── */
 .sbp-panel {
-  background: var(--nc-bg-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .sbp-panel-header {
   padding: 14px 18px;
@@ -476,7 +537,7 @@ button { cursor: pointer; outline: none; }
   background: var(--nc-border-default);
 }
 
-/* ── Progress bars — thin 3px ── */
+/* ── Progress bars — flat 3px ── */
 .progress-track {
   width: 100%;
   height: 3px;
@@ -491,12 +552,8 @@ button { cursor: pointer; outline: none; }
   transition: width 0.5s ease;
   background: var(--nc-accent-cyan);
 }
-.progress-fill.at-risk {
-  background: var(--nc-accent-orange);
-}
-.progress-fill.complete {
-  background: var(--nc-accent-green);
-}
+.progress-fill.at-risk  { background: var(--nc-accent-orange); }
+.progress-fill.complete { background: var(--nc-accent-green); }
 
 /* ── Status bar rows ── */
 .exec-row {
@@ -526,9 +583,9 @@ button { cursor: pointer; outline: none; }
 }
 .exec-count {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent);
   width: 40px;
   text-align: right;
   flex-shrink: 0;
@@ -538,28 +595,32 @@ button { cursor: pointer; outline: none; }
 .mono-num {
   font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-/* ── Buttons ── */
-/* Primary CTA — orange */
+/* ── Buttons — Iron Forge ── */
+/* Primary CTA — cyan */
 .btn-primary {
-  background: var(--nc-accent-orange);
-  color: #FFFFFF;
+  background: var(--accent);
+  color: #000000;
   border: none;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   padding: 8px 18px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.15s;
 }
-.btn-primary:hover { opacity: 0.88; }
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 16px rgba(0,229,255,0.35);
+}
 
-/* Cyan CTA — detail panels */
+/* Cyan CTA */
 .btn-cyan {
   background: var(--nc-accent-cyan);
   color: #0D0D0D;
@@ -611,16 +672,14 @@ button { cursor: pointer; outline: none; }
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-destructive:hover {
-  background: rgba(239, 68, 68, 0.08);
-}
+.btn-destructive:hover { background: rgba(239, 68, 68, 0.08); }
 
 /* ── Gantt grid ── */
 .gantt-grid {
   background-size: 40px 100%;
   background-image: linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.03) 1px,
+    rgba(0, 229, 255, 0.05) 1px,
     transparent 1px
   );
 }
@@ -635,6 +694,15 @@ button { cursor: pointer; outline: none; }
       rgba(0, 229, 255, 0.02) 10px,
       rgba(0, 229, 255, 0.02) 11px
     );
+}
+
+/* ── Top nav glassmorphism ── */
+.nav-glass {
+  background: rgba(5, 5, 5, 0.90) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.18) !important;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.06) !important;
 }
 
 /* ── Light-mode overrides (force dark for NC theme) ── */
@@ -686,7 +754,7 @@ button { cursor: pointer; outline: none; }
 [data-theme="light"] .gantt-grid {
   background-image: linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.03) 1px,
+    rgba(0, 229, 255, 0.05) 1px,
     transparent 1px
   );
 }
