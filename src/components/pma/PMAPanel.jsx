@@ -75,21 +75,22 @@ export default function PMAPanel() {
           right: 0,
           bottom: 0,
           width: 520,
-          background: 'var(--bg-surface-low)',
-          borderLeft: '1px solid var(--accent-border)',
+          background: 'rgba(10,18,22,0.74)',
+          backdropFilter: 'blur(24px)',
+          borderLeft: '1px solid var(--secondary-border)',
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
+          boxShadow: '-12px 0 36px rgba(0,0,0,0.55), inset 0 1px 0 rgba(0,229,255,0.08)',
           animation: 'slideInRight 0.25s ease-out',
         }}
       >
         {/* Header */}
         <div
           style={{
-            background: 'var(--bg-surface-mid)',
+            background: 'rgba(8,20,24,0.72)',
             padding: '12px 16px',
-            borderBottom: '1px solid var(--accent-border)',
+            borderBottom: '1px solid var(--secondary-border)',
           }}
         >
           <div
@@ -101,13 +102,13 @@ export default function PMAPanel() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--accent)' }}>✦</span>
+              <span style={{ fontSize: 12, color: 'var(--secondary)' }}>✦</span>
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
                   fontWeight: 700,
-                  color: 'var(--accent)',
+                  color: 'var(--secondary)',
                   letterSpacing: '0.08em',
                 }}
               >
@@ -119,7 +120,7 @@ export default function PMAPanel() {
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'rgba(139,92,246,0.6)',
+                color: 'var(--secondary)',
                 cursor: 'pointer',
                 fontSize: 18,
               }}
@@ -132,7 +133,7 @@ export default function PMAPanel() {
           {projectSnapshot && (
             <div
               style={{
-                background: 'rgba(139,92,246,0.06)',
+                background: 'var(--secondary-muted)',
                 borderRadius: 6,
                 padding: '6px 12px',
                 fontFamily: 'var(--font-mono)',
@@ -150,8 +151,8 @@ export default function PMAPanel() {
               {projectSnapshot.project?.phase && (
                 <span style={{
                   background: 'var(--accent-muted)',
-                  border: '1px solid var(--accent-border)',
-                  color: 'var(--accent)',
+                  border: '1px solid var(--secondary-border)',
+                  color: 'var(--secondary)',
                   padding: '2px 6px',
                   borderRadius: 4,
                   fontWeight: 700,
@@ -183,7 +184,7 @@ export default function PMAPanel() {
             style={{
               display: 'flex',
               gap: 8,
-              borderBottom: '1px solid var(--accent-border)',
+              borderBottom: '1px solid var(--secondary-border)',
               paddingBottom: 8,
             }}
           >
@@ -194,10 +195,10 @@ export default function PMAPanel() {
                 style={{
                   flex: 1,
                   padding: '6px 8px',
-                  background: activeTab === tab.id ? (tab.color ? `${tab.color}22` : 'var(--accent-border)') : 'transparent',
-                  border: activeTab === tab.id ? `1px solid ${tab.color || 'var(--accent-border)'}` : '1px solid transparent',
+                  background: activeTab === tab.id ? (tab.color ? `${tab.color}22` : 'var(--secondary-muted)') : 'transparent',
+                  border: activeTab === tab.id ? `1px solid ${tab.color || 'var(--secondary-border)'}` : '1px solid transparent',
                   borderRadius: 6,
-                  color: activeTab === tab.id ? (tab.color || 'var(--accent)') : 'var(--accent-border)',
+                  color: activeTab === tab.id ? (tab.color || 'var(--secondary)') : 'var(--text-muted)',
                   fontFamily: 'var(--font-mono)',
                   fontSize: 8,
                   fontWeight: 700,
@@ -297,7 +298,7 @@ export default function PMAPanel() {
           fontSize: 7,
           color: 'var(--text-muted)',
           letterSpacing: '0.08em',
-          background: 'var(--bg-surface-mid)',
+          background: 'rgba(8,20,24,0.72)',
         }}>
           ⌘⇧P — Open · Esc — Close · ↑↓ — Scroll · Tab — Switch tabs
         </div>

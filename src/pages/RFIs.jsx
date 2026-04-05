@@ -8,6 +8,13 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { parseUTCDate } from "@/components/shared/formatters";
+import {
+  appendRecordToCaches,
+  replaceRecordInCaches,
+  removeRecordFromCaches,
+  invalidateCrudQueries,
+  toastCrudError,
+} from "@/components/shared/crudFeedback";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const BIC_COLORS = {
@@ -30,6 +37,72 @@ const STATUS_CFG = {
   Closed: { color: "var(--text-muted)", bg: "var(--hover-bg)" },
 };
 const statusColumns = ["Open", "Under Review", "Answered", "Closed"];
+const RFI_NUMBER_PATTERN = /^RFI #(\d+)$/i;
+
+const extractRfiSequence = (value) => {
+  if (!value) return null;
+  const match = String(value).trim().match(RFI_NUMBER_PATTERN);
+  return match ? Number(match[1]) : null;
+};
+
+const sortRfisForRepair = (a, b) => {
+  const numericDiff = (extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER) - (extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER);
+  if (numericDiff !== 0) return numericDiff;
+
+  const dateA = new Date(a.submitted_date || a.created_date || 0).getTime();
+  const dateB = new Date(b.submitted_date || b.created_date || 0).getTime();
+  if (dateA !== dateB) return dateA - dateB;
+
+  return String(a.id).localeCompare(String(b.id));
+};
+
+const buildRfiNumberRepairs = (records) => {
+  const groups = records.reduce((acc, record) => {
+    const key = record.project_id || "__missing_project__";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+
+  const repairs = [];
+  let skippedWithoutProject = 0;
+
+  Object.entries(groups).forEach(([projectKey, group]) => {
+    if (projectKey === "__missing_project__") {
+      skippedWithoutProject += group.length;
+      return;
+    }
+
+    const sorted = [...group].sort(sortRfisForRepair);
+    const reserved = new Set();
+    let nextNumber = 0;
+    const candidates = [];
+
+    sorted.forEach((record) => {
+      const numeric = extractRfiSequence(record.rfi_number);
+      if (numeric && !reserved.has(numeric)) {
+        reserved.add(numeric);
+        nextNumber = Math.max(nextNumber, numeric);
+        return;
+      }
+
+      candidates.push(record);
+    });
+
+    candidates.forEach((record) => {
+      nextNumber += 1;
+      repairs.push({
+        id: record.id,
+        project_id: record.project_id,
+        project_name: record.project_name || "",
+        previous_number: record.rfi_number || "",
+        next_number: `RFI #${String(nextNumber).padStart(3, "0")}`,
+      });
+    });
+  });
+
+  return { repairs, skippedWithoutProject };
+};
 
 const daysOpen = (r) => {
   if (!r.submitted_date) return 0;
@@ -91,38 +164,77 @@ export default function RFIs() {
         : base44.entities.RFI.list("-submitted_date"),
     initialData: [],
   });
+  const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.RFI.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rfis"] });
-      setShowForm(false);
-      setEditingRFI(null);
+    onSuccess: async (created) => {
+      appendRecordToCaches(qc, rfiQueryKeys, created, (record, key) => !key[1] || record.project_id === key[1]);
+      await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI created");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastCrudError(e, "Failed to create RFI"),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.RFI.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rfis"] });
-      setShowForm(false);
-      setEditingRFI(null);
+    onSuccess: async (updated) => {
+      replaceRecordInCaches(qc, rfiQueryKeys, updated);
+      if (selectedRFI?.id === updated.id) setSelectedRFI(updated);
+      await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI updated");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toastCrudError(e, "Failed to update RFI"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.RFI.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rfis"] });
+    onSuccess: async (_, deletedId) => {
+      removeRecordFromCaches(qc, rfiQueryKeys, deletedId);
       if (selectedRFI?.id === deleteTarget?.id) setSelectedRFI(null);
       setDeleteTarget(null);
+      await invalidateCrudQueries(qc, rfiQueryKeys);
       toast.success("RFI deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (e) => toastCrudError(e, "Failed to delete RFI"),
+  });
+  const repairPlan = useMemo(() => buildRfiNumberRepairs(rfis), [rfis]);
+
+  const repairNumbersMut = useMutation({
+    mutationFn: async () => {
+      const { repairs, skippedWithoutProject } = buildRfiNumberRepairs(rfis);
+      if (!repairs.length) {
+        return { repaired: 0, updates: [], skippedWithoutProject };
+      }
+
+      const projectNameById = new Map(projects.map((project) => [project.id, project.name || ""]));
+      const updates = [];
+
+      for (const repair of repairs) {
+        const updated = await base44.entities.RFI.update(repair.id, {
+          rfi_number: repair.next_number,
+          project_name: repair.project_name || projectNameById.get(repair.project_id) || "",
+        });
+        updates.push(updated);
+      }
+
+      return { repaired: updates.length, updates, skippedWithoutProject };
+    },
+    onSuccess: async ({ repaired, updates, skippedWithoutProject }) => {
+      updates.forEach((updated) => replaceRecordInCaches(qc, rfiQueryKeys, updated));
+      await invalidateCrudQueries(qc, rfiQueryKeys);
+
+      if (repaired > 0) {
+        toast.success(`Repaired ${repaired} RFI number${repaired === 1 ? "" : "s"}`);
+      } else {
+        toast.success("RFI numbering is already clean");
+      }
+
+      if (skippedWithoutProject > 0) {
+        toast.warning(`Skipped ${skippedWithoutProject} RFIs without a project`);
+      }
+    },
+    onError: (e) => toastCrudError(e, "Failed to repair RFI numbering"),
   });
 
   const toggleStatus = (r) => {
@@ -215,6 +327,7 @@ export default function RFIs() {
       count: openR.filter((r) => r.ball_in_court === p).length,
     }));
   }, [rfis]);
+  const numberingIssues = repairPlan.repairs.length;
 
   useEffect(() => {
     if (!rfis.length) return;
@@ -271,6 +384,9 @@ export default function RFIs() {
         return acc;
       }, {});
   }, [filtered, projectId]);
+
+  const resolveProjectName = (targetProjectId) =>
+    projects.find((project) => project.id === targetProjectId)?.name || "";
 
   const agingBuckets = useMemo(() => {
     const open = rfis.filter((r) => ["Open", "Under Review"].includes(r.status));
@@ -375,6 +491,31 @@ export default function RFIs() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => qc.invalidateQueries({ queryKey: ["rfis"] })} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", cursor: "pointer" }}>
             ?
+          </button>
+          <button
+            type="button"
+            onClick={() => repairNumbersMut.mutate()}
+            disabled={repairNumbersMut.isPending || numberingIssues === 0}
+            style={{
+              background: numberingIssues > 0 ? "var(--warning-muted)" : "var(--bg-surface-low)",
+              color: numberingIssues > 0 ? "var(--status-warning)" : "var(--text-muted)",
+              border: `1px solid ${numberingIssues > 0 ? "var(--warning-border)" : "var(--border-default)"}`,
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: repairNumbersMut.isPending || numberingIssues === 0 ? "not-allowed" : "pointer",
+              opacity: repairNumbersMut.isPending || numberingIssues === 0 ? 0.7 : 1,
+            }}
+          >
+            {repairNumbersMut.isPending
+              ? "Repairing..."
+              : numberingIssues > 0
+                ? `Repair Numbers (${numberingIssues})`
+                : "Numbers Clean"}
           </button>
           <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
             {["LIST", "BOARD"].map((v) => (
@@ -1050,12 +1191,33 @@ export default function RFIs() {
           }}
           onSave={async (data) => {
             if (editingRFI) {
-              updateMut.mutate({ id: editingRFI.id, data });
+              updateMut.mutate({
+                id: editingRFI.id,
+                data: {
+                  ...data,
+                  project_name: resolveProjectName(data.project_id || projectId) || data.project_name || editingRFI.project_name || "",
+                },
+              });
             } else {
-              const num = data.rfi_number || (await getNextFormattedNumber(data.project_id || projectId, "RFI"));
-              createMut.mutate({ ...data, rfi_number: num });
+              const num =
+                data.rfi_number ||
+                (await getNextFormattedNumber({
+                  projectId: data.project_id || projectId,
+                  recordType: "RFI",
+                  entityName: "RFI",
+                  fieldName: "rfi_number",
+                  prefix: "RFI #",
+                }));
+              createMut.mutate({
+                ...data,
+                rfi_number: num,
+                project_name: resolveProjectName(data.project_id || projectId) || data.project_name || "",
+              });
             }
+            setShowForm(false);
+            setEditingRFI(null);
           }}
+          saving={createMut.isPending || updateMut.isPending}
           rfi={editingRFI}
           projectId={projectId}
         />

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { getTaskTypeColor, formatDateShort, getDaysBetween } from './scheduleUtils';
+import React, { useState } from 'react';
+import { getDaysBetween } from './scheduleUtils';
 
 const TASK_TYPE_COLORS = {
   Fabrication: 'var(--accent)',

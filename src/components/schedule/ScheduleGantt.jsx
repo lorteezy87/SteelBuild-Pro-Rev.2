@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { sortByPhase, PHASE_COLORS as PHASE_COLORS_UTIL, PHASES, derivePhase } from "../../utils/phases";
+import { sortByPhase, derivePhase } from "../../utils/phases";
 
 const PHASE_BADGE = {
   'Pre-Construction': { bg: "rgba(139,92,246,0.12)",  color: "#8B5CF6" },

@@ -1,9 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 
 const MAX_PDF_SIZE_MB = 32;
+
+function isPdfFile(file) {
+  if (!file) return false;
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return mime === "application/pdf" || mime.includes("pdf") || name.endsWith(".pdf");
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -13,6 +20,11 @@ function formatBytes(bytes) {
 function formatDate(d) {
   if (!d) return "";
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function normalizeRevisionNumber(value, fallback = "0") {
+  if (value == null || value === "") return fallback;
+  return String(value).trim() || fallback;
 }
 
 // Smart revision suggestions
@@ -74,6 +86,7 @@ Return ONLY a JSON array starting with [. Nothing else.`,
 function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading = false, error = null }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(preSelectedSet || null);
+  const getSetIdentity = (drawingSet) => drawingSet?.id ?? drawingSet?.set_name ?? "";
 
   const filtered = drawingSets.filter(ds =>
     !search || (ds.set_name || "").toLowerCase().includes(search.toLowerCase())
@@ -129,9 +142,9 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
       ) : (
         <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
           {filtered.map(ds => {
-            const isSelected = selected?.id === ds.id;
+            const isSelected = getSetIdentity(selected) === getSetIdentity(ds);
             return (
-              <div key={ds.id} onClick={() => setSelected(ds)} style={{
+              <div key={getSetIdentity(ds)} onClick={() => setSelected(ds)} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "0 12px", height: 48,
                 background: isSelected ? "var(--warning-muted)" : "rgba(255,255,255,0.03)",
@@ -281,10 +294,21 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
 // ── Step C: Drop PDF ───────────────────────────────────────────────
 function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract }) {
   const [dragOver, setDragOver] = useState(false);
+  const [localError, setLocalError] = useState("");
   const fileInputRef = useRef();
 
   const handleFile = (f) => {
-    if (f && (f.type === "application/pdf" || f.name.endsWith(".pdf"))) setFile(f);
+    if (!f) return;
+    if (!isPdfFile(f)) {
+      setLocalError("Please upload a PDF file (.pdf).");
+      return;
+    }
+    if (f.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
+      setLocalError(`PDF exceeds ${MAX_PDF_SIZE_MB}MB limit for revision upload.`);
+      return;
+    }
+    setLocalError("");
+    setFile(f);
   };
 
   return (
@@ -324,6 +348,11 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
       </div>
       <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: "none" }}
         onChange={e => { handleFile(e.target.files[0]); e.target.value = ""; }} />
+      {localError && (
+        <div style={{ marginBottom: 12, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-error)" }}>
+          {localError}
+        </div>
+      )}
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
@@ -524,6 +553,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   const [matchedSheets, setMatchedSheets] = useState([]);
   const [processingMsg, setProcessingMsg] = useState("");
   const [processingPct, setProcessingPct] = useState(0);
+  const [flowError, setFlowError] = useState("");
   const [applyStats, setApplyStats] = useState({ updated: 0, added: 0, removed: 0 });
   useEffect(() => {
     if (preSelectedSet) { setSelectedSet(preSelectedSet); setStep("revMeta"); }
@@ -537,15 +567,17 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
   }, [open]);
 
   const handleExtract = async () => {
-    setStep("processing");
-    setProcessingMsg("Uploading PDF...");
-    setProcessingPct(10);
-    const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
-    setProcessingMsg("AI is reading the drawing set...");
-    setProcessingPct(40);
-    const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
-    setProcessingMsg("Comparing sheets...");
-    setProcessingPct(80);
+    try {
+      setFlowError("");
+      setStep("processing");
+      setProcessingMsg("Uploading PDF...");
+      setProcessingPct(10);
+      const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
+      setProcessingMsg("AI is reading the drawing set...");
+      setProcessingPct(40);
+      const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
+      setProcessingMsg("Comparing sheets...");
+      setProcessingPct(80);
 
     // Get old sheets from existing Drawing records
     let oldSheets = [];
@@ -554,19 +586,26 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
-    const matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
-    // Store uploaded fileUrl on each new sheet match
-    matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
-    setMatchedSheets(matched);
-    setProcessingPct(100);
-    await new Promise(r => setTimeout(r, 400));
-    setStep("comparison");
+      const matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
+      // Store uploaded fileUrl on each new sheet match
+      matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
+      setMatchedSheets(matched);
+      setProcessingPct(100);
+      await new Promise(r => setTimeout(r, 400));
+      setStep("comparison");
+    } catch (error) {
+      console.error("Revision extraction failed:", error);
+      setFlowError(error?.message || "Unable to upload or parse this revision PDF.");
+      setStep("dropPDF");
+    }
   };
 
   const handleApply = async () => {
-    setStep("processing");
-    setProcessingMsg("Updating drawing set...");
-    setProcessingPct(10);
+    try {
+      setFlowError("");
+      setStep("processing");
+      setProcessingMsg("Updating drawing set...");
+      setProcessingPct(10);
 
     // Snapshot current revision into history
     let history = [];
@@ -620,7 +659,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           project_id: activeProject?.id,
           project_name: activeProject?.name,
           discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
-          revision_number: 0,
+          revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
           stage: "Not Started",
           issue_date: revMeta.issueDate,
           issued_by: revMeta.issuedBy,
@@ -633,7 +672,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       } else {
         if (existing) {
           await base44.entities.Drawing.update(existing.id, {
-            revision_number: (existing.revision_number || 0),
+            revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
             issue_date: revMeta.issueDate,
             issued_by: revMeta.issuedBy || existing.issued_by,
             file_url: newFileUrl,
@@ -645,11 +684,16 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setProcessingPct(30 + Math.round((updated + added + removed) / matchedSheets.length * 60));
     }
 
-    setApplyStats({ updated, added, removed });
-    setProcessingPct(100);
-    await new Promise(r => setTimeout(r, 500));
-    setStep("success");
-    if (onComplete) onComplete();
+      setApplyStats({ updated, added, removed });
+      setProcessingPct(100);
+      await new Promise(r => setTimeout(r, 500));
+      setStep("success");
+      if (onComplete) onComplete();
+    } catch (error) {
+      console.error("Revision apply failed:", error);
+      setFlowError(error?.message || "Failed to apply revision changes.");
+      setStep("comparison");
+    }
   };
 
   const reset = () => {
@@ -657,6 +701,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     setSelectedSet(preSelectedSet || null);
     setRevMeta({ revisionLabel: "", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "", disposition: "superseded" });
     setPdfFile(null); setMatchedSheets([]);
+    setFlowError("");
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -684,6 +729,20 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         </DialogHeader>
 
         <div style={{ paddingTop: 8 }}>
+          {flowError && step !== "processing" && (
+            <div style={{
+              marginBottom: 12,
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid var(--danger-border)",
+              background: "var(--danger-muted)",
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              color: "var(--danger)"
+            }}>
+              {flowError}
+            </div>
+          )}
           {step === "selectSet" && (
             <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.current_issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
           )}

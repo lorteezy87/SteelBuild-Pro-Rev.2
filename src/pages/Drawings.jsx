@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import BulkActionBar from "../components/drawings/BulkActionBar";
 import DrawingFormModal from "../components/drawings/DrawingFormModal";
+import DrawingSetUploadModal from "../components/drawings/DrawingSetUploadModal";
 import RevisionHistoryPanel from "../components/drawings/RevisionHistoryPanel";
 import RevisionUploadModal from "../components/drawings/RevisionUploadModal";
 import SetApprovalModal from "../components/drawings/SetApprovalModal";
@@ -109,9 +110,11 @@ export default function Drawings() {
   const [collapsedSets, setCollapsedSets] = useState(new Set());
 
   const [formOpen, setFormOpen] = useState(false);
+  const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [editingDrawing, setEditingDrawing] = useState(null);
   const [historyDrawing, setHistoryDrawing] = useState(null);
-  const [newRevOpen, setNewRevOpen] = useState(null);
+  const [revisionUploadOpen, setRevisionUploadOpen] = useState(false);
+  const [revisionPreselectedSet, setRevisionPreselectedSet] = useState(null);
   const [approvalOpen, setApprovalOpen] = useState(null);
 
   // Fetch drawings
@@ -158,6 +161,24 @@ export default function Drawings() {
   }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded]);
 
   const sortedSetKeys = Object.keys(groupedBySet).sort();
+  const drawingSets = useMemo(() => {
+    return sortedSetKeys.map((setName) => {
+      const sheets = groupedBySet[setName] || [];
+      const lead = sheets[0] || {};
+      return {
+        id: lead.drawing_set_id || null,
+        set_name: setName,
+        current_revision: lead.set_approval_revision || String(lead.revision_number || "0"),
+        current_issue_date: lead.issue_date || null,
+        current_issued_by: lead.issued_by || "",
+        current_file_url: lead.file_url || null,
+        sheet_count: sheets.filter((sheet) => !sheet.is_superseded).length,
+        revision_history: lead.revision_history || "[]",
+        discipline: lead.discipline || "Structural",
+        notes: lead.notes || "",
+      };
+    });
+  }, [groupedBySet, sortedSetKeys]);
 
   const stages = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const disciplines = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
@@ -324,7 +345,7 @@ export default function Drawings() {
           </button>
 
           <button
-            onClick={() => {}}
+            onClick={() => setUploadSetOpen(true)}
             style={{
               background: "linear-gradient(135deg, var(--accent), var(--status-warning))",
               border: "none",
@@ -772,7 +793,22 @@ export default function Drawings() {
                     </button>
 
                     <button
-                      onClick={() => setNewRevOpen(sheets[0]?.id)}
+                      onClick={() => {
+                        const lead = sheets[0];
+                        setRevisionPreselectedSet({
+                          id: lead?.drawing_set_id || null,
+                          set_name: setName,
+                          current_revision: lead?.set_approval_revision || String(lead?.revision_number || "0"),
+                          current_issue_date: lead?.issue_date || null,
+                          current_issued_by: lead?.issued_by || "",
+                          current_file_url: lead?.file_url || null,
+                          sheet_count: sheets.filter((sheet) => !sheet.is_superseded).length,
+                          revision_history: lead?.revision_history || "[]",
+                          discipline: lead?.discipline || "Structural",
+                          notes: lead?.notes || "",
+                        });
+                        setRevisionUploadOpen(true);
+                      }}
                       style={{
                         ...headerBtn,
                         background: "rgba(0,229,255,0.06)",
@@ -1063,6 +1099,23 @@ export default function Drawings() {
         />
       )}
 
+      {uploadSetOpen && (
+        <DrawingSetUploadModal
+          open={uploadSetOpen}
+          onClose={() => setUploadSetOpen(false)}
+          onComplete={() => {
+            qc.invalidateQueries({ queryKey: ["drawings"] });
+            setUploadSetOpen(false);
+          }}
+          activeProject={activeProject}
+          onNewRevision={() => {
+            setUploadSetOpen(false);
+            setRevisionPreselectedSet(null);
+            setRevisionUploadOpen(true);
+          }}
+        />
+      )}
+
       {historyDrawing && (
         <RevisionHistoryPanel
           drawing={historyDrawing}
@@ -1070,14 +1123,21 @@ export default function Drawings() {
         />
       )}
 
-      {newRevOpen && (
+      {revisionUploadOpen && (
         <RevisionUploadModal
-          drawingSetId={newRevOpen}
-          onClose={() => setNewRevOpen(null)}
-          onSuccess={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
-            setNewRevOpen(null);
+          open={revisionUploadOpen}
+          onClose={() => {
+            setRevisionUploadOpen(false);
+            setRevisionPreselectedSet(null);
           }}
+          onComplete={() => {
+            qc.invalidateQueries({ queryKey: ["drawings"] });
+            setRevisionUploadOpen(false);
+            setRevisionPreselectedSet(null);
+          }}
+          activeProject={activeProject}
+          preSelectedSet={revisionPreselectedSet}
+          drawingSets={drawingSets}
         />
       )}
 

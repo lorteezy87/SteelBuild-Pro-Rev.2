@@ -6,15 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Upload, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const MAX_PDF_SIZE_MB = 32;
+
+function isPdfFile(file) {
+  if (!file) return false;
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return mime === "application/pdf" || mime.includes("pdf") || name.endsWith(".pdf");
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function normalizeRevisionNumber(value, fallback = "0") {
+  if (value == null || value === "") return fallback;
+  return String(value).trim() || fallback;
 }
 
 // ─── Native Claude PDF extraction via Base44 proxy ───────────────────
@@ -149,7 +161,7 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
   const fileInputRef = useRef();
 
   const addFiles = (newFiles) => {
-    const pdfs = Array.from(newFiles).filter(f => f.type === "application/pdf" || f.name.endsWith(".pdf"));
+    const pdfs = Array.from(newFiles).filter(isPdfFile);
     setFiles(prev => {
       const existingNames = new Set(prev.map(f => f.name));
       return [...prev, ...pdfs.filter(f => !existingNames.has(f.name))];
@@ -639,7 +651,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         project_id:       activeProject?.id,
         project_name:     activeProject?.name,
         discipline:       sheet.discipline || meta.discipline,
-        revision_number:  parseInt(sheet.revision ?? meta.revision) || 0,
+        revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
         stage:            "Not Started",
         issue_date:       sheet.date || meta.issueDate,
         issued_by:        meta.issuedBy,

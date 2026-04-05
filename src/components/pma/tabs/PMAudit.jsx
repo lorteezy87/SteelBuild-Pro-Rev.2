@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { usePMA } from '../usePMAContext';
 import { useProjectContext } from '../../shared/useProjectContext';
 import { flagLegalHold, exportAuditLogCSV, reproduceOutput } from '../auditUtils';
 import { toast } from 'sonner';

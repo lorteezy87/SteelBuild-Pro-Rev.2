@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { X, AlertTriangle, CheckCircle2, Clock, Pause } from "lucide-react";
+import { X, AlertTriangle, Pause } from "lucide-react";
 
 const PHASE_COLOR = {
   Detailing: "#8B5CF6",

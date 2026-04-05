@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, Zap, Share2, Download } from "lucide-react";
+import { Zap, Share2, Download } from "lucide-react";
 
 export default function ViewerToolbar({
   document,

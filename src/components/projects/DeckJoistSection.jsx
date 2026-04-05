@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import {
-  DARK_RED,
-  getStatusBadgeStyle,
-  getItemStyle,
-  isPending,
-} from '../shared/deckJoistStyles';
+
+
 
 export default function DeckJoistSection({ project, onUpdate }) {
   const [deliveries, setDeliveries] = useState([]);
