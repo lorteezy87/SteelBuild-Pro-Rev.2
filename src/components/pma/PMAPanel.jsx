@@ -7,7 +7,7 @@ import PMATasks from './tabs/PMATasks';
 import PMAMemory from './tabs/PMAMemory';
 import PMAudit from './tabs/PMAudit';
 import RiskRegister from './tabs/RiskRegister';
-import PMADraft from './tabs/PMAdraft';
+import PMADraft from './tabs/PMADraft';
 import WeeklyDelta from './tabs/WeeklyDelta';
 import DriftRadar from './tabs/DriftRadar';
 
