@@ -1084,8 +1084,8 @@ export default function Layout({ children, currentPageName }) {
         {/* TOP NAV */}
         <nav className="nav-glass" style={{
               height: 52,
-              background: "rgba(12,14,17,0.85)",
-              borderBottom: "1px solid rgba(51,53,56,0.60)",
+              background: "rgba(5,5,5,0.88)",
+              borderBottom: "1px solid rgba(0,229,255,0.18)",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
