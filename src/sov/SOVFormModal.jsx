@@ -82,7 +82,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
             <Label>SOV ID</Label>
-            <Input value={form.sov_id || nextId || ""} disabled className="bg-slate-50" />
+            <Input value={form.sov_id || nextId || ""} disabled style={{background:"var(--bg-surface-low)"}} />
           </div>
           <div>
             <Label>Project *</Label>
@@ -145,19 +145,19 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
               <p className="text-sm font-semibold">{formatCurrency(thisPeriod)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">To Date</p>
+              <p style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-muted)"}}>To Date</p>
               <p className="text-sm font-semibold">{formatCurrency(toDate)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Balance to Finish</p>
+              <p style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-muted)"}}>Balance to Finish</p>
               <p className="text-sm font-semibold">{formatCurrency(balance)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Retainage</p>
+              <p style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-muted)"}}>Retainage</p>
               <p className="text-sm font-semibold">{formatCurrency(retAmt)}</p>
             </div>
             <div className="sm:col-span-4">
-              <p className="text-xs text-slate-500">Net to Date</p>
+              <p style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text-muted)"}}>Net to Date</p>
               <p className="text-sm font-bold text-blue-700">{formatCurrency(netToDate)}</p>
             </div>
           </div>

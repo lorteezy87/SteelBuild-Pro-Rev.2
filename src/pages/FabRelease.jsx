@@ -666,7 +666,7 @@ export default function FabRelease() {
             style={{
               background: "var(--accent)",
               border: "1px solid var(--accent)",
-              color: "#0b1021",
+              color: "var(--accent-text)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,
@@ -694,7 +694,7 @@ export default function FabRelease() {
                   padding: "6px 12px",
                   border: "none",
                   background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "#0b1021" : "var(--text-secondary)",
+                  color: view === v.id ? "var(--accent-text)" : "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
                   fontWeight: 700,
@@ -755,7 +755,7 @@ export default function FabRelease() {
               }}
               style={{
                 background: stageFilter === "all" ? "var(--accent)" : "var(--bg-surface-low)",
-                color: stageFilter === "all" ? "#0b1021" : "var(--text-secondary)",
+                color: stageFilter === "all" ? "var(--accent-text)" : "var(--text-secondary)",
                 border: "none",
                 borderRadius: "var(--radius-btn)",
                 padding: "5px 12px",
@@ -777,7 +777,7 @@ export default function FabRelease() {
                 }}
                 style={{
                   background: stageFilter === s.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: stageFilter === s.id ? "#0b1021" : "var(--text-secondary)",
+                  color: stageFilter === s.id ? "var(--accent-text)" : "var(--text-secondary)",
                   border: "none",
                   borderRadius: "var(--radius-btn)",
                   padding: "5px 12px",

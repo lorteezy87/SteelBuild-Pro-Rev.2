@@ -319,7 +319,6 @@ export function PMAProvider({ children }) {
   }, []);
 
   const generateInsights = useCallback(async () => {
-    console.log('PMA generateInsights called, activeProject:', activeProject?.name || 'NONE');
     if (!activeProject?.id) {
       setInsights(null);
       setIsLoadingInsights(false);

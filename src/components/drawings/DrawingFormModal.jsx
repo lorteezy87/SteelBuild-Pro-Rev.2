@@ -81,7 +81,7 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
           <div>
             <Label>Drawing ID</Label>
-            <Input value={form.drawing_id || nextId || ""} disabled className="bg-slate-50" />
+            <Input value={form.drawing_id || nextId || ""} disabled style={{background:"var(--bg-surface-low)"}} />
           </div>
           <div>
             <Label>Sheet Number *</Label>

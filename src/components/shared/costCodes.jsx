@@ -22,7 +22,7 @@ export const CATEGORY_COLORS = {
   Labor:         'var(--status-warning)',
   Materials:     'var(--status-info)',
   Subcontractor: '#8B5CF6',
-  Equipment:     '#FFB400',
+  Equipment:     'var(--nc-accent-orange)',
   'Misc.':       'var(--text-muted)',
   Overhead:      'var(--status-success)',
 };
