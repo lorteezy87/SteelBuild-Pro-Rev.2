@@ -82,6 +82,10 @@ export const AuthProvider = ({ children }) => {
         } else {
           setIsLoadingAuth(false);
           setIsAuthenticated(false);
+          // No token means no session — treat as auth_required so the app
+          // shows the login form (local) or redirects to the auth server (prod)
+          // instead of rendering the full app unauthenticated.
+          setAuthError({ type: 'auth_required', message: 'Authentication required' });
         }
         setIsLoadingPublicSettings(false);
       } catch (appError) {
@@ -137,18 +141,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = (shouldRedirect = true) => {
+  const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
     clearLoginAttempt();
-    
-    if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      base44.auth.logout(window.location.href);
-    } else {
-      // Just remove the token without redirect
-      base44.auth.logout();
-    }
+    // Do not pass the current URL — that would redirect back to the app after logout,
+    // landing the user in an unauthenticated-but-rendered state.
+    base44.auth.logout();
   };
 
   const navigateToLogin = () => {
