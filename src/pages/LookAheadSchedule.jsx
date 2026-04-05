@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Pencil, Trash2, Plus } from "lucide-react";
 import StatusBadge from "../components/shared/StatusBadge";
 import ProgressBar from "../components/shared/ProgressBar";
-import PageHeader from "../components/shared/PageHeader";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";

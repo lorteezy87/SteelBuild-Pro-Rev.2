@@ -43,6 +43,7 @@ export const btnDanger = {
 };
 
 // ── Input style constant ─────────────────────────────────────────────
+/** @type {import('react').CSSProperties} */
 export const inputStyle = {
   width: "100%",
   background: "var(--bg-input)",
@@ -56,6 +57,7 @@ export const inputStyle = {
   boxSizing: "border-box",
 };
 
+/** @type {import('react').CSSProperties} */
 export const inputDisabledStyle = {
   ...inputStyle,
   background: "var(--hover-bg)",
@@ -156,7 +158,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
 }
 
 // ── Form field helpers ───────────────────────────────────────────────
-export function FormField({ label, error, children, span2 = false }) {
+export function FormField({ label, error = undefined, children, span2 = false }) {
   return (
     <div style={span2 ? { gridColumn: "span 2" } : {}}>
       <label style={labelStyle}>{label}</label>

@@ -5,7 +5,6 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
-import StatusBadge from "../components/shared/StatusBadge";
 
 const FAB_STAGES = [
   { id: "drawings_approved", label: "Drawings Approved", short: "DWG APRVD", color: "var(--accent)" },

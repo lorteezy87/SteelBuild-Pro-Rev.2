@@ -3,11 +3,9 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
-import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusBadge from "../components/shared/StatusBadge";
 import { formatDate } from "../components/shared/formatters";
-import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Calendar, Filter } from "lucide-react";
 import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
 
 const PHASE_COLORS = {

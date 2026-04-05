@@ -90,15 +90,6 @@ export default function PMATasks() {
 
   const escalationCount = countEscalations(actionItems, risks);
 
-  if ((tasks.length === 0 && actionItems.length === 0) || isLoading) {
-    return (
-      <div style={{ textAlign: "center", padding: "20px 0", color: "rgba(160,175,210,0.4)" }}>
-        <div style={{ fontSize: 12, marginBottom: 8 }}>{isLoading ? "Loading action items..." : "No tasks yet"}</div>
-        <div style={{ fontSize: 10 }}>{isLoading ? "Please wait" : 'Create tasks by typing "assign X to Y"'}</div>
-      </div>
-    );
-  }
-
   const groupedByAssignee = useMemo(() => {
     return openActionItems.reduce((acc, a) => {
       const key = a.assigned_to || "Unassigned";
@@ -107,6 +98,15 @@ export default function PMATasks() {
       return acc;
     }, {});
   }, [openActionItems]);
+
+  if ((tasks.length === 0 && actionItems.length === 0) || isLoading) {
+    return (
+      <div style={{ textAlign: "center", padding: "20px 0", color: "rgba(160,175,210,0.4)" }}>
+        <div style={{ fontSize: 12, marginBottom: 8 }}>{isLoading ? "Loading action items..." : "No tasks yet"}</div>
+        <div style={{ fontSize: 10 }}>{isLoading ? "Please wait" : 'Create tasks by typing "assign X to Y"'}</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

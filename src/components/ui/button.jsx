@@ -10,15 +10,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] dark:shadow-md",
+          "bg-[var(--accent)] text-[var(--on-accent)] shadow-[0_0_20px_rgba(255,107,0,0.18)] hover:bg-[var(--accent-hover)]",
         destructive:
-          "bg-[var(--status-error)] text-white shadow-sm hover:opacity-90 dark:shadow-md",
+          "bg-[var(--status-error)] text-white shadow-sm hover:opacity-90",
         outline:
-          "border border-[var(--border)] bg-[var(--bg-surface)] shadow-sm hover:bg-[var(--hover-bg)] hover:border-[var(--accent)]",
+          "border border-[var(--secondary-border)] bg-transparent text-[var(--secondary)] hover:bg-[var(--secondary-muted)]",
         secondary:
-          "bg-[var(--bg-surface-secondary)] text-[var(--text-primary)] shadow-sm hover:bg-[var(--hover-bg)]",
-        ghost: "hover:bg-[var(--hover-bg)] text-[var(--text-primary)]",
-        link: "text-[var(--accent)] underline-offset-4 hover:underline",
+          "bg-[var(--bg-surface-secondary)] text-[var(--text-primary)] border border-[var(--border)] shadow-sm hover:bg-[var(--hover-bg)]",
+        ghost: "hover:bg-[var(--secondary-muted)] text-[var(--secondary)]",
+        link: "text-[var(--secondary)] underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2",

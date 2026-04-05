@@ -56,7 +56,7 @@ const healthColors = [
 export default function ExecutiveView() {
   const navigate = useNavigate();
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: rfis = [] } = useQuery({ queryKey: ["rfis-global"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
+  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
   const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
   const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
   const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => base44.entities.WorkPackage.list(), initialData: [] });

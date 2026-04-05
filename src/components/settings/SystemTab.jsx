@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
 const labelStyle = {
