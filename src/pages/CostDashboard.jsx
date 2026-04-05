@@ -80,7 +80,7 @@ export default function CostDashboard() {
   const [deleteCodeTarget, setDeleteCodeTarget] = useState(null);
 
   const createCodeMut = useMutation({
-    mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: activeProject?.id }),
+    mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
   });
   const updateCodeMut = useMutation({
