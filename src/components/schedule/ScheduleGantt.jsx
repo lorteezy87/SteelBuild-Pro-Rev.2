@@ -35,45 +35,44 @@ function TaskBar({ task, leftPx, widthPx, todayStr }) {
     borderRadius: 0,
   };
 
-  /* COMPLETE — solid cyan */
+  /* COMPLETE — solid amber */
   if (task.status === "Complete") {
     return (
-      <div style={{ ...base, width: Math.max(widthPx, 48), background: "#00E5FF", boxShadow: "0 0 10px rgba(0,229,255,0.35)" }}>
-        <span style={labelStyle("#050505")}>COMPLETE</span>
+      <div style={{ ...base, width: Math.max(widthPx, 48), background: "var(--accent)" }}>
+        <span style={labelStyle("var(--on-accent)")}>COMPLETE</span>
       </div>
     );
   }
 
-  /* ACTIVE / HOT — orange bar + orange dot */
+  /* ACTIVE / HOT — filled amber bar + dot */
   if (isHotTask(task, todayStr)) {
     return (
       <div style={{ ...base, display: "flex", alignItems: "center" }}>
         <div style={{
           width: Math.max(widthPx, 90), height: 22,
-          background: "#FF6B00",
-          boxShadow: "0 0 14px rgba(255,107,0,0.45)",
+          background: "var(--accent)",
           display: "flex", alignItems: "center",
         }}>
-          <span style={labelStyle("#000")}>ACTIVE TASK</span>
+          <span style={labelStyle("var(--on-accent)")}>ACTIVE TASK</span>
         </div>
-        <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FF6B00", marginLeft: 3, flexShrink: 0, boxShadow: "0 0 8px rgba(255,107,0,0.7)" }} />
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", marginLeft: 3, flexShrink: 0 }} />
       </div>
     );
   }
 
-  /* IN PROGRESS — cyan fill + dark teal outline for remainder */
+  /* IN PROGRESS — amber partial fill + dark outline for remainder */
   if (task.status === "In Progress") {
     const fillW = Math.round(Math.max(widthPx, 60) * pct / 100);
     const remW  = Math.max(widthPx, 60) - fillW;
     return (
-      <div style={{ ...base, width: Math.max(widthPx, 60), display: "flex", border: "1px solid rgba(0,229,255,0.35)", overflow: "hidden", background: "rgba(0,229,255,0.06)" }}>
+      <div style={{ ...base, width: Math.max(widthPx, 60), display: "flex", border: "1px solid rgba(232,101,10,0.35)", overflow: "hidden", background: "rgba(232,101,10,0.06)" }}>
         {/* filled portion */}
-        <div style={{ width: fillW, height: "100%", background: "#00E5FF", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0 }}>
-          {fillW > 50 && <span style={labelStyle("#050505")}>{pct}% COMPLETE</span>}
+        <div style={{ width: fillW, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0 }}>
+          {fillW > 50 && <span style={labelStyle("var(--on-accent)")}>{pct}% COMPLETE</span>}
         </div>
         {/* remaining */}
         <div style={{ width: remW, height: "100%", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0 }}>
-          {fillW <= 50 && <span style={{ ...labelStyle("rgba(0,229,255,0.9)"), paddingLeft: 6 }}>{pct}% COMPLETE</span>}
+          {fillW <= 50 && <span style={{ ...labelStyle("var(--accent)"), paddingLeft: 6 }}>{pct}% COMPLETE</span>}
         </div>
       </div>
     );
