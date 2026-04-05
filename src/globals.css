@@ -179,9 +179,11 @@
   --secondary-muted:    rgba(255, 107, 0, 0.10);
   --secondary-border:   rgba(255, 107, 0, 0.40);
 
-  --accent-orange:      #FF6B00;
-  --accent-orange-muted: rgba(255, 107, 0, 0.10);
-  --accent-orange-border: rgba(255, 107, 0, 0.30);
+  --accent-orange:          #FF6B00;
+  --accent-orange-light:    #FF8C38;
+  --accent-orange-hover:    #E55E00;
+  --accent-orange-muted:    rgba(255, 107, 0, 0.10);
+  --accent-orange-border:   rgba(255, 107, 0, 0.30);
 
   --tertiary:           #22C55E;
   --tertiary-muted:     rgba(34, 197, 94, 0.10);
@@ -247,9 +249,9 @@ h1, h2, h3, h4 {
 }
 
 .tech-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   text-transform: uppercase;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.1em;
   font-weight: 500;
 }
 
@@ -364,12 +366,13 @@ button { cursor: pointer; outline: none; }
 .hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
 .hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
 
-/* ── KPI cards ── */
+/* ── KPI cards — Iron Forge style ── */
 .kpi-card {
-  background: var(--nc-bg-secondary);
+  background: var(--bg-surface);
   border: 1px solid var(--nc-border-cyan);
   padding: 20px 24px;
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .kpi-label {
   font-family: var(--font-mono);
@@ -383,9 +386,10 @@ button { cursor: pointer; outline: none; }
 .kpi-value {
   font-family: var(--font-mono);
   font-size: 32px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
+  color: var(--accent);
+  letter-spacing: -0.01em;
 }
 .kpi-value.critical { color: var(--nc-accent-orange); }
 .kpi-value.accent   { color: var(--nc-accent-cyan); }
@@ -467,7 +471,7 @@ button { cursor: pointer; outline: none; }
   transition: background 0.1s;
   border-bottom: 1px solid var(--nc-border-default);
 }
-.sbp-table tbody tr:hover { background: var(--nc-bg-tertiary); }
+.sbp-table tbody tr:hover { background: var(--bg-row-hover); }
 .sbp-table tbody tr.row-pending,
 .sbp-table tbody tr.row-at-risk,
 .sbp-table tbody tr.row-overdue { background: rgba(255, 107, 0, 0.07); }
@@ -489,9 +493,11 @@ button { cursor: pointer; outline: none; }
 
 /* ── Panel / card containers ── */
 .sbp-panel {
-  background: var(--nc-bg-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .sbp-panel-header {
   padding: 14px 18px;
@@ -577,9 +583,9 @@ button { cursor: pointer; outline: none; }
 }
 .exec-count {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent);
   width: 40px;
   text-align: right;
   flex-shrink: 0;
@@ -589,26 +595,30 @@ button { cursor: pointer; outline: none; }
 .mono-num {
   font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-/* ── Buttons ── */
-/* Primary CTA — orange */
+/* ── Buttons — Iron Forge ── */
+/* Primary CTA — cyan */
 .btn-primary {
-  background: var(--nc-accent-orange);
-  color: #FFFFFF;
+  background: var(--accent);
+  color: #000000;
   border: none;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   padding: 8px 18px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.15s;
 }
-.btn-primary:hover { opacity: 0.88; }
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 16px rgba(0,229,255,0.35);
+}
 
 /* Cyan CTA */
 .btn-cyan {
