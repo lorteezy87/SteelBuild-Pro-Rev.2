@@ -372,7 +372,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
                   }}
                   onMouseEnter={(e) => {
                     if (!isAdminOnly) {
-                      e.currentTarget.style.background = "rgba(173,198,255,0.08)";
+                      e.currentTarget.style.background = "rgba(0,229,255,0.05)";
                       e.currentTarget.style.borderLeft = "2px solid var(--accent)";
                       e.currentTarget.style.borderRadius = "0";
                     }
@@ -445,8 +445,8 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
               }}
               onMouseEnter={(e) => {
                 if (!isAdminOnly) {
-                  e.currentTarget.style.background = "rgba(59,130,246,0.06)";
-                  e.currentTarget.style.borderLeft = "2px solid rgba(59,130,246,0.5)";
+                  e.currentTarget.style.background = "rgba(0,229,255,0.05)";
+                  e.currentTarget.style.borderLeft = "2px solid var(--accent)";
                 }
               }}
               onMouseLeave={(e) => {
@@ -1177,8 +1177,8 @@ export default function Layout({ children, currentPageName }) {
                     title: "Search (Cmd+K)"
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(59,130,246,0.10)";
-                    e.currentTarget.style.borderColor = "rgba(59,130,246,0.30)";
+                    e.currentTarget.style.background = "rgba(0,229,255,0.06)";
+                    e.currentTarget.style.borderColor = "var(--accent-border)";
                     e.currentTarget.style.color = "var(--accent)";
                   }}
                   onMouseLeave={(e) => {

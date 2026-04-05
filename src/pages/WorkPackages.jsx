@@ -37,7 +37,7 @@ const DRAWING_STAGES = [
 
 const STAGE_STYLES = {
   "Not Started": { bg: "rgba(144,144,149,0.12)", color: "var(--text-muted)" },
-  OFA: { bg: "rgba(123,208,255,0.12)", color: "var(--status-info)" },
+  OFA: { bg: "rgba(0,229,255,0.12)", color: "var(--status-info)" },
   BFA: { bg: "rgba(255,185,95,0.12)", color: "var(--status-warning)" },
   OFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
   BFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },

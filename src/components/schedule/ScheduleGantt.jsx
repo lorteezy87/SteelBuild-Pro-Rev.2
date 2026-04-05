@@ -71,7 +71,7 @@ function TaskBar({ task, leftPx, widthPx }) {
         border: "2px solid var(--accent)",
         borderRadius: 2,
         overflow: "hidden",
-        background: "rgba(59,130,246,0.08)",
+        background: "rgba(0,229,255,0.06)",
       }}>
         <div style={{
           width: `${Math.min(pct, 100)}%`,
@@ -414,7 +414,7 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
                   alignItems: "center",
                   justifyContent: "center",
                   padding: "4px 0",
-                  background: current ? "rgba(59,130,246,0.06)" : "transparent",
+                  background: current ? "rgba(0,229,255,0.06)" : "transparent",
                 }}>
                   <div style={{
                     fontSize: 9,
@@ -456,7 +456,7 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
                 width: 1,
                 background: "var(--accent)",
                 zIndex: 10,
-                boxShadow: "0 0 8px rgba(59,130,246,0.5)",
+                boxShadow: "0 0 8px rgba(0,229,255,0.06)",
               }}>
                 <div style={{
                   position: "absolute",

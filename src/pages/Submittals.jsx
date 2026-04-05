@@ -1244,7 +1244,7 @@ export default function Submittals() {
           <option value="all">All Disciplines</option>
           {disciplines.map((discipline) => <option key={discipline} value={discipline}>{discipline}</option>)}
         </select>
-        <button onClick={() => setSortByDue((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: sortByDue ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.04)", border: `1px solid ${sortByDue ? "rgba(59,130,246,0.40)" : "rgba(255,255,255,0.08)"}`, color: sortByDue ? "var(--accent)" : "rgba(200,210,230,0.40)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em", fontWeight: sortByDue ? 700 : 400 }}>
+        <button onClick={() => setSortByDue((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: sortByDue ? "rgba(0,229,255,0.06)" : "rgba(255,255,255,0.04)", border: `1px solid ${sortByDue ? "rgba(0,229,255,0.06)" : "rgba(255,255,255,0.08)"}`, color: sortByDue ? "var(--accent)" : "rgba(200,210,230,0.40)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em", fontWeight: sortByDue ? 700 : 400 }}>
           SORT BY DUE
         </button>
         <button onClick={() => setShowSuperseded((value) => !value)} style={{ padding: "0 10px", height: 28, borderRadius: 6, cursor: "pointer", background: showSuperseded ? "rgba(200,210,230,0.10)" : "rgba(255,255,255,0.04)", border: `1px solid ${showSuperseded ? "rgba(200,210,230,0.25)" : "rgba(255,255,255,0.08)"}`, color: showSuperseded ? "rgba(200,210,230,0.60)" : "rgba(200,210,230,0.35)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em" }}>

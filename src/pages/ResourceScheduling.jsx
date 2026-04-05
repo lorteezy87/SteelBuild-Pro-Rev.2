@@ -689,7 +689,7 @@ export default function ResourceScheduling() {
             <button key={v.id} onClick={() => setViewMode(v.id)} style={{
               padding: "4px 12px", borderRadius: 6,
               border: viewMode === v.id ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.12)",
-              background: viewMode === v.id ? "rgba(59,130,246,0.12)" : "transparent",
+              background: viewMode === v.id ? "rgba(0,229,255,0.06)" : "transparent",
               color: viewMode === v.id ? "var(--accent)" : "rgba(255,255,255,0.50)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.08em", cursor: "pointer", transition: "all 0.1s",

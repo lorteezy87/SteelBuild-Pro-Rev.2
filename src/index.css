@@ -4,26 +4,44 @@
 
 @layer base {
   :root {
-    --background: 222 47% 4%;
-    --foreground: 0 0% 90%;
-    --card: 222 40% 8%;
-    --card-foreground: 0 0% 90%;
-    --popover: 222 40% 8%;
-    --popover-foreground: 0 0% 90%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 222 30% 12%;
-    --secondary-foreground: 0 0% 80%;
-    --muted: 222 30% 12%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 222 15% 18%;
-    --input: 222 20% 14%;
-    --ring: 217 91% 60%;
-    --radius: 0.125rem;
+    /* NC dark — map Tailwind shadcn vars to Neon Command palette */
+    --background: 0 0% 5%;           /* #0D0D0D */
+    --foreground: 0 0% 100%;         /* #FFFFFF */
+    --card: 0 0% 8%;                 /* #141414 */
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 7%;              /* #111111 */
+    --popover-foreground: 0 0% 100%;
+    --primary: 186 100% 50%;         /* #00E5FF cyan */
+    --primary-foreground: 0 0% 5%;
+    --secondary: 24 100% 50%;        /* #FF6B00 orange */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;               /* #1A1A1A */
+    --muted-foreground: 220 9% 46%;  /* #6B7280 */
+    --accent: 186 100% 50%;          /* #00E5FF cyan */
+    --accent-foreground: 0 0% 5%;
+    --destructive: 0 84% 60%;        /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 0.06;      /* rgba(255,255,255,0.06) */
+    --input: 0 0% 10%;               /* #1A1A1A */
+    --ring: 186 100% 50%;            /* cyan */
+    --radius: 0.125rem;              /* 2px */
+
+    /* Chart palette — cyan/orange/green/red/muted */
+    --chart-1: 186 100% 50%;         /* #00E5FF */
+    --chart-2: 24 100% 50%;          /* #FF6B00 */
+    --chart-3: 142 71% 45%;          /* #22C55E */
+    --chart-4: 0 84% 60%;            /* #EF4444 */
+    --chart-5: 220 9% 46%;           /* #6B7280 */
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 186 100% 50%;
+    --sidebar-primary-foreground: 0 0% 5%;
+    --sidebar-accent: 186 100% 50% / 0.08;
+    --sidebar-accent-foreground: 186 100% 50%;
+    --sidebar-border: 0 0% 100% / 0.06;
+    --sidebar-ring: 186 100% 50%;
   }
 }
 
