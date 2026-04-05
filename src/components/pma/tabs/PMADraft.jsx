@@ -109,7 +109,7 @@ export default function PMADraft() {
             marginTop: 6,
             background: "var(--accent)",
             border: "1px solid var(--accent-border)",
-            color: "#002E6A",
+            color: "var(--accent-text)",
             borderRadius: 8,
             padding: "10px 16px",
             ...mono,

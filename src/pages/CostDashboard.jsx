@@ -1,6 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import KPIStrip from "../components/shared/KPIStrip";
@@ -72,6 +74,23 @@ function VarianceAlertCard({ code, description, phase, variance, pctOver, contin
 
 export default function CostDashboard() {
   const { activeProject } = useProjectContext();
+  const qc = useQueryClient();
+  const [codeModalOpen, setCodeModalOpen] = useState(false);
+  const [editingCode, setEditingCode] = useState(null);
+  const [deleteCodeTarget, setDeleteCodeTarget] = useState(null);
+
+  const createCodeMut = useMutation({
+    mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+  });
+  const updateCodeMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+  });
+  const deleteCodeMut = useMutation({
+    mutationFn: (id) => base44.entities.CostCode.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setDeleteCodeTarget(null); },
+  });
 
   const { data: codes = [], isLoading } = useQuery({
     queryKey: ["cost-codes-dash", activeProject?.id],
@@ -315,6 +334,7 @@ export default function CostDashboard() {
           <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>{codes.length} cost codes • {project?.name || ""}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <Button size="sm" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }} style={{ background: "var(--accent)", color: "var(--accent-text)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>+ Add Cost Code</Button>
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
         </div>
       </div>
@@ -412,7 +432,7 @@ export default function CostDashboard() {
             { label: "Code" }, { label: "Description" }, { label: "Category" },
             { label: "Budget", right: true }, { label: "Actual", right: true },
             { label: "Committed", right: true }, { label: "Forecast", right: true },
-            { label: "Variance", right: true }, { label: "% Used" },
+            { label: "Variance", right: true }, { label: "% Used" }, { label: "" },
           ]}
           loading={isLoading}
           empty="NO COST CODES"
@@ -445,6 +465,12 @@ export default function CostDashboard() {
                   </PTD>
                   <PTD style={{ minWidth: 100 }}>
                     <ProgressBar value={pctUsed} max={100} color={pctUsed > 100 ? "rose" : pctUsed > 80 ? "amber" : "green"} height="h-1.5" />
+                  </PTD>
+                  <PTD>
+                    <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></Button>
+                    </div>
                   </PTD>
                 </PTR>
               );
@@ -665,6 +691,27 @@ export default function CostDashboard() {
         </PhoenixPanel>
       )}
 
+      <CostCodeFormModal
+        open={codeModalOpen}
+        onClose={() => { setCodeModalOpen(false); setEditingCode(null); }}
+        costCode={editingCode}
+        projects={projects}
+        existingCodes={codes}
+        onSave={(data) => {
+          if (editingCode) {
+            updateCodeMut.mutate({ id: editingCode.id, data });
+          } else {
+            createCodeMut.mutate(data);
+          }
+        }}
+      />
+      <DeleteDialog
+        open={!!deleteCodeTarget}
+        onClose={() => setDeleteCodeTarget(null)}
+        onConfirm={() => deleteCodeMut.mutate(deleteCodeTarget.id)}
+        title="Delete cost code?"
+        description={`Remove ${deleteCodeTarget?.cost_code_number} — ${deleteCodeTarget?.description}?`}
+      />
     </div>
   );
 }

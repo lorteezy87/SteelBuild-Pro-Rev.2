@@ -95,7 +95,7 @@ function SectionTabs({ active, onChange }) {
           onClick={() => onChange(tab.key)}
           style={{
             background: active === tab.key ? "var(--accent)" : "var(--bg-surface-low)",
-            color: active === tab.key ? "#0A0A0B" : "var(--text-secondary)",
+            color: active === tab.key ? "var(--accent-text)" : "var(--text-secondary)",
             border: `1px solid ${active === tab.key ? "var(--accent-border)" : "var(--border-default)"}`,
             borderRadius: "var(--radius-btn)",
             padding: "7px 12px",

@@ -169,7 +169,7 @@ export default function LookAheadSchedule() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <div style={{background:"var(--bg-surface)",border:"1px solid var(--border-default)",borderRadius:2,overflowX:"auto"}}>
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">

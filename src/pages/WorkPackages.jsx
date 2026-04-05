@@ -37,7 +37,7 @@ const DRAWING_STAGES = [
 
 const STAGE_STYLES = {
   "Not Started": { bg: "rgba(144,144,149,0.12)", color: "var(--text-muted)" },
-  OFA: { bg: "rgba(123,208,255,0.12)", color: "var(--status-info)" },
+  OFA: { bg: "rgba(0,229,255,0.12)", color: "var(--status-info)" },
   BFA: { bg: "rgba(255,185,95,0.12)", color: "var(--status-warning)" },
   OFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
   BFS: { bg: "rgba(68,226,205,0.12)", color: "var(--secondary)" },
@@ -235,7 +235,7 @@ export default function WorkPackages() {
         border: "none",
         borderRadius: "var(--radius-btn)",
         background: active ? color : "var(--bg-surface-low)",
-        color: active ? "#0A0A0B" : "var(--text-secondary)",
+        color: active ? "var(--accent-text)" : "var(--text-secondary)",
         fontFamily: "var(--font-mono)",
         fontSize: 9,
         fontWeight: 700,
@@ -829,7 +829,7 @@ export default function WorkPackages() {
                   borderRadius: "var(--radius-btn)",
                   border: "none",
                   background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "#0A0A0B" : "var(--text-secondary)",
+                  color: view === v.id ? "var(--accent-text)" : "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
                   fontWeight: 700,
@@ -846,7 +846,7 @@ export default function WorkPackages() {
             onClick={handleWPCreate}
             style={{
               background: "var(--accent)",
-              color: "#0A0A0B",
+              color: "var(--accent-text)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "8px 16px",

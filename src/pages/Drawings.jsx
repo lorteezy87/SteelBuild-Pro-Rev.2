@@ -358,7 +358,7 @@ export default function Drawings() {
               cursor: "pointer",
               letterSpacing: "0.01em",
               whiteSpace: "nowrap",
-              boxShadow: "0 2px 12px rgba(59,130,246,0.25)",
+              boxShadow: "0 2px 12px rgba(0,229,255,0.06)",
             }}
           >
             ↑ Upload Set
@@ -469,10 +469,10 @@ export default function Drawings() {
           onClick={() => setHideSuperseeded(!hideSuperseeded)}
           style={{
             background: hideSuperseeded
-              ? "rgba(59,130,246,0.15)"
+              ? "rgba(0,229,255,0.06)"
               : "rgba(255,255,255,0.04)",
             border: hideSuperseeded
-              ? "1px solid rgba(59,130,246,0.30)"
+              ? "1px solid rgba(0,229,255,0.06)"
               : "1px solid rgba(255,255,255,0.07)",
             borderRadius: 7,
             padding: "0 12px",
@@ -512,7 +512,7 @@ export default function Drawings() {
                 padding: "0 12px",
                 height: 30,
                 background:
-                  view === val ? "rgba(59,130,246,0.15)" : "transparent",
+                  view === val ? "rgba(0,229,255,0.06)" : "transparent",
                 border: "none",
                 borderRight: "1px solid rgba(255,255,255,0.06)",
                 color: view === val ? "var(--accent)" : "rgba(160,175,210,0.35)",
@@ -615,7 +615,7 @@ export default function Drawings() {
                   style={{
                     height: 1,
                     background:
-                      "linear-gradient(90deg, rgba(59,130,246,0.35) 0%, rgba(59,130,246,0.08) 60%, transparent 100%)",
+                      "linear-gradient(90deg, rgba(0,229,255,0.06) 0%, rgba(0,229,255,0.06) 60%, transparent 100%)",
                     marginBottom: 0,
                   }}
                 />
@@ -630,9 +630,9 @@ export default function Drawings() {
                     padding: "0 20px",
                     height: 40,
                     background: "var(--accent-glow)",
-                    borderBottom: "1px solid rgba(59,130,246,0.12)",
+                    borderBottom: "1px solid rgba(0,229,255,0.06)",
                     borderLeft: "3px solid var(--accent)",
-                    borderRight: "1px solid rgba(59,130,246,0.08)",
+                    borderRight: "1px solid rgba(0,229,255,0.06)",
                     borderRadius: "0 8px 0 0",
                     cursor: "pointer",
                     userSelect: "none",
@@ -693,10 +693,10 @@ export default function Drawings() {
                       style={{
                         fontFamily: "var(--font-mono)",
                         fontSize: 8,
-                        color: "rgba(59,130,246,0.70)",
+                        color: "rgba(0,229,255,0.06)",
                         letterSpacing: "0.12em",
-                        background: "rgba(59,130,246,0.10)",
-                        border: "1px solid rgba(59,130,246,0.18)",
+                        background: "rgba(0,229,255,0.06)",
+                        border: "1px solid rgba(0,229,255,0.06)",
                         padding: "2px 8px",
                         borderRadius: 4,
                         flexShrink: 0,
@@ -811,8 +811,8 @@ export default function Drawings() {
                       }}
                       style={{
                         ...headerBtn,
-                        background: "rgba(59,130,246,0.10)",
-                        borderColor: "rgba(59,130,246,0.22)",
+                        background: "rgba(0,229,255,0.06)",
+                        borderColor: "rgba(0,229,255,0.06)",
                         color: "var(--status-warning)",
                       }}
                     >
@@ -824,8 +824,8 @@ export default function Drawings() {
                         onClick={() => setApprovalOpen(setName)}
                         style={{
                           ...headerBtn,
-                          background: "rgba(59,130,246,0.14)",
-                          borderColor: "rgba(59,130,246,0.30)",
+                          background: "rgba(0,229,255,0.06)",
+                          borderColor: "rgba(0,229,255,0.06)",
                           color: "var(--accent)",
                           fontWeight: 600,
                         }}
@@ -860,9 +860,9 @@ export default function Drawings() {
                         alignItems: "center",
                         height: 32,
                         padding: "0 20px",
-                        borderBottom: idx === sheets.length - 1 ? "1px solid rgba(59,130,246,0.10)" : "1px solid rgba(255,255,255,0.038)",
+                        borderBottom: idx === sheets.length - 1 ? "1px solid rgba(0,229,255,0.06)" : "1px solid rgba(255,255,255,0.038)",
                         background: selectedIds.has(drawing.id)
-                          ? "rgba(59,130,246,0.05)"
+                          ? "rgba(0,229,255,0.06)"
                           : "transparent",
                         transition: "background 0.1s",
                       }}
@@ -876,7 +876,7 @@ export default function Drawings() {
                         e.currentTarget.style.background = selectedIds.has(
                           drawing.id
                         )
-                          ? "rgba(59,130,246,0.05)"
+                          ? "rgba(0,229,255,0.06)"
                           : "transparent";
                       }}
                     >

@@ -9,7 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 
 const STATUS_COLORS = {
   Scheduled: { bg: "rgba(234,179,8,0.18)", text: "var(--status-warning)", border: "var(--status-warning)" },
-  "In Transit": { bg: "rgba(59,130,246,0.18)", text: "var(--status-info)", border: "var(--status-info)" },
+  "In Transit": { bg: "rgba(0,229,255,0.06)", text: "var(--status-info)", border: "var(--status-info)" },
   Delivered: { bg: "rgba(34,197,94,0.18)", text: "var(--status-success)", border: "var(--status-success)" },
   Partial: { bg: "rgba(251,146,60,0.20)", text: "var(--status-warning)", border: "var(--status-warning)" },
   Rejected: { bg: "rgba(239,68,68,0.20)", text: "var(--status-error)", border: "var(--status-error)" },
@@ -135,11 +135,8 @@ export default function Deliveries() {
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
-    queryFn: async () => {
-      if (projectId) return base44.entities.Delivery.filter({ project_id: projectId });
-      const all = await base44.entities.Delivery.list();
-      return all;
-    },
+    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    enabled: !!projectId,
     initialData: [],
     refetchInterval: 30000,
   });
@@ -659,7 +656,7 @@ export default function Deliveries() {
                   borderRadius: 8,
                   border: "1px solid var(--divider)",
                   background: detail.status === s ? "var(--accent)" : "var(--bg-surface)",
-                  color: detail.status === s ? "#0b1021" : "var(--text-primary)",
+                  color: detail.status === s ? "var(--accent-text)" : "var(--text-primary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
                   cursor: "pointer",
@@ -740,7 +737,7 @@ export default function Deliveries() {
                   padding: "8px 12px",
                   border: "none",
                   background: view === v ? "var(--accent)" : "transparent",
-                  color: view === v ? "#0b1021" : "var(--text-primary)",
+                  color: view === v ? "var(--accent-text)" : "var(--text-primary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
                   cursor: "pointer",
@@ -776,7 +773,7 @@ export default function Deliveries() {
               borderRadius: 8,
               border: "1px solid var(--accent)",
               background: "var(--accent)",
-              color: "#0b1021",
+              color: "var(--accent-text)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               fontWeight: 700,
@@ -942,7 +939,7 @@ export default function Deliveries() {
               borderRadius: 999,
               border: "1px solid var(--divider)",
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface)",
-              color: filterStatus === s ? "#0b1021" : "var(--text-primary)",
+              color: filterStatus === s ? "var(--accent-text)" : "var(--text-primary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer",
@@ -977,7 +974,7 @@ export default function Deliveries() {
               borderRadius: 8,
               border: "1px solid var(--divider)",
               background: overdueFirst ? "var(--accent)" : "var(--bg-surface)",
-              color: overdueFirst ? "#0b1021" : "var(--text-primary)",
+              color: overdueFirst ? "var(--accent-text)" : "var(--text-primary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer",
@@ -1173,7 +1170,7 @@ export default function Deliveries() {
               padding: "6px 10px",
               borderRadius: 6,
               border: "1px solid var(--status-info)",
-              background: "rgba(59,130,246,0.12)",
+              background: "rgba(0,229,255,0.06)",
               color: "var(--status-info)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,

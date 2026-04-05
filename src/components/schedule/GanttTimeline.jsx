@@ -144,7 +144,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
             top: 0,
             bottom: 0,
             width: pxPerDay,
-            background: 'rgba(59,130,246,0.03)',
+            background: 'rgba(0,229,255,0.06)',
             pointerEvents: 'none',
             zIndex: 1,
           }}

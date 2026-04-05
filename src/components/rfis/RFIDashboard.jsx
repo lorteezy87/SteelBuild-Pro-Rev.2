@@ -65,12 +65,12 @@ const MiniRow = ({ rfi, onClick }) => {
           : "3px solid var(--accent)",
         background: overdue
           ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)")
-          : "rgba(59,130,246,0.02)",
+          : "rgba(0,229,255,0.06)",
         cursor: "pointer",
         transition: "background 0.15s",
       }}
       onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
-      onMouseLeave={(e) => e.currentTarget.style.background = overdue ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)") : "rgba(59,130,246,0.02)"}
+      onMouseLeave={(e) => e.currentTarget.style.background = overdue ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)") : "rgba(0,229,255,0.06)"}
     >
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 600, minWidth: 70, flexShrink: 0 }}>{rfi.rfi_number || "—"}</div>
       <div style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rfi.title}</div>

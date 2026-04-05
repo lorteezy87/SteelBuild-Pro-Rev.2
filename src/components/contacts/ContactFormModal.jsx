@@ -267,7 +267,7 @@ export default function ContactFormModal({ projectId, contact = null, onClose, o
               disabled={createMut.isPending}
               style={{
                 background: "var(--accent)",
-                color: "#0A0A0B",
+                color: "var(--accent-text)",
                 border: "none",
                 borderRadius: "var(--radius-btn)",
                 padding: "8px 20px",

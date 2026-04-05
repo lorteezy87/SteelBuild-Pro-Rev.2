@@ -59,13 +59,13 @@ const PRIORITY_CONFIG = {
     color: "var(--status-warning)",
     bg: "var(--warning-muted)",
     border: "var(--warning-border)",
-    dot: "#FFB95F",
+    dot: "var(--tertiary)",
   },
   Medium: {
     color: "var(--accent)",
     bg: "var(--accent-muted)",
     border: "var(--accent-border)",
-    dot: "#7BD0FF",
+    dot: "var(--accent)",
   },
   Low: {
     color: "var(--text-muted)",
@@ -411,7 +411,7 @@ export default function Constraints() {
                 onClick={() => setView(v)}
                 style={{
                   background: view === v ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v ? "#0A0A0B" : "var(--text-secondary)",
+                  color: view === v ? "var(--accent-text)" : "var(--text-secondary)",
                   border: "none",
                   borderRadius: "var(--radius-btn)",
                   padding: "7px 12px",
@@ -705,7 +705,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
             onClick={() => setFilterStatus(s)}
             style={{
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterStatus === s ? "#0A0A0B" : "var(--text-secondary)",
+              color: filterStatus === s ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "5px 12px",
@@ -731,7 +731,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
             onClick={() => setFilterPriority(p)}
             style={{
               background: filterPriority === p ? PRIORITY_CONFIG[p]?.bg || "var(--accent)" : "var(--bg-surface-low)",
-              color: filterPriority === p ? PRIORITY_CONFIG[p]?.color || "#0A0A0B" : "var(--text-secondary)",
+              color: filterPriority === p ? PRIORITY_CONFIG[p]?.color || "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "5px 12px",
