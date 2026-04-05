@@ -235,7 +235,7 @@ export default function WorkPackages() {
         border: "none",
         borderRadius: "var(--radius-btn)",
         background: active ? color : "var(--bg-surface-low)",
-        color: active ? "#0A0A0B" : "var(--text-secondary)",
+        color: active ? "var(--accent-text)" : "var(--text-secondary)",
         fontFamily: "var(--font-mono)",
         fontSize: 9,
         fontWeight: 700,
@@ -829,7 +829,7 @@ export default function WorkPackages() {
                   borderRadius: "var(--radius-btn)",
                   border: "none",
                   background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "#0A0A0B" : "var(--text-secondary)",
+                  color: view === v.id ? "var(--accent-text)" : "var(--text-secondary)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
                   fontWeight: 700,
@@ -846,7 +846,7 @@ export default function WorkPackages() {
             onClick={handleWPCreate}
             style={{
               background: "var(--accent)",
-              color: "#0A0A0B",
+              color: "var(--accent-text)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "8px 16px",
