@@ -135,11 +135,8 @@ export default function Deliveries() {
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries", projectId],
-    queryFn: async () => {
-      if (projectId) return base44.entities.Delivery.filter({ project_id: projectId });
-      const all = await base44.entities.Delivery.list();
-      return all;
-    },
+    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    enabled: !!projectId,
     initialData: [],
     refetchInterval: 30000,
   });
