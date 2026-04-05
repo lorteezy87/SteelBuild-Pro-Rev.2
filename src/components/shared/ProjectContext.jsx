@@ -26,7 +26,8 @@ export function ProjectProvider({ children }) {
   const [activeProject, setActiveProject] = useState(() => {
     const cached = readProjectsCache();
     const savedId = localStorage.getItem("activeProjectId");
-    return cached.find((p) => p.id === savedId) || cached[0] || null;
+    // Only restore if user explicitly saved a project — never auto-select first
+    return savedId ? (cached.find((p) => p.id === savedId) || null) : null;
   });
   const [loading, setLoading] = useState(true);
   const [projectLoadError, setProjectLoadError] = useState(null);
@@ -58,15 +59,19 @@ export function ProjectProvider({ children }) {
           try { localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(data)); } catch {}
         }
 
-        // Try to restore last selected project
+        // Only restore the project the user explicitly had selected — never auto-pick
         const savedId = localStorage.getItem("activeProjectId");
-        const list = data.length > 0 ? data : readProjectsCache();
-        const saved = list.find((p) => p.id === savedId);
-        const defaultProject = saved || list.find((p) => p.health_status) || list[0] || null;
-
-        if (defaultProject) {
-          setActiveProject(defaultProject);
-          localStorage.setItem("activeProjectId", defaultProject.id);
+        if (savedId) {
+          const list = data.length > 0 ? data : readProjectsCache();
+          const saved = list.find((p) => p.id === savedId);
+          if (saved) {
+            setActiveProject(saved);
+          }
+          // If savedId no longer exists in the list, clear it so portfolio shows
+          else {
+            localStorage.removeItem("activeProjectId");
+            setActiveProject(null);
+          }
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
