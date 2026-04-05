@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,49 +6,56 @@
 
 :root,
 [data-theme="dark"] {
-  /* ── Surfaces — Deep Obsidian / Iron Forge ── */
-  --bg-void:                #090A0B;
-  --bg-page:                #0C0E11;
-  --bg-surface:             #111316;
-  --bg-surface-low:         #111316;
-  --bg-surface-mid:         #1A1C1F;
-  --bg-surface-high:        #1F2125;
-  --bg-surface-highest:     #282A2D;
-  --bg-input:               #0C0E11;
-  --bg-sidebar:             #0C0E11;
+  /* ── Surfaces — Neon Command / Deep Void ── */
+  --bg-void:                #030304;
+  --bg-page:                #050505;
+  --bg-surface:             #0E0E0E;
+  --bg-surface-low:         #111111;
+  --bg-surface-mid:         #1C1B1B;
+  --bg-surface-high:        #222222;
+  --bg-surface-highest:     #2A2A2A;
+  --bg-input:               #080808;
+  --bg-sidebar:             #050505;
 
   /* Legacy aliases */
-  --bg-base:                #090A0B;
-  --bg-card:                #111316;
-  --bg-elevated:            #1A1C1F;
-  --bg-surface-secondary:   #1A1C1F;
+  --bg-base:                #030304;
+  --bg-card:                #0E0E0E;
+  --bg-elevated:            #1C1B1B;
+  --bg-surface-secondary:   #1C1B1B;
 
   /* ── Text ── */
-  --text-primary:           #F0F1F3;
-  --text-secondary:         #B8BFCC;
+  --text-primary:           #E5E2E1;
+  --text-secondary:         #BAC9CC;
   --text-muted:             #6B7280;
-  --text-disabled:          rgba(184,191,204,0.30);
+  --text-disabled:          rgba(186,201,204,0.30);
 
-  /* ── Borders ── */
-  --border-default:         rgba(51,53,56,0.70);
-  --border-strong:          #333538;
-  --border:                 rgba(51,53,56,0.70);
-  --divider:                rgba(40,42,45,0.80);
+  /* ── Borders — Blue-tinted (Neon Command style) ── */
+  --border-default:         rgba(30,64,175,0.22);
+  --border-strong:          rgba(0,229,255,0.20);
+  --border:                 rgba(30,64,175,0.22);
+  --divider:                rgba(30,64,175,0.15);
   --outline:                #6B7280;
 
-  /* ── PRIMARY ACCENT — Safety Orange ── */
-  --accent:                 #FF6B00;
-  --accent-light:           #FF8C38;
-  --accent-hover:           #E55E00;
-  --accent-muted:           rgba(255,107,0,0.10);
-  --accent-border:          rgba(255,107,0,0.30);
-  --accent-text:            #FF6B00;
+  /* ── PRIMARY ACCENT — Electric Cyan (Neon Command) ── */
+  --accent:                 #00E5FF;
+  --accent-light:           #33EEFF;
+  --accent-hover:           #00C4DC;
+  --accent-muted:           rgba(0,229,255,0.10);
+  --accent-border:          rgba(0,229,255,0.30);
+  --accent-text:            #00E5FF;
   --on-accent:              #000000;
 
-  /* ── SECONDARY ACCENT — Electric Cyan (AI/Intelligence) ── */
-  --secondary:              #00E5FF;
-  --secondary-muted:        rgba(0,229,255,0.08);
-  --secondary-border:       rgba(0,229,255,0.25);
+  /* ── CRITICAL / ACTIVE — Safety Orange (kept for warnings, critical path, today marker) ── */
+  --accent-orange:          #FF6B00;
+  --accent-orange-light:    #FF8C38;
+  --accent-orange-hover:    #E55E00;
+  --accent-orange-muted:    rgba(255,107,0,0.10);
+  --accent-orange-border:   rgba(255,107,0,0.30);
+
+  /* ── SECONDARY — Orange kept as secondary role ── */
+  --secondary:              #FF6B00;
+  --secondary-muted:        rgba(255,107,0,0.08);
+  --secondary-border:       rgba(255,107,0,0.25);
 
   /* ── Phase colors ── */
   --phase-detailing:        #00E5FF;
@@ -76,16 +83,16 @@
   --info-border:            rgba(0,229,255,0.20);
 
   /* ── Shadows ── */
-  --shadow-card:            0 0 0 1px rgba(51,53,56,0.60), 0 4px 24px rgba(0,0,0,0.40);
-  --shadow-lg:              0 8px 40px rgba(0,0,0,0.60);
-  --shadow-orange-glow:     0 0 20px rgba(255,107,0,0.12);
-  --shadow-cyan-glow:       0 0 20px rgba(0,229,255,0.10);
+  --shadow-card:            0 0 0 1px rgba(30,64,175,0.18), 0 4px 24px rgba(0,0,0,0.50);
+  --shadow-lg:              0 8px 40px rgba(0,0,0,0.70);
+  --shadow-orange-glow:     0 0 20px rgba(255,107,0,0.18);
+  --shadow-cyan-glow:       0 0 20px rgba(0,229,255,0.18);
 
-  /* ── Interaction ── */
-  --hover-bg:               rgba(255,107,0,0.05);
-  --bg-hover:               rgba(255,107,0,0.05);
-  --nav-hover-bg:           rgba(255,107,0,0.08);
-  --bg-row-hover:           rgba(255,255,255,0.025);
+  /* ── Interaction — Cyan-tinted hovers ── */
+  --hover-bg:               rgba(0,229,255,0.05);
+  --bg-hover:               rgba(0,229,255,0.05);
+  --nav-hover-bg:           rgba(0,229,255,0.08);
+  --bg-row-hover:           rgba(0,229,255,0.03);
 
   /* ── Radius — Sharp Industrial ── */
   --radius-card:            4px;
@@ -96,43 +103,48 @@
   /* ── Fonts ── */
   --font-display:           'Space Grotesk', sans-serif;
   --font-body:              'Inter', sans-serif;
-  --font-mono:              'Space Grotesk', sans-serif;
+  --font-mono:              'IBM Plex Mono', monospace;
 }
 
 [data-theme="light"] {
-  /* Iron Forge is dark-only — light inherits dark values */
-  --bg-void:                #090A0B;
-  --bg-page:                #0C0E11;
-  --bg-surface:             #111316;
-  --bg-surface-low:         #111316;
-  --bg-surface-mid:         #1A1C1F;
-  --bg-surface-high:        #1F2125;
-  --bg-surface-highest:     #282A2D;
-  --bg-input:               #0C0E11;
-  --bg-sidebar:             #0C0E11;
-  --bg-base:                #090A0B;
-  --bg-card:                #111316;
-  --bg-elevated:            #1A1C1F;
-  --bg-surface-secondary:   #1A1C1F;
-  --text-primary:           #F0F1F3;
-  --text-secondary:         #B8BFCC;
+  /* Neon Command is dark-only — light inherits dark values */
+  --bg-void:                #030304;
+  --bg-page:                #050505;
+  --bg-surface:             #0E0E0E;
+  --bg-surface-low:         #111111;
+  --bg-surface-mid:         #1C1B1B;
+  --bg-surface-high:        #222222;
+  --bg-surface-highest:     #2A2A2A;
+  --bg-input:               #080808;
+  --bg-sidebar:             #050505;
+  --bg-base:                #030304;
+  --bg-card:                #0E0E0E;
+  --bg-elevated:            #1C1B1B;
+  --bg-surface-secondary:   #1C1B1B;
+  --text-primary:           #E5E2E1;
+  --text-secondary:         #BAC9CC;
   --text-muted:             #6B7280;
-  --text-disabled:          rgba(184,191,204,0.30);
-  --border-default:         rgba(51,53,56,0.70);
-  --border-strong:          #333538;
-  --border:                 rgba(51,53,56,0.70);
-  --divider:                rgba(40,42,45,0.80);
+  --text-disabled:          rgba(186,201,204,0.30);
+  --border-default:         rgba(30,64,175,0.22);
+  --border-strong:          rgba(0,229,255,0.20);
+  --border:                 rgba(30,64,175,0.22);
+  --divider:                rgba(30,64,175,0.15);
   --outline:                #6B7280;
-  --accent:                 #FF6B00;
-  --accent-light:           #FF8C38;
-  --accent-hover:           #E55E00;
-  --accent-muted:           rgba(255,107,0,0.10);
-  --accent-border:          rgba(255,107,0,0.30);
-  --accent-text:            #FF6B00;
+  --accent:                 #00E5FF;
+  --accent-light:           #33EEFF;
+  --accent-hover:           #00C4DC;
+  --accent-muted:           rgba(0,229,255,0.10);
+  --accent-border:          rgba(0,229,255,0.30);
+  --accent-text:            #00E5FF;
   --on-accent:              #000000;
-  --secondary:              #00E5FF;
-  --secondary-muted:        rgba(0,229,255,0.08);
-  --secondary-border:       rgba(0,229,255,0.25);
+  --accent-orange:          #FF6B00;
+  --accent-orange-light:    #FF8C38;
+  --accent-orange-hover:    #E55E00;
+  --accent-orange-muted:    rgba(255,107,0,0.10);
+  --accent-orange-border:   rgba(255,107,0,0.30);
+  --secondary:              #FF6B00;
+  --secondary-muted:        rgba(255,107,0,0.08);
+  --secondary-border:       rgba(255,107,0,0.25);
   --phase-detailing:        #00E5FF;
   --phase-fab:              #FF6B00;
   --phase-delivery:         #00C853;
@@ -154,19 +166,21 @@
   --info:                   #00E5FF;
   --info-muted:             rgba(0,229,255,0.08);
   --info-border:            rgba(0,229,255,0.20);
-  --shadow-card:            0 0 0 1px rgba(51,53,56,0.60), 0 4px 24px rgba(0,0,0,0.40);
-  --shadow-lg:              0 8px 40px rgba(0,0,0,0.60);
-  --hover-bg:               rgba(255,107,0,0.05);
-  --bg-hover:               rgba(255,107,0,0.05);
-  --nav-hover-bg:           rgba(255,107,0,0.08);
-  --bg-row-hover:           rgba(255,255,255,0.025);
+  --shadow-card:            0 0 0 1px rgba(30,64,175,0.18), 0 4px 24px rgba(0,0,0,0.50);
+  --shadow-lg:              0 8px 40px rgba(0,0,0,0.70);
+  --shadow-orange-glow:     0 0 20px rgba(255,107,0,0.18);
+  --shadow-cyan-glow:       0 0 20px rgba(0,229,255,0.18);
+  --hover-bg:               rgba(0,229,255,0.05);
+  --bg-hover:               rgba(0,229,255,0.05);
+  --nav-hover-bg:           rgba(0,229,255,0.08);
+  --bg-row-hover:           rgba(0,229,255,0.03);
   --radius-card:            4px;
   --radius-btn:             4px;
   --radius-input:           4px;
   --radius-badge:           9999px;
   --font-display:           'Space Grotesk', sans-serif;
   --font-body:              'Inter', sans-serif;
-  --font-mono:              'Space Grotesk', sans-serif;
+  --font-mono:              'IBM Plex Mono', monospace;
 }
 
 /* ── Base ── */
@@ -209,7 +223,7 @@ h1, h2, h3, h4 {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,107,0,0.20);
+  background: rgba(30,64,175,0.40);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -230,7 +244,7 @@ input, textarea, select {
 }
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px rgba(255,107,0,0.12) !important;
+  box-shadow: 0 0 0 2px rgba(0,229,255,0.12) !important;
 }
 input::placeholder, textarea::placeholder {
   color: var(--text-muted) !important;
@@ -521,7 +535,7 @@ button { cursor: pointer; outline: none; }
 }
 .btn-primary:hover {
   background: var(--accent-hover);
-  box-shadow: 0 0 16px rgba(255,107,0,0.30);
+  box-shadow: 0 0 16px rgba(0,229,255,0.35);
 }
 
 .btn-ghost {
@@ -544,10 +558,13 @@ button { cursor: pointer; outline: none; }
 
 /* ── Active card glow ── */
 .card-active {
-  box-shadow: 0 0 20px rgba(255,107,0,0.10), 0 0 0 1px rgba(255,107,0,0.20);
+  box-shadow: 0 0 20px rgba(0,229,255,0.12), 0 0 0 1px rgba(0,229,255,0.25);
+}
+.card-critical {
+  box-shadow: 0 0 20px rgba(255,107,0,0.12), 0 0 0 1px rgba(255,107,0,0.25);
 }
 .card-intel {
-  box-shadow: 0 0 20px rgba(0,229,255,0.08), 0 0 0 1px rgba(0,229,255,0.15);
+  box-shadow: 0 0 20px rgba(0,229,255,0.10), 0 0 0 1px rgba(0,229,255,0.18);
 }
 
 /* ── Gantt grid ── */
@@ -555,7 +572,7 @@ button { cursor: pointer; outline: none; }
   background-size: 40px 100%;
   background-image: linear-gradient(
     to right,
-    rgba(255,255,255,0.03) 1px,
+    rgba(0,229,255,0.05) 1px,
     transparent 1px
   );
 }
@@ -574,8 +591,9 @@ button { cursor: pointer; outline: none; }
 
 /* ── Top nav glassmorphism ── */
 .nav-glass {
-  background: rgba(12,14,17,0.85) !important;
+  background: rgba(5,5,5,0.88) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(51,53,56,0.60) !important;
+  border-bottom: 1px solid rgba(0,229,255,0.18) !important;
+  box-shadow: 0 0 20px rgba(0,229,255,0.06) !important;
 }
