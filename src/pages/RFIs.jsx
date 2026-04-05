@@ -18,7 +18,7 @@ import {
 
 const mono = { fontFamily: "var(--font-mono)" };
 const BIC_COLORS = {
-  Contractor: { bg: "rgba(123,208,255,0.15)", text: "var(--accent)" },
+  Contractor: { bg: "rgba(0,229,255,0.15)", text: "var(--accent)" },
   GC: { bg: "rgba(68,226,205,0.18)", text: "var(--secondary)" },
   Engineer: { bg: "rgba(255,185,95,0.15)", text: "var(--status-warning)" },
   Architect: { bg: "rgba(168,240,203,0.18)", text: "var(--status-success)" },
@@ -1258,8 +1258,8 @@ function ContentBox({ children, accent, success }) {
       style={{
         padding: "12px 14px",
         borderRadius: 4,
-        border: "1px solid " + (accent ? "rgba(123,208,255,0.25)" : success ? "var(--success-border)" : "var(--border-default)"),
-        background: accent ? "rgba(123,208,255,0.08)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
+        border: "1px solid " + (accent ? "rgba(0,229,255,0.25)" : success ? "var(--success-border)" : "var(--border-default)"),
+        background: accent ? "rgba(0,229,255,0.08)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
         borderLeft: "3px solid " + (accent ? "var(--accent)" : success ? "var(--status-success)" : "var(--accent)"),
         fontFamily: "var(--font-body)",
         fontSize: 13,

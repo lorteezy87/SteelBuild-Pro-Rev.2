@@ -6,12 +6,14 @@ export const ProjectContext = createContext({
   setActiveProject: () => {},
   projects: [],
   loading: false,
+  projectLoadError: null,
 });
 
 export function ProjectProvider({ children }) {
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [projectLoadError, setProjectLoadError] = useState(null);
 
   // Load projects on mount
   useEffect(() => {
@@ -34,6 +36,7 @@ export function ProjectProvider({ children }) {
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
+        setProjectLoadError(err?.message || "Failed to load projects");
       } finally {
         setLoading(false);
       }
@@ -53,7 +56,7 @@ export function ProjectProvider({ children }) {
   };
 
   return (
-    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading }}>
+    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading, projectLoadError }}>
       {children}
     </ProjectContext.Provider>
   );

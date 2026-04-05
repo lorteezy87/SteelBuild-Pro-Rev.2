@@ -10,7 +10,7 @@ import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, c
 
 const PHASE_CONFIG = {
   Detailing:   { color: "var(--accent)", bg: "var(--accent-muted)", order: 1 },
-  Fabrication: { color: "#3B82F6", bg: "rgba(59,130,246,0.12)",  order: 2 },
+  Fabrication: { color: "var(--accent)", bg: "rgba(0,229,255,0.06)",  order: 2 },
   Delivery:    { color: "#06B6D4", bg: "rgba(6,182,212,0.12)",   order: 3 },
   Erection:    { color: "#22C55E", bg: "rgba(34,197,94,0.12)",   order: 4 },
   Closeout:    { color: "#9CA3AF", bg: "rgba(156,163,175,0.12)", order: 5 },
