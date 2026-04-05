@@ -278,6 +278,13 @@ button { cursor: pointer; outline: none; }
 .border-gray-200, .border-slate-200 {
   border-color: var(--border-default) !important;
 }
+.text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
+.text-slate-300 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-muted) !important; }
+.bg-slate-800 { background: var(--bg-surface) !important; }
+.bg-slate-900, .bg-slate-950 { background: var(--bg-surface-low) !important; }
+.hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
+.hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
 
 /* ── KPI cards ── */
 .kpi-card {
