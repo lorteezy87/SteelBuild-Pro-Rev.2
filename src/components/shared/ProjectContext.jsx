@@ -9,19 +9,37 @@ export const ProjectContext = createContext({
   projectLoadError: null,
 });
 
+const PROJECTS_CACHE_KEY = "sbp_projects_cache";
+
+function readProjectsCache() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function ProjectProvider({ children }) {
-  const [projects, setProjects] = useState([]);
-  const [activeProject, setActiveProject] = useState(null);
+  // Seed from cache so pages render immediately on hard refresh
+  const [projects, setProjects] = useState(() => readProjectsCache());
+  const [activeProject, setActiveProject] = useState(() => {
+    const cached = readProjectsCache();
+    const savedId = localStorage.getItem("activeProjectId");
+    return cached.find((p) => p.id === savedId) || cached[0] || null;
+  });
   const [loading, setLoading] = useState(true);
   const [projectLoadError, setProjectLoadError] = useState(null);
 
-  // Load projects on mount
+  // Load projects on mount — updates cache for next refresh
   useEffect(() => {
     const loadProjects = async () => {
       try {
         setLoading(true);
         const data = await base44.entities.Project.list("-created_date");
         setProjects(data);
+        // Persist to localStorage cache so next hard refresh is instant
+        try { localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(data)); } catch {}
 
         // Try to restore last selected project
         const savedId = localStorage.getItem("activeProjectId");
@@ -37,6 +55,7 @@ export function ProjectProvider({ children }) {
       } catch (err) {
         console.error("Failed to load projects:", err);
         setProjectLoadError(err?.message || "Failed to load projects");
+        // Leave cached projects visible — don't wipe them on network error
       } finally {
         setLoading(false);
       }
