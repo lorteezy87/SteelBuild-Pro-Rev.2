@@ -108,35 +108,35 @@ export default function QuickAddFAB() {
           </div>
         )}
 
-        {/* FAB Button */}
+        {/* FAB Button — Neon Command orange square */}
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
-            width: 52,
-            height: 52,
-            borderRadius: "50%",
-            background: "var(--accent)",
+            width: 56,
+            height: 56,
+            borderRadius: 4,
+            background: "var(--accent-orange)",
             border: "none",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            color: "#fff",
-            boxShadow: "0 8px 24px var(--accent-muted)",
-            transition: "all 0.2s",
+            color: "#000",
+            boxShadow: "0 0 20px rgba(255,107,0,0.45)",
+            transition: "all 0.15s",
             position: "relative",
             zIndex: 501,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.1)";
-            e.currentTarget.style.boxShadow = "0 12px 32px var(--accent-border)";
+            e.currentTarget.style.transform = "scale(1.06)";
+            e.currentTarget.style.boxShadow = "0 0 32px rgba(255,107,0,0.65)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "scale(1)";
-            e.currentTarget.style.boxShadow = "0 8px 24px var(--accent-muted)";
+            e.currentTarget.style.boxShadow = "0 0 20px rgba(255,107,0,0.45)";
           }}
         >
-          <Plus size={24} strokeWidth={2.5} />
+          <Plus size={26} strokeWidth={2.5} />
         </button>
 
         <style>{`

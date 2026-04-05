@@ -197,6 +197,32 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Neon Command glow utilities ── */
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(0,229,255,0.6);
+  color: var(--accent);
+}
+.glow-orange {
+  filter: drop-shadow(0 0 4px rgba(255,107,0,0.8));
+  color: var(--accent-orange);
+}
+.border-cyan {
+  border-color: rgba(0,229,255,0.30) !important;
+  box-shadow: 0 0 12px rgba(0,229,255,0.08);
+}
+.border-orange {
+  border-color: rgba(255,107,0,0.30) !important;
+  box-shadow: 0 0 12px rgba(255,107,0,0.10);
+}
+/* Diamond milestone marker (Gantt) */
+.diamond-milestone {
+  width: 10px;
+  height: 10px;
+  background: var(--accent-orange);
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px var(--accent-orange);
+}
+
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
@@ -289,12 +315,12 @@ button { cursor: pointer; outline: none; }
   margin-bottom: 8px;
 }
 .kpi-value {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
+  color: var(--accent);
+  letter-spacing: -0.01em;
 }
 .kpi-sub {
   font-family: var(--font-body);
@@ -402,13 +428,13 @@ button { cursor: pointer; outline: none; }
   padding: 11px 16px;
 }
 .sbp-table tbody td.mono {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 .sbp-table tbody td.accent {
   color: var(--accent);
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-weight: 700;
 }
 
@@ -501,10 +527,10 @@ button { cursor: pointer; outline: none; }
   overflow: hidden;
 }
 .exec-count {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent);
   width: 40px;
   text-align: right;
   flex-shrink: 0;
@@ -512,10 +538,10 @@ button { cursor: pointer; outline: none; }
 
 /* ── Monospace numbers ── */
 .mono-num {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* ── Buttons — Iron Forge ── */
