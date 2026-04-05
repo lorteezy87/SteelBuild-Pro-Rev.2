@@ -7,7 +7,7 @@
 export const getChartTheme = () => {
   // Get colors from computed CSS variables
   const getVar = (name) => {
-    if (typeof window === 'undefined') return '#3B82F6'; // Server-side fallback
+    if (typeof window === 'undefined') return 'var(--accent)'; // Server-side fallback
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   };
 

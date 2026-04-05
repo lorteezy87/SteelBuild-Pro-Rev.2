@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function ProjectCloseoutChecklist({ closeout }) {
+export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
   const items = [
     { key: "final_inspection_completed", label: "Final Inspection", icon: "✓" },
     { key: "punch_list_cleared", label: "Punchlist Cleared", icon: "☑" },
@@ -35,30 +35,38 @@ export default function ProjectCloseoutChecklist({ closeout }) {
 
       {/* Checklist Items */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-        {items.map((item) => (
-          <div
-            key={item.key}
-            style={{
-              background: "var(--bg-surface)",
-              border: closeout[item.key] ? "1px solid var(--status-success)" : "1px solid var(--border-default)",
-              borderRadius: "10px",
-              padding: "14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              transition: "all 0.15s",
-            }}
-          >
-            <div style={{ fontSize: "20px" }}>{item.icon}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>{item.label}</div>
-              <div style={{ fontSize: "9px", color: closeout[item.key] ? "var(--status-success)" : "var(--text-muted)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
-                {closeout[item.key] ? "✓ DONE" : "PENDING"}
+        {items.map((item) => {
+          const isDone = !!closeout[item.key];
+          return (
+            <div
+              key={item.key}
+              onClick={() => onUpdate && onUpdate({ ...closeout, [item.key]: !isDone })}
+              style={{
+                background: "var(--bg-surface)",
+                border: isDone ? "1px solid var(--status-success)" : "1px solid var(--border-default)",
+                borderRadius: "10px",
+                padding: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                transition: "all 0.15s",
+                cursor: onUpdate ? "pointer" : "default",
+                opacity: 1,
+              }}
+            >
+              <div style={{ fontSize: "20px" }}>{item.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>{item.label}</div>
+                <div style={{ fontSize: "9px", color: isDone ? "var(--status-success)" : "var(--text-muted)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                  {isDone ? "✓ DONE" : "CLICK TO MARK DONE"}
+                </div>
+              </div>
+              <div style={{ fontSize: "18px", color: isDone ? "var(--status-success)" : "var(--border-default)", transition: "color 0.15s" }}>
+                {isDone ? "✓" : "○"}
               </div>
             </div>
-            {closeout[item.key] && <div style={{ fontSize: "16px", color: "var(--status-success)" }}>✓</div>}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Key Dates */}

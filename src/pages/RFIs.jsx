@@ -18,7 +18,7 @@ import {
 
 const mono = { fontFamily: "var(--font-mono)" };
 const BIC_COLORS = {
-  Contractor: { bg: "rgba(123,208,255,0.15)", text: "var(--accent)" },
+  Contractor: { bg: "rgba(0,229,255,0.15)", text: "var(--accent)" },
   GC: { bg: "rgba(68,226,205,0.18)", text: "var(--secondary)" },
   Engineer: { bg: "rgba(255,185,95,0.15)", text: "var(--status-warning)" },
   Architect: { bg: "rgba(168,240,203,0.18)", text: "var(--status-success)" },
@@ -158,10 +158,8 @@ export default function RFIs() {
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
-    queryFn: () =>
-      projectId
-        ? base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date")
-        : base44.entities.RFI.list("-submitted_date"),
+    queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
+    enabled: !!projectId,
     initialData: [],
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
@@ -525,7 +523,7 @@ export default function RFIs() {
                 style={{
                   padding: "6px 12px",
                   background: view === v ? "var(--accent)" : "transparent",
-                  color: view === v ? "#002E6A" : "var(--text-secondary)",
+                  color: view === v ? "var(--accent-text)" : "var(--text-secondary)",
                   border: "none",
                   ...mono,
                   fontSize: 9,
@@ -545,7 +543,7 @@ export default function RFIs() {
             }}
             style={{
               background: "var(--accent)",
-              color: "#002E6A",
+              color: "var(--accent-text)",
               border: "none",
               borderRadius: "var(--radius-btn)",
               padding: "10px 16px",
@@ -615,7 +613,7 @@ export default function RFIs() {
             onClick={() => setFilterStatus(s)}
             style={{
               background: filterStatus === s ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterStatus === s ? "#002E6A" : "var(--text-secondary)",
+              color: filterStatus === s ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: 6,
               padding: "6px 10px",
@@ -635,7 +633,7 @@ export default function RFIs() {
             onClick={() => setFilterPriority(p)}
             style={{
               background: filterPriority === p ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterPriority === p ? "#002E6A" : "var(--text-secondary)",
+              color: filterPriority === p ? "var(--accent-text)" : "var(--text-secondary)",
               border: "none",
               borderRadius: 6,
               padding: "6px 10px",
@@ -682,7 +680,7 @@ export default function RFIs() {
           onClick={() => setOverdueFirst((v) => !v)}
           style={{
             background: overdueFirst ? "var(--accent)" : "var(--bg-surface-low)",
-            color: overdueFirst ? "#002E6A" : "var(--text-secondary)",
+            color: overdueFirst ? "var(--accent-text)" : "var(--text-secondary)",
             border: "1px solid var(--border-default)",
             borderRadius: 6,
             padding: "6px 10px",
@@ -1032,7 +1030,7 @@ export default function RFIs() {
                       const active = selectedRFI.status === s;
                       const past = statusColumns.indexOf(selectedRFI.status) > statusColumns.indexOf(s);
                       const bg = active ? "var(--accent)" : past ? "var(--success-muted)" : "var(--bg-surface-low)";
-                      const color = active ? "#002E6A" : past ? "var(--status-success)" : "var(--text-secondary)";
+                      const color = active ? "var(--accent-text)" : past ? "var(--status-success)" : "var(--text-secondary)";
                       return (
                         <button
                           key={s}
@@ -1146,7 +1144,7 @@ export default function RFIs() {
                     style={{
                       flex: 1,
                       background: "var(--accent)",
-                      color: "#002E6A",
+                      color: "var(--accent-text)",
                       border: "none",
                       borderRadius: 4,
                       padding: "10px 12px",
@@ -1258,8 +1256,8 @@ function ContentBox({ children, accent, success }) {
       style={{
         padding: "12px 14px",
         borderRadius: 4,
-        border: "1px solid " + (accent ? "rgba(123,208,255,0.25)" : success ? "var(--success-border)" : "var(--border-default)"),
-        background: accent ? "rgba(123,208,255,0.08)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
+        border: "1px solid " + (accent ? "rgba(0,229,255,0.25)" : success ? "var(--success-border)" : "var(--border-default)"),
+        background: accent ? "rgba(0,229,255,0.08)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
         borderLeft: "3px solid " + (accent ? "var(--accent)" : success ? "var(--status-success)" : "var(--accent)"),
         fontFamily: "var(--font-body)",
         fontSize: 13,

@@ -529,7 +529,7 @@ export default function ImportData() {
             disabled={anyRunning || Object.keys(files).length === 0 || !importAllowed}
             style={btnStyle(
               anyRunning ? "var(--bg-surface-high)" : "var(--accent)",
-              anyRunning ? "var(--text-muted)" : "#0A0A0B",
+              anyRunning ? "var(--text-muted)" : "var(--accent-text)",
               anyRunning || Object.keys(files).length === 0 || !importAllowed
             )}
           >

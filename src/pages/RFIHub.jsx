@@ -247,7 +247,7 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
                   updateMut.mutate({ response_text: answerText });
                   setEditingAnswer(false);
                   toast.success("Response saved");
-                }} style={{ background: "var(--accent)", color: "#002E6A", border: "none", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
+                }} style={{ background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
                   Save
                 </button>
                 <button onClick={() => { setEditingAnswer(false); setAnswerText(rfi.response_text || ""); }}
@@ -410,7 +410,7 @@ function NewRFIModal({ projects, onClose, onSave, isSaving = false }) {
           </div>
           <div style={{ gridColumn: "span 2", display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid var(--divider)" }}>
             <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "8px 20px", color: "var(--text-muted)", ...mono, fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>
-            <button type="button" onClick={handleSubmit} disabled={isSaving || !form.title.trim()} style={{ background: "var(--accent)", color: "#0A0A0B", border: "none", borderRadius: 2, padding: "8px 24px", ...mono, fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !form.title.trim() ? 0.4 : 1 }}>
+            <button type="button" onClick={handleSubmit} disabled={isSaving || !form.title.trim()} style={{ background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 2, padding: "8px 24px", ...mono, fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving || !form.title.trim() ? 0.4 : 1 }}>
               {saving ? "CREATING…" : "CREATE RFI"}
             </button>
           </div>
@@ -561,7 +561,7 @@ export default function RFIHub() {
             <button onClick={() => refetch()} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "7px 10px", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center" }}>
               <RefreshCw size={14} />
             </button>
-            <button onClick={() => setShowNewRFI(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--accent)", color: "#002E6A", border: "none", borderRadius: 2, ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <button onClick={() => setShowNewRFI(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 2, ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
               <Plus size={14} /> NEW RFI
             </button>
           </div>

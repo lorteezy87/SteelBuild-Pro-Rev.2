@@ -10,7 +10,7 @@ const SEV_COLORS = {
   Critical: "bg-rose-50 border-rose-300 border-l-4 border-l-rose-500",
   High:     "bg-orange-50 border-orange-200 border-l-4 border-l-orange-400",
   Medium:   "bg-amber-50 border-amber-200 border-l-4 border-l-amber-400",
-  Low:      "bg-slate-50 border-slate-200 border-l-4 border-l-slate-400",
+  Low:      "bg-slate-50 border-default border-l-4 border-l-slate-400",
 };
 const SEV_BADGE = {
   Critical: "bg-rose-100 text-rose-700",
@@ -89,12 +89,12 @@ export default function Alerts() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">Alerts</h1>
+            <h1 className="text-2xl font-bold text-primary">Alerts</h1>
             {unreadCount > 0 && (
               <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{unreadCount}</span>
             )}
           </div>
-          <p className="text-sm text-slate-500">{alerts.filter(a => !a.is_dismissed).length} active alerts</p>
+          <p className="text-sm text-muted">{alerts.filter(a => !a.is_dismissed).length} active alerts</p>
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
@@ -112,7 +112,7 @@ export default function Alerts() {
           const count = alerts.filter(a => a.severity === sev && !a.is_dismissed).length;
           return (
             <div key={sev} className={`rounded-lg border p-3 text-center ${SEV_COLORS[sev] || ""}`}>
-              <p className="text-2xl font-bold text-slate-900">{count}</p>
+              <p className="text-2xl font-bold text-primary">{count}</p>
               <p className={`text-xs font-semibold mt-0.5 ${SEV_BADGE[sev]?.replace("bg-", "text-").replace("-100", "-700") || ""}`}>{sev}</p>
             </div>
           );
@@ -120,31 +120,31 @@ export default function Alerts() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 mb-4 border-b border-slate-200">
+      <div className="flex gap-1 mb-4 border-b border-default">
         {[["all","All"], ["unread","Unread"], ["read","Read"]].map(([v, l]) => (
-          <button key={v} onClick={() => setFilter(v)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${filter === v ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{l}</button>
+          <button key={v} onClick={() => setFilter(v)} style={{ padding: "8px 16px", fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", background: "transparent", border: "none", borderBottom: `2px solid ${filter === v ? "var(--accent)" : "transparent"}`, color: filter === v ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", transition: "all 0.15s" }}>{l}</button>
         ))}
       </div>
 
       {isLoading ? (
         <div className="text-center py-12 text-slate-400">Loading...</div>
       ) : visible.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
+        <div className="rounded-xl border border-dashed p-12 text-center" style={{background:"var(--bg-surface)",borderColor:"var(--border-default)"}}>
           <Bell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">{filter === "unread" ? "All caught up!" : "No alerts"}</p>
+          <p className="text-muted font-medium">{filter === "unread" ? "All caught up!" : "No alerts"}</p>
           <p className="text-slate-400 text-sm mt-1">Click "Refresh Alerts" to scan for new issues</p>
         </div>
       ) : (
         <div className="space-y-3">
           {visible.map(alert => (
-            <div key={alert.id} className={`rounded-xl border p-4 transition-all ${SEV_COLORS[alert.severity] || "bg-white border-slate-200"} ${alert.is_read ? "opacity-60" : ""}`}>
+            <div key={alert.id} className={`rounded-xl border p-4 transition-all ${SEV_COLORS[alert.severity] || "bg-white border-default"} ${alert.is_read ? "opacity-60" : ""}`}>
               <div className="flex items-start gap-4">
                 <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${alert.severity === "Critical" ? "text-rose-500" : alert.severity === "High" ? "text-orange-500" : "text-amber-500"}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
+                    <p className="text-sm font-semibold text-primary">{alert.title}</p>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${SEV_BADGE[alert.severity] || ""}`}>{alert.severity}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/70 text-slate-500 border border-slate-200">{alert.alert_type}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface/70 text-muted border border-default">{alert.alert_type}</span>
                     {alert.project_name && <span className="text-[10px] text-slate-400">{alert.project_name}</span>}
                   </div>
                   <p className="text-sm text-slate-600">{alert.message}</p>

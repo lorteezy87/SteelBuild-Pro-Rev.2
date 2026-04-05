@@ -90,7 +90,18 @@ const AuthenticatedApp = () => {
         );
       }
 
-      if (hasStoredToken() || hasLoginAttempt()) {
+      // Expired/rejected token — clear it and redirect to fresh login
+      if (hasStoredToken()) {
+        try {
+          window.localStorage.removeItem('base44_access_token');
+          window.localStorage.removeItem('token');
+          window.sessionStorage.removeItem('base44_login_attempted');
+        } catch {}
+        navigateToLogin();
+        return null;
+      }
+
+      if (hasLoginAttempt()) {
         return (
           <AuthCallbackError
             authError={authError}

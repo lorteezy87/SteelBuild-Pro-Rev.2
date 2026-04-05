@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
 
-export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate }) {
+export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false }) {
   const [formData, setFormData] = useState({
     task_name: '',
     task_type: 'Task',
@@ -14,25 +14,25 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
   });
 
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      start_date: prefilledDate || new Date().toISOString().split('T')[0],
-      end_date: prefilledDate || new Date().toISOString().split('T')[0],
-    }));
-  }, [prefilledDate, open]);
-
-  const handleSubmit = () => {
-    if (formData.task_name && formData.start_date && formData.end_date) {
-      onSubmit(formData);
+    if (open) {
+      // Full reset each time the modal opens so stale values don't persist
       setFormData({
         task_name: '',
         task_type: 'Task',
         phase: 'Fabrication',
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: new Date().toISOString().split('T')[0],
+        start_date: prefilledDate || new Date().toISOString().split('T')[0],
+        end_date: prefilledDate || new Date().toISOString().split('T')[0],
         status: 'Not Started',
         priority: 'Normal',
       });
+    }
+  }, [open, prefilledDate]);
+
+  const handleSubmit = () => {
+    if (!isSaving && formData.task_name && formData.start_date && formData.end_date) {
+      onSubmit(formData);
+      // Form will reset naturally when modal unmounts on success.
+      // Do NOT reset here — keeps data visible while mutation is in flight.
     }
   };
 
@@ -79,8 +79,10 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <Button onClick={onClose} variant="outline" style={{ flex: 1 }}>Cancel</Button>
-          <Button onClick={handleSubmit} style={{ flex: 1, background: 'var(--accent)', color: 'white' }}>Create Task →</Button>
+          <Button onClick={onClose} variant="outline" style={{ flex: 1 }} disabled={isSaving}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isSaving || !formData.task_name || !formData.start_date || !formData.end_date} style={{ flex: 1, background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.6 : 1 }}>
+            {isSaving ? 'Creating...' : 'Create Task →'}
+          </Button>
         </div>
       </div>
     </>
