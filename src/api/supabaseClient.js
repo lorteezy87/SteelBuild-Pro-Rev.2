@@ -16,12 +16,38 @@ import { supabase } from '@/lib/supabase';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Base44 used `created_date` / `updated_date` as timestamp field names.
+ * Our Postgres schema uses the standard `created_at` / `updated_at`.
+ * Map them transparently so all existing code continues to work.
+ */
+const COLUMN_MAP = {
+  created_date: 'created_at',
+  updated_date: 'updated_at',
+};
+
+const mapColumn = (col) => COLUMN_MAP[col] || col;
+
+/**
+ * After fetching, add Base44-style aliases to each record so UI code
+ * reading `record.created_date` still works.
+ */
+const addAliases = (record) => {
+  if (!record || typeof record !== 'object') return record;
+  const out = { ...record };
+  if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
+  if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
+  return out;
+};
+
+const addAliasesToList = (rows) => (rows || []).map(addAliases);
+
+/**
  * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
  */
 const parseSortBy = (sortBy) => {
   if (!sortBy) return null;
   const desc = sortBy.startsWith('-');
-  const column = desc ? sortBy.slice(1) : sortBy;
+  const column = mapColumn(desc ? sortBy.slice(1) : sortBy);
   return { column, ascending: !desc };
 };
 
@@ -32,10 +58,11 @@ const parseSortBy = (sortBy) => {
 const applyConditions = (query, conditions = {}) => {
   for (const [key, value] of Object.entries(conditions)) {
     if (value === null || value === undefined) continue;
+    const col = mapColumn(key);
     if (Array.isArray(value)) {
-      query = query.in(key, value);
+      query = query.in(col, value);
     } else {
-      query = query.eq(key, value);
+      query = query.eq(col, value);
     }
   }
   return query;
@@ -57,7 +84,7 @@ const createEntityClient = (tableName) => ({
     }
     const { data, error } = await q;
     if (error) throw error;
-    return data || [];
+    return addAliasesToList(data);
   },
 
   /**
@@ -78,7 +105,7 @@ const createEntityClient = (tableName) => ({
     if (limit) q = q.limit(limit);
     const { data, error } = await q;
     if (error) throw error;
-    return data || [];
+    return addAliasesToList(data);
   },
 
   /**
@@ -91,14 +118,13 @@ const createEntityClient = (tableName) => ({
       .eq('id', id)
       .single();
     if (error) throw error;
-    return data;
+    return addAliases(data);
   },
 
   /**
    * Create a new record. Returns the created record with its generated id.
    */
   create: async (record) => {
-    // Strip any undefined values to avoid Supabase errors
     const clean = Object.fromEntries(
       Object.entries(record).filter(([, v]) => v !== undefined)
     );
@@ -108,7 +134,7 @@ const createEntityClient = (tableName) => ({
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return addAliases(data);
   },
 
   /**
@@ -125,7 +151,7 @@ const createEntityClient = (tableName) => ({
       .select()
       .single();
     if (error) throw error;
-    return data;
+    return addAliases(data);
   },
 
   /**
@@ -149,7 +175,7 @@ const createEntityClient = (tableName) => ({
       .insert(records)
       .select();
     if (error) throw error;
-    return data || [];
+    return addAliasesToList(data);
   },
 });
 
