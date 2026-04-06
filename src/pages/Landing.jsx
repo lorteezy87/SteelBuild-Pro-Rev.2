@@ -71,7 +71,7 @@ export default function Landing() {
           <button onClick={scrollModules} style={linkBtn}>Platform</button>
           <button onClick={() => navigate(createPageUrl("Projects"))} style={linkBtn}>Projects</button>
           <button onClick={() => navigate(createPageUrl("RFIs"))} style={linkBtn}>RFIs</button>
-          <button onClick={() => navigate(createPageUrl("DrawingViewer"))} style={linkBtn}>Drawings</button>
+          <button onClick={() => navigate(createPageUrl("Documents"))} style={linkBtn}>Drawings</button>
           <button onClick={goDashboard} style={ctaBtn}>Launch App</button>
         </div>
       </header>

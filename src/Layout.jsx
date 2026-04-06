@@ -21,7 +21,7 @@ const PRIMARY_TABS = [
 { label: "PCC", pages: ["ProjectControlCenter"] },
 { label: "PROJECTS", pages: ["Projects", "ExecutiveView"] },
 { label: "RFIs", pages: ["RFIs", "RFIHub"] },
-{ label: "DRAWINGS", pages: ["Submittals", "DrawingViewer"] },
+{ label: "DRAWINGS", pages: ["Documents"] },
 { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAhead", "LookAheadSchedule", "GanttChart"] },
 { label: "DELIVERIES", pages: ["Deliveries"] },
 { label: "SCHEDULE", pages: ["Schedule", "GanttChart", "LookAheadSchedule"] },
@@ -175,8 +175,6 @@ const NAV_GROUPS = [
   label: "DOCUMENTS & DRAWINGS",
   items: [
   { label: "Document Repository", icon: "📁", page: "Documents" },
-  { label: "Drawing Log", icon: "⊞", page: "Submittals", badgeKey: "drawings" },
-  { label: "Drawing Viewer", icon: "📐", page: "DrawingViewer" },
   { label: "3D Model Viewer", icon: "△", page: "ModelViewer" }]
 
 },
