@@ -50,6 +50,7 @@ export default function DrawingViewer() {
   const [showCrossRefs, setShowCrossRefs] = useState(true);
   const [allSetDrawings, setAllSetDrawings] = useState([]);
   const [rightPanel, setRightPanel] = useState("sheets");
+  const [sheetSearch, setSheetSearch] = useState("");
 
   const pdfCanvasRef = useRef(null);
   const markupCanvasRef = useRef(null);
@@ -568,15 +569,28 @@ Drawing file URL for reference: ${fileUrl}`;
             </div>
 
             {/* Sheets panel */}
-            {rightPanel === "sheets" && allSetDrawings.length > 0 && (
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 700 }}>
-                  SHEETS IN SET · {allSetDrawings.length}
+            {rightPanel === "sheets" && allSetDrawings.length > 0 && (() => {
+              const filteredSheets = allSetDrawings.filter(s =>
+                !sheetSearch ||
+                s.sheet_number?.toLowerCase().includes(sheetSearch.toLowerCase()) ||
+                s.title?.toLowerCase().includes(sheetSearch.toLowerCase())
+              );
+              const currentIdx = allSetDrawings.findIndex(s => s.id === drawingId);
+              return (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>SHEETS · {allSetDrawings.length}</span>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button disabled={currentIdx <= 0} onClick={() => { const prev = allSetDrawings[currentIdx - 1]; if (prev) { const p = new URLSearchParams(searchParams); p.set("drawingId", prev.id); navigate(`?${p.toString()}`); }}} style={{ padding: "2px 6px", background: "rgba(255,255,255,0.05)", border: "1px solid var(--divider)", borderRadius: 3, color: currentIdx <= 0 ? "var(--text-muted)" : "var(--text-primary)", cursor: currentIdx <= 0 ? "not-allowed" : "pointer", fontSize: 10 }}>‹</button>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", alignSelf: "center" }}>{currentIdx + 1}/{allSetDrawings.length}</span>
+                    <button disabled={currentIdx >= allSetDrawings.length - 1} onClick={() => { const next = allSetDrawings[currentIdx + 1]; if (next) { const p = new URLSearchParams(searchParams); p.set("drawingId", next.id); navigate(`?${p.toString()}`); }}} style={{ padding: "2px 6px", background: "rgba(255,255,255,0.05)", border: "1px solid var(--divider)", borderRadius: 3, color: currentIdx >= allSetDrawings.length - 1 ? "var(--text-muted)" : "var(--text-primary)", cursor: currentIdx >= allSetDrawings.length - 1 ? "not-allowed" : "pointer", fontSize: 10 }}>›</button>
+                  </div>
                 </div>
                 <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--divider)" }}>
-                  <input placeholder="Search sheets..." style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "4px 8px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 9, outline: "none" }} />
+                  <input placeholder="Search sheets…" value={sheetSearch} onChange={e => setSheetSearch(e.target.value)} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "4px 8px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 9, outline: "none" }} />
                 </div>
-                {allSetDrawings.map(sheet => (
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                {filteredSheets.map(sheet => (
                   <div
                     key={sheet.id}
                     onClick={() => {
@@ -592,15 +606,21 @@ Drawing file URL for reference: ${fileUrl}`;
                       borderLeft: sheet.id === drawingId ? "3px solid var(--accent)" : "3px solid transparent",
                       transition: "background 0.1s",
                     }}
-                    onMouseEnter={e => { if (sheet.id !== drawingId) e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseEnter={e => { if (sheet.id !== drawingId) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                     onMouseLeave={e => { if (sheet.id !== drawingId) e.currentTarget.style.background = "transparent"; }}
                   >
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: sheet.id === drawingId ? "var(--accent)" : "var(--text-muted)" }}>{sheet.sheet_number}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: sheet.id === drawingId ? "var(--accent)" : "var(--text-muted)" }}>{sheet.sheet_number}</span>
+                      {sheet.ifc_status === "IFC" && <span style={{ fontFamily: "var(--font-mono)", fontSize: 6, color: "#00D68F", background: "rgba(0,214,143,0.12)", border: "1px solid rgba(0,214,143,0.22)", borderRadius: 3, padding: "1px 4px" }}>IFC</span>}
+                    </div>
                     <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sheet.title}</div>
                   </div>
                 ))}
+                {filteredSheets.length === 0 && <div style={{ padding: "20px 12px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center" }}>No sheets match</div>}
+                </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Markups panel */}
             {rightPanel === "markups" && (

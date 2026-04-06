@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import BulkActionBar from "../components/drawings/BulkActionBar";
@@ -100,6 +102,7 @@ const IFCBadge = ({ status }) => {
 export default function Drawings() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const [view, setView] = useState("table");
   const [search, setSearch] = useState("");
@@ -118,6 +121,8 @@ export default function Drawings() {
   const [approvalOpen, setApprovalOpen] = useState(null);
   const [selectedSet, setSelectedSet] = useState(null);
   const [setDetailTab, setSetDetailTab] = useState("sheets");
+  const [sheetSearch, setSheetSearch] = useState("");
+  const [sheetDiscFilter, setSheetDiscFilter] = useState("all");
 
   // Fetch drawings
   const { data: drawings = [], isLoading } = useQuery({
@@ -267,6 +272,37 @@ export default function Drawings() {
   const overdueCount = useMemo(() => drawings.filter(d => d.due_date && d.stage !== "Released" && new Date(d.due_date) < new Date()).length, [drawings]);
   const dueThisWeek = useMemo(() => drawings.filter(d => { const days = d.due_date ? Math.ceil((new Date(d.due_date) - new Date()) / 86400000) : null; return days !== null && days >= 0 && days <= 7 && d.stage !== "Released"; }).length, [drawings]);
 
+  const openInViewer = (drawing) => {
+    if (!drawing.file_url) { toast.error("No PDF attached to this sheet"); return; }
+    navigate(createPageUrl(`DrawingViewer?drawingId=${drawing.id}&from=Drawings`));
+  };
+
+  const exportTransmittal = (setName) => {
+    const sheets = (groupedBySet[setName] || []).slice().sort((a, b) => (a.sheet_number || "").localeCompare(b.sheet_number || ""));
+    const rows = [
+      ["Sheet #", "Title", "Discipline", "Rev", "Stage", "IFC", "Issue Date", "Due Date", "Approved By"].join(","),
+      ...sheets.map(s => [
+        s.sheet_number || "",
+        `"${(s.title || "").replace(/"/g, '""')}"`,
+        s.discipline || "",
+        s.revision_number ?? "",
+        s.stage || "",
+        s.ifc_status || "",
+        s.issue_date || "",
+        s.due_date || "",
+        s.set_approved_by || "",
+      ].join(",")),
+    ].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${setName.replace(/[^a-z0-9]/gi, "_")}_transmittal.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Transmittal exported");
+  };
+
   const headerBtn = {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.09)",
@@ -414,6 +450,12 @@ export default function Drawings() {
                 ↑ UPLOAD REVISION
               </button>
               <button
+                onClick={() => exportTransmittal(selectedSet)}
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "0 14px", height: 32, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}
+              >
+                ↓ TRANSMITTAL
+              </button>
+              <button
                 onClick={() => setApprovalOpen(selectedSet)}
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "0 14px", height: 32, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}
               >
@@ -437,67 +479,111 @@ export default function Drawings() {
           </div>
 
           {/* Tab content */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            {setDetailTab === "sheets" && (
-              <div style={{ height: "100%", overflowY: "auto", paddingBottom: 24 }}>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
-                  alignItems: "center", padding: "0 20px", height: 28,
-                  background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.06)",
-                  position: "sticky", top: 0, zIndex: 10,
-                }}>
-                  {["", "#", "TITLE", "DISC", "REV", "STAGE", "IFC", "APPV", "DUE", "DAYS", ""].map((col, i) => (
-                    <div key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "rgba(160,175,210,0.30)", letterSpacing: "0.14em", userSelect: "none" }}>{col}</div>
-                  ))}
-                </div>
-                {(groupedBySet[selectedSet] || []).map((drawing, idx) => {
-                  const setSheets = groupedBySet[selectedSet] || [];
-                  return (
-                    <div
-                      key={drawing.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
-                        alignItems: "center", height: 32, padding: "0 20px",
-                        borderBottom: idx === setSheets.length - 1 ? "1px solid rgba(0,229,255,0.06)" : "1px solid rgba(255,255,255,0.038)",
-                        background: selectedIds.has(drawing.id) ? "rgba(0,229,255,0.06)" : "transparent",
-                        transition: "background 0.1s",
-                      }}
-                      className="drawing-row"
-                      onMouseEnter={e => { if (!selectedIds.has(drawing.id)) e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(drawing.id) ? "rgba(0,229,255,0.06)" : "transparent"; }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
-                        <input type="checkbox" checked={selectedIds.has(drawing.id)} onChange={() => toggleSelect(drawing.id)} style={{ width: 13, height: 13, cursor: "pointer", accentColor: "var(--accent)" }} />
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--status-warning)", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 12 }}>{drawing.sheet_number}</span>
-                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 16 }}>{drawing.title}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.42)", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>{drawing.discipline?.toUpperCase().slice(0, 6)}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.52)", textAlign: "center" }}>{drawing.revision_number || "—"}</span>
-                      <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}><StatusBadge status={drawing.stage} /></div>
-                      <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}><IFCBadge status={drawing.ifc_status} /></div>
-                      <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}>
-                        {drawing.set_approved_date ? (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.08em", color: "#00D68F", background: "rgba(0,214,143,0.10)", border: "1px solid rgba(0,214,143,0.20)", borderRadius: 4, padding: "2px 6px" }}>✓ APPV</span>
-                        ) : (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.20)" }}>—</span>
-                        )}
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: drawing.due_date && new Date(drawing.due_date) < new Date() ? "#FF7A7A" : "rgba(160,175,210,0.38)" }}>
-                        {drawing.due_date ? new Date(drawing.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—"}
-                      </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: (() => { if (!drawing.due_date || drawing.stage === "Released") return "rgba(160,175,210,0.25)"; const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000); return days < 0 ? "#FF7A7A" : days <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)"; })() }}>
-                        {drawing.due_date && drawing.stage !== "Released" ? (() => { const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000); return days < 0 ? `${Math.abs(days)}d late` : `${days}d`; })() : "—"}
-                      </span>
-                      <div className="row-actions" style={{ display: "flex", gap: 4, opacity: 0, transition: "opacity 0.1s" }}>
-                        <button title="Edit" onClick={() => { setEditingDrawing(drawing); setFormOpen(true); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(160,175,210,0.55)", padding: 0, flexShrink: 0 }}>✏</button>
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {setDetailTab === "sheets" && (() => {
+              const allSheets = groupedBySet[selectedSet] || [];
+              const discs = [...new Set(allSheets.map(s => s.discipline).filter(Boolean))].sort();
+              const releasedCount = allSheets.filter(s => s.stage === "Released" || s.ifc_status === "IFC").length;
+              const filteredSheets = allSheets.filter(s => {
+                const matchSearch = !sheetSearch || s.sheet_number?.toLowerCase().includes(sheetSearch.toLowerCase()) || s.title?.toLowerCase().includes(sheetSearch.toLowerCase());
+                const matchDisc = sheetDiscFilter === "all" || s.discipline === sheetDiscFilter;
+                return matchSearch && matchDisc;
+              });
+              return (
+                <>
+                  {/* Discipline progress strip */}
+                  <div style={{ flexShrink: 0, display: "flex", gap: 0, padding: "0 20px", background: "var(--bg-surface)", borderBottom: "1px solid var(--divider)" }}>
+                    {/* Released progress */}
+                    <div style={{ padding: "8px 16px 8px 0", borderRight: "1px solid var(--divider)", marginRight: 16 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 4 }}>IFC PROGRESS</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 120, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ width: `${allSheets.length ? (releasedCount / allSheets.length) * 100 : 0}%`, height: "100%", background: "#00D68F", borderRadius: 3, transition: "width 0.3s" }} />
+                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#00D68F", fontWeight: 700 }}>{releasedCount}/{allSheets.length}</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    {/* Discipline filter chips */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap", overflow: "hidden" }}>
+                      {["all", ...discs].map(d => (
+                        <button key={d} onClick={() => setSheetDiscFilter(d)} style={{ padding: "3px 10px", borderRadius: 3, border: `1px solid ${sheetDiscFilter === d ? "var(--accent-border)" : "var(--divider)"}`, background: sheetDiscFilter === d ? "rgba(200,155,32,0.10)" : "transparent", color: sheetDiscFilter === d ? "var(--accent)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
+                          {d === "all" ? `ALL · ${allSheets.length}` : `${d} · ${allSheets.filter(s => s.discipline === d).length}`}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Search */}
+                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+                      <input
+                        placeholder="Search sheets…"
+                        value={sheetSearch}
+                        onChange={e => setSheetSearch(e.target.value)}
+                        style={{ background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 4, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 9, outline: "none", width: 160 }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div style={{ flex: 1, overflowY: "auto", paddingBottom: 24 }}>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
+                      alignItems: "center", padding: "0 20px", height: 28,
+                      background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                      position: "sticky", top: 0, zIndex: 10,
+                    }}>
+                      {["", "#", "TITLE", "DISC", "REV", "STAGE", "IFC", "APPV", "DUE", "DAYS", ""].map((col, i) => (
+                        <div key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "rgba(160,175,210,0.30)", letterSpacing: "0.14em", userSelect: "none" }}>{col}</div>
+                      ))}
+                    </div>
+                    {filteredSheets.length === 0 && (
+                      <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>NO SHEETS MATCH</div>
+                    )}
+                    {filteredSheets.map((drawing, idx) => (
+                      <div
+                        key={drawing.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
+                          alignItems: "center", height: 32, padding: "0 20px",
+                          borderBottom: idx === filteredSheets.length - 1 ? "1px solid rgba(0,229,255,0.06)" : "1px solid rgba(255,255,255,0.038)",
+                          background: selectedIds.has(drawing.id) ? "rgba(0,229,255,0.06)" : "transparent",
+                          transition: "background 0.1s", cursor: drawing.file_url ? "pointer" : "default",
+                        }}
+                        onClick={() => openInViewer(drawing)}
+                        onMouseEnter={e => { if (!selectedIds.has(drawing.id)) e.currentTarget.style.background = "rgba(200,155,32,0.04)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = selectedIds.has(drawing.id) ? "rgba(0,229,255,0.06)" : "transparent"; }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                          <input type="checkbox" checked={selectedIds.has(drawing.id)} onChange={e => { e.stopPropagation(); toggleSelect(drawing.id); }} onClick={e => e.stopPropagation()} style={{ width: 13, height: 13, cursor: "pointer", accentColor: "var(--accent)" }} />
+                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--accent)", letterSpacing: "0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 12 }}>{drawing.sheet_number}</span>
+                        <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 400, color: drawing.file_url ? "var(--text-primary)" : "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 16 }}>{drawing.title}{drawing.file_url && <span style={{ marginLeft: 6, fontSize: 9, color: "var(--accent)", opacity: 0.6 }}>↗</span>}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.42)", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>{drawing.discipline?.toUpperCase().slice(0, 6)}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.52)", textAlign: "center" }}>{drawing.revision_number || "—"}</span>
+                        <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}><StatusBadge status={drawing.stage} /></div>
+                        <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}><IFCBadge status={drawing.ifc_status} /></div>
+                        <div style={{ display: "flex", alignItems: "center", height: "100%", padding: 0 }}>
+                          {drawing.set_approved_date ? (
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.08em", color: "#00D68F", background: "rgba(0,214,143,0.10)", border: "1px solid rgba(0,214,143,0.20)", borderRadius: 4, padding: "2px 6px" }}>✓ APPV</span>
+                          ) : (
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.20)" }}>—</span>
+                          )}
+                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: drawing.due_date && new Date(drawing.due_date) < new Date() ? "#FF7A7A" : "rgba(160,175,210,0.38)" }}>
+                          {drawing.due_date ? new Date(drawing.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—"}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: (() => { if (!drawing.due_date || drawing.stage === "Released") return "rgba(160,175,210,0.25)"; const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000); return days < 0 ? "#FF7A7A" : days <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)"; })() }}>
+                          {drawing.due_date && drawing.stage !== "Released" ? (() => { const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000); return days < 0 ? `${Math.abs(days)}d late` : `${days}d`; })() : "—"}
+                        </span>
+                        <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                          <button title="Edit" onClick={() => { setEditingDrawing(drawing); setFormOpen(true); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(160,175,210,0.55)", padding: 0, flexShrink: 0 }}>✏</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
 
             {setDetailTab === "revisions" && (
               <div style={{ height: "100%", overflowY: "auto", padding: "20px 24px" }}>
