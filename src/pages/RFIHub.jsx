@@ -575,15 +575,19 @@ export default function RFIHub() {
             { label: "Due Today",  value: kpis.dueToday,    color: kpis.dueToday > 0 ? "var(--status-error)" : "var(--text-muted)",  filter: "open" },
             { label: "Due ≤3 Days",value: kpis.due3,        color: kpis.due3 > 0 ? "var(--status-warning)" : "var(--text-muted)",    filter: "open" },
             { label: "Answered",   value: kpis.answered,    color: "var(--status-success)",   filter: "answered" },
-          ].map((k, i) => (
-            <div key={i} onClick={() => k.filter && setStatusFilter(k.filter)}
-              style={{ padding: "10px 12px", background: "var(--bg-surface)", cursor: k.filter ? "pointer" : "default", borderTop: k.urgent ? "2px solid var(--status-error)" : "2px solid transparent" }}
-              onMouseEnter={e => { if (k.filter) e.currentTarget.style.background = "var(--hover-bg)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "var(--bg-surface)"; }}>
-              <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5 }}>{k.label}</div>
-              <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: k.color, lineHeight: 1 }}>{k.value}</div>
-            </div>
-          ))}
+          ].map((k, i) => {
+            const isActive = k.filter && statusFilter === k.filter;
+            return (
+              <div key={i} onClick={() => k.filter && setStatusFilter(isActive ? "all" : k.filter)}
+                title={k.filter ? (isActive ? "Click to clear filter" : `Filter by ${k.label}`) : undefined}
+                style={{ padding: "10px 12px", background: isActive ? "var(--accent-muted)" : "var(--bg-surface)", cursor: k.filter ? "pointer" : "default", borderTop: k.urgent ? "2px solid var(--status-error)" : isActive ? "2px solid var(--accent)" : "2px solid transparent", transition: "background 0.1s" }}
+                onMouseEnter={e => { if (k.filter && !isActive) e.currentTarget.style.background = "var(--hover-bg)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isActive ? "var(--accent-muted)" : "var(--bg-surface)"; }}>
+                <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: isActive ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5 }}>{k.label}</div>
+                <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: k.color, lineHeight: 1 }}>{k.value}</div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Search + filters */}
@@ -607,6 +611,12 @@ export default function RFIHub() {
             <option value="all">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          {(search || statusFilter !== "all" || priorityFilter !== "all" || projectFilter !== "all") && (
+            <button onClick={() => { setSearch(""); setStatusFilter("open"); setPriorityFilter("all"); setProjectFilter("all"); }}
+              style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border, var(--border-default))", borderRadius: 2, padding: "6px 12px", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+              × Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -626,13 +636,33 @@ export default function RFIHub() {
               <RefreshCw size={20} style={{ display: "block", margin: "0 auto 12px", opacity: 0.4 }} /> LOADING…
             </div>
           ) : grouped.length === 0 ? (
-            <div style={{ padding: 60, textAlign: "center" }}>
-              <FileText size={40} style={{ display: "block", margin: "0 auto 16px", color: "var(--text-muted)", opacity: 0.4 }} />
-              <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
-                {search ? "NO RFIS MATCH" : statusFilter === "open" ? "✓ ALL RFIS ANSWERED" : "NO RFIS YET"}
+            rfis.length === 0 && !search ? (
+              /* Hero empty state — no RFIs exist yet */
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 0, padding: 40, textAlign: "center" }}>
+                <FileText size={56} style={{ color: "var(--accent)", opacity: 0.25, marginBottom: 20 }} />
+                <div style={{ fontFamily: "Space Grotesk, var(--font-display), sans-serif", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 10 }}>
+                  No RFIs Yet
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 340, lineHeight: 1.6, marginBottom: 28 }}>
+                  Track information requests, document answers, and keep the engineer on the clock. Create your first RFI to get started.
+                </div>
+                <button onClick={() => setShowNewRFI(true)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 24px", background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 3, ...mono, fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <Plus size={15} /> Create First RFI
+                </button>
               </div>
-              {!search && <button onClick={() => setShowNewRFI(true)} style={{ marginTop: 16, ...mono, fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ Create your first RFI</button>}
-            </div>
+            ) : (
+              /* Filter produced no results */
+              <div style={{ padding: 60, textAlign: "center" }}>
+                <FileText size={36} style={{ display: "block", margin: "0 auto 14px", color: "var(--text-muted)", opacity: 0.3 }} />
+                <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 14 }}>
+                  {search ? "NO RFIS MATCH YOUR SEARCH" : statusFilter === "open" ? "✓ ALL RFIS ANSWERED" : "NO RFIS MATCH FILTERS"}
+                </div>
+                <button onClick={() => { setSearch(""); setStatusFilter("all"); setPriorityFilter("all"); setProjectFilter("all"); }}
+                  style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "none", border: "1px solid var(--accent-border)", borderRadius: 2, padding: "5px 14px", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Clear Filters
+                </button>
+              </div>
+            )
           ) : grouped.map(([projKey, group]) => {
             const proj = group.project;
             const isExpanded = expandedProjects.has(projKey);

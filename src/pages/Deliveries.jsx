@@ -786,46 +786,42 @@ export default function Deliveries() {
       {/* KPI strip */}
       <div style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--divider)", display: "flex", flexShrink: 0, overflowX: "auto" }}>
         {[
-          { label: "SCHEDULED", value: kpis.scheduled, tone: "warning", status: "Scheduled" },
-          { label: "IN TRANSIT", value: kpis.inTransit, tone: "info", status: "In Transit" },
-          { label: "DELIVERED", value: kpis.delivered, tone: "success", status: "Delivered" },
-          { label: "PARTIAL / ISSUES", value: kpis.partial, tone: "error", status: "Partial" },
-          { label: "OVERDUE", value: kpis.overdue, tone: kpis.overdue ? "error" : "muted", status: "ALL" },
-          { label: "DUE THIS WEEK", value: kpis.dueWeek, tone: "warning", status: "ALL" },
-          { label: "DUE THIS MONTH", value: kpis.dueMonth, tone: "accent", status: "ALL" },
-          { label: "TONS PENDING", value: `${kpis.tonsPending}T`, tone: "accent", status: "ALL" },
-        ].map((k, idx) => (
-          <div
-            key={k.label}
-            onClick={() => setFilterStatus(k.status === "ALL" ? "ALL" : k.status)}
-            style={{
-              padding: "10px 20px",
-              borderRight: idx < 7 ? "1px solid var(--divider)" : "none",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 4 }}>
-              {k.label}
-            </div>
+          { label: "SCHEDULED",      value: kpis.scheduled,           tone: "warning", status: "Scheduled"  },
+          { label: "IN TRANSIT",     value: kpis.inTransit,           tone: "info",    status: "In Transit" },
+          { label: "DELIVERED",      value: kpis.delivered,           tone: "success", status: "Delivered"  },
+          { label: "PARTIAL/ISSUES", value: kpis.partial,             tone: "error",   status: "Partial"    },
+          { label: "OVERDUE",        value: kpis.overdue,             tone: kpis.overdue ? "error" : "muted", status: null },
+          { label: "DUE THIS WEEK",  value: kpis.dueWeek,            tone: "warning", status: null },
+          { label: "DUE THIS MONTH", value: kpis.dueMonth,           tone: "accent",  status: null },
+          { label: "TONS PENDING",   value: `${kpis.tonsPending}T`,  tone: "accent",  status: null },
+        ].map((k, idx) => {
+          const isActive = k.status && filterStatus === k.status;
+          return (
             <div
+              key={k.label}
+              onClick={() => k.status && setFilterStatus(isActive ? "ALL" : k.status)}
+              title={k.status ? (isActive ? "Click to clear filter" : `Filter by ${k.label}`) : undefined}
               style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 20,
-                fontWeight: 800,
-                color:
-                  k.tone === "error"
-                    ? "var(--status-error)"
-                    : k.tone === "warning"
-                    ? "var(--status-warning)"
-                    : k.tone === "info"
-                    ? "var(--status-info)"
-                    : "var(--accent)",
+                padding: "10px 20px",
+                borderRight: idx < 7 ? "1px solid var(--divider)" : "none",
+                cursor: k.status ? "pointer" : "default",
+                background: isActive ? "var(--accent-muted)" : "transparent",
+                borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
+                transition: "background 0.1s",
               }}
             >
-              {k.value}
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? "var(--accent)" : "var(--text-muted)", marginBottom: 4 }}>
+                {k.label}
+              </div>
+              <div style={{
+                fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800,
+                color: k.tone === "error" ? "var(--status-error)" : k.tone === "warning" ? "var(--status-warning)" : k.tone === "info" ? "var(--status-info)" : "var(--accent)",
+              }}>
+                {k.value}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Critical alert banner */}
@@ -985,14 +981,16 @@ export default function Deliveries() {
 
       {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Lookahead panel */}
+        {/* Lookahead panel — hidden when there are no deliveries at all */}
         <div
           style={{
-            width: 260,
+            width: deliveries.length === 0 ? 0 : 260,
             flexShrink: 0,
-            borderRight: "1px solid var(--divider)",
+            borderRight: deliveries.length === 0 ? "none" : "1px solid var(--divider)",
             background: "var(--bg-sidebar)",
             overflowY: "auto",
+            overflow: deliveries.length === 0 ? "hidden" : undefined,
+            transition: "width 0.2s ease",
           }}
         >
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--divider)" }}>
@@ -1102,7 +1100,24 @@ export default function Deliveries() {
 
         {/* Right panel */}
         <div style={{ flex: 1, overflowY: "auto", position: "relative", background: "var(--bg-page)" }}>
-          {view === "TABLE" ? (
+          {deliveries.length === 0 ? (
+            /* Hero empty state */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 0, padding: 40, textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 20, opacity: 0.3 }}>🚛</div>
+              <div style={{ fontFamily: "Space Grotesk, var(--font-display), sans-serif", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 10 }}>
+                No Shipments Tracked
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 360, lineHeight: 1.6, marginBottom: 28 }}>
+                Start tracking steel deliveries, vendor shipments, and material arrivals. Log your first delivery to enable the lookahead schedule and overdue alerts.
+              </div>
+              <button
+                onClick={() => { setEditing(null); setDetail(null); setShowForm(true); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 28px", background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
+              >
+                + Add First Delivery
+              </button>
+            </div>
+          ) : view === "TABLE" ? (
             <div>
               <div
                 style={{
