@@ -12,12 +12,14 @@ import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, c
    Phase + Health configs
 ───────────────────────────────────────────── */
 const PHASE_CONFIG = {
-  "Pre-Construction":    { color: "#8B5CF6", bg: "rgba(139,92,246,0.10)",  order: 0 },
-  "Detailing":           { color: "#6366F1", bg: "rgba(99,102,241,0.10)",  order: 1 },
-  "Procurement":         { color: "#3B82F6", bg: "rgba(59,130,246,0.10)",  order: 2 },
+  "Pre-Construction":    { color: "#64748B", bg: "rgba(100,116,139,0.12)", order: 0 },
+  "Detailing":           { color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  order: 1 },
+  "Procurement":         { color: "#F59E0B", bg: "rgba(245,158,11,0.10)",  order: 2 },
   "Fabrication":         { color: "#E8650A", bg: "rgba(232,101,10,0.10)",  order: 3 },
   "Delivery":            { color: "#10B981", bg: "rgba(16,185,129,0.10)",  order: 4 },
-  "Installation/Erection": { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", order: 5 },
+  "Installation":        { color: "#06B6D4", bg: "rgba(6,182,212,0.10)",   order: 5 },
+  "Installation/Erection": { color: "#06B6D4", bg: "rgba(6,182,212,0.10)", order: 5 },
+  "Erection":            { color: "#06B6D4", bg: "rgba(6,182,212,0.10)",   order: 5 },
   "Closeout":            { color: "#6B7280", bg: "rgba(107,114,128,0.10)", order: 6 },
 };
 
