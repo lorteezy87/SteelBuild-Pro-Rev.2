@@ -112,6 +112,7 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
   const [tooltip, setTooltip] = useState(null); // { task, x, y }
+  const [hoveredRowId, setHoveredRowId] = useState(null);
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
   const rightBody = useRef(null);
@@ -351,12 +352,13 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
             const predecessor = task.predecessor_wbs || task.predecessor_task_id || task.predecessors || "—";
             const overdue = isOverdue(task);
             const isEditing = editingId === task.id;
+            const leftHovered = hoveredRowId === task.id;
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent", transition: "background 0.1s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-row-hover)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={() => setHoveredRowId(task.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
                 {/* WBS */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || task.task_number || "—"}</span>
@@ -424,14 +426,21 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
               </div>
             )}
 
-            {/* Week grid lines */}
-            {dateRange.weeks.map((w, i) => (
-              <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1, background: "rgba(255,255,255,0.04)" }} />
-            ))}
+            {/* Week grid lines — brighter at month boundaries */}
+            {dateRange.weeks.map((w, i) => {
+              const isMonthStart = w.getDate() <= 7; // first week of month
+              return (
+                <div key={i} style={{
+                  position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: isMonthStart ? 1 : 1,
+                  background: isMonthStart ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
+                }} />
+              );
+            })}
 
             {/* Rows */}
             {(() => {
               let top = 0;
+              let taskIdx = 0;
               return rows.map((row, i) => {
                 const rowTop = top;
                 if (row.type === "summary") {
@@ -444,25 +453,23 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
                     </div>
                   );
                 }
+                const zebra = taskIdx++ % 2 === 1;
                 top += ROW_H;
                 const { task } = row;
                 const overdue = isOverdue(task);
+                const hovered = hoveredRowId === task.id;
+                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "rgba(255,255,255,0.015)" : "transparent";
+                const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
-                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent" }} />;
+                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg }} />;
                 }
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent", cursor: "pointer" }}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
                     onClick={() => onTaskClick && onTaskClick(task)}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                      setTooltip({ task, x: e.clientX, y: e.clientY });
-                    }}
+                    onMouseEnter={e => { setHoveredRowId(task.id); setTooltip({ task, x: e.clientX, y: e.clientY }); }}
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = overdue ? "rgba(239,68,68,0.03)" : "transparent";
-                      setTooltip(null);
-                    }}
+                    onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
                     <TaskBar task={task} leftPx={px(task.start_date)} widthPx={spanPx(task.start_date, task.end_date)} />
                   </div>
