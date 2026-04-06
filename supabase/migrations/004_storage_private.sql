@@ -24,5 +24,5 @@ CREATE POLICY "auth_delete_own" ON storage.objects
   FOR DELETE TO authenticated
   USING (
     bucket_id = 'app-files'
-    AND owner_id = auth.uid()
+    AND owner_id = auth.uid()::text
   );
