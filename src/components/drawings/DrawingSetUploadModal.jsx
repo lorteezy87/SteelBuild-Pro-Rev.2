@@ -10,6 +10,17 @@ import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const MAX_PDF_SIZE_MB = 32;
+const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
+const EXTRACT_TIMEOUT_MS = 150_000;  // 2.5 min
+
+function withTimeout(promise, ms, label = "Operation") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s — please retry`)), ms)
+    ),
+  ]);
+}
 
 function isPdfFile(file) {
   if (!file) return false;
@@ -281,8 +292,23 @@ function StepMeta({ meta, setMeta, onBack, onUpload, projectName }) {
 }
 
 // ─── Step 3: Processing UI ────────────────────────────────────────────
-function StepProcessing({ processingStatus }) {
+function StepProcessing({ processingStatus, onCancel, error }) {
   const { steps = [], currentStepId, progress = 0, message = "" } = processingStatus;
+
+  if (error) {
+    return (
+      <div style={{ padding: "20px 0", textAlign: "center" }}>
+        <div style={{ fontSize: 36, marginBottom: 10 }}>⚠</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--status-error)", marginBottom: 8 }}>
+          Processing Failed
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24, maxWidth: 360, margin: "0 auto 24px" }}>
+          {error}
+        </div>
+        <Button variant="outline" onClick={onCancel}>← Start Over</Button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "20px 0" }}>
@@ -337,6 +363,20 @@ function StepProcessing({ processingStatus }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Cancel escape hatch */}
+      <div style={{ textAlign: "center", marginTop: 20 }}>
+        <button
+          onClick={onCancel}
+          style={{
+            background: "none", border: "none", color: "rgba(160,175,210,0.35)",
+            fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer",
+            letterSpacing: "0.08em", textDecoration: "underline",
+          }}
+        >
+          cancel &amp; start over
+        </button>
       </div>
     </div>
   );
@@ -523,6 +563,8 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   const [sheets, setSheets]               = useState([]);
   const [fileResults, setFileResults]     = useState([]);
   const [createdCount, setCreatedCount]   = useState(0);
+  const [processError, setProcessError]   = useState(null);
+  const cancelledRef                      = useRef(false);
 
   const makeSteps = (activeId, doneIds = [], warnings = {}) => [
     { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload"),  id: "upload"  },
@@ -533,7 +575,9 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   ].map(s => ({ ...s, id: s.id }));
 
   const reset = () => {
+    cancelledRef.current = true;  // abort any in-progress operation
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
+    setProcessError(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
     setMeta({ setName: "", discipline: "Structural", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
   };
@@ -541,137 +585,183 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   const handleClose = () => { reset(); onClose(); };
 
   const handleUploadAndProcess = async () => {
+    cancelledRef.current = false;
+    setProcessError(null);
     setStep(3);
     const allSheets  = [];
     const results    = [];
     const totalFiles = files.length;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        if (cancelledRef.current) break;
+        const file = files[i];
 
-      // ── Upload ──
-      setProcessingStatus({
-        steps: makeSteps("upload", []),
-        currentStepId: "upload",
-        progress: Math.round((i / totalFiles) * 15),
-        message: `Uploading ${file.name}… (${i + 1} of ${totalFiles})`,
-      });
+        // ── Upload ──
+        setProcessingStatus({
+          steps: makeSteps("upload", []),
+          currentStepId: "upload",
+          progress: Math.round((i / totalFiles) * 15),
+          message: `Uploading ${file.name}… (${i + 1} of ${totalFiles})`,
+        });
 
-      let fileUrl;
-      try {
-        const res = await base44.integrations.Core.UploadFile({ file });
-        fileUrl = res.file_url;
-      } catch (err) {
-        results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message });
-        continue;
+        let fileUrl;
+        try {
+          const res = await withTimeout(
+            base44.integrations.Core.UploadFile({ file }),
+            UPLOAD_TIMEOUT_MS,
+            "File upload"
+          );
+          fileUrl = res?.file_url || res?.url;
+          if (!fileUrl) throw new Error("Upload succeeded but no file URL was returned");
+        } catch (err) {
+          results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message });
+          continue;
+        }
+
+        if (cancelledRef.current) break;
+
+        const baseProgress = Math.round(((i + 0.2) / totalFiles) * 90);
+
+        // ── Encode ──
+        setProcessingStatus({
+          steps: makeSteps("encode", ["upload"]),
+          currentStepId: "encode",
+          progress: baseProgress + 5,
+          message: `Preparing ${file.name} for AI…`,
+        });
+
+        // ── Extract ──
+        setProcessingStatus({
+          steps: makeSteps("extract", ["upload", "encode"]),
+          currentStepId: "extract",
+          progress: baseProgress + 10,
+          message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
+        });
+
+        const sizeMB = file.size / (1024 * 1024);
+        let extractResult;
+        try {
+          extractResult = await withTimeout(
+            validateAndExtract(file, fileUrl),
+            EXTRACT_TIMEOUT_MS,
+            "AI extraction"
+          );
+        } catch (err) {
+          // On timeout/extract failure, fall back to a single manual-entry row
+          extractResult = {
+            sheets: [{
+              sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
+              discipline: meta.discipline, sheetType: "General",
+              revision: "0", scale: "", date: "",
+              _note: `Extraction failed: ${err.message}. Please fill in manually.`,
+            }],
+            scanned: false,
+            extractFailed: true,
+            error: err.message,
+          };
+        }
+
+        if (cancelledRef.current) break;
+
+        // ── Parse ──
+        setProcessingStatus({
+          steps: makeSteps("parse", ["upload", "encode", "extract"], extractResult.scanned ? { extract: true } : {}),
+          currentStepId: "parse",
+          progress: baseProgress + 20,
+          message: `Building sheet list for ${file.name}…`,
+        });
+
+        const tagged = extractResult.sheets.map(s => ({
+          ...s,
+          discipline:    s.discipline || meta.discipline,
+          sourceFile:    file.name,
+          sourceFileUrl: fileUrl,
+          selected:      true,
+        }));
+
+        allSheets.push(...tagged);
+        results.push({
+          fileName:      file.name,
+          fileUrl,
+          sheetCount:    extractResult.sheets.length,
+          status:        "success",
+          scanned:       extractResult.scanned       || false,
+          tooLarge:      extractResult.tooLarge      || false,
+          extractFailed: extractResult.extractFailed || false,
+          sizeMB,
+        });
+
+        if (i < files.length - 1) {
+          await new Promise(r => setTimeout(r, 600));
+        }
       }
 
-      const baseProgress = Math.round(((i + 0.2) / totalFiles) * 90);
+      if (cancelledRef.current) return;  // user cancelled — stay at step 0 (reset already called)
 
-      // ── Encode ──
+      // ── Done ──
       setProcessingStatus({
-        steps: makeSteps("encode", ["upload"]),
-        currentStepId: "encode",
-        progress: baseProgress + 5,
-        message: `Preparing ${file.name} for AI…`,
+        steps: makeSteps(null, ["upload", "encode", "extract", "parse", "done"]),
+        currentStepId: null,
+        progress: 100,
+        message: `Found ${allSheets.length} sheets across ${results.filter(r => r.status === "success").length} file(s)`,
       });
 
-      // ── Extract ──
-      setProcessingStatus({
-        steps: makeSteps("extract", ["upload", "encode"]),
-        currentStepId: "extract",
-        progress: baseProgress + 10,
-        message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
-      });
+      setSheets(allSheets);
+      setFileResults(results);
+      await new Promise(r => setTimeout(r, 600));
 
-      const sizeMB = file.size / (1024 * 1024);
-      let extractResult;
-      try {
-        extractResult = await validateAndExtract(file, fileUrl);
-      } catch (err) {
-        results.push({ fileName: file.name, sheetCount: 0, status: "failed", error: err.message, fileUrl });
-        continue;
-      }
+      if (!cancelledRef.current) setStep(4);
 
-      // ── Parse ──
-      setProcessingStatus({
-        steps: makeSteps("parse", ["upload", "encode", "extract"], extractResult.scanned ? { extract: true } : {}),
-        currentStepId: "parse",
-        progress: baseProgress + 20,
-        message: `Building sheet list for ${file.name}…`,
-      });
-
-      const tagged = extractResult.sheets.map(s => ({
-        ...s,
-        discipline:    s.discipline || meta.discipline,
-        sourceFile:    file.name,
-        sourceFileUrl: fileUrl,
-        selected:      true,
-      }));
-
-      allSheets.push(...tagged);
-      results.push({
-        fileName:   file.name,
-        fileUrl,
-        sheetCount: extractResult.sheets.length,
-        status:     "success",
-        scanned:    extractResult.scanned  || false,
-        tooLarge:   extractResult.tooLarge || false,
-        sizeMB,
-      });
-
-      if (i < files.length - 1) {
-        await new Promise(r => setTimeout(r, 800));
-      }
+    } catch (fatalErr) {
+      // Completely unexpected error — show it in the processing screen
+      console.error("Fatal upload error:", fatalErr);
+      setProcessError(fatalErr.message || "An unexpected error occurred. Please try again.");
     }
-
-    // ── Done ──
-    setProcessingStatus({
-      steps: makeSteps(null, ["upload", "encode", "extract", "parse", "done"]),
-      currentStepId: null,
-      progress: 100,
-      message: `Found ${allSheets.length} sheets across ${results.filter(r => r.status === "success").length} file(s)`,
-    });
-
-    setSheets(allSheets);
-    setFileResults(results);
-    await new Promise(r => setTimeout(r, 700));
-    setStep(4);
   };
 
   const handleCreate = async (selectedSheets) => {
+    cancelledRef.current = false;
+    setProcessError(null);
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
     const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
 
-    let created = 0;
-    for (const sheet of selectedSheets) {
-      await base44.entities.Drawing.create({
-        sheet_number:     sheet.sheetNumber,
-        title:            sheet.sheetTitle,
-        project_id:       activeProject?.id,
-        project_name:     activeProject?.name,
-        discipline:       sheet.discipline || meta.discipline,
-        revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-        stage:            "Not Started",
-        issue_date:       sheet.date || meta.issueDate,
-        issued_by:        meta.issuedBy,
-        file_url:         sheet.sourceFileUrl,
-        drawing_set_name: resolvedSetName,
-        notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
-      });
-      created++;
-      setProcessingStatus(prev => ({
-        ...prev,
-        progress: Math.round((created / selectedSheets.length) * 100),
-        message: `Creating entries… ${created} of ${selectedSheets.length}`,
-      }));
-    }
+    try {
+      let created = 0;
+      for (const sheet of selectedSheets) {
+        if (cancelledRef.current) break;
+        await base44.entities.Drawing.create({
+          sheet_number:     sheet.sheetNumber,
+          title:            sheet.sheetTitle,
+          project_id:       activeProject?.id,
+          project_name:     activeProject?.name,
+          discipline:       sheet.discipline || meta.discipline,
+          revision_number:  Number(sheet.revision ?? meta.revision) || 0,
+          stage:            "Not Started",
+          issue_date:       sheet.date || meta.issueDate,
+          issued_by:        meta.issuedBy,
+          file_url:         sheet.sourceFileUrl,
+          drawing_set_name: resolvedSetName,
+          notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
+        });
+        created++;
+        setProcessingStatus(prev => ({
+          ...prev,
+          progress: Math.round((created / selectedSheets.length) * 100),
+          message: `Creating entries… ${created} of ${selectedSheets.length}`,
+        }));
+      }
 
-    setCreatedCount(created);
-    setStep(5);
-    if (onComplete) onComplete();
+      if (cancelledRef.current) return;
+      setCreatedCount(created);
+      setStep(5);
+      if (onComplete) onComplete();
+    } catch (err) {
+      console.error("Create drawings error:", err);
+      setProcessError(`Failed to save drawings: ${err.message}`);
+    }
   };
 
   return (
@@ -696,7 +786,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           {step === 0 && <StepChoice onNewSet={() => setStep(1)} onNewRevision={() => { handleClose(); if (onNewRevision) onNewRevision(); }} onClose={handleClose} />}
           {step === 1 && <StepFiles files={files} setFiles={setFiles} onNext={() => setStep(2)} onClose={handleClose} />}
           {step === 2 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} projectName={activeProject?.name} />}
-          {step === 3 && <StepProcessing processingStatus={processingStatus} />}
+          {step === 3 && <StepProcessing processingStatus={processingStatus} onCancel={reset} error={processError} />}
           {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} onBack={() => setStep(1)} onCreate={handleCreate} />}
           {step === 5 && <StepSuccess createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>

@@ -121,7 +121,7 @@ export default function QuickAddFAB() {
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            color: "#000",
+            color: "#fff",
             boxShadow: "0 0 20px rgba(255,107,0,0.45)",
             transition: "all 0.15s",
             position: "relative",
