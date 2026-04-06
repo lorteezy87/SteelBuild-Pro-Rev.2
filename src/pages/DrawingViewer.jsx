@@ -234,6 +234,71 @@ export default function DrawingViewer() {
     }
   };
 
+  const detectCrossReferences = async () => {
+    if (!drawingRecord || detectingRefs) return;
+    setDetectingRefs(true);
+    try {
+      const otherSheets = allSetDrawings
+        .filter(d => d.id !== drawingRecord.id)
+        .map(d => `${d.sheet_number}: ${d.title}`)
+        .join(", ");
+
+      const prompt = `You are analyzing an engineering drawing: "${drawingRecord.sheet_number} - ${drawingRecord.title}".
+
+Other sheets in this drawing set: ${otherSheets || "none provided"}
+
+Analyze this drawing for callout references such as:
+- Section markers (e.g., "SECTION A-A", "SECTION 1/603E105")
+- Elevation callouts (e.g., "ELEVATION", "ELEV 1/S-101")
+- Detail bubbles (e.g., "DETAIL 1", "SEE DET 3/A-201")
+- Reference arrows pointing to other sheets
+- Keynote references
+
+For each reference found, provide:
+1. The label text as it appears
+2. The approximate position on the drawing (as percentage of width and height, e.g., x: 0.35, y: 0.72)
+3. The target sheet number if determinable (match against the sheet list above)
+
+Return a JSON array: [{"label": "SECTION A", "x": 0.35, "y": 0.72, "targetSheet": "603E104"}]
+
+If no references are found, return: []
+
+Drawing file URL for reference: ${fileUrl}`;
+
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        add_context_from_internet: false,
+        response_json_schema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string" },
+              x: { type: "number" },
+              y: { type: "number" },
+              targetSheet: { type: "string" }
+            }
+          }
+        }
+      });
+
+      const refs = Array.isArray(result) ? result : [];
+      setCrossRefs(refs);
+
+      // Save to drawing annotations
+      const existingAnnotations = drawingRecord?.annotations || {};
+      await base44.entities.Drawing.update(drawingRecord.id, {
+        annotations: { ...existingAnnotations, crossRefs: refs }
+      });
+
+      toast.success(`Found ${refs.length} cross-reference${refs.length !== 1 ? "s" : ""}`);
+    } catch (err) {
+      toast.error("Cross-reference detection failed: " + (err?.message || "unknown error"));
+    } finally {
+      setDetectingRefs(false);
+    }
+  };
+
   const handleSaveNow = async () => {
     clearTimeout(saveTimerRef.current);
     setSaveStatus("saving");
@@ -346,6 +411,56 @@ export default function DrawingViewer() {
               onUpdateMarkup={handleUpdateMarkup}
               onDeleteMarkup={handleDeleteMarkup}
             />
+
+            {/* Cross-reference hotspots overlay */}
+            {showCrossRefs && crossRefs.length > 0 && (
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 20 }}>
+                {crossRefs.map((ref, i) => {
+                  const targetDrawing = allSetDrawings.find(d =>
+                    d.sheet_number === ref.targetSheet ||
+                    d.sheet_number?.includes(ref.targetSheet)
+                  );
+                  return (
+                    <div
+                      key={i}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (targetDrawing) {
+                          const params = new URLSearchParams(searchParams);
+                          params.set("drawingId", targetDrawing.id);
+                          navigate(`?${params.toString()}`);
+                        }
+                      }}
+                      title={`${ref.label}${ref.targetSheet ? ` → Sheet ${ref.targetSheet}` : ""}`}
+                      style={{
+                        position: "absolute",
+                        left: `${ref.x * 100}%`,
+                        top: `${ref.y * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: targetDrawing ? "rgba(200,155,32,0.85)" : "rgba(59,130,246,0.85)",
+                        border: "2px solid rgba(255,255,255,0.8)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: targetDrawing ? "pointer" : "default",
+                        pointerEvents: "all",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                        transition: "transform 0.1s, background 0.1s",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "translate(-50%, -50%) scale(1.15)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "translate(-50%, -50%)"; }}
+                    >
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 800, color: "#fff", textAlign: "center", lineHeight: 1, padding: "0 2px", whiteSpace: "nowrap", maxWidth: 28, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {ref.label.slice(0, 4)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Markup toolbar (floating left sidebar) */}
@@ -365,6 +480,49 @@ export default function DrawingViewer() {
               onUndo={popUndo}
             />
           )}
+
+          {/* Cross-reference detection buttons (floating top-right in canvas area) */}
+          {drawingRecord && (
+            <div style={{ position: "absolute", top: 16, right: 16, display: "flex", gap: 6, zIndex: 30 }}>
+              <button
+                onClick={detectCrossReferences}
+                disabled={detectingRefs}
+                style={{
+                  padding: "5px 10px",
+                  background: detectingRefs ? "rgba(200,155,32,0.3)" : "rgba(200,155,32,0.15)",
+                  border: "1px solid rgba(200,155,32,0.5)",
+                  color: "var(--accent)",
+                  borderRadius: 4,
+                  cursor: detectingRefs ? "not-allowed" : "pointer",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {detectingRefs ? "DETECTING…" : "DETECT REFS"}
+              </button>
+              {crossRefs.length > 0 && (
+                <button
+                  onClick={() => setShowCrossRefs(v => !v)}
+                  style={{
+                    padding: "5px 10px",
+                    background: showCrossRefs ? "rgba(200,155,32,0.15)" : "rgba(80,80,100,0.3)",
+                    border: "1px solid rgba(200,155,32,0.3)",
+                    color: showCrossRefs ? "var(--accent)" : "rgba(200,210,230,0.50)",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {showCrossRefs ? `REFS ON · ${crossRefs.length}` : `REFS OFF · ${crossRefs.length}`}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right panel */}
@@ -381,6 +539,90 @@ export default function DrawingViewer() {
             onUpdate={(updates) => handleUpdateMarkup(selectedMarkup.id, updates)}
             onDelete={() => handleDeleteMarkup(selectedMarkup.id)}
           />
+        ) : drawingRecord ? (
+          <div style={{ display: "flex", flexDirection: "column", width: 220, flexShrink: 0, borderLeft: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+            {/* Panel toggle buttons */}
+            <div style={{ display: "flex", borderBottom: "1px solid var(--divider)" }}>
+              {["sheets", "markups", "analysis"].map(panel => (
+                <button
+                  key={panel}
+                  onClick={() => setRightPanel(panel)}
+                  style={{
+                    flex: 1,
+                    padding: "7px 0",
+                    background: rightPanel === panel ? "rgba(200,155,32,0.08)" : "transparent",
+                    border: "none",
+                    borderBottom: rightPanel === panel ? "2px solid var(--accent)" : "2px solid transparent",
+                    color: rightPanel === panel ? "var(--accent)" : "rgba(200,210,230,0.50)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {panel}
+                </button>
+              ))}
+            </div>
+
+            {/* Sheets panel */}
+            {rightPanel === "sheets" && allSetDrawings.length > 0 && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 700 }}>
+                  SHEETS IN SET · {allSetDrawings.length}
+                </div>
+                <div style={{ padding: "6px 10px", borderBottom: "1px solid var(--divider)" }}>
+                  <input placeholder="Search sheets..." style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "4px 8px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 9, outline: "none" }} />
+                </div>
+                {allSetDrawings.map(sheet => (
+                  <div
+                    key={sheet.id}
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.set("drawingId", sheet.id);
+                      navigate(`?${params.toString()}`);
+                    }}
+                    style={{
+                      padding: "8px 10px",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      cursor: "pointer",
+                      background: sheet.id === drawingId ? "rgba(200,155,32,0.08)" : "transparent",
+                      borderLeft: sheet.id === drawingId ? "3px solid var(--accent)" : "3px solid transparent",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={e => { if (sheet.id !== drawingId) e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseLeave={e => { if (sheet.id !== drawingId) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: sheet.id === drawingId ? "var(--accent)" : "var(--text-muted)" }}>{sheet.sheet_number}</div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sheet.title}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Markups panel */}
+            {rightPanel === "markups" && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <MarkupsList
+                  markups={pageMarkups}
+                  allMarkups={markups}
+                  onSelectMarkup={(m) => { setSelectedMarkup(m); if (!markupMode) setMarkupMode(true); }}
+                  onDelete={handleDeleteMarkup}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                />
+              </div>
+            )}
+
+            {/* Analysis panel placeholder */}
+            {rightPanel === "analysis" && (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(200,210,230,0.40)", fontFamily: "var(--font-mono)", fontSize: 9, textAlign: "center", padding: 16 }}>
+                Run AI Analysis from the toolbar to see results here.
+              </div>
+            )}
+          </div>
         ) : (
           <MarkupsList
             markups={pageMarkups}
