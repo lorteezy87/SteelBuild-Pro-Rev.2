@@ -38,7 +38,7 @@ const TAB_DEFAULT_PAGE = {
   "PCC": "ProjectControlCenter",
   "PROJECTS": "Projects",
   "RFIs": "RFIs",
-  "DRAWINGS": "Submittals",
+  "DRAWINGS": "Documents",
   "FABRICATION": "WorkPackages",
   "DELIVERIES": "Deliveries",
   "SCHEDULE": "Schedule",
