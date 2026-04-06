@@ -182,7 +182,22 @@ const createEntityClient = (tableName) => ({
 // ─── Entity registry ──────────────────────────────────────────────────────────
 
 export const entities = {
-  Project:               createEntityClient('projects'),
+  // Project creation goes through an RPC to atomically insert the project
+  // and the creator's owner membership row in a single SECURITY DEFINER call,
+  // bypassing the RLS bootstrap problem with the AFTER trigger approach.
+  Project: {
+    ...createEntityClient('projects'),
+    create: async (record) => {
+      const clean = Object.fromEntries(
+        Object.entries(record).filter(([, v]) => v !== undefined)
+      );
+      const { data, error } = await supabase.rpc('create_project', {
+        project_data: clean,
+      });
+      if (error) throw error;
+      return addAliases(data);
+    },
+  },
   RFI:                   createEntityClient('rfis'),
   Drawing:               createEntityClient('drawings'),
   DrawingSet:            createEntityClient('drawing_sets'),
