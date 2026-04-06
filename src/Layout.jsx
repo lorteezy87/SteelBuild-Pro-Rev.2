@@ -807,10 +807,10 @@ function PMAButton() {
   const { isOpen, setIsOpen, unreadInsights, isLoadingInsights } = usePMA();
 
   const statusLabel = isLoadingInsights
-    ? 'LOADING'
+    ? 'ANALYZING'
     : unreadInsights > 0
-    ? 'READY'
-    : 'IDLE';
+    ? 'INSIGHTS READY'
+    : 'ENTER DATA';
 
   const pulseStyle =
     unreadInsights > 0
