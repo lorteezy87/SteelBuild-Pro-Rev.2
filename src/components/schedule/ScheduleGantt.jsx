@@ -75,7 +75,7 @@ function TaskBar({ task, leftPx, widthPx }) {
   }
   if (task.status === "In Progress") {
     return (
-      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px solid var(--accent)", borderRadius: 2, overflow: "hidden", background: "rgba(232,101,10,0.08)" }}>
+      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px solid var(--accent)", borderRadius: 2, overflow: "hidden", background: "rgba(200,155,32,0.08)" }}>
         <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden" }}>
           <span style={{ fontSize: 8, fontWeight: 700, color: "#000", whiteSpace: "nowrap" }}>{task.task_name}</span>
         </div>
@@ -226,7 +226,7 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
             {dateRange.weeks.map((week, i) => {
               const cur = isCurrentWeek(week);
               return (
-                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: cur ? "rgba(232,101,10,0.06)" : "transparent" }}>
+                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: cur ? "rgba(200,155,32,0.06)" : "transparent" }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
                     {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>

@@ -44,8 +44,8 @@ function SignalCard({ label, value, color, sub, onClick, active }) {
         flex: 1,
         minWidth: 100,
         padding: "10px 14px",
-        background: active ? "rgba(232,101,10,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(232,101,10,0.30)" : "rgba(255,255,255,0.06)"}`,
+        background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
+        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.06)"}`,
         borderRadius: 8,
         cursor: onClick ? "pointer" : "default",
         transition: "all 0.15s",
@@ -86,8 +86,8 @@ function ActionBadge({ action }) {
     <span style={{
       fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.08em",
       padding: "2px 8px", borderRadius: 4,
-      background: "rgba(232,101,10,0.10)", color: "var(--accent)",
-      border: "1px solid rgba(232,101,10,0.22)", whiteSpace: "nowrap", flexShrink: 0,
+      background: "rgba(200,155,32,0.10)", color: "var(--accent)",
+      border: "1px solid rgba(200,155,32,0.22)", whiteSpace: "nowrap", flexShrink: 0,
     }}>
       → {action}
     </span>
@@ -791,9 +791,9 @@ export default function ProjectControlCenter() {
             {tab.count > 0 && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 8,
-                background: activeTab === tab.id ? "rgba(232,101,10,0.15)" : "rgba(255,255,255,0.05)",
+                background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "rgba(255,255,255,0.05)",
                 color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
-                border: `1px solid ${activeTab === tab.id ? "rgba(232,101,10,0.30)" : "rgba(255,255,255,0.08)"}`,
+                border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.08)"}`,
                 padding: "0 5px", borderRadius: 3,
               }}>
                 {tab.count}
