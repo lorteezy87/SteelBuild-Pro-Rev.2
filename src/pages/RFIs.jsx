@@ -404,7 +404,7 @@ export default function RFIs() {
     "var(--status-warning)": "rgba(245,158,11,0.10)",
     "var(--status-error)":   "rgba(239,68,68,0.10)",
     "var(--status-info)":    "rgba(96,165,250,0.10)",
-    "var(--accent)":         "rgba(232,101,10,0.08)",
+    "var(--accent)":         "rgba(200,155,32,0.08)",
   };
   const renderKPI = (label, value, color, onClick, extraStyle = {}) => {
     const accent = KPI_ACCENT_MAP[color];
