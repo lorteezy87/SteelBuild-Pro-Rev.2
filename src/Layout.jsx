@@ -174,6 +174,7 @@ const NAV_GROUPS = [
 {
   label: "DOCUMENTS & DRAWINGS",
   items: [
+  { label: "Drawings & Submittals", icon: "▦", page: "Drawings" },
   { label: "Document Repository", icon: "📁", page: "Documents" },
   { label: "3D Model Viewer", icon: "△", page: "ModelViewer" }]
 
