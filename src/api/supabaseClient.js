@@ -282,11 +282,28 @@ export const auth = {
 
 // ─── File uploads & LLM integrations ─────────────────────────────────────────
 
+// Signed URL expiry in seconds (1 hour). Increase if long-lived links are needed.
+const SIGNED_URL_EXPIRY_SECONDS = 60 * 60;
+
+/**
+ * Get a short-lived signed URL for a stored file path.
+ * Use this whenever displaying a file that was uploaded to the private bucket.
+ */
+export const getSignedUrl = async (storagePath) => {
+  const { data, error } = await supabase.storage
+    .from('app-files')
+    .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS);
+  if (error) throw error;
+  return data.signedUrl;
+};
+
 export const integrations = {
   Core: {
     /**
-     * Upload a file to Supabase Storage.
+     * Upload a file to Supabase Storage (private bucket).
      * Returns { file_url, file_name, path }
+     * file_url is a signed URL valid for 1 hour. For long-term storage,
+     * persist `path` to the database and call getSignedUrl(path) on demand.
      */
     UploadFile: async ({ file }) => {
       if (!file) throw new Error('No file provided');
@@ -296,10 +313,8 @@ export const integrations = {
         .from('app-files')
         .upload(path, file, { contentType: file.type, upsert: false });
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage
-        .from('app-files')
-        .getPublicUrl(data.path);
-      return { file_url: publicUrl, file_name: file.name, path: data.path };
+      const signedUrl = await getSignedUrl(data.path);
+      return { file_url: signedUrl, file_name: file.name, path: data.path };
     },
 
     /**
