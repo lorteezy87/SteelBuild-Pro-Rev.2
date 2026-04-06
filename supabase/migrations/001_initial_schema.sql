@@ -930,28 +930,5 @@ SELECT add_updated_at_trigger('project_closeout');
 ALTER TABLE project_closeout ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "auth_all" ON project_closeout FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- ─── Storage bucket ───────────────────────────────────────────────────────────
--- Run these in the Storage section of the Supabase Dashboard, or via CLI:
---   supabase storage create app-files --public
--- Or insert directly:
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('app-files', 'app-files', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Allow authenticated users to upload/read/delete their files
-CREATE POLICY "auth_upload" ON storage.objects
-  FOR INSERT TO authenticated
-  WITH CHECK (bucket_id = 'app-files');
-
-CREATE POLICY "auth_read" ON storage.objects
-  FOR SELECT TO authenticated
-  USING (bucket_id = 'app-files');
-
-CREATE POLICY "auth_delete" ON storage.objects
-  FOR DELETE TO authenticated
-  USING (bucket_id = 'app-files');
-
--- Public read for shared file links
-CREATE POLICY "public_read" ON storage.objects
-  FOR SELECT TO anon
-  USING (bucket_id = 'app-files');
+-- Storage bucket setup must be done separately.
+-- See: supabase/migrations/002_storage.sql
