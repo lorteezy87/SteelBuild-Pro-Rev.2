@@ -19,13 +19,11 @@ export default function ResourceManagement() {
       projectId
         ? base44.entities.Resource.filter({ project_id: projectId })
         : base44.entities.Resource.list(),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

@@ -22,13 +22,11 @@ export default function Safety() {
       projectId
         ? base44.entities.SafetyIncident.filter({ project_id: projectId })
         : base44.entities.SafetyIncident.list("-incident_date"),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

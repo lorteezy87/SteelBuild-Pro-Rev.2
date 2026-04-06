@@ -155,14 +155,12 @@ export default function RFIs() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
-    initialData: [],
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
 

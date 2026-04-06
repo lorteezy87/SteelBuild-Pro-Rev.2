@@ -38,14 +38,12 @@ export default function ProjectDetail() {
     queryFn: () =>
       base44.entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: deliveries = [] } = useQuery({
@@ -53,7 +51,6 @@ export default function ProjectDetail() {
     queryFn: () =>
       base44.entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
-    initialData: [],
   });
 
   if (!project) {
