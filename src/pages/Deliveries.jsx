@@ -137,14 +137,12 @@ export default function Deliveries() {
     queryKey: ["deliveries", projectId],
     queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
-    initialData: [],
     refetchInterval: 30000,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const projectCount = useMemo(() => {

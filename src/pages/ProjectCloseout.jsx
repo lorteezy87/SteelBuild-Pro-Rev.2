@@ -16,7 +16,6 @@ export default function ProjectCloseout() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: closeouts = [] } = useQuery({
@@ -25,7 +24,6 @@ export default function ProjectCloseout() {
       projectId
         ? base44.entities.ProjectCloseout.filter({ project_id: projectId })
         : base44.entities.ProjectCloseout.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

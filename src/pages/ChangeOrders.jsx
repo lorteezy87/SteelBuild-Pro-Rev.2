@@ -37,7 +37,6 @@ export default function ChangeOrders() {
       ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_date")
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
 

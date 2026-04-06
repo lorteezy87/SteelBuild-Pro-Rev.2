@@ -40,13 +40,11 @@ export default function Schedule() {
         ? base44.entities.ScheduleTask.filter({ project_id: projectId })
         : [],
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;

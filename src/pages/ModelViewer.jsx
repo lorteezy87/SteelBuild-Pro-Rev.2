@@ -25,7 +25,6 @@ export default function ModelViewer() {
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
-    initialData: [],
   });
 
   // ─── SCRIPT LOADING (Sequential) ───────────────────────────────

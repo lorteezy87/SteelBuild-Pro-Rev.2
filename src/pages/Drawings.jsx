@@ -127,7 +127,6 @@ export default function Drawings() {
         ? base44.entities.Drawing.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   // Group by drawing set — resolved from drawing_set_name field only

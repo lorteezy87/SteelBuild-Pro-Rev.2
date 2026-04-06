@@ -25,13 +25,11 @@ export default function Punchlist() {
       projectId
         ? base44.entities.PunchlistItem.filter({ project_id: projectId })
         : base44.entities.PunchlistItem.list(),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

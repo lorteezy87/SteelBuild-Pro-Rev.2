@@ -78,7 +78,6 @@ export default function ResourceScheduling() {
         project_id: activeProject.id,
       });
     },
-    initialData: [],
   });
 
   const { data: resources = [] } = useQuery({
@@ -89,7 +88,6 @@ export default function ResourceScheduling() {
         project_id: activeProject.id,
       });
     },
-    initialData: [],
   });
 
   // Capacity view data (uses same workPackages query)

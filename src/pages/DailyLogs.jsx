@@ -25,13 +25,11 @@ export default function DailyLogs() {
       projectId
         ? base44.entities.DailyLog.filter({ project_id: projectId })
         : base44.entities.DailyLog.list("-date"),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const createMut = useMutation({

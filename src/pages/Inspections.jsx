@@ -21,13 +21,11 @@ export default function Inspections() {
       projectId
         ? base44.entities.Inspection.filter({ project_id: projectId })
         : base44.entities.Inspection.list("-inspection_date"),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

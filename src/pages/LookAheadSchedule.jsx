@@ -83,7 +83,6 @@ export default function LookAheadSchedule() {
       ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_date")
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
   const projects = [activeProject].filter(Boolean);
 

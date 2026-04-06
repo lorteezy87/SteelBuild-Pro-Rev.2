@@ -46,13 +46,11 @@ export default function ActionItems() {
       projectId
         ? base44.entities.ActionItem.filter({ project_id: projectId }, "-due_date")
         : base44.entities.ActionItem.list("-due_date"),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId
