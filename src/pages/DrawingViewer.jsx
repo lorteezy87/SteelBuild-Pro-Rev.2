@@ -204,10 +204,46 @@ export default function DrawingViewer() {
           setUndoStack((stack) => stack.slice(0, -1));
         }
       }
+      // Arrow key sheet navigation (only when not editing a markup)
+      if (!markupMode && allSetDrawings.length > 1) {
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          const idx = allSetDrawings.findIndex(s => s.id === drawingId);
+          const next = allSetDrawings[idx + 1];
+          if (next) { const p = new URLSearchParams(searchParams); p.set("drawingId", next.id); navigate(`?${p.toString()}`); }
+        }
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          const idx = allSetDrawings.findIndex(s => s.id === drawingId);
+          const prev = allSetDrawings[idx - 1];
+          if (prev) { const p = new URLSearchParams(searchParams); p.set("drawingId", prev.id); navigate(`?${p.toString()}`); }
+        }
+      }
+      // +/- zoom
+      if (!event.ctrlKey && !event.metaKey) {
+        if (event.key === "+" || event.key === "=") setZoomLevel(z => Math.min(z + 0.25, 4));
+        if (event.key === "-") setZoomLevel(z => Math.max(z - 0.25, 0.25));
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [undoStack, handleUndoMarkups]);
+  }, [undoStack, handleUndoMarkups, markupMode, allSetDrawings, drawingId, searchParams, navigate]);
+
+  const handleDownload = () => {
+    if (!fileUrl) return;
+    const a = document.createElement("a");
+    a.href = fileUrl;
+    a.download = `${recordTitle.replace(/[^a-z0-9]/gi, "_")}.pdf`;
+    a.target = "_blank";
+    a.click();
+  };
+
+  const handleFitWidth = () => {
+    const container = document.querySelector("[data-pdf-container]");
+    const canvas = pdfCanvasRef.current;
+    if (!canvas || !container) return;
+    const containerWidth = container.clientWidth - 32;
+    const canvasNaturalWidth = canvas.width / (window.devicePixelRatio || 1);
+    if (canvasNaturalWidth > 0) setZoomLevel(prev => (containerWidth / canvasNaturalWidth) * prev);
+  };
 
   const handleRunAIAnalysis = async () => {
     if (!docRecord) return;
@@ -373,6 +409,10 @@ Drawing file URL for reference: ${fileUrl}`;
         onZoom={setZoomLevel}
         currentPage={currentPage}
         onPageChange={setCurrentPage}
+        onDownload={handleDownload}
+        onFitWidth={handleFitWidth}
+        recordTitle={recordTitle}
+        recordMeta={recordMeta}
       />
 
       {/* Main content area */}
@@ -383,7 +423,7 @@ Drawing file URL for reference: ${fileUrl}`;
         )}
 
         {/* Center - Viewer canvas */}
-        <div style={{ flex: 1, position: "relative", background: "var(--bg-page)", overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16 }}>
+        <div data-pdf-container style={{ flex: 1, position: "relative", background: "var(--bg-page)", overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16 }}>
           {/* Canvas wrapper — both canvases live inside here so they scroll together */}
           <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
             <PDFRenderer

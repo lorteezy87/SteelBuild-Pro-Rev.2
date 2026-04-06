@@ -99,6 +99,111 @@ const IFCBadge = ({ status }) => {
   return <span style={{ color: "rgba(160,175,210,0.25)" }}>—</span>;
 };
 
+// ── PDF thumbnail renderer ─────────────────────────────────────────────────
+const thumbCache = new Map();
+let pdfJsReady = null;
+
+function loadPdfJs() {
+  if (pdfJsReady) return pdfJsReady;
+  if (window.pdfjsLib) { pdfJsReady = Promise.resolve(); return pdfJsReady; }
+  pdfJsReady = new Promise(resolve => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      resolve();
+    };
+    document.head.appendChild(s);
+  });
+  return pdfJsReady;
+}
+
+function SheetThumbnailCard({ sheet, isSelected, onSelect, onClick }) {
+  const canvasRef = React.useRef(null);
+  const [loaded, setLoaded] = React.useState(false);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!sheet.file_url) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadPdfJs();
+        if (cancelled) return;
+        let dataUrl = thumbCache.get(sheet.id);
+        if (!dataUrl) {
+          const pdf = await window.pdfjsLib.getDocument(sheet.file_url).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 0.4 });
+          const offscreen = document.createElement("canvas");
+          offscreen.width = viewport.width;
+          offscreen.height = viewport.height;
+          await page.render({ canvasContext: offscreen.getContext("2d"), viewport }).promise;
+          dataUrl = offscreen.toDataURL("image/jpeg", 0.7);
+          thumbCache.set(sheet.id, dataUrl);
+        }
+        if (!cancelled && canvasRef.current) {
+          const img = new Image();
+          img.onload = () => { if (!cancelled && canvasRef.current) { const ctx = canvasRef.current.getContext("2d"); canvasRef.current.width = img.width; canvasRef.current.height = img.height; ctx.drawImage(img, 0, 0); setLoaded(true); }};
+          img.src = dataUrl;
+        }
+      } catch { if (!cancelled) setError(true); }
+    })();
+    return () => { cancelled = true; };
+  }, [sheet.file_url, sheet.id]);
+
+  const stageColor = { Released: "#00D68F", BFS: "#00B8D9", OFS: "#00B8D9", BFA: "#FFB400", OFA: "#FFB400", FFF: "var(--accent)", "Not Started": "#555" }[sheet.stage] || "#555";
+
+  return (
+    <div
+      onClick={onClick}
+      style={{ background: isSelected ? "rgba(200,155,32,0.08)" : "var(--bg-surface)", border: `1px solid ${isSelected ? "var(--accent-border)" : "var(--divider)"}`, borderRadius: 6, overflow: "hidden", cursor: "pointer", transition: "all 0.15s", display: "flex", flexDirection: "column" }}
+      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = "rgba(200,155,32,0.4)"; }}
+      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = "var(--divider)"; }}
+    >
+      {/* Thumbnail area */}
+      <div style={{ background: "#1a1c24", aspectRatio: "1.41 / 1", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {sheet.file_url ? (
+          <>
+            <canvas ref={canvasRef} style={{ maxWidth: "100%", maxHeight: "100%", display: loaded ? "block" : "none" }} />
+            {!loaded && !error && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>Loading…</div>}
+            {error && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>No preview</div>}
+          </>
+        ) : (
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: 8 }}>No PDF</div>
+        )}
+        {/* Stage pill overlay */}
+        <div style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.7)", borderRadius: 3, padding: "2px 6px", border: `1px solid ${stageColor}40` }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: stageColor, letterSpacing: "0.08em" }}>{sheet.stage || "—"}</span>
+        </div>
+        {/* IFC badge */}
+        {(sheet.ifc_status === "IFC" || sheet.stage === "Released") && (
+          <div style={{ position: "absolute", top: 6, left: 6, background: "rgba(0,214,143,0.85)", borderRadius: 3, padding: "2px 5px" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 800, color: "#003915" }}>IFC</span>
+          </div>
+        )}
+        {/* Select checkbox */}
+        <div style={{ position: "absolute", bottom: 6, right: 6 }} onClick={e => { e.stopPropagation(); onSelect(); }}>
+          <div style={{ width: 16, height: 16, borderRadius: 3, border: `2px solid ${isSelected ? "var(--accent)" : "rgba(255,255,255,0.3)"}`, background: isSelected ? "var(--accent)" : "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            {isSelected && <span style={{ fontSize: 9, color: "#000", fontWeight: 800 }}>✓</span>}
+          </div>
+        </div>
+      </div>
+      {/* Sheet info */}
+      <div style={{ padding: "8px 10px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", marginBottom: 2 }}>{sheet.sheet_number}</div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sheet.title}</div>
+        {sheet.due_date && sheet.stage !== "Released" && (
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: new Date(sheet.due_date) < new Date() ? "#FF7A7A" : "var(--text-muted)", marginTop: 3 }}>
+            Due {new Date(sheet.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Drawings() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
@@ -123,6 +228,7 @@ export default function Drawings() {
   const [setDetailTab, setSetDetailTab] = useState("sheets");
   const [sheetSearch, setSheetSearch] = useState("");
   const [sheetDiscFilter, setSheetDiscFilter] = useState("all");
+  const [bulkStage, setBulkStage] = useState("");
 
   // Fetch drawings
   const { data: drawings = [], isLoading } = useQuery({
@@ -256,6 +362,17 @@ export default function Drawings() {
       setFormOpen(false);
       toast.success("Drawing updated");
     },
+  });
+
+  const bulkUpdateMut = useMutation({
+    mutationFn: async ({ ids, stage }) =>
+      Promise.all(ids.map(id => base44.entities.Drawing.update(id, { stage }))),
+    onSuccess: (_, { ids, stage }) => {
+      qc.invalidateQueries({ queryKey: ["drawings"] });
+      setSelectedIds(new Set());
+      toast.success(`${ids.length} sheets set to ${stage}`);
+    },
+    onError: () => toast.error("Bulk update failed"),
   });
 
   const handleSave = (formData) => {
@@ -464,9 +581,9 @@ export default function Drawings() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div style={{ display: "flex", padding: "0 24px", background: "var(--bg-surface)", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-            {["sheets", "revisions", "timeline"].map(tab => (
+          {/* Tabs + bulk bar */}
+          <div style={{ display: "flex", alignItems: "center", padding: "0 24px", background: "var(--bg-surface)", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
+            {["sheets", "thumbnails", "revisions", "timeline"].map(tab => (
               <button key={tab} onClick={() => setSetDetailTab(tab)} style={{
                 background: "none", border: "none", padding: "10px 16px",
                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
@@ -476,6 +593,27 @@ export default function Drawings() {
                 marginBottom: -1,
               }}>{tab}</button>
             ))}
+            {selectedIds.size > 0 && (
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700 }}>{selectedIds.size} SELECTED</span>
+                <select
+                  value={bulkStage}
+                  onChange={e => setBulkStage(e.target.value)}
+                  style={{ background: "var(--bg-input)", border: "1px solid var(--accent-border)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 9, padding: "4px 8px" }}
+                >
+                  <option value="">Set stage…</option>
+                  {["Not Started","OFA","BFA","OFS","BFS","FFF","Released"].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button
+                  onClick={() => { if (bulkStage) { bulkUpdateMut.mutate({ ids: [...selectedIds], stage: bulkStage }); setBulkStage(""); }}}
+                  disabled={!bulkStage || bulkUpdateMut.isPending}
+                  style={{ background: "var(--accent)", border: "none", borderRadius: 4, padding: "4px 12px", color: "#07090E", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, cursor: !bulkStage ? "not-allowed" : "pointer", opacity: !bulkStage ? 0.5 : 1 }}
+                >
+                  APPLY
+                </button>
+                <button onClick={() => setSelectedIds(new Set())} style={{ background: "transparent", border: "1px solid var(--divider)", borderRadius: 4, padding: "4px 10px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer" }}>✕</button>
+              </div>
+            )}
           </div>
 
           {/* Tab content */}
@@ -582,6 +720,25 @@ export default function Drawings() {
                     ))}
                   </div>
                 </>
+              );
+            })()}
+
+            {setDetailTab === "thumbnails" && (() => {
+              const allSheets = (groupedBySet[selectedSet] || []).slice().sort((a, b) => (a.sheet_number || "").localeCompare(b.sheet_number || ""));
+              return (
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+                    {allSheets.map(sheet => (
+                      <SheetThumbnailCard
+                        key={sheet.id}
+                        sheet={sheet}
+                        isSelected={selectedIds.has(sheet.id)}
+                        onSelect={() => toggleSelect(sheet.id)}
+                        onClick={() => openInViewer(sheet)}
+                      />
+                    ))}
+                  </div>
+                </div>
               );
             })()}
 
