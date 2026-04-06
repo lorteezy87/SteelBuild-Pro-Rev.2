@@ -738,7 +738,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           project_id:       activeProject?.id,
           project_name:     activeProject?.name,
           discipline:       sheet.discipline || meta.discipline,
-          revision_number:  Number(sheet.revision ?? meta.revision) || 0,
+          revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
           stage:            "Not Started",
           issue_date:       sheet.date || meta.issueDate,
           issued_by:        meta.issuedBy,
