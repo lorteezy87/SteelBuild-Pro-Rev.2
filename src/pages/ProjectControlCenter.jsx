@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import {
   mapRFIsToPCCItems,
@@ -14,6 +16,15 @@ import {
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
+
+// ─── Type → page routing map ──────────────────────────────────────────────────
+const TYPE_PAGE_MAP = {
+  RFI:         "RFIs",
+  Drawing:     "Submittals",
+  WorkPackage: "WorkPackages",
+  Delivery:    "Deliveries",
+  ChangeOrder: "ChangeOrders",
+};
 
 // ─── Type icon map ────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
@@ -244,7 +255,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer }) {
 }
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
-function DetailDrawer({ item, onClose }) {
+function DetailDrawer({ item, onClose, onNavigate }) {
   if (!item) return null;
   const tc = TYPE_CONFIG[item.type] || { icon: "◉", label: item.type, color: "var(--text-muted)" };
   const overdueTxt = item.overdueDays > 0
@@ -374,11 +385,24 @@ function DetailDrawer({ item, onClose }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={{
               flex: 1, background: "var(--accent)", border: "none", borderRadius: 6,
-              padding: "9px 14px", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
+              padding: "9px 14px", color: "#07090E", fontFamily: "var(--font-mono)", fontSize: 10,
               fontWeight: 800, cursor: "pointer", letterSpacing: "0.09em", textTransform: "uppercase",
             }}>
               → {item.nextAction}
             </button>
+            {onNavigate && TYPE_PAGE_MAP[item.type] && (
+              <button
+                onClick={() => { onNavigate(item); onClose(); }}
+                style={{
+                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 6, padding: "9px 14px", color: "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                  letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap",
+                }}
+              >
+                VIEW {TYPE_CONFIG[item.type]?.label || item.type} →
+              </button>
+            )}
             <button onClick={onClose} style={{
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
               borderRadius: 6, padding: "9px 14px", color: "var(--text-muted)",
@@ -538,6 +562,7 @@ function RiskWatchlist({ items, onSelect }) {
 // ─── Main PCC Page ────────────────────────────────────────────────────────────
 export default function ProjectControlCenter() {
   const { activeProject } = useProjectContext();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("morning");
   const [typeFilter, setTypeFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -577,6 +602,44 @@ export default function ProjectControlCenter() {
   const waitingBoard = useMemo(() => buildWaitingOnBoard(scoredFeed), [scoredFeed]);
 
   const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
+
+  // ── Navigate to source record page ────────────────────────────
+  const handleNavigate = (item) => {
+    const page = TYPE_PAGE_MAP[item.type];
+    if (page) navigate(createPageUrl(page));
+  };
+
+  // ── Export daily briefing CSV ──────────────────────────────────
+  const exportBriefing = () => {
+    const today = new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }).replace(/\//g, "-");
+    const projectName = activeProject?.name || "Project";
+    const rows = [
+      ["Rank", "Severity", "Type", "Title", "Score", "Due Date", "Days Overdue", "Owner", "Next Action", "Impact Tags", "Reasons"],
+    ];
+    scoredFeed.forEach((item, idx) => {
+      rows.push([
+        idx + 1,
+        item.severityKey,
+        item.type,
+        `"${(item.title || "").replace(/"/g, '""')}"`,
+        item.score,
+        item.due_date ? new Date(item.due_date).toLocaleDateString("en-US") : "",
+        item.overdueDays > 0 ? item.overdueDays : "",
+        `"${(item.assigned_to || "Unassigned").replace(/"/g, '""')}"`,
+        `"${(item.nextAction || "").replace(/"/g, '""')}"`,
+        `"${(item.tags || []).join(", ")}"`,
+        `"${(item.reasons || []).join(" | ").replace(/"/g, '""')}"`,
+      ]);
+    });
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `PCC-Briefing_${projectName.replace(/\s+/g, "-")}_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const tabs = [
     { id: "morning", label: "MORNING SCAN",    count: criticalHighCount },
@@ -636,6 +699,23 @@ export default function ProjectControlCenter() {
               <option key={k} value={k}>{k}</option>
             ))}
           </select>
+
+          {/* Export briefing */}
+          {!isEmpty && (
+            <button
+              onClick={exportBriefing}
+              title="Download daily briefing CSV"
+              style={{
+                background: "rgba(200,155,32,0.10)", border: "1px solid rgba(200,155,32,0.30)",
+                borderRadius: 6, padding: "0 12px", height: 28,
+                color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9,
+                fontWeight: 700, cursor: "pointer", letterSpacing: "0.09em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ↓ EXPORT BRIEFING
+            </button>
+          )}
         </div>
       </div>
 
@@ -805,7 +885,7 @@ export default function ProjectControlCenter() {
       </div>
 
       {/* Detail drawer */}
-      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
+      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} onNavigate={handleNavigate} />
     </div>
   );
 }
