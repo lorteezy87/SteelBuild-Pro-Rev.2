@@ -59,8 +59,8 @@
   --accent-hover:             #F07020;
   --accent-muted:             rgba(232, 101, 10, 0.10);
   --accent-border:            rgba(232, 101, 10, 0.30);
-  --accent-text:              #0A0A0A;
-  --on-accent:                #0A0A0A;
+  --accent-text:              #ffffff;
+  --on-accent:                #ffffff;
 
   /* ── Orange aliases (same amber) ── */
   --secondary:                #E8650A;
@@ -457,7 +457,7 @@ button { cursor: pointer; outline: none; }
 /* ── Buttons — Obsidian style ── */
 .btn-primary {
   background: var(--accent);
-  color: #000000;
+  color: #ffffff;
   border: none;
   border-radius: var(--radius-btn);
   padding: 8px 18px;
