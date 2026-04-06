@@ -367,8 +367,16 @@ function ThumbnailGrid({ drawingsBySet, setKeys, onEdit, onAnnotate, navigate, c
   );
 }
 
-function DrawingSetTrackerPanel({ setKeys, drawingsBySet, activeSetFilter, onSelectSet, onClearSet }) {
-  const unsubmitteds = setKeys.filter((key) => key !== "__ungrouped__").filter((key) => !(drawingsBySet[key] || []).some((drawing) => drawing.submitted_date));
+function DrawingSetTrackerPanel({ setKeys, drawingsBySet, drawingSetRecords = [], activeSetFilter, onSelectSet, onClearSet }) {
+  // Merge: drawing-derived set keys + any DrawingSet entity records not already covered
+  const entityNames = drawingSetRecords.map((ds) => ds.set_name).filter(Boolean);
+  const derivedKeys = setKeys.filter((key) => key !== "__ungrouped__");
+  const allKeys = [
+    ...derivedKeys,
+    ...entityNames.filter((name) => !derivedKeys.includes(name)),
+  ];
+
+  const unsubmitteds = allKeys.filter((key) => !(drawingsBySet[key] || []).some((drawing) => drawing.submitted_date));
 
   return (
     <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid var(--divider)", overflowY: "auto", background: "var(--bg-sidebar)", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -379,7 +387,7 @@ function DrawingSetTrackerPanel({ setKeys, drawingsBySet, activeSetFilter, onSel
         )}
       </div>
 
-      {setKeys.filter((key) => key !== "__ungrouped__").map((setKey) => {
+      {allKeys.map((setKey) => {
         const setDrawings = drawingsBySet[setKey] || [];
         const approvalStatus = getSetApprovalStatus(setDrawings);
         const tone = approvalStatus === "approved" ? "var(--status-success)" : approvalStatus === "pending" ? "var(--status-warning)" : approvalStatus === "rejected" ? "var(--status-error)" : "var(--accent)";
@@ -867,12 +875,20 @@ export default function Submittals() {
         base44.entities.Drawing.filter({ project_id: activeProject.id }, "-created_date"),
         base44.entities.DrawingSet.filter({ project_id: activeProject.id }, "-created_date").catch(() => []),
       ]);
-      // Build id->name lookup so drawings with only drawing_set_id get resolved names
+      // Build id->name lookup
       const setsById = {};
       sets.forEach((ds) => { if (ds.id && ds.set_name) setsById[ds.id] = ds.set_name; });
+
+      // If exactly one DrawingSet exists and a drawing has no set name, auto-assign it
+      const onlySetName = sets.length === 1 ? sets[0].set_name : null;
+
       const resolved = data.map((d) => ({
         ...d,
-        drawing_set_name: d.drawing_set_name || (d.drawing_set_id && setsById[d.drawing_set_id]) || d.drawing_set_name,
+        drawing_set_name:
+          d.drawing_set_name ||
+          (d.drawing_set_id && setsById[d.drawing_set_id]) ||
+          onlySetName ||
+          d.drawing_set_name,
       }));
       setDrawings(resolved);
       setDrawingSets(sets);
@@ -1254,7 +1270,7 @@ export default function Submittals() {
       {selectedIds.size > 0 && <BulkActionBar count={selectedIds.size} onBulkUpdate={applyBulkUpdate} onBulkDelete={() => setBulkDeleteOpen(true)} onClear={clearSelection} />}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <DrawingSetTrackerPanel setKeys={trackerSetKeys} drawingsBySet={allDrawingsBySet} activeSetFilter={activeSetFilter} onSelectSet={setActiveSetFilter} onClearSet={() => setActiveSetFilter(null)} />
+        <DrawingSetTrackerPanel setKeys={trackerSetKeys} drawingsBySet={allDrawingsBySet} drawingSetRecords={drawingSets} activeSetFilter={activeSetFilter} onSelectSet={setActiveSetFilter} onClearSet={() => setActiveSetFilter(null)} />
 
         <div style={{ flex: 1, overflowY: view === "KANBAN" ? "hidden" : "auto", overflowX: "hidden", display: "flex", flexDirection: "column" }}>
           {view === "TABLE" && displayDrawings.length > 0 && (
