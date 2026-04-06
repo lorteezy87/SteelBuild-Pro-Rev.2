@@ -100,7 +100,7 @@ function ImpactTag({ tagKey }) {
 }
 
 // ─── Priority feed row ────────────────────────────────────────────────────────
-function PriorityRow({ item, expanded, onToggle }) {
+function PriorityRow({ item, expanded, onToggle, onOpenDrawer }) {
   const tc = TYPE_CONFIG[item.type] || { icon: "◉", label: item.type, color: "var(--text-muted)" };
   const overdueTxt = item.overdueDays > 0
     ? `${item.overdueDays}d overdue`
@@ -187,7 +187,14 @@ function PriorityRow({ item, expanded, onToggle }) {
         </span>
 
         {/* Next action */}
-        <ActionBadge action={item.nextAction} />
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <ActionBadge action={item.nextAction} />
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
+            title="View details"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(160,175,210,0.50)", fontSize: 10, flexShrink: 0 }}
+          >⤢</button>
+        </div>
       </div>
 
       {/* Expanded detail */}
@@ -236,6 +243,222 @@ function PriorityRow({ item, expanded, onToggle }) {
   );
 }
 
+// ─── Detail Drawer ────────────────────────────────────────────────────────────
+function DetailDrawer({ item, onClose }) {
+  if (!item) return null;
+  const tc = TYPE_CONFIG[item.type] || { icon: "◉", label: item.type, color: "var(--text-muted)" };
+  const overdueTxt = item.overdueDays > 0
+    ? `${item.overdueDays} days overdue`
+    : item.dueSoonDays !== null
+      ? `Due in ${item.dueSoonDays} days`
+      : item.due_date
+        ? new Date(item.due_date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+        : "No due date";
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 380,
+        background: "var(--bg-surface)", borderLeft: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "-12px 0 40px rgba(0,0,0,0.70)", zIndex: 51,
+        display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.09em",
+                  color: tc.color, background: `${tc.color}15`, border: `1px solid ${tc.color}30`,
+                  padding: "2px 7px", borderRadius: 4,
+                }}>
+                  {tc.icon} {tc.label}
+                </span>
+                <SeverityBadge severity={item.severity} />
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.35 }}>
+                {item.title}
+              </div>
+              {item.subtitle && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 4 }}>
+                  {item.subtitle}
+                </div>
+              )}
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 18, cursor: "pointer", flexShrink: 0, lineHeight: 1, padding: 2 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Score card */}
+          <div style={{ background: `${item.severity.color}0D`, border: `1px solid ${item.severity.color}30`, borderRadius: 8, padding: "12px 14px" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>PRIORITY SCORE</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 800, color: item.severity.color, lineHeight: 1 }}>{item.score}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>pts → {item.severity.label}</span>
+            </div>
+          </div>
+
+          {/* Timing */}
+          <div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>TIMING</div>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
+              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-secondary)",
+            }}>
+              {overdueTxt}
+            </div>
+          </div>
+
+          {/* Reasons */}
+          {item.reasons.length > 0 && (
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>WHY IT'S RANKED HERE</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {item.reasons.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+                    <span style={{ color: item.severity.color, fontSize: 10, lineHeight: 1 }}>▸</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{r}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Impact tags */}
+          {item.tags.length > 0 && (
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>DOWNSTREAM IMPACT</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {item.tags.map((t) => <ImpactTag key={t} tagKey={t} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Ownership */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OWNER</div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: item.assigned_to ? "var(--text-secondary)" : "rgba(255,100,100,0.70)" }}>
+                {item.assigned_to || "Unassigned"}
+              </div>
+            </div>
+            {item.waiting_on && (
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>WAITING ON</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#FFB400" }}>{item.waiting_on}</div>
+              </div>
+            )}
+            {item.project_name && (
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>PROJECT</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{item.project_name}</div>
+              </div>
+            )}
+            {item.status && (
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>STATUS</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{item.status}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer — next action */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 8 }}>RECOMMENDED ACTION</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button style={{
+              flex: 1, background: "var(--accent)", border: "none", borderRadius: 6,
+              padding: "9px 14px", color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 800, cursor: "pointer", letterSpacing: "0.09em", textTransform: "uppercase",
+            }}>
+              → {item.nextAction}
+            </button>
+            <button onClick={onClose} style={{
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 6, padding: "9px 14px", color: "var(--text-muted)",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
+              letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              DISMISS
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Morning Scan ─────────────────────────────────────────────────────────────
+function MorningScan({ items, onSelect }) {
+  const top = items.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").slice(0, 10);
+  if (!top.length) {
+    return (
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>ALL CLEAR — NO CRITICAL OR HIGH-RISK ITEMS</div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>
+          TOP {top.length} ITEMS REQUIRING ATTENTION TODAY
+        </div>
+      </div>
+      {top.map((item, i) => {
+        const tc = TYPE_CONFIG[item.type] || { icon: "◉", label: item.type, color: "var(--text-muted)" };
+        return (
+          <div
+            key={item.id}
+            onClick={() => onSelect(item)}
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+              cursor: "pointer", transition: "background 0.1s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            {/* Index */}
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${item.severity.color}15`, border: `1px solid ${item.severity.color}40`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: item.severity.color }}>{i + 1}</span>
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
+                <SeverityBadge severity={item.severity} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: tc.color }}>{tc.label}</span>
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.title}
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
+                {item.reasons.slice(0, 2).map((r, ri) => (
+                  <span key={ri} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{r}</span>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ flexShrink: 0, textAlign: "right" }}>
+              <ActionBadge action={item.nextAction} />
+              {item.overdueDays > 0 && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FF7A7A", marginTop: 4 }}>{item.overdueDays}d overdue</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Waiting-On Board ─────────────────────────────────────────────────────────
 function WaitingOnBoard({ board }) {
   if (!board.length) {
@@ -280,7 +503,7 @@ function WaitingOnBoard({ board }) {
 }
 
 // ─── Risk Watchlist (high severity items grouped by impact) ───────────────────
-function RiskWatchlist({ items }) {
+function RiskWatchlist({ items, onSelect }) {
   const high = items.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").slice(0, 8);
   if (!high.length) {
     return (
@@ -292,7 +515,10 @@ function RiskWatchlist({ items }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {high.map((item) => (
-        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+        <div key={item.id} onClick={() => onSelect?.(item)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}
+          onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+        >
           <div style={{ width: 3, height: 28, background: item.severity.color, borderRadius: 2, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -312,10 +538,11 @@ function RiskWatchlist({ items }) {
 // ─── Main PCC Page ────────────────────────────────────────────────────────────
 export default function ProjectControlCenter() {
   const { activeProject } = useProjectContext();
-  const [activeTab, setActiveTab] = useState("feed");
+  const [activeTab, setActiveTab] = useState("morning");
   const [typeFilter, setTypeFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
+  const [drawerItem, setDrawerItem] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const enabled = !!activeProject?.id;
@@ -349,10 +576,13 @@ export default function ProjectControlCenter() {
   const kpis        = useMemo(() => buildSignalKPIs(scoredFeed, deliveries), [scoredFeed, deliveries]);
   const waitingBoard = useMemo(() => buildWaitingOnBoard(scoredFeed), [scoredFeed]);
 
+  const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
+
   const tabs = [
+    { id: "morning", label: "MORNING SCAN",    count: criticalHighCount },
     { id: "feed",    label: "PRIORITY FEED",   count: filteredFeed.length },
     { id: "waiting", label: "WAITING ON",      count: waitingBoard.reduce((s, g) => s + g.count, 0) },
-    { id: "risk",    label: "RISK WATCHLIST",  count: scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length },
+    { id: "risk",    label: "RISK WATCHLIST",  count: criticalHighCount },
   ];
 
   const noProject = !activeProject;
@@ -512,6 +742,11 @@ export default function ProjectControlCenter() {
           </div>
         )}
 
+        {/* Morning Scan */}
+        {!noProject && activeTab === "morning" && (
+          <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
+        )}
+
         {/* Priority Feed */}
         {!noProject && !isEmpty && activeTab === "feed" && (
           <div style={{ flex: 1, overflowY: "auto" }}>
@@ -541,6 +776,7 @@ export default function ProjectControlCenter() {
                   item={item}
                   expanded={expandedId === item.id}
                   onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                  onOpenDrawer={setDrawerItem}
                 />
               ))
             )}
@@ -563,10 +799,13 @@ export default function ProjectControlCenter() {
         {/* Risk Watchlist */}
         {!noProject && activeTab === "risk" && (
           <div style={{ flex: 1, overflowY: "auto" }}>
-            <RiskWatchlist items={scoredFeed} />
+            <RiskWatchlist items={scoredFeed} onSelect={setDrawerItem} />
           </div>
         )}
       </div>
+
+      {/* Detail drawer */}
+      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
     </div>
   );
 }

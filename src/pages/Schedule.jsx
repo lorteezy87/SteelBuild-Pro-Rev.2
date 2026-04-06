@@ -10,6 +10,7 @@ import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
+import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import { PHASES } from "@/utils/phases";
 import { useRef } from "react";
 
@@ -23,6 +24,8 @@ export default function Schedule() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -122,6 +125,26 @@ export default function Schedule() {
     },
     onError: () => toast.error("Bulk delete failed"),
   });
+
+  const handleBulkAdd = async (rows) => {
+    if (!hasProject) return;
+    setBulkSaving(true);
+    try {
+      const pid = projectId || activeProject?.id;
+      await Promise.all(
+        rows.map((row) =>
+          base44.entities.ScheduleTask.create({ ...row, project_id: pid })
+        )
+      );
+      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      setShowBulkAdd(false);
+      toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
+    } catch (err) {
+      toast.error("Bulk add failed: " + err.message);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   const parseMsProjectXml = (xml) => {
     const doc = new DOMParser().parseFromString(xml, "text/xml");
@@ -240,6 +263,27 @@ export default function Schedule() {
             }}
           >
             + Add Task
+          </button>
+          <button
+            onClick={() => setShowBulkAdd(true)}
+            disabled={!hasProject}
+            style={{
+              marginLeft: 8,
+              background: "var(--bg-surface)",
+              color: "#fff",
+              border: "1px solid var(--accent-border)",
+              borderRadius: "var(--radius-btn)",
+              padding: "7px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: !hasProject ? "not-allowed" : "pointer",
+              opacity: !hasProject ? 0.45 : 1,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            + Bulk Add
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -375,6 +419,14 @@ export default function Schedule() {
         isSaving={createTaskMut.isPending}
         projectName={selectedProject?.name || ""}
         prefilledDate={new Date().toISOString().split("T")[0]}
+      />
+
+      <BulkAddTaskModal
+        open={showBulkAdd}
+        onClose={() => setShowBulkAdd(false)}
+        onSubmit={handleBulkAdd}
+        projectName={selectedProject?.name || ""}
+        isSaving={bulkSaving}
       />
 
       <DeleteDialog
