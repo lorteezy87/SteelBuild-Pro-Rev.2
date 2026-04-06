@@ -411,31 +411,43 @@ export default function Drawings() {
           {
             label: "TOTAL SHEETS",
             value: drawings.length,
+            color: "var(--text-primary)",
+            accent: null,
             onClick: () => { setStageFilter("all"); setDisciplineFilter("all"); setSearch(""); },
           },
           {
             label: "RELEASED",
             value: drawings.filter(d => d.stage === "Released").length,
+            color: "var(--status-success)",
+            accent: "rgba(34,197,94,0.10)",
             onClick: () => setStageFilter("Released"),
           },
           {
             label: "IN REVIEW",
             value: drawings.filter(d => ["OFA","BFA","OFS","BFS"].includes(d.stage)).length,
+            color: "var(--status-info)",
+            accent: "rgba(96,165,250,0.10)",
             onClick: () => setStageFilter("OFA"),
           },
           {
             label: "OVERDUE",
             value: overdueCount,
+            color: overdueCount ? "var(--status-error)" : "var(--text-muted)",
+            accent: overdueCount ? "rgba(239,68,68,0.10)" : null,
             onClick: () => setHideSuperseeded(false),
           },
           {
             label: "DUE THIS WEEK",
             value: dueThisWeek,
+            color: dueThisWeek ? "var(--status-warning)" : "var(--text-muted)",
+            accent: dueThisWeek ? "rgba(245,158,11,0.10)" : null,
             onClick: () => setStageFilter("all"),
           },
           {
             label: "SETS",
             value: drawingSets.length,
+            color: "var(--accent)",
+            accent: "rgba(232,101,10,0.08)",
             onClick: () => {},
           },
         ].map((tile, i) => (
@@ -444,13 +456,19 @@ export default function Drawings() {
             onClick={tile.onClick}
             style={{
               padding: "10px 12px",
+              borderTop: `3px solid ${tile.accent ? tile.color : "transparent"}`,
               borderRight: i < 5 ? "1px solid var(--divider)" : undefined,
-              background: "var(--bg-surface)",
+              borderLeft: "none",
+              borderBottom: "none",
+              background: tile.accent || "var(--bg-surface)",
               cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               gap: 4,
+              transition: "filter 0.1s",
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.12)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
           >
             <span
               style={{
@@ -469,7 +487,7 @@ export default function Drawings() {
                 fontSize: 18,
                 fontWeight: 700,
                 lineHeight: 1,
-                color: "var(--text-primary)",
+                color: tile.color || "var(--text-primary)",
               }}
             >
               {tile.value}

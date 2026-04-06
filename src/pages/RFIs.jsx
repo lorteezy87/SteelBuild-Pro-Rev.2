@@ -399,21 +399,37 @@ export default function RFIs() {
     return result;
   }, [rfis]);
 
-  const renderKPI = (label, value, color, onClick, extraStyle = {}) => (
-    <div
-      onClick={onClick}
-      style={{
-        padding: "12px 20px",
-        borderRight: "1px solid var(--divider)",
-        cursor: onClick ? "pointer" : "default",
-        background: "var(--bg-surface)",
-        ...extraStyle,
-      }}
-    >
-      <div style={{ ...mono, fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-      <div style={{ ...mono, fontSize: 20, fontWeight: 800, color }}>{value}</div>
-    </div>
-  );
+  const KPI_ACCENT_MAP = {
+    "var(--status-success)": "rgba(34,197,94,0.10)",
+    "var(--status-warning)": "rgba(245,158,11,0.10)",
+    "var(--status-error)":   "rgba(239,68,68,0.10)",
+    "var(--status-info)":    "rgba(96,165,250,0.10)",
+    "var(--accent)":         "rgba(232,101,10,0.08)",
+  };
+  const renderKPI = (label, value, color, onClick, extraStyle = {}) => {
+    const accent = KPI_ACCENT_MAP[color];
+    return (
+      <div
+        onClick={onClick}
+        style={{
+          padding: "12px 20px",
+          borderTop: accent ? `3px solid ${color}` : "3px solid transparent",
+          borderRight: "1px solid var(--divider)",
+          borderLeft: "none",
+          borderBottom: "none",
+          cursor: onClick ? "pointer" : "default",
+          background: accent || "var(--bg-surface)",
+          transition: "filter 0.1s",
+          ...extraStyle,
+        }}
+        onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = "brightness(1.12)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+      >
+        <div style={{ ...mono, fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+        <div style={{ ...mono, fontSize: 20, fontWeight: 800, color }}>{value}</div>
+      </div>
+    );
+  };
   const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
     const headers = [
       "RFI #",

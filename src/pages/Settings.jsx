@@ -22,6 +22,7 @@ const TABS = [
 export default function Settings() {
   const authCtx = useContext(AuthContext);
   const user = authCtx?.user;
+  const isLoadingAuth = authCtx?.isLoadingAuth;
   const [activeTab, setActiveTab] = useState('profile');
   const [userPrefs, setUserPrefs] = useState({});
   const qc = useQueryClient();
@@ -54,7 +55,7 @@ export default function Settings() {
     updatePrefsMut.mutate(prefs);
   };
 
-  if (!user) {
+  if (isLoadingAuth) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -63,6 +64,9 @@ export default function Settings() {
       </div>
     );
   }
+
+  // If auth has finished loading but there's still no user, render the page anyway
+  // (the user must be authenticated to reach this route; the guard is in the router).
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, maxWidth: 1100, margin: '0 auto' }}>

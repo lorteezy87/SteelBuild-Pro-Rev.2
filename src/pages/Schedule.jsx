@@ -389,6 +389,12 @@ export default function Schedule() {
             tasks={scheduleTasks}
             onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
             onDelete={(task) => setDeleteTarget(task)}
+            onSave={async (data) => {
+              const { id, ...fields } = data;
+              await base44.entities.ScheduleTask.update(id, fields);
+              qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+              toast.success("Task saved");
+            }}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
           />
