@@ -8,7 +8,7 @@ import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 
-const PAGE_MAP = { RFI: "RFIs", Drawing: "Submittals", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
+const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
 const SEVERITY_BG = {
   Critical: { bg: "var(--danger-muted)", border: "var(--status-error)" },

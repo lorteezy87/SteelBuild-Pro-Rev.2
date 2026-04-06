@@ -20,7 +20,7 @@ const SEV_BADGE = {
 };
 const RECORD_PAGE = {
   RFI: "RFIs",
-  Drawing: "Submittals",
+  Drawing: "Drawings",
   ChangeOrder: "ChangeOrders",
   Delivery: "Deliveries",
   WorkPackage: "WorkPackages",
