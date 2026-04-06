@@ -98,7 +98,7 @@ export function getTaskTypeColor(taskType) {
     Fabrication: { gradient: 'var(--accent)', solid: 'var(--accent)' },
     Delivery: { gradient: 'linear-gradient(90deg, #00B8D9, #0090B8)', solid: '#00B8D9' },
     Install: { gradient: 'linear-gradient(90deg, #00D68F, #00A86B)', solid: '#00D68F' },
-    Submittal: { gradient: 'linear-gradient(90deg, #8B5CF6, #6D40D4)', solid: '#8B5CF6' },
+    Submittal: { gradient: 'linear-gradient(90deg, #0EA5E9, #0284C7)', solid: '#0EA5E9' },
     RFI: { gradient: 'linear-gradient(90deg, #FFB400, #FF8C00)', solid: '#FFB400' },
     Milestone: { gradient: 'none', solid: '#FFB400' },
     Task: { gradient: 'linear-gradient(90deg, rgba(160,175,210,0.4), rgba(130,145,180,0.4))', solid: 'rgba(160,175,210,0.5)' },
