@@ -51,10 +51,10 @@ export default function DrawingFormModal({ open, onClose, onSave, drawing, proje
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = { ...form, revision_number: Number(form.revision_number) || 0 };
+    const data = { ...form, revision_number: String(form.revision_number ?? "0") };
     // Increment rev on BFA or BFS transition (return from review)
     if (drawing && (form.stage === "BFA" || form.stage === "BFS") && drawing.stage !== form.stage) {
-      data.revision_number = (Number(drawing.revision_number) || 0) + 1;
+      data.revision_number = String((Number(drawing.revision_number) || 0) + 1);
     }
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;

@@ -178,7 +178,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink }
           <button
             onClick={(e) => {
               e.stopPropagation();
-              navigate(createPageUrl("DrawingViewer") + `?docId=${doc.id}`);
+              navigate(createPageUrl("Documents"));
             }}
             style={{
               flex: 1,

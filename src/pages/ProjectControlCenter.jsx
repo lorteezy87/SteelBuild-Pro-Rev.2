@@ -20,7 +20,7 @@ import {
 // ─── Type → page routing map ──────────────────────────────────────────────────
 const TYPE_PAGE_MAP = {
   RFI:         "RFIs",
-  Drawing:     "Submittals",
+  Drawing:     "Documents",
   WorkPackage: "WorkPackages",
   Delivery:    "Deliveries",
   ChangeOrder: "ChangeOrders",
