@@ -97,7 +97,6 @@ function TaskBar({ task, leftPx, widthPx }) {
   );
 }
 
-const WEEK_PX = 240;
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
@@ -106,11 +105,64 @@ const LEFT_W  = 600;
 // grid: WBS | TASK NAME | START | FINISH | PRED | STATUS | %
 const GRID = "56px 1fr 72px 72px 56px 78px 42px";
 
-export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpandedTask, phaseFilter = "all" }) {
+export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
+  const [zoom, setZoom] = useState("week"); // "week" | "month"
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [tooltip, setTooltip] = useState(null); // { task, x, y }
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
   const rightBody = useRef(null);
+  const containerRef = useRef(null);
+
+  const WEEK_PX = zoom === "month" ? 80 : 240;
+
+  const today = new Date();
+
+  const isOverdue = (task) => {
+    if (!task.end_date || task.status === "Complete") return false;
+    return new Date(task.end_date + "T00:00:00Z") < today;
+  };
+
+  const startInlineEdit = (task, e) => {
+    e.stopPropagation();
+    setEditingId(task.id);
+    setEditDraft({
+      task_name: task.task_name || "",
+      start_date: task.start_date || "",
+      end_date: task.end_date || "",
+      status: task.status || "Not Started",
+      percent_complete: task.percent_complete ?? 0,
+    });
+  };
+
+  const commitEdit = async (taskId) => {
+    if (!onSave || saving) return;
+    setSaving(true);
+    try {
+      await onSave({ id: taskId, ...editDraft });
+      setEditingId(null);
+      setEditDraft({});
+    } catch (err) {
+      console.error("Gantt save failed:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft({});
+  };
+
+  const scrollToToday = () => {
+    if (rightBody.current) {
+      const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
+      rightBody.current.scrollLeft = Math.max(0, todayOffset - 200);
+    }
+  };
 
   // Sync vertical scroll between left and right body
   const syncScroll = (from) => {
@@ -172,6 +224,12 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
   const PX_PER_DAY = WEEK_PX / 7;
   const totalW = Math.max(dayCount * PX_PER_DAY, dateRange.weeks.length * WEEK_PX);
 
+  // Stats
+  const totalTasks = allTasks.length;
+  const completeTasks = allTasks.filter(t => t.status === "Complete").length;
+  const overdueTasks = allTasks.filter(isOverdue).length;
+  const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
+
   const px = (dateStr) => {
     if (!dateStr) return 0;
     const d = new Date(dateStr + "T00:00:00Z");
@@ -182,7 +240,6 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
     return Math.max(4, (new Date(end + "T00:00:00Z") - new Date(start + "T00:00:00Z")) / 86400000 * PX_PER_DAY);
   };
 
-  const today = new Date();
   const todayPx = (today - dateRange.start) / 86400000 * PX_PER_DAY;
   const showToday = todayPx >= 0 && todayPx <= totalW;
 
@@ -210,7 +267,36 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
   const totalHeight = rows.reduce((h, r) => h + (r.type === "summary" ? SUM_H : ROW_H), 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
+    <div ref={containerRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
+
+      {/* ── Toolbar ─────────────────────────────────────────────────── */}
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+        {/* Stats */}
+        <div style={{ display: "flex", gap: 16, flex: 1 }}>
+          {[
+            { label: "TOTAL", val: totalTasks, color: "var(--text-secondary)" },
+            { label: "COMPLETE", val: completeTasks, color: "#10B981" },
+            { label: "IN PROGRESS", val: inProgressTasks, color: "var(--accent)" },
+            { label: "OVERDUE", val: overdueTasks, color: "#EF4444" },
+          ].map(s => (
+            <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.val}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+        {/* Controls */}
+        <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Today
+        </button>
+        <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 4, overflow: "hidden" }}>
+          {["week", "month"].map(z => (
+            <button key={z} onClick={() => setZoom(z)} style={{ padding: "4px 10px", border: "none", background: zoom === z ? "var(--accent-muted)" : "transparent", color: zoom === z ? "var(--accent)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              {z}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ── Synchronized header row ─────────────────────────────────── */}
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
@@ -263,25 +349,65 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
             // Task row
             const { task, phase } = row;
             const predecessor = task.predecessor_wbs || task.predecessor_task_id || task.predecessors || "—";
+            const overdue = isOverdue(task);
+            const isEditing = editingId === task.id;
             return (
-              <div key={`task-${task.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent", transition: "background 0.1s" }}
+              <div key={`task-${task.id}`}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent", transition: "background 0.1s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={e => e.currentTarget.style.background = "var(--bg-row-hover)"}
                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
                 {/* WBS */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || task.task_number || "—"}</span>
-                {/* Task name */}
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.task_name}</span>
+                {/* Task name — inline edit or display */}
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    value={editDraft.task_name}
+                    onChange={e => setEditDraft(d => ({ ...d, task_name: e.target.value }))}
+                    onClick={e => e.stopPropagation()}
+                    onKeyDown={e => { if (e.key === "Enter") commitEdit(task.id); if (e.key === "Escape") cancelEdit(); }}
+                    style={{ fontFamily: "var(--font-body)", fontSize: 11, background: "var(--bg-input)", border: "1px solid var(--accent)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 6px", width: "100%" }}
+                  />
+                ) : (
+                  <span
+                    title={task.task_name}
+                    onDoubleClick={e => onSave && startInlineEdit(task, e)}
+                    style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: overdue ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >{task.task_name}</span>
+                )}
                 {/* Start */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
+                {isEditing ? (
+                  <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 9, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 4px", width: "100%" }} />
+                ) : (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
+                )}
                 {/* Finish */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
+                {isEditing ? (
+                  <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 9, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 4px", width: "100%" }} />
+                ) : (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
+                )}
                 {/* Predecessor */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{String(predecessor).slice(0, 8)}</span>
                 {/* Status */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
-                {/* % */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
+                {isEditing ? (
+                  <select value={editDraft.status} onChange={e => setEditDraft(d => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
+                    {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                )}
+                {/* % or save/cancel */}
+                {isEditing ? (
+                  <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => commitEdit(task.id)} disabled={saving} style={{ background: "var(--accent)", border: "none", borderRadius: 3, color: "#000", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, padding: "2px 6px", cursor: "pointer" }}>{saving ? "…" : "✓"}</button>
+                    <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
+                  </div>
+                ) : (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
+                )}
               </div>
             );
           })}
@@ -320,11 +446,24 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
                 }
                 top += ROW_H;
                 const { task } = row;
+                const overdue = isOverdue(task);
                 if (!task.start_date || !task.end_date) {
-                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)" }} />;
+                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent" }} />;
                 }
                 return (
-                  <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div key={`gr-${task.id}`}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent", cursor: "pointer" }}
+                    onClick={() => onTaskClick && onTaskClick(task)}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                      setTooltip({ task, x: e.clientX, y: e.clientY });
+                    }}
+                    onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = overdue ? "rgba(239,68,68,0.03)" : "transparent";
+                      setTooltip(null);
+                    }}
+                  >
                     <TaskBar task={task} leftPx={px(task.start_date)} widthPx={spanPx(task.start_date, task.end_date)} />
                   </div>
                 );
@@ -333,6 +472,17 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
           </div>
         </div>
       </div>
+
+      {/* ── Tooltip ─────────────────────────────────────────────────── */}
+      {tooltip && (
+        <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 180, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{tooltip.task.task_name}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.06em", marginBottom: 4 }}>{tooltip.task.status || "—"}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{tooltip.task.percent_complete ?? 0}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
+          {onSave && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, opacity: 0.7 }}>Double-click row to edit inline</div>}
+        </div>
+      )}
     </div>
   );
 }
