@@ -4,44 +4,44 @@
 
 @layer base {
   :root {
-    /* Obsidian amber — map Tailwind shadcn vars to amber palette */
-    --background: 0 0% 4%;            /* #0A0A0A */
-    --foreground: 0 0% 95%;           /* #F2F0EF */
-    --card: 0 0% 7%;                  /* #111111 */
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 5%;               /* #0D0D0D */
-    --popover-foreground: 0 0% 95%;
-    --primary: 24 93% 47%;            /* #E8650A amber */
-    --primary-foreground: 0 0% 4%;
-    --secondary: 0 0% 10%;            /* #1A1A1A */
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 7%;                 /* #111111 */
-    --muted-foreground: 210 13% 61%;  /* #8898A8 */
-    --accent: 24 93% 47%;             /* #E8650A amber */
-    --accent-foreground: 0 0% 4%;
-    --destructive: 14 65% 48%;        /* #CC4A2A */
-    --destructive-foreground: 0 0% 95%;
-    --border: 0 0% 12%;               /* #1E1E1E */
-    --input: 0 0% 7%;                 /* #111111 */
-    --ring: 24 93% 47%;               /* amber */
-    --radius: 0.125rem;               /* 2px */
+    /* Executive Gold — SteelBuild Pro dark navy-gold palette */
+    --background: 222 43% 5%;          /* #07090E */
+    --foreground: 220 20% 91%;         /* #E8EBF2 */
+    --card: 222 35% 7%;                /* #0C1018 */
+    --card-foreground: 220 20% 91%;
+    --popover: 222 40% 6%;             /* #090D14 */
+    --popover-foreground: 220 20% 91%;
+    --primary: 43 73% 45%;             /* #C89B20 gold */
+    --primary-foreground: 222 43% 5%;
+    --secondary: 222 30% 10%;          /* #141A28 */
+    --secondary-foreground: 220 20% 91%;
+    --muted: 222 35% 7%;               /* #0C1018 */
+    --muted-foreground: 215 17% 44%;   /* #5A6880 */
+    --accent: 43 73% 45%;              /* #C89B20 gold */
+    --accent-foreground: 222 43% 5%;
+    --destructive: 0 84% 60%;          /* #EF4444 */
+    --destructive-foreground: 220 20% 91%;
+    --border: 222 30% 13%;             /* rgba(255,255,255,0.07) */
+    --input: 222 35% 8%;               /* #0C1018 */
+    --ring: 43 73% 45%;                /* gold */
+    --radius: 0.25rem;                 /* 4px */
 
-    /* Chart palette — amber tones */
-    --chart-1: 24 93% 47%;            /* #E8650A */
-    --chart-2: 14 65% 48%;            /* #CC4A2A */
-    --chart-3: 0 0% 53%;              /* #888888 */
-    --chart-4: 0 0% 35%;              /* #595959 */
-    --chart-5: 210 13% 61%;           /* #8898A8 */
+    /* Chart palette — executive multi-color */
+    --chart-1: 43 73% 45%;             /* gold */
+    --chart-2: 217 91% 60%;            /* blue */
+    --chart-3: 142 71% 45%;            /* green */
+    --chart-4: 271 81% 66%;            /* purple */
+    --chart-5: 0 84% 60%;              /* red */
 
     /* Sidebar */
-    --sidebar-background: 0 0% 4%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 24 93% 47%;
-    --sidebar-primary-foreground: 0 0% 4%;
-    --sidebar-accent: 24 93% 47% / 0.10;
-    --sidebar-accent-foreground: 24 93% 47%;
-    --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 24 93% 47%;
+    --sidebar-background: 222 43% 5%;
+    --sidebar-foreground: 220 20% 91%;
+    --sidebar-primary: 43 73% 45%;
+    --sidebar-primary-foreground: 222 43% 5%;
+    --sidebar-accent: 43 73% 45% / 0.10;
+    --sidebar-accent-foreground: 43 73% 45%;
+    --sidebar-border: 222 30% 13%;
+    --sidebar-ring: 43 73% 45%;
   }
 }
 

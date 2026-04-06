@@ -122,14 +122,14 @@ function NavTab({ tab, active, onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 10,
+        fontFamily: "'Barlow Condensed', 'IBM Plex Mono', sans-serif",
+        fontSize: 12,
         fontWeight: active ? 700 : 600,
-        letterSpacing: "0.10em",
+        letterSpacing: "0.12em",
         textTransform: "uppercase",
-        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
-        padding: "12px 14px",
-        height: 52,
+        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "rgba(168,180,200,0.65)",
+        padding: "0 16px",
+        height: 48,
         display: "flex", alignItems: "center",
         cursor: "pointer",
         background: "transparent",
@@ -139,9 +139,11 @@ function NavTab({ tab, active, onClick }) {
         transition: "all 0.15s",
         flexShrink: 0,
         whiteSpace: "nowrap",
+        position: "relative",
       }}>
       {tab.label}
-    </button>);
+    </button>
+  );
 }
 
 // ─── Modules Dropdown ─────────────────────────────────────────────
@@ -1087,9 +1089,9 @@ export default function Layout({ children, currentPageName }) {
 
         {/* TOP NAV */}
         <nav className="nav-glass" style={{
-              height: 52,
-              background: "rgba(10,10,10,0.95)",
-              borderBottom: "1px solid #1E1E1E",
+              height: 48,
+              background: "rgba(7,9,14,0.97)",
+              borderBottom: "1px solid rgba(255,255,255,0.07)",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
