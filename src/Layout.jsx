@@ -7,6 +7,7 @@ import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import { Toaster } from "sonner";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
 import { ProjectProvider } from "./components/shared/ProjectContext";
+import { useProjectContext } from "./components/shared/useProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { PMAProvider } from "./components/pma/usePMAContext";
 import PMAPanel from "./components/pma/PMAPanel";
