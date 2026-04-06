@@ -89,7 +89,7 @@ export default function LookAheadSchedule() {
   const createMut = useMutation({
     mutationFn: d => base44.entities.LookAhead.create(d),
     onSuccess: () => {
-      qc.invalidateQueries(["lookahead"]);
+      qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
       setEditing(null);
       toast.success("Look-ahead item created");
@@ -101,7 +101,7 @@ export default function LookAheadSchedule() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
     onSuccess: () => {
-      qc.invalidateQueries(["lookahead"]);
+      qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
       setEditing(null);
       toast.success("Look-ahead item updated");
@@ -113,7 +113,7 @@ export default function LookAheadSchedule() {
   const deleteMut = useMutation({
     mutationFn: id => base44.entities.LookAhead.delete(id),
     onSuccess: (_, deletedId) => {
-      qc.invalidateQueries(["lookahead"]);
+      qc.invalidateQueries({ queryKey: ["lookahead"] });
       if (editing?.id === deletedId) {
         setEditing(null);
         setModalOpen(false);
