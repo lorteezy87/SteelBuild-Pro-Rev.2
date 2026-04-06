@@ -18,6 +18,7 @@ import { useTheme } from "./components/shared/ThemeContext";
 // ─── Tab → page mapping ───────────────────────────────────────────
 const PRIMARY_TABS = [
 { label: "DASHBOARD", pages: ["Dashboard"] },
+{ label: "PCC", pages: ["ProjectControlCenter"] },
 { label: "PROJECTS", pages: ["Projects", "ExecutiveView"] },
 { label: "RFIs", pages: ["RFIs", "RFIHub"] },
 { label: "DRAWINGS", pages: ["Submittals", "DrawingViewer"] },
@@ -34,6 +35,7 @@ const PRIMARY_TABS = [
 
 const TAB_DEFAULT_PAGE = {
   "DASHBOARD": "Dashboard",
+  "PCC": "ProjectControlCenter",
   "PROJECTS": "Projects",
   "RFIs": "RFIs",
   "DRAWINGS": "Submittals",
@@ -50,6 +52,7 @@ const TAB_DEFAULT_PAGE = {
 
 const ALL_MODULES = [
 { icon: "◈", name: "Dashboard", group: "Overview", page: "Dashboard" },
+{ icon: "⊕", name: "Project Control Center", group: "Overview", page: "ProjectControlCenter" },
 { icon: "◉", name: "Executive View", group: "Overview", page: "ExecutiveView" },
 { icon: "▤", name: "Projects", group: "Overview", page: "Projects" },
 { icon: "≡", name: "Scope & Exclusions", group: "Setup", page: "ScopeExclusions" },

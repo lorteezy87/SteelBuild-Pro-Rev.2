@@ -128,32 +128,11 @@ export default function Drawings() {
     initialData: [],
   });
 
-  // Fetch DrawingSet entities to resolve set names for drawings that only have drawing_set_id
-  const { data: drawingSetEntities = [] } = useQuery({
-    queryKey: ["drawingSets", activeProject?.id],
-    queryFn: () =>
-      activeProject?.id
-        ? base44.entities.DrawingSet.filter({ project_id: activeProject.id })
-        : [],
-    enabled: !!activeProject?.id,
-    initialData: [],
-  });
-
-  // Build a lookup map: drawing_set_id -> set_name
-  const setNameById = useMemo(() => {
-    const map = {};
-    drawingSetEntities.forEach((ds) => {
-      if (ds.id && ds.set_name) map[ds.id] = ds.set_name;
-    });
-    return map;
-  }, [drawingSetEntities]);
-
-  // Group by drawing set
+  // Group by drawing set — resolved from drawing_set_name field only
   const groupedBySet = useMemo(() => {
     const groups = {};
     drawings.forEach((d) => {
-      // Resolve set name: prefer drawing_set_name, fall back to DrawingSet entity, then "Ungrouped"
-      const setName = d.drawing_set_name || (d.drawing_set_id && setNameById[d.drawing_set_id]) || "Ungrouped";
+      const setName = (d.drawing_set_name || "").trim() || "Ungrouped";
       if (!groups[setName]) groups[setName] = [];
       groups[setName].push(d);
     });
@@ -179,37 +158,28 @@ export default function Drawings() {
     );
 
     return groups;
-  }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded, setNameById]);
+  }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded]);
 
   const sortedSetKeys = Object.keys(groupedBySet).sort();
-
-  // Build a lookup: set_name -> DrawingSet entity record
-  const drawingSetByName = useMemo(() => {
-    const map = {};
-    drawingSetEntities.forEach((ds) => { if (ds.set_name) map[ds.set_name] = ds; });
-    return map;
-  }, [drawingSetEntities]);
 
   const drawingSets = useMemo(() => {
     return sortedSetKeys.map((setName) => {
       const sheets = groupedBySet[setName] || [];
       const lead = sheets[0] || {};
-      // Prefer the canonical DrawingSet entity record for metadata if it exists
-      const dsEntity = drawingSetByName[setName] || null;
       return {
-        id: dsEntity?.id || lead.drawing_set_id || null,
+        id: null,
         set_name: setName,
-        current_revision: dsEntity?.current_revision || lead.set_approval_revision || String(lead.revision_number || "0"),
-        current_issue_date: dsEntity?.current_issue_date || lead.issue_date || null,
-        current_issued_by: dsEntity?.current_issued_by || lead.issued_by || "",
-        current_file_url: dsEntity?.current_file_url || lead.file_url || null,
+        current_revision: lead.set_approval_revision || String(lead.revision_number || "0"),
+        current_issue_date: lead.issue_date || null,
+        current_issued_by: lead.issued_by || "",
+        current_file_url: lead.file_url || null,
         sheet_count: sheets.filter((sheet) => !sheet.is_superseded).length,
-        revision_history: dsEntity?.revision_history || lead.revision_history || "[]",
-        discipline: dsEntity?.discipline || lead.discipline || "Structural",
-        notes: dsEntity?.notes || lead.notes || "",
+        revision_history: lead.revision_history || "[]",
+        discipline: lead.discipline || "Structural",
+        notes: lead.notes || "",
       };
     });
-  }, [groupedBySet, sortedSetKeys, drawingSetByName]);
+  }, [groupedBySet, sortedSetKeys]);
 
   const stages = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const disciplines = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
@@ -244,6 +214,32 @@ export default function Drawings() {
       toast.success("Drawing created");
     },
   });
+
+  const [approvingSaving, setApprovingSaving] = useState(false);
+
+  const handleApproveSet = async ({ status, revision, approvedBy, approvalDate, applyToSheets, notes }) => {
+    if (!approvalOpen) return;
+    setApprovingSaving(true);
+    try {
+      const sheets = groupedBySet[approvalOpen] || [];
+      const updatePayload = {
+        set_approval_status: status,
+        set_approval_revision: revision,
+        set_approved_date: approvalDate,
+        set_approved_by: approvedBy,
+      };
+      if (applyToSheets) {
+        await Promise.all(sheets.map((d) => base44.entities.Drawing.update(d.id, updatePayload)));
+      }
+      qc.invalidateQueries({ queryKey: ["drawings"] });
+      toast.success(`Set "${approvalOpen}" ${status}`);
+      setApprovalOpen(null);
+    } catch (err) {
+      toast.error("Failed to save approval");
+    } finally {
+      setApprovingSaving(false);
+    }
+  };
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) =>
@@ -439,7 +435,7 @@ export default function Drawings() {
           },
           {
             label: "SETS",
-            value: drawingSetEntities.length,
+            value: drawingSets.length,
             onClick: () => {},
           },
         ].map((tile, i) => (
@@ -487,9 +483,10 @@ export default function Drawings() {
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: 8,
-          padding: "0 24px",
-          height: 44,
+          padding: "6px 24px",
+          minHeight: 44,
           borderBottom: "2px solid rgba(255,255,255,0.06)",
           flexShrink: 0,
         }}
@@ -1404,12 +1401,13 @@ export default function Drawings() {
 
       {approvalOpen && (
         <SetApprovalModal
+          open={!!approvalOpen}
           setName={approvalOpen}
+          sheetCount={(groupedBySet[approvalOpen] || []).length}
+          existingRevision={(groupedBySet[approvalOpen]?.[0])?.set_approval_revision || ""}
           onClose={() => setApprovalOpen(null)}
-          onSuccess={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
-            setApprovalOpen(null);
-          }}
+          onConfirm={handleApproveSet}
+          saving={approvingSaving}
         />
       )}
 
