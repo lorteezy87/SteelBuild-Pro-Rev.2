@@ -10,6 +10,7 @@ import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary
 
 export default function ProjectCloseout() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [activeTab, setActiveTab] = useState("checklist");
 

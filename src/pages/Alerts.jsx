@@ -20,7 +20,7 @@ const SEV_BADGE = {
 };
 const RECORD_PAGE = {
   RFI: "RFIs",
-  Drawing: "Submittals",
+  Drawing: "Drawings",
   ChangeOrder: "ChangeOrders",
   Delivery: "Deliveries",
   WorkPackage: "WorkPackages",
@@ -39,11 +39,11 @@ export default function Alerts() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
-    onSuccess: () => qc.invalidateQueries(["alerts"]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
   const deleteMut = useMutation({
     mutationFn: id => base44.entities.Alert.delete(id),
-    onSuccess: () => qc.invalidateQueries(["alerts"]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
   const markRead = (alert, e) => {

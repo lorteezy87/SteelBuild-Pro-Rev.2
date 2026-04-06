@@ -8,6 +8,7 @@ import PhotoGallery from "@/components/photos/PhotoGallery";
 
 export default function Photos() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showUpload, setShowUpload] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");

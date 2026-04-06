@@ -10,6 +10,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function Punchlist() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
