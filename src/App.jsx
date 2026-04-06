@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/components/shared/ThemeContext';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
 import Dashboard from './pages/Dashboard';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const { Pages, Layout } = pagesConfig;
 
@@ -87,16 +88,18 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <QueryClientProvider client={queryClientInstance}>
-          <Router>
-            <AuthenticatedApp />
-          </Router>
-          <Toaster />
-        </QueryClientProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <QueryClientProvider client={queryClientInstance}>
+            <Router>
+              <AuthenticatedApp />
+            </Router>
+            <Toaster />
+          </QueryClientProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 
