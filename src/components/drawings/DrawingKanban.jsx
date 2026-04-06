@@ -313,7 +313,7 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
 
 export default function DrawingKanban({ drawings, onStageChange, onEdit, onAnnotate }) {
   const navigate = useNavigate();
-  const handleAnnotate = onAnnotate || ((d) => navigate(createPageUrl(`DrawingViewer?drawingId=${d.id}&from=Submittals`)));
+  const handleAnnotate = onAnnotate || ((d) => navigate(createPageUrl(`DrawingViewer?drawingId=${d.id}&from=Drawings`)));
 
   const [localDrawings, setLocalDrawings] = useState(drawings);
 

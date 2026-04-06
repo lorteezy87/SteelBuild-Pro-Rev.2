@@ -44,7 +44,7 @@ export default function DrawingApprovalStatusCard({ drawings }) {
             <span style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 4, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>{overdue} OVERDUE</span>
           )}
         </div>
-        <button onClick={() => navigate(createPageUrl("Submittals"))} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--chart-4)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.10em", fontWeight: 600 }}>LOG →</button>
+        <button onClick={() => navigate(createPageUrl("Drawings"))} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--chart-4)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.10em", fontWeight: 600 }}>LOG →</button>
       </div>
 
       <div style={{ padding: "12px 16px" }}>

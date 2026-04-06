@@ -85,6 +85,7 @@ import Projects from './pages/Projects';
 import Punchlist from './pages/Punchlist';
 import QualityControl from './pages/QualityControl';
 import RFIs from './pages/RFIs';
+import RFIHub from './pages/RFIHub';
 import ResourceManagement from './pages/ResourceManagement';
 import ResourceScheduling from './pages/ResourceScheduling';
 import SOV from './pages/SOV';
@@ -140,6 +141,7 @@ export const PAGES = {
     "Punchlist": Punchlist,
     "QualityControl": QualityControl,
     "RFIs": RFIs,
+    "RFIHub": RFIHub,
     "ResourceManagement": ResourceManagement,
     "ResourceScheduling": ResourceScheduling,
     "SOV": SOV,
