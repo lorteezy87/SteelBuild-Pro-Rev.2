@@ -147,3 +147,18 @@ SELECT u.id, u.email,
 FROM auth.users u
 WHERE NOT EXISTS (SELECT 1 FROM public.user_profiles p WHERE p.id = u.id)
 ON CONFLICT (id) DO NOTHING;
+
+-- Fix 8: Add missing columns to documents table that DMS components expect.
+-- Also add discipline/drawing_number/revision/sheet_number from Fix 6.
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS discipline      TEXT DEFAULT 'General',
+  ADD COLUMN IF NOT EXISTS drawing_number  TEXT,
+  ADD COLUMN IF NOT EXISTS revision        TEXT,
+  ADD COLUMN IF NOT EXISTS sheet_number    TEXT,
+  ADD COLUMN IF NOT EXISTS display_name    TEXT,
+  ADD COLUMN IF NOT EXISTS file_type       TEXT,
+  ADD COLUMN IF NOT EXISTS file_size_kb    INTEGER,
+  ADD COLUMN IF NOT EXISTS mime_type       TEXT,
+  ADD COLUMN IF NOT EXISTS revision_number TEXT DEFAULT '0',
+  ADD COLUMN IF NOT EXISTS revision_date   DATE,
+  ADD COLUMN IF NOT EXISTS uploaded_date   TIMESTAMPTZ;

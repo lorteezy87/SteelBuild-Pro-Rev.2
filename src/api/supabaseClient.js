@@ -70,6 +70,18 @@ const applyConditions = (query, conditions = {}) => {
 
 // ─── Entity factory ───────────────────────────────────────────────────────────
 
+/**
+ * Strip undefined values and camelCase keys (Postgres uses snake_case only).
+ * Components built on Base44 often pass both forms; we keep only the
+ * snake_case ones so PostgREST doesn't complain about unknown columns.
+ */
+const cleanRecord = (record) =>
+  Object.fromEntries(
+    Object.entries(record).filter(
+      ([k, v]) => v !== undefined && !/[A-Z]/.test(k)
+    )
+  );
+
 const createEntityClient = (tableName) => ({
   /**
    * List all records, optionally sorted.
@@ -125,9 +137,7 @@ const createEntityClient = (tableName) => ({
    * Create a new record. Returns the created record with its generated id.
    */
   create: async (record) => {
-    const clean = Object.fromEntries(
-      Object.entries(record).filter(([, v]) => v !== undefined)
-    );
+    const clean = cleanRecord(record);
     const { data, error } = await supabase
       .from(tableName)
       .insert(clean)
@@ -141,9 +151,7 @@ const createEntityClient = (tableName) => ({
    * Update an existing record by id.
    */
   update: async (id, updates) => {
-    const clean = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
-    );
+    const clean = cleanRecord(updates);
     const { data, error } = await supabase
       .from(tableName)
       .update({ ...clean, updated_at: new Date().toISOString() })
