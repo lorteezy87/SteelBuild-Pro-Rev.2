@@ -116,3 +116,34 @@ BEGIN
   RETURN v_result;
 END;$$;
 GRANT EXECUTE ON FUNCTION public.create_project(jsonb) TO authenticated;
+
+-- Fix 6: Storage policies had project_file_insert/select/update policies that
+-- tried to cast the first path segment ("uploads") to uuid, causing:
+--   "invalid input syntax for type uuid: 'uploads'"
+-- Replace with simple authenticated-user policies matching migration 002.
+DROP POLICY IF EXISTS project_file_insert ON storage.objects;
+DROP POLICY IF EXISTS project_file_select ON storage.objects;
+DROP POLICY IF EXISTS project_file_update ON storage.objects;
+DROP POLICY IF EXISTS auth_delete_own ON storage.objects;
+DROP POLICY IF EXISTS owner_file_delete ON storage.objects;
+DROP POLICY IF EXISTS auth_upload ON storage.objects;
+DROP POLICY IF EXISTS auth_read ON storage.objects;
+DROP POLICY IF EXISTS auth_delete ON storage.objects;
+DROP POLICY IF EXISTS public_read ON storage.objects;
+
+CREATE POLICY "auth_upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'app-files');
+CREATE POLICY "auth_read"   ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'app-files');
+CREATE POLICY "auth_update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'app-files');
+CREATE POLICY "auth_delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'app-files');
+CREATE POLICY "public_read" ON storage.objects FOR SELECT TO anon USING (bucket_id = 'app-files');
+
+-- Fix 7: Create missing user_profiles row for existing users.
+-- The on_auth_user_created trigger only fires for new signups; backfill
+-- any auth.users rows that don't yet have a profile.
+INSERT INTO public.user_profiles (id, email, full_name, role)
+SELECT u.id, u.email,
+  COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', u.email),
+  'user'
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.user_profiles p WHERE p.id = u.id)
+ON CONFLICT (id) DO NOTHING;
