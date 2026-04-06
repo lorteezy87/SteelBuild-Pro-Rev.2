@@ -209,9 +209,9 @@ export default function Schedule() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
-      <div>
+      <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -276,7 +276,7 @@ export default function Schedule() {
       </div>
 
       {/* Phase Filter */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 24px 0" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Phase:</span>
         {["all", ...PHASES].map((p) => (
           <button
@@ -303,7 +303,7 @@ export default function Schedule() {
       </div>
 
       {/* View Tabs */}
-      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--divider)" }}>
+      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px", marginTop: 8 }}>
         {[
           { id: "gantt", label: "Gantt Chart" },
           { id: "lookahead", label: "6-Week Lookahead" },
@@ -327,27 +327,29 @@ export default function Schedule() {
       </div>
 
       {/* View Content */}
-      {view === "gantt" && (
-        <ScheduleGantt
-          tasks={scheduleTasks}
-          expandedTask={expandedTask}
-          setExpandedTask={setExpandedTask}
-          onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-          phaseFilter={phaseFilter}
-        />
-      )}
+      <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+        {view === "gantt" && (
+          <ScheduleGantt
+            tasks={scheduleTasks}
+            expandedTask={expandedTask}
+            setExpandedTask={setExpandedTask}
+            onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+            phaseFilter={phaseFilter}
+          />
+        )}
 
-      {view === "lookahead" && <LookaheadPlanner tasks={scheduleTasks} />}
+        {view === "lookahead" && <LookaheadPlanner tasks={scheduleTasks} />}
 
-      {view === "list" && (
-        <ScheduleTaskList
-          tasks={scheduleTasks}
-          onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-          onDelete={(task) => setDeleteTarget(task)}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-        />
-      )}
+        {view === "list" && (
+          <ScheduleTaskList
+            tasks={scheduleTasks}
+            onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+            onDelete={(task) => setDeleteTarget(task)}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+          />
+        )}
+      </div>
 
       {/* Task Detail Drawer */}
       <TaskDetailDrawer

@@ -643,6 +643,8 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
+    const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
+
     let created = 0;
     for (const sheet of selectedSheets) {
       await base44.entities.Drawing.create({
@@ -656,7 +658,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         issue_date:       sheet.date || meta.issueDate,
         issued_by:        meta.issuedBy,
         file_url:         sheet.sourceFileUrl,
-        drawing_set_name: meta.setName || meta.revision || "Drawing Set",
+        drawing_set_name: resolvedSetName,
         notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
       });
       created++;

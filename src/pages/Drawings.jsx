@@ -128,11 +128,11 @@ export default function Drawings() {
     initialData: [],
   });
 
-  // Group by drawing set
+  // Group by drawing set — resolved from drawing_set_name field only
   const groupedBySet = useMemo(() => {
     const groups = {};
     drawings.forEach((d) => {
-      const setName = d.drawing_set_name || "Ungrouped";
+      const setName = (d.drawing_set_name || "").trim() || "Ungrouped";
       if (!groups[setName]) groups[setName] = [];
       groups[setName].push(d);
     });
@@ -161,12 +161,13 @@ export default function Drawings() {
   }, [drawings, search, stageFilter, disciplineFilter, hideSuperseeded]);
 
   const sortedSetKeys = Object.keys(groupedBySet).sort();
+
   const drawingSets = useMemo(() => {
     return sortedSetKeys.map((setName) => {
       const sheets = groupedBySet[setName] || [];
       const lead = sheets[0] || {};
       return {
-        id: lead.drawing_set_id || null,
+        id: null,
         set_name: setName,
         current_revision: lead.set_approval_revision || String(lead.revision_number || "0"),
         current_issue_date: lead.issue_date || null,
@@ -207,17 +208,45 @@ export default function Drawings() {
     mutationFn: (data) => base44.entities.Drawing.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawingSets"] });
       setFormOpen(false);
       setEditingDrawing(null);
       toast.success("Drawing created");
     },
   });
 
+  const [approvingSaving, setApprovingSaving] = useState(false);
+
+  const handleApproveSet = async ({ status, revision, approvedBy, approvalDate, applyToSheets, notes }) => {
+    if (!approvalOpen) return;
+    setApprovingSaving(true);
+    try {
+      const sheets = groupedBySet[approvalOpen] || [];
+      const updatePayload = {
+        set_approval_status: status,
+        set_approval_revision: revision,
+        set_approved_date: approvalDate,
+        set_approved_by: approvedBy,
+      };
+      if (applyToSheets) {
+        await Promise.all(sheets.map((d) => base44.entities.Drawing.update(d.id, updatePayload)));
+      }
+      qc.invalidateQueries({ queryKey: ["drawings"] });
+      toast.success(`Set "${approvalOpen}" ${status}`);
+      setApprovalOpen(null);
+    } catch (err) {
+      toast.error("Failed to save approval");
+    } finally {
+      setApprovingSaving(false);
+    }
+  };
+
   const updateMut = useMutation({
     mutationFn: ({ id, data }) =>
       base44.entities.Drawing.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawingSets"] });
       setFormOpen(false);
       toast.success("Drawing updated");
     },
@@ -233,6 +262,9 @@ export default function Drawings() {
       });
     }
   };
+
+  const overdueCount = useMemo(() => drawings.filter(d => d.due_date && d.stage !== "Released" && new Date(d.due_date) < new Date()).length, [drawings]);
+  const dueThisWeek = useMemo(() => drawings.filter(d => { const days = d.due_date ? Math.ceil((new Date(d.due_date) - new Date()) / 86400000) : null; return days !== null && days >= 0 && days <= 7 && d.stage !== "Released"; }).length, [drawings]);
 
   const headerBtn = {
     background: "rgba(255,255,255,0.04)",
@@ -268,7 +300,8 @@ export default function Drawings() {
           justifyContent: "space-between",
           padding: "0 24px",
           height: 56,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-sidebar)",
+          borderBottom: "1px solid var(--divider)",
           flexShrink: 0,
         }}
       >
@@ -281,11 +314,11 @@ export default function Drawings() {
         >
           <span
             style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 22,
-              fontWeight: 700,
+              fontFamily: "var(--font-mono)",
+              fontSize: 20,
+              fontWeight: 800,
               color: "var(--text-primary)",
-              letterSpacing: "0.04em",
+              letterSpacing: "0.06em",
             }}
           >
             DRAWINGS
@@ -328,16 +361,16 @@ export default function Drawings() {
               setFormOpen(true);
             }}
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "transparent",
+              border: "1px solid var(--border-default)",
               borderRadius: 8,
               padding: "7px 14px",
               color: "var(--text-secondary)",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              fontWeight: 500,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
               cursor: "pointer",
-              letterSpacing: "0.01em",
+              letterSpacing: "0.08em",
               whiteSpace: "nowrap",
             }}
           >
@@ -347,18 +380,17 @@ export default function Drawings() {
           <button
             onClick={() => setUploadSetOpen(true)}
             style={{
-              background: "linear-gradient(135deg, var(--accent), var(--status-warning))",
+              background: "var(--accent)",
               border: "none",
               borderRadius: 8,
               padding: "7px 16px",
-              color: "white",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              fontWeight: 600,
+              color: "#fff",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
               cursor: "pointer",
-              letterSpacing: "0.01em",
+              letterSpacing: "0.08em",
               whiteSpace: "nowrap",
-              boxShadow: "0 2px 12px rgba(0,229,255,0.06)",
             }}
           >
             ↑ Upload Set
@@ -366,14 +398,95 @@ export default function Drawings() {
         </div>
       </div>
 
+      {/* ===== KPI TILES ROW ===== */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6, 1fr)",
+          borderBottom: "1px solid var(--divider)",
+          flexShrink: 0,
+        }}
+      >
+        {[
+          {
+            label: "TOTAL SHEETS",
+            value: drawings.length,
+            onClick: () => { setStageFilter("all"); setDisciplineFilter("all"); setSearch(""); },
+          },
+          {
+            label: "RELEASED",
+            value: drawings.filter(d => d.stage === "Released").length,
+            onClick: () => setStageFilter("Released"),
+          },
+          {
+            label: "IN REVIEW",
+            value: drawings.filter(d => ["OFA","BFA","OFS","BFS"].includes(d.stage)).length,
+            onClick: () => setStageFilter("OFA"),
+          },
+          {
+            label: "OVERDUE",
+            value: overdueCount,
+            onClick: () => setHideSuperseeded(false),
+          },
+          {
+            label: "DUE THIS WEEK",
+            value: dueThisWeek,
+            onClick: () => setStageFilter("all"),
+          },
+          {
+            label: "SETS",
+            value: drawingSets.length,
+            onClick: () => {},
+          },
+        ].map((tile, i) => (
+          <div
+            key={tile.label}
+            onClick={tile.onClick}
+            style={{
+              padding: "10px 12px",
+              borderRight: i < 5 ? "1px solid var(--divider)" : undefined,
+              background: "var(--bg-surface)",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 7,
+                letterSpacing: "0.14em",
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+              }}
+            >
+              {tile.label}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 18,
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "var(--text-primary)",
+              }}
+            >
+              {tile.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* ===== FILTER TOOLBAR ===== */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
           gap: 8,
-          padding: "0 24px",
-          height: 44,
+          padding: "6px 24px",
+          minHeight: 44,
           borderBottom: "2px solid rgba(255,255,255,0.06)",
           flexShrink: 0,
         }}
@@ -538,38 +651,40 @@ export default function Drawings() {
         }}
       />
 
-      {/* ===== COLUMN HEADERS ===== */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
-          alignItems: "center",
-          padding: "0 20px",
-          height: 28,
-          background: "rgba(255,255,255,0.025)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        {["", "#", "TITLE", "DISC", "REV", "STATUS", "IFC", "APPV", ""].map(
-          (col, i) => (
-            <div
-              key={i}
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 7,
-                color: "rgba(160,175,210,0.30)",
-                letterSpacing: "0.14em",
-                userSelect: "none",
-              }}
-            >
-              {col}
-            </div>
-          )
-        )}
-      </div>
+      {/* ===== COLUMN HEADERS (table only) ===== */}
+      {view === "table" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
+            alignItems: "center",
+            padding: "0 20px",
+            height: 28,
+            background: "rgba(255,255,255,0.025)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          {["", "#", "TITLE", "DISC", "REV", "STAGE", "IFC", "APPV", "DUE", "DAYS", ""].map(
+            (col, i) => (
+              <div
+                key={i}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 7,
+                  color: "rgba(160,175,210,0.30)",
+                  letterSpacing: "0.14em",
+                  userSelect: "none",
+                }}
+              >
+                {col}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* ===== SCROLLABLE CONTENT ===== */}
       <div
@@ -599,6 +714,129 @@ export default function Drawings() {
             }}
           >
             No drawings found
+          </div>
+        ) : view === "cards" ? (
+          /* ===== CARDS / THUMBNAIL VIEW ===== */
+          <div style={{ padding: "16px 20px" }}>
+            {sortedSetKeys.map((setName) => {
+              const sheets = groupedBySet[setName];
+              const isCollapsed = collapsedSets.has(setName);
+              return (
+                <div key={setName} style={{ marginBottom: 28 }}>
+                  {/* Set header */}
+                  <div
+                    onClick={() => toggleCollapse(setName)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "6px 12px", marginBottom: 12, cursor: "pointer",
+                      borderLeft: "3px solid var(--accent)",
+                      background: "rgba(232,101,10,0.05)",
+                      borderRadius: "0 4px 4px 0",
+                      userSelect: "none",
+                    }}
+                  >
+                    <span style={{ color: "var(--accent)", fontSize: 10, transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{setName}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "1px 7px", borderRadius: 3 }}>
+                      {sheets.length} SHEETS
+                    </span>
+                  </div>
+                  {!isCollapsed && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                      gap: 10,
+                    }}>
+                      {sheets.map((drawing) => {
+                        const s = BADGE_STYLES[drawing.stage] || BADGE_STYLES["Not Started"];
+                        return (
+                          <div
+                            key={drawing.id}
+                            onClick={() => { setEditingDrawing(drawing); setFormOpen(true); }}
+                            style={{
+                              background: "var(--bg-surface)",
+                              border: `1px solid ${selectedIds.has(drawing.id) ? "var(--accent)" : "var(--border-default)"}`,
+                              borderRadius: 4,
+                              overflow: "hidden",
+                              cursor: "pointer",
+                              transition: "border-color 0.15s",
+                            }}
+                          >
+                            {/* PDF thumbnail area */}
+                            <div style={{
+                              height: 130, background: "#0D0D0D",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              position: "relative", overflow: "hidden",
+                              borderBottom: "1px solid var(--border-default)",
+                            }}>
+                              {drawing.file_url ? (
+                                <iframe
+                                  src={`${drawing.file_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                  style={{ width: "100%", height: "200%", border: "none", pointerEvents: "none", marginTop: "-50%" }}
+                                  title={drawing.sheet_number}
+                                />
+                              ) : (
+                                <div style={{ textAlign: "center" }}>
+                                  <div style={{ fontSize: 28, opacity: 0.12 }}>📐</div>
+                                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.20)", letterSpacing: "0.1em", marginTop: 4 }}>NO FILE</div>
+                                </div>
+                              )}
+                              {/* Sheet number overlay */}
+                              <div style={{
+                                position: "absolute", top: 6, left: 6,
+                                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                                color: "#fff", background: "rgba(0,0,0,0.65)",
+                                padding: "2px 6px", borderRadius: 3, letterSpacing: "0.06em",
+                              }}>
+                                {drawing.sheet_number || "—"}
+                              </div>
+                              {/* Selection checkbox */}
+                              <div
+                                onClick={(e) => { e.stopPropagation(); toggleSelect(drawing.id); }}
+                                style={{
+                                  position: "absolute", top: 6, right: 6, width: 16, height: 16,
+                                  background: selectedIds.has(drawing.id) ? "var(--accent)" : "rgba(0,0,0,0.5)",
+                                  border: `1px solid ${selectedIds.has(drawing.id) ? "var(--accent)" : "rgba(255,255,255,0.25)"}`,
+                                  borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {selectedIds.has(drawing.id) && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
+                              </div>
+                            </div>
+                            {/* Card body */}
+                            <div style={{ padding: "8px 10px" }}>
+                              <div style={{
+                                fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500,
+                                color: "var(--text-primary)", marginBottom: 4,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }} title={drawing.title}>
+                                {drawing.title || "Untitled"}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                <span style={{
+                                  fontFamily: "var(--font-mono)", fontSize: 7,
+                                  color: "var(--text-muted)", letterSpacing: "0.08em",
+                                }}>
+                                  {drawing.discipline?.slice(0, 4).toUpperCase()} · Rev {drawing.revision_number ?? "0"}
+                                </span>
+                                <span style={{
+                                  background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+                                  fontFamily: "var(--font-mono)", fontSize: 6, letterSpacing: "0.08em",
+                                  padding: "1px 5px", borderRadius: 3, whiteSpace: "nowrap",
+                                }}>
+                                  {s.label}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           sortedSetKeys.map((setName) => {
@@ -856,7 +1094,7 @@ export default function Drawings() {
                       style={{
                         display: "grid",
                         gridTemplateColumns:
-                          "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
+                          "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
                         alignItems: "center",
                         height: 32,
                         padding: "0 20px",
@@ -1035,6 +1273,25 @@ export default function Drawings() {
                           : "—"}
                       </span>
 
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 9,
+                          color: (() => {
+                            if (!drawing.due_date || drawing.stage === "Released") return "rgba(160,175,210,0.25)";
+                            const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000);
+                            return days < 0 ? "#FF7A7A" : days <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)";
+                          })(),
+                        }}
+                      >
+                        {drawing.due_date && drawing.stage !== "Released"
+                          ? (() => {
+                              const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000);
+                              return days < 0 ? `${Math.abs(days)}d late` : `${days}d`;
+                            })()
+                          : "—"}
+                      </span>
+
                       <div
                         className="row-actions"
                         style={{
@@ -1096,6 +1353,7 @@ export default function Drawings() {
           }}
           onSave={handleSave}
           drawing={editingDrawing}
+          drawingSets={drawingSets}
         />
       )}
 
@@ -1143,12 +1401,13 @@ export default function Drawings() {
 
       {approvalOpen && (
         <SetApprovalModal
+          open={!!approvalOpen}
           setName={approvalOpen}
+          sheetCount={(groupedBySet[approvalOpen] || []).length}
+          existingRevision={(groupedBySet[approvalOpen]?.[0])?.set_approval_revision || ""}
           onClose={() => setApprovalOpen(null)}
-          onSuccess={() => {
-            qc.invalidateQueries({ queryKey: ["drawings"] });
-            setApprovalOpen(null);
-          }}
+          onConfirm={handleApproveSet}
+          saving={approvingSaving}
         />
       )}
 

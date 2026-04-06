@@ -1,241 +1,237 @@
-import React, { useMemo, useRef, useCallback } from "react";
-import { sortByPhase, derivePhase } from "../../utils/phases";
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import { derivePhase } from "../../utils/phases";
 
-const PX_PER_DAY = 72;
-const ROW_H      = 50;
-const HEADER_H   = 48;
-const LEFT_W     = 340;
+// ── Phase definition — ordered 1-7 ──────────────────────────────────────
+const PHASES = [
+  { id: 1, label: "Pre-Construction",    key: "Pre-Construction",  color: "#64748B" },
+  { id: 2, label: "Detailing",           key: "Detailing",         color: "#0EA5E9" },
+  { id: 3, label: "Procurement",         key: "Procurement",       color: "#F59E0B" },
+  { id: 4, label: "Fabrication",         key: "Fabrication",       color: "#E8650A" },
+  { id: 5, label: "Delivery",            key: "Delivery",          color: "#10B981" },
+  { id: 6, label: "Installation",        key: "Installation",      color: "#06B6D4" },
+  { id: 7, label: "Closeout",            key: "Closeout",          color: "#6B7280" },
+];
+// Also catch Erection as Installation
+const PHASE_KEY_MAP = { Erection: "Installation" };
 
-const MONTH = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-
-function fmtDay(d, todayStr) {
-  const s = `${MONTH[d.getUTCMonth()]} ${d.getUTCDate()}`;
-  return d.toISOString().slice(0,10) === todayStr ? `${s} (T)` : s;
+function normalizePhase(task) {
+  const raw = task.phase || derivePhase(task) || "";
+  return PHASE_KEY_MAP[raw] || raw;
 }
 
-/** Returns true if today falls within the task's date range AND it's In Progress with low pct. */
-function isHotTask(task, todayStr) {
-  if (task.status !== "In Progress") return false;
-  const pct = task.percent_complete || 0;
-  if (pct >= 30) return false;           // already well underway → show as progress bar
-  const s = task.start_date?.slice(0,10);
-  const e = task.end_date?.slice(0,10);
-  return s && e && todayStr >= s && todayStr <= e;
+const PHASE_BY_KEY = Object.fromEntries(PHASES.map(p => [p.key, p]));
+
+// ── Status helpers ────────────────────────────────────────────────────────
+const STATUS_COLOR = {
+  "Complete":    "#10B981",
+  "In Progress": "var(--accent)",
+  "Delayed":     "#EF4444",
+  "On Hold":     "#DDB7FF",
+  "Not Started": "var(--text-muted)",
+};
+
+function statusColor(s) { return STATUS_COLOR[s] || "var(--text-muted)"; }
+
+// ── Formatting helpers ────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return "—";
+  const dt = new Date(d + "T00:00:00Z");
+  return dt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "UTC" });
 }
 
-/* ── Task bar variants ─────────────────────────────────────────────────── */
-function TaskBar({ task, leftPx, widthPx, todayStr }) {
-  const pct = task.percent_complete || 0;
-  const base = {
-    position: "absolute",
-    left: leftPx,
-    top: "50%",
-    transform: "translateY(-50%)",
-    height: 22,
-    borderRadius: 0,
-  };
-
-  /* COMPLETE — solid amber */
-  if (task.status === "Complete") {
-    return (
-      <div style={{ ...base, width: Math.max(widthPx, 48), background: "var(--accent)" }}>
-        <span style={labelStyle("var(--on-accent)")}>COMPLETE</span>
-      </div>
-    );
-  }
-
-  /* ACTIVE / HOT — filled amber bar + dot */
-  if (isHotTask(task, todayStr)) {
-    return (
-      <div style={{ ...base, display: "flex", alignItems: "center" }}>
-        <div style={{
-          width: Math.max(widthPx, 90), height: 22,
-          background: "var(--accent)",
-          display: "flex", alignItems: "center",
-        }}>
-          <span style={labelStyle("var(--on-accent)")}>ACTIVE TASK</span>
-        </div>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", marginLeft: 3, flexShrink: 0 }} />
-      </div>
-    );
-  }
-
-  /* IN PROGRESS — amber partial fill + dark outline for remainder */
-  if (task.status === "In Progress") {
-    const fillW = Math.round(Math.max(widthPx, 60) * pct / 100);
-    const remW  = Math.max(widthPx, 60) - fillW;
-    return (
-      <div style={{ ...base, width: Math.max(widthPx, 60), display: "flex", border: "1px solid rgba(232,101,10,0.35)", overflow: "hidden", background: "rgba(232,101,10,0.06)" }}>
-        {/* filled portion */}
-        <div style={{ width: fillW, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0 }}>
-          {fillW > 50 && <span style={labelStyle("var(--on-accent)")}>{pct}% COMPLETE</span>}
-        </div>
-        {/* remaining */}
-        <div style={{ width: remW, height: "100%", display: "flex", alignItems: "center", overflow: "hidden", flexShrink: 0 }}>
-          {fillW <= 50 && <span style={{ ...labelStyle("var(--accent)"), paddingLeft: 6 }}>{pct}% COMPLETE</span>}
-        </div>
-      </div>
-    );
-  }
-
-  /* DELAYED — red dashed */
-  if (task.status === "Delayed") {
-    return (
-      <div style={{ ...base, width: Math.max(widthPx, 48), border: "2px dashed rgba(239,68,68,0.8)", background: "rgba(239,68,68,0.07)", display: "flex", alignItems: "center" }}>
-        <span style={labelStyle("#EF4444")}>DELAYED</span>
-      </div>
-    );
-  }
-
-  /* ON HOLD */
-  if (task.status === "On Hold") {
-    return (
-      <div style={{ ...base, width: Math.max(widthPx, 48), border: "1px solid rgba(221,183,255,0.5)", background: "rgba(221,183,255,0.07)", display: "flex", alignItems: "center" }}>
-        <span style={labelStyle("#DDB7FF")}>ON HOLD</span>
-      </div>
-    );
-  }
-
-  /* NOT STARTED / SCHEDULED / default — dark navy PENDING */
+// ── Summary gantt bar ─────────────────────────────────────────────────────
+function SummaryBar({ phase, leftPx, widthPx }) {
+  const ph = PHASE_BY_KEY[phase.key];
+  const color = ph?.color || "#888";
   return (
-    <div style={{ ...base, width: Math.max(widthPx, 48), background: "rgba(30,58,138,0.55)", border: "1px solid rgba(59,130,246,0.35)", display: "flex", alignItems: "center" }}>
-      <span style={labelStyle("rgba(147,197,253,0.85)")}>PENDING</span>
+    <div style={{
+      position: "absolute",
+      left: leftPx,
+      width: Math.max(widthPx, 6),
+      height: 14,
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: color,
+      borderRadius: 2,
+      opacity: 0.85,
+    }}>
+      {/* end caps */}
+      <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: color, filter: "brightness(1.3)", borderRadius: "2px 0 0 2px" }} />
+      <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: color, filter: "brightness(1.3)", borderRadius: "0 2px 2px 0" }} />
     </div>
   );
 }
 
-function labelStyle(color) {
-  return {
-    fontFamily: "'IBM Plex Mono', monospace",
-    fontSize: 8,
-    fontWeight: 700,
-    letterSpacing: "0.1em",
-    color,
-    padding: "0 8px",
-    whiteSpace: "nowrap",
-    userSelect: "none",
-  };
+// ── Task gantt bar ────────────────────────────────────────────────────────
+function TaskBar({ task, leftPx, widthPx }) {
+  const pct = task.percent_complete || 0;
+
+  if (task.status === "Complete") {
+    return (
+      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", background: "#10B981", borderRadius: 2, overflow: "hidden", display: "flex", alignItems: "center", padding: "0 8px" }}>
+        <span style={{ fontSize: 8, fontWeight: 700, color: "#003915", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+      </div>
+    );
+  }
+  if (task.status === "In Progress") {
+    return (
+      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px solid var(--accent)", borderRadius: 2, overflow: "hidden", background: "rgba(232,101,10,0.08)" }}>
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden" }}>
+          <span style={{ fontSize: 8, fontWeight: 700, color: "#000", whiteSpace: "nowrap" }}>{task.task_name}</span>
+        </div>
+      </div>
+    );
+  }
+  if (task.status === "Delayed") {
+    return (
+      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px dashed #EF4444", borderRadius: 2, background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
+        <span style={{ fontSize: 8, fontWeight: 700, color: "#EF4444", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+      </div>
+    );
+  }
+  // Not Started / default
+  return (
+    <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1px solid rgba(136,136,136,0.4)", borderRadius: 2, background: "rgba(136,136,136,0.06)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
+      <span style={{ fontSize: 8, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+    </div>
+  );
 }
 
-/* ── Main component ────────────────────────────────────────────────────── */
-export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpandedTask, phaseFilter = 'all' }) {
+const WEEK_PX = 240;
+const ROW_H   = 40;
+const SUM_H   = 36;
+const HEAD_H  = 40;
+// Left panel column layout
+const LEFT_W  = 600;
+// grid: WBS | TASK NAME | START | FINISH | PRED | STATUS | %
+const GRID = "56px 1fr 72px 72px 56px 78px 42px";
 
-  const leftScrollRef  = useRef(null);
-  const rightBodyRef   = useRef(null);
-  const rightHeaderRef = useRef(null);
+export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpandedTask, phaseFilter = "all" }) {
+  const [collapsed, setCollapsed] = useState({});
+  const leftRef   = useRef(null);
+  const rightHead = useRef(null);
+  const rightBody = useRef(null);
 
-  /* Sync vertical scroll between left and right body */
-  const onLeftScroll = useCallback(() => {
-    if (rightBodyRef.current) rightBodyRef.current.scrollTop = leftScrollRef.current.scrollTop;
-  }, []);
-  const onRightBodyScroll = useCallback(() => {
-    if (leftScrollRef.current) leftScrollRef.current.scrollTop = rightBodyRef.current.scrollTop;
-    if (rightHeaderRef.current) rightHeaderRef.current.scrollLeft = rightBodyRef.current.scrollLeft;
-  }, []);
+  // Sync vertical scroll between left and right body
+  const syncScroll = (from) => {
+    const other = from === "left" ? rightBody.current : leftRef.current;
+    const src = from === "left" ? leftRef.current : rightBody.current;
+    if (src && other) other.scrollTop = src.scrollTop;
+  };
 
-  const todayStr = useMemo(() => new Date().toISOString().slice(0,10), []);
+  // Sync horizontal scroll: right body → right header
+  const syncHScroll = () => {
+    if (rightBody.current && rightHead.current) {
+      rightHead.current.scrollLeft = rightBody.current.scrollLeft;
+    }
+  };
 
-  const tasks = useMemo(() => {
-    const filtered = phaseFilter === 'all'
+  // ── Filter + group by phase ─────────────────────────────────────────
+  const grouped = useMemo(() => {
+    const filtered = phaseFilter === "all"
       ? rawTasks
-      : rawTasks.filter(t => derivePhase(t) === phaseFilter);
-    return sortByPhase(filtered);
+      : rawTasks.filter(t => normalizePhase(t) === phaseFilter);
+
+    const map = {};
+    filtered.forEach(t => {
+      const ph = normalizePhase(t) || "Uncategorized";
+      if (!map[ph]) map[ph] = [];
+      map[ph].push(t);
+    });
+
+    // Order by PHASES array, uncategorized last
+    const ordered = [];
+    PHASES.forEach(ph => {
+      if (map[ph.key]) ordered.push({ phase: ph, tasks: map[ph.key] });
+    });
+    if (map["Uncategorized"]) {
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: map["Uncategorized"] });
+    }
+    return ordered;
   }, [rawTasks, phaseFilter]);
 
-  const { days, start: rangeStart } = useMemo(() => {
-    if (tasks.length === 0) {
-      const now = new Date(); now.setUTCHours(0,0,0,0);
-      return { days: [now], start: now };
-    }
-    const dates = tasks.flatMap(t => [
+  // ── Date range ─────────────────────────────────────────────────────
+  const allTasks = grouped.flatMap(g => g.tasks);
+
+  const dateRange = useMemo(() => {
+    if (allTasks.length === 0) return { start: new Date(), end: new Date(), weeks: [] };
+    const dates = allTasks.flatMap(t => [
       t.start_date ? new Date(t.start_date + "T00:00:00Z") : null,
       t.end_date   ? new Date(t.end_date   + "T00:00:00Z") : null,
     ]).filter(Boolean);
-    const s = new Date(Math.min(...dates));
-    const e = new Date(Math.max(...dates));
-    s.setUTCDate(s.getUTCDate() - 4);
-    e.setUTCDate(e.getUTCDate() + 4);
-    const days = [];
-    for (let d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
-      days.push(new Date(d));
-    }
-    return { days, start: s };
-  }, [tasks]);
+    const start = new Date(Math.min(...dates));
+    const end   = new Date(Math.max(...dates));
+    start.setDate(start.getDate() - start.getDay());
+    end.setDate(end.getDate() + (6 - end.getDay()) + 7);
+    const weeks = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
+    return { start, end, weeks };
+  }, [allTasks]);
 
-  const totalW = days.length * PX_PER_DAY;
+  const dayCount = Math.ceil((dateRange.end - dateRange.start) / 86400000);
+  const PX_PER_DAY = WEEK_PX / 7;
+  const totalW = Math.max(dayCount * PX_PER_DAY, dateRange.weeks.length * WEEK_PX);
 
-  const getPos = (task) => {
-    const s = new Date(task.start_date + "T00:00:00Z");
-    const e = new Date(task.end_date   + "T00:00:00Z");
-    const startDay = (s - rangeStart) / 86400000;
-    const widthDay = Math.max((e - s) / 86400000, 1);
-    return { leftPx: Math.max(0, startDay) * PX_PER_DAY, widthPx: widthDay * PX_PER_DAY };
+  const px = (dateStr) => {
+    if (!dateStr) return 0;
+    const d = new Date(dateStr + "T00:00:00Z");
+    return Math.max(0, (d - dateRange.start) / 86400000 * PX_PER_DAY);
+  };
+  const spanPx = (start, end) => {
+    if (!start || !end) return 0;
+    return Math.max(4, (new Date(end + "T00:00:00Z") - new Date(start + "T00:00:00Z")) / 86400000 * PX_PER_DAY);
   };
 
-  const todayDay = (new Date(todayStr + "T00:00:00Z") - rangeStart) / 86400000;
-  const todayPx  = todayDay * PX_PER_DAY;
-  const showToday = todayDay >= 0 && todayDay <= days.length;
+  const today = new Date();
+  const todayPx = (today - dateRange.start) / 86400000 * PX_PER_DAY;
+  const showToday = todayPx >= 0 && todayPx <= totalW;
 
-  const activeTasks = tasks.filter(t => t.status === "In Progress").length;
-  const totalTonnage = tasks.reduce((s, t) => s + (t.tonnage || 0), 0);
+  const nowWeekStart = new Date(today);
+  nowWeekStart.setDate(today.getDate() - today.getDay());
+  const isCurrentWeek = (w) => w.toDateString() === nowWeekStart.toDateString();
+
+  const togglePhase = (key) => setCollapsed(c => ({ ...c, [key]: !c[key] }));
+
+  // Build flat row list for synchronized scroll
+  const rows = useMemo(() => {
+    const list = [];
+    grouped.forEach(({ phase, tasks }) => {
+      // Phase summary row
+      const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
+      const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
+      list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1] });
+      if (!collapsed[phase.key]) {
+        tasks.forEach(t => list.push({ type: "task", task: t, phase }));
+      }
+    });
+    return list;
+  }, [grouped, collapsed]);
+
+  const totalHeight = rows.reduce((h, r) => h + (r.type === "summary" ? SUM_H : ROW_H), 0);
 
   return (
-    <div style={{
-      display: "flex", flexDirection: "column",
-      height: "calc(100vh - 180px)", minHeight: 500,
-      background: "var(--bg-page)",
-      border: "1px solid var(--border-default)",
-      overflow: "hidden",
-    }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
 
-      {/* ── HEADER ROW ─────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexShrink: 0, height: HEADER_H, borderBottom: "1px solid var(--border-default)" }}>
-
+      {/* ── Synchronized header row ─────────────────────────────────── */}
+      <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
         {/* Left header */}
-        <div style={{
-          width: LEFT_W, minWidth: LEFT_W,
-          background: "var(--bg-surface-low)",
-          borderRight: "1px solid var(--border-default)",
-          display: "flex", flexDirection: "column",
-          justifyContent: "flex-end", padding: "0 16px 8px",
-          flexShrink: 0,
-        }}>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, fontWeight: 700, letterSpacing: "0.18em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-            PROJECT SEQUENCE MATRIX
-          </span>
-          <div style={{ display: "grid", gridTemplateColumns: "76px 1fr 56px", gap: 8, marginTop: 5 }}>
-            {["ID", "TASK NAME", "TRADE"].map(h => (
-              <span key={h} style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(107,114,128,0.55)", textTransform: "uppercase" }}>{h}</span>
-            ))}
-          </div>
+        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6 }}>
+          {["WBS", "TASK NAME", "START", "FINISH", "PRED", "STATUS", "%"].map((h, i) => (
+            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
+          ))}
         </div>
-
-        {/* Timeline header (synced scroll) */}
-        <div
-          ref={rightHeaderRef}
-          style={{ flex: 1, overflowX: "hidden", background: "var(--bg-surface-low)" }}
-        >
-          <div style={{ display: "flex", height: "100%", width: totalW }}>
-            {days.map((day, i) => {
-              const isT = day.toISOString().slice(0,10) === todayStr;
+        {/* Right timeline header */}
+        <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: "var(--bg-surface-low)" }}>
+          <div style={{ display: "flex", width: totalW, height: HEAD_H }}>
+            {dateRange.weeks.map((week, i) => {
+              const cur = isCurrentWeek(week);
               return (
-                <div key={i} style={{
-                  minWidth: PX_PER_DAY, width: PX_PER_DAY,
-                  borderRight: `1px solid ${isT ? "rgba(255,107,0,0.3)" : "rgba(30,64,175,0.12)"}`,
-                  display: "flex", alignItems: "flex-end", justifyContent: "center",
-                  paddingBottom: 8,
-                  background: isT ? "rgba(255,107,0,0.07)" : "transparent",
-                }}>
-                  <span style={{
-                    fontFamily: "'IBM Plex Mono',monospace",
-                    fontSize: 8,
-                    fontWeight: isT ? 900 : 600,
-                    letterSpacing: "0.1em",
-                    color: isT ? "#FF6B00" : "var(--text-muted)",
-                    textTransform: "uppercase",
-                    whiteSpace: "nowrap",
-                  }}>
-                    {fmtDay(day, todayStr)}
+                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: cur ? "rgba(232,101,10,0.06)" : "transparent" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
+                    {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "rgba(136,136,136,0.4)", marginTop: 2 }}>
+                    WK {Math.ceil((week - new Date(week.getFullYear(), 0, 1)) / 604800000)}
                   </span>
                 </div>
               );
@@ -244,144 +240,98 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
         </div>
       </div>
 
-      {/* ── BODY ROW ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      {/* ── Body ───────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
-        {/* Left panel rows */}
-        <div
-          ref={leftScrollRef}
-          onScroll={onLeftScroll}
-          style={{
-            width: LEFT_W, minWidth: LEFT_W,
-            overflowY: "auto", overflowX: "hidden",
-            borderRight: "1px solid var(--border-default)",
-            background: "var(--bg-page)",
-            flexShrink: 0,
-          }}
-        >
-          {tasks.length === 0 ? (
-            <div style={{ padding: "24px 16px", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: "var(--text-muted)" }}>No tasks</div>
-          ) : tasks.map(task => {
-            const hot     = isHotTask(task, todayStr);
-            const taskId  = task.wbs_code || task.task_number || `T-${String(task.id).slice(-4)}`;
-            const trade   = (task.task_type || task.phase || "").slice(0, 4).toUpperCase();
-            const idColor = hot ? "#FF6B00" : "var(--accent)";
-
+        {/* Left panel */}
+        <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+          {rows.map((row, i) => {
+            if (row.type === "summary") {
+              const { phase, tasks } = row;
+              const isOpen = !collapsed[phase.key];
+              return (
+                <div key={`sum-${phase.key}`} onClick={() => togglePhase(phase.key)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none" }}>
+                  <span style={{ color: phase.color, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
+                  </div>
+                </div>
+              );
+            }
+            // Task row
+            const { task, phase } = row;
+            const predecessor = task.predecessor_wbs || task.predecessor_task_id || task.predecessors || "—";
             return (
-              <div
-                key={task.id}
-                onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
-                style={{
-                  height: ROW_H,
-                  display: "grid",
-                  gridTemplateColumns: "76px 1fr 56px",
-                  gap: 8,
-                  padding: "0 16px",
-                  alignItems: "center",
-                  borderBottom: "1px solid rgba(30,64,175,0.1)",
-                  borderLeft: hot ? "3px solid #FF6B00" : "3px solid transparent",
-                  background: hot ? "rgba(255,107,0,0.04)" : "transparent",
-                  cursor: "pointer",
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = hot ? "rgba(255,107,0,0.07)" : "rgba(255,255,255,0.02)"}
-                onMouseLeave={e => e.currentTarget.style.background = hot ? "rgba(255,107,0,0.04)" : "transparent"}
+              <div key={`task-${task.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent", transition: "background 0.1s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-row-hover)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, color: idColor, letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {taskId}
-                </span>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, fontWeight: 500, color: hot ? "#FF6B00" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {task.task_name}
-                </span>
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em" }}>
-                  {trade}
-                </span>
+                {/* WBS */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || task.task_number || "—"}</span>
+                {/* Task name */}
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.task_name}</span>
+                {/* Start */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
+                {/* Finish */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
+                {/* Predecessor */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{String(predecessor).slice(0, 8)}</span>
+                {/* Status */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                {/* % */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
               </div>
             );
           })}
         </div>
 
-        {/* Right Gantt canvas */}
-        <div
-          ref={rightBodyRef}
-          onScroll={onRightBodyScroll}
-          style={{ flex: 1, overflowX: "auto", overflowY: "auto", position: "relative", background: "var(--bg-page)" }}
-        >
-          <div style={{ width: totalW, position: "relative", minHeight: "100%" }}>
+        {/* Right gantt panel */}
+        <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: "var(--bg-page)", position: "relative" }}>
+          <div style={{ width: totalW, height: totalHeight, position: "relative" }}>
 
-            {/* Vertical day grid lines (single pass, not per-row) */}
-            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-              {days.map((day, i) => {
-                const isT = day.toISOString().slice(0,10) === todayStr;
-                return (
-                  <div key={i} style={{
-                    position: "absolute",
-                    left: i * PX_PER_DAY,
-                    top: 0, bottom: 0,
-                    width: 1,
-                    background: isT ? "rgba(255,107,0,0.18)" : "rgba(30,64,175,0.08)",
-                  }} />
-                );
-              })}
-            </div>
-
-            {/* Today orange line + LIVE label */}
+            {/* Today line */}
             {showToday && (
-              <div style={{ position: "absolute", left: todayPx, top: 0, bottom: 0, width: 2, background: "#FF6B00", zIndex: 10, boxShadow: "0 0 14px rgba(255,107,0,0.5)", pointerEvents: "none" }}>
-                <div style={{
-                  position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)",
-                  background: "#FF6B00", color: "#000",
-                  fontFamily: "'IBM Plex Mono',monospace",
-                  fontSize: 8, fontWeight: 900, letterSpacing: "0.15em",
-                  padding: "3px 7px",
-                  whiteSpace: "nowrap",
-                }}>
-                  LIVE
-                </div>
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: todayPx, width: 2, background: "#FF6B00", zIndex: 10 }}>
+                <div style={{ position: "absolute", top: 0, left: -18, background: "#FF6B00", borderRadius: 2, padding: "1px 4px", fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "#fff", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>TODAY</div>
               </div>
             )}
 
-            {/* Task rows */}
-            {tasks.map(task => {
-              const { leftPx, widthPx } = getPos(task);
-              return (
-                <div
-                  key={task.id}
-                  style={{
-                    height: ROW_H,
-                    borderBottom: "1px solid rgba(30,64,175,0.08)",
-                    position: "relative",
-                    zIndex: 1,
-                  }}
-                >
-                  <TaskBar task={task} leftPx={leftPx} widthPx={widthPx} todayStr={todayStr} />
-                </div>
-              );
-            })}
+            {/* Week grid lines */}
+            {dateRange.weeks.map((w, i) => (
+              <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1, background: "rgba(255,255,255,0.04)" }} />
+            ))}
+
+            {/* Rows */}
+            {(() => {
+              let top = 0;
+              return rows.map((row, i) => {
+                const rowTop = top;
+                if (row.type === "summary") {
+                  top += SUM_H;
+                  const startPx = px(row.start);
+                  const w = spanPx(row.start, row.end);
+                  return (
+                    <div key={`gs-${row.phase.key}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${row.phase.color}08`, borderBottom: `1px solid var(--divider)` }}>
+                      <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} />
+                    </div>
+                  );
+                }
+                top += ROW_H;
+                const { task } = row;
+                if (!task.start_date || !task.end_date) {
+                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)" }} />;
+                }
+                return (
+                  <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <TaskBar task={task} leftPx={px(task.start_date)} widthPx={spanPx(task.start_date, task.end_date)} />
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
-      </div>
-
-      {/* ── FOOTER ─────────────────────────────────────────────────────── */}
-      <div style={{
-        height: 30, background: "var(--bg-surface-low)",
-        borderTop: "1px solid var(--border-default)",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "0 16px", flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8 }}>
-            <span style={{ color: "var(--text-muted)", letterSpacing: "0.08em" }}>ACTIVE: </span>
-            <span style={{ color: "var(--accent)", fontWeight: 700 }}>{activeTasks}</span>
-          </span>
-          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8 }}>
-            <span style={{ color: "var(--text-muted)", letterSpacing: "0.08em" }}>TONNAGE: </span>
-            <span style={{ color: "#FF6B00", fontWeight: 700 }}>{totalTonnage.toFixed(1)} T</span>
-          </span>
-        </div>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-          UPDATED {new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-        </span>
       </div>
     </div>
   );

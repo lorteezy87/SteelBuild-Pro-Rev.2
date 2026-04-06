@@ -48,6 +48,7 @@
  * The mainPage value must match a key in the PAGES object exactly.
  */
 import AIInsights from './pages/AIInsights';
+import ProjectControlCenter from './pages/ProjectControlCenter';
 import ActionItems from './pages/ActionItems';
 import Activity from './pages/Activity';
 import AgentMemory from './pages/AgentMemory';
@@ -133,6 +134,7 @@ export const PAGES = {
     "ProductionNotes": ProductionNotes,
     "ProjectCloseout": ProjectCloseout,
     "ProjectDetail": ProjectDetail,
+    "ProjectControlCenter": ProjectControlCenter,
     "Projects": Projects,
     "Punchlist": Punchlist,
     "QualityControl": QualityControl,
