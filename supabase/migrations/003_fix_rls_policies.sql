@@ -71,3 +71,26 @@ CREATE POLICY users_insert_own_membership ON user_projects
   FOR INSERT
   TO authenticated
   WITH CHECK (user_id = auth.uid());
+
+-- Fix 4: SECURITY INVOKER trigger couldn't reliably call auth.uid() inside
+-- the trigger context. Reverted to SECURITY DEFINER and added an explicit
+-- postgres-role bypass policy so the trigger INSERT is never blocked by RLS.
+CREATE OR REPLACE FUNCTION public.handle_new_project()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.user_projects (user_id, project_id, role)
+  VALUES (auth.uid(), NEW.id, 'owner');
+  RETURN NEW;
+END;
+$$;
+
+DROP POLICY IF EXISTS postgres_full_access ON user_projects;
+CREATE POLICY postgres_full_access ON user_projects
+  FOR ALL
+  TO postgres
+  USING (true)
+  WITH CHECK (true);
