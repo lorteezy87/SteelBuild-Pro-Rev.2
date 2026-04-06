@@ -63,8 +63,8 @@ import DailyLogs from './pages/DailyLogs';
 import Dashboard from './pages/Dashboard';
 import Deliveries from './pages/Deliveries';
 import Documents from './pages/Documents';
-import DrawingViewer from './pages/DrawingViewer';
 import Drawings from './pages/Drawings';
+import DrawingViewer from './pages/DrawingViewer';
 import ExecutiveView from './pages/ExecutiveView';
 import Expenses from './pages/Expenses';
 import DecisionLog from './pages/DecisionLog';
@@ -92,7 +92,6 @@ import Safety from './pages/Safety';
 import Schedule from './pages/Schedule';
 import ScopeExclusions from './pages/ScopeExclusions';
 import Settings from './pages/Settings';
-import Submittals from './pages/Submittals';
 import UsersManagement from './pages/UsersManagement';
 import Vendors from './pages/Vendors';
 import Warranty from './pages/Warranty';
@@ -116,8 +115,10 @@ export const PAGES = {
     "Dashboard": Dashboard,
     "Deliveries": Deliveries,
     "Documents": Documents,
-    "DrawingViewer": DrawingViewer,
     "Drawings": Drawings,
+    "DrawingViewer": DrawingViewer,
+    
+    
     "ExecutiveView": ExecutiveView,
     "Expenses": Expenses,
     "DecisionLog": DecisionLog,
@@ -146,7 +147,7 @@ export const PAGES = {
     "Schedule": Schedule,
     "ScopeExclusions": ScopeExclusions,
     "Settings": Settings,
-    "Submittals": Submittals,
+    
     "UsersManagement": UsersManagement,
     "Vendors": Vendors,
     "Warranty": Warranty,

@@ -1,21 +1,39 @@
-import { base44 } from "@/api/base44Client";
+import { supabase } from '@/lib/supabase';
+import { entities } from '@/api/supabaseClient';
 
 /**
- * Get the next number in sequence for a project + record type.
- * Routes through the secureNumberSequence backend function — never touches
- * ProjectNumberSequence directly from the frontend.
+ * Get the next sequence number for a project + record type.
+ * Uses a dedicated number_sequences table for atomic incrementing.
  */
 export const getNextNumber = async (projectId, recordType) => {
   if (!projectId) throw new Error("projectId is required");
   if (!recordType) throw new Error("recordType is required");
 
-  const response = await base44.functions.invoke('secureNumberSequence', {
-    action: 'next',
-    project_id: projectId,
-    record_type: recordType,
-  });
+  // Try to increment an existing sequence row
+  const { data: existing } = await supabase
+    .from('number_sequences')
+    .select('next_value')
+    .eq('project_id', projectId)
+    .eq('record_type', recordType)
+    .single();
 
-  return response.data.number;
+  if (existing) {
+    const current = existing.next_value || 1;
+    await supabase
+      .from('number_sequences')
+      .update({ next_value: current + 1, updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('record_type', recordType);
+    return current;
+  } else {
+    // Create row starting at 1, return 1
+    await supabase.from('number_sequences').insert({
+      project_id: projectId,
+      record_type: recordType,
+      next_value: 2,
+    });
+    return 1;
+  }
 };
 
 const extractNumericSuffix = (value) => {
@@ -62,14 +80,12 @@ export const getNextFormattedNumber = async (...rawArgs) => {
   try {
     const nextValue = await getNextNumber(projectId, recordType);
     const formatted = formatSequenceValue(nextValue, prefix, padLength);
-    if (formatted) {
-      return formatted;
-    }
-  } catch (error) {
-    // Fall back to the highest existing number for the project.
+    if (formatted) return formatted;
+  } catch {
+    // Fall back to scanning existing records
   }
 
-  const existing = await base44.entities[entityName].filter({ project_id: projectId });
+  const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxNumber = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
     return numericValue != null && numericValue > max ? numericValue : max;
@@ -79,20 +95,19 @@ export const getNextFormattedNumber = async (...rawArgs) => {
 };
 
 /**
- * Preview the next number without incrementing.
- * Used to show in create form UI.
+ * Preview the next number without incrementing (reads current sequence value).
  */
 export const previewNextNumber = async (projectId, recordType) => {
-  if (!projectId) return null;
-  if (!recordType) return null;
+  if (!projectId || !recordType) return null;
 
-  const response = await base44.functions.invoke('secureNumberSequence', {
-    action: 'preview',
-    project_id: projectId,
-    record_type: recordType,
-  });
+  const { data } = await supabase
+    .from('number_sequences')
+    .select('next_value')
+    .eq('project_id', projectId)
+    .eq('record_type', recordType)
+    .single();
 
-  return response.data.number;
+  return data?.next_value || 1;
 };
 
 export const previewNextFormattedNumber = async ({
@@ -109,11 +124,11 @@ export const previewNextFormattedNumber = async ({
     const previewValue = await previewNextNumber(projectId, recordType);
     const formatted = formatSequenceValue(previewValue, prefix, padLength);
     if (formatted) return formatted;
-  } catch (error) {
-    // Fall through to non-mutating data scan.
+  } catch {
+    // Fall through to non-mutating data scan
   }
 
-  const existing = await base44.entities[entityName].filter({ project_id: projectId });
+  const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxNumber = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
     return numericValue != null && numericValue > max ? numericValue : max;
@@ -124,7 +139,6 @@ export const previewNextFormattedNumber = async ({
 
 /**
  * Display a record number with project context.
- * Used in list views and cross-project displays.
  */
 export const displayNumber = (number, project, omitProject = false) => {
   if (!number) return "";

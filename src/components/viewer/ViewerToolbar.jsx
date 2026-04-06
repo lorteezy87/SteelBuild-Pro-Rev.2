@@ -11,9 +11,13 @@ export default function ViewerToolbar({
   zoomLevel,
   onZoom,
   currentPage,
-  onPageChange
+  onPageChange,
+  onDownload,
+  onFitWidth,
+  recordTitle,
+  recordMeta,
 }) {
-  const zoomLevels = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  const zoomLevels = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
   return (
     <div
@@ -44,11 +48,11 @@ export default function ViewerToolbar({
           ←
         </button>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {document.documentNumber} · {document.displayName}
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {recordTitle || `${document.documentNumber || ""} · ${document.displayName || ""}`}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)" }}>
-            Rev {document.revisionNumber}
+            {recordMeta || `Rev ${document.revisionNumber || 0}`}
           </div>
         </div>
       </div>
@@ -100,7 +104,7 @@ export default function ViewerToolbar({
             ))}
           </select>
           <button
-            onClick={() => onZoom(Math.min(zoomLevel + 0.25, 3))}
+            onClick={() => onZoom(Math.min(zoomLevel + 0.25, 4))}
             style={{
               padding: "4px 8px",
               background: "none",
@@ -192,45 +196,25 @@ export default function ViewerToolbar({
           {analysisRunning ? "ANALYZING..." : "AI ANALYZE"}
         </button>
 
-        <button
-          style={{
-            padding: "6px 12px",
-            background: "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
-            color: "var(--text-secondary)",
-            borderRadius: 6,
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6
-          }}
-        >
-          <Share2 size={14} />
-          SHARE
-        </button>
+        {onFitWidth && (
+          <button
+            onClick={onFitWidth}
+            title="Fit to width"
+            style={{ padding: "6px 10px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}
+          >
+            ⊞ FIT
+          </button>
+        )}
 
-        <button
-          style={{
-            padding: "6px 12px",
-            background: "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
-            color: "var(--text-secondary)",
-            borderRadius: 6,
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6
-          }}
-        >
-          <Download size={14} />
-          DOWNLOAD
-        </button>
+        {onDownload && (
+          <button
+            onClick={onDownload}
+            style={{ padding: "6px 10px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <Download size={13} />
+            PDF
+          </button>
+        )}
       </div>
     </div>
   );

@@ -6,9 +6,10 @@ export const queryClientInstance = new QueryClient({
 		queries: {
 			refetchOnWindowFocus: false,
 			retry: 1,
-			// Always treat cached data as stale so every page mount fetches fresh data.
-			// Prevents empty lists showing when navigating to a page without a URL param.
-			staleTime: 0,
+			// 30 s stale window: fresh enough to reflect real updates on navigation,
+			// slow enough to avoid hammering the API when switching between pages quickly.
+			// initialData: [] was removed from all page queries (was suppressing the first fetch).
+			staleTime: 30 * 1000,
 		},
 	},
 });

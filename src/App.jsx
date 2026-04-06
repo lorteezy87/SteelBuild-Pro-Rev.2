@@ -5,8 +5,6 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import AuthCallbackError from '@/components/AuthCallbackError';
 import LocalLoginForm from '@/components/LocalLoginForm';
 import { ThemeProvider } from '@/components/shared/ThemeContext';
 import Landing from './pages/Landing';
@@ -14,45 +12,15 @@ import RFIHub from './pages/RFIHub';
 import Dashboard from './pages/Dashboard';
 
 const { Pages, Layout } = pagesConfig;
-const mainPageKey = "Dashboard";
-const MainPageComponent = Dashboard;
 
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
-const hasStoredToken = () => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return Boolean(
-      window.localStorage.getItem('base44_access_token') ||
-      window.localStorage.getItem('token')
-    );
-  } catch (error) {
-    console.error('Failed to inspect local auth token:', error);
-    return false;
-  }
-};
-
-const hasLoginAttempt = () => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.sessionStorage.getItem('base44_login_attempted') === 'true';
-  } catch (error) {
-    console.error('Failed to inspect login attempt state:', error);
-    return false;
-  }
-};
-
-const isLocalDevHost = () => {
-  if (typeof window === 'undefined') return false;
-  return ['localhost', '127.0.0.1'].includes(window.location.hostname);
-};
-
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, loginWithPassword } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, loginWithPassword } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
+  // Show loading spinner while checking auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div style={{
@@ -76,46 +44,15 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      if (isLocalDevHost()) {
-        return (
-          <LocalLoginForm
-            onSubmit={loginWithPassword}
-            isSubmitting={isLoadingAuth}
-            errorMessage={authError?.message}
-          />
-        );
-      }
-
-      // Expired/rejected token — clear it and redirect to fresh login
-      if (hasStoredToken()) {
-        try {
-          window.localStorage.removeItem('base44_access_token');
-          window.localStorage.removeItem('token');
-          window.sessionStorage.removeItem('base44_login_attempted');
-        } catch {}
-        navigateToLogin();
-        return null;
-      }
-
-      if (hasLoginAttempt()) {
-        return (
-          <AuthCallbackError
-            authError={authError}
-            hasToken={hasStoredToken()}
-            onRetry={navigateToLogin}
-          />
-        );
-      }
-
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
+  // Show login form when not authenticated
+  if (authError?.type === 'auth_required') {
+    return (
+      <LocalLoginForm
+        onSubmit={loginWithPassword}
+        isSubmitting={isLoadingAuth}
+        errorMessage={authError?.message !== 'Authentication required' ? authError?.message : null}
+      />
+    );
   }
 
   // Render the main app
@@ -124,8 +61,8 @@ const AuthenticatedApp = () => {
       <Route
         path="/"
         element={
-          <LayoutWrapper currentPageName="Landing">
-            <MainPageComponent />
+          <LayoutWrapper currentPageName="Dashboard">
+            <Dashboard />
           </LayoutWrapper>
         }
       />
@@ -149,7 +86,6 @@ const AuthenticatedApp = () => {
 
 
 function App() {
-
   return (
     <ThemeProvider>
       <AuthProvider>
