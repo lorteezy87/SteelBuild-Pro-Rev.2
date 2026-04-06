@@ -1,31 +1,27 @@
 /**
- * LLM client — routes all Claude calls through the invokeLLM backend function
+ * LLM client — routes Claude calls through a Supabase Edge Function named "llm-proxy"
  * so the Anthropic API key is never exposed in the browser.
+ *
+ * Deploy the edge function: supabase functions deploy llm-proxy
  */
-import { base44 } from './base44Client';
+import { supabase } from '@/lib/supabase';
 
 /**
- * Invoke Claude via the secure backend proxy.
+ * Invoke Claude via the "llm-proxy" Supabase Edge Function.
  * @param {object} opts
- * @param {string} [opts.prompt]        - Simple user prompt (alternative to messages)
- * @param {string} [opts.system]        - System prompt
- * @param {Array}  [opts.messages]      - Full Anthropic messages array (overrides prompt)
- * @param {number} [opts.maxTokens]     - Max tokens (default 1000)
- * @param {string} [opts.model]         - Model override (default: claude-sonnet-4-6)
- * @returns {Promise<string>}           - The assistant text response
+ * @param {string} [opts.prompt]     - Simple user prompt
+ * @param {string} [opts.system]     - System prompt
+ * @param {Array}  [opts.messages]   - Full Anthropic messages array (overrides prompt)
+ * @param {number} [opts.maxTokens]  - Max tokens (default 1000)
+ * @param {string} [opts.model]      - Model override
+ * @returns {Promise<string>}        - The assistant text response
  */
 export async function invokeLLM({ prompt, system, messages, maxTokens = 1000, model }) {
-  const response = await base44.functions.invoke('invokeLLM', {
-    prompt,
-    system,
-    messages,
-    maxTokens,
-    model,
+  const { data, error } = await supabase.functions.invoke('llm-proxy', {
+    body: { prompt, system, messages, maxTokens, model },
   });
 
-  const text = response?.data?.text;
-  if (response?.data?.error) {
-    throw new Error(response.data.error);
-  }
-  return text || '';
+  if (error) throw new Error(error.message || 'LLM invocation failed');
+  if (data?.error) throw new Error(data.error);
+  return data?.text || '';
 }
