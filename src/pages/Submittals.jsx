@@ -379,7 +379,7 @@ function DrawingSetTrackerPanel({ setKeys, drawingsBySet, drawingSetRecords = []
   const unsubmitteds = allKeys.filter((key) => !(drawingsBySet[key] || []).some((drawing) => drawing.submitted_date));
 
   return (
-    <div style={{ width: 300, flexShrink: 0, borderRight: "1px solid var(--divider)", overflowY: "auto", background: "var(--bg-sidebar)", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ width: 240, flexShrink: 0, borderRight: "1px solid var(--divider)", overflowY: "auto", background: "var(--bg-sidebar)", padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.18em", color: "var(--text-muted)", textTransform: "uppercase" }}>Submission Log</div>
         {activeSetFilter && (
@@ -862,6 +862,7 @@ export default function Submittals() {
   const [sortByDue, setSortByDue] = useState(false);
   const [overdueAlertDismissed, setOverdueAlertDismissed] = useState(false);
   const [activeSetFilter, setActiveSetFilter] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const loadDrawings = async () => {
     if (!activeProject?.id) {
@@ -1190,10 +1191,10 @@ export default function Submittals() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)", overflow: "hidden", background: "var(--bg-page)" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 56, borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
+      <div style={{ background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: "'Space Grotesk', var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Drawing Log</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.06em" }}>SUBMITTALS</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", background: "var(--bg-surface-high)", padding: "2px 7px", borderRadius: "var(--radius-badge)" }}>{drawings.length} SHEETS</span>
           <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--accent)" }}>{activeProject.name}</span>
         </div>
@@ -1211,16 +1212,19 @@ export default function Submittals() {
           <button
             key={kpi.label}
             onClick={kpi.onClick}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-surface)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             style={{
               padding: "10px 12px",
               border: "none",
-              borderRight: "1px solid rgba(255,255,255,0.05)",
+              borderRight: "1px solid var(--divider)",
               background: "transparent",
               textAlign: "left",
               cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               gap: 4,
+              transition: "background 0.1s",
             }}
           >
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase" }}>{kpi.label}</span>
@@ -1270,7 +1274,15 @@ export default function Submittals() {
       {selectedIds.size > 0 && <BulkActionBar count={selectedIds.size} onBulkUpdate={applyBulkUpdate} onBulkDelete={() => setBulkDeleteOpen(true)} onClear={clearSelection} />}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <DrawingSetTrackerPanel setKeys={trackerSetKeys} drawingsBySet={allDrawingsBySet} drawingSetRecords={drawingSets} activeSetFilter={activeSetFilter} onSelectSet={setActiveSetFilter} onClearSet={() => setActiveSetFilter(null)} />
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          style={{ width: 18, height: 80, background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 4, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 10, flexShrink: 0, alignSelf: "flex-start", marginTop: 16 }}
+        >
+          {sidebarOpen ? "◀" : "▶"}
+        </button>
+        <div style={{ width: sidebarOpen ? 240 : 0, overflow: "hidden", transition: "width 0.2s", flexShrink: 0 }}>
+          <DrawingSetTrackerPanel setKeys={trackerSetKeys} drawingsBySet={allDrawingsBySet} drawingSetRecords={drawingSets} activeSetFilter={activeSetFilter} onSelectSet={setActiveSetFilter} onClearSet={() => setActiveSetFilter(null)} />
+        </div>
 
         <div style={{ flex: 1, overflowY: view === "KANBAN" ? "hidden" : "auto", overflowX: "hidden", display: "flex", flexDirection: "column" }}>
           {view === "TABLE" && displayDrawings.length > 0 && (

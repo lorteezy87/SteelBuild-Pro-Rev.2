@@ -267,6 +267,9 @@ export default function Drawings() {
     }
   };
 
+  const overdueCount = useMemo(() => drawings.filter(d => d.due_date && d.stage !== "Released" && new Date(d.due_date) < new Date()).length, [drawings]);
+  const dueThisWeek = useMemo(() => drawings.filter(d => { const days = d.due_date ? Math.ceil((new Date(d.due_date) - new Date()) / 86400000) : null; return days !== null && days >= 0 && days <= 7 && d.stage !== "Released"; }).length, [drawings]);
+
   const headerBtn = {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.09)",
@@ -301,7 +304,8 @@ export default function Drawings() {
           justifyContent: "space-between",
           padding: "0 24px",
           height: 56,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-sidebar)",
+          borderBottom: "1px solid var(--divider)",
           flexShrink: 0,
         }}
       >
@@ -314,11 +318,11 @@ export default function Drawings() {
         >
           <span
             style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 22,
-              fontWeight: 700,
+              fontFamily: "var(--font-mono)",
+              fontSize: 20,
+              fontWeight: 800,
               color: "var(--text-primary)",
-              letterSpacing: "0.04em",
+              letterSpacing: "0.06em",
             }}
           >
             DRAWINGS
@@ -361,16 +365,16 @@ export default function Drawings() {
               setFormOpen(true);
             }}
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.10)",
+              background: "transparent",
+              border: "1px solid var(--border-default)",
               borderRadius: 8,
               padding: "7px 14px",
               color: "var(--text-secondary)",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              fontWeight: 500,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
               cursor: "pointer",
-              letterSpacing: "0.01em",
+              letterSpacing: "0.08em",
               whiteSpace: "nowrap",
             }}
           >
@@ -380,23 +384,102 @@ export default function Drawings() {
           <button
             onClick={() => setUploadSetOpen(true)}
             style={{
-              background: "linear-gradient(135deg, var(--accent), var(--status-warning))",
+              background: "var(--accent)",
               border: "none",
               borderRadius: 8,
               padding: "7px 16px",
-              color: "white",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              fontWeight: 600,
+              color: "#fff",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
               cursor: "pointer",
-              letterSpacing: "0.01em",
+              letterSpacing: "0.08em",
               whiteSpace: "nowrap",
-              boxShadow: "0 2px 12px rgba(0,229,255,0.06)",
             }}
           >
             ↑ Upload Set
           </button>
         </div>
+      </div>
+
+      {/* ===== KPI TILES ROW ===== */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6, 1fr)",
+          borderBottom: "1px solid var(--divider)",
+          flexShrink: 0,
+        }}
+      >
+        {[
+          {
+            label: "TOTAL SHEETS",
+            value: drawings.length,
+            onClick: () => { setStageFilter("all"); setDisciplineFilter("all"); setSearch(""); },
+          },
+          {
+            label: "RELEASED",
+            value: drawings.filter(d => d.stage === "Released").length,
+            onClick: () => setStageFilter("Released"),
+          },
+          {
+            label: "IN REVIEW",
+            value: drawings.filter(d => ["OFA","BFA","OFS","BFS"].includes(d.stage)).length,
+            onClick: () => setStageFilter("OFA"),
+          },
+          {
+            label: "OVERDUE",
+            value: overdueCount,
+            onClick: () => setHideSuperseeded(false),
+          },
+          {
+            label: "DUE THIS WEEK",
+            value: dueThisWeek,
+            onClick: () => setStageFilter("all"),
+          },
+          {
+            label: "SETS",
+            value: drawingSetEntities.length,
+            onClick: () => {},
+          },
+        ].map((tile, i) => (
+          <div
+            key={tile.label}
+            onClick={tile.onClick}
+            style={{
+              padding: "10px 12px",
+              borderRight: i < 5 ? "1px solid var(--divider)" : undefined,
+              background: "var(--bg-surface)",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 7,
+                letterSpacing: "0.14em",
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+              }}
+            >
+              {tile.label}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 18,
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "var(--text-primary)",
+              }}
+            >
+              {tile.value}
+            </span>
+          </div>
+        ))}
       </div>
 
       {/* ===== FILTER TOOLBAR ===== */}
@@ -576,7 +659,7 @@ export default function Drawings() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
+            gridTemplateColumns: "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
             alignItems: "center",
             padding: "0 20px",
             height: 28,
@@ -587,7 +670,7 @@ export default function Drawings() {
             zIndex: 10,
           }}
         >
-          {["", "#", "TITLE", "DISC", "REV", "STATUS", "IFC", "APPV", ""].map(
+          {["", "#", "TITLE", "DISC", "REV", "STAGE", "IFC", "APPV", "DUE", "DAYS", ""].map(
             (col, i) => (
               <div
                 key={i}
@@ -664,7 +747,7 @@ export default function Drawings() {
                   {!isCollapsed && (
                     <div style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
                       gap: 10,
                     }}>
                       {sheets.map((drawing) => {
@@ -684,7 +767,7 @@ export default function Drawings() {
                           >
                             {/* PDF thumbnail area */}
                             <div style={{
-                              height: 110, background: "#0D0D0D",
+                              height: 130, background: "#0D0D0D",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               position: "relative", overflow: "hidden",
                               borderBottom: "1px solid var(--border-default)",
@@ -1014,7 +1097,7 @@ export default function Drawings() {
                       style={{
                         display: "grid",
                         gridTemplateColumns:
-                          "40px 108px 1fr 100px 56px 130px 100px 80px 72px",
+                          "28px 96px 1fr 90px 40px 110px 80px 70px 60px 90px 70px",
                         alignItems: "center",
                         height: 32,
                         padding: "0 20px",
@@ -1190,6 +1273,25 @@ export default function Drawings() {
                                 day: "numeric",
                               }
                             )
+                          : "—"}
+                      </span>
+
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 9,
+                          color: (() => {
+                            if (!drawing.due_date || drawing.stage === "Released") return "rgba(160,175,210,0.25)";
+                            const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000);
+                            return days < 0 ? "#FF7A7A" : days <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)";
+                          })(),
+                        }}
+                      >
+                        {drawing.due_date && drawing.stage !== "Released"
+                          ? (() => {
+                              const days = Math.ceil((new Date(drawing.due_date) - new Date()) / 86400000);
+                              return days < 0 ? `${Math.abs(days)}d late` : `${days}d`;
+                            })()
                           : "—"}
                       </span>
 
