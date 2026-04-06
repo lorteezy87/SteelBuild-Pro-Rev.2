@@ -24,13 +24,11 @@ export default function ChangeRequests() {
       projectId
         ? base44.entities.ChangeRequest.filter({ project_id: projectId })
         : base44.entities.ChangeRequest.list("-request_date"),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const selectedProject = projectId

@@ -208,7 +208,6 @@ export default function JobStatusReport() {
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const [bulkStatus, setBulkStatus] = useState("idle");

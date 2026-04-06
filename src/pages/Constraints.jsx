@@ -161,7 +161,6 @@ export default function Constraints() {
         ? base44.entities.ActionItem.filter({ project_id: projectId, category: "CONSTRAINT" })
         : base44.entities.ActionItem.filter({ category: "CONSTRAINT" }),
     enabled: true,
-    initialData: [],
   });
 
   const { data: wps = [] } = useQuery({
@@ -171,13 +170,11 @@ export default function Constraints() {
         ? base44.entities.WorkPackage.filter({ project_id: projectId })
         : base44.entities.WorkPackage.list(),
     enabled: true,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const createMut = useMutation({

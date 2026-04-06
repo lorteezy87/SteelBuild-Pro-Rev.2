@@ -30,13 +30,11 @@ export default function SOV() {
       ? base44.entities.SOVItem.filter({ project_id: activeProject.id }, "-created_date")
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: expenses = [] } = useQuery({
@@ -45,7 +43,6 @@ export default function SOV() {
       ? base44.entities.Expense.filter({ project_id: activeProject.id })
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const createMut = useMutation({

@@ -88,20 +88,17 @@ export default function WorkPackages() {
       const all = await base44.entities.WorkPackage.list();
       return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
     },
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: drawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const updateWPMut = useMutation({

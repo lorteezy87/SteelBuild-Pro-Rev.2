@@ -434,13 +434,11 @@ export default function RFIHub() {
   const { data: rfis = [], isLoading, refetch } = useQuery({
     queryKey: ["rfis", "hub"],
     queryFn: () => base44.entities.RFI.list("-submitted_date", 500),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const createMut = useMutation({

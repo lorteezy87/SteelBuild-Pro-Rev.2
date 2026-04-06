@@ -65,27 +65,23 @@ export default function ExpensesPage() {
       return projectExpenses.sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date));
     },
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: sovItems = [] } = useQuery({
     queryKey: ['sov-items', activeProject?.id],
     queryFn: () => (activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ['work-packages', activeProject?.id],
     queryFn: () => (activeProject?.id ? base44.entities.WorkPackage.filter({ project_id: activeProject.id }) : []),
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: costCodes = [] } = useQuery({
@@ -94,7 +90,6 @@ export default function ExpensesPage() {
       ? base44.entities.CostCode.filter({ project_id: activeProject.id }, '-created_date')
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const createMut = useMutation({
