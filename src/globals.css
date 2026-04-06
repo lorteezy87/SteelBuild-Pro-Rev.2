@@ -19,8 +19,8 @@
   --nc-accent-blue:     #1E40AF;
   --nc-accent-green:    #22C55E;
   --nc-accent-red:      #EF4444;
-  --nc-text-primary:    #E5E2E1;
-  --nc-text-muted:      #6B7280;
+  --nc-text-primary:    #EDEAE9;
+  --nc-text-muted:      #8898A8;
   --nc-text-cyan:       #00E5FF;
   --nc-text-orange:     #FF6B00;
   --nc-border-default:  rgba(30, 64, 175, 0.2);
@@ -46,10 +46,10 @@
   --bg-surface-secondary:     #1C1B1B;
 
   /* ── Text ── */
-  --text-primary:             #E5E2E1;
-  --text-secondary:           #BAC9CC;
-  --text-muted:               #6B7280;
-  --text-disabled:            rgba(107, 114, 128, 0.50);
+  --text-primary:             #EDEAE9;
+  --text-secondary:           #C8D4D8;
+  --text-muted:               #8898A8;
+  --text-disabled:            rgba(136, 152, 168, 0.45);
 
   /* ── Borders ── */
   --border-default:           rgba(30, 64, 175, 0.2);
@@ -230,17 +230,21 @@
 }
 
 /* ── Base ── */
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 
 html, body, #root {
   background: var(--bg-page) !important;
   color: var(--text-primary) !important;
   font-family: var(--font-body);
   font-size: 14px;
+  line-height: 1.5;
   margin: 0;
   min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4 {
