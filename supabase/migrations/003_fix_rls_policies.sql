@@ -50,3 +50,24 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- Fix 3: admins_manage_memberships FOR ALL covered INSERT, causing its
+-- WITH CHECK to conflict with bootstrap inserts on new projects.
+-- Replaced with explicit UPDATE + DELETE policies only.
+-- INSERT is now handled solely by users_insert_own_membership.
+DROP POLICY IF EXISTS admins_manage_memberships ON user_projects;
+DROP POLICY IF EXISTS users_insert_own_membership ON user_projects;
+
+CREATE POLICY admins_update_memberships ON user_projects
+  FOR UPDATE
+  USING (get_my_project_role(project_id) = ANY(ARRAY['owner', 'admin']))
+  WITH CHECK (get_my_project_role(project_id) = ANY(ARRAY['owner', 'admin']));
+
+CREATE POLICY admins_delete_memberships ON user_projects
+  FOR DELETE
+  USING (get_my_project_role(project_id) = ANY(ARRAY['owner', 'admin']));
+
+CREATE POLICY users_insert_own_membership ON user_projects
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (user_id = auth.uid());
