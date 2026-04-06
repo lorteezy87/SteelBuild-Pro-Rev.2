@@ -1,3 +1,4 @@
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +10,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function Punchlist() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");

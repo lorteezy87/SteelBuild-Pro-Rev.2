@@ -1,3 +1,4 @@
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -64,7 +65,7 @@ const formatDate = (d) =>
 
 export default function WorkPackages() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
 
   const [view, setView] = useState("list");
