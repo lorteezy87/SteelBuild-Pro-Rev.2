@@ -149,7 +149,7 @@ function PhasePill({ phase, config, size = "sm" }) {
 /* ─────────────────────────────────────────────
    ProjectCard
 ───────────────────────────────────────────── */
-function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdit }) {
+function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdit, onDelete }) {
   const [hovered, setHovered] = useState(false);
   const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG["Detailing"];
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG["On Track"];
@@ -357,30 +357,30 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         {/* Edit button */}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(project); }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "var(--accent)";
-            e.currentTarget.style.color = "var(--accent)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--border-strong)";
-            e.currentTarget.style.color = "var(--text-muted)";
-          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "#fff"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
           style={{
-            background: "transparent",
-            border: "1px solid var(--border-strong)",
-            borderRadius: 3,
-            padding: "3px 9px",
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 8,
-            fontWeight: 700,
-            cursor: "pointer",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            transition: "border-color 0.12s, color 0.12s",
+            background: "transparent", border: "1px solid var(--border-strong)", borderRadius: 3,
+            padding: "3px 9px", color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+            fontSize: 8, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em",
+            textTransform: "uppercase", transition: "border-color 0.12s, color 0.12s",
           }}
         >
           EDIT
+        </button>
+        {/* Delete button */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(project); }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(204,74,42,0.60)"; e.currentTarget.style.color = "#FF7A7A"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          style={{
+            background: "transparent", border: "1px solid var(--border-strong)", borderRadius: 3,
+            padding: "3px 9px", color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+            fontSize: 8, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em",
+            textTransform: "uppercase", transition: "border-color 0.12s, color 0.12s",
+          }}
+        >
+          DEL
         </button>
       </div>
     </div>
@@ -516,9 +516,19 @@ export default function Projects() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project updated"); },
     onError: (err) => toast.error(err.message),
   });
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.Project.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Project deleted"); },
+    onError: (err) => toast.error(err.message),
+  });
   const handleSave = (d) => {
     if (editing) updateMut.mutate({ id: editing.id, data: d });
     else createMut.mutate(d);
+  };
+  const handleDelete = (project) => {
+    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
+      deleteMut.mutate(project.id);
+    }
   };
 
   /* ── KPI calculations ── */
@@ -614,7 +624,7 @@ export default function Projects() {
                 border: "none",
                 borderRadius: 2,
                 padding: "4px 11px",
-                color: view === v ? "#000" : "var(--text-muted)",
+                color: view === v ? "#fff" : "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 9,
                 fontWeight: 800,
@@ -635,7 +645,7 @@ export default function Projects() {
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
           style={{
             background: "var(--accent)",
-            color: "#000",
+            color: "#fff",
             border: "none",
             borderRadius: 3,
             padding: "7px 16px",
@@ -825,6 +835,7 @@ export default function Projects() {
                   changeOrders={changeOrders}
                   onClick={() => setDetailProject(p)}
                   onEdit={(proj) => { setEditing(proj); setModalOpen(true); }}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>
