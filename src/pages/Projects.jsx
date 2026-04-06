@@ -8,46 +8,148 @@ import ProjectDetailView from "@/components/projects/ProjectDetailView";
 import { toast } from "sonner";
 import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
 
+/* ─────────────────────────────────────────────
+   Phase + Health configs
+───────────────────────────────────────────── */
 const PHASE_CONFIG = {
-  Detailing:   { color: "var(--accent)", bg: "var(--accent-muted)", order: 1 },
-  Fabrication: { color: "var(--accent)", bg: "rgba(0,229,255,0.06)",  order: 2 },
-  Delivery:    { color: "#06B6D4", bg: "rgba(6,182,212,0.12)",   order: 3 },
-  Erection:    { color: "#22C55E", bg: "rgba(34,197,94,0.12)",   order: 4 },
-  Closeout:    { color: "#9CA3AF", bg: "rgba(156,163,175,0.12)", order: 5 },
+  "Pre-Construction":    { color: "#8B5CF6", bg: "rgba(139,92,246,0.10)",  order: 0 },
+  "Detailing":           { color: "#6366F1", bg: "rgba(99,102,241,0.10)",  order: 1 },
+  "Procurement":         { color: "#3B82F6", bg: "rgba(59,130,246,0.10)",  order: 2 },
+  "Fabrication":         { color: "#E8650A", bg: "rgba(232,101,10,0.10)",  order: 3 },
+  "Delivery":            { color: "#10B981", bg: "rgba(16,185,129,0.10)",  order: 4 },
+  "Installation/Erection": { color: "#F59E0B", bg: "rgba(245,158,11,0.10)", order: 5 },
+  "Closeout":            { color: "#6B7280", bg: "rgba(107,114,128,0.10)", order: 6 },
 };
 
 const HEALTH_CONFIG = {
-  "On Track": { color: "var(--status-success)", dot: "#22C55E" },
-  "Watch":    { color: "var(--status-warning)", dot: "#F59E0B" },
-  "At Risk":  { color: "var(--status-error)",   dot: "#EF4444" },
+  "On Track": { color: "#22C55E", dot: "#22C55E" },
+  "Watch":    { color: "#F59E0B", dot: "#F59E0B" },
+  "At Risk":  { color: "#EF4444", dot: "#EF4444" },
 };
 
-function ProgressRing({ pct, size = 44, color = "var(--accent)" }) {
-  const r = (size - 6) / 2;
+/* ─────────────────────────────────────────────
+   ProgressRing — 48px SVG ring
+───────────────────────────────────────────── */
+function ProgressRing({ pct, size = 48, color = "#E8650A" }) {
+  const r    = (size - 7) / 2;
   const circ = 2 * Math.PI * r;
   const fill = circ - (circ * Math.min(100, pct || 0)) / 100;
   return (
-    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border-default)" strokeWidth={4} />
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={4}
-        strokeDasharray={circ} strokeDashoffset={fill} strokeLinecap="round"
-        style={{ transition: "stroke-dashoffset 0.5s ease" }} />
-    </svg>
-  );
-}
-
-function StatPill({ label, value, color = "var(--text-muted)" }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 3 }}>{label}</span>
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg
+        width={size}
+        height={size}
+        style={{ transform: "rotate(-90deg)", display: "block" }}
+      >
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none"
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth={4.5}
+        />
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={4.5}
+          strokeDasharray={circ}
+          strokeDashoffset={fill}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 0.55s ease" }}
+        />
+      </svg>
+      <div style={{
+        position: "absolute", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          fontWeight: 800,
+          color: "var(--text-primary)",
+          lineHeight: 1,
+          letterSpacing: "-0.03em",
+        }}>
+          {pct}%
+        </span>
+      </div>
     </div>
   );
 }
 
+/* ─────────────────────────────────────────────
+   Mini stat card used inside ProjectCard
+───────────────────────────────────────────── */
+function MiniStat({ label, value, valueColor = "var(--text-primary)" }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.03)",
+      border: "1px solid var(--border-default)",
+      borderRadius: 4,
+      padding: "7px 10px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 3,
+    }}>
+      <span style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 15,
+        fontWeight: 800,
+        color: valueColor,
+        lineHeight: 1,
+        letterSpacing: "-0.02em",
+      }}>
+        {value}
+      </span>
+      <span style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 7,
+        fontWeight: 600,
+        color: "var(--text-muted)",
+        textTransform: "uppercase",
+        letterSpacing: "0.10em",
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Phase pill badge
+───────────────────────────────────────────── */
+function PhasePill({ phase, config, size = "sm" }) {
+  const isSm = size === "sm";
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      background: config.bg,
+      border: `1px solid ${config.color}45`,
+      borderRadius: 3,
+      padding: isSm ? "2px 7px" : "3px 9px",
+      fontFamily: "var(--font-mono)",
+      fontSize: isSm ? 8 : 9,
+      fontWeight: 700,
+      color: config.color,
+      textTransform: "uppercase",
+      letterSpacing: "0.08em",
+      whiteSpace: "nowrap",
+    }}>
+      {phase}
+    </span>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   ProjectCard
+───────────────────────────────────────────── */
 function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdit }) {
   const [hovered, setHovered] = useState(false);
-  const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG.Detailing;
+  const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG["Detailing"];
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG["On Track"];
 
   const projectWPs = workPackages.filter(w => w.project_id === project.id);
@@ -57,9 +159,10 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
   const { pct: wpPct, totalTons, completeTons, completeCount: completeWPs } = calcWpProgress(projectWPs);
   const { openCount: openRFIs, overdueCount: overdueRFIs } = calcRfiHealth(projectRFIs);
   const { approvedCOTotal: approvedCOs, revised: revisedContract, original: originalContract, pendingCOCount: pendingCOs } = calcContractValue(project, projectCOs);
-  const { daysLeft, isOverdue: _isOverdue } = calcDaysToDeadline(project);
+  const { daysLeft, isOverdue } = calcDaysToDeadline(project);
   const { burnPct: laborBurn, isOverBudget } = calcLaborBurn(projectWPs);
-  const hasIssues = overdueRFIs > 0 || pendingCOs > 0 || isOverBudget;
+
+  const contractDisplay = formatCurrency(revisedContract || originalContract);
 
   return (
     <div
@@ -68,70 +171,212 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       onMouseLeave={() => setHovered(false)}
       style={{
         background: "var(--bg-surface)",
-        border: `1px solid ${hovered ? phase.color + "60" : "var(--border-default)"}`,
-        borderTop: `3px solid ${phase.color}`,
-        borderRadius: 14, padding: "18px 20px", cursor: "pointer",
-        transition: "all 0.15s",
-        boxShadow: hovered ? `0 8px 32px rgba(0,0,0,0.25), 0 0 0 1px ${phase.color}30` : "var(--shadow-card)",
+        border: `1px solid ${hovered ? phase.color + "50" : "var(--border-default)"}`,
+        borderLeft: `4px solid ${phase.color}`,
+        borderRadius: 6,
+        cursor: "pointer",
+        transition: "border-color 0.15s, box-shadow 0.15s, transform 0.12s",
+        boxShadow: hovered
+          ? `0 6px 28px rgba(0,0,0,0.30), 0 0 0 1px ${phase.color}25`
+          : "var(--shadow-card)",
         transform: hovered ? "translateY(-2px)" : "none",
-        position: "relative", overflow: "hidden",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {hasIssues && (
-        <div style={{ position: "absolute", top: 12, right: 12, width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)", boxShadow: "0 0 8px var(--status-error)" }} />
-      )}
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: phase.color, letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ background: phase.bg, border: `1px solid ${phase.color}40`, borderRadius: 4, padding: "2px 6px" }}>{project.phase}</span>
-            <span style={{ color: "var(--text-muted)", fontSize: 8 }}>{project.project_number}</span>
-          </div>
-          <h3 style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{project.name}</h3>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>{project.general_contractor || project.client || "—"}</div>
+      {/* Card header */}
+      <div style={{ padding: "16px 18px 12px 16px" }}>
+        {/* Row 1: phase pill + number */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <PhasePill phase={project.phase || "—"} config={phase} />
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            color: "var(--text-muted)",
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+          }}>
+            {project.project_number || "—"}
+          </span>
         </div>
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <ProgressRing pct={wpPct} color={phase.color} />
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 }}>{wpPct}%</span>
+
+        {/* Row 2: project name + progress ring */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 15,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              lineHeight: 1.25,
+              marginBottom: 4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {project.name}
+            </div>
+            <div style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              color: "var(--text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {project.general_contractor || project.client || "—"}
+            </div>
           </div>
+          <ProgressRing pct={wpPct} color={phase.color} size={48} />
         </div>
       </div>
 
-      <div style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* Contract value box */}
+      <div style={{
+        margin: "0 16px 12px 16px",
+        background: "rgba(0,0,0,0.25)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 4,
+        padding: "10px 14px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
         <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 3 }}>Contract Value</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{formatCurrency(revisedContract || originalContract)}</div>
+          <div style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 7,
+            color: "var(--text-muted)",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            marginBottom: 4,
+          }}>
+            Contract Value
+          </div>
+          <div style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 17,
+            fontWeight: 700,
+            color: "var(--text-primary)",
+            letterSpacing: "-0.02em",
+            lineHeight: 1,
+          }}>
+            {contractDisplay}
+          </div>
         </div>
         {approvedCOs !== 0 && (
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: approvedCOs > 0 ? "var(--status-success)" : "var(--status-error)", fontWeight: 700 }}>
-            {approvedCOs > 0 ? "+" : ""}{formatCurrency(approvedCOs)} COs
-          </div>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            fontWeight: 700,
+            color: approvedCOs > 0 ? "#22C55E" : "#EF4444",
+            background: approvedCOs > 0 ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
+            border: `1px solid ${approvedCOs > 0 ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+            borderRadius: 3,
+            padding: "2px 7px",
+          }}>
+            {approvedCOs > 0 ? "+" : ""}{formatCurrency(approvedCOs)}
+          </span>
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-        <StatPill label="RFIs" value={openRFIs} color={openRFIs > 0 ? (overdueRFIs > 0 ? "var(--status-error)" : "var(--status-warning)") : "var(--text-muted)"} />
-        <StatPill label="Pend CO" value={pendingCOs} color={pendingCOs > 0 ? "var(--status-warning)" : "var(--text-muted)"} />
-        <StatPill label="WPs" value={`${completeWPs}/${projectWPs.length}`} color={phase.color} />
-        <StatPill label={totalTons > 0 ? "Tons" : "Labor"} value={totalTons > 0 ? `${completeTons}T` : `${laborBurn}%`} color={isOverBudget ? "var(--status-error)" : "var(--text-secondary)"} />
+      {/* 4-stat grid */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+        gap: 6,
+        margin: "0 16px 14px 16px",
+      }}>
+        <MiniStat
+          label="Open RFIs"
+          value={openRFIs}
+          valueColor={openRFIs > 0 ? (overdueRFIs > 0 ? "#EF4444" : "#F59E0B") : "var(--text-muted)"}
+        />
+        <MiniStat
+          label="Pend COs"
+          value={pendingCOs}
+          valueColor={pendingCOs > 0 ? "#F59E0B" : "var(--text-muted)"}
+        />
+        <MiniStat
+          label="WPs"
+          value={`${completeWPs}/${projectWPs.length}`}
+          valueColor={phase.color}
+        />
+        <MiniStat
+          label={totalTons > 0 ? "Tons" : "Labor"}
+          value={totalTons > 0 ? `${completeTons}T` : `${laborBurn}%`}
+          valueColor={isOverBudget ? "#EF4444" : "var(--text-secondary)"}
+        />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid var(--divider)" }}>
+      {/* Footer */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "10px 16px",
+        borderTop: "1px solid var(--divider)",
+        marginTop: "auto",
+      }}>
+        {/* Health dot + label */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: health.dot, boxShadow: `0 0 6px ${health.dot}80` }} />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: health.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{project.health_status || "On Track"}</span>
+          <div style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: health.dot,
+            flexShrink: 0,
+          }} />
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 700,
+            color: health.color,
+            textTransform: "uppercase",
+            letterSpacing: "0.09em",
+          }}>
+            {project.health_status || "On Track"}
+          </span>
         </div>
+
+        {/* Days remaining */}
         {daysLeft !== null && (
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: daysLeft < 0 ? "var(--status-error)" : daysLeft < 30 ? "var(--status-warning)" : "var(--text-muted)", fontWeight: daysLeft < 30 ? 700 : 400 }}>
-            {daysLeft < 0 ? `${Math.abs(daysLeft)}d OVERDUE` : `${daysLeft}d remaining`}
-          </div>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            fontWeight: daysLeft < 30 ? 700 : 400,
+            color: isOverdue ? "#EF4444" : daysLeft < 30 ? "#F59E0B" : "var(--text-muted)",
+          }}>
+            {isOverdue ? `${Math.abs(daysLeft)}d OVERDUE` : `${daysLeft}d left`}
+          </span>
         )}
+
+        {/* Edit button */}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(project); }}
-          style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 6, padding: "3px 8px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, cursor: "pointer", transition: "all 0.15s" }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "var(--accent)";
+            e.currentTarget.style.color = "var(--accent)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--border-strong)";
+            e.currentTarget.style.color = "var(--text-muted)";
+          }}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--border-strong)",
+            borderRadius: 3,
+            padding: "3px 9px",
+            color: "var(--text-muted)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 700,
+            cursor: "pointer",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            transition: "border-color 0.12s, color 0.12s",
+          }}
         >
           EDIT
         </button>
@@ -140,22 +385,125 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
   );
 }
 
+/* ─────────────────────────────────────────────
+   KPI card used in the metric strip
+───────────────────────────────────────────── */
+function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-error)", onClick, active = false }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        flex: 1,
+        minWidth: 130,
+        background: active ? "rgba(232,101,10,0.07)" : "var(--bg-surface)",
+        border: `1px solid ${active ? "rgba(232,101,10,0.35)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
+        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "rgba(232,101,10,0.35)" : "var(--border-default)"}`,
+        borderRadius: 4,
+        padding: "14px 18px",
+        cursor: onClick ? "pointer" : "default",
+        transition: "border-color 0.15s, background 0.15s",
+        boxShadow: "var(--shadow-card)",
+      }}
+    >
+      <div style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 7,
+        fontWeight: 700,
+        color: "var(--text-muted)",
+        textTransform: "uppercase",
+        letterSpacing: "0.14em",
+        marginBottom: 7,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 22,
+        fontWeight: 700,
+        color: alert ? alertColor : active ? "var(--accent)" : "var(--text-primary)",
+        letterSpacing: "-0.03em",
+        lineHeight: 1,
+        marginBottom: 5,
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        color: "var(--text-muted)",
+        letterSpacing: "0.04em",
+      }}>
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Filter pill button
+───────────────────────────────────────────── */
+function FilterPill({ label, color, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        background: active ? (color ? `${color}18` : "rgba(232,101,10,0.12)") : "transparent",
+        border: `1px solid ${active ? (color || "var(--accent)") + "55" : "var(--border-default)"}`,
+        borderRadius: 3,
+        padding: "4px 11px",
+        fontFamily: "var(--font-mono)",
+        fontSize: 8,
+        fontWeight: 700,
+        color: active ? (color || "var(--accent)") : "var(--text-muted)",
+        cursor: "pointer",
+        textTransform: "uppercase",
+        letterSpacing: "0.09em",
+        transition: "all 0.12s",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {color && (
+        <span style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: active ? color : "var(--text-muted)",
+          flexShrink: 0,
+          transition: "background 0.12s",
+        }} />
+      )}
+      {label}
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Main component
+───────────────────────────────────────────── */
 export default function Projects() {
-  const navigate  = useNavigate();
-  const qc        = useQueryClient();
-  const [search,       setSearch]       = useState("");
-  const [phaseFilter,  setPhaseFilter]  = useState("all");
-  const [healthFilter, setHealthFilter] = useState("all");
-  const [view,         setView]         = useState("cards");
-  const [modalOpen,    setModalOpen]    = useState(false);
-  const [editing,      setEditing]      = useState(null);
+  const navigate   = useNavigate();
+  const qc         = useQueryClient();
+  const [search,        setSearch]        = useState("");
+  const [phaseFilter,   setPhaseFilter]   = useState("all");
+  const [healthFilter,  setHealthFilter]  = useState("all");
+  const [view,          setView]          = useState("cards");
+  const [modalOpen,     setModalOpen]     = useState(false);
+  const [editing,       setEditing]       = useState(null);
   const [detailProject, setDetailProject] = useState(null);
 
+  /* ── Data fetching ── */
   const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_date"),    initialData: [] });
   const { data: workPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list(),                initialData: [] });
   const { data: rfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list(),                        initialData: [] });
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list(),                initialData: [] });
 
+  /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: (d) => base44.entities.Project.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Project created"); },
@@ -171,6 +519,7 @@ export default function Projects() {
     else createMut.mutate(d);
   };
 
+  /* ── KPI calculations ── */
   const kpis = useMemo(() => {
     const active       = projects.filter(p => p.phase !== "Closeout");
     const atRisk       = projects.filter(p => p.health_status === "At Risk").length;
@@ -178,175 +527,566 @@ export default function Projects() {
     const openRFIs     = rfis.filter(r => r.status === "Open" || r.status === "Under Review").length;
     const overdueRFIs  = rfis.filter(r => r.date_required && new Date(r.date_required) < new Date() && !["Answered","Closed"].includes(r.status)).length;
     const pendingCOVal = changeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-    return { total: projects.length, active: active.length, atRisk, totalVal, openRFIs, overdueRFIs, pendingCOVal };
+    const pendingCOCount = changeOrders.filter(c => ["Submitted","Under Review"].includes(c.status)).length;
+    return { total: projects.length, active: active.length, atRisk, totalVal, openRFIs, overdueRFIs, pendingCOVal, pendingCOCount };
   }, [projects, rfis, changeOrders]);
 
+  /* ── Filtered list ── */
   const filtered = useMemo(() => projects.filter(p => {
     const q = search.toLowerCase();
     const matchSearch = !q || p.name?.toLowerCase().includes(q) || p.project_number?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q) || p.general_contractor?.toLowerCase().includes(q);
     return matchSearch && (phaseFilter === "all" || p.phase === phaseFilter) && (healthFilter === "all" || p.health_status === healthFilter);
   }), [projects, search, phaseFilter, healthFilter]);
 
-  const S = {
-    kpiCard:  { background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "16px 20px", boxShadow: "var(--shadow-card)", flex: 1, minWidth: 140 },
-    kpiLabel: { fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 },
-    kpiValue: { fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 },
-    kpiSub:   { fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 4 },
-  };
+  const hasFilters = search || phaseFilter !== "all" || healthFilter !== "all";
 
+  /* ─────────────────────────────────────────────
+     Render
+  ───────────────────────────────────────────── */
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Projects</h1>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{kpis.active} active · {kpis.total} total</p>
+    <div style={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      background: "var(--bg-page)",
+    }}>
+
+      {/* ══ Command bar ══ */}
+      <div style={{
+        height: 52,
+        flexShrink: 0,
+        background: "var(--bg-sidebar)",
+        borderBottom: "1px solid var(--divider)",
+        display: "flex",
+        alignItems: "center",
+        padding: "0 24px",
+        gap: 16,
+      }}>
+        {/* Title + count */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: "auto" }}>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 20,
+            fontWeight: 800,
+            color: "var(--text-primary)",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            lineHeight: 1,
+          }}>
+            PROJECTS
+          </span>
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(232,101,10,0.14)",
+            border: "1px solid rgba(232,101,10,0.30)",
+            borderRadius: 3,
+            padding: "2px 8px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            color: "var(--accent)",
+            letterSpacing: "0.06em",
+          }}>
+            {projects.length}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 2, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: 8, padding: 3 }}>
-            {[["cards","⊞"],["list","☰"]].map(([v, icon]) => (
-              <button key={v} onClick={() => setView(v)} style={{ background: view === v ? "var(--accent)" : "transparent", border: "none", borderRadius: 6, padding: "5px 10px", color: view === v ? "#fff" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>{icon}</button>
-            ))}
-          </div>
-          <button
-            onClick={() => { setEditing(null); setModalOpen(true); }}
-            style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-          >
-            + New Project
-          </button>
+
+        {/* View toggle */}
+        <div style={{
+          display: "flex",
+          gap: 2,
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid var(--border-default)",
+          borderRadius: 4,
+          padding: 3,
+        }}>
+          {[["cards", "CARDS"], ["list", "LIST"]].map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                background: view === v ? "var(--accent)" : "transparent",
+                border: "none",
+                borderRadius: 2,
+                padding: "4px 11px",
+                color: view === v ? "#000" : "var(--text-muted)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 800,
+                cursor: "pointer",
+                letterSpacing: "0.08em",
+                transition: "background 0.12s, color 0.12s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* New project button */}
+        <button
+          onClick={() => { setEditing(null); setModalOpen(true); }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "#F07020"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+          style={{
+            background: "var(--accent)",
+            color: "#000",
+            border: "none",
+            borderRadius: 3,
+            padding: "7px 16px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 800,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.09em",
+            transition: "background 0.12s",
+            whiteSpace: "nowrap",
+          }}
+        >
+          + New Project
+        </button>
       </div>
 
-      {/* KPI Strip */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div style={S.kpiCard}>
-          <div style={S.kpiLabel}>Portfolio Value</div>
-          <div style={{ ...S.kpiValue, fontSize: 20 }}>{formatCurrency(kpis.totalVal)}</div>
-          <div style={S.kpiSub}>{kpis.total} projects</div>
-        </div>
-        <div style={S.kpiCard}>
-          <div style={S.kpiLabel}>Active</div>
-          <div style={S.kpiValue}>{kpis.active}</div>
-          <div style={S.kpiSub}>in progress</div>
-        </div>
-        <div style={{ ...S.kpiCard, borderTop: kpis.atRisk > 0 ? "3px solid var(--status-error)" : undefined }}>
-          <div style={S.kpiLabel}>At Risk</div>
-          <div style={{ ...S.kpiValue, color: kpis.atRisk > 0 ? "var(--status-error)" : "var(--text-primary)" }}>{kpis.atRisk}</div>
-          <div style={S.kpiSub}>need attention</div>
-        </div>
-        <div style={{ ...S.kpiCard, borderTop: kpis.overdueRFIs > 0 ? "3px solid var(--status-warning)" : undefined }}>
-          <div style={S.kpiLabel}>Open RFIs</div>
-          <div style={{ ...S.kpiValue, color: kpis.overdueRFIs > 0 ? "var(--status-warning)" : "var(--text-primary)" }}>{kpis.openRFIs}</div>
-          <div style={{ ...S.kpiSub, color: kpis.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)", fontWeight: kpis.overdueRFIs > 0 ? 700 : 400 }}>
-            {kpis.overdueRFIs > 0 ? `${kpis.overdueRFIs} overdue` : "across all projects"}
-          </div>
-        </div>
-        <div style={{ ...S.kpiCard, borderTop: kpis.pendingCOVal > 0 ? "3px solid var(--status-info)" : undefined }}>
-          <div style={S.kpiLabel}>Pending COs</div>
-          <div style={{ ...S.kpiValue, fontSize: 18 }}>{formatCurrency(kpis.pendingCOVal)}</div>
-          <div style={S.kpiSub}>awaiting approval</div>
-        </div>
+      {/* ══ KPI strip ══ */}
+      <div style={{
+        flexShrink: 0,
+        display: "flex",
+        gap: 10,
+        padding: "12px 24px",
+        borderBottom: "1px solid var(--divider)",
+        overflowX: "auto",
+        background: "var(--bg-page)",
+      }}>
+        <KpiCard
+          label="Portfolio Value"
+          value={formatCurrency(kpis.totalVal)}
+          sub={`${kpis.total} project${kpis.total !== 1 ? "s" : ""} total`}
+        />
+        <KpiCard
+          label="Active"
+          value={kpis.active}
+          sub="in progress"
+          active={phaseFilter === "all" && healthFilter === "all" && !search}
+        />
+        <KpiCard
+          label="At Risk"
+          value={kpis.atRisk}
+          sub="need attention"
+          alert={kpis.atRisk > 0}
+          alertColor="var(--status-error)"
+          onClick={kpis.atRisk > 0 ? () => setHealthFilter("At Risk") : undefined}
+        />
+        <KpiCard
+          label="Open RFIs"
+          value={kpis.openRFIs}
+          sub={kpis.overdueRFIs > 0 ? `${kpis.overdueRFIs} overdue` : "across all projects"}
+          alert={kpis.overdueRFIs > 0}
+          alertColor="var(--status-warning)"
+        />
+        <KpiCard
+          label="Pending COs"
+          value={formatCurrency(kpis.pendingCOVal)}
+          sub={`${kpis.pendingCOCount} awaiting approval`}
+          alert={kpis.pendingCOCount > 0}
+          alertColor="var(--status-error)"
+        />
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {/* ══ Filter bar ══ */}
+      <div style={{
+        flexShrink: 0,
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 8,
+        padding: "10px 24px",
+        borderBottom: "1px solid var(--divider)",
+        background: "var(--bg-page)",
+      }}>
+        {/* Search input */}
         <input
-          placeholder="Search projects, clients, GC..."
+          placeholder="Search projects, clients, GC…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 220, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 14px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none" }}
-          onFocus={e => e.target.style.borderColor = "var(--accent)"}
-          onBlur={e => e.target.style.borderColor = "var(--border-default)"}
+          onFocus={e => { e.target.style.borderColor = "var(--accent)"; }}
+          onBlur={e => { e.target.style.borderColor = "var(--border-default)"; }}
+          style={{
+            width: 230,
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 3,
+            padding: "6px 12px",
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-body)",
+            fontSize: 12,
+            outline: "none",
+          }}
         />
-        <select value={phaseFilter} onChange={e => setPhaseFilter(e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 14px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none" }}>
-          <option value="all">All Phases</option>
-          {Object.keys(PHASE_CONFIG).map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={healthFilter} onChange={e => setHealthFilter(e.target.value)} style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 14px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none" }}>
-          <option value="all">All Health</option>
-          <option value="On Track">On Track</option>
-          <option value="Watch">Watch</option>
-          <option value="At Risk">At Risk</option>
-        </select>
-        {(search || phaseFilter !== "all" || healthFilter !== "all") && (
-          <button onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); }} style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 8, padding: "8px 14px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer", letterSpacing: "0.08em" }}>CLEAR</button>
-        )}
-        <div style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", alignSelf: "center" }}>{filtered.length} of {projects.length} PROJECTS</div>
+
+        {/* Phase pills */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+          <FilterPill
+            label="All"
+            active={phaseFilter === "all"}
+            onClick={() => setPhaseFilter("all")}
+          />
+          {Object.entries(PHASE_CONFIG).map(([phase, cfg]) => (
+            <FilterPill
+              key={phase}
+              label={phase}
+              color={cfg.color}
+              active={phaseFilter === phase}
+              onClick={() => setPhaseFilter(phaseFilter === phase ? "all" : phase)}
+            />
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: "var(--divider)", flexShrink: 0 }} />
+
+        {/* Health pills */}
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          {["On Track", "Watch", "At Risk"].map(h => (
+            <FilterPill
+              key={h}
+              label={h}
+              color={HEALTH_CONFIG[h].dot}
+              active={healthFilter === h}
+              onClick={() => setHealthFilter(healthFilter === h ? "all" : h)}
+            />
+          ))}
+        </div>
+
+        {/* Clear + count */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          {hasFilters && (
+            <button
+              onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); }}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border-default)",
+                borderRadius: 3,
+                padding: "4px 10px",
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.09em",
+                textTransform: "uppercase",
+                transition: "border-color 0.12s, color 0.12s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              CLEAR
+            </button>
+          )}
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+          }}>
+            {filtered.length} / {projects.length}
+          </span>
+        </div>
       </div>
 
-      {/* Card View */}
-      {view === "cards" ? (
-        filtered.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>
-            {filtered.map(p => (
-              <ProjectCard
-                key={p.id}
-                project={p}
-                workPackages={workPackages}
-                rfis={rfis}
-                changeOrders={changeOrders}
-                onClick={() => setDetailProject(p)}
-                onEdit={(proj) => { setEditing(proj); setModalOpen(true); }}
-              />
-            ))}
-          </div>
-        ) : (
-          <div style={{ textAlign: "center", padding: "60px 24px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 14 }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>▤</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>No projects found</div>
-          </div>
-        )
-      ) : (
-        /* List View */
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px", gap: 12, padding: "10px 16px", background: "var(--bg-surface-secondary)", borderBottom: "1px solid var(--border-default)" }}>
-            {["Project","GC / Client","Phase","Progress","Contract","Health","Due","RFIs"].map(col => (
-              <div key={col} style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{col}</div>
-            ))}
-          </div>
-          {filtered.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No projects found</div>
-          ) : filtered.map(p => {
-            const phase  = PHASE_CONFIG[p.phase] || PHASE_CONFIG.Detailing;
-            const health = HEALTH_CONFIG[p.health_status] || HEALTH_CONFIG["On Track"];
-            const pWPs   = workPackages.filter(w => w.project_id === p.id);
-            const wpPct  = pWPs.length > 0 ? Math.round((pWPs.filter(w => w.status === "Complete").length / pWPs.length) * 100) : 0;
-            const pRFIs  = rfis.filter(r => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
-            const target = p.target_completion_date ? new Date(p.target_completion_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
-            return (
-              <div key={p.id}
-                onClick={() => setDetailProject(p)}
-                style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 80px 100px 80px 90px 60px", gap: 12, padding: "11px 16px", borderBottom: "1px solid var(--divider)", borderLeft: `3px solid ${phase.color}`, cursor: "pointer", transition: "background 0.1s", alignItems: "center" }}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              >
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>{p.project_number}</div>
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.general_contractor || p.client || "—"}</div>
-                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", background: phase.bg, border: `1px solid ${phase.color}40`, borderRadius: 5, width: "fit-content" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600, color: phase.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.phase}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ flex: 1, height: 4, background: "var(--border-default)", borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${wpPct}%`, background: phase.color, borderRadius: 2, transition: "width 0.4s" }} />
-                  </div>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", minWidth: 28 }}>{wpPct}%</span>
-                </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>{formatCurrency(Number(p.original_contract_value) || 0)}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: health.dot, boxShadow: `0 0 5px ${health.dot}80` }} />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600, color: health.color, textTransform: "uppercase", letterSpacing: "0.04em" }}>{p.health_status || "—"}</span>
-                </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{target}</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: pRFIs > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>{pRFIs}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* ══ Content area ══ */}
+      <div style={{
+        flex: 1,
+        overflowY: "auto",
+        padding: "20px 24px",
+      }}>
 
+        {/* ── CARDS view ── */}
+        {view === "cards" ? (
+          filtered.length > 0 ? (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gap: 16,
+            }}>
+              {filtered.map(p => (
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  workPackages={workPackages}
+                  rfis={rfis}
+                  changeOrders={changeOrders}
+                  onClick={() => setDetailProject(p)}
+                  onEdit={(proj) => { setEditing(proj); setModalOpen(true); }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "72px 24px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 6,
+            }}>
+              <div style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 28,
+                color: "var(--border-strong)",
+                marginBottom: 14,
+                lineHeight: 1,
+              }}>
+                ▤
+              </div>
+              <div style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "var(--text-muted)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}>
+                No projects found
+              </div>
+              {hasFilters && (
+                <button
+                  onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); }}
+                  style={{
+                    marginTop: 14,
+                    background: "transparent",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: 3,
+                    padding: "5px 14px",
+                    color: "var(--text-muted)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    letterSpacing: "0.09em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          )
+        ) : (
+          /* ── LIST view ── */
+          <div style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 6,
+            overflow: "hidden",
+            boxShadow: "var(--shadow-card)",
+          }}>
+            {/* Table header */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "2fr 1.2fr 110px 140px 150px 90px 110px 60px",
+              gap: 0,
+              padding: "9px 16px 9px 20px",
+              background: "rgba(0,0,0,0.25)",
+              borderBottom: "1px solid var(--border-default)",
+            }}>
+              {["Project", "GC / Client", "Phase", "Progress", "Contract", "Health", "Due Date", "RFIs"].map(col => (
+                <div key={col} style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.13em",
+                  textTransform: "uppercase",
+                  paddingRight: 12,
+                }}>
+                  {col}
+                </div>
+              ))}
+            </div>
+
+            {/* Table rows */}
+            {filtered.length === 0 ? (
+              <div style={{
+                padding: "44px 24px",
+                textAlign: "center",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                color: "var(--text-muted)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}>
+                No projects found
+              </div>
+            ) : filtered.map((p, idx) => {
+              const phase  = PHASE_CONFIG[p.phase] || PHASE_CONFIG["Detailing"];
+              const health = HEALTH_CONFIG[p.health_status] || HEALTH_CONFIG["On Track"];
+              const pWPs   = workPackages.filter(w => w.project_id === p.id);
+              const { pct: wpPct } = calcWpProgress(pWPs);
+              const pRFIs  = rfis.filter(r => r.project_id === p.id && (r.status === "Open" || r.status === "Under Review")).length;
+              const target = p.target_completion_date
+                ? new Date(p.target_completion_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+                : "—";
+              const contractVal = formatCurrency(Number(p.original_contract_value) || 0);
+
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => setDetailProject(p)}
+                  onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-row-hover)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = idx % 2 === 1 ? "#0D0D0D" : "transparent"; }}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1.2fr 110px 140px 150px 90px 110px 60px",
+                    gap: 0,
+                    padding: "10px 16px 10px 0",
+                    borderBottom: "1px solid var(--divider)",
+                    borderLeft: `3px solid ${phase.color}`,
+                    paddingLeft: 17,
+                    cursor: "pointer",
+                    transition: "background 0.10s",
+                    alignItems: "center",
+                    background: idx % 2 === 1 ? "#0D0D0D" : "transparent",
+                  }}
+                >
+                  {/* Project name + number */}
+                  <div style={{ paddingRight: 12, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      lineHeight: 1.3,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {p.name}
+                    </div>
+                    <div style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      color: "var(--text-muted)",
+                      marginTop: 2,
+                      letterSpacing: "0.07em",
+                    }}>
+                      {p.project_number || "—"}
+                    </div>
+                  </div>
+
+                  {/* GC / Client */}
+                  <div style={{
+                    fontSize: 11,
+                    color: "var(--text-secondary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    paddingRight: 12,
+                  }}>
+                    {p.general_contractor || p.client || "—"}
+                  </div>
+
+                  {/* Phase pill */}
+                  <div style={{ paddingRight: 12 }}>
+                    <PhasePill phase={p.phase || "—"} config={phase} />
+                  </div>
+
+                  {/* Progress bar */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingRight: 12 }}>
+                    <div style={{
+                      flex: 1,
+                      height: 4,
+                      background: "var(--border-default)",
+                      borderRadius: 2,
+                      overflow: "hidden",
+                    }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${wpPct}%`,
+                        background: phase.color,
+                        borderRadius: 2,
+                        transition: "width 0.4s ease",
+                      }} />
+                    </div>
+                    <span style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "var(--text-muted)",
+                      minWidth: 30,
+                      textAlign: "right",
+                    }}>
+                      {wpPct}%
+                    </span>
+                  </div>
+
+                  {/* Contract value */}
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "var(--text-primary)",
+                    paddingRight: 12,
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {contractVal}
+                  </div>
+
+                  {/* Health */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, paddingRight: 12 }}>
+                    <div style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: health.dot,
+                      flexShrink: 0,
+                    }} />
+                    <span style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: health.color,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}>
+                      {p.health_status || "—"}
+                    </span>
+                  </div>
+
+                  {/* Due date */}
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    paddingRight: 12,
+                  }}>
+                    {target}
+                  </div>
+
+                  {/* Open RFIs */}
+                  <div style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: pRFIs > 0 ? "#F59E0B" : "var(--text-muted)",
+                    textAlign: "center",
+                  }}>
+                    {pRFIs}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ══ Modals ══ */}
       {modalOpen && (
         <ProjectFormModal
           open={modalOpen}
