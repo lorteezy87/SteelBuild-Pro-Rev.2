@@ -643,26 +643,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setStep(3);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
-    const resolvedSetName = meta.setName || meta.revision || "Drawing Set";
-
-    // Create the canonical DrawingSet entity first so drawings can link to it
-    let drawingSetId = null;
-    try {
-      const ds = await base44.entities.DrawingSet.create({
-        project_id:          activeProject?.id,
-        set_name:            resolvedSetName,
-        discipline:          meta.discipline,
-        current_revision:    normalizeRevisionNumber(meta.revision),
-        current_issue_date:  meta.issueDate,
-        current_issued_by:   meta.issuedBy,
-        current_file_url:    selectedSheets[0]?.sourceFileUrl || null,
-        notes:               meta.notes,
-        revision_history:    "[]",
-      });
-      drawingSetId = ds?.id || null;
-    } catch (err) {
-      console.warn("DrawingSet entity creation failed — drawings will still be created without linking:", err);
-    }
+    const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
 
     let created = 0;
     for (const sheet of selectedSheets) {
@@ -678,7 +659,6 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         issued_by:        meta.issuedBy,
         file_url:         sheet.sourceFileUrl,
         drawing_set_name: resolvedSetName,
-        drawing_set_id:   drawingSetId,
         notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
       });
       created++;
