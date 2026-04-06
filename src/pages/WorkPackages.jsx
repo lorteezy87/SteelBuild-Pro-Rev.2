@@ -65,6 +65,7 @@ const formatDate = (d) =>
 
 export default function WorkPackages() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
 
