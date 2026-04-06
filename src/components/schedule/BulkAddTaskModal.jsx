@@ -113,7 +113,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
         width: "min(1060px, 96vw)", maxHeight: "88vh",
-        background: "var(--bg-surface)", border: "1px solid rgba(232,101,10,0.30)",
+        background: "var(--bg-surface)", border: "1px solid rgba(200,155,32,0.30)",
         borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.80)", zIndex: 999,
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
@@ -174,7 +174,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <input
                     value={row.task_name}
                     onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
-                    onFocus={(e) => e.target.style.background = "rgba(232,101,10,0.05)"}
+                    onFocus={(e) => e.target.style.background = "rgba(200,155,32,0.05)"}
                     onBlur={(e) => e.target.style.background = "transparent"}
                     placeholder={hasErr ? "Required" : "Task name…"}
                     style={{ ...INPUT_STYLE, color: hasErr && !row.task_name ? "#FF7A7A" : "var(--text-primary)" }}
@@ -252,13 +252,13 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
             style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "8px 24px", cursor: "pointer",
-              color: "rgba(232,101,10,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
+              color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
               borderBottom: "1px solid rgba(255,255,255,0.04)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
-            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(232,101,10,0.50)"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(200,155,32,0.50)"}
           >
             + ADD ROW
           </div>
@@ -289,7 +289,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               onClick={handleSave}
               disabled={isSaving}
               style={{
-                background: isSaving ? "rgba(232,101,10,0.5)" : "var(--accent)",
+                background: isSaving ? "rgba(200,155,32,0.5)" : "var(--accent)",
                 border: "none", borderRadius: 6, padding: "7px 22px",
                 color: "#fff", fontFamily: "var(--font-mono)", fontSize: 10,
                 fontWeight: 800, cursor: isSaving ? "not-allowed" : "pointer",

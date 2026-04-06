@@ -29,8 +29,8 @@ const sortByDate = (a, b) => {
 const fmtDate = (d) => formatDateShort(d);
 
 const INLINE_INPUT = {
-  background: "rgba(232,101,10,0.08)",
-  border: "1px solid rgba(232,101,10,0.4)",
+  background: "rgba(200,155,32,0.08)",
+  border: "1px solid rgba(200,155,32,0.4)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-body)",
@@ -42,8 +42,8 @@ const INLINE_INPUT = {
 };
 
 const INLINE_SELECT = {
-  background: "rgba(232,101,10,0.08)",
-  border: "1px solid rgba(232,101,10,0.4)",
+  background: "rgba(200,155,32,0.08)",
+  border: "1px solid rgba(200,155,32,0.4)",
   borderRadius: 4,
   color: "var(--text-primary)",
   fontFamily: "var(--font-mono)",
@@ -233,9 +233,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       gap: 12,
                       alignItems: "center",
                       transition: "background 0.1s",
-                      background: isEditing ? "rgba(232,101,10,0.04)" : "transparent",
+                      background: isEditing ? "rgba(200,155,32,0.04)" : "transparent",
                       cursor: isEditing ? "default" : "pointer",
-                      outline: isEditing ? "1px solid rgba(232,101,10,0.25)" : "none",
+                      outline: isEditing ? "1px solid rgba(200,155,32,0.25)" : "none",
                     }}
                     onMouseEnter={(e) => { if (!isEditing) e.currentTarget.style.background = "var(--hover-bg)"; }}
                     onMouseLeave={(e) => { if (!isEditing) e.currentTarget.style.background = "transparent"; }}

@@ -447,7 +447,7 @@ export default function Drawings() {
             label: "SETS",
             value: drawingSets.length,
             color: "var(--accent)",
-            accent: "rgba(232,101,10,0.08)",
+            accent: "rgba(200,155,32,0.08)",
             onClick: () => {},
           },
         ].map((tile, i) => (
@@ -748,7 +748,7 @@ export default function Drawings() {
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "6px 12px", marginBottom: 12, cursor: "pointer",
                       borderLeft: "3px solid var(--accent)",
-                      background: "rgba(232,101,10,0.05)",
+                      background: "rgba(200,155,32,0.05)",
                       borderRadius: "0 4px 4px 0",
                       userSelect: "none",
                     }}

@@ -6,7 +6,7 @@ const accentMap = {
   amber:  { color: "var(--status-warning)", bg: "rgba(245,158,11,0.07)" },
   rose:   { color: "var(--status-error)",   bg: "rgba(239,68,68,0.07)" },
   purple: { color: "var(--chart-4)",        bg: "rgba(168,85,247,0.07)" },
-  slate:  { color: "var(--accent)",         bg: "rgba(232,101,10,0.06)" },
+  slate:  { color: "var(--accent)",         bg: "rgba(200,155,32,0.06)" },
 };
 
 export default function KPIStrip({ items }) {
