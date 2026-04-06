@@ -205,35 +205,30 @@ export default function Financials() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes", projectId],
     queryFn: () => (projectId ? base44.entities.CostCode.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders", projectId],
     queryFn: () => (projectId ? base44.entities.ChangeOrder.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses", projectId],
     queryFn: () => (projectId ? base44.entities.Expense.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: sovItems = [] } = useQuery({
     queryKey: ["sov-items", projectId],
     queryFn: () => (projectId ? base44.entities.SOVItem.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const costCodeQueryKeys = [["cost-codes", projectId], ["cost-codes"]];

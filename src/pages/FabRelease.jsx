@@ -78,7 +78,6 @@ export default function FabRelease() {
     queryKey: ["wps-fab", projectId],
     queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
     enabled: !!projectId,
-    initialData: [],
   });
 
   const completeMut = useMutation({

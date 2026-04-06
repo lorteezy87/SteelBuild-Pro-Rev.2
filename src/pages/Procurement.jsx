@@ -80,19 +80,16 @@ export default function Procurement() {
       ? base44.entities.Delivery.filter({ project_id: projectId, delivery_type: 'PROCUREMENT' })
       : [],
     enabled: !!projectId,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: vendors = [] } = useQuery({
     queryKey: ['vendors'],
     queryFn: () => base44.entities.Vendor.list(),
-    initialData: [],
   });
 
   const createMut = useMutation({

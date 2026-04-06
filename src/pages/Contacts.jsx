@@ -71,13 +71,11 @@ export default function Contacts() {
       projectId
         ? base44.entities.Contact.filter({ project_id: projectId })
         : base44.entities.Contact.list(),
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const updateMut = useMutation({

@@ -98,13 +98,11 @@ export default function CostDashboard() {
       ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "-created_date")
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: cos = [] } = useQuery({
@@ -113,35 +111,30 @@ export default function CostDashboard() {
       ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_date")
       : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: wps = [] } = useQuery({
     queryKey: ['wps-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.WorkPackage.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: sovs = [] } = useQuery({
     queryKey: ['sovs-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: cos_all = [] } = useQuery({
     queryKey: ['cos-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ['deliveries-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.Delivery.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
-    initialData: [],
   });
 
   const project = projects.find(p => p.id === activeProject?.id);

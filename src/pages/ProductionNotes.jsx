@@ -49,38 +49,32 @@ export default function ProductionNotes() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: [],
   });
 
   const { data: notes = [] } = useQuery({
     queryKey: ["production-notes"],
     queryFn: () => base44.entities.ProductionNote.list("-note_date"),
-    initialData: [],
     refetchInterval: 30000,
   });
 
   const { data: allWPs = [] } = useQuery({
     queryKey: ["wps-all"],
     queryFn: () => base44.entities.WorkPackage.list(),
-    initialData: [],
   });
 
   const { data: allRFIs = [] } = useQuery({
     queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list(),
-    initialData: [],
   });
 
   const { data: allDeliveries = [] } = useQuery({
     queryKey: ["deliveries-all"],
     queryFn: () => base44.entities.Delivery.list(),
-    initialData: [],
   });
 
   const { data: allCOs = [] } = useQuery({
     queryKey: ["cos-all"],
     queryFn: () => base44.entities.ChangeOrder.list(),
-    initialData: [],
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ProductionNote.update(id, data),
