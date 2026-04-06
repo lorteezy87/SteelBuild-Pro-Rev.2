@@ -1084,8 +1084,8 @@ export default function Layout({ children, currentPageName }) {
         {/* TOP NAV */}
         <nav className="nav-glass" style={{
               height: 52,
-              background: "rgba(5,5,5,0.88)",
-              borderBottom: "1px solid rgba(0,229,255,0.18)",
+              background: "rgba(10,10,10,0.95)",
+              borderBottom: "1px solid #1E1E1E",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
@@ -1307,7 +1307,7 @@ export default function Layout({ children, currentPageName }) {
         </nav>
 
         {/* CONTENT */}
-        <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 16, background: "var(--bg-base)", color: "var(--text-primary)" }}>
+        <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
           <ProjectErrorBanner />
           {children}
         </main>
