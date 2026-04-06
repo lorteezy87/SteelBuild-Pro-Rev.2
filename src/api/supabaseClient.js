@@ -296,10 +296,12 @@ export const integrations = {
         .from('app-files')
         .upload(path, file, { contentType: file.type, upsert: false });
       if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage
+      // Bucket is private — generate a signed URL valid for 1 hour
+      const { data: signedData, error: signErr } = await supabase.storage
         .from('app-files')
-        .getPublicUrl(data.path);
-      return { file_url: publicUrl, file_name: file.name, path: data.path };
+        .createSignedUrl(data.path, 3600);
+      if (signErr) throw signErr;
+      return { file_url: signedData.signedUrl, file_name: file.name, path: data.path };
     },
 
     /**

@@ -719,7 +719,7 @@ function MobileDrawer({ open, onClose, onNavigate }) {
       }}>
         <div style={{ padding: "16px 16px 8px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center" }}>
           <img
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69aa43d230072438d933f70b/fa3bd3f80_steelbuild-pro-logo-v3.png"
+            src="/logo.png"
             alt="SteelBuild Pro"
             style={{ height: 32, width: "auto", objectFit: "contain" }} />
 
@@ -1106,7 +1106,7 @@ export default function Layout({ children, currentPageName }) {
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
               <img
-                    src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69aa43d230072438d933f70b/fa3bd3f80_steelbuild-pro-logo-v3.png"
+                    src="/logo.png"
                     alt="SteelBuild Pro"
                     style={{ height: 36, width: "auto", objectFit: "contain" }} />
 

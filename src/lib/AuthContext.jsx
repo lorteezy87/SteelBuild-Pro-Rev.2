@@ -13,13 +13,25 @@ export const AuthProvider = ({ children }) => {
   // Kept for API compatibility; no longer populated
   const [appPublicSettings] = useState(null);
 
-  const mapSupabaseUser = (sbUser) => {
+  const mapSupabaseUser = async (sbUser) => {
     if (!sbUser) return null;
+    // Fetch role from user_profiles (server-authoritative) rather than client-modifiable user_metadata
+    let role = 'user';
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', sbUser.id)
+        .single();
+      if (profile?.role) role = profile.role;
+    } catch {
+      // Fall back to 'user' if profile fetch fails
+    }
     return {
       id: sbUser.id,
       email: sbUser.email,
       full_name: sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email,
-      role: sbUser.user_metadata?.role || 'user',
+      role,
       ...sbUser.user_metadata,
     };
   };
@@ -27,9 +39,9 @@ export const AuthProvider = ({ children }) => {
   // Listen for Supabase auth state changes
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
+        setUser(await mapSupabaseUser(session.user));
         setIsAuthenticated(true);
         setAuthError(null);
       } else {
@@ -41,9 +53,9 @@ export const AuthProvider = ({ children }) => {
     });
 
     // Subscribe to future auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
+        setUser(await mapSupabaseUser(session.user));
         setIsAuthenticated(true);
         setAuthError(null);
       } else {
@@ -63,7 +75,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      setUser(mapSupabaseUser(data.user));
+      setUser(await mapSupabaseUser(data.user));
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       return { success: true };
@@ -91,7 +103,7 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingAuth(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      setUser(mapSupabaseUser(session.user));
+      setUser(await mapSupabaseUser(session.user));
       setIsAuthenticated(true);
       setAuthError(null);
     } else {
