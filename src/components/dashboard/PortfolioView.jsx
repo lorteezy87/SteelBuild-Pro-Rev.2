@@ -199,7 +199,7 @@ export default function PortfolioView({
         const pExpenses = allExpenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
         const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
         const actual = pExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + (Number(e.amount) || 0), 0);
-        const openRFIs = pRFIs.filter((r) => r.status === "Open" || r.status === "Under Review").length;
+        const openRFIs = pRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
         const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
         const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;
         const pendingCOs = pCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status));
