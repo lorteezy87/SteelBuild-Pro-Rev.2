@@ -38,32 +38,32 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for Supabase auth state changes
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setUser(await mapSupabaseUser(session.user));
-        setIsAuthenticated(true);
-        setAuthError(null);
-      } else {
+    const handleSession = async (session) => {
+      try {
+        if (session?.user) {
+          setUser(await mapSupabaseUser(session.user));
+          setIsAuthenticated(true);
+          setAuthError(null);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          setAuthError({ type: 'auth_required', message: 'Authentication required' });
+        }
+      } catch {
         setUser(null);
         setIsAuthenticated(false);
         setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      } finally {
+        setIsLoadingAuth(false);
       }
-      setIsLoadingAuth(false);
-    });
+    };
 
-    // Subscribe to future auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(await mapSupabaseUser(session.user));
-        setIsAuthenticated(true);
-        setAuthError(null);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-        setAuthError({ type: 'auth_required', message: 'Authentication required' });
-      }
-      setIsLoadingAuth(false);
+    // Get initial session — handles expired/invalid tokens by returning null session
+    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session));
+
+    // Subscribe to future auth changes (token refresh, sign-out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleSession(session);
     });
 
     return () => subscription.unsubscribe();
