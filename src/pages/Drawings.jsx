@@ -116,6 +116,8 @@ export default function Drawings() {
   const [revisionUploadOpen, setRevisionUploadOpen] = useState(false);
   const [revisionPreselectedSet, setRevisionPreselectedSet] = useState(null);
   const [approvalOpen, setApprovalOpen] = useState(null);
+  const [selectedSet, setSelectedSet] = useState(null);
+  const [setDetailTab, setSetDetailTab] = useState("sheets");
 
   // Fetch drawings
   const { data: drawings = [], isLoading } = useQuery({

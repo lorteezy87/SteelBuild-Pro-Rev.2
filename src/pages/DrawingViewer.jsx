@@ -11,6 +11,7 @@ import MarkupPropertiesPanel from "../components/viewer/MarkupPropertiesPanel.js
 import MarkupsList from "../components/viewer/MarkupsList.jsx";
 import AIAnalysisPanel from "../components/viewer/AIAnalysisPanel.jsx";
 import { extractPDFText } from "../components/shared/pdfHandling";
+import { toast } from "sonner";
 
 const STAMPS = [
   { id: "approved", label: "APPROVED", color: "#00D68F" },
@@ -44,6 +45,11 @@ export default function DrawingViewer() {
   const [analysisResults, setAnalysisResults] = useState(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
+  const [crossRefs, setCrossRefs] = useState([]);
+  const [detectingRefs, setDetectingRefs] = useState(false);
+  const [showCrossRefs, setShowCrossRefs] = useState(true);
+  const [allSetDrawings, setAllSetDrawings] = useState([]);
+  const [rightPanel, setRightPanel] = useState("sheets");
 
   const pdfCanvasRef = useRef(null);
   const markupCanvasRef = useRef(null);
@@ -61,6 +67,27 @@ export default function DrawingViewer() {
     queryFn: () => (docId ? base44.entities.Document.get(docId) : null),
     enabled: !!docId && !drawingId,
   });
+
+  // --- Load all drawings in the same set (for Drawing entity) ---
+  const { data: setDrawings = [] } = useQuery({
+    queryKey: ["set-drawings", drawingRecord?.drawing_set_name, drawingRecord?.project_id],
+    queryFn: () => base44.entities.Drawing.filter({
+      drawing_set_name: drawingRecord.drawing_set_name,
+      project_id: drawingRecord.project_id,
+    }),
+    enabled: !!drawingRecord?.drawing_set_name,
+  });
+
+  useEffect(() => {
+    setAllSetDrawings(setDrawings);
+  }, [setDrawings]);
+
+  // Load cross-refs from drawing record annotations
+  useEffect(() => {
+    if (drawingRecord?.annotations?.crossRefs) {
+      setCrossRefs(drawingRecord.annotations.crossRefs);
+    }
+  }, [drawingRecord]);
 
   const isLoading = drawingLoading || docLoading;
 
