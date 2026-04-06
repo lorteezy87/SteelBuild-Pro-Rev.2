@@ -347,7 +347,7 @@ export default function Deliveries() {
         key={delivery.id}
         style={{
           display: "grid",
-          gridTemplateColumns: "28px 90px 130px 2fr 120px 90px 80px 80px 70px 80px 90px",
+          gridTemplateColumns: "28px 100px 150px 2fr 140px 100px 90px 90px 72px 90px 110px",
           padding: "10px 12px",
           borderBottom: "1px solid var(--divider)",
           alignItems: "center",
@@ -707,7 +707,7 @@ export default function Deliveries() {
   };
 
   return (
-    <div style={{ height: "calc(100vh - 92px)", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-page)" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-page)" }}>
       {/* Command bar */}
       <div
         style={{
@@ -721,11 +721,11 @@ export default function Deliveries() {
           justifyContent: "space-between",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-primary)" }}>DELIVERY TRACKER</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-            {deliveries.length} shipments across {projectCount} projects
-          </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-primary)", textTransform: "uppercase" }}>Deliveries</div>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", padding: "2px 8px", borderRadius: 4, letterSpacing: "0.12em" }}>
+            {deliveries.length} SHIPMENTS · {projectCount} PROJECTS
+          </span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
@@ -878,15 +878,15 @@ export default function Deliveries() {
       {/* Filter toolbar */}
       <div
         style={{
-          height: 40,
+          minHeight: 48,
           flexShrink: 0,
           background: "var(--bg-surface)",
           borderBottom: "1px solid var(--divider)",
-          padding: "0 16px",
+          padding: "6px 20px",
           display: "flex",
           alignItems: "center",
           gap: 8,
-          overflowX: "auto",
+          flexWrap: "wrap",
         }}
       >
         <input
@@ -990,7 +990,7 @@ export default function Deliveries() {
         {/* Lookahead panel */}
         <div
           style={{
-            width: 280,
+            width: 260,
             flexShrink: 0,
             borderRight: "1px solid var(--divider)",
             background: "var(--bg-sidebar)",
@@ -1112,7 +1112,7 @@ export default function Deliveries() {
                   top: 0,
                   zIndex: 5,
                   display: "grid",
-                  gridTemplateColumns: "28px 90px 130px 2fr 120px 90px 80px 80px 70px 80px 90px",
+                  gridTemplateColumns: "28px 100px 150px 2fr 140px 100px 90px 90px 72px 90px 110px",
                   background: "var(--bg-sidebar)",
                   borderBottom: "1px solid var(--divider)",
                   padding: "10px 12px",

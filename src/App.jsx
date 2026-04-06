@@ -11,10 +11,11 @@ import LocalLoginForm from '@/components/LocalLoginForm';
 import { ThemeProvider } from '@/components/shared/ThemeContext';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
+import Dashboard from './pages/Dashboard';
 
 const { Pages, Layout } = pagesConfig;
-const mainPageKey = "Landing";
-const MainPageComponent = Landing;
+const mainPageKey = "Dashboard";
+const MainPageComponent = Dashboard;
 
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>

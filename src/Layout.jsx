@@ -7,6 +7,7 @@ import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import { Toaster } from "sonner";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
 import { ProjectProvider } from "./components/shared/ProjectContext";
+import { useProjectContext } from "./components/shared/useProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { PMAProvider } from "./components/pma/usePMAContext";
 import PMAPanel from "./components/pma/PMAPanel";
@@ -17,6 +18,7 @@ import { useTheme } from "./components/shared/ThemeContext";
 // ─── Tab → page mapping ───────────────────────────────────────────
 const PRIMARY_TABS = [
 { label: "DASHBOARD", pages: ["Dashboard"] },
+{ label: "PCC", pages: ["ProjectControlCenter"] },
 { label: "PROJECTS", pages: ["Projects", "ExecutiveView"] },
 { label: "RFIs", pages: ["RFIs", "RFIHub"] },
 { label: "DRAWINGS", pages: ["Submittals", "DrawingViewer"] },
@@ -33,6 +35,7 @@ const PRIMARY_TABS = [
 
 const TAB_DEFAULT_PAGE = {
   "DASHBOARD": "Dashboard",
+  "PCC": "ProjectControlCenter",
   "PROJECTS": "Projects",
   "RFIs": "RFIs",
   "DRAWINGS": "Submittals",
@@ -49,6 +52,7 @@ const TAB_DEFAULT_PAGE = {
 
 const ALL_MODULES = [
 { icon: "◈", name: "Dashboard", group: "Overview", page: "Dashboard" },
+{ icon: "⊕", name: "Project Control Center", group: "Overview", page: "ProjectControlCenter" },
 { icon: "◉", name: "Executive View", group: "Overview", page: "ExecutiveView" },
 { icon: "▤", name: "Projects", group: "Overview", page: "Projects" },
 { icon: "≡", name: "Scope & Exclusions", group: "Setup", page: "ScopeExclusions" },
@@ -1084,8 +1088,8 @@ export default function Layout({ children, currentPageName }) {
         {/* TOP NAV */}
         <nav className="nav-glass" style={{
               height: 52,
-              background: "rgba(5,5,5,0.88)",
-              borderBottom: "1px solid rgba(0,229,255,0.18)",
+              background: "rgba(10,10,10,0.95)",
+              borderBottom: "1px solid #1E1E1E",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
@@ -1307,7 +1311,7 @@ export default function Layout({ children, currentPageName }) {
         </nav>
 
         {/* CONTENT */}
-        <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 16, background: "var(--bg-base)", color: "var(--text-primary)" }}>
+        <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
           <ProjectErrorBanner />
           {children}
         </main>
