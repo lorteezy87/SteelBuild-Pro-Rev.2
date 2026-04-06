@@ -378,6 +378,17 @@ export default function Schedule() {
             expandedTask={expandedTask}
             setExpandedTask={setExpandedTask}
             onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+            onSave={async (data) => {
+              const { id, ...fields } = data;
+              try {
+                await base44.entities.ScheduleTask.update(id, fields);
+                qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                toast.success("Task saved");
+              } catch (err) {
+                toast.error("Save failed: " + (err?.message || "unknown error"));
+                throw err;
+              }
+            }}
             phaseFilter={phaseFilter}
           />
         )}
