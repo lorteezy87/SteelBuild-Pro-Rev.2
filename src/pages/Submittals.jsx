@@ -239,23 +239,6 @@ function HoverThumbnail({ thumb }) {
 }
 
 function DrawingThumbnailCard({ drawing, onEdit, onAnnotate, navigate, createPageUrl: createUrl }) {
-  const [thumb, setThumb] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    if (!drawing.file_url) return undefined;
-    setLoading(true);
-    generateThumbnail(drawing.file_url, drawing.id).then((url) => {
-      if (!active) return;
-      setThumb(url);
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [drawing.file_url, drawing.id]);
-
   const overdue = drawing.due_date && drawing.stage !== "Released" && new Date(drawing.due_date) < new Date();
 
   return (
@@ -296,16 +279,19 @@ function DrawingThumbnailCard({ drawing, onEdit, onAnnotate, navigate, createPag
         </div>
       )}
 
-      <div style={{ width: "100%", paddingTop: "70%", position: "relative", background: "var(--bg-surface-low)", overflow: "hidden" }}>
+      <div style={{ width: "100%", paddingTop: "75%", position: "relative", background: "#F8F8F8", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {loading ? (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>LOADING...</div>
-          ) : thumb ? (
-            <img src={thumb} alt={drawing.sheet_number} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
+          {drawing.file_url ? (
+            <iframe
+              src={`${drawing.file_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", pointerEvents: "none", background: "#fff" }}
+              title={drawing.sheet_number}
+              loading="lazy"
+            />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-              <div style={{ fontSize: 24, opacity: 0.2 }}>[]</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em" }}>NO PREVIEW</div>
+              <div style={{ fontSize: 24, opacity: 0.15 }}>📐</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em" }}>NO FILE</div>
             </div>
           )}
         </div>
@@ -881,7 +867,14 @@ export default function Submittals() {
         base44.entities.Drawing.filter({ project_id: activeProject.id }, "-created_date"),
         base44.entities.DrawingSet.filter({ project_id: activeProject.id }, "-created_date").catch(() => []),
       ]);
-      setDrawings(data);
+      // Build id->name lookup so drawings with only drawing_set_id get resolved names
+      const setsById = {};
+      sets.forEach((ds) => { if (ds.id && ds.set_name) setsById[ds.id] = ds.set_name; });
+      const resolved = data.map((d) => ({
+        ...d,
+        drawing_set_name: d.drawing_set_name || (d.drawing_set_id && setsById[d.drawing_set_id]) || d.drawing_set_name,
+      }));
+      setDrawings(resolved);
       setDrawingSets(sets);
     } finally {
       setLoading(false);
@@ -1231,7 +1224,7 @@ export default function Submittals() {
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", height: 40, borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, padding: "6px 16px", minHeight: 44, borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-input)", padding: "0 10px", height: 28, flex: 1, maxWidth: 260 }}>
           <span style={{ fontSize: 12, opacity: 0.4, flexShrink: 0 }}>/</span>
           <input placeholder="Search drawings..." value={search} onChange={(event) => setSearch(event.target.value)} style={{ background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 11, width: "100%", padding: 0 }} />
