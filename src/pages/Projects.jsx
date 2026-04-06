@@ -32,7 +32,7 @@ const HEALTH_CONFIG = {
 /* ─────────────────────────────────────────────
    ProgressRing — 48px SVG ring
 ───────────────────────────────────────────── */
-function ProgressRing({ pct, size = 48, color = "#E8650A" }) {
+function ProgressRing({ pct, size = 48, color = "#C89B20" }) {
   const r    = (size - 7) / 2;
   const circ = 2 * Math.PI * r;
   const fill = circ - (circ * Math.min(100, pct || 0)) / 100;
@@ -400,9 +400,9 @@ function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-
       style={{
         flex: 1,
         minWidth: 130,
-        background: active ? "rgba(232,101,10,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(232,101,10,0.35)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
-        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "rgba(232,101,10,0.35)" : "var(--border-default)"}`,
+        background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
+        border: `1px solid ${active ? "rgba(200,155,32,0.35)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
+        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "rgba(200,155,32,0.35)" : "var(--border-default)"}`,
         borderRadius: 4,
         padding: "14px 18px",
         cursor: onClick ? "pointer" : "default",
@@ -455,7 +455,7 @@ function FilterPill({ label, color, active, onClick }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
-        background: active ? (color ? `${color}18` : "rgba(232,101,10,0.12)") : "transparent",
+        background: active ? (color ? `${color}18` : "rgba(200,155,32,0.12)") : "transparent",
         border: `1px solid ${active ? (color || "var(--accent)") + "55" : "var(--border-default)"}`,
         borderRadius: 3,
         padding: "4px 11px",
@@ -592,8 +592,8 @@ export default function Projects() {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "rgba(232,101,10,0.14)",
-            border: "1px solid rgba(232,101,10,0.30)",
+            background: "rgba(200,155,32,0.14)",
+            border: "1px solid rgba(200,155,32,0.30)",
             borderRadius: 3,
             padding: "2px 8px",
             fontFamily: "var(--font-mono)",
