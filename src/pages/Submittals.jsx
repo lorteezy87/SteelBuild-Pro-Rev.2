@@ -1006,7 +1006,7 @@ export default function Submittals() {
     if (idx < STAGES.length - 1) {
       const newStage = STAGES[idx + 1];
       const data = { stage: newStage };
-      if (newStage === "BFA" || newStage === "BFS") data.revision_number = (Number(drawing.revision_number) || 0) + 1;
+      if (newStage === "BFA" || newStage === "BFS") data.revision_number = String((Number(drawing.revision_number) || 0) + 1);
       await base44.entities.Drawing.update(drawing.id, data);
       loadDrawings();
     }
@@ -1317,7 +1317,7 @@ export default function Submittals() {
               drawings={filtered}
               onStageChange={async (drawing, newStage) => {
                 const data = { stage: newStage };
-                if (newStage === "BFA" || newStage === "BFS") data.revision_number = (Number(drawing.revision_number) || 0) + 1;
+                if (newStage === "BFA" || newStage === "BFS") data.revision_number = String((Number(drawing.revision_number) || 0) + 1);
                 await base44.entities.Drawing.update(drawing.id, data);
                 loadDrawings();
               }}
