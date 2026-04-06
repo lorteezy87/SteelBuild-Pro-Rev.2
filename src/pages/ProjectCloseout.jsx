@@ -1,3 +1,4 @@
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +10,7 @@ import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary
 
 export default function ProjectCloseout() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [activeTab, setActiveTab] = useState("checklist");
 
   const { data: projects = [] } = useQuery({

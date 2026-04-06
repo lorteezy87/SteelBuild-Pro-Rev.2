@@ -1,3 +1,4 @@
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import PhotoGallery from "@/components/photos/PhotoGallery";
 
 export default function Photos() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showUpload, setShowUpload] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterDate, setFilterDate] = useState("all");
