@@ -66,7 +66,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
       title: d.title,
       detail: `Approval hold · ${d.stage}`,
       severity: "warning",
-      nav: "Submittals",
+      nav: "Drawings",
     });
   });
 

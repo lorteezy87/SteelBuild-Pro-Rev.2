@@ -544,7 +544,7 @@ export default function DrilldownView({
         detail: `${drawing.stage} | Due ${fmtDate(drawing.due_date)} | Rev ${drawing.revision_number || 0}`,
         badge: "REVISION",
         tone: "danger",
-        page: "Submittals",
+        page: "Drawings",
       })),
       ...lateDeliveries.map((delivery) => ({
         key: `delivery-${delivery.id}`,
@@ -640,7 +640,7 @@ export default function DrilldownView({
         value: lateDrawings.length,
         detail: `${pendingRevisions.length} active revisions in review`,
         color: lateDrawings.length ? "var(--status-error)" : "var(--accent)",
-        page: "Submittals",
+        page: "Drawings",
       },
       {
         label: "Blocked WPs",
@@ -702,7 +702,7 @@ export default function DrilldownView({
 
   const quickActions = [
     { label: "Update RFIs", detail: `${rfis.filter((r) => !["Answered", "Closed"].includes(r.status)).length} open`, page: "RFIs", primary: true },
-    { label: "Drawing Revisions", detail: `${drawings.filter((d) => d.stage !== "Released").length} active`, page: "Submittals" },
+    { label: "Drawing Revisions", detail: `${drawings.filter((d) => d.stage !== "Released").length} active`, page: "Drawings" },
     { label: "Deliveries", detail: `${deliveries.filter((d) => d.status !== "Delivered").length} in play`, page: "Deliveries" },
     { label: "Work Packages", detail: `${wps.filter((wp) => wp.status !== "Complete").length} active`, page: "WorkPackages" },
     { label: "Costs", detail: `$${Math.round(financials.committedCosts).toLocaleString()} committed`, page: "Financials" },
@@ -867,7 +867,7 @@ export default function DrilldownView({
                 label: "Pending revisions",
                 value: drawings.filter((d) => d.stage !== "Released").length,
                 detail: `${derived.lateDrawings.length} late`,
-                page: "Submittals",
+                page: "Drawings",
               },
               {
                 label: "Open deliveries",
