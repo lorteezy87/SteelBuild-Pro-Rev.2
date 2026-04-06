@@ -391,9 +391,14 @@ export default function Schedule() {
             onDelete={(task) => setDeleteTarget(task)}
             onSave={async (data) => {
               const { id, ...fields } = data;
-              await base44.entities.ScheduleTask.update(id, fields);
-              qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-              toast.success("Task saved");
+              try {
+                await base44.entities.ScheduleTask.update(id, fields);
+                qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                toast.success("Task saved");
+              } catch (err) {
+                toast.error("Save failed: " + (err?.message || "unknown error"));
+                throw err;
+              }
             }}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
