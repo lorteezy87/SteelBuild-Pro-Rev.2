@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useProjectContext } from "../components/shared/useProjectContext";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
@@ -134,7 +135,8 @@ const Pill = ({ label, color, bg }) => (
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project") || null;
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
 
   const [view, setView] = useState("LIST");
