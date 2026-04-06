@@ -92,11 +92,13 @@ const compactSelect = {
   borderRadius: "var(--radius-input)",
   padding: "0 8px",
   height: 28,
+  minWidth: 120,
   color: "var(--text-secondary)",
   fontFamily: "var(--font-body)",
   fontSize: 11,
   cursor: "pointer",
   outline: "none",
+  flexShrink: 0,
 };
 
 const compactHeaderBtn = {
@@ -1180,14 +1182,14 @@ export default function Submittals() {
   })();
 
   const kpis = [
-    { label: "TOTAL SHEETS", value: drawings.length, color: "var(--text-primary)", onClick: () => { setStageFilter("all"); setActiveSetFilter(null); } },
-    { label: "RELEASED", value: drawings.filter((drawing) => drawing.stage === "Released").length, color: "var(--status-success)", onClick: () => setStageFilter("Released") },
-    { label: "IN REVIEW", value: inReviewCount, color: "var(--status-info)", onClick: () => setStageFilter("OFA") },
-    { label: "OFA/BFA", value: pendingEorCount, color: "var(--status-warning)", onClick: () => setStageFilter("OFA") },
-    { label: "OVERDUE", value: overdueDrawings.length, color: overdueDrawings.length ? "var(--status-error)" : "var(--text-muted)", onClick: () => setSortByDue(true) },
-    { label: "DUE THIS WEEK", value: dueThisWeek.length, color: dueThisWeek.length ? "var(--status-warning)" : "var(--text-muted)", onClick: () => setSortByDue(true) },
-    { label: "APPROVED SETS", value: approvedSets, color: approvedSets ? "var(--status-success)" : "var(--text-muted)", onClick: () => setActiveSetFilter(null) },
-    { label: "AVG DAYS OPEN", value: avgDaysOpen, color: avgDaysOpen > 14 ? "var(--status-warning)" : "var(--text-primary)", onClick: () => setSortByDue(true) },
+    { label: "TOTAL SHEETS", value: drawings.length, color: "var(--text-primary)", accent: null, onClick: () => { setStageFilter("all"); setActiveSetFilter(null); } },
+    { label: "RELEASED", value: drawings.filter((drawing) => drawing.stage === "Released").length, color: "var(--status-success)", accent: "rgba(34,197,94,0.10)", onClick: () => setStageFilter("Released") },
+    { label: "IN REVIEW", value: inReviewCount, color: "var(--status-info)", accent: "rgba(96,165,250,0.10)", onClick: () => setStageFilter("OFA") },
+    { label: "OFA/BFA", value: pendingEorCount, color: "var(--status-warning)", accent: "rgba(245,158,11,0.10)", onClick: () => setStageFilter("OFA") },
+    { label: "OVERDUE", value: overdueDrawings.length, color: overdueDrawings.length ? "var(--status-error)" : "var(--text-muted)", accent: overdueDrawings.length ? "rgba(239,68,68,0.10)" : null, onClick: () => setSortByDue(true) },
+    { label: "DUE THIS WEEK", value: dueThisWeek.length, color: dueThisWeek.length ? "var(--status-warning)" : "var(--text-muted)", accent: dueThisWeek.length ? "rgba(245,158,11,0.10)" : null, onClick: () => setSortByDue(true) },
+    { label: "APPROVED SETS", value: approvedSets, color: approvedSets ? "var(--status-success)" : "var(--text-muted)", accent: approvedSets ? "rgba(34,197,94,0.10)" : null, onClick: () => setActiveSetFilter(null) },
+    { label: "AVG DAYS OPEN", value: avgDaysOpen, color: avgDaysOpen > 14 ? "var(--status-warning)" : "var(--text-primary)", accent: avgDaysOpen > 14 ? "rgba(245,158,11,0.10)" : null, onClick: () => setSortByDue(true) },
   ];
 
   return (
@@ -1212,19 +1214,21 @@ export default function Submittals() {
           <button
             key={kpi.label}
             onClick={kpi.onClick}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-surface)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.12)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
             style={{
               padding: "10px 12px",
-              border: "none",
+              borderTop: `3px solid ${kpi.accent ? kpi.color : "transparent"}`,
+              borderLeft: "none",
+              borderBottom: "none",
               borderRight: "1px solid var(--divider)",
-              background: "transparent",
+              background: kpi.accent || "transparent",
               textAlign: "left",
               cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               gap: 4,
-              transition: "background 0.1s",
+              transition: "filter 0.1s",
             }}
           >
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase" }}>{kpi.label}</span>

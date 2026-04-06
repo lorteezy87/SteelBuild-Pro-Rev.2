@@ -1,12 +1,12 @@
 import React from "react";
 
 const accentMap = {
-  blue:   { color: "var(--status-info)" },
-  green:  { color: "var(--status-success)" },
-  amber:  { color: "var(--status-warning)" },
-  rose:   { color: "var(--status-error)" },
-  purple: { color: "var(--chart-4)" },
-  slate:  { color: "var(--accent)" },
+  blue:   { color: "var(--status-info)",    bg: "rgba(96,165,250,0.07)" },
+  green:  { color: "var(--status-success)", bg: "rgba(34,197,94,0.07)" },
+  amber:  { color: "var(--status-warning)", bg: "rgba(245,158,11,0.07)" },
+  rose:   { color: "var(--status-error)",   bg: "rgba(239,68,68,0.07)" },
+  purple: { color: "var(--chart-4)",        bg: "rgba(168,85,247,0.07)" },
+  slate:  { color: "var(--accent)",         bg: "rgba(232,101,10,0.06)" },
 };
 
 export default function KPIStrip({ items }) {
@@ -16,9 +16,9 @@ export default function KPIStrip({ items }) {
         const accent = accentMap[item.color || "slate"];
         return (
           <div key={i} style={{
-            background: "var(--bg-surface)",
+            background: accent.bg || "var(--bg-surface)",
             border: "1px solid var(--border-default)",
-            borderTop: `2px solid ${accent.color}`,
+            borderTop: `3px solid ${accent.color}`,
             borderRadius: 12,
             padding: "12px 14px",
             boxShadow: `0 -1px 0 ${accent.color}44, var(--shadow-sm)`,
