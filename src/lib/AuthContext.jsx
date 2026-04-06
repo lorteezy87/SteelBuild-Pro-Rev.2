@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
         .from('user_profiles')
         .select('role')
         .eq('id', sbUser.id)
-        .single();
+        .maybeSingle();
       if (profile?.role) role = profile.role;
     } catch {
       // Fall back to 'user' if profile fetch fails
