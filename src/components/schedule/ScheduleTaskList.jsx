@@ -95,6 +95,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
       await onSave({ id: taskId, ...editDraft });
       setEditingId(null);
       setEditDraft({});
+    } catch (err) {
+      // toast is shown by the caller's onSave; keep form open so user can retry
+      console.error("Save failed:", err);
     } finally {
       setSaving(false);
     }
