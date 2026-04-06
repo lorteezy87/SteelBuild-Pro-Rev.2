@@ -63,6 +63,8 @@ import DailyLogs from './pages/DailyLogs';
 import Dashboard from './pages/Dashboard';
 import Deliveries from './pages/Deliveries';
 import Documents from './pages/Documents';
+import Drawings from './pages/Drawings';
+import DrawingViewer from './pages/DrawingViewer';
 import ExecutiveView from './pages/ExecutiveView';
 import Expenses from './pages/Expenses';
 import DecisionLog from './pages/DecisionLog';
@@ -113,6 +115,8 @@ export const PAGES = {
     "Dashboard": Dashboard,
     "Deliveries": Deliveries,
     "Documents": Documents,
+    "Drawings": Drawings,
+    "DrawingViewer": DrawingViewer,
     
     
     "ExecutiveView": ExecutiveView,
