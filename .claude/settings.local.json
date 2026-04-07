@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(gh pr:*)",
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx vercel:*)",
+      "Bash(xargs grep:*)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

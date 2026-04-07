@@ -33,7 +33,7 @@ export default function Dashboard() {
   const { data: tasks = [] } = useQuery({ queryKey: ["schedule-tasks", pid], queryFn: () => pid ? base44.entities.ScheduleTask.filter({ project_id: pid }, "-start_date") : [], enabled: !!pid, initialData: [] });
   const { data: recentActivity = [] } = useQuery({
     queryKey: ["activity-feed", pid],
-    queryFn: () => pid ? base44.entities.Activity.filter({ projectId: pid }, "-timestamp") : base44.entities.Activity.list("-timestamp"),
+    queryFn: () => pid ? base44.entities.Activity.filter({ project_id: pid }, "-timestamp") : base44.entities.Activity.list("-timestamp"),
   });
 
   // Derived project-scoped slices from global data (avoids duplicate queries)

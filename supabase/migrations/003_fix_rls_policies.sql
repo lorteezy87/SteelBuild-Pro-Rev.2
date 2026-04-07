@@ -163,6 +163,11 @@ ALTER TABLE public.documents
   ADD COLUMN IF NOT EXISTS revision_date   DATE,
   ADD COLUMN IF NOT EXISTS uploaded_date   TIMESTAMPTZ;
 
+-- Fix 10: Add sov_id column to sov_items table.
+-- The UI generates a human-readable SOV ID (e.g. SOV-001) and stores it here.
+ALTER TABLE public.sov_items
+  ADD COLUMN IF NOT EXISTS sov_id TEXT;
+
 -- Fix 9: Add submittal schedule-integration fields to documents table.
 -- These enable linking a document (submittal) to a work package on the Gantt,
 -- tracking the review lead time, and computing a contractual due date.
