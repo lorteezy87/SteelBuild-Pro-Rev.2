@@ -8,7 +8,8 @@ import DocumentLeftPanel from "../components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "../components/dms/DocumentDetailPanel";
 import UploadModal from "../components/dms/UploadModal";
 import DocumentEditModal from "../components/dms/DocumentEditModal";
-import { Upload, Grid3x3, List, Folder, CloudUpload } from "lucide-react";
+import { Upload, Grid3x3, List, Folder, CloudUpload, FileDown } from "lucide-react";
+import { generateTransmittal } from "../lib/generateTransmittal";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
@@ -28,6 +29,9 @@ export default function Documents() {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [transmittalOpen, setTransmittalOpen] = useState(false);
+  const [transmittalForm, setTransmittalForm] = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
 
   const { data: rawDocuments = [], isLoading } = useQuery({
     queryKey: ["documents", activeProject?.id],
@@ -181,6 +185,28 @@ export default function Documents() {
           >
             <Upload size={14} /> UPLOAD
           </button>
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setTransmittalOpen(true)}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(16,185,129,0.10)",
+                border: "1px solid rgba(16,185,129,0.35)",
+                color: "#10B981",
+                borderRadius: 6,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <FileDown size={14} /> TRANSMITTAL ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "flex-end" }}>
@@ -355,14 +381,40 @@ export default function Documents() {
               }}
             >
               {filteredDocs.map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  doc={doc}
-                  onView={handleViewDoc}
-                  onDownload={handleDownloadDoc}
-                  onEdit={handleEditDoc}
-                  onLink={handleLinkDoc}
-                />
+                <div key={doc.id} style={{ position: "relative" }}>
+                  {/* Selection checkbox */}
+                  <div
+                    onClick={() => setSelectedIds(prev => {
+                      const next = new Set(prev);
+                      next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id);
+                      return next;
+                    })}
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      left: 8,
+                      zIndex: 10,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
+                      border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid rgba(255,255,255,0.25)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <DocumentCard
+                    doc={doc}
+                    onView={handleViewDoc}
+                    onDownload={handleDownloadDoc}
+                    onEdit={handleEditDoc}
+                    onLink={handleLinkDoc}
+                  />
+                </div>
               ))}
             </div>
           ) : (
@@ -393,6 +445,114 @@ export default function Documents() {
           projectId={activeProject.id}
           onClose={() => setUploadOpen(false)}
         />
+      )}
+
+      {/* Transmittal modal */}
+      {transmittalOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.70)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}
+          onClick={() => setTransmittalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--bg-surface-low)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderTop: "3px solid #10B981",
+              borderRadius: 12,
+              width: 520,
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.75)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#10B981", letterSpacing: "0.06em" }}>GENERATE TRANSMITTAL</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{selectedIds.size} document{selectedIds.size !== 1 ? "s" : ""} selected</div>
+              </div>
+              <button onClick={() => setTransmittalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, cursor: "pointer" }}>×</button>
+            </div>
+
+            {/* Form */}
+            <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
+              {[
+                { key: "number",   label: "Transmittal #",  placeholder: "e.g. T-001" },
+                { key: "issuedTo", label: "Issued To",       placeholder: "Company / Contact name" },
+                { key: "issuedBy", label: "Issued By",       placeholder: "Your name" },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                  <input
+                    type="text"
+                    placeholder={placeholder}
+                    value={transmittalForm[key]}
+                    onChange={e => setTransmittalForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }}
+                  />
+                </div>
+              ))}
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>Purpose</div>
+                <select
+                  value={transmittalForm.purpose}
+                  onChange={e => setTransmittalForm(prev => ({ ...prev, purpose: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12 }}
+                >
+                  {["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"].map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>Notes (optional)</div>
+                <textarea
+                  rows={3}
+                  placeholder="Any remarks or special instructions..."
+                  value={transmittalForm.notes}
+                  onChange={e => setTransmittalForm(prev => ({ ...prev, notes: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, resize: "vertical", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {/* Doc list preview */}
+              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "10px 12px" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 8 }}>Documents Included</div>
+                {allDocuments.filter(d => selectedIds.has(d.id)).map(d => (
+                  <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{d.displayName || d.display_name || d.fileName || d.file_name}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>R{d.revisionNumber || d.revision_number || "0"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setTransmittalOpen(false)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+                CANCEL
+              </button>
+              <button
+                onClick={() => {
+                  generateTransmittal({
+                    project: activeProject || {},
+                    docs: allDocuments.filter(d => selectedIds.has(d.id)),
+                    issuedTo: transmittalForm.issuedTo,
+                    issuedBy: transmittalForm.issuedBy,
+                    purpose: transmittalForm.purpose,
+                    notes: transmittalForm.notes,
+                    transmittalNumber: transmittalForm.number,
+                  });
+                  setTransmittalOpen(false);
+                }}
+                style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "#10B981", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+              >
+                ↓ GENERATE PDF
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
