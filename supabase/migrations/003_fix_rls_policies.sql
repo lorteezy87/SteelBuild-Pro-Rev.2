@@ -14,7 +14,8 @@ ALTER TABLE public.user_projects ENABLE ROW LEVEL SECURITY;
 
 -- Temporary permissive policy so the rest of this migration can create
 -- more-specific policies without hitting RLS denials during the transaction.
-CREATE POLICY IF NOT EXISTS "temp_auth_all" ON public.user_projects
+DROP POLICY IF EXISTS "temp_auth_all" ON public.user_projects;
+CREATE POLICY "temp_auth_all" ON public.user_projects
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- Fix 1: Break infinite recursion in user_projects RLS policy.
