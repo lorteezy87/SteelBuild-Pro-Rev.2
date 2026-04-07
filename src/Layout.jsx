@@ -720,7 +720,7 @@ function MobileDrawer({ open, onClose, onNavigate }) {
       }}>
         <div style={{ padding: "16px 16px 8px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center" }}>
           <img
-            src="/steelbuild-pro-logo.png"
+            src="/logo.png"
             alt="SteelBuild Pro"
             style={{ height: 32, width: "auto", objectFit: "contain" }} />
 
@@ -808,10 +808,10 @@ function PMAButton() {
   const { isOpen, setIsOpen, unreadInsights, isLoadingInsights } = usePMA();
 
   const statusLabel = isLoadingInsights
-    ? 'LOADING'
+    ? 'ANALYZING'
     : unreadInsights > 0
-    ? 'READY'
-    : 'IDLE';
+    ? 'INSIGHTS READY'
+    : 'ENTER DATA';
 
   const pulseStyle =
     unreadInsights > 0
@@ -1107,7 +1107,7 @@ export default function Layout({ children, currentPageName }) {
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
               <img
-                    src="/steelbuild-pro-logo.png"
+                    src="/logo.png"
                     alt="SteelBuild Pro"
                     style={{ height: 36, width: "auto", objectFit: "contain" }} />
 

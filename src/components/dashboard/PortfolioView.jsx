@@ -198,7 +198,9 @@ export default function PortfolioView({
         const pDeliveries = allDeliveries.filter((d) => d.project_id === p.id);
         const pExpenses = allExpenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
         const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+        const hasBudgetData = pCodes.length > 0;
         const actual = pExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        const hasActualData = pExpenses.length > 0;
         const openRFIs = pRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
         const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
         const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;
@@ -211,6 +213,8 @@ export default function PortfolioView({
           ...p,
           budget,
           actual,
+          hasBudgetData,
+          hasActualData,
           openRFIs,
           overdueRFIs,
           avgProgress,
@@ -445,21 +449,50 @@ export default function PortfolioView({
           flexShrink: 0,
         }}
       >
+        {/* Portfolio Value — featured (wider) */}
+        <div style={{
+          padding: "12px 28px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: "3px solid var(--accent)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          minWidth: 200,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Portfolio Value</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--accent)" }}>
+            {formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")}
+          </span>
+        </div>
         <KPIBlock label="Active Projects" value={projects.filter((p) => p.status === "Active" || !p.status).length} bordered color="var(--accent)" />
-        <KPIBlock label="Portfolio Value" value={formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")} bordered color="var(--accent)" />
         <KPIBlock
           label="Total Spend"
           value={formatCurrency(portfolioKPIs.totalSpend).replace(/\.\d+/, "")}
           bordered
           color={portfolioKPIs.totalSpend > (portfolioKPIs.totalBudget || 0) ? "var(--status-error)" : "var(--status-success)"}
         />
-        <KPIBlock
-          label="Overdue RFIs"
-          value={portfolioKPIs.overdueRFIs}
-          bordered
-          color={portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)"}
-        />
-        <KPIBlock label="At Risk" value={portfolioKPIs.atRisk} bordered color={portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)"} />
+        {/* Overdue RFIs — glows red when non-zero */}
+        <div style={{
+          padding: "12px 24px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: portfolioKPIs.overdueRFIs > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+          background: portfolioKPIs.overdueRFIs > 0 ? "var(--danger-muted)" : "transparent",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)" }}>Overdue RFIs</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.overdueRFIs}</span>
+        </div>
+        {/* At Risk — glows red when non-zero */}
+        <div style={{
+          padding: "12px 24px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: portfolioKPIs.atRisk > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+          background: portfolioKPIs.atRisk > 0 ? "var(--danger-muted)" : "transparent",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--text-muted)" }}>At Risk</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.atRisk}</span>
+        </div>
         <KPIBlock label="Active Work Pkgs" value={portfolioKPIs.activeWPs} color="var(--accent)" />
       </div>
 
@@ -583,7 +616,7 @@ export default function PortfolioView({
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
-                  {["#", "Project", "Phase", "Health", "Budget vs Actual", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Late Deliveries", "Tonnage"].map((h, idx) => (
+                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage"].map((h, idx) => (
                     <th
                       key={idx}
                       style={{
@@ -603,53 +636,65 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody>
-                {projectMetrics.map((p, i) => (
-                  <tr key={p.id} style={{ borderBottom: "1px solid var(--divider)", background: "transparent", height: ROW_HEIGHT }}>
-                    <td style={{ padding: "6px 8px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{i + 1}</td>
-                    <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", minWidth: 160 }}>
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span style={{ fontWeight: 700 }}>{p.name || p.project_number}</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{p.project_number}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: PHASE_DOT[p.phase] || "var(--text-muted)",
-                          display: "inline-block",
-                          marginRight: 6,
-                        }}
-                      />
-                      {p.phase || "—"}
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                      <StatusBadge status={p.health_status} />
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>
-                        {formatCurrency(p.actual).replace(/\.\d+/, "")} / {formatCurrency(p.budget).replace(/\.\d+/, "")}
-                      </div>
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontSize: 10 }}>{p.openRFIs}</td>
-                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--status-error)", fontSize: 10 }}>{p.overdueRFIs}</td>
-                    <td style={{ padding: "6px 8px", minWidth: 150 }}>
-                      <ProgressBar value={p.avgProgress || 0} />
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10 }}>
-                      {p.pendingCOs.length} ({formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")})
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.lateDeliveries > 0 ? "var(--status-error)" : "var(--text-primary)" }}>
-                      {p.lateDeliveries}
-                    </td>
-                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10 }}>{p.tonnage}T</td>
-                  </tr>
-                ))}
+                {projectMetrics.map((p, i) => {
+                  const variance = p.hasBudgetData ? p.budget - p.actual : null;
+                  const isOverBudget = variance !== null && variance < 0;
+                  const rowBg = p.health_status === "At Risk" ? "rgba(255,61,61,0.04)" : p.health_status === "Watch" ? "rgba(245,158,11,0.03)" : "transparent";
+                  return (
+                    <tr
+                      key={p.id}
+                      onClick={() => navigate(`/ProjectDashboard?project=${p.id}`)}
+                      style={{
+                        borderBottom: "1px solid var(--divider)",
+                        background: rowBg,
+                        height: ROW_HEIGHT,
+                        cursor: "pointer",
+                        transition: "background 0.12s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+                      onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                    >
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{i + 1}</td>
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", minWidth: 160 }}>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <span style={{ fontWeight: 700 }}>{p.name || p.project_number}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{p.project_number}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: PHASE_DOT[p.phase] || "var(--text-muted)", display: "inline-block", marginRight: 6 }} />
+                        {p.phase || "—"}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                        <StatusBadge status={p.health_status} />
+                      </td>
+                      {/* Budget */}
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasBudgetData ? "normal" : "italic" }}>
+                        {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : "Pending"}
+                      </td>
+                      {/* Actual */}
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasActualData ? "normal" : "italic" }}>
+                        {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : "Pending"}
+                      </td>
+                      {/* Variance = Budget - Actual (positive = under budget) */}
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)" }}>
+                        {variance === null ? "—" : (isOverBudget ? "−" : "+") + formatCurrency(Math.abs(variance)).replace(/\.\d+/, "")}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontSize: 10 }}>{p.openRFIs}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)", fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400 }}>{p.overdueRFIs}</td>
+                      <td style={{ padding: "6px 8px", minWidth: 130 }}>
+                        <ProgressBar value={p.avgProgress || 0} />
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>
+                        {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : "—"}</td>
+                    </tr>
+                  );
+                })}
                 {projectMetrics.length === 0 && (
                   <tr>
-                    <td colSpan={11} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    <td colSpan={12} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
                         <svg width="48" height="48" viewBox="0 0 36 36" aria-hidden style={{ opacity: 0.15 }}>
                           <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--text-muted)" />
@@ -683,9 +728,9 @@ export default function PortfolioView({
           </div>
         </Card>
         {/* Budget + Risk */}
-        <Card style={{ gridColumn: "span 7" }}>
+        <Card style={{ gridColumn: "span 8" }}>
           <HeaderBar title="Budget vs Actual — All Projects" />
-          <div style={{ padding: "12px 16px", height: 280 }}>
+          <div style={{ padding: "12px 16px", height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={budgetChartData}>
                 <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
@@ -714,7 +759,7 @@ export default function PortfolioView({
           </div>
         </Card>
 
-        <Card style={{ gridColumn: "span 5" }}>
+        <Card style={{ gridColumn: "span 4" }}>
           <HeaderBar title="Risk Matrix" />
           <div style={{ padding: "12px 14px", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>

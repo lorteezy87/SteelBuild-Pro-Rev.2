@@ -70,6 +70,20 @@ const applyConditions = (query, conditions = {}) => {
 
 // ─── Entity factory ───────────────────────────────────────────────────────────
 
+/**
+ * Strip undefined values and camelCase keys (Postgres uses snake_case only).
+ * Also strip the virtual alias fields that addAliases() injects after reads
+ * (created_date, updated_date) — they are not real DB columns and will cause
+ * a PostgREST "column not found" error if sent back on update/create.
+ */
+const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date']);
+const cleanRecord = (record) =>
+  Object.fromEntries(
+    Object.entries(record).filter(
+      ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
+    )
+  );
+
 const createEntityClient = (tableName) => ({
   /**
    * List all records, optionally sorted.
@@ -125,9 +139,7 @@ const createEntityClient = (tableName) => ({
    * Create a new record. Returns the created record with its generated id.
    */
   create: async (record) => {
-    const clean = Object.fromEntries(
-      Object.entries(record).filter(([, v]) => v !== undefined)
-    );
+    const clean = cleanRecord(record);
     const { data, error } = await supabase
       .from(tableName)
       .insert(clean)
@@ -141,9 +153,7 @@ const createEntityClient = (tableName) => ({
    * Update an existing record by id.
    */
   update: async (id, updates) => {
-    const clean = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
-    );
+    const clean = cleanRecord(updates);
     const { data, error } = await supabase
       .from(tableName)
       .update({ ...clean, updated_at: new Date().toISOString() })
@@ -182,7 +192,22 @@ const createEntityClient = (tableName) => ({
 // ─── Entity registry ──────────────────────────────────────────────────────────
 
 export const entities = {
-  Project:               createEntityClient('projects'),
+  // Project creation goes through an RPC to atomically insert the project
+  // and the creator's owner membership row in a single SECURITY DEFINER call,
+  // bypassing the RLS bootstrap problem with the AFTER trigger approach.
+  Project: {
+    ...createEntityClient('projects'),
+    create: async (record) => {
+      const clean = Object.fromEntries(
+        Object.entries(record).filter(([, v]) => v !== undefined)
+      );
+      const { data, error } = await supabase.rpc('create_project', {
+        project_data: clean,
+      });
+      if (error) throw error;
+      return addAliases(data);
+    },
+  },
   RFI:                   createEntityClient('rfis'),
   Drawing:               createEntityClient('drawings'),
   DrawingSet:            createEntityClient('drawing_sets'),
@@ -313,8 +338,8 @@ export const integrations = {
         .from('app-files')
         .upload(path, file, { contentType: file.type, upsert: false });
       if (error) throw error;
-      const signedUrl = await getSignedUrl(data.path);
-      return { file_url: signedUrl, file_name: file.name, path: data.path };
+      // Store the storage path — call getSignedUrl(path) on demand when displaying
+      return { file_url: data.path, file_name: file.name, path: data.path };
     },
 
     /**

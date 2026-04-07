@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+﻿import React, { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import DocumentCard from "../components/dms/DocumentCard";
@@ -8,16 +8,30 @@ import DocumentLeftPanel from "../components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "../components/dms/DocumentDetailPanel";
 import UploadModal from "../components/dms/UploadModal";
 import DocumentEditModal from "../components/dms/DocumentEditModal";
-import { Upload, Grid3x3, List, Folder } from "lucide-react";
+import { Upload, Grid3x3, List, Folder, CloudUpload, FileDown } from "lucide-react";
+import { generateTransmittal } from "../lib/generateTransmittal";
+
+const STATUS_TABS = [
+  { key: "all", label: "All" },
+  { key: "Approved", label: "Approved" },
+  { key: "Under Review", label: "Under Review" },
+  { key: "Approved as Noted", label: "As Noted" },
+  { key: "Revise & Resubmit", label: "Revise & Resubmit" },
+  { key: "Rejected", label: "Rejected" },
+];
 
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const [viewMode, setViewMode] = useState("grid"); // grid, list, folder
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState({});
+  const [statusTab, setStatusTab] = useState("all");
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [transmittalOpen, setTransmittalOpen] = useState(false);
+  const [transmittalForm, setTransmittalForm] = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
 
   const { data: rawDocuments = [], isLoading } = useQuery({
     queryKey: ["documents", activeProject?.id],
@@ -77,13 +91,15 @@ export default function Documents() {
       result = result.filter((d) => activeFilters.discipline.includes(d.discipline));
     }
 
-    // Status filter
-    if (activeFilters.status?.length) {
+    // Status filter (tab takes priority over sidebar filter)
+    if (statusTab !== "all") {
+      result = result.filter((d) => d.status === statusTab);
+    } else if (activeFilters.status?.length) {
       result = result.filter((d) => activeFilters.status.includes(d.status));
     }
 
     return result;
-  }, [allDocuments, searchQuery, activeFilters]);
+  }, [allDocuments, searchQuery, activeFilters, statusTab]);
 
   const handleFilterChange = (key, value) => {
     setActiveFilters((prev) => ({
@@ -119,6 +135,14 @@ export default function Documents() {
     // Link handled via edit modal (work package / rfi / delivery IDs)
     setEditingDoc(doc);
   };
+  const handleDeleteDoc = async (doc) => {
+    try {
+      await base44.entities.Document.delete(doc.id);
+      queryClient.invalidateQueries(["documents", activeProject?.id]);
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
 
   if (!activeProject) {
     return (
@@ -147,7 +171,7 @@ export default function Documents() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--status-warning)" }}>
-            ◈ DOCUMENT REPOSITORY
+            â—ˆ DOCUMENT REPOSITORY
           </div>
           <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.10)" }} />
           <button
@@ -169,6 +193,28 @@ export default function Documents() {
           >
             <Upload size={14} /> UPLOAD
           </button>
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setTransmittalOpen(true)}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(16,185,129,0.10)",
+                border: "1px solid rgba(16,185,129,0.35)",
+                color: "#10B981",
+                borderRadius: 6,
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <FileDown size={14} /> TRANSMITTAL ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "flex-end" }}>
@@ -230,6 +276,47 @@ export default function Documents() {
 
         {/* Main area */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* Status Tabs */}
+          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
+            {STATUS_TABS.map((tab) => {
+              const count = tab.key === "all" ? allDocuments.length : allDocuments.filter((d) => d.status === tab.key).length;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setStatusTab(tab.key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "7px 14px",
+                    background: "transparent",
+                    color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
+                    border: "none",
+                    borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
+                    borderRadius: 0,
+                    marginBottom: -1,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: statusTab === tab.key ? 700 : 500,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "color 0.15s, border-color 0.15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      padding: "1px 5px", borderRadius: 3,
+                      background: statusTab === tab.key ? "var(--accent-muted)" : "rgba(255,255,255,0.06)",
+                      color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
+                    }}>{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Filters */}
           <DocumentFilters
             onFilterChange={handleFilterChange}
@@ -242,9 +329,55 @@ export default function Documents() {
             <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
               Loading documents...
             </div>
+          ) : allDocuments.length === 0 ? (
+            /* Hero empty state â€” drag & drop zone */
+            <div
+              onClick={() => setUploadOpen(true)}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                margin: "12px 0",
+                border: "2px dashed rgba(255,255,255,0.12)",
+                borderRadius: 12,
+                padding: "60px 24px",
+                cursor: "pointer",
+                transition: "border-color 0.2s, background 0.2s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--accent-muted)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.background = "transparent"; }}
+            >
+              <CloudUpload size={52} style={{ color: "var(--accent)", opacity: 0.4 }} />
+              <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
+                Upload Project Documents
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 360, textAlign: "center", lineHeight: 1.7 }}>
+                Drag drawings, specs, or submittals here, or click to browse. Files are organized by category, discipline, and revision automatically.
+              </div>
+              <div style={{
+                marginTop: 8,
+                padding: "8px 20px",
+                background: "var(--accent-muted)",
+                border: "1px solid var(--accent-border)",
+                borderRadius: "var(--radius-btn)",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+              }}>
+                UPLOAD FIRST DOCUMENT
+              </div>
+            </div>
           ) : filteredDocs.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
-              No documents found
+            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)", fontFamily: "var(--font-body)", fontSize: 13 }}>
+              No documents match the current filters.{" "}
+              <button onClick={handleClearAllFilters} style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700 }}>
+                CLEAR FILTERS
+              </button>
             </div>
           ) : viewMode === "grid" ? (
             <div
@@ -256,14 +389,40 @@ export default function Documents() {
               }}
             >
               {filteredDocs.map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  doc={doc}
-                  onView={handleViewDoc}
-                  onDownload={handleDownloadDoc}
-                  onEdit={handleEditDoc}
-                  onLink={handleLinkDoc}
-                />
+                <div key={doc.id} style={{ position: "relative" }}>
+                  {/* Selection checkbox */}
+                  <div
+                    onClick={() => setSelectedIds(prev => {
+                      const next = new Set(prev);
+                      next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id);
+                      return next;
+                    })}
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      left: 8,
+                      zIndex: 10,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
+                      border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid rgba(255,255,255,0.25)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>âœ“</span>}
+                  </div>
+                  <DocumentCard
+                    doc={doc}
+                    onView={handleViewDoc}
+                    onDownload={handleDownloadDoc}
+                    onEdit={handleEditDoc}
+                    onLink={handleLinkDoc}
+                  />
+                </div>
               ))}
             </div>
           ) : (
@@ -295,6 +454,115 @@ export default function Documents() {
           onClose={() => setUploadOpen(false)}
         />
       )}
+
+      {/* Transmittal modal */}
+      {transmittalOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.70)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}
+          onClick={() => setTransmittalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--bg-surface-low)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderTop: "3px solid #10B981",
+              borderRadius: 12,
+              width: 520,
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.75)",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#10B981", letterSpacing: "0.06em" }}>GENERATE TRANSMITTAL</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{selectedIds.size} document{selectedIds.size !== 1 ? "s" : ""} selected</div>
+              </div>
+              <button onClick={() => setTransmittalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, cursor: "pointer" }}>Ã—</button>
+            </div>
+
+            {/* Form */}
+            <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
+              {[
+                { key: "number",   label: "Transmittal #",  placeholder: "e.g. T-001" },
+                { key: "issuedTo", label: "Issued To",       placeholder: "Company / Contact name" },
+                { key: "issuedBy", label: "Issued By",       placeholder: "Your name" },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                  <input
+                    type="text"
+                    placeholder={placeholder}
+                    value={transmittalForm[key]}
+                    onChange={e => setTransmittalForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }}
+                  />
+                </div>
+              ))}
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>Purpose</div>
+                <select
+                  value={transmittalForm.purpose}
+                  onChange={e => setTransmittalForm(prev => ({ ...prev, purpose: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12 }}
+                >
+                  {["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"].map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>Notes (optional)</div>
+                <textarea
+                  rows={3}
+                  placeholder="Any remarks or special instructions..."
+                  value={transmittalForm.notes}
+                  onChange={e => setTransmittalForm(prev => ({ ...prev, notes: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, resize: "vertical", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {/* Doc list preview */}
+              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "10px 12px" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 8 }}>Documents Included</div>
+                {allDocuments.filter(d => selectedIds.has(d.id)).map(d => (
+                  <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{d.displayName || d.display_name || d.fileName || d.file_name}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>R{d.revisionNumber || d.revision_number || "0"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setTransmittalOpen(false)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+                CANCEL
+              </button>
+              <button
+                onClick={() => {
+                  generateTransmittal({
+                    project: activeProject || {},
+                    docs: allDocuments.filter(d => selectedIds.has(d.id)),
+                    issuedTo: transmittalForm.issuedTo,
+                    issuedBy: transmittalForm.issuedBy,
+                    purpose: transmittalForm.purpose,
+                    notes: transmittalForm.notes,
+                    transmittalNumber: transmittalForm.number,
+                  });
+                  setTransmittalOpen(false);
+                }}
+                style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "#10B981", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+              >
+                â†“ GENERATE PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

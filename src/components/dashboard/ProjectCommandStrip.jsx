@@ -3,9 +3,10 @@ import { formatCurrency, formatDate } from "../shared/formatters";
 import StatusBadge from "../shared/StatusBadge";
 
 const HEALTH_COLOR = {
-  "On Track": "var(--status-success)",
-  "Watch": "var(--status-warning)",
-  "At Risk": "var(--status-error)",
+  "On Track":      "var(--status-success)",
+  "Watch":         "var(--status-warning)",
+  "At Risk":       "var(--status-error)",
+  "Awaiting Data": "var(--text-muted)",
 };
 
 export default function ProjectCommandStrip({ project, wps, cos, financials, onClearProject }) {
@@ -24,7 +25,14 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
   const avgProgress = wps.length > 0
     ? Math.round(wps.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / wps.length) : 0;
 
-  const healthColor = HEALTH_COLOR[project.health_status] || "var(--accent)";
+  // Derive a smarter status: if no WP data exists and meaningful time has elapsed,
+  // override the stored "On Track" with "Awaiting Data" so it isn't misleading.
+  const derivedStatus = (() => {
+    if (wps.length === 0 && totalTonnage === 0) return "Awaiting Data";
+    return project.health_status;
+  })();
+
+  const healthColor = HEALTH_COLOR[derivedStatus] || "var(--accent)";
 
   // Timeline bar: map start → target completion
   const startTs = project.start_date ? new Date(project.start_date).getTime() : null;
@@ -70,7 +78,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", fontWeight: 700, letterSpacing: "0.06em" }}>{project.project_number}</span>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.02em" }}>{project.name}</span>
-              <StatusBadge status={project.health_status} />
+              <StatusBadge status={derivedStatus} />
             </div>
             <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
               {fields.map(([label, value]) => (

@@ -32,6 +32,10 @@ export default function WorkPackageList({
   onEdit,
   onDelete,
   showProject = false,
+  compact = false,
+  selected = new Set(),
+  onToggleSelect,
+  onSelectAll,
 }) {
   const drawingMap = useMemo(() => {
     const m = {};
@@ -43,29 +47,31 @@ export default function WorkPackageList({
     return (
       <div
         style={{
-          padding: "48px 24px",
+          padding: "40px 24px",
           textAlign: "center",
           background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
+          border: "2px dashed var(--border-default)",
           borderRadius: "var(--radius-card)",
         }}
       >
-        <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>✓</div>
-        <div
+        <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.25 }}>⬜</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+          No Work Packages Match
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-faint, var(--text-muted))", marginBottom: 16 }}>
+          Try adjusting your filters, or add the first work package.
+        </div>
+        <button
+          onClick={() => onEdit?.({})}
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            fontWeight: 700,
-            color: "var(--status-success)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
+            padding: "7px 18px", borderRadius: "var(--radius-btn)",
+            border: "1px solid var(--accent)", background: "var(--accent-muted)",
+            color: "var(--accent)", fontFamily: "var(--font-mono)",
+            fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
           }}
         >
-          No work packages found
-        </div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-          Create a work package to get started.
-        </div>
+          + Create Work Package
+        </button>
       </div>
     );
   }
@@ -108,10 +114,10 @@ export default function WorkPackageList({
         style={{
           background: "var(--bg-surface-secondary)",
           borderBottom: "1px solid var(--divider)",
-          padding: "10px 16px",
+          padding: compact ? "6px 16px" : "10px 16px",
           display: "grid",
-          gridTemplateColumns: "4px 70px 1fr 90px 60px 100px 80px 90px",
-          gap: 12,
+          gridTemplateColumns: `24px 4px 70px 1fr 100px 60px 100px ${compact ? "" : "80px "}90px`,
+          gap: 10,
           alignItems: "center",
           fontFamily: "var(--font-mono)",
           fontSize: 9,
@@ -121,13 +127,20 @@ export default function WorkPackageList({
           textTransform: "uppercase",
         }}
       >
+        <input
+          type="checkbox"
+          checked={workPackages.length > 0 && selected.size === workPackages.length}
+          onChange={onSelectAll}
+          style={{ cursor: "pointer", accentColor: "var(--accent)" }}
+          title="Select all"
+        />
         <span></span>
         <span>WP #</span>
         <span>Name</span>
-        <span>Phase</span>
+        <span>Phase / Status</span>
         <span>Tons</span>
         <span>Progress</span>
-        <span>Hours</span>
+        {!compact && <span>Hours</span>}
         <span>Actions</span>
       </div>
 
@@ -137,67 +150,68 @@ export default function WorkPackageList({
         const percent = Math.min(100, Math.max(0, Number(wp.percent_complete) || 0));
         const isExpanded = expandedWP?.id === wp.id;
 
+        const isSelected = selected.has(wp.id);
         return (
           <React.Fragment key={wp.id}>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "4px 70px 1fr 90px 60px 100px 80px 90px",
-                gap: 12,
+                gridTemplateColumns: `24px 4px 70px 1fr 100px 60px 100px ${compact ? "" : "80px "}90px`,
+                gap: 10,
                 padding: "0 16px",
-                height: 48,
+                height: compact ? 34 : 48,
                 alignItems: "center",
                 borderBottom: "1px solid var(--divider)",
                 cursor: "pointer",
-                background: isExpanded ? "var(--bg-surface-low)" : "transparent",
+                background: isSelected ? "rgba(99,102,241,0.06)" : isExpanded ? "var(--bg-surface-low)" : "transparent",
               }}
               onClick={() => onExpand?.(wp)}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = isExpanded ? "var(--bg-surface-low)" : "transparent")}
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = isSelected ? "rgba(99,102,241,0.06)" : isExpanded ? "var(--bg-surface-low)" : "transparent"; }}
             >
-              <div style={{ width: 4, height: 36, borderRadius: 2, background: phaseColor }} />
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{wp.wp_number}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => { e.stopPropagation(); onToggleSelect?.(wp.id); }}
+                onClick={(e) => e.stopPropagation()}
+                style={{ cursor: "pointer", accentColor: "var(--accent)" }}
+              />
+              <div style={{ width: 4, height: compact ? 24 : 36, borderRadius: 2, background: phaseColor }} />
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: compact ? 9 : 10, fontWeight: 700, color: "var(--accent)" }}>{wp.wp_number}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: compact ? 0 : 2 }}>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: compact ? 11 : 12, fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {wp.name}
                 </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 9 }}>
-                  {showProject && (
-                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 700 }}>{wp.project_name || "—"}</span>
-                  )}
-                  {wp.crew && <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)", fontStyle: "italic" }}>{wp.crew}</span>}
-                </div>
+                {!compact && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 9 }}>
+                    {showProject && <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 700 }}>{wp.project_name || "—"}</span>}
+                    {wp.crew && <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)", fontStyle: "italic" }}>{wp.crew}</span>}
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 7,
-                    fontWeight: 700,
-                    padding: "2px 8px",
-                    borderRadius: "var(--radius-badge)",
-                    background: `${phaseColor}15`,
-                    color: phaseColor,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
+              <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-badge)", background: `${phaseColor}15`, color: phaseColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {wp.phase || "—"}
                 </span>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor, display: "inline-block" }} />
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-badge)", background: `${statusColor}15`, color: statusColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, display: "inline-block", flexShrink: 0 }} />
+                  {wp.status || "—"}
+                </span>
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)" }}>
                 {(Number(wp.tonnage) || 0).toFixed(1)}T
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ flex: 1, height: 6, background: "var(--bg-surface-high)", borderRadius: 3 }}>
+                <div style={{ flex: 1, height: compact ? 4 : 6, background: "var(--bg-surface-high)", borderRadius: 3 }}>
                   <div style={{ width: `${percent}%`, height: "100%", background: phaseColor, borderRadius: 3 }} />
                 </div>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phaseColor }}>{percent}%</span>
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: hoursColor(wp.shop_hours_actual, wp.shop_hours_budget) }}>
-                {(wp.shop_hours_actual || 0)}/{wp.shop_hours_budget || 0}h
-              </div>
+              {!compact && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: hoursColor(wp.shop_hours_actual, wp.shop_hours_budget) }}>
+                  {(wp.shop_hours_actual || 0)}/{wp.shop_hours_budget || 0}h
+                </div>
+              )}
               <div style={{ display: "flex", gap: 6, justifyContent: "flex-start" }}>
                 {wp.status !== "Complete" && (
                   <button

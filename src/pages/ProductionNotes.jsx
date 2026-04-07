@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -9,6 +9,7 @@ import {
   Flag as FlagIcon,
   Trash2,
   Check as CheckIcon,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
@@ -45,6 +46,8 @@ export default function ProductionNotes() {
   const [editBuffer, setEditBuffer] = useState({});
   const [quickAddState, setQuickAddState] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [convertTarget, setConvertTarget] = useState(null); // { note, projectId }
+  const [convertForm, setConvertForm] = useState({ assigned_to: "", due_date: "" });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -100,6 +103,17 @@ export default function ProductionNotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production-notes"] });
       toast.success("Note added");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const createActionItemMut = useMutation({
+    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      setConvertTarget(null);
+      setConvertForm({ assigned_to: "", due_date: "" });
+      toast.success("Action item created from note");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -227,12 +241,15 @@ export default function ProductionNotes() {
   };
 
   const renderKPICell = (label, value, tone) => {
-    const color =
-      tone === "error"
-        ? "var(--status-error)"
-        : tone === "warning"
-        ? "var(--status-warning)"
-        : "var(--accent)";
+    const isEmpty = value === 0;
+    const isAlert = (tone === "error" || tone === "warning") && !isEmpty;
+    const color = isEmpty
+      ? "var(--status-success)"
+      : tone === "error"
+      ? "var(--status-error)"
+      : tone === "warning"
+      ? "var(--status-warning)"
+      : "var(--accent)";
     return (
       <div
         style={{
@@ -241,31 +258,23 @@ export default function ProductionNotes() {
           display: "flex",
           flexDirection: "column",
           gap: 4,
-          minWidth: 120,
+          minWidth: 130,
+          background: isAlert ? `${color}08` : "transparent",
+          borderTop: isAlert ? `2px solid ${color}` : "2px solid transparent",
         }}
       >
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            letterSpacing: "0.14em",
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-          }}
-        >
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase" }}>
           {label}
         </span>
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 22,
-            fontWeight: 800,
-            color,
-            lineHeight: 1.1,
-          }}
-        >
-          {value}
-        </span>
+        {isEmpty ? (
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--status-success)" }}>
+            ✓ Clear
+          </span>
+        ) : (
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color, lineHeight: 1.1 }}>
+            {value}
+          </span>
+        )}
       </div>
     );
   };
@@ -413,49 +422,43 @@ export default function ProductionNotes() {
             {buffer || "Click to add notes..."}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, opacity: 0.9, justifyContent: "flex-end", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Convert to Action Item */}
+          {!note.is_resolved && (
+            <button
+              title="Convert to Action Item"
+              onClick={() => { setConvertTarget(note); setConvertForm({ assigned_to: "", due_date: "" }); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                height: 26, padding: "0 8px", borderRadius: 4,
+                border: "1px solid var(--accent-border)",
+                background: "var(--accent-muted)",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em",
+              }}
+            >
+              <ArrowRight size={11} /> Task
+            </button>
+          )}
           <button
             title={note.is_resolved ? "Reopen" : "Resolve"}
             onClick={() => handleResolveToggle(note)}
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: 4,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              color: "var(--status-success)",
-              cursor: "pointer",
-            }}
+            style={{ width: 26, height: 26, borderRadius: 4, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--status-success)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             {note.is_resolved ? <ChevronRight size={14} /> : <CheckIcon size={14} />}
           </button>
           <button
-            title="Priority"
+            title={note.is_high_priority ? "Remove flag" : "Flag as priority"}
             onClick={() => handlePriorityToggle(note)}
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: 4,
-              border: "1px solid var(--divider)",
-              background: note.is_high_priority ? "rgba(239,68,68,0.12)" : "var(--bg-surface)",
-              color: note.is_high_priority ? "var(--status-error)" : "var(--text-muted)",
-              cursor: "pointer",
-            }}
+            style={{ width: 26, height: 26, borderRadius: 4, border: "1px solid var(--divider)", background: note.is_high_priority ? "rgba(239,68,68,0.12)" : "var(--bg-surface)", color: note.is_high_priority ? "var(--status-error)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             <FlagIcon size={14} />
           </button>
           <button
             title="Delete"
             onClick={() => setDeleteTarget(note.id)}
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: 4,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              color: "var(--status-error)",
-              cursor: "pointer",
-            }}
+            style={{ width: 26, height: 26, borderRadius: 4, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--status-error)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             <Trash2 size={14} />
           </button>
@@ -906,108 +909,82 @@ export default function ProductionNotes() {
                       ))}
                     </div>
 
+                    {/* Quick add — pinned at top of notes section */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", background: "var(--bg-surface-low)", borderRadius: 8, border: "1px solid var(--border-default)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {["General", "Fabrication", "Erection", "Schedule", "Quality", "Safety"].map((cat) => {
+                          const isActive = quickState.category === cat;
+                          const catColor = CATEGORY_COLORS[cat] || "var(--text-muted)";
+                          return (
+                            <button
+                              key={cat}
+                              onClick={() => setQuickAddState(prev => ({ ...prev, [project.id]: { ...quickState, category: cat } }))}
+                              style={{
+                                padding: "3px 9px", borderRadius: 999, cursor: "pointer",
+                                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                                textTransform: "uppercase", letterSpacing: "0.06em",
+                                border: `1px solid ${isActive ? catColor : "var(--border-default)"}`,
+                                background: isActive ? `${catColor}20` : "transparent",
+                                color: isActive ? catColor : "var(--text-muted)",
+                                transition: "all 0.12s",
+                              }}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          value={quickState.value}
+                          onChange={(e) => setQuickAddState((prev) => ({ ...prev, [project.id]: { ...quickState, value: e.target.value } }))}
+                          onKeyDown={(e) => { if (e.key === "Enter" && quickState.value.trim()) handleQuickAdd(project); }}
+                          placeholder={`Type a note… Enter to add`}
+                          style={{
+                            flex: 1, background: "transparent", border: "none",
+                            borderBottom: "1px solid var(--divider)",
+                            color: "var(--text-primary)", fontFamily: "var(--font-body)",
+                            fontSize: 12, padding: "6px 4px", outline: "none",
+                          }}
+                        />
+                        <button
+                          onClick={() => setQuickAddState((prev) => ({ ...prev, [project.id]: { ...quickState, priority: !quickState.priority } }))}
+                          title="Flag as high priority"
+                          style={{ width: 30, height: 30, borderRadius: 6, border: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "center", background: quickState.priority ? "rgba(239,68,68,0.12)" : "var(--bg-surface)", color: quickState.priority ? "var(--status-error)" : "var(--text-muted)", cursor: "pointer" }}
+                        >
+                          <FlagIcon size={13} />
+                        </button>
+                        <button
+                          disabled={!quickState.value.trim()}
+                          onClick={() => handleQuickAdd(project)}
+                          style={{
+                            height: 30,
+                            padding: "0 12px",
+                            borderRadius: 6,
+                            border: "1px solid var(--accent)",
+                            background: "var(--accent)",
+                            color: "var(--accent-text)",
+                            fontWeight: 700,
+                            cursor: quickState.value.trim() ? "pointer" : "not-allowed",
+                            opacity: quickState.value.trim() ? 1 : 0.5,
+                          }}
+                        >
+                          ADD
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Empty state */}
                     {notesForProject.length === 0 && (
-                      <div
-                        style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 9,
-                          color: "var(--text-muted)",
-                          fontStyle: "italic",
-                          padding: "8px 4px",
-                        }}
-                      >
-                        — No notes yet. Click + to add the first note for this meeting.
+                      <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.08em" }}>
+                        NO NOTES YET — TYPE ABOVE TO ADD THE FIRST ONE
                       </div>
                     )}
 
+                    {/* Notes list */}
                     {notesForProject.map((note) => (
                       <NoteCard key={note.id} note={note} />
                     ))}
-
-                    {/* Quick add */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                      <input
-                        value={quickState.value}
-                        onChange={(e) =>
-                          setQuickAddState((prev) => ({
-                            ...prev,
-                            [project.id]: { ...quickState, value: e.target.value },
-                          }))
-                        }
-                        placeholder={`Type a note for ${project.name}...`}
-                        style={{
-                          flex: 1,
-                          background: "transparent",
-                          border: "none",
-                          borderBottom: "1px solid var(--divider)",
-                          color: "var(--text-primary)",
-                          fontFamily: "var(--font-body)",
-                          fontSize: 12,
-                          padding: "8px 4px",
-                          outline: "none",
-                        }}
-                      />
-                      <select
-                        value={quickState.category}
-                        onChange={(e) =>
-                          setQuickAddState((prev) => ({
-                            ...prev,
-                            [project.id]: { ...quickState, category: e.target.value },
-                          }))
-                        }
-                        style={{
-                          height: 32,
-                          background: "var(--bg-surface)",
-                          color: "var(--text-primary)",
-                          border: "1px solid var(--divider)",
-                          borderRadius: 6,
-                          padding: "0 8px",
-                        }}
-                      >
-                        {["General", "Fabrication", "Erection", "Schedule", "Quality", "Safety"].map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() =>
-                          setQuickAddState((prev) => ({
-                            ...prev,
-                            [project.id]: { ...quickState, priority: !quickState.priority },
-                          }))
-                        }
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 6,
-                          border: "1px solid var(--divider)",
-                          background: quickState.priority ? "rgba(239,68,68,0.12)" : "var(--bg-surface)",
-                          color: quickState.priority ? "var(--status-error)" : "var(--text-muted)",
-                          cursor: "pointer",
-                        }}
-                        title="Toggle priority"
-                      >
-                        <FlagIcon size={14} />
-                      </button>
-                      <button
-                        disabled={!quickState.value.trim()}
-                        onClick={() => handleQuickAdd(project)}
-                        style={{
-                          height: 32,
-                          padding: "0 12px",
-                          borderRadius: 6,
-                          border: "1px solid var(--accent)",
-                          background: "var(--accent)",
-                          color: "var(--accent-text)",
-                          fontWeight: 700,
-                          cursor: quickState.value.trim() ? "pointer" : "not-allowed",
-                          opacity: quickState.value.trim() ? 1 : 0.5,
-                        }}
-                      >
-                        ADD
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
@@ -1015,6 +992,61 @@ export default function ProductionNotes() {
           );
         })}
       </div>
+
+      {/* Convert to Action Item modal */}
+      {convertTarget && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget) setConvertTarget(null); }}>
+          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 24, width: 420, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 24px 80px rgba(0,0,0,0.8)" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--text-primary)" }}>
+              Convert to Action Item
+            </div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-secondary)", padding: "8px 12px", background: "var(--bg-surface-low)", borderRadius: 6, borderLeft: "3px solid var(--accent)" }}>
+              {convertTarget.content}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Assign To</label>
+              <input
+                value={convertForm.assigned_to}
+                onChange={(e) => setConvertForm((f) => ({ ...f, assigned_to: e.target.value }))}
+                placeholder="Name or team"
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Due Date</label>
+              <input
+                type="date"
+                value={convertForm.due_date}
+                onChange={(e) => setConvertForm((f) => ({ ...f, due_date: e.target.value }))}
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConvertTarget(null)}
+                style={{ padding: "8px 16px", borderRadius: 4, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={createActionItemMut.isPending}
+                onClick={() => createActionItemMut.mutate({
+                  project_id: convertTarget.project_id,
+                  title: (convertTarget.content || "Action Item").slice(0, 100),
+                  description: convertTarget.content,
+                  priority: convertTarget.is_high_priority ? "High" : "Medium",
+                  status: "Open",
+                  assigned_to: convertForm.assigned_to || null,
+                  due_date: convertForm.due_date || null,
+                })}
+                style={{ padding: "8px 20px", borderRadius: 4, border: "none", background: "var(--accent)", color: "white", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: createActionItemMut.isPending ? "not-allowed" : "pointer", opacity: createActionItemMut.isPending ? 0.6 : 1 }}
+              >
+                {createActionItemMut.isPending ? "Creating..." : "Create Action Item"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DeleteDialog
         open={!!deleteTarget}
