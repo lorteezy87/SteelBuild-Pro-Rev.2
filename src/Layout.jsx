@@ -720,10 +720,7 @@ function MobileDrawer({ open, onClose, onNavigate }) {
       }}>
         <div style={{ padding: "16px 16px 8px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center" }}>
           <img
-          claude/cranky-black
             src="/logo.png"
-           
-           codex/base44-deploy-nick
             alt="SteelBuild Pro"
             style={{ height: 32, width: "auto", objectFit: "contain" }} />
 
@@ -1110,11 +1107,7 @@ export default function Layout({ children, currentPageName }) {
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
               <img
-              claude/cranky-black
                     src="/logo.png"
-                   
-                    src="/steelbuild-pro-logo.png"
-                    codex/base44-deploy-nick
                     alt="SteelBuild Pro"
                     style={{ height: 36, width: "auto", objectFit: "contain" }} />
 
