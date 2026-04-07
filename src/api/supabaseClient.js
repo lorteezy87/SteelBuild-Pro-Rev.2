@@ -238,9 +238,6 @@ export const entities = {
   ScopeItem:             createEntityClient('scope_items'),
   Alert:                 createEntityClient('alerts'),
   CostCode:              createEntityClient('cost_codes'),
-  PMAAssumption:         createEntityClient('pma_assumptions'),
-  PMADecision:           createEntityClient('pma_decisions'),
-  PMAuditLog:            createEntityClient('pma_audit_logs'),
   ProjectCloseout:       createEntityClient('project_closeout'),
   User:                  createEntityClient('user_profiles'),
 };
