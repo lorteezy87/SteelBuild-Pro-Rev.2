@@ -430,6 +430,7 @@ export default function RFIHub() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
   const [expandedProjects, setExpandedProjects] = useState(new Set(["__all"]));
+  const [statsOpen, setStatsOpen] = useState(true);
 
   const { data: rfis = [], isLoading, refetch } = useQuery({
     queryKey: ["rfis", "hub"],
@@ -556,6 +557,11 @@ export default function RFIHub() {
             <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.14em", marginTop: 3 }}>REQUEST FOR INFORMATION · {rfis.length} TOTAL</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setStatsOpen(v => !v)}
+              title={statsOpen ? "Hide stats to maximise table" : "Show stats"}
+              style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "7px 12px", color: statsOpen ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, ...mono, fontSize: 9, fontWeight: 700 }}>
+              {statsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} STATS
+            </button>
             <button onClick={() => refetch()} style={{ background: "var(--hover-bg)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "7px 10px", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center" }}>
               <RefreshCw size={14} />
             </button>
@@ -565,8 +571,8 @@ export default function RFIHub() {
           </div>
         </div>
 
-        {/* KPI strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: "var(--divider)", border: "1px solid var(--divider)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
+        {/* KPI strip — collapsible */}
+        {statsOpen && <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: "var(--divider)", border: "1px solid var(--divider)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
           {[
             { label: "Total",      value: kpis.total,      color: "var(--text-primary)",    filter: null },
             { label: "Open",       value: kpis.open,        color: "var(--accent)",           filter: "open" },
@@ -588,7 +594,7 @@ export default function RFIHub() {
               </div>
             );
           })}
-        </div>
+        </div>}
 
         {/* Search + filters */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
