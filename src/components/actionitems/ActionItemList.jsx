@@ -1,46 +1,42 @@
 import React from "react";
 import { Trash2 } from "lucide-react";
 
-const PRIORITY_COLORS = {
-  Critical: "var(--status-error)",
-  High: "var(--status-warning)",
-  Medium: "var(--status-info)",
-  Low: "var(--text-muted)",
+const PRIORITY_CONFIG = {
+  Critical: { color: "var(--status-error)",   bg: "rgba(239,68,68,0.1)",   border: "rgba(239,68,68,0.3)",   icon: "🔥" },
+  High:     { color: "var(--status-warning)", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.3)",  icon: "⚠" },
+  Medium:   { color: "var(--status-info)",    bg: "rgba(37,99,235,0.1)",   border: "rgba(37,99,235,0.3)",   icon: "●" },
+  Low:      { color: "var(--text-muted)",     bg: "rgba(100,116,139,0.1)", border: "rgba(100,116,139,0.3)", icon: "○" },
 };
 
 const STATUS_COLORS = {
-  Open: "var(--status-warning)",
+  Open:          "var(--status-warning)",
   "In Progress": "var(--status-info)",
-  Complete: "var(--status-success)",
-  Cancelled: "var(--text-muted)",
+  Complete:      "var(--status-success)",
+  Cancelled:     "var(--text-muted)",
 };
 
-export default function ActionItemList({
-  actionItems,
-  onEdit,
-  onResolve,
-  onDelete,
-}) {
+function relativeDueDate(dateStr, status) {
+  if (!dateStr) return null;
+  const due = new Date(dateStr);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.round((due - now) / (1000 * 60 * 60 * 24));
+  const isDone = status === "Complete" || status === "Cancelled";
+
+  if (isDone) return { label: due.toLocaleDateString(), overdue: false };
+  if (diff < 0)  return { label: `${Math.abs(diff)}d overdue`, overdue: true };
+  if (diff === 0) return { label: "Due today", overdue: false, urgent: true };
+  if (diff === 1) return { label: "Due tomorrow", overdue: false, urgent: true };
+  if (diff <= 7)  return { label: `Due in ${diff} days`, overdue: false, urgent: false };
+  return { label: due.toLocaleDateString("en-US", { month: "short", day: "numeric" }), overdue: false, urgent: false };
+}
+
+export default function ActionItemList({ actionItems, onEdit, onResolve, onDelete }) {
   if (actionItems.length === 0) {
     return (
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "12px",
-          padding: "40px",
-          textAlign: "center",
-        }}
-      >
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "10px",
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
           No action items
         </p>
       </div>
@@ -48,310 +44,117 @@ export default function ActionItemList({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       {actionItems.map((item) => {
-        const isOverdue =
-          item.due_date &&
-          new Date(item.due_date) < new Date() &&
-          item.status !== "Complete" &&
-          item.status !== "Cancelled";
+        const isOverdue = item.due_date && new Date(item.due_date) < new Date() && item.status !== "Complete" && item.status !== "Cancelled";
+        const dueInfo = relativeDueDate(item.due_date, item.status);
+        const priorityCfg = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.Medium;
+        const isCritical = item.priority === "Critical";
 
         return (
           <div
             key={item.id}
             style={{
-              background: "var(--bg-surface)",
-              border: isOverdue ? "1px solid var(--status-error)" : "1px solid var(--border-default)",
+              background: isCritical && item.status !== "Complete" ? "rgba(239,68,68,0.03)" : "var(--bg-surface)",
+              border: isOverdue ? "1px solid rgba(239,68,68,0.4)" : isCritical && item.status !== "Complete" ? "1px solid rgba(239,68,68,0.2)" : "1px solid var(--border-default)",
+              borderLeft: `3px solid ${priorityCfg.color}`,
               borderRadius: "12px",
-              padding: "16px",
+              padding: "14px 16px",
               transition: "all 0.15s",
               opacity: item.status === "Complete" ? 0.6 : 1,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--accent-border)";
-              e.currentTarget.style.background = "var(--hover-bg)";
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--hover-bg)"; }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = isOverdue ? "var(--status-error)" : "var(--border-default)";
-              e.currentTarget.style.background = "var(--bg-surface)";
+              e.currentTarget.style.borderColor = isOverdue ? "rgba(239,68,68,0.4)" : isCritical && item.status !== "Complete" ? "rgba(239,68,68,0.2)" : "var(--border-default)";
+              e.currentTarget.style.background = isCritical && item.status !== "Complete" ? "rgba(239,68,68,0.03)" : "var(--bg-surface)";
             }}
           >
-            {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: "8px",
-              }}
-            >
+            {/* Header row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    color: "var(--text-primary)",
-                    marginBottom: "4px",
-                    textDecoration: item.status === "Complete" ? "line-through" : "none",
-                  }}
-                >
-                  {item.title}
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2, textDecoration: item.status === "Complete" ? "line-through" : "none" }}>
+                  {priorityCfg.icon} {item.title}
                 </div>
                 {item.description && (
-                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
                     {item.description}
                   </div>
                 )}
               </div>
 
-              <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px" }}>
-                {(item.status === "Complete" || item.status === "Cancelled") && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete && onDelete(item);
-                    }}
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "transparent",
-                      border: "1px solid var(--danger-border)",
-                      borderRadius: "6px",
-                      color: "var(--status-error)",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                    title="Delete completed item"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
-
-                {/* Priority Badge */}
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "4px 8px",
-                    background: `${PRIORITY_COLORS[item.priority]}20`,
-                    border: `1px solid ${PRIORITY_COLORS[item.priority]}40`,
-                    borderRadius: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 600,
-                      color: PRIORITY_COLORS[item.priority],
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 12, flexShrink: 0 }}>
+                {/* Priority badge */}
+                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", background: priorityCfg.bg, border: `1px solid ${priorityCfg.border}`, borderRadius: 6 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: priorityCfg.color, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     {item.priority}
                   </span>
                 </div>
 
-                {/* Status Badge */}
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "4px 8px",
-                    background: `${STATUS_COLORS[item.status]}20`,
-                    border: `1px solid ${STATUS_COLORS[item.status]}40`,
-                    borderRadius: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 600,
-                      color: STATUS_COLORS[item.status],
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
+                {/* Status badge */}
+                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", background: `${STATUS_COLORS[item.status]}20`, border: `1px solid ${STATUS_COLORS[item.status]}40`, borderRadius: 6 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: STATUS_COLORS[item.status], textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     {item.status}
                   </span>
                 </div>
-
-                {/* Overdue warning */}
-                {isOverdue && (
-                  <span style={{ color: "var(--status-error)", fontSize: "12px", fontWeight: 700 }}>
-                    ⚠
-                  </span>
-                )}
               </div>
             </div>
 
-            {/* Footer */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "auto auto auto 1fr",
-                gap: "24px",
-                marginTop: "12px",
-                paddingTop: "12px",
-                borderTop: "1px solid var(--divider)",
-                alignItems: "center",
-              }}
-            >
+            {/* Footer row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 20, paddingTop: 10, borderTop: "1px solid var(--divider)" }}>
+              {/* Assignee avatar + name */}
               {item.assigned_to && (
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Assigned To
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "white" }}>
+                      {item.assigned_to.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
                   </div>
-                  <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
-                    {item.assigned_to}
-                  </div>
+                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.assigned_to}</span>
                 </div>
               )}
 
-              {item.due_date && (
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Due Date
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: isOverdue ? "var(--status-error)" : "var(--text-secondary)",
-                      fontWeight: isOverdue ? 600 : 400,
-                    }}
-                  >
-                    {new Date(item.due_date).toLocaleDateString()}
-                    {isOverdue && " (OVERDUE)"}
-                  </div>
+              {/* Relative due date */}
+              {dueInfo && (
+                <div style={{ fontSize: 11, fontWeight: dueInfo.overdue || dueInfo.urgent ? 700 : 400, color: dueInfo.overdue ? "var(--status-error)" : dueInfo.urgent ? "var(--status-warning)" : "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                  {dueInfo.overdue && "⏰ "}{dueInfo.label}
                 </div>
               )}
 
               {item.meeting_reference && (
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    From Meeting
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--accent)" }}>
-                    {item.meeting_reference}
-                  </div>
+                <div style={{ fontSize: 11, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
+                  📋 {item.meeting_reference}
                 </div>
               )}
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  marginLeft: "auto",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                }}
-              >
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 5, marginLeft: "auto", alignItems: "center" }}>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onResolve?.(item);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onResolve?.(item); }}
                   title={item.status === "Complete" ? "Reopen" : "Mark Complete"}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 10px",
-                    borderRadius: 4,
-                    border: `1px solid ${
-                      item.status === "Complete" ? "var(--border-default)" : "rgba(0,214,143,0.35)"
-                    }`,
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "4px 10px", borderRadius: 4,
+                    border: item.status === "Complete" ? "1px solid var(--border-default)" : "1px solid rgba(0,214,143,0.35)",
                     background: item.status === "Complete" ? "transparent" : "rgba(0,214,143,0.10)",
                     color: item.status === "Complete" ? "var(--text-muted)" : "var(--status-success)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
+                    fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em",
                   }}
                 >
-                  {item.status === "Complete" ? "↩ REOPEN" : "✓ RESOLVE"}
+                  {item.status === "Complete" ? "↩ Reopen" : "✓ Resolve"}
                 </button>
 
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit?.(item);
-                  }}
-                  title="Edit"
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 4,
-                    border: "1px solid var(--border-default)",
-                    background: "transparent",
-                    color: "var(--text-muted)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onEdit?.(item); }}
+                  style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}
                 >
-                  EDIT
+                  Edit
                 </button>
 
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete?.(item);
-                  }}
-                  title="Delete"
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 4,
-                    border: "1px solid rgba(255,61,61,0.25)",
-                    background: "rgba(255,61,61,0.08)",
-                    color: "var(--status-error)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onDelete?.(item); }}
+                  style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: "1px solid rgba(255,61,61,0.25)", background: "rgba(255,61,61,0.08)", color: "var(--status-error)", cursor: "pointer" }}
                 >
-                  DELETE
+                  <Trash2 size={11} />
                 </button>
               </div>
             </div>
