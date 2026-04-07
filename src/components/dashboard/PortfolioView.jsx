@@ -445,21 +445,50 @@ export default function PortfolioView({
           flexShrink: 0,
         }}
       >
+        {/* Portfolio Value — featured (wider) */}
+        <div style={{
+          padding: "12px 28px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: "3px solid var(--accent)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          minWidth: 200,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Portfolio Value</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--accent)" }}>
+            {formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")}
+          </span>
+        </div>
         <KPIBlock label="Active Projects" value={projects.filter((p) => p.status === "Active" || !p.status).length} bordered color="var(--accent)" />
-        <KPIBlock label="Portfolio Value" value={formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")} bordered color="var(--accent)" />
         <KPIBlock
           label="Total Spend"
           value={formatCurrency(portfolioKPIs.totalSpend).replace(/\.\d+/, "")}
           bordered
           color={portfolioKPIs.totalSpend > (portfolioKPIs.totalBudget || 0) ? "var(--status-error)" : "var(--status-success)"}
         />
-        <KPIBlock
-          label="Overdue RFIs"
-          value={portfolioKPIs.overdueRFIs}
-          bordered
-          color={portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)"}
-        />
-        <KPIBlock label="At Risk" value={portfolioKPIs.atRisk} bordered color={portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)"} />
+        {/* Overdue RFIs — glows red when non-zero */}
+        <div style={{
+          padding: "12px 24px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: portfolioKPIs.overdueRFIs > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+          background: portfolioKPIs.overdueRFIs > 0 ? "var(--danger-muted)" : "transparent",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)" }}>Overdue RFIs</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.overdueRFIs}</span>
+        </div>
+        {/* At Risk — glows red when non-zero */}
+        <div style={{
+          padding: "12px 24px",
+          borderRight: "1px solid var(--divider)",
+          borderTop: portfolioKPIs.atRisk > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+          background: portfolioKPIs.atRisk > 0 ? "var(--danger-muted)" : "transparent",
+          display: "flex", flexDirection: "column", gap: 4,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--text-muted)" }}>At Risk</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.atRisk}</span>
+        </div>
         <KPIBlock label="Active Work Pkgs" value={portfolioKPIs.activeWPs} color="var(--accent)" />
       </div>
 
@@ -604,7 +633,11 @@ export default function PortfolioView({
               </thead>
               <tbody>
                 {projectMetrics.map((p, i) => (
-                  <tr key={p.id} style={{ borderBottom: "1px solid var(--divider)", background: "transparent", height: ROW_HEIGHT }}>
+                  <tr key={p.id} style={{
+                    borderBottom: "1px solid var(--divider)",
+                    background: p.health_status === "At Risk" ? "rgba(255,61,61,0.04)" : p.health_status === "Watch" ? "rgba(245,158,11,0.03)" : "transparent",
+                    height: ROW_HEIGHT,
+                  }}>
                     <td style={{ padding: "6px 8px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{i + 1}</td>
                     <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", minWidth: 160 }}>
                       <div style={{ display: "flex", flexDirection: "column" }}>
@@ -683,9 +716,9 @@ export default function PortfolioView({
           </div>
         </Card>
         {/* Budget + Risk */}
-        <Card style={{ gridColumn: "span 7" }}>
+        <Card style={{ gridColumn: "span 8" }}>
           <HeaderBar title="Budget vs Actual — All Projects" />
-          <div style={{ padding: "12px 16px", height: 280 }}>
+          <div style={{ padding: "12px 16px", height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={budgetChartData}>
                 <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
@@ -714,7 +747,7 @@ export default function PortfolioView({
           </div>
         </Card>
 
-        <Card style={{ gridColumn: "span 5" }}>
+        <Card style={{ gridColumn: "span 4" }}>
           <HeaderBar title="Risk Matrix" />
           <div style={{ padding: "12px 14px", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
