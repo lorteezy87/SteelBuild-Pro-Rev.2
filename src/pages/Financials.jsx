@@ -677,7 +677,10 @@ export default function Financials() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setEditingCostCode(row);
+                        // Strip computed display fields so they don't poison the save payload.
+                        // Pass only the original DB record from costCodes array.
+                        const dbRecord = costCodes.find((c) => c.id === row.id) || row;
+                        setEditingCostCode(dbRecord);
                         setModalOpen(true);
                       }}
                       style={{
