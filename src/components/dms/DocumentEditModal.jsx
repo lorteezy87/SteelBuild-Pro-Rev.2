@@ -26,9 +26,9 @@ const LABEL_STYLE = {
   display: "block",
 };
 
-const STATUS_OPTIONS = ["Draft", "In Review", "Approved", "Issued", "Superseded", "Archived"];
-const CATEGORY_OPTIONS = ["Other", "Contracts", "IFC/Models", "Issued for Construction", "Submittals", "QA/QC", "Closeout"];
-const DISCIPLINE_OPTIONS = ["General", "Structural", "Architectural", "MEP", "Civil", "Procurement"];
+const STATUS_OPTIONS = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded", "Archived", "Void"];
+const CATEGORY_OPTIONS = ["Blueprint", "Shop Drawing", "IFC Model", "Specification", "Submittal", "Transmittal", "RFI Response", "Change Order", "Contract", "Photo", "Report", "Correspondence", "Permit", "Inspection Report", "Other"];
+const DISCIPLINE_OPTIONS = ["Structural", "Architectural", "MEP", "Civil", "Misc Metals", "Geotechnical", "General", "Other"];
 
 export default function DocumentEditModal({ projectId, doc, onClose }) {
   const qc = useQueryClient();
@@ -93,21 +93,18 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
 
     mut.mutate({
       display_name: form.displayName,
-      displayName: form.displayName,
       document_number: form.documentNumber,
-      documentNumber: form.documentNumber,
       revision_number: form.revisionNumber,
-      revisionNumber: form.revisionNumber,
       status: form.status,
       category: form.category,
       discipline: form.discipline,
       description: form.description,
       tags,
-      work_package_id: form.work_package_id,
-      rfi_id: form.rfi_id,
-      delivery_id: form.delivery_id,
-      change_order_id: form.change_order_id,
-      submittal_id: form.submittal_id,
+      work_package_id: form.work_package_id || null,
+      rfi_id: form.rfi_id || null,
+      delivery_id: form.delivery_id || null,
+      change_order_id: form.change_order_id || null,
+      submittal_id: form.submittal_id || null,
       is_current: form.is_current,
       project_id: projectId,
     });

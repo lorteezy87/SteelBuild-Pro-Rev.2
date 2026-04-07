@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { base44, resolveFileUrl } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -37,6 +37,7 @@ export default function DrawingViewer() {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [rendering, setRendering] = useState(false);
   const [pdfError, setPdfError] = useState(null);
+  const [resolvedUrl, setResolvedUrl] = useState(null);
 
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -60,25 +61,61 @@ export default function DrawingViewer() {
 
   const activeIndex = filtered.findIndex(d => d.id === activeId);
 
-  // ── Load PDF when drawing changes ──────────────────────────────────────────
+  // Resolve file_url (storage path) to a signed URL
   useEffect(() => {
-    if (!activeDrawing?.file_url) {
-      setPdfDoc(null);
-      setPdfError(null);
-      return;
-    }
+    let cancelled = false;
+    setResolvedUrl(null);
+    setPdfDoc(null);
     setPdfError(null);
     setCurrentPage(1);
-    pdfjsLib.getDocument(activeDrawing.file_url).promise
+    setTotalPages(0);
+
+    const rawUrl = activeDrawing?.file_url;
+    if (!rawUrl) return;
+
+    resolveFileUrl(rawUrl)
+      .then(url => { if (!cancelled) setResolvedUrl(url); })
+      .catch(err => { if (!cancelled) setPdfError(`Failed to resolve file URL: ${err.message}`); });
+
+    return () => { cancelled = true; };
+  }, [activeDrawing?.file_url]);
+
+  // Load the PDF once we have a signed URL
+  useEffect(() => {
+    if (!resolvedUrl) return;
+
+    let cancelled = false;
+    let loadingTask = null;
+
+    loadingTask = pdfjsLib.getDocument(resolvedUrl);
+    loadingTask.promise
       .then(doc => {
+        if (cancelled) { doc.destroy(); return; }
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
+        setCurrentPage(1);
+        setPdfError(null);
       })
       .catch(err => {
-        setPdfError("Unable to load PDF: " + (err?.message || "unknown error"));
-        setPdfDoc(null);
+        if (!cancelled) setPdfError(`PDF load failed: ${err.message}`);
       });
-  }, [activeDrawing?.file_url]);
+
+    return () => {
+      cancelled = true;
+      if (loadingTask) {
+        loadingTask.destroy?.();
+      }
+    };
+  }, [resolvedUrl]);
+
+  // Destroy previous PDF document to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (pdfDoc) {
+        pdfDoc.destroy().catch(() => {});
+      }
+    };
+  }, [pdfDoc]);
 
   // ── Render page when doc, page, or zoom changes ────────────────────────────
   const renderPage = useCallback(async () => {
@@ -151,12 +188,15 @@ export default function DrawingViewer() {
   };
 
   // ── Download ───────────────────────────────────────────────────────────────
-  const handleDownload = () => {
-    if (!activeDrawing?.file_url) return;
+  const handleDownload = async () => {
+    const url = resolvedUrl || await resolveFileUrl(activeDrawing?.file_url);
+    if (!url) { toast?.error?.("No file URL available"); return; }
     const a = document.createElement("a");
-    a.href = activeDrawing.file_url;
-    a.download = `${activeDrawing.sheet_number || "drawing"}.pdf`;
+    a.href = url;
+    a.download = activeDrawing?.file_name || activeDrawing?.title || "drawing.pdf";
+    document.body.appendChild(a);
     a.click();
+    a.remove();
   };
 
   return (
