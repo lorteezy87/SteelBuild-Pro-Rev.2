@@ -47,6 +47,14 @@ export default function Schedule() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  // Fetch submittals linked to this project for Gantt overlay
+  const { data: submittals = [] } = useQuery({
+    queryKey: ["documents", projectId],
+    queryFn: () => projectId ? base44.entities.Document.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    select: (docs) => docs.filter(d => d.is_submittal && d.linked_wp_id),
+  });
+
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
   const hasProject = !!(projectId || activeProject?.id);
 
@@ -373,6 +381,7 @@ export default function Schedule() {
         {view === "gantt" && (
           <ScheduleGantt
             tasks={scheduleTasks}
+            submittals={submittals}
             expandedTask={expandedTask}
             setExpandedTask={setExpandedTask}
             onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}

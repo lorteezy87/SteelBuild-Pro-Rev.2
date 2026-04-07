@@ -162,3 +162,12 @@ ALTER TABLE public.documents
   ADD COLUMN IF NOT EXISTS revision_number TEXT DEFAULT '0',
   ADD COLUMN IF NOT EXISTS revision_date   DATE,
   ADD COLUMN IF NOT EXISTS uploaded_date   TIMESTAMPTZ;
+
+-- Fix 9: Add submittal schedule-integration fields to documents table.
+-- These enable linking a document (submittal) to a work package on the Gantt,
+-- tracking the review lead time, and computing a contractual due date.
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS linked_wp_id     UUID REFERENCES public.work_packages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS review_lead_time INTEGER DEFAULT 14,   -- calendar days for review
+  ADD COLUMN IF NOT EXISTS due_date         DATE,                 -- planned approval date = upload + lead_time
+  ADD COLUMN IF NOT EXISTS is_submittal     BOOLEAN DEFAULT FALSE; -- TRUE = tracked in submittal log
