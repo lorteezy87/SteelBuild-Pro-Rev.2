@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+﻿import React, { useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import DocumentCard from "../components/dms/DocumentCard";
@@ -135,6 +135,14 @@ export default function Documents() {
     // Link handled via edit modal (work package / rfi / delivery IDs)
     setEditingDoc(doc);
   };
+  const handleDeleteDoc = async (doc) => {
+    try {
+      await base44.entities.Document.delete(doc.id);
+      queryClient.invalidateQueries(["documents", activeProject?.id]);
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
 
   if (!activeProject) {
     return (
@@ -163,7 +171,7 @@ export default function Documents() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--status-warning)" }}>
-            ◈ DOCUMENT REPOSITORY
+            â—ˆ DOCUMENT REPOSITORY
           </div>
           <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.10)" }} />
           <button
@@ -322,7 +330,7 @@ export default function Documents() {
               Loading documents...
             </div>
           ) : allDocuments.length === 0 ? (
-            /* Hero empty state — drag & drop zone */
+            /* Hero empty state â€” drag & drop zone */
             <div
               onClick={() => setUploadOpen(true)}
               style={{
@@ -405,7 +413,7 @@ export default function Documents() {
                       justifyContent: "center",
                     }}
                   >
-                    {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                    {selectedIds.has(doc.id) && <span style={{ color: "white", fontSize: 11, lineHeight: 1 }}>âœ“</span>}
                   </div>
                   <DocumentCard
                     doc={doc}
@@ -474,7 +482,7 @@ export default function Documents() {
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#10B981", letterSpacing: "0.06em" }}>GENERATE TRANSMITTAL</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{selectedIds.size} document{selectedIds.size !== 1 ? "s" : ""} selected</div>
               </div>
-              <button onClick={() => setTransmittalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, cursor: "pointer" }}>×</button>
+              <button onClick={() => setTransmittalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 20, cursor: "pointer" }}>Ã—</button>
             </div>
 
             {/* Form */}
@@ -548,7 +556,7 @@ export default function Documents() {
                 }}
                 style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "#10B981", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
               >
-                ↓ GENERATE PDF
+                â†“ GENERATE PDF
               </button>
             </div>
           </div>
@@ -557,3 +565,4 @@ export default function Documents() {
     </div>
   );
 }
+
