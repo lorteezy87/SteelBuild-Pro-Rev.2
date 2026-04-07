@@ -9,9 +9,6 @@ import QuickAddFAB from "./components/shared/QuickAddFAB";
 import { ProjectProvider } from "./components/shared/ProjectContext";
 import { useProjectContext } from "./components/shared/useProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
-import { PMAProvider } from "./components/pma/usePMAContext";
-import PMAPanel from "./components/pma/PMAPanel";
-import { usePMA } from "./components/pma/usePMAContext";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "./components/shared/ThemeContext";
 
@@ -28,7 +25,7 @@ const PRIMARY_TABS = [
 { label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes"] },
 { label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV"] },
 { label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
-{ label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "DecisionLog", "AlertsCenter", "Activity"] },
+{ label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
 { label: "QUALITY", pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
 { label: "CLOSEOUT", pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] }];
 
@@ -803,115 +800,6 @@ function ThemeToggleButton() {
   );
 }
 
-// ─── PMA Button Component ─────────────────────────────────────
-function PMAButton() {
-  const { isOpen, setIsOpen, unreadInsights, isLoadingInsights } = usePMA();
-
-  const statusLabel = isLoadingInsights
-    ? 'ANALYZING'
-    : unreadInsights > 0
-    ? 'INSIGHTS READY'
-    : 'ENTER DATA';
-
-  const pulseStyle =
-    unreadInsights > 0
-      ? {
-          animation: 'pma-pulse 2s infinite',
-          boxShadow: '0 0 0 0 rgba(0,229,255,0.45)',
-        }
-      : {};
-
-  return (
-    <button
-      onClick={() => setIsOpen(!isOpen)}
-      title="Project Management Assistant · ⌘⇧P to open"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '6px 14px',
-        background: isOpen ? 'rgba(0,229,255,0.15)' : 'rgba(0,229,255,0.06)',
-        border: '1px solid',
-        borderColor: isOpen ? 'rgba(0,229,255,0.50)' : 'rgba(0,229,255,0.20)',
-        borderRadius: 16,
-        cursor: 'pointer',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9,
-        fontWeight: 700,
-        color: isOpen ? '#00E5FF' : 'rgba(0,229,255,0.65)',
-        letterSpacing: '0.08em',
-        transition: 'all 0.2s',
-        position: 'relative',
-        boxShadow: isOpen ? '0 0 16px rgba(0,229,255,0.25)' : 'none',
-        ...pulseStyle,
-      }}
-    >
-      <style>{`
-        @keyframes pma-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(0,229,255,0.45); }
-          70% { box-shadow: 0 0 0 8px rgba(0,229,255,0); }
-          100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
-        }
-      `}</style>
-      <span style={{ fontSize: 11 }}>✦</span>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
-        <span>PMA</span>
-        <span
-          style={{
-            fontSize: 7,
-            color:
-              statusLabel === 'READY'
-                ? 'var(--status-success)'
-                : statusLabel === 'LOADING'
-                ? 'var(--status-warning)'
-                : 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background:
-                statusLabel === 'READY'
-                  ? 'var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? 'var(--status-warning)'
-                  : 'var(--text-muted)',
-              boxShadow:
-                statusLabel === 'READY'
-                  ? '0 0 6px var(--status-success)'
-                  : statusLabel === 'LOADING'
-                  ? '0 0 6px var(--status-warning)'
-                  : 'none',
-              flexShrink: 0,
-            }}
-          />
-          {statusLabel}
-        </span>
-      </div>
-      {unreadInsights > 0 && (
-        <span
-          style={{
-            background: '#FF3D3D',
-            borderRadius: 10,
-            padding: '0 6px',
-            fontSize: 8,
-            color: 'white',
-            fontWeight: 800,
-            lineHeight: 1.4,
-          }}
-        >
-          {unreadInsights}
-        </span>
-      )}
-    </button>
-  );
-}
-
 // ─── Project error banner (renders inside ProjectProvider) ────────
 function ProjectErrorBanner() {
   const { projectLoadError } = useProjectContext();
@@ -1051,7 +939,6 @@ export default function Layout({ children, currentPageName }) {
   // Noise texture SVG data URI
   return (
     <ProjectProvider>
-      <PMAProvider>
         <div style={{
           minHeight: "100vh",
           width: "100%",
@@ -1246,9 +1133,6 @@ export default function Layout({ children, currentPageName }) {
             {/* Theme Toggle */}
             {!isMobile && <ThemeToggleButton />}
 
-            {/* PMA Button */}
-            {!isMobile && <PMAButton />}
-
             {/* Bell with dropdown */}
             <BellDropdown
                   alerts={unreadAlerts}
@@ -1323,9 +1207,6 @@ export default function Layout({ children, currentPageName }) {
         {/* Quick Add FAB */}
         <QuickAddFAB />
 
-        {/* PMA Panel */}
-        <PMAPanel />
-
         {/* Toast notifications */}
         <Toaster
               position="bottom-right"
@@ -1343,7 +1224,6 @@ export default function Layout({ children, currentPageName }) {
 
       </div>
     </div>
-      </PMAProvider>
     </ProjectProvider>
   );
 

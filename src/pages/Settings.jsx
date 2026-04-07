@@ -14,7 +14,6 @@ const TABS = [
   { id: 'profile', label: 'Profile', icon: '👤', desc: 'Your account information' },
   { id: 'notifications', label: 'Notifications', icon: '🔔', desc: 'Alerts and digest settings' },
   { id: 'display', label: 'Display', icon: '🎨', desc: 'Theme, layout, and format' },
-  { id: 'pma', label: 'PMA', icon: '✦', desc: 'AI assistant preferences' },
   { id: 'roles', label: 'Roles', icon: '👑', desc: 'Permissions and access', adminOnly: true },
   { id: 'system', label: 'System', icon: '⚙', desc: 'Data and app management', adminOnly: true },
 ];
@@ -105,7 +104,6 @@ export default function Settings() {
         {activeTab === 'profile' && <UserSettingsTab user={user} onSave={handleSavePrefs} />}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
-        {activeTab === 'pma' && <PMASettingsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'system' && <SystemTab user={user} />}
       </div>
@@ -113,92 +111,3 @@ export default function Settings() {
   );
 }
 
-function PMASettingsTab({ preferences, onSave, isSaving }) {
-  const [prefs, setPrefs] = useState({
-    pma_role: preferences?.pma_role || 'pm',
-    pma_custom_instructions: preferences?.pma_custom_instructions || localStorage.getItem('pma_custom_instructions') || '',
-    pma_auto_briefing: preferences?.pma_auto_briefing !== false,
-    pma_briefing_time: preferences?.pma_briefing_time || '07:00',
-  });
-
-  useEffect(() => {
-    setPrefs(prev => ({
-      ...prev,
-      pma_role: preferences?.pma_role || prev.pma_role,
-      pma_custom_instructions: preferences?.pma_custom_instructions || prev.pma_custom_instructions,
-      pma_auto_briefing: preferences?.pma_auto_briefing !== undefined ? preferences.pma_auto_briefing : prev.pma_auto_briefing,
-      pma_briefing_time: preferences?.pma_briefing_time || prev.pma_briefing_time,
-    }));
-  }, [preferences]);
-
-  const handleChange = (k, v) => {
-    const updated = { ...prefs, [k]: v };
-    setPrefs(updated);
-    if (k === 'pma_custom_instructions') localStorage.setItem('pma_custom_instructions', v);
-    onSave(updated);
-  };
-
-  const S = {
-    section: { marginBottom: 28, paddingBottom: 28, borderBottom: '1px solid var(--divider)' },
-    sectionTitle: { fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 16, display: 'block' },
-    label: { fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' },
-    input: { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', fontSize: 12, outline: 'none', boxSizing: 'border-box' },
-  };
-
-  return (
-    <div>
-      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 24px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        ✦ PMA Settings
-      </h2>
-
-      {/* Role */}
-      <div style={S.section}>
-        <span style={S.sectionTitle}>Default Role</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {[
-            { id: 'pm', label: 'Project Manager', desc: 'Full project oversight', icon: '👔' },
-            { id: 'super', label: 'Superintendent', desc: 'Field & erection focus', icon: '🦺' },
-            { id: 'estimator', label: 'Estimator', desc: 'Cost & scope focus', icon: '🧮' },
-          ].map(role => (
-            <div key={role.id} onClick={() => handleChange('pma_role', role.id)} style={{ padding: '14px', background: prefs.pma_role === role.id ? 'var(--accent-muted)' : 'var(--bg-surface-low)', border: `1px solid ${prefs.pma_role === role.id ? 'var(--accent)' : 'var(--border-default)'}`, borderRadius: 8, cursor: 'pointer', textAlign: 'center' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{role.icon}</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: prefs.pma_role === role.id ? 'var(--accent)' : 'var(--text-primary)', marginBottom: 3 }}>{role.label}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>{role.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Custom instructions */}
-      <div style={S.section}>
-        <span style={S.sectionTitle}>Custom Instructions</span>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
-          Tell PMA how you want it to respond. These instructions are always included in every briefing and chat.
-        </p>
-        <textarea
-          value={prefs.pma_custom_instructions}
-          onChange={e => handleChange('pma_custom_instructions', e.target.value)}
-          placeholder={'Examples:\n- Always flag schedule impacts first\n- I am managing a Davis Bacon project\n- We have a hard completion date of Oct 15\n- Always recommend RFI action items'}
-          style={{ ...S.input, minHeight: 120, resize: 'vertical', lineHeight: 1.6 }}
-        />
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.08em' }}>
-          {prefs.pma_custom_instructions?.length || 0} characters
-        </div>
-      </div>
-
-      {/* Auto briefing */}
-      <div>
-        <span style={S.sectionTitle}>Briefing Options</span>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Auto-generate briefing on open</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Generate daily briefing when PMA panel opens</div>
-          </div>
-          <div onClick={() => handleChange('pma_auto_briefing', !prefs.pma_auto_briefing)} style={{ width: 44, height: 24, background: prefs.pma_auto_briefing ? 'var(--status-success)' : 'var(--bg-surface-high)', borderRadius: 12, padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: prefs.pma_auto_briefing ? 'flex-end' : 'flex-start', transition: 'all 0.2s', flexShrink: 0 }}>
-            <div style={{ width: 20, height: 20, background: '#fff', borderRadius: 10 }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
