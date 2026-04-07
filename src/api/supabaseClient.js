@@ -322,6 +322,17 @@ export const getSignedUrl = async (storagePath) => {
   return data.signedUrl;
 };
 
+/**
+ * Resolve a file_url to a usable URL.
+ * If the value looks like a storage path (no protocol), generate a signed URL.
+ * If it's already a full URL, return as-is.
+ */
+export const resolveFileUrl = async (fileUrl) => {
+  if (!fileUrl) return null;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+  return getSignedUrl(fileUrl);
+};
+
 export const integrations = {
   Core: {
     /**
@@ -454,4 +465,4 @@ export const functions = {
 
 // ─── Main export (matches Base44 client API) ─────────────────────────────────
 
-export const base44 = { entities, auth, integrations, functions };
+export const base44 = { entities, auth, integrations, functions, getSignedUrl, resolveFileUrl };

@@ -1,6 +1,7 @@
 ﻿import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { base44, resolveFileUrl } from "@/api/base44Client";
+import { toast } from "sonner";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import DocumentCard from "../components/dms/DocumentCard";
 import DocumentFilters from "../components/dms/DocumentFilters";
@@ -20,6 +21,52 @@ const STATUS_TABS = [
   { key: "Rejected", label: "Rejected" },
 ];
 
+function FolderSection({ name, docs, selectedIds, onToggleSelect, onViewDoc, onDownloadDoc, onEditDoc, onDeleteDoc }) {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <div style={{ border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, overflow: "hidden" }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "10px 14px",
+          background: "rgba(255,255,255,0.03)", cursor: "pointer",
+          borderBottom: open ? "1px solid rgba(255,255,255,0.06)" : "none",
+        }}
+      >
+        <span style={{ fontSize: 14, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", display: "inline-block" }}>{"\u25B6"}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{name}</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>{docs.length} file{docs.length !== 1 ? "s" : ""}</span>
+      </div>
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 8, padding: 10 }}>
+          {docs.map(doc => (
+            <div key={doc.id} style={{ position: "relative" }}>
+              <div
+                onClick={(e) => { e.stopPropagation(); onToggleSelect(doc.id); }}
+                style={{
+                  position: "absolute", top: 8, left: 8, zIndex: 10,
+                  width: 16, height: 16, borderRadius: 3,
+                  background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
+                  border: "2px solid " + (selectedIds.has(doc.id) ? "#10B981" : "rgba(255,255,255,0.25)"),
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, color: "#fff",
+                }}
+              >{selectedIds.has(doc.id) ? "\u2713" : ""}</div>
+              <DocumentCard
+                doc={doc}
+                onView={onViewDoc}
+                onDownload={onDownloadDoc}
+                onEdit={onEditDoc}
+                onDelete={onDeleteDoc}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const [viewMode, setViewMode] = useState("grid"); // grid, list, folder
@@ -32,6 +79,7 @@ export default function Documents() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [transmittalOpen, setTransmittalOpen] = useState(false);
   const [transmittalForm, setTransmittalForm] = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+  const queryClient = useQueryClient();
 
   const { data: rawDocuments = [], isLoading } = useQuery({
     queryKey: ["documents", activeProject?.id],
@@ -40,7 +88,6 @@ export default function Documents() {
         ? base44.entities.Document.filter({ project_id: activeProject.id })
         : [],
     enabled: !!activeProject?.id,
-    initialData: []
   });
 
   // Normalize snake_case / camelCase fields so UI renders regardless of backend casing
@@ -117,14 +164,19 @@ export default function Documents() {
     setSelectedDoc(doc);
   };
 
-  const handleDownloadDoc = (doc) => {
-    // Trigger file download
-    const a = document.createElement("a");
-    a.href = doc.fileUrl;
-    a.download = doc.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownloadDoc = async (doc) => {
+    try {
+      const url = await resolveFileUrl(doc.fileUrl || doc.file_url);
+      if (!url) { toast.error("No file URL available"); return; }
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName || doc.file_name || "download";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error("Download failed: " + (err?.message || "Unknown error"));
+    }
   };
 
   const handleEditDoc = (doc) => {
@@ -138,9 +190,11 @@ export default function Documents() {
   const handleDeleteDoc = async (doc) => {
     try {
       await base44.entities.Document.delete(doc.id);
-      queryClient.invalidateQueries(["documents", activeProject?.id]);
+      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      toast.success("Document deleted");
     } catch (err) {
       console.error("Delete failed:", err);
+      toast.error("Failed to delete document");
     }
   };
 
@@ -333,6 +387,8 @@ export default function Documents() {
             /* Hero empty state â€” drag & drop zone */
             <div
               onClick={() => setUploadOpen(true)}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setUploadOpen(true); }}
               style={{
                 flex: 1,
                 display: "flex",
@@ -421,14 +477,119 @@ export default function Documents() {
                     onDownload={handleDownloadDoc}
                     onEdit={handleEditDoc}
                     onLink={handleLinkDoc}
+                    onDelete={handleDeleteDoc}
                   />
                 </div>
               ))}
             </div>
-          ) : (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
-              {viewMode === "list" ? "List view coming soon" : "Folder view coming soon"}
+          ) : viewMode === "list" ? (
+            /* ── List View ─────────────────────────────────────── */
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {/* Header row */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "28px 1fr 100px 80px 70px 80px 90px 100px",
+                gap: 8, padding: "6px 12px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 1,
+              }}>
+                <div onClick={() => {
+                  if (selectedIds.size === filteredDocs.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(filteredDocs.map(d => d.id)));
+                }} style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{
+                    width: 14, height: 14, borderRadius: 3,
+                    border: "2px solid " + (selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "#10B981" : "rgba(255,255,255,0.25)"),
+                    background: selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "#10B981" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff",
+                  }}>{selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "\u2713" : ""}</div>
+                </div>
+                {["Name", "Doc #", "Rev", "Type", "Status", "Size", "Date"].map(h => (
+                  <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{h}</div>
+                ))}
+              </div>
+              {/* Rows */}
+              {filteredDocs.map(doc => {
+                const isSelected = selectedIds.has(doc.id);
+                const fsk = doc.fileSizeKb ?? doc.file_size_kb ?? 0;
+                const sizeMB = fsk ? (fsk / 1024).toFixed(1) + " MB" : "\u2014";
+                const rawDate = doc.uploadedDate ?? doc.uploaded_date ?? doc.created_at;
+                const dateStr = rawDate ? new Date(rawDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "\u2014";
+                return (
+                  <div key={doc.id}
+                    onClick={() => setSelectedDoc(doc)}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "28px 1fr 100px 80px 70px 80px 90px 100px",
+                      gap: 8, padding: "8px 12px", cursor: "pointer",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      background: isSelected ? "rgba(16,185,129,0.06)" : "transparent",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <div onClick={e => { e.stopPropagation(); setSelectedIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; }); }}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      <div style={{
+                        width: 14, height: 14, borderRadius: 3,
+                        border: "2px solid " + (isSelected ? "#10B981" : "rgba(255,255,255,0.25)"),
+                        background: isSelected ? "#10B981" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff",
+                      }}>{isSelected ? "\u2713" : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, padding: "2px 5px", borderRadius: 3, background: "rgba(255,255,255,0.06)", color: "var(--text-muted)", flexShrink: 0 }}>
+                        {(doc.fileType || "file").toUpperCase().slice(0,4)}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {doc.displayName || doc.fileName || "Untitled"}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", display: "flex", alignItems: "center" }}>{doc.documentNumber || "\u2014"}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center" }}>R{doc.revisionNumber || "0"}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", display: "flex", alignItems: "center", textTransform: "uppercase" }}>{doc.fileType || "\u2014"}</div>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", borderRadius: 3,
+                        background: doc.status === "Approved" ? "rgba(0,214,143,0.15)" : doc.status === "Rejected" ? "rgba(255,61,61,0.15)" : "rgba(255,176,32,0.15)",
+                        color: doc.status === "Approved" ? "#00D68F" : doc.status === "Rejected" ? "#FF3D3D" : "#FFB020",
+                      }}>{doc.status || "Draft"}</span>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center" }}>{sizeMB}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center" }}>{dateStr}</div>
+                  </div>
+                );
+              })}
             </div>
+          ) : (
+            /* ── Folder View ─────────────────────────────────── */
+            (() => {
+              const folders = {};
+              filteredDocs.forEach(doc => {
+                const cat = doc.category || "Uncategorized";
+                if (!folders[cat]) folders[cat] = [];
+                folders[cat].push(doc);
+              });
+              const folderNames = Object.keys(folders).sort();
+              return (
+                <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+                  {folderNames.map(folder => (
+                    <FolderSection
+                      key={folder}
+                      name={folder}
+                      docs={folders[folder]}
+                      selectedIds={selectedIds}
+                      onToggleSelect={(id) => setSelectedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; })}
+                      onViewDoc={handleViewDoc}
+                      onDownloadDoc={handleDownloadDoc}
+                      onEditDoc={handleEditDoc}
+                      onDeleteDoc={handleDeleteDoc}
+                    />
+                  ))}
+                </div>
+              );
+            })()
           )}
         </div>
       </div>
@@ -553,6 +714,8 @@ export default function Documents() {
                     transmittalNumber: transmittalForm.number,
                   });
                   setTransmittalOpen(false);
+                  setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+                  setSelectedIds(new Set());
                 }}
                 style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "#10B981", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
               >
