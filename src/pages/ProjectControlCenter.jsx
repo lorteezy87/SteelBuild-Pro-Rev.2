@@ -573,11 +573,17 @@ export default function ProjectControlCenter() {
   const enabled = !!activeProject?.id;
 
   // ── Data fetching ──────────────────────────────────────────────
-  const { data: rfis = [] }         = useQuery({ queryKey: ["pcc-rfis",         activeProject?.id], queryFn: () => base44.entities.RFI.filter({ project_id: activeProject.id }),          enabled, initialData: [] });
-  const { data: drawings = [] }     = useQuery({ queryKey: ["pcc-drawings",     activeProject?.id], queryFn: () => base44.entities.Drawing.filter({ project_id: activeProject.id }),      enabled, initialData: [] });
-  const { data: workPackages = [] } = useQuery({ queryKey: ["pcc-wps",          activeProject?.id], queryFn: () => base44.entities.WorkPackage.filter({ project_id: activeProject.id }), enabled, initialData: [] });
-  const { data: deliveries = [] }   = useQuery({ queryKey: ["pcc-deliveries",   activeProject?.id], queryFn: () => base44.entities.Delivery.filter({ project_id: activeProject.id }),    enabled, initialData: [] });
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["pcc-cos",          activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled, initialData: [] });
+  const rfiQ  = useQuery({ queryKey: ["pcc-rfis",       activeProject?.id], queryFn: () => base44.entities.RFI.filter({ project_id: activeProject.id }),          enabled });
+  const dwgQ  = useQuery({ queryKey: ["pcc-drawings",   activeProject?.id], queryFn: () => base44.entities.Drawing.filter({ project_id: activeProject.id }),      enabled });
+  const wpQ   = useQuery({ queryKey: ["pcc-wps",        activeProject?.id], queryFn: () => base44.entities.WorkPackage.filter({ project_id: activeProject.id }), enabled });
+  const delQ  = useQuery({ queryKey: ["pcc-deliveries", activeProject?.id], queryFn: () => base44.entities.Delivery.filter({ project_id: activeProject.id }),    enabled });
+  const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
+  const rfis = rfiQ.data ?? [];
+  const drawings = dwgQ.data ?? [];
+  const workPackages = wpQ.data ?? [];
+  const deliveries = delQ.data ?? [];
+  const changeOrders = coQ.data ?? [];
+  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
@@ -814,8 +820,17 @@ export default function ProjectControlCenter() {
           </div>
         )}
 
+        {/* Loading state */}
+        {!noProject && isLoading && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+            <div style={{ width: 28, height: 28, border: "3px solid var(--border-default)", borderTop: "3px solid var(--accent)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SCORING {activeProject?.name || "PROJECT"} DATA...</div>
+          </div>
+        )}
+
         {/* Empty state */}
-        {!noProject && isEmpty && (
+        {!noProject && !isLoading && isEmpty && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>NO OPEN ITEMS — PROJECT IS CLEAR</div>
@@ -823,12 +838,12 @@ export default function ProjectControlCenter() {
         )}
 
         {/* Morning Scan */}
-        {!noProject && activeTab === "morning" && (
+        {!noProject && !isLoading && activeTab === "morning" && (
           <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
         )}
 
         {/* Priority Feed */}
-        {!noProject && !isEmpty && activeTab === "feed" && (
+        {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
           <div style={{ flex: 1, overflowY: "auto" }}>
             {/* Column headers */}
             <div style={{
@@ -864,7 +879,7 @@ export default function ProjectControlCenter() {
         )}
 
         {/* Waiting On Board */}
-        {!noProject && activeTab === "waiting" && (
+        {!noProject && !isLoading && activeTab === "waiting" && (
           <div style={{ flex: 1, overflowY: "auto" }}>
             {waitingBoard.length === 0 ? (
               <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -877,7 +892,7 @@ export default function ProjectControlCenter() {
         )}
 
         {/* Risk Watchlist */}
-        {!noProject && activeTab === "risk" && (
+        {!noProject && !isLoading && activeTab === "risk" && (
           <div style={{ flex: 1, overflowY: "auto" }}>
             <RiskWatchlist items={scoredFeed} onSelect={setDrawerItem} />
           </div>

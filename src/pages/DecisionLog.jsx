@@ -58,15 +58,16 @@ export default function DecisionLog() {
   const [filterImpact, setFilterImpact] = useState('all');
   const [search, setSearch] = useState('');
 
+  // PMA entities removed — queries return empty arrays
   const { data: decisions = [], isLoading: loadingD } = useQuery({
     queryKey: ['decisions', projectId],
-    queryFn: () => projectId ? base44.entities.PMADecision.filter({ project_id: projectId }) : [],
+    queryFn: () => [],
     enabled: !!projectId,
   });
 
   const { data: assumptions = [], isLoading: loadingA } = useQuery({
     queryKey: ['assumptions', projectId],
-    queryFn: () => projectId ? base44.entities.PMAAssumption.filter({ project_id: projectId }) : [],
+    queryFn: () => [],
     enabled: !!projectId,
   });
 
@@ -78,31 +79,14 @@ export default function DecisionLog() {
   const decisionKeys = [['decisions', projectId]];
   const assumptionKeys = [['assumptions', projectId]];
 
-  const createDecision = useSaveMutation(
-    (data) => base44.entities.PMADecision.create({ ...data, project_id: projectId }),
-    { invalidateKeys: decisionKeys, successMsg: 'Decision logged', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } }
-  );
-  const updateDecision = useSaveMutation(
-    ({ id, data }) => base44.entities.PMADecision.update(id, data),
-    { invalidateKeys: decisionKeys, successMsg: 'Decision updated', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } }
-  );
-  const deleteDecision = useSaveMutation(
-    (id) => base44.entities.PMADecision.delete(id),
-    { invalidateKeys: decisionKeys, successMsg: 'Decision removed', onDone: () => setDeleteTarget(null) }
-  );
-
-  const createAssumption = useSaveMutation(
-    (data) => base44.entities.PMAAssumption.create({ ...data, project_id: projectId }),
-    { invalidateKeys: assumptionKeys, successMsg: 'Assumption logged', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } }
-  );
-  const updateAssumption = useSaveMutation(
-    ({ id, data }) => base44.entities.PMAAssumption.update(id, data),
-    { invalidateKeys: assumptionKeys, successMsg: 'Assumption updated', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } }
-  );
-  const deleteAssumption = useSaveMutation(
-    (id) => base44.entities.PMAAssumption.delete(id),
-    { invalidateKeys: assumptionKeys, successMsg: 'Assumption removed', onDone: () => setDeleteTarget(null) }
-  );
+  // PMA entities removed — mutations are no-ops
+  const noop = async () => {};
+  const createDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision logged', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } });
+  const updateDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision updated', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } });
+  const deleteDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision removed', onDone: () => setDeleteTarget(null) });
+  const createAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption logged', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } });
+  const updateAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption updated', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } });
+  const deleteAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption removed', onDone: () => setDeleteTarget(null) });
 
   const today = new Date();
 
