@@ -72,13 +72,15 @@ const applyConditions = (query, conditions = {}) => {
 
 /**
  * Strip undefined values and camelCase keys (Postgres uses snake_case only).
- * Components built on Base44 often pass both forms; we keep only the
- * snake_case ones so PostgREST doesn't complain about unknown columns.
+ * Also strip the virtual alias fields that addAliases() injects after reads
+ * (created_date, updated_date) — they are not real DB columns and will cause
+ * a PostgREST "column not found" error if sent back on update/create.
  */
+const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date']);
 const cleanRecord = (record) =>
   Object.fromEntries(
     Object.entries(record).filter(
-      ([k, v]) => v !== undefined && !/[A-Z]/.test(k)
+      ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
     )
   );
 
