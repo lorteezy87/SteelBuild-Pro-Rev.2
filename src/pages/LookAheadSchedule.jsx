@@ -150,15 +150,6 @@ export default function LookAheadSchedule() {
 
   const createMut = useMutation({
     mutationFn: d => base44.entities.LookAhead.create(d),
-claude/cranky-black
-    onSuccess: () => { qc.invalidateQueries(["lookahead"]); setModalOpen(false); setEditing(null); toast.success("Look-ahead item created"); },
-    onError: (err) => toast.error(`Failed to create: ${err?.message || "Unknown error"}`),
-  });
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
-    onSuccess: () => { qc.invalidateQueries(["lookahead"]); setModalOpen(false); setEditing(null); toast.success("Look-ahead item updated"); },
-    onError: (err) => toast.error(`Failed to update: ${err?.message || "Unknown error"}`),
-=======
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       setModalOpen(false);
@@ -180,21 +171,15 @@ claude/cranky-black
     onError: (err) => {
       toast.error(`Failed to update look-ahead item: ${err?.message || "Unknown error"}`);
     },
-    codex/base44-deploy-nick
   });
   const deleteMut = useMutation({
     mutationFn: id => base44.entities.LookAhead.delete(id),
     onSuccess: (_, deletedId) => {
-claude/cranky-black
-      qc.invalidateQueries(["lookahead"]);
-      if (editing?.id === deletedId) { setEditing(null); setModalOpen(false); }
-=======
       qc.invalidateQueries({ queryKey: ["lookahead"] });
       if (editing?.id === deletedId) {
         setEditing(null);
         setModalOpen(false);
       }
-codex/base44-deploy-nick
       setDeleteTarget(null);
       toast.success("Look-ahead item deleted");
     },

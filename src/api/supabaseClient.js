@@ -338,16 +338,8 @@ export const integrations = {
         .from('app-files')
         .upload(path, file, { contentType: file.type, upsert: false });
       if (error) throw error;
-      claude/cranky-black
-      // Bucket is private — generate a signed URL valid for 1 hour
-      const { data: signedData, error: signErr } = await supabase.storage
-        .from('app-files')
-        .createSignedUrl(data.path, 3600);
-      if (signErr) throw signErr;
-      return { file_url: signedData.signedUrl, file_name: file.name, path: data.path };
-      const signedUrl = await getSignedUrl(data.path);
-      return { file_url: signedUrl, file_name: file.name, path: data.path };
-      codex/base44-deploy-nick
+      // Store the storage path — call getSignedUrl(path) on demand when displaying
+      return { file_url: data.path, file_name: file.name, path: data.path };
     },
 
     /**

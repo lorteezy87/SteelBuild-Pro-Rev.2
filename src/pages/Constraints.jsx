@@ -355,7 +355,7 @@ export default function Constraints() {
               flexWrap: "wrap",
             }}
           >
-            <span>{project?.name || projects.find((p) => p.id === projectId)?.name || "Project"}</span>
+            <span>{activeProject?.name || projects.find((p) => p.id === projectId)?.name || "Project"}</span>
             <span style={{ color: "var(--border-strong)" }}>�</span>
             <span>{openCount} Open</span>
             <span style={{ color: "var(--border-strong)" }}>�</span>
