@@ -1,15 +1,15 @@
 import React from "react";
 
-export default function DocumentLeftPanel({ documents, activeFilters, onFilterChange }) {
+export default function DocumentLeftPanel({ documents = [], activeFilters = {}, onFilterChange }) {
   const categories = [
-    "Blueprint", "Shop Drawing", "IFC Model", "RFI Document",
-    "Submittal", "Specification", "Contract", "Change Order",
-    "Daily Log", "Photo", "Report", "Transmittal",
-    "Material Cert", "Safety", "Other"
+    "Blueprint", "Shop Drawing", "IFC Model", "Specification",
+    "Submittal", "Transmittal", "RFI Response", "Change Order",
+    "Contract", "Photo", "Report", "Correspondence",
+    "Permit", "Inspection Report", "Other"
   ];
 
-  const disciplines = ["Structural", "Arch", "MEP", "Civil", "Misc Metals", "Geotechnical", "Other"];
-  const statuses = ["Approved", "Under Review", "Draft", "Superseded"];
+  const disciplines = ["Structural", "Architectural", "MEP", "Civil", "Misc Metals", "Geotechnical", "General", "Other"];
+  const statuses = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded"];
 
   const getCategoryCount = (cat) => documents.filter((d) => d.category === cat).length;
   const getDisciplineCount = (disc) => documents.filter((d) => d.discipline === disc).length;
