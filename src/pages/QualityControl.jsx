@@ -8,6 +8,7 @@ import QCList from "@/components/qc/QCList";
 
 export default function QualityControl() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");

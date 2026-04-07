@@ -8,6 +8,7 @@ import ResourceList from "@/components/resources/ResourceList";
 
 export default function ResourceManagement() {
   const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
