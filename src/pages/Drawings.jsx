@@ -93,6 +93,8 @@ function StagePipeline({ drawings }) {
 
 function SheetFormModal({ initial, onSave, onClose, saving }) {
   const [form, setForm] = useState(initial || EMPTY_FORM);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const labelStyle = { ...mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--text-muted)", display: "block", marginBottom: 5 };
@@ -160,6 +162,22 @@ function SheetFormModal({ initial, onSave, onClose, saving }) {
             <input style={inputStyle} value={form.linked_rfi_ids || ""} onChange={e => set("linked_rfi_ids", e.target.value)} placeholder="RFI #001, RFI #002" />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>PDF Attachment</label>
+            {form.file_url && !uploadFile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ ...mono, fontSize: 10, color: "#10B981" }}>FILE ATTACHED</span>
+                <button onClick={() => set("file_url", "")} style={{ background: "none", border: "none", color: "var(--status-error)", fontSize: 10, cursor: "pointer", ...mono }}>REMOVE</button>
+              </div>
+            )}
+            <input
+              type="file"
+              accept=".pdf,.dwg,.dxf"
+              onChange={e => { if (e.target.files?.[0]) setUploadFile(e.target.files[0]); }}
+              style={{ ...inputStyle, padding: "6px 10px", fontSize: 11 }}
+            />
+            {uploadFile && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)</div>}
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Notes</label>
             <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
           </div>
@@ -175,9 +193,24 @@ function SheetFormModal({ initial, onSave, onClose, saving }) {
           <button onClick={onClose} style={{ padding: "8px 20px", background: "none", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-muted)", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer" }}>
             CANCEL
           </button>
-          <button onClick={() => onSave(form)} disabled={saving || !form.sheet_number || !form.title}
-            style={{ padding: "8px 24px", background: "var(--accent)", border: "none", borderRadius: 2, color: "#000", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "SAVING..." : "SAVE SHEET"}
+          <button onClick={async () => {
+              let fileUrl = form.file_url || "";
+              if (uploadFile) {
+                setUploading(true);
+                try {
+                  const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+                  fileUrl = file_url;
+                } catch (err) {
+                  toast.error("File upload failed: " + (err?.message || "Unknown error"));
+                  setUploading(false);
+                  return;
+                }
+                setUploading(false);
+              }
+              onSave({ ...form, file_url: fileUrl });
+            }} disabled={saving || uploading || !form.sheet_number || !form.title}
+            style={{ padding: "8px 24px", background: "var(--accent)", border: "none", borderRadius: 2, color: "#000", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: (saving || uploading) ? "not-allowed" : "pointer", opacity: (saving || uploading) ? 0.7 : 1 }}>
+            {uploading ? "UPLOADING..." : saving ? "SAVING..." : "SAVE SHEET"}
           </button>
         </div>
       </div>
@@ -321,7 +354,7 @@ export default function Drawings() {
     if (!bulkStage || selected.size === 0) return;
     Promise.all([...selected].map(id => base44.entities.Drawing.update(id, { stage: bulkStage })))
       .then(() => { invalidate(); setSelected(new Set()); setBulkStage(""); toast.success(`Updated ${selected.size} sheets`); })
-      .catch(() => toast.error("Bulk update failed"));
+      .catch(err => { invalidate(); toast.error("Bulk update failed: " + (err?.message || "Unknown error")); });
   };
 
   const toggleSelect = (id) => {
@@ -454,7 +487,8 @@ export default function Drawings() {
           <button style={btnGhost} onClick={() => {
             if (!confirm(`Delete ${selected.size} sheets? This cannot be undone.`)) return;
             Promise.all([...selected].map(id => base44.entities.Drawing.delete(id)))
-              .then(() => { invalidate(); setSelected(new Set()); toast.success("Sheets deleted"); });
+              .then(() => { invalidate(); setSelected(new Set()); toast.success("Sheets deleted"); })
+              .catch(err => { invalidate(); toast.error("Some deletions failed: " + (err?.message || "Unknown error")); });
           }}>DELETE</button>
           <button style={btnGhost} onClick={() => setSelected(new Set())}>CLEAR</button>
         </div>

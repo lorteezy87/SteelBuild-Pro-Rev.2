@@ -4,14 +4,14 @@ export default function DocumentFilters({ onFilterChange, activeFilters, onClear
   const [open, setOpen] = useState(false);
 
   const CATEGORIES = [
-    "Blueprint", "Shop Drawing", "IFC Model", "RFI Document",
-    "Submittal", "Specification", "Contract", "Change Order",
-    "Daily Log", "Photo", "Report", "Transmittal",
-    "Material Cert", "Safety", "Other"
+    "Blueprint", "Shop Drawing", "IFC Model", "Specification",
+    "Submittal", "Transmittal", "RFI Response", "Change Order",
+    "Contract", "Photo", "Report", "Correspondence",
+    "Permit", "Inspection Report", "Other"
   ];
 
-  const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals", "Geotechnical", "Other"];
-  const STATUSES = ["Draft", "Under Review", "Approved", "Approved with Comments", "Rejected", "Superseded", "Void"];
+  const DISCIPLINES = ["Structural", "Architectural", "MEP", "Civil", "Misc Metals", "Geotechnical", "General", "Other"];
+  const STATUSES = ["Draft", "Under Review", "Approved", "Approved with Comments", "Revise & Resubmit", "Rejected", "Issued", "Superseded", "Archived", "Void"];
 
   const removeFilter = (key, value) => {
     const updated = activeFilters[key]

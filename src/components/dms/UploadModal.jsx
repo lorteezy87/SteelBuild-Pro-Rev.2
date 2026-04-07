@@ -35,7 +35,7 @@ export default function UploadModal({ projectId, onClose }) {
           description: meta.description || "",
           file_name: file.name,
           file_url,
-          file_type: meta.fileType || "other",
+          file_type: meta.fileType || (() => { const ext = file.name.split(".").pop()?.toLowerCase(); return ["pdf","dwg","dxf","ifc","rvt","jpg","jpeg","png","xlsx","xls","docx","doc"].includes(ext) ? ext : "other"; })(),
           file_size_kb: Math.round(file.size / 1024),
           mime_type: file.type,
           category: meta.category || "Other",
@@ -44,7 +44,7 @@ export default function UploadModal({ projectId, onClose }) {
           revision_number: meta.revisionNumber || "0",
           revision_date: today.toISOString().split("T")[0],
           tags: meta.tags || [],
-          uploaded_by: "Current User",
+          uploaded_by: (await base44.auth.me?.())?.email || "Unknown",
           uploaded_date: today.toISOString(),
           // Schedule integration fields
           is_submittal: scheduleLink.isSubmittal,
@@ -278,11 +278,7 @@ export default function UploadModal({ projectId, onClose }) {
                         }}
                       >
                         <option value="">Category</option>
-                        <option value="Blueprint">Blueprint</option>
-                        <option value="Shop Drawing">Shop Drawing</option>
-                        <option value="IFC Model">IFC Model</option>
-                        <option value="Photo">Photo</option>
-                        <option value="Other">Other</option>
+                        {["Blueprint","Shop Drawing","IFC Model","Specification","Submittal","Transmittal","RFI Response","Change Order","Contract","Photo","Report","Correspondence","Permit","Inspection Report","Other"].map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                       <select
                         value={meta.discipline || ""}
@@ -298,11 +294,7 @@ export default function UploadModal({ projectId, onClose }) {
                         }}
                       >
                         <option value="">Discipline</option>
-                        <option value="Structural">Structural</option>
-                        <option value="Arch">Arch</option>
-                        <option value="MEP">MEP</option>
-                        <option value="Civil">Civil</option>
-                        <option value="Misc Metals">Misc Metals</option>
+                        {["Structural","Architectural","MEP","Civil","Misc Metals","Geotechnical","General","Other"].map(d => <option key={d} value={d}>{d}</option>)}
                       </select>
                       <input
                         type="text"
