@@ -57,12 +57,18 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
 
   const mutation = useMutation({
     mutationFn: async (data) => {
+      // Coerce empty-string numeric fields to null so Postgres doesn't reject them
+      const clean = {
+        ...data,
+        cost_impact_amount:   data.cost_impact_amount   === "" ? null : data.cost_impact_amount   !== undefined ? Number(data.cost_impact_amount)   : null,
+        schedule_impact_days: data.schedule_impact_days === "" ? null : data.schedule_impact_days !== undefined ? Number(data.schedule_impact_days) : null,
+      };
       if (rfi) {
-        return base44.entities.RFI.update(rfi.id, data);
+        return base44.entities.RFI.update(rfi.id, clean);
       }
-      const rfiNumber = data.project_id
+      const rfiNumber = clean.project_id
         ? await getNextFormattedNumber({
-            projectId: data.project_id,
+            projectId: clean.project_id,
             recordType: "RFI",
             entityName: "RFI",
             fieldName: "rfi_number",
@@ -70,7 +76,7 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
           })
         : `RFI #${String(Date.now()).slice(-3)}`;
       return base44.entities.RFI.create({
-        ...data,
+        ...clean,
         rfi_number: rfiNumber,
       });
     },
