@@ -48,16 +48,19 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       }
     }
 
+    // CRITICAL: only include real DB columns — never spread ...form which
+    // may contain computed display fields (signed_extras, exposure, etc.)
+    // that don't exist in the cost_codes table and would cause a 400 error.
     const data = {
-      ...form,
       cost_code_number: selectedCode,
       description: COST_CODES.find((c) => c.code === selectedCode)?.name || "",
-      phase: COST_CODES.find((c) => c.code === selectedCode)?.category || form.phase,
+      phase: form.phase || "Materials",
       budget_amount: Number(form.budget_amount) || 0,
       actual_cost: Number(form.actual_cost) || 0,
       committed_cost: Number(form.committed_cost) || 0,
       forecast_to_complete: Number(form.forecast_to_complete) || 0,
-      phase: form.phase || "Materials"
+      project_id: form.project_id,
+      notes: form.notes || "",
     };
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.number_sequences (
   UNIQUE (project_id, record_type)
 );
 ALTER TABLE public.number_sequences ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_all" ON public.number_sequences;
 CREATE POLICY "auth_all" ON public.number_sequences
   FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
