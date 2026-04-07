@@ -1,3 +1,22 @@
+-- Fix 0: Create user_projects table if it does not exist.
+-- This table was assumed to exist in the original schema but was never created.
+-- It is the many-to-many join between auth users and projects, with a role.
+CREATE TABLE IF NOT EXISTS public.user_projects (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  user_id    UUID NOT NULL,
+  project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL DEFAULT 'member',
+  UNIQUE (user_id, project_id)
+);
+ALTER TABLE public.user_projects ENABLE ROW LEVEL SECURITY;
+
+-- Temporary permissive policy so the rest of this migration can create
+-- more-specific policies without hitting RLS denials during the transaction.
+CREATE POLICY IF NOT EXISTS "temp_auth_all" ON public.user_projects
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
 -- Fix 1: Break infinite recursion in user_projects RLS policy.
 -- admins_manage_memberships was self-referential (queried user_projects from
 -- within a policy on user_projects). Replace with a SECURITY DEFINER function
@@ -94,6 +113,9 @@ CREATE POLICY postgres_full_access ON user_projects
   TO postgres
   USING (true)
   WITH CHECK (true);
+
+-- Clean up the temporary permissive policy now that proper policies are in place.
+DROP POLICY IF EXISTS "temp_auth_all" ON user_projects;
 
 -- Fix 5: Replace unreliable AFTER trigger with an atomic RPC function.
 -- The trigger approach had auth.uid() reliability issues in SECURITY DEFINER context.
