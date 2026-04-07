@@ -8,13 +8,23 @@ import DocumentLeftPanel from "../components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "../components/dms/DocumentDetailPanel";
 import UploadModal from "../components/dms/UploadModal";
 import DocumentEditModal from "../components/dms/DocumentEditModal";
-import { Upload, Grid3x3, List, Folder } from "lucide-react";
+import { Upload, Grid3x3, List, Folder, CloudUpload } from "lucide-react";
+
+const STATUS_TABS = [
+  { key: "all", label: "All" },
+  { key: "Approved", label: "Approved" },
+  { key: "Under Review", label: "Under Review" },
+  { key: "Approved as Noted", label: "As Noted" },
+  { key: "Revise & Resubmit", label: "Revise & Resubmit" },
+  { key: "Rejected", label: "Rejected" },
+];
 
 export default function Documents() {
   const { activeProject } = useProjectContext();
   const [viewMode, setViewMode] = useState("grid"); // grid, list, folder
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState({});
+  const [statusTab, setStatusTab] = useState("all");
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
@@ -77,13 +87,15 @@ export default function Documents() {
       result = result.filter((d) => activeFilters.discipline.includes(d.discipline));
     }
 
-    // Status filter
-    if (activeFilters.status?.length) {
+    // Status filter (tab takes priority over sidebar filter)
+    if (statusTab !== "all") {
+      result = result.filter((d) => d.status === statusTab);
+    } else if (activeFilters.status?.length) {
       result = result.filter((d) => activeFilters.status.includes(d.status));
     }
 
     return result;
-  }, [allDocuments, searchQuery, activeFilters]);
+  }, [allDocuments, searchQuery, activeFilters, statusTab]);
 
   const handleFilterChange = (key, value) => {
     setActiveFilters((prev) => ({
@@ -230,6 +242,47 @@ export default function Documents() {
 
         {/* Main area */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* Status Tabs */}
+          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
+            {STATUS_TABS.map((tab) => {
+              const count = tab.key === "all" ? allDocuments.length : allDocuments.filter((d) => d.status === tab.key).length;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setStatusTab(tab.key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "7px 14px",
+                    background: "transparent",
+                    color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
+                    border: "none",
+                    borderBottom: statusTab === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
+                    borderRadius: 0,
+                    marginBottom: -1,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: statusTab === tab.key ? 700 : 500,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "color 0.15s, border-color 0.15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      padding: "1px 5px", borderRadius: 3,
+                      background: statusTab === tab.key ? "var(--accent-muted)" : "rgba(255,255,255,0.06)",
+                      color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
+                    }}>{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Filters */}
           <DocumentFilters
             onFilterChange={handleFilterChange}
@@ -242,9 +295,55 @@ export default function Documents() {
             <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
               Loading documents...
             </div>
+          ) : allDocuments.length === 0 ? (
+            /* Hero empty state — drag & drop zone */
+            <div
+              onClick={() => setUploadOpen(true)}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                margin: "12px 0",
+                border: "2px dashed rgba(255,255,255,0.12)",
+                borderRadius: 12,
+                padding: "60px 24px",
+                cursor: "pointer",
+                transition: "border-color 0.2s, background 0.2s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--accent-muted)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.background = "transparent"; }}
+            >
+              <CloudUpload size={52} style={{ color: "var(--accent)", opacity: 0.4 }} />
+              <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
+                Upload Project Documents
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 360, textAlign: "center", lineHeight: 1.7 }}>
+                Drag drawings, specs, or submittals here, or click to browse. Files are organized by category, discipline, and revision automatically.
+              </div>
+              <div style={{
+                marginTop: 8,
+                padding: "8px 20px",
+                background: "var(--accent-muted)",
+                border: "1px solid var(--accent-border)",
+                borderRadius: "var(--radius-btn)",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+              }}>
+                UPLOAD FIRST DOCUMENT
+              </div>
+            </div>
           ) : filteredDocs.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
-              No documents found
+            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)", fontFamily: "var(--font-body)", fontSize: 13 }}>
+              No documents match the current filters.{" "}
+              <button onClick={handleClearAllFilters} style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700 }}>
+                CLEAR FILTERS
+              </button>
             </div>
           ) : viewMode === "grid" ? (
             <div
