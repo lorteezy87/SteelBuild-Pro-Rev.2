@@ -627,8 +627,8 @@ export default function ProjectControlCenter() {
         item.overdueDays > 0 ? item.overdueDays : "",
         `"${(item.assigned_to || "Unassigned").replace(/"/g, '""')}"`,
         `"${(item.nextAction || "").replace(/"/g, '""')}"`,
-        `"${(item.tags || []).join(", ")}"`,
-        `"${(item.reasons || []).join(" | ").replace(/"/g, '""')}"`,
+        `"${(Array.isArray(item.tags) ? item.tags : []).join(", ")}"`,
+        `"${(Array.isArray(item.reasons) ? item.reasons : []).join(" | ").replace(/"/g, '""')}"`,
       ]);
     });
     const csv = rows.map((r) => r.join(",")).join("\n");
