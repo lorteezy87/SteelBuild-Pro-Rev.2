@@ -89,7 +89,7 @@ export default function GlobalSearchModal({ open, onClose }) {
       drawings
         .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title.toLowerCase().includes(ql))
         .slice(0, 5)
-        .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Submittals" }));
+        .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Drawings" }));
 
       workPackages
         .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name.toLowerCase().includes(ql))

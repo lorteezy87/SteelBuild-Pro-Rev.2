@@ -1,18 +1,46 @@
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 
 export default function QualityControl() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterResult, setFilterResult] = useState("all");
+  const qc = useQueryClient();
+
+  const createMut = useMutation({
+    mutationFn: (data) => base44.entities.QualityControlRecord.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record created"); setShowForm(false); setEditing(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...data }) => base44.entities.QualityControlRecord.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record updated"); setShowForm(false); setEditing(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.QualityControlRecord.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["qc-records"] }); toast.success("Record deleted"); setDeleteTarget(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleSave = (data) => {
+    if (editing?.id) updateMut.mutate({ id: editing.id, ...data });
+    else createMut.mutate({ ...data, project_id: projectId });
+  };
 
   const { data: qcRecords = [] } = useQuery({
     queryKey: ["qc-records", projectId],

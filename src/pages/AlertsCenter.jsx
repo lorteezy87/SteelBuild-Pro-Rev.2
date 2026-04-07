@@ -8,7 +8,7 @@ import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 
-const PAGE_MAP = { RFI: "RFIs", Drawing: "Submittals", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
+const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
 const SEVERITY_BG = {
   Critical: { bg: "var(--danger-muted)", border: "var(--status-error)" },
@@ -31,12 +31,12 @@ export default function AlertsCenter() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
-    onSuccess: () => qc.invalidateQueries(["alerts"]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
   const deleteMut = useMutation({
     mutationFn: id => base44.entities.Alert.delete(id),
-    onSuccess: () => qc.invalidateQueries(["alerts"]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
   const markRead = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_read: true } });
