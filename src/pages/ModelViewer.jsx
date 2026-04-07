@@ -31,9 +31,9 @@ export default function ModelViewer() {
   useEffect(() => {
     const loadScripts = async () => {
       const scripts = [
-        'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
-        'https://threejs.org/examples/js/controls/OrbitControls.js',
-        'https://threejs.org/examples/js/loaders/GLTFLoader.js',
+        'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
+        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
       ];
 
       for (const src of scripts) {
