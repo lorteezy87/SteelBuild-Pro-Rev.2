@@ -11,7 +11,6 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
 import Dashboard from './pages/Dashboard';
-import ErrorBoundary from '@/components/ErrorBoundary';
 
 const { Pages, Layout } = pagesConfig;
 
