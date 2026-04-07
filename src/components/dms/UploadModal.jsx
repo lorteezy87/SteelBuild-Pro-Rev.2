@@ -1,13 +1,20 @@
 import React, { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 
 export default function UploadModal({ projectId, onClose }) {
   const [files, setFiles] = useState([]);
   const [metadata, setMetadata] = useState({});
+  const [scheduleLink, setScheduleLink] = useState({ linkedWpId: "", reviewLeadTime: 14, isSubmittal: false });
   const fileInputRef = useRef(null);
   const qc = useQueryClient();
+
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+  });
 
   const uploadMutation = useMutation({
     mutationFn: async (filesToUpload) => {
@@ -16,34 +23,33 @@ export default function UploadModal({ projectId, onClose }) {
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
         const meta = metadata[file.name] || {};
+        // Calculate due date from lead time if this is a submittal
+        const today = new Date();
+        const dueDate = scheduleLink.isSubmittal
+          ? new Date(today.getTime() + scheduleLink.reviewLeadTime * 86400000).toISOString().split("T")[0]
+          : undefined;
+
         const doc = await base44.entities.Document.create({
           project_id: projectId,
-          projectId,
           display_name: meta.displayName || file.name,
-          displayName: meta.displayName || file.name,
           description: meta.description || "",
           file_name: file.name,
-          fileName: file.name,
           file_url,
-          fileUrl: file_url,
           file_type: meta.fileType || "other",
-          fileType: meta.fileType || "other",
           file_size_kb: Math.round(file.size / 1024),
-          fileSizeKb: Math.round(file.size / 1024),
           mime_type: file.type,
-          mimeType: file.type,
           category: meta.category || "Other",
           discipline: meta.discipline || "Other",
-          status: "Draft",
+          status: scheduleLink.isSubmittal ? "Under Review" : "Draft",
           revision_number: meta.revisionNumber || "0",
-          revisionNumber: meta.revisionNumber || "0",
-          revision_date: new Date().toISOString().split("T")[0],
-          revisionDate: new Date().toISOString().split("T")[0],
+          revision_date: today.toISOString().split("T")[0],
           tags: meta.tags || [],
           uploaded_by: "Current User",
-          uploadedBy: "Current User",
-          uploaded_date: new Date().toISOString(),
-          uploadedDate: new Date().toISOString()
+          uploaded_date: today.toISOString(),
+          // Schedule integration fields
+          is_submittal: scheduleLink.isSubmittal,
+          ...(scheduleLink.isSubmittal && scheduleLink.linkedWpId ? { linked_wp_id: scheduleLink.linkedWpId } : {}),
+          ...(scheduleLink.isSubmittal ? { review_lead_time: scheduleLink.reviewLeadTime, due_date: dueDate } : {}),
         });
         created.push(doc);
       }
@@ -320,6 +326,94 @@ export default function UploadModal({ projectId, onClose }) {
             </div>
           )}
         </div>
+
+        {/* Schedule Integration */}
+        {files.length > 0 && (
+          <div style={{
+            margin: "0 16px 16px",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            paddingTop: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                id="isSubmittal"
+                checked={scheduleLink.isSubmittal}
+                onChange={(e) => setScheduleLink(prev => ({ ...prev, isSubmittal: e.target.checked }))}
+                style={{ accentColor: "var(--accent)", width: 14, height: 14, cursor: "pointer" }}
+              />
+              <label htmlFor="isSubmittal" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-warning)", letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer" }}>
+                Track as Submittal — Link to Schedule
+              </label>
+            </div>
+
+            {scheduleLink.isSubmittal && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, paddingLeft: 24 }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>
+                    Target Gantt Activity (Work Package)
+                  </div>
+                  <select
+                    value={scheduleLink.linkedWpId}
+                    onChange={(e) => setScheduleLink(prev => ({ ...prev, linkedWpId: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      padding: "7px 10px",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid var(--accent-border)",
+                      color: scheduleLink.linkedWpId ? "var(--text-primary)" : "var(--text-muted)",
+                      borderRadius: 6,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 11,
+                    }}
+                  >
+                    <option value="">— Select Activity —</option>
+                    {workPackages.map(wp => (
+                      <option key={wp.id} value={wp.id}>
+                        {wp.wp_number ? `${wp.wp_number} · ` : ""}{wp.name} ({wp.phase || "—"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ minWidth: 110 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>
+                    Review Lead Time
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={scheduleLink.reviewLeadTime}
+                      onChange={(e) => setScheduleLink(prev => ({ ...prev, reviewLeadTime: Number(e.target.value) || 14 }))}
+                      style={{
+                        width: 60,
+                        padding: "7px 8px",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid var(--accent-border)",
+                        color: "var(--text-primary)",
+                        borderRadius: 6,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        textAlign: "right",
+                      }}
+                    />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>days</span>
+                  </div>
+                </div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 4 }}>
+                    Planned approval date:{" "}
+                    <span style={{ color: "var(--accent)" }}>
+                      {new Date(Date.now() + scheduleLink.reviewLeadTime * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    {" · "}A review bar will appear on the Gantt chart preceding the selected activity.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div

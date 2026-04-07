@@ -59,8 +59,8 @@
   --accent-hover:             #E0B030;
   --accent-muted:             rgba(200,155,32,0.10);
   --accent-border:            rgba(200,155,32,0.35);
-  --accent-text:              #07090E;
-  --on-accent:                #07090E;
+  --accent-text:              #FFFFFF;
+  --on-accent:                #FFFFFF;
 
   /* ── Aliases ── */
   --secondary:                #C89B20;

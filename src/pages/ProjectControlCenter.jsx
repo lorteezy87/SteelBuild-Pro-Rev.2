@@ -212,9 +212,9 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer }) {
       {expanded && (
         <div style={{ padding: "10px 16px 14px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
           {/* Impact tags */}
-          {item.tags.length > 0 && (
+          {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {item.tags.map((t) => <ImpactTag key={t} tagKey={t} />)}
+              {(Array.isArray(item.tags) ? item.tags : []).map((t) => <ImpactTag key={t} tagKey={t} />)}
             </div>
           )}
 
@@ -341,11 +341,11 @@ function DetailDrawer({ item, onClose, onNavigate }) {
           )}
 
           {/* Impact tags */}
-          {item.tags.length > 0 && (
+          {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>DOWNSTREAM IMPACT</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {item.tags.map((t) => <ImpactTag key={t} tagKey={t} />)}
+                {(Array.isArray(item.tags) ? item.tags : []).map((t) => <ImpactTag key={t} tagKey={t} />)}
               </div>
             </div>
           )}
@@ -627,8 +627,8 @@ export default function ProjectControlCenter() {
         item.overdueDays > 0 ? item.overdueDays : "",
         `"${(item.assigned_to || "Unassigned").replace(/"/g, '""')}"`,
         `"${(item.nextAction || "").replace(/"/g, '""')}"`,
-        `"${(item.tags || []).join(", ")}"`,
-        `"${(item.reasons || []).join(" | ").replace(/"/g, '""')}"`,
+        `"${(Array.isArray(item.tags) ? item.tags : []).join(", ")}"`,
+        `"${(Array.isArray(item.reasons) ? item.reasons : []).join(" | ").replace(/"/g, '""')}"`,
       ]);
     });
     const csv = rows.map((r) => r.join(",")).join("\n");

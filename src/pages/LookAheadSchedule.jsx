@@ -8,16 +8,30 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Pencil, Trash2, Plus } from "lucide-react";
-import StatusBadge from "../components/shared/StatusBadge";
-import ProgressBar from "../components/shared/ProgressBar";
+import { Pencil, Trash2, Plus, ChevronLeft, ChevronRight, RefreshCw, Calendar } from "lucide-react";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 
-const PHASE_COLORS = { Detailing: "bg-indigo-100 text-indigo-700", Fabrication: "bg-amber-100 text-amber-700", Delivery: "bg-emerald-100 text-emerald-700", Erection: "bg-rose-100 text-rose-700" };
+const PHASE_COLORS = {
+  Detailing:   { bg: "rgba(99,102,241,0.12)",  color: "rgb(99,102,241)",  border: "rgba(99,102,241,0.3)"  },
+  Fabrication: { bg: "rgba(245,158,11,0.12)",  color: "rgb(245,158,11)",  border: "rgba(245,158,11,0.3)"  },
+  Delivery:    { bg: "rgba(16,185,129,0.12)",  color: "rgb(16,185,129)",  border: "rgba(16,185,129,0.3)"  },
+  Erection:    { bg: "rgba(239,68,68,0.12)",   color: "rgb(239,68,68)",   border: "rgba(239,68,68,0.3)"   },
+};
 
-const empty = { project_id: "", project_name: "", activity: "", phase: "Erection", crew: "", planned_start: "", planned_end: "", forecast_start: "", forecast_end: "", percent_complete: 0, constraints: "", status: "Not Started" };
+const STATUS_CONFIG = {
+  "Not Started": { bg: "rgba(100,116,139,0.12)", color: "rgb(100,116,139)", border: "rgba(100,116,139,0.3)", icon: "○" },
+  "In Progress":  { bg: "rgba(37,99,235,0.12)",  color: "rgb(37,99,235)",   border: "rgba(37,99,235,0.3)",  icon: "◑" },
+  "Complete":     { bg: "rgba(16,185,129,0.12)", color: "rgb(16,185,129)",  border: "rgba(16,185,129,0.3)", icon: "✓" },
+  "Delayed":      { bg: "rgba(245,158,11,0.15)", color: "rgb(245,158,11)",  border: "rgba(245,158,11,0.4)", icon: "⚠" },
+};
+
+const empty = {
+  project_id: "", project_name: "", activity: "", phase: "Erection", crew: "",
+  planned_start: "", planned_end: "", forecast_start: "", forecast_end: "",
+  percent_complete: 0, constraints: "", status: "Not Started",
+};
 
 function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = false }) {
   const [form, setForm] = useState(empty);
@@ -33,20 +47,31 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{item ? "Edit Look-Ahead Item" : "New Look-Ahead Item"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-4">
-          <div className="col-span-2"><Label>Activity *</Label><Input value={form.activity} onChange={e => set("activity", e.target.value)} /></div>
-          <div><Label>Project *</Label>
+          <div className="col-span-2">
+            <Label>Activity *</Label>
+            <Input
+              autoFocus
+              value={form.activity}
+              onChange={e => set("activity", e.target.value)}
+              placeholder="e.g., Erect columns at Grid A-4"
+            />
+          </div>
+          <div>
+            <Label>Project *</Label>
             <Select value={form.project_id} onValueChange={v => set("project_id", v)}>
               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
               <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div><Label>Phase</Label>
+          <div>
+            <Label>Phase</Label>
             <Select value={form.phase} onValueChange={v => set("phase", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{["Detailing","Fabrication","Delivery","Erection"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div><Label>Status</Label>
+          <div>
+            <Label>Status</Label>
             <Select value={form.status} onValueChange={v => set("status", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{["Not Started","In Progress","Complete","Delayed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
@@ -58,14 +83,50 @@ function LookAheadModal({ open, onClose, onSave, item, projects, isSaving = fals
           <div><Label>Forecast Start</Label><Input type="date" value={form.forecast_start} onChange={e => set("forecast_start", e.target.value)} /></div>
           <div><Label>Forecast End</Label><Input type="date" value={form.forecast_end} onChange={e => set("forecast_end", e.target.value)} /></div>
           <div><Label>% Complete</Label><Input type="number" min="0" max="100" value={form.percent_complete} onChange={e => set("percent_complete", e.target.value)} /></div>
-          <div className="col-span-2"><Label>Constraints</Label><Input value={form.constraints} onChange={e => set("constraints", e.target.value)} placeholder="e.g. Pending RFI-005, material delay" /></div>
+          <div className="col-span-2">
+            <Label>Constraints</Label>
+            <Input value={form.constraints} onChange={e => set("constraints", e.target.value)} placeholder="e.g. Pending RFI-005, material delay" />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
-          <Button onClick={save} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">{isSaving ? (item ? "Updating..." : "Creating...") : (item ? "Update" : "Create")}</Button>
+          <Button onClick={save} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800">
+            {isSaving ? (item ? "Updating..." : "Creating...") : (item ? "Update" : "Create")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function StatusLozenge({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["Not Started"];
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+      borderRadius: 6, padding: "3px 8px",
+      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+      textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap",
+    }}>
+      <span style={{ fontSize: 10 }}>{cfg.icon}</span>
+      {status}
+    </span>
+  );
+}
+
+function MiniProgressBar({ value }) {
+  const pct = Math.min(100, Math.max(0, value || 0));
+  const color = pct >= 100 ? "var(--status-success)" : pct >= 50 ? "var(--accent)" : "var(--status-warning)";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: 1, height: 5, background: "var(--bg-surface-low)", borderRadius: 3, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width 0.3s" }} />
+      </div>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", minWidth: 28, textAlign: "right" }}>
+        {pct}%
+      </span>
+    </div>
   );
 }
 
@@ -76,6 +137,7 @@ export default function LookAheadSchedule() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current 2-week window
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["lookahead", activeProject?.id],
@@ -121,15 +183,17 @@ export default function LookAheadSchedule() {
       setDeleteTarget(null);
       toast.success("Look-ahead item deleted");
     },
-    onError: () => {
-      toast.error("Failed to delete look-ahead item");
-    },
+    onError: () => toast.error("Failed to delete look-ahead item"),
   });
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
-  // Compute 2-week window
-  const today = new Date();
-  const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 14);
+  // Compute 2-week window based on weekOffset
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() + weekOffset * 14);
+  const windowEnd = new Date(windowStart);
+  windowEnd.setDate(windowStart.getDate() + 14);
+
+  const fmtWindow = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   // Group items
   const groupKeys = groupBy === "Phase" ? ["Detailing", "Fabrication", "Delivery", "Erection"]
@@ -144,84 +208,251 @@ export default function LookAheadSchedule() {
 
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>👁</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view the Look-Ahead</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Select a Project</div>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right to view the 2-week look-ahead.</div>
     </div>
   );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">2-Week Look-Ahead</h1>
-          <p className="text-sm text-slate-500">{today.toLocaleDateString("en-US", { month: "long", day: "numeric" })} – {weekEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            2-Week Look-Ahead
+          </h1>
+          {/* Week nav */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+            <button
+              onClick={() => setWeekOffset(o => o - 1)}
+              style={{ display: "flex", alignItems: "center", padding: "2px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, cursor: "pointer", color: "var(--text-secondary)" }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
+              {fmtWindow(windowStart)} – {fmtWindow(windowEnd)}
+            </span>
+            <button
+              onClick={() => setWeekOffset(o => o + 1)}
+              style={{ display: "flex", alignItems: "center", padding: "2px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, cursor: "pointer", color: "var(--text-secondary)" }}
+            >
+              <ChevronRight size={14} />
+            </button>
+            {weekOffset !== 0 && (
+              <button
+                onClick={() => setWeekOffset(0)}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
+              >
+                Today
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 border rounded-md overflow-hidden">
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Group by */}
+          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
             {["Phase", "Crew", "Project"].map(g => (
-              <button key={g} onClick={() => setGroupBy(g)} className={`px-3 py-1.5 text-xs font-medium ${groupBy === g ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{g}</button>
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                style={{
+                  padding: "6px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  border: "none",
+                  borderRight: g !== "Project" ? "1px solid var(--border-default)" : "none",
+                  background: groupBy === g ? "var(--accent)" : "var(--bg-surface)",
+                  color: groupBy === g ? "white" : "var(--text-muted)",
+                  cursor: "pointer",
+                }}
+              >
+                {g}
+              </button>
             ))}
           </div>
-          <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }} className="bg-slate-900 hover:bg-slate-800"><Plus className="w-3.5 h-3.5 mr-1" />Add Item</Button>
-          <Button variant="outline" size="sm" onClick={refetch}>Refresh</Button>
+          <button
+            onClick={() => { setEditing(null); setModalOpen(true); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "7px 14px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--accent-hover)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--accent)"}
+          >
+            <Plus size={12} /> Add Item
+          </button>
+          <button
+            onClick={refetch}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "7px 12px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}
+          >
+            <RefreshCw size={11} />
+          </button>
         </div>
       </div>
 
-      <div style={{background:"var(--bg-surface)",border:"1px solid var(--border-default)",borderRadius:2,overflowX:"auto"}}>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50">
-              <TableHead className="text-xs font-semibold">Activity</TableHead>
-              <TableHead className="text-xs font-semibold">Phase</TableHead>
-              <TableHead className="text-xs font-semibold">Crew</TableHead>
-              <TableHead className="text-xs font-semibold">Planned Start</TableHead>
-              <TableHead className="text-xs font-semibold">Planned End</TableHead>
-              <TableHead className="text-xs font-semibold">Forecast End</TableHead>
-              <TableHead className="text-xs font-semibold w-28">% Complete</TableHead>
-              <TableHead className="text-xs font-semibold">Constraints</TableHead>
-              <TableHead className="text-xs font-semibold">Status</TableHead>
-              <TableHead className="text-xs font-semibold">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? <TableRow><TableCell colSpan={10} className="text-center py-8 text-slate-400">Loading...</TableCell></TableRow>
-              : groupKeys.map(key => {
+      {/* Table */}
+      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <thead>
+              <tr style={{ position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 2, borderBottom: "2px solid var(--border-default)" }}>
+                {[
+                  { label: "Activity",       width: "22%" },
+                  { label: "Phase",          width: "9%"  },
+                  { label: "Crew",           width: "9%"  },
+                  { label: "Planned Start",  width: "9%"  },
+                  { label: "Planned End",    width: "9%"  },
+                  { label: "Forecast End",   width: "9%"  },
+                  { label: "Progress",       width: "12%" },
+                  { label: "Constraints",    width: "12%" },
+                  { label: "Status",         width: "11%" },
+                  { label: "",               width: "8%"  },
+                ].map(col => (
+                  <th
+                    key={col.label}
+                    style={{
+                      width: col.width,
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: "var(--text-muted)",
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr><td colSpan={10} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>Loading...</td></tr>
+              )}
+
+              {!isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={10}>
+                    <div style={{ padding: "64px 24px", textAlign: "center" }}>
+                      <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>No Look-Ahead Items</div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+                        Start tracking upcoming work for this 2-week window.
+                      </div>
+                      <button
+                        onClick={() => { setEditing(null); setModalOpen(true); }}
+                        style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "10px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
+                      >
+                        + Add First Look-Ahead Item
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && groupKeys.map(key => {
                 const grpItems = getGroupItems(key);
                 if (grpItems.length === 0) return null;
+                const phaseCfg = PHASE_COLORS[key];
                 return (
                   <React.Fragment key={key}>
-                    <TableRow className="bg-slate-100">
-                      <TableCell colSpan={10} className="text-sm font-semibold text-slate-700 py-2">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold mr-2 ${PHASE_COLORS[key] || "bg-slate-200 text-slate-700"}`}>{key}</span>
-                        {grpItems.length} item{grpItems.length !== 1 ? "s" : ""}
-                      </TableCell>
-                    </TableRow>
-                    {grpItems.map(item => (
-                      <TableRow key={item.id} className={`hover:bg-slate-50/50 cursor-pointer ${item.status === "Delayed" ? "bg-rose-50/30" : ""}`} onClick={() => { setEditing(item); setModalOpen(true); }}>
-                        <TableCell className="text-sm font-medium">{item.activity}</TableCell>
-                        <TableCell><span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${PHASE_COLORS[item.phase] || ""}`}>{item.phase}</span></TableCell>
-                        <TableCell className="text-sm">{item.crew || "—"}</TableCell>
-                        <TableCell className="text-sm">{formatDate(item.planned_start)}</TableCell>
-                        <TableCell className="text-sm">{formatDate(item.planned_end)}</TableCell>
-                        <TableCell className={`text-sm ${item.forecast_end && item.planned_end && item.forecast_end > item.planned_end ? "text-rose-600 font-medium" : ""}`}>{formatDate(item.forecast_end)}</TableCell>
-                        <TableCell><ProgressBar value={item.percent_complete || 0} max={100} height="h-1.5" color={item.percent_complete >= 100 ? "green" : "blue"} /></TableCell>
-                        <TableCell className="text-sm text-slate-500 max-w-[120px] truncate">{item.constraints || "—"}</TableCell>
-                        <TableCell><StatusBadge status={item.status} /></TableCell>
-                        <TableCell onClick={e => e.stopPropagation()}>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(item); setModalOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500" onClick={() => setDeleteTarget(item)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {/* Group header row */}
+                    <tr style={{ background: "var(--bg-surface-low)" }}>
+                      <td colSpan={10} style={{ padding: "7px 12px" }}>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          background: phaseCfg?.bg || "rgba(100,116,139,0.12)",
+                          color: phaseCfg?.color || "var(--text-muted)",
+                          border: `1px solid ${phaseCfg?.border || "rgba(100,116,139,0.3)"}`,
+                          borderRadius: 6, padding: "2px 10px",
+                          fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                          textTransform: "uppercase", letterSpacing: "0.08em",
+                        }}>
+                          {key}
+                          <span style={{ opacity: 0.6, fontSize: 9 }}>· {grpItems.length}</span>
+                        </span>
+                      </td>
+                    </tr>
+                    {grpItems.map((item, idx) => {
+                      const isDelayed = item.status === "Delayed";
+                      const forecastLate = item.forecast_end && item.planned_end && item.forecast_end > item.planned_end;
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => { setEditing(item); setModalOpen(true); }}
+                          style={{
+                            cursor: "pointer",
+                            background: isDelayed ? "rgba(245,158,11,0.04)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)",
+                            borderBottom: "1px solid var(--divider)",
+                            transition: "background 0.12s",
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
+                          onMouseLeave={e => e.currentTarget.style.background = isDelayed ? "rgba(245,158,11,0.04)" : idx % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-low)"}
+                        >
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: "var(--text-primary)" }}>
+                            {item.activity}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            {item.phase && (
+                              <span style={{
+                                background: PHASE_COLORS[item.phase]?.bg || "rgba(100,116,139,0.1)",
+                                color: PHASE_COLORS[item.phase]?.color || "var(--text-muted)",
+                                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                                borderRadius: 4, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.06em",
+                              }}>{item.phase}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
+                            {item.crew || "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
+                            {formatDate(item.planned_start) || "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
+                            {formatDate(item.planned_end) || "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: forecastLate ? 700 : 400, color: forecastLate ? "var(--status-error)" : "var(--text-muted)" }}>
+                            {formatDate(item.forecast_end) || "—"}
+                            {forecastLate && <span style={{ marginLeft: 4, fontSize: 9 }}>⚠</span>}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <MiniProgressBar value={item.percent_complete} />
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {item.constraints || "—"}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <StatusLozenge status={item.status} />
+                          </td>
+                          <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                onClick={() => { setEditing(item); setModalOpen(true); }}
+                                style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer" }}
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(item)}
+                                style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, color: "var(--status-error)", cursor: "pointer" }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}
-            {!isLoading && items.length === 0 && <TableRow><TableCell colSpan={10} className="text-center py-8 text-slate-400">No look-ahead items. Add your first!</TableCell></TableRow>}
-          </TableBody>
-        </Table>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <LookAheadModal
@@ -235,11 +466,7 @@ export default function LookAheadSchedule() {
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteMut.isPending && deleteTarget?.id) {
-            deleteMut.mutate(deleteTarget.id);
-          }
-        }}
+        onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }}
         title="Delete Item"
         description={`Delete "${deleteTarget?.activity}"?`}
       />

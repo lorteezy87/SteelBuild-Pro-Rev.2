@@ -87,24 +87,27 @@ function SummaryCard({ label, value, detail, tone = "var(--accent)" }) {
 
 function SectionTabs({ active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)" }}>
       {VIEW_TABS.map((tab) => (
         <button
           key={tab.key}
           type="button"
           onClick={() => onChange(tab.key)}
           style={{
-            background: active === tab.key ? "var(--accent)" : "var(--bg-surface-low)",
-            color: active === tab.key ? "var(--accent-text)" : "var(--text-secondary)",
-            border: `1px solid ${active === tab.key ? "var(--accent-border)" : "var(--border-default)"}`,
-            borderRadius: "var(--radius-btn)",
-            padding: "7px 12px",
+            background: "transparent",
+            color: active === tab.key ? "var(--accent)" : "var(--text-muted)",
+            border: "none",
+            borderBottom: active === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
+            borderRadius: 0,
+            padding: "8px 16px",
+            marginBottom: -1,
             fontFamily: "var(--font-mono)",
             fontSize: 9,
-            fontWeight: 700,
+            fontWeight: active === tab.key ? 700 : 500,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
             cursor: "pointer",
+            transition: "color 0.15s, border-color 0.15s",
           }}
         >
           {tab.label}
@@ -484,8 +487,70 @@ export default function Financials() {
         addLabel="New Cost Code"
       />
 
+      {reviewFlags.length > 0 && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 16px",
+          background: "var(--danger-muted)",
+          border: "1px solid var(--danger-border)",
+          borderLeft: "4px solid var(--status-error)",
+          borderRadius: "var(--radius-card)",
+          flexWrap: "wrap",
+        }}>
+          <span style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.12em", textTransform: "uppercase", flexShrink: 0 }}>
+            ⚑ {reviewFlags.length} FLAG{reviewFlags.length > 1 ? "S" : ""} REQUIRE REVIEW
+          </span>
+          {reviewFlags.map((flag) => (
+            <div key={flag.title} style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: flag.tone === "error" ? "rgba(255,61,61,0.12)" : "rgba(245,158,11,0.12)",
+              border: `1px solid ${flag.tone === "error" ? "rgba(255,61,61,0.30)" : "rgba(245,158,11,0.30)"}`,
+              borderRadius: 4,
+              padding: "3px 10px",
+            }}>
+              <span style={{ ...mono, fontSize: 8, fontWeight: 700, color: flag.tone === "error" ? "var(--status-error)" : "var(--status-warning)", letterSpacing: "0.10em" }}>
+                {flag.title.toUpperCase()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <SectionTabs active={activeView} onChange={setActiveView} />
 
+      {costCodes.length === 0 && sovItems.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", gap: 14 }}>
+          <div style={{ ...mono, fontSize: 48, opacity: 0.15, lineHeight: 1 }}>$</div>
+          <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
+            Awaiting SOV Upload
+          </div>
+          <div style={{ ...body, fontSize: 12, color: "var(--text-muted)", maxWidth: 360, textAlign: "center", lineHeight: 1.6 }}>
+            Add cost codes to build your budget, then upload a Schedule of Values to enable billing analysis and variance tracking.
+          </div>
+          <button
+            onClick={() => { setEditingCostCode(null); setModalOpen(true); }}
+            style={{
+              marginTop: 8,
+              padding: "9px 20px",
+              background: "var(--accent-muted)",
+              border: "1px solid var(--accent-border)",
+              borderRadius: "var(--radius-btn)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+            }}
+          >
+            + Add First Cost Code
+          </button>
+        </div>
+      ) : (<>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <SummaryCard label="Contract Value" value={formatCurrencyShort(summary.contractValue)} detail={`Project ${selectedProject?.project_number || "—"}`} />
         <SummaryCard label="SOV Total" value={formatCurrencyShort(summary.sovTotal)} detail={`Variance to contract ${formatSigned(summary.sovVsContract)}`} tone={Math.abs(summary.sovVsContract) > 1 ? "var(--status-warning)" : "var(--accent)"} />
@@ -687,6 +752,7 @@ export default function Financials() {
           </PhoenixTable>
         </PhoenixPanel>
       )}
+      </>)}
 
       <CostCodeFormModal
         open={modalOpen}

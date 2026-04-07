@@ -79,6 +79,8 @@ export default function WorkPackages() {
   const [expandedWP, setExpandedWP] = useState(null);
   const [drawingStageFilter, setDrawingStageFilter] = useState("all");
   const [selectedBoardWP, setSelectedBoardWP] = useState(null);
+  const [compact, setCompact] = useState(false);
+  const [selectedWPs, setSelectedWPs] = useState(new Set());
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -150,6 +152,44 @@ export default function WorkPackages() {
     },
     onError: () => toast.error("Delete failed"),
   });
+
+  const bulkStatusMut = useMutation({
+    mutationFn: ({ ids, status }) =>
+      Promise.all(ids.map((id) => base44.entities.WorkPackage.update(id, { status }))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work-packages"] });
+      qc.invalidateQueries({ queryKey: ["wps-all"] });
+      setSelectedWPs(new Set());
+      toast.success("Status updated");
+    },
+    onError: () => toast.error("Bulk update failed"),
+  });
+
+  const exportCSV = () => {
+    const toExport = selectedWPs.size > 0 ? filtered.filter((w) => selectedWPs.has(w.id)) : filtered;
+    const headers = ["WP #", "Name", "Phase", "Status", "Tonnage", "% Complete", "Crew", "Shop Hrs Budget", "Shop Hrs Actual", "Notes"];
+    const rows = toExport.map((w) =>
+      [w.wp_number, w.name, w.phase, w.status, (Number(w.tonnage) || 0).toFixed(1),
+       `${Number(w.percent_complete) || 0}%`, w.crew || "",
+       w.shop_hours_budget || 0, w.shop_hours_actual || 0, w.notes || ""]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `work-packages-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleSelectWP = (id) =>
+    setSelectedWPs((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const toggleSelectAll = () =>
+    setSelectedWPs(selectedWPs.size === filtered.length ? new Set() : new Set(filtered.map((w) => w.id)));
 
   const filtered = useMemo(() => {
     return workPackages.filter((wp) => {
@@ -842,6 +882,35 @@ export default function WorkPackages() {
           </div>
 
           <button
+            onClick={() => setCompact((v) => !v)}
+            title={compact ? "Normal view" : "Compact view — more rows visible"}
+            style={{
+              padding: "7px 12px", borderRadius: "var(--radius-btn)",
+              border: "1px solid var(--border-default)",
+              background: compact ? "var(--bg-surface-high)" : "var(--bg-surface-low)",
+              color: compact ? "var(--accent)" : "var(--text-secondary)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer",
+            }}
+          >
+            ⊟ {compact ? "COMPACT" : "COMPACT"}
+          </button>
+
+          <button
+            onClick={exportCSV}
+            title="Export filtered work packages as CSV"
+            style={{
+              padding: "7px 12px", borderRadius: "var(--radius-btn)",
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-surface-low)", color: "var(--text-secondary)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer",
+            }}
+          >
+            ↓ CSV
+          </button>
+
+          <button
             onClick={handleWPCreate}
             style={{
               background: "var(--accent)",
@@ -887,6 +956,44 @@ export default function WorkPackages() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedWPs.size > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
+          background: "rgba(99,102,241,0.10)", border: "1px solid var(--accent)",
+          borderRadius: "var(--radius-card)", flexWrap: "wrap",
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
+            {selectedWPs.size} selected
+          </span>
+          <span style={{ color: "var(--divider)" }}>|</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
+          {STATUS_COLUMNS.map((s) => (
+            <button key={s} disabled={bulkStatusMut.isPending}
+              onClick={() => bulkStatusMut.mutate({ ids: [...selectedWPs], status: s })}
+              style={{
+                padding: "4px 10px", borderRadius: "var(--radius-btn)",
+                border: `1px solid ${STATUS_COLORS[s]}`,
+                background: `${STATUS_COLORS[s]}18`,
+                color: STATUS_COLORS[s],
+                fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                cursor: "pointer", textTransform: "uppercase",
+              }}
+            >
+              {s}
+            </button>
+          ))}
+          <button onClick={exportCSV}
+            style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
+            ↓ Export {selectedWPs.size}
+          </button>
+          <button onClick={() => setSelectedWPs(new Set())}
+            style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
       {/* Views */}
       {view === "list" && (
         <WorkPackageList
@@ -897,6 +1004,10 @@ export default function WorkPackages() {
           onEdit={handleWPEdit}
           onDelete={setDeleteTarget}
           showProject={!projectId}
+          compact={compact}
+          selected={selectedWPs}
+          onToggleSelect={toggleSelectWP}
+          onSelectAll={toggleSelectAll}
         />
       )}
 

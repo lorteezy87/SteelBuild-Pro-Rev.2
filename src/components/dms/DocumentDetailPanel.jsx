@@ -265,7 +265,7 @@ export default function DocumentDetailPanel({ doc, onClose }) {
                   TAGS
                 </div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {doc.tags.map((tag) => (
+                  {(Array.isArray(doc.tags) ? doc.tags : []).map((tag) => (
                     <span
                       key={tag}
                       style={{

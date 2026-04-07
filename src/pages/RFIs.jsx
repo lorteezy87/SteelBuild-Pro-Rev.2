@@ -151,6 +151,9 @@ export default function RFIs() {
   const [sortField, setSortField] = useState("date_required");
   const [sortDir, setSortDir] = useState("asc");
   const [overdueFirst, setOverdueFirst] = useState(false);
+  const [selectedRFIs, setSelectedRFIs] = useState(new Set());
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState("");
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -234,6 +237,67 @@ export default function RFIs() {
     },
     onError: (e) => toastCrudError(e, "Failed to repair RFI numbering"),
   });
+
+  const bulkUpdateMut = useMutation({
+    mutationFn: ({ ids, data }) => Promise.all(ids.map((id) => base44.entities.RFI.update(id, data))),
+    onSuccess: async () => {
+      setSelectedRFIs(new Set());
+      await invalidateCrudQueries(qc, rfiQueryKeys);
+      toast.success("RFIs updated");
+    },
+    onError: (e) => toastCrudError(e, "Bulk update failed"),
+  });
+
+  const bulkImportMut = useMutation({
+    mutationFn: async (rows) => {
+      const results = [];
+      for (const row of rows) {
+        const created = await base44.entities.RFI.create({
+          project_id: projectId,
+          project_name: projects.find((p) => p.id === projectId)?.name || "",
+          title: row.title,
+          description: row.description || "",
+          priority: row.priority || "Medium",
+          ball_in_court: row.ball_in_court || "GC",
+          date_required: row.date_required || null,
+          submitted_by: row.submitted_by || "",
+          drawing_reference: row.drawing_reference || "",
+          status: "Open",
+          submitted_date: new Date().toISOString().split("T")[0],
+        });
+        results.push(created);
+      }
+      return results;
+    },
+    onSuccess: async (created) => {
+      await invalidateCrudQueries(qc, rfiQueryKeys);
+      setShowBulkImport(false);
+      setBulkImportText("");
+      toast.success(`${created.length} RFIs imported`);
+    },
+    onError: (e) => toastCrudError(e, "Bulk import failed"),
+  });
+
+  const parseBulkImport = () => {
+    const lines = bulkImportText.trim().split("\n").filter(Boolean);
+    return lines.map((line) => {
+      // Support: "Subject | Priority | BIC | Due Date | Drawing Ref"
+      const parts = line.split("|").map((s) => s.trim());
+      return {
+        title: parts[0] || line,
+        priority: ["Critical", "High", "Medium", "Low"].includes(parts[1]) ? parts[1] : "Medium",
+        ball_in_court: ["Contractor", "GC", "Engineer", "Architect", "Owner"].includes(parts[2]) ? parts[2] : "GC",
+        date_required: parts[3] || null,
+        drawing_reference: parts[4] || "",
+      };
+    });
+  };
+
+  const toggleSelectRFI = (id) =>
+    setSelectedRFIs((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const toggleSelectAll = () =>
+    setSelectedRFIs(selectedRFIs.size === filtered.length ? new Set() : new Set(filtered.map((r) => r.id)));
 
   const toggleStatus = (r) => {
     const order = statusColumns;
@@ -553,6 +617,12 @@ export default function RFIs() {
             ))}
           </div>
           <button
+            onClick={() => setShowBulkImport(true)}
+            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            ↑ Bulk Add
+          </button>
+          <button
             onClick={() => {
               setEditingRFI(null);
               setShowForm(true);
@@ -715,6 +785,83 @@ export default function RFIs() {
           Export
         </button>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedRFIs.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px", background: "rgba(99,102,241,0.10)", borderBottom: "1px solid var(--accent)", flexShrink: 0, flexWrap: "wrap" }}>
+          <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{selectedRFIs.size} selected</span>
+          <span style={{ color: "var(--divider)" }}>|</span>
+          <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
+          {statusColumns.map((s) => (
+            <button key={s} onClick={() => bulkUpdateMut.mutate({ ids: [...selectedRFIs], data: { status: s, ...((s === "Answered" || s === "Closed") ? { date_answered: new Date().toISOString().split("T")[0] } : {}) } })}
+              style={{ padding: "3px 10px", borderRadius: 4, border: `1px solid ${STATUS_CFG[s]?.color || "var(--border-default)"}`, background: `${STATUS_CFG[s]?.color || "var(--accent)"}18`, color: STATUS_CFG[s]?.color || "var(--accent)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
+              {s}
+            </button>
+          ))}
+          <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>SET PRIORITY →</span>
+          {["Critical", "High", "Medium", "Low"].map((p) => (
+            <button key={p} onClick={() => bulkUpdateMut.mutate({ ids: [...selectedRFIs], data: { priority: p } })}
+              style={{ padding: "3px 10px", borderRadius: 4, border: `1px solid ${PRIORITY_CFG[p]?.color || "var(--border-default)"}`, background: `${PRIORITY_CFG[p]?.color || "var(--accent)"}18`, color: PRIORITY_CFG[p]?.color || "var(--text-muted)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
+              {p}
+            </button>
+          ))}
+          <button onClick={() => { exportRFIsToCSV(filtered.filter((r) => selectedRFIs.has(r.id))); }}
+            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
+            ↓ Export {selectedRFIs.size}
+          </button>
+          <button onClick={() => setSelectedRFIs(new Set())}
+            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBulkImport(false); }}>
+          <div style={{ width: 560, background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>Bulk Add RFIs</div>
+                <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>One RFI per line · Format: Subject | Priority | BIC | Due Date | Drawing Ref</div>
+              </div>
+              <button onClick={() => setShowBulkImport(false)} style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 20 }}>×</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginBottom: 6 }}>EXAMPLE:</div>
+              <div style={{ ...mono, fontSize: 9, color: "var(--accent)", background: "var(--bg-surface-low)", padding: "6px 10px", borderRadius: 4, marginBottom: 12, lineHeight: 1.7 }}>
+                Beam connection at Grid C-4 | Critical | Engineer | 2026-05-01 | S-201<br/>
+                Anchor bolt layout confirmation | High | GC | 2026-05-10<br/>
+                Missing embed plate at Column B-7 | High | Architect
+              </div>
+              <textarea
+                value={bulkImportText}
+                onChange={(e) => setBulkImportText(e.target.value)}
+                placeholder="Paste your RFI list here, one per line..."
+                autoFocus
+                style={{ width: "100%", minHeight: 160, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "10px 12px", fontSize: 12, color: "var(--text-primary)", outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+                <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                  {bulkImportText.trim() ? `${bulkImportText.trim().split("\n").filter(Boolean).length} RFIs to import` : "No lines entered"}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowBulkImport(false)} style={{ padding: "8px 16px", borderRadius: 4, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-muted)", ...mono, fontSize: 9, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                  <button
+                    disabled={!bulkImportText.trim() || bulkImportMut.isPending || !projectId}
+                    onClick={() => bulkImportMut.mutate(parseBulkImport())}
+                    style={{ padding: "8px 20px", borderRadius: 4, border: "none", background: "var(--accent)", color: "var(--accent-text)", ...mono, fontSize: 9, fontWeight: 700, cursor: bulkImportText.trim() && projectId ? "pointer" : "not-allowed", opacity: bulkImportText.trim() && projectId ? 1 : 0.5 }}>
+                    {bulkImportMut.isPending ? "Importing..." : `Import ${bulkImportText.trim() ? bulkImportText.trim().split("\n").filter(Boolean).length : 0} RFIs`}
+                  </button>
+                </div>
+              </div>
+              {!projectId && <div style={{ ...mono, fontSize: 9, color: "var(--status-error)", marginTop: 8 }}>⚠ Select a project first before bulk importing</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {view === "LIST" && (
@@ -854,7 +1001,7 @@ export default function RFIs() {
           ) : (
             <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
               <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 90px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
-                <div>?</div>
+                <div><input type="checkbox" checked={filtered.length > 0 && selectedRFIs.size === filtered.length} onChange={toggleSelectAll} style={{ cursor: "pointer", accentColor: "var(--accent)" }} /></div>
                 <div>RFI #</div>
                 <div>Subject</div>
                 <div>Priority</div>
@@ -900,8 +1047,8 @@ export default function RFIs() {
                         onMouseEnter={(e) => (e.currentTarget.style.background = selectedRFI?.id === r.id ? "var(--accent-muted)" : "var(--hover-bg)")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = selectedRFI?.id === r.id ? "var(--accent-muted)" : rowBg)}
                       >
-                        <div>
-                          <input type="checkbox" />
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={selectedRFIs.has(r.id)} onChange={() => toggleSelectRFI(r.id)} style={{ cursor: "pointer", accentColor: "var(--accent)" }} />
                         </div>
                         <div style={{ ...mono, fontSize: 11, fontWeight: 800, color: "var(--accent)" }}>
                           {r.priority === "Critical" && <span style={{ color: "var(--status-error)", marginRight: 4 }}>?</span>}

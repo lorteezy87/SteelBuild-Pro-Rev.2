@@ -603,6 +603,13 @@ export default function ResourceScheduling() {
     })()
   );
 
+  // Auto-scroll to today when the board mounts or timeline changes
+  useEffect(() => {
+    if (boardRef.current && todayOffset > 0) {
+      boardRef.current.scrollLeft = Math.max(0, todayOffset - 300);
+    }
+  }, [todayOffset]);
+
   return (
     <div
       style={{
@@ -881,6 +888,18 @@ export default function ResourceScheduling() {
       {/* ── BOARD VIEW ── */}
       {viewMode === "board" && (
       <>
+      {/* HERO EMPTY STATE — no resources or WPs yet */}
+      {resources.length === 0 && workPackages.length === 0 && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 40 }}>
+          <div style={{ fontSize: 56, opacity: 0.2, lineHeight: 1 }}>👷</div>
+          <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
+            No Resources Assigned
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 340, textAlign: "center", lineHeight: 1.7 }}>
+            Add crew, equipment, and work packages to start building your resource schedule. Drag work packages onto resources to assign them.
+          </div>
+        </div>
+      )}
       {/* HOURS SUMMARY STRIP */}
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8,

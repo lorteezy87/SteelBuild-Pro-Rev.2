@@ -105,13 +105,55 @@ const LEFT_W  = 600;
 // grid: WBS | TASK NAME | START | FINISH | PRED | STATUS | %
 const GRID = "56px 1fr 72px 72px 56px 78px 42px";
 
-export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
+// ── Submittal bar ─────────────────────────────────────────────────────────
+function SubmittalBar({ submittal, leftPx, widthPx }) {
+  const statusColors = {
+    "Approved":             { bg: "rgba(16,185,129,0.15)", border: "#10B981", text: "#10B981" },
+    "Approved as Noted":    { bg: "rgba(16,185,129,0.10)", border: "#10B981", text: "#10B981" },
+    "Rejected":             { bg: "rgba(239,68,68,0.12)",  border: "#EF4444", text: "#EF4444" },
+    "Revise & Resubmit":    { bg: "rgba(239,68,68,0.10)",  border: "#EF4444", text: "#EF4444" },
+    "Under Review":         { bg: "rgba(59,130,246,0.12)", border: "#3B82F6", text: "#3B82F6" },
+    "Draft":                { bg: "rgba(100,116,139,0.10)", border: "#64748B", text: "#94A3B8" },
+  };
+  const c = statusColors[submittal.status] || statusColors["Draft"];
+  const isLate = submittal.due_date && new Date(submittal.due_date) < new Date() && submittal.status !== "Approved" && submittal.status !== "Approved as Noted";
+
+  return (
+    <div style={{
+      position: "absolute",
+      left: leftPx,
+      width: Math.max(widthPx, 4),
+      height: 18,
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: c.bg,
+      border: `1.5px dashed ${isLate ? "#EF4444" : c.border}`,
+      borderRadius: 3,
+      display: "flex",
+      alignItems: "center",
+      padding: "0 6px",
+      overflow: "hidden",
+      gap: 4,
+    }}
+    title={`📂 ${submittal.display_name || submittal.file_name}${isLate ? " — OVERDUE" : ""}`}
+    >
+      <span style={{ fontSize: 9, flexShrink: 0 }}>📂</span>
+      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? "#EF4444" : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {submittal.display_name || submittal.file_name}
+      </span>
+    </div>
+  );
+}
+
+export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
+  const [showSubmittals, setShowSubmittals] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
   const [tooltip, setTooltip] = useState(null); // { task, x, y }
+  const [hoveredRowId, setHoveredRowId] = useState(null);
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
   const rightBody = useRef(null);
@@ -286,6 +328,26 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
           ))}
         </div>
         {/* Controls */}
+        {submittals.filter(s => s.is_submittal && s.linked_wp_id).length > 0 && (
+          <button
+            onClick={() => setShowSubmittals(v => !v)}
+            style={{
+              padding: "4px 10px",
+              borderRadius: 4,
+              border: showSubmittals ? "1px solid #3B82F6" : "1px solid var(--divider)",
+              background: showSubmittals ? "rgba(59,130,246,0.10)" : "transparent",
+              color: showSubmittals ? "#3B82F6" : "var(--text-muted)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              cursor: "pointer",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            📂 Submittals ({submittals.filter(s => s.is_submittal && s.linked_wp_id).length})
+          </button>
+        )}
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today
         </button>
@@ -351,12 +413,13 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
             const predecessor = task.predecessor_wbs || task.predecessor_task_id || task.predecessors || "—";
             const overdue = isOverdue(task);
             const isEditing = editingId === task.id;
+            const leftHovered = hoveredRowId === task.id;
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: "transparent", transition: "background 0.1s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-row-hover)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={() => setHoveredRowId(task.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
                 {/* WBS */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || task.task_number || "—"}</span>
@@ -424,14 +487,21 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
               </div>
             )}
 
-            {/* Week grid lines */}
-            {dateRange.weeks.map((w, i) => (
-              <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1, background: "rgba(255,255,255,0.04)" }} />
-            ))}
+            {/* Week grid lines — brighter at month boundaries */}
+            {dateRange.weeks.map((w, i) => {
+              const isMonthStart = w.getDate() <= 7; // first week of month
+              return (
+                <div key={i} style={{
+                  position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: isMonthStart ? 1 : 1,
+                  background: isMonthStart ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
+                }} />
+              );
+            })}
 
             {/* Rows */}
             {(() => {
               let top = 0;
+              let taskIdx = 0;
               return rows.map((row, i) => {
                 const rowTop = top;
                 if (row.type === "summary") {
@@ -444,27 +514,45 @@ export default function ScheduleGantt({ tasks: rawTasks, expandedTask, setExpand
                     </div>
                   );
                 }
+                const zebra = taskIdx++ % 2 === 1;
                 top += ROW_H;
                 const { task } = row;
                 const overdue = isOverdue(task);
+                const hovered = hoveredRowId === task.id;
+                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "rgba(255,255,255,0.015)" : "transparent";
+                const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
-                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent" }} />;
+                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg }} />;
                 }
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: overdue ? "rgba(239,68,68,0.03)" : "transparent", cursor: "pointer" }}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
                     onClick={() => onTaskClick && onTaskClick(task)}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                      setTooltip({ task, x: e.clientX, y: e.clientY });
-                    }}
+                    onMouseEnter={e => { setHoveredRowId(task.id); setTooltip({ task, x: e.clientX, y: e.clientY }); }}
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = overdue ? "rgba(239,68,68,0.03)" : "transparent";
-                      setTooltip(null);
-                    }}
+                    onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
                     <TaskBar task={task} leftPx={px(task.start_date)} widthPx={spanPx(task.start_date, task.end_date)} />
+                    {/* Submittal review bars linked to this WP */}
+                    {showSubmittals && submittals
+                      .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
+                      .map(s => {
+                        // Submittal bar spans: upload date → due date (before the WP start)
+                        const uploadIso = (s.uploaded_date || s.revision_date || task.start_date || "").split("T")[0];
+                        const dueIso = s.due_date;
+                        if (!uploadIso || !dueIso) return null;
+                        const leftPx2 = px(uploadIso);
+                        const w2 = spanPx(uploadIso, dueIso);
+                        return (
+                          <SubmittalBar
+                            key={s.id}
+                            submittal={s}
+                            leftPx={leftPx2}
+                            widthPx={w2}
+                          />
+                        );
+                      })
+                    }
                   </div>
                 );
               });
