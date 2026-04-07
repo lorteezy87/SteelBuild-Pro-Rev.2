@@ -63,6 +63,8 @@ import DailyLogs from './pages/DailyLogs';
 import Dashboard from './pages/Dashboard';
 import Deliveries from './pages/Deliveries';
 import Documents from './pages/Documents';
+import Drawings from './pages/Drawings';
+import DrawingViewer from './pages/DrawingViewer';
 import ExecutiveView from './pages/ExecutiveView';
 import Expenses from './pages/Expenses';
 import DecisionLog from './pages/DecisionLog';
@@ -83,6 +85,7 @@ import Projects from './pages/Projects';
 import Punchlist from './pages/Punchlist';
 import QualityControl from './pages/QualityControl';
 import RFIs from './pages/RFIs';
+import RFIHub from './pages/RFIHub';
 import ResourceManagement from './pages/ResourceManagement';
 import ResourceScheduling from './pages/ResourceScheduling';
 import SOV from './pages/SOV';
@@ -113,6 +116,8 @@ export const PAGES = {
     "Dashboard": Dashboard,
     "Deliveries": Deliveries,
     "Documents": Documents,
+    "Drawings": Drawings,
+    "DrawingViewer": DrawingViewer,
     
     
     "ExecutiveView": ExecutiveView,
@@ -136,6 +141,7 @@ export const PAGES = {
     "Punchlist": Punchlist,
     "QualityControl": QualityControl,
     "RFIs": RFIs,
+    "RFIHub": RFIHub,
     "ResourceManagement": ResourceManagement,
     "ResourceScheduling": ResourceScheduling,
     "SOV": SOV,

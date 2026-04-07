@@ -21,7 +21,7 @@ const PRIMARY_TABS = [
 { label: "PCC", pages: ["ProjectControlCenter"] },
 { label: "PROJECTS", pages: ["Projects", "ExecutiveView"] },
 { label: "RFIs", pages: ["RFIs", "RFIHub"] },
-{ label: "DRAWINGS", pages: ["Documents"] },
+{ label: "DRAWINGS", pages: ["Drawings", "DrawingViewer", "Documents"] },
 { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAhead", "LookAheadSchedule", "GanttChart"] },
 { label: "DELIVERIES", pages: ["Deliveries"] },
 { label: "SCHEDULE", pages: ["Schedule", "GanttChart", "LookAheadSchedule"] },
@@ -38,7 +38,7 @@ const TAB_DEFAULT_PAGE = {
   "PCC": "ProjectControlCenter",
   "PROJECTS": "Projects",
   "RFIs": "RFIs",
-  "DRAWINGS": "Documents",
+  "DRAWINGS": "Drawings",
   "FABRICATION": "WorkPackages",
   "DELIVERIES": "Deliveries",
   "SCHEDULE": "Schedule",
@@ -58,7 +58,7 @@ const ALL_MODULES = [
 { icon: "≡", name: "Scope & Exclusions", group: "Setup", page: "ScopeExclusions" },
 { icon: "☰", name: "Contacts", group: "Setup", page: "Contacts" },
 { icon: "🔔", name: "Alerts", group: "Setup", page: "AlertsCenter" },
-{ icon: "▦", name: "Submittals", group: "Detailing", page: "Submittals" },
+{ icon: "▦", name: "Drawings & Submittals", group: "Detailing", page: "Drawings" },
 { icon: "△", name: "3D Model Viewer", group: "Detailing", page: "ModelViewer" },
 { icon: "⚑", name: "RFI Hub", group: "Comms", page: "RFIs" },
 { icon: "⚑", name: "RFI Command Center", group: "Comms", page: "RFIHub" },
@@ -174,6 +174,7 @@ const NAV_GROUPS = [
 {
   label: "DOCUMENTS & DRAWINGS",
   items: [
+  { label: "Drawings & Submittals", icon: "▦", page: "Drawings" },
   { label: "Document Repository", icon: "📁", page: "Documents" },
   { label: "3D Model Viewer", icon: "△", page: "ModelViewer" }]
 
@@ -719,7 +720,10 @@ function MobileDrawer({ open, onClose, onNavigate }) {
       }}>
         <div style={{ padding: "16px 16px 8px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center" }}>
           <img
+          claude/cranky-black
             src="/logo.png"
+           
+           codex/base44-deploy-nick
             alt="SteelBuild Pro"
             style={{ height: 32, width: "auto", objectFit: "contain" }} />
 
@@ -1106,7 +1110,11 @@ export default function Layout({ children, currentPageName }) {
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
               <img
+              claude/cranky-black
                     src="/logo.png"
+                   
+                    src="/steelbuild-pro-logo.png"
+                    codex/base44-deploy-nick
                     alt="SteelBuild Pro"
                     style={{ height: 36, width: "auto", objectFit: "contain" }} />
 

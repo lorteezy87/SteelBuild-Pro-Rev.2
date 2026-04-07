@@ -5,7 +5,7 @@ import { differenceInDays } from "date-fns";
 import { Plus, RefreshCw, Search, CheckCircle2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { parseUTCDate, formatDate } from "@/components/shared/formatters";
-import { getNextFormattedNumber, previewNextFormattedNumber } from "../components/shared/numberSequencing";
+import { getNextFormattedNumber, previewNextFormattedNumber } from "@/components/shared/numberSequencing";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
