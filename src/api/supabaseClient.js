@@ -154,6 +154,9 @@ const createEntityClient = (tableName) => ({
    */
   update: async (id, updates) => {
     const clean = cleanRecord(updates);
+    // Never send primary key or server timestamps in the update body
+    delete clean.id;
+    delete clean.created_at;
     const { data, error } = await supabase
       .from(tableName)
       .update({ ...clean, updated_at: new Date().toISOString() })
