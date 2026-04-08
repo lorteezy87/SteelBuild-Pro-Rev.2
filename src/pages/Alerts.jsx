@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import { Button } from "@/components/ui/button";
 import { Bell, BellOff, RefreshCw, CheckCheck, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 import { formatDate } from "../components/shared/formatters";
@@ -29,12 +31,17 @@ const RECORD_PAGE = {
 
 export default function Alerts() {
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [generating, setGenerating] = useState(false);
   const [filter, setFilter] = useState("unread");
 
   const { data: alerts = [], isLoading, refetch } = useQuery({
-    queryKey: ["alerts"],
-    queryFn: () => base44.entities.Alert.list("-created_at"),
+    queryKey: ["alerts", projectId],
+    queryFn: () => projectId
+      ? base44.entities.Alert.filter({ project_id: projectId }, "-created_at")
+      : base44.entities.Alert.list("-created_at"),
     refetchInterval: 60000,
   });
 
