@@ -20,6 +20,7 @@ const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected
 function exportToCSV(deliveries, filename = "deliveries.csv") {
   const headers = [
     "Project",
+    "Delivery Title",
     "Description",
     "Vendor",
     "PO Number",
@@ -38,6 +39,7 @@ function exportToCSV(deliveries, filename = "deliveries.csv") {
   ];
   const rows = deliveries.map((d) => [
     d.project_name || "",
+    d.delivery_title || "",
     d.description || "",
     d.vendor || "",
     d.po_number || "",
@@ -173,7 +175,7 @@ export default function Deliveries() {
         const q = search.trim().toLowerCase();
         if (q.length) {
           const hay =
-            `${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
+            `${d.delivery_title} ${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -203,7 +205,7 @@ export default function Deliveries() {
   const grouped = useMemo(() => {
     if (projectId) return null;
     return filtered.reduce((acc, d) => {
-      const key = d.project_name || d.project_id || "Project";
+      const key = d.project_name || d.project_id || "Unassigned";
       acc[key] = acc[key] || [];
       acc[key].push(d);
       return acc;
@@ -365,11 +367,16 @@ export default function Deliveries() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.description || delivery.vendor || "—"}
+            {delivery.delivery_title || delivery.description || delivery.vendor || "—"}
             {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
             {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
           </div>
-          {delivery.notes && (
+          {(delivery.delivery_title && delivery.description) && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {delivery.description.slice(0, 60)}
+            </div>
+          )}
+          {!delivery.delivery_title && delivery.notes && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
               {delivery.notes.slice(0, 60)}
             </div>
@@ -495,7 +502,7 @@ export default function Deliveries() {
             {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </div>
         ))}
-        {(projectId ? [{ name: filtered[0]?.project_name || "Project", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
+        {(projectId ? [{ name: filtered[0]?.project_name || "—", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
           <React.Fragment key={grp.name}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{grp.name}</div>
             {timelineDays.map((day, idx) => {
@@ -507,7 +514,7 @@ export default function Deliveries() {
                     return (
                       <div
                         key={d.id}
-                        title={`${d.vendor} · ${d.description || ""}`}
+                        title={`${d.delivery_title || d.description || d.vendor} · ${d.vendor}`}
                         style={{
                           position: "absolute",
                           top: 2 + i2 * 14,
@@ -587,8 +594,9 @@ export default function Deliveries() {
             }}
           >
             {renderStatusPill(detail.status)}
-            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.vendor}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.project_name}</div>
+            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.delivery_title || detail.vendor}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{detail.project_name || "—"}</div>
+            {detail.delivery_title && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
             {overdue && (
               <div style={{ background: "var(--status-error)", color: "#fff", padding: "4px 8px", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10 }}>
                 Overdue
@@ -862,7 +870,7 @@ export default function Deliveries() {
                     cursor: "pointer",
                   }}
                 >
-                  {d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
+                  {d.delivery_title || d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
                 </span>
               );
             })}
@@ -1140,7 +1148,7 @@ export default function Deliveries() {
                 <div> </div>
                 <div>Status</div>
                 <div>Project</div>
-                <div>Description</div>
+                <div>Delivery Title</div>
                 <div>Vendor</div>
                 <div>PO #</div>
                 <div>Sched</div>
