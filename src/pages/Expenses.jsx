@@ -6,7 +6,7 @@ import { Pencil, Trash2, Download, CheckSquare, Square } from 'lucide-react';
 import PageHeader from '../components/shared/PageHeader';
 import DeleteDialog from '../components/shared/DeleteDialog';
 import ExpenseFormModal from '../components/expenses/ExpenseFormModal';
-import { formatCurrency, formatDate, formatCurrencyShort } from '../components/shared/formatters';
+import { formatCurrency, formatDate, formatCurrencyShort, roundCurrency } from '../components/shared/formatters';
 import { COST_CODES, COST_CODES_GROUPED, CATEGORY_COLORS } from '../components/shared/costCodes';
 import { toast } from 'sonner';
 import { getNextNumber } from '../components/shared/numberSequencing';
@@ -160,16 +160,16 @@ export default function ExpensesPage() {
 
   // ── KPI calculations ──
   const safeNum = (v) => Number(v) || 0;
-  const totalBudget = costCodes.reduce((s, c) => s + safeNum(c.budget_amount), 0);
+  const totalBudget = roundCurrency(costCodes.reduce((s, c) => s + safeNum(c.budget_amount), 0));
   const activeExpenses = expenses.filter(e => e.payment_status !== 'Voided');
-  const totalCommitted = activeExpenses.reduce((s, e) => s + safeNum(e.amount), 0);
-  const totalPaid = activeExpenses.filter(e => e.payment_status === 'Paid').reduce((s, e) => s + safeNum(e.amount), 0);
+  const totalCommitted = roundCurrency(activeExpenses.reduce((s, e) => s + safeNum(e.amount), 0));
+  const totalPaid = roundCurrency(activeExpenses.filter(e => e.payment_status === 'Paid').reduce((s, e) => s + safeNum(e.amount), 0));
   const paidCount = activeExpenses.filter(e => e.payment_status === 'Paid').length;
-  const totalRemaining = totalBudget - totalCommitted;
+  const totalRemaining = roundCurrency(totalBudget - totalCommitted);
   const pctUsed = totalBudget > 0 ? Math.min(100, Math.round((totalCommitted / totalBudget) * 100)) : 0;
-  const totalOutstanding = activeExpenses
+  const totalOutstanding = roundCurrency(activeExpenses
     .filter(e => e.payment_status === 'Unpaid' || e.payment_status === 'Pending Approval')
-    .reduce((s, e) => s + safeNum(e.amount), 0);
+    .reduce((s, e) => s + safeNum(e.amount), 0));
 
   const remainingColor = totalRemaining < 0
     ? 'var(--status-error)'

@@ -13,7 +13,7 @@ import COFormModal from "../components/changeorders/COFormModal";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
-import { formatCurrency, formatDate } from "../components/shared/formatters";
+import { formatCurrency, formatDate, roundCurrency } from "../components/shared/formatters";
 import { toast } from "sonner";
 
 export default function ChangeOrders() {
@@ -75,12 +75,12 @@ export default function ChangeOrders() {
 
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
-  const approvedVal = cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-  const pendingVal = cos.filter(c => c.status === "Submitted" || c.status === "Under Review").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+  const approvedVal = roundCurrency(cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
+  const pendingVal = roundCurrency(cos.filter(c => c.status === "Submitted" || c.status === "Under Review").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
   // Scope contract to active project only
   const activeProjectData = activeProject?.id ? projects.filter(p => p.id === activeProject.id) : [];
-  const totalContract = activeProjectData.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-  const revisedContract = totalContract + approvedVal;
+  const totalContract = roundCurrency(activeProjectData.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0));
+  const revisedContract = roundCurrency(totalContract + approvedVal);
 
   const kpis = [
     { label: "Total COs", value: cos.length, color: "slate" },
