@@ -244,6 +244,18 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
     }
   };
 
+  // Auto-scroll to today on mount so every project starts centred on the current date
+  useEffect(() => {
+    // Small delay so the DOM has rendered and scrollWidth is accurate
+    const timer = setTimeout(() => {
+      if (rightBody.current && dateRange.weeks.length > 0) {
+        const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
+        rightBody.current.scrollLeft = Math.max(0, todayOffset - rightBody.current.clientWidth / 3);
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [dateRange.start?.getTime?.(), dateRange.weeks.length]);
+
   // Sync vertical scroll between left and right body
   const syncScroll = (from) => {
     const other = from === "left" ? rightBody.current : leftRef.current;
@@ -293,11 +305,22 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   const allTasks = grouped.flatMap(g => g.tasks);
 
   const dateRange = useMemo(() => {
-    if (allTasks.length === 0) return { start: new Date(), end: new Date(), weeks: [] };
+    if (allTasks.length === 0) {
+      // Even with no tasks, build a 4-week window around today
+      const s = new Date(today);
+      s.setDate(s.getDate() - s.getDay() - 7); // 1 week before
+      const e = new Date(today);
+      e.setDate(e.getDate() + (6 - e.getDay()) + 21); // 3 weeks after
+      const weeks = [];
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
+      return { start: s, end: e, weeks };
+    }
     const dates = allTasks.flatMap(t => [
       t.start_date ? new Date(t.start_date + "T00:00:00Z") : null,
       t.end_date   ? new Date(t.end_date   + "T00:00:00Z") : null,
     ]).filter(Boolean);
+    // Always include today in the range so the TODAY line is always visible
+    dates.push(today);
     const start = new Date(Math.min(...dates));
     const end   = new Date(Math.max(...dates));
     start.setDate(start.getDate() - start.getDay());

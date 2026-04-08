@@ -12,7 +12,37 @@ import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import { PHASES } from "@/utils/phases";
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
+
+/* ── Phase abbreviation map for WBS codes ────────────────────────────── */
+const PHASE_ABBREV = {
+  "Pre-Construction": "PC",
+  "Detailing":        "DET",
+  "Procurement":      "PRO",
+  "Fabrication":      "FAB",
+  "Delivery":         "DEL",
+  "Installation":     "INS",
+  "Closeout":         "CLO",
+};
+
+/**
+ * Auto-generate a WBS code for a task based on its phase and the
+ * existing tasks in that phase. Format: "FAB-003"
+ */
+function generateWBS(phase, existingTasks) {
+  const abbrev = PHASE_ABBREV[phase] || phase?.slice(0, 3).toUpperCase() || "TSK";
+  const samePhase = (existingTasks || []).filter(t => t.phase === phase);
+  // Find highest existing index in this phase's WBS codes
+  let maxIdx = 0;
+  samePhase.forEach(t => {
+    if (t.wbs_code) {
+      const match = t.wbs_code.match(/(\d+)$/);
+      if (match) maxIdx = Math.max(maxIdx, parseInt(match[1], 10));
+    }
+  });
+  const nextIdx = maxIdx + 1;
+  return `${abbrev}-${String(nextIdx).padStart(3, "0")}`;
+}
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
@@ -58,6 +88,50 @@ export default function Schedule() {
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
   const hasProject = !!(projectId || activeProject?.id);
 
+  /* ── Auto-assign WBS codes to tasks that don't have one ────────── */
+  const enrichedTasks = useMemo(() => {
+    if (!scheduleTasks.length) return scheduleTasks;
+    const phaseCounts = {};
+    const result = [];
+    // First pass: count existing WBS max per phase
+    scheduleTasks.forEach(t => {
+      if (t.wbs_code) {
+        const match = t.wbs_code.match(/(\d+)$/);
+        if (match) {
+          const ph = t.phase || "Other";
+          phaseCounts[ph] = Math.max(phaseCounts[ph] || 0, parseInt(match[1], 10));
+        }
+      }
+    });
+    // Second pass: assign WBS to tasks missing it
+    const toBackfill = [];
+    scheduleTasks.forEach(t => {
+      if (t.wbs_code) {
+        result.push(t);
+      } else {
+        const ph = t.phase || "Other";
+        const abbrev = PHASE_ABBREV[ph] || ph.slice(0, 3).toUpperCase();
+        phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
+        const wbs = `${abbrev}-${String(phaseCounts[ph]).padStart(3, "0")}`;
+        result.push({ ...t, wbs_code: wbs });
+        toBackfill.push({ id: t.id, wbs });
+      }
+    });
+    // Background-persist generated WBS codes to DB (fire-and-forget)
+    if (toBackfill.length > 0) {
+      Promise.all(
+        toBackfill.map(({ id, wbs }) =>
+          base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {})
+        )
+      ).then(() => {
+        if (toBackfill.length > 0) {
+          qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        }
+      });
+    }
+    return result;
+  }, [scheduleTasks, projectId, qc]);
+
   const updateTaskMut = useMutation({
     mutationFn: (data) => {
       const { id, created_at, updated_at, created_date, updated_date, ...fields } = data;
@@ -76,7 +150,8 @@ export default function Schedule() {
     mutationFn: (data) => {
       const pid = data.project_id || projectId || activeProject?.id;
       if (!pid) throw new Error("Select a project first");
-      return base44.entities.ScheduleTask.create({ ...data, project_id: pid });
+      const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
+      return base44.entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
@@ -140,11 +215,14 @@ export default function Schedule() {
     setBulkSaving(true);
     try {
       const pid = projectId || activeProject?.id;
-      await Promise.all(
-        rows.map((row) =>
-          base44.entities.ScheduleTask.create({ ...row, project_id: pid })
-        )
-      );
+      // Build a running snapshot of tasks so each new WBS is unique
+      const snapshot = [...scheduleTasks];
+      for (const row of rows) {
+        const wbs = row.wbs_code || generateWBS(row.phase, snapshot);
+        const task = { ...row, project_id: pid, wbs_code: wbs };
+        await base44.entities.ScheduleTask.create(task);
+        snapshot.push(task); // include in snapshot for next WBS calculation
+      }
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
@@ -495,7 +573,7 @@ export default function Schedule() {
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         {view === "gantt" && (
           <ScheduleGantt
-            tasks={scheduleTasks}
+            tasks={enrichedTasks}
             submittals={submittals}
             expandedTask={expandedTask}
             setExpandedTask={setExpandedTask}
@@ -515,11 +593,11 @@ export default function Schedule() {
           />
         )}
 
-        {view === "lookahead" && <LookaheadPlanner tasks={scheduleTasks} />}
+        {view === "lookahead" && <LookaheadPlanner tasks={enrichedTasks} />}
 
         {view === "list" && (
           <ScheduleTaskList
-            tasks={scheduleTasks}
+            tasks={enrichedTasks}
             onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
             onDelete={(task) => setDeleteTarget(task)}
             onSave={async (data) => {
@@ -546,7 +624,7 @@ export default function Schedule() {
         onClose={() => { setShowDrawer(false); setSelectedTask(null); }}
         onUpdate={(data) => updateTaskMut.mutate(data)}
         onDelete={(id) => deleteTaskMut.mutate(id)}
-        allTasks={scheduleTasks}
+        allTasks={enrichedTasks}
       />
 
       {/* Add Task Modal */}

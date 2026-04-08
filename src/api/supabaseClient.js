@@ -79,9 +79,11 @@ const applyConditions = (query, conditions = {}) => {
 const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date']);
 const cleanRecord = (record) =>
   Object.fromEntries(
-    Object.entries(record).filter(
-      ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
-    )
+    Object.entries(record)
+      .filter(
+        ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
+      )
+      .map(([k, v]) => [k, v === '' ? null : v])
   );
 
 const createEntityClient = (tableName) => ({
@@ -154,6 +156,9 @@ const createEntityClient = (tableName) => ({
    */
   update: async (id, updates) => {
     const clean = cleanRecord(updates);
+    // Never send primary key or server timestamps in the update body
+    delete clean.id;
+    delete clean.created_at;
     const { data, error } = await supabase
       .from(tableName)
       .update({ ...clean, updated_at: new Date().toISOString() })
