@@ -112,7 +112,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       ...formData,
       delivery_title: formData.delivery_title.trim(),
       project_name: proj?.name || proj?.project_name || formData.project_name || "",
-      description: formData.description || (wp ? `${wp.wp_number || ""} — ${wp.name || ""}`.trim().replace(/^— /, "") : ""),
+      description: wp ? (wp.name || wp.wp_number || formData.description || "") : formData.description || "",
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });
