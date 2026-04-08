@@ -6,7 +6,7 @@ export default function LookaheadPlanner({ tasks }) {
     const result = [];
     for (let i = 0; i < 6; i++) {
       const weekStart = new Date(today);
-      weekStart.setDate(weekStart.getDate() + i * 7);
+      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7) + i * 7);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
       result.push({ start: weekStart, end: weekEnd, num: i + 1 });
@@ -16,8 +16,8 @@ export default function LookaheadPlanner({ tasks }) {
 
   const getTasksForWeek = (weekStart, weekEnd) => {
     return tasks.filter((task) => {
-      const taskStart = new Date(task.start_date);
-      const taskEnd = new Date(task.end_date);
+      const taskStart = new Date(task.start_date + "T00:00:00Z");
+      const taskEnd = new Date(task.end_date + "T00:00:00Z");
       return taskStart <= weekEnd && taskEnd >= weekStart;
     });
   };

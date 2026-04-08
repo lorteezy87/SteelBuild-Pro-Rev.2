@@ -51,7 +51,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
   });
 
   const getTaskBarPosition = (task) => {
-    const taskStart = new Date(task.start_date);
+    const taskStart = new Date(task.start_date + "T00:00:00Z");
     const daysFromStart = getDaysBetween(minDate, taskStart);
     const left = daysFromStart * pxPerDay;
     const duration = calculateTaskDuration(task.start_date, task.end_date);
@@ -284,7 +284,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
               </div>
 
               {/* Delayed indicator */}
-              {task.status === 'Delayed' && new Date() > new Date(task.end_date) && (
+              {task.status === 'Delayed' && new Date() > new Date(task.end_date + "T00:00:00Z") && (
                 <div
                   style={{
                     position: 'absolute',

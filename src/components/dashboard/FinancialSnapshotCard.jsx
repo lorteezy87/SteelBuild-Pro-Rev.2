@@ -21,7 +21,13 @@ function FinRow({ label, value, valueColor, isTotal = false }) {
 
 export default function FinancialSnapshotCard({ financials, cos }) {
   const navigate = useNavigate();
-  const { contractValue, approvedCOVal, revisedValue, actualSpend, pendingCOVal, budgetCommitted, committedCosts } = financials;
+  const contractValue = Number(financials.contractValue) || 0;
+  const approvedCOVal = Number(financials.approvedCOVal) || 0;
+  const revisedValue = Number(financials.revisedValue) || 0;
+  const actualSpend = Number(financials.actualSpend) || 0;
+  const pendingCOVal = Number(financials.pendingCOVal) || 0;
+  const budgetCommitted = Number(financials.budgetCommitted) || 0;
+  const committedCosts = Number(financials.committedCosts) || 0;
 
   const variance = revisedValue - actualSpend;
   const costPct = budgetCommitted > 0 ? Math.round(actualSpend / budgetCommitted * 100) : 0;
