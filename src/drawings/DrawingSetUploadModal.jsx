@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -501,6 +502,7 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
 
 // ─── Main Modal ──────────────────────────────────────────────────────
 export default function DrawingSetUploadModal({ open, onClose, onComplete, activeProject, onNewRevision }) {
+  const qc = useQueryClient();
   const [step, setStep]                   = useState(0);
   const [files, setFiles]                 = useState([]);
   const [meta, setMeta]                   = useState({
@@ -632,30 +634,43 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
     let created = 0;
+    let failed = 0;
     for (const sheet of selectedSheets) {
-      await base44.entities.Drawing.create({
-        sheet_number:     sheet.sheetNumber,
-        title:            sheet.sheetTitle,
-        project_id:       activeProject?.id,
-        project_name:     activeProject?.name,
-        discipline:       sheet.discipline || meta.discipline,
-        revision_number:  parseInt(sheet.revision ?? meta.revision) || 0,
-        stage:            "Not Started",
-        issue_date:       sheet.date || meta.issueDate,
-        issued_by:        meta.issuedBy,
-        file_url:         sheet.sourceFileUrl,
-        drawing_set_name: meta.setName || meta.revision || "Drawing Set",
-        notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
-      });
-      created++;
+      try {
+        await base44.entities.Drawing.create({
+          sheet_number:     sheet.sheetNumber,
+          title:            sheet.sheetTitle,
+          project_id:       activeProject?.id,
+          project_name:     activeProject?.name,
+          discipline:       sheet.discipline || meta.discipline,
+          revision_number:  parseInt(sheet.revision ?? meta.revision) || 0,
+          stage:            "Not Started",
+          issue_date:       sheet.date || meta.issueDate,
+          issued_by:        meta.issuedBy,
+          file_url:         sheet.sourceFileUrl,
+          drawing_set_name: meta.setName || meta.revision || "Drawing Set",
+          notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
+        });
+        created++;
+      } catch (err) {
+        console.error("Failed to create sheet:", sheet.sheetNumber, err);
+        failed++;
+      }
       setProcessingStatus(prev => ({
         ...prev,
-        progress: Math.round((created / selectedSheets.length) * 100),
-        message: `Creating entries… ${created} of ${selectedSheets.length}`,
+        progress: Math.round(((created + failed) / selectedSheets.length) * 100),
+        message: `Creating entries… ${created + failed} of ${selectedSheets.length}`,
       }));
     }
 
     setCreatedCount(created);
+    if (failed > 0) {
+      setProcessingStatus(prev => ({
+        ...prev,
+        message: `${created} created, ${failed} failed`,
+      }));
+    }
+    qc.invalidateQueries({ queryKey: ["drawings"] });
     setStep(5);
     if (onComplete) onComplete();
   };

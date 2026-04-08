@@ -2,9 +2,11 @@ import React from "react";
 import { AreaChart, Area, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 function BurnRow({ label, actual, budget, color }) {
-  const pct = budget > 0 ? Math.round(actual / budget * 100) : 0;
+  const safeActual = Number(actual) || 0;
+  const safeBudget = Number(budget) || 0;
+  const pct = safeBudget > 0 ? Math.round(safeActual / safeBudget * 100) : 0;
   const barColor = pct > 100 ? "var(--status-error)" : pct > 85 ? "var(--status-warning)" : "var(--status-success)";
-  const remaining = budget - actual;
+  const remaining = safeBudget - safeActual;
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
@@ -20,10 +22,10 @@ function BurnRow({ label, actual, budget, color }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div style={{ display: "flex", gap: 14 }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: barColor }}>{actual.toLocaleString()} actual</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>/ {budget.toLocaleString()} budget</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: barColor }}>{safeActual.toLocaleString()} actual</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>/ {safeBudget.toLocaleString()} budget</span>
         </div>
-        {budget > 0 && (
+        {safeBudget > 0 && (
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: remaining >= 0 ? "var(--status-success)" : "var(--status-error)" }}>
             {remaining >= 0 ? `${remaining.toLocaleString()} left` : `${Math.abs(remaining).toLocaleString()} over`}
           </span>
