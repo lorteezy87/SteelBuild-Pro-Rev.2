@@ -101,6 +101,7 @@ export default function ExpenseFormModal({
     const proj = projects.find(p => p.id === form.project_id);
     const ccData = COST_CODES.find(cc => cc.code === form.cost_code);
     const wp = workPackages.find(w => w.id === form.work_package_id);
+    const sov = sovItems.find(s => s.id === form.sov_line_item_id);
     onSave({
       ...form,
       amount: Number(form.amount) || 0,
@@ -109,6 +110,7 @@ export default function ExpenseFormModal({
       project_name: proj?.name || form.project_name,
       cost_code_name: ccData ? `${ccData.code} — ${ccData.name}` : form.cost_code_name,
       work_package_name: wp ? `${wp.wp_number} — ${wp.name}` : form.work_package_name,
+      sov_line_item_name: sov ? sov.description : form.sov_line_item_name || "",
     });
   };
 
