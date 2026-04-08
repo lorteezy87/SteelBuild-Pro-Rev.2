@@ -27,14 +27,27 @@ export default function ActionItems() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
 
+  const createMut = useMutation({
+    mutationFn: (data) => base44.entities.ActionItem.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      qc.invalidateQueries({ queryKey: ["action-items-all"] });
+      toast.success("Action item created");
+      setShowForm(false);
+    },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ActionItem.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["action-items"] });
       qc.invalidateQueries({ queryKey: ["action-items-all"] });
       toast.success("Action item updated");
+      setEditingItem(null);
+      setShowForm(false);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
   const deleteMut = useMutation({
@@ -45,7 +58,7 @@ export default function ActionItems() {
       setDeleteTarget(null);
       toast.success("Action item deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
   });
 
   const { data: actionItems = [] } = useQuery({
@@ -272,7 +285,8 @@ export default function ActionItems() {
           onSave={(data) => {
             if (editingItem) {
               updateMut.mutate({ id: editingItem.id, data });
-              setEditingItem(null);
+            } else {
+              createMut.mutate(data);
             }
           }}
         />

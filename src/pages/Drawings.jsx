@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
+import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -256,6 +257,8 @@ export default function Drawings() {
   const [bulkStage, setBulkStage] = useState("");
   const [contextMenu, setContextMenu] = useState(null); // { x, y, drawing }
   const [showStageMenu, setShowStageMenu] = useState(false);
+  const [approvalSet, setApprovalSet] = useState(null);   // { setName, sheets }
+  const [savingApproval, setSavingApproval] = useState(false);
   const contextRef = useRef(null);
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -321,6 +324,19 @@ export default function Drawings() {
     priority: drawings.filter(d => d.priority_flag).length,
   }), [drawings]);
 
+  // ── Drawing set grouping (for set approval) ────────────────────────────────
+
+  const drawingSets = useMemo(() => {
+    const map = {};
+    drawings.forEach(d => {
+      const name = d.drawing_set_name?.trim();
+      if (!name) return;
+      if (!map[name]) map[name] = [];
+      map[name].push(d);
+    });
+    return map; // { "Set A": [drawing, ...], ... }
+  }, [drawings]);
+
   // ── Save handlers ──────────────────────────────────────────────────────────
 
   const handleSave = async (form) => {
@@ -355,6 +371,49 @@ export default function Drawings() {
     Promise.all([...selected].map(id => base44.entities.Drawing.update(id, { stage: bulkStage })))
       .then(() => { invalidate(); setSelected(new Set()); setBulkStage(""); toast.success(`Updated ${selected.size} sheets`); })
       .catch(err => { invalidate(); toast.error("Bulk update failed: " + (err?.message || "Unknown error")); });
+  };
+
+  const handleSetApproval = async ({ status, revision, approvedBy, approvalDate, applyToSheets, notes }) => {
+    if (!approvalSet) return;
+    setSavingApproval(true);
+    try {
+      const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
+      await Promise.all(
+        sheetsToUpdate.map(s =>
+          base44.entities.Drawing.update(s.id, {
+            set_approval_status: status,
+            set_approved_date: approvalDate || new Date().toISOString().split("T")[0],
+            ...(revision ? { revision_number: revision } : {}),
+            ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
+          })
+        )
+      );
+      invalidate();
+      toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+      setApprovalSet(null);
+    } catch (err) {
+      toast.error("Approval update failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setSavingApproval(false);
+    }
+  };
+
+  // Determine the set name for the current selection (for bulk set approval)
+  const selectedSetName = useMemo(() => {
+    if (selected.size === 0) return null;
+    const names = new Set();
+    for (const id of selected) {
+      const d = drawings.find(x => x.id === id);
+      if (d?.drawing_set_name?.trim()) names.add(d.drawing_set_name.trim());
+    }
+    // Only offer set approval when all selected drawings share the same set name
+    return names.size === 1 ? [...names][0] : null;
+  }, [selected, drawings]);
+
+  const openSetApproval = (setName) => {
+    const sheets = drawingSets[setName] || [];
+    if (!sheets.length) return;
+    setApprovalSet({ setName, sheets });
   };
 
   const toggleSelect = (id) => {
@@ -484,6 +543,12 @@ export default function Drawings() {
             {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           <button style={btnPrimary} onClick={handleBulkStageApply} disabled={!bulkStage}>APPLY</button>
+          {selectedSetName && (
+            <button style={{ ...btnBase, background: "rgba(0,230,118,0.15)", border: "1px solid rgba(0,230,118,0.3)", color: "#00E676" }}
+              onClick={() => openSetApproval(selectedSetName)}>
+              SET APPROVAL
+            </button>
+          )}
           <button style={btnGhost} onClick={() => {
             if (!confirm(`Delete ${selected.size} sheets? This cannot be undone.`)) return;
             Promise.all([...selected].map(id => base44.entities.Drawing.delete(id)))
@@ -509,12 +574,14 @@ export default function Drawings() {
           onToggleAll={toggleSelectAll} onEdit={d => { setEditing(d); setShowModal(true); }}
           onDelete={handleDelete} onAdvance={handleAdvanceStage}
           onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
-          setContextMenu={setContextMenu} />
+          setContextMenu={setContextMenu}
+          onSetApproval={openSetApproval} />
       ) : (
         <GridView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
           onEdit={d => { setEditing(d); setShowModal(true); }}
           onDelete={handleDelete} onAdvance={handleAdvanceStage}
-          onView={d => navigate(`/DrawingViewer?id=${d.id}`)} />
+          onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
+          onSetApproval={openSetApproval} />
       )}
 
       {/* ── Context Menu ───────────────────────────────────────────────────── */}
@@ -527,6 +594,10 @@ export default function Drawings() {
             { label: "View PDF", action: () => { navigate(`/DrawingViewer?id=${contextMenu.drawing.id}`); setContextMenu(null); } },
             { label: "Edit Sheet", action: () => { setEditing(contextMenu.drawing); setShowModal(true); setContextMenu(null); } },
             { label: "Advance Stage →", action: () => handleAdvanceStage(contextMenu.drawing) },
+            ...(contextMenu.drawing.drawing_set_name?.trim() ? [{
+              label: "Set Approval ✓",
+              action: () => { openSetApproval(contextMenu.drawing.drawing_set_name.trim()); setContextMenu(null); }
+            }] : []),
             { label: "Delete Sheet", action: () => handleDelete(contextMenu.drawing.id), danger: true },
           ].map(item => (
             <button key={item.label} onClick={item.action} style={{
@@ -548,13 +619,24 @@ export default function Drawings() {
           saving={saving}
         />
       )}
+
+      {/* ── Set Approval Modal ────────────────────────────────────────────── */}
+      <SetApprovalModal
+        open={!!approvalSet}
+        onClose={() => setApprovalSet(null)}
+        setName={approvalSet?.setName || ""}
+        sheetCount={approvalSet?.sheets?.length || 0}
+        existingRevision={approvalSet?.sheets?.[0]?.revision_number || ""}
+        onConfirm={handleSetApproval}
+        saving={savingApproval}
+      />
     </div>
   );
 }
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu }) {
+function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
   const allSelected = selected.size === drawings.length && drawings.length > 0;
   const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
   const tdStyle = { padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", verticalAlign: "middle" };
@@ -575,6 +657,7 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
             <th style={thStyle}>SUBMITTED</th>
             <th style={thStyle}>DUE DATE</th>
             <th style={thStyle}>REVIEWER</th>
+            <th style={thStyle}>APPROVAL</th>
             <th style={thStyle}></th>
           </tr>
         </thead>
@@ -611,6 +694,28 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                 </td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
                 <td style={{ ...tdStyle }}>
+                  {d.set_approval_status ? (
+                    <span style={{
+                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                      color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+                      background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
+                      border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                      textTransform: "uppercase",
+                    }}>
+                      {d.set_approval_status}
+                    </span>
+                  ) : d.drawing_set_name?.trim() ? (
+                    <button onClick={() => onSetApproval(d.drawing_set_name.trim())} style={{
+                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                      background: "none", border: "1px dashed rgba(255,255,255,0.15)", color: "var(--text-muted)", cursor: "pointer",
+                    }}>
+                      REVIEW
+                    </button>
+                  ) : (
+                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</span>
+                  )}
+                </td>
+                <td style={{ ...tdStyle }}>
                   <div style={{ display: "flex", gap: 4 }}>
                     <ActionBtn label="View" onClick={() => onView(d)} />
                     <ActionBtn label="Edit" onClick={() => onEdit(d)} />
@@ -638,7 +743,7 @@ function ActionBtn({ label, onClick, danger, disabled, title }) {
 
 // ─── Grid View ────────────────────────────────────────────────────────────────
 
-function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView }) {
+function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
       {drawings.map(d => {
@@ -681,12 +786,28 @@ function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdva
 
               {/* Discipline */}
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, opacity: 0.6 }}>{d.discipline}</div>
+
+              {/* Set approval status */}
+              {d.set_approval_status && (
+                <div style={{ marginTop: 6 }}>
+                  <span style={{
+                    ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 2,
+                    color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+                    background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
+                    border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                    textTransform: "uppercase",
+                  }}>{d.set_approval_status}</span>
+                </div>
+              )}
             </div>
 
             {/* Actions footer */}
             <div style={{ borderTop: "1px solid var(--border-default)", padding: "7px 10px", display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
               <ActionBtn label="View" onClick={() => onView(d)} />
               <ActionBtn label="Edit" onClick={() => onEdit(d)} />
+              {d.drawing_set_name?.trim() && !d.set_approval_status && (
+                <ActionBtn label="Approve" onClick={() => onSetApproval(d.drawing_set_name.trim())} />
+              )}
               <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
               <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
             </div>

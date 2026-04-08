@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, BellOff, RefreshCw, CheckCheck, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 import { formatDate } from "../components/shared/formatters";
 import { createPageUrl } from "@/utils";
+import { toast } from "sonner";
 
 const SEV_COLORS = {
   Critical: "bg-rose-50 border-rose-300 border-l-4 border-l-rose-500",
@@ -50,8 +51,17 @@ export default function Alerts() {
     e?.stopPropagation();
     updateMut.mutate({ id: alert.id, data: { ...alert, is_read: true } });
   };
-  const markAllRead = () => {
-    alerts.filter(a => !a.is_read).forEach(a => updateMut.mutate({ id: a.id, data: { ...a, is_read: true } }));
+  const markAllRead = async () => {
+    const unread = alerts.filter(a => !a.is_read);
+    try {
+      await Promise.all(unread.map(a =>
+        base44.entities.Alert.update(a.id, { is_read: true })
+      ));
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      toast.success(`${unread.length} alerts marked as read`);
+    } catch (err) {
+      toast.error("Some alerts failed to update");
+    }
   };
   const dismiss = (alert, e) => {
     e?.stopPropagation();

@@ -128,15 +128,29 @@ export default function ExpensesPage() {
   });
 
   const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, data }) => Promise.all(ids.map(id => base44.entities.Expense.update(id, data))),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.success('Updated'); },
-    onError: () => toast.error('Bulk update failed'),
+    mutationFn: async ({ ids, data }) => {
+      let succeeded = 0, failed = 0;
+      for (const id of ids) {
+        try { await base44.entities.Expense.update(id, data); succeeded++; } catch { failed++; }
+      }
+      if (failed > 0) throw new Error(`${failed} of ${ids.length} updates failed`);
+      return { succeeded };
+    },
+    onSuccess: (result, { ids }) => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.success(`${result.succeeded} expense(s) updated`); },
+    onError: (err) => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.error(err.message); },
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids) => Promise.all(ids.map(id => base44.entities.Expense.delete(id))),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.success('Deleted'); },
-    onError: () => toast.error('Bulk delete failed'),
+    mutationFn: async (ids) => {
+      let succeeded = 0, failed = 0;
+      for (const id of ids) {
+        try { await base44.entities.Expense.delete(id); succeeded++; } catch { failed++; }
+      }
+      if (failed > 0) throw new Error(`${failed} of ${ids.length} deletes failed`);
+      return { succeeded };
+    },
+    onSuccess: (result) => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.success(`${result.succeeded} expense(s) deleted`); },
+    onError: (err) => { qc.invalidateQueries({ queryKey: ['expenses'] }); setSelected([]); toast.error(err.message); },
   });
 
   const handleSave = d => {
