@@ -1,16 +1,21 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import { toast } from "sonner";
 
 export default function ScopeExclusions() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
+  const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
 
@@ -26,6 +31,23 @@ export default function ScopeExclusions() {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
   });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.ScopeItem.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.ScopeItem.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item deleted"); setDeleteTarget(null); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  const handleSave = (data) => {
+    if (editing) updateMut.mutate({ id: editing.id, data });
+    // create is handled by ScopeItemFormModal internally
+  };
 
   const selectedProject = projectId
     ? projects.find((p) => p.id === projectId)
@@ -80,7 +102,7 @@ export default function ScopeExclusions() {
         </div>
 
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
             background: "var(--accent)",
             color: "white",
@@ -193,11 +215,20 @@ export default function ScopeExclusions() {
 
       {/* Form Modal */}
       {showForm && (
-        <ScopeItemFormModal projectId={projectId} onClose={() => setShowForm(false)} />
+        <ScopeItemFormModal projectId={projectId} editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
       )}
 
       {/* Scope Items List */}
-      <ScopeItemList items={filtered} />
+      <ScopeItemList items={filtered} onEdit={(item) => { setEditing(item); setShowForm(true); }} onDelete={setDeleteTarget} />
+
+      {/* Delete Dialog */}
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Scope Item"
+        description="Delete this scope item? This cannot be undone."
+      />
     </div>
   );
 }
