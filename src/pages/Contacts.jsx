@@ -78,6 +78,16 @@ export default function Contacts() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  const createMut = useMutation({
+    mutationFn: (data) => base44.entities.Contact.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["contacts"] });
+      toast.success("Contact created");
+      setShowForm(false);
+    },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Contact.update(id, data),
     onSuccess: () => {
@@ -86,7 +96,7 @@ export default function Contacts() {
       setShowForm(false);
       toast.success("Contact updated");
     },
-    onError: (err) => toast.error(err.message),
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
   const deleteMut = useMutation({
@@ -96,7 +106,7 @@ export default function Contacts() {
       setDeleteTarget(null);
       toast.success("Contact deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;
@@ -328,6 +338,8 @@ export default function Contacts() {
           onSave={(data) => {
             if (editingContact) {
               updateMut.mutate({ id: editingContact.id, data });
+            } else {
+              createMut.mutate(data);
             }
           }}
         />

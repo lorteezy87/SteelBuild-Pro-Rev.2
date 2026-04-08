@@ -96,7 +96,11 @@ export default function DecisionLog() {
       if (filterImpact !== 'all' && d.impact_level !== filterImpact) return false;
       if (q && !(d.decision_text?.toLowerCase().includes(q) || d.decided_by?.toLowerCase().includes(q) || d.rationale?.toLowerCase().includes(q))) return false;
       return true;
-    }).sort((a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0));
+    }).sort((a, b) => {
+      const da = a.created_date ? new Date(a.created_date) : new Date(0);
+      const db = b.created_date ? new Date(b.created_date) : new Date(0);
+      return db - da;
+    });
   }, [decisions, filterImpact, search]);
 
   const filteredAssumptions = useMemo(() => {
@@ -110,7 +114,9 @@ export default function DecisionLog() {
       const bOverdue = b.review_date && new Date(b.review_date) < today && b.status === 'Active';
       if (aOverdue && !bOverdue) return -1;
       if (!aOverdue && bOverdue) return 1;
-      return new Date(b.created_date || 0) - new Date(a.created_date || 0);
+      const da = a.created_date ? new Date(a.created_date) : new Date(0);
+      const db = b.created_date ? new Date(b.created_date) : new Date(0);
+      return db - da;
     });
   }, [assumptions, filterImpact, search]);
 
