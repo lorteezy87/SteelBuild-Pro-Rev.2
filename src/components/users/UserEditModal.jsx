@@ -16,7 +16,7 @@ export default function UserEditModal({ open, onClose, user }) {
   }, [user, open]);
 
   const updateMut = useMutation({
-    mutationFn: (data) => base44.auth.updateMe(data),
+    mutationFn: ({ id, data }) => base44.entities.User.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User updated");
@@ -29,7 +29,7 @@ export default function UserEditModal({ open, onClose, user }) {
 
   const handleSave = () => {
     if (!user) return;
-    updateMut.mutate({ role });
+    updateMut.mutate({ id: user.id, data: { role } });
   };
 
   return (
