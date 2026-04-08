@@ -73,8 +73,9 @@ export default function QualityControl() {
     pending: qcRecords.filter((r) => r.status === "Pending").length,
   };
 
-  const passRate = qcRecords.length > 0
-    ? Math.round(((stats.passed + stats.conditional) / qcRecords.filter((r) => r.result !== "Inconclusive").length) * 100)
+  const conclusiveCount = qcRecords.filter((r) => r.result !== "Inconclusive").length;
+  const passRate = conclusiveCount > 0
+    ? Math.round(((stats.passed + stats.conditional) / conclusiveCount) * 100)
     : 0;
 
   const types = [

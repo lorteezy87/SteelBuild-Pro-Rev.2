@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
+import { toast } from "sonner";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -47,9 +48,15 @@ export default function AlertsCenter() {
 
   const generateAlerts = async () => {
     setGenerating(true);
-    await base44.functions.invoke("generateAlerts", {});
-    await refetch();
-    setGenerating(false);
+    try {
+      await base44.functions.invoke("generateAlerts", {});
+      await refetch();
+      toast.success("Alerts refreshed");
+    } catch (err) {
+      toast.error("Failed to generate alerts: " + (err?.message || "Unknown error"));
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const filtered = alerts.filter(a => {

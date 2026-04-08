@@ -837,6 +837,24 @@ export default function Layout({ children, currentPageName }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
+  // Track active project ID from localStorage (set by ProjectContext)
+  const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("activeProjectId"));
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "activeProjectId") setActiveProjectId(e.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    // Also poll briefly since storage events don't fire in the same tab
+    const interval = setInterval(() => {
+      const current = localStorage.getItem("activeProjectId");
+      setActiveProjectId((prev) => (prev !== current ? current : prev));
+    }, 1000);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      clearInterval(interval);
+    };
+  }, []);
+
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 900);
     window.addEventListener("resize", handler);
@@ -857,34 +875,38 @@ export default function Layout({ children, currentPageName }) {
   const qc = useQueryClient();
 
   const { data: allAlerts = [] } = useQuery({
-    queryKey: ["alerts-nav"],
-    queryFn: () => base44.entities.Alert.filter({ is_dismissed: false }),
+    queryKey: ["alerts-nav", activeProjectId],
+    queryFn: () => base44.entities.Alert.filter({ is_dismissed: false, project_id: activeProjectId }),
     initialData: [],
-    staleTime: 30000
+    staleTime: 30000,
+    enabled: !!activeProjectId,
   });
 
   const { data: navRFIs = [] } = useQuery({
-    queryKey: ["rfis-nav-count"],
-    queryFn: () => base44.entities.RFI.list("-date_required", 500),
+    queryKey: ["rfis-nav-count", activeProjectId],
+    queryFn: () => base44.entities.RFI.filter({ project_id: activeProjectId }),
     initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
+    enabled: !!activeProjectId,
   });
 
   const { data: navDrawings = [] } = useQuery({
-    queryKey: ["drawings-nav-count"],
-    queryFn: () => base44.entities.Drawing.list("-due_date", 500),
+    queryKey: ["drawings-nav-count", activeProjectId],
+    queryFn: () => base44.entities.Drawing.filter({ project_id: activeProjectId }),
     initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
+    enabled: !!activeProjectId,
   });
 
   const { data: navDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-nav-count"],
-    queryFn: () => base44.entities.Delivery.list("-scheduled_date", 500),
+    queryKey: ["deliveries-nav-count", activeProjectId],
+    queryFn: () => base44.entities.Delivery.filter({ project_id: activeProjectId }),
     initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
+    enabled: !!activeProjectId,
   });
 
   const overdueRFICount = navRFIs.filter(r =>
