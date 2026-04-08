@@ -59,7 +59,10 @@ export default function Schedule() {
   const hasProject = !!(projectId || activeProject?.id);
 
   const updateTaskMut = useMutation({
-    mutationFn: (data) => base44.entities.ScheduleTask.update(data.id, data),
+    mutationFn: (data) => {
+      const { id, created_at, updated_at, created_date, updated_date, ...fields } = data;
+      return base44.entities.ScheduleTask.update(id, fields);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setShowDrawer(false);
@@ -155,21 +158,81 @@ export default function Schedule() {
   const parseMsProjectXml = (xml) => {
     const doc = new DOMParser().parseFromString(xml, "text/xml");
     const taskNodes = Array.from(doc.getElementsByTagName("Task"));
+
+    // Build resource map: UID → name
+    const resourceMap = {};
+    Array.from(doc.getElementsByTagName("Resource")).forEach((r) => {
+      const rUid = r.getElementsByTagName("UID")[0]?.textContent;
+      const rName = r.getElementsByTagName("Name")[0]?.textContent;
+      if (rUid && rName) resourceMap[rUid] = rName;
+    });
+
+    // Build assignment map: TaskUID → [resource names]
+    const assignmentMap = {};
+    Array.from(doc.getElementsByTagName("Assignment")).forEach((a) => {
+      const tUid = a.getElementsByTagName("TaskUID")[0]?.textContent;
+      const rUid = a.getElementsByTagName("ResourceUID")[0]?.textContent;
+      if (tUid && rUid && resourceMap[rUid]) {
+        if (!assignmentMap[tUid]) assignmentMap[tUid] = [];
+        assignmentMap[tUid].push(resourceMap[rUid]);
+      }
+    });
+
     const tasks = [];
     taskNodes.forEach((node) => {
       const uid = node.getElementsByTagName("UID")[0]?.textContent;
       if (!uid || uid === "0") return; // skip root project summary
       const isSummary = node.getElementsByTagName("Summary")[0]?.textContent === "1";
+      const outlineLevel = Number(node.getElementsByTagName("OutlineLevel")[0]?.textContent) || 0;
+      const outlineNumber = node.getElementsByTagName("OutlineNumber")[0]?.textContent || "";
       const name = node.getElementsByTagName("Name")[0]?.textContent || "Task";
       const start = node.getElementsByTagName("Start")[0]?.textContent?.slice(0, 10) || "";
       const finish = node.getElementsByTagName("Finish")[0]?.textContent?.slice(0, 10) || "";
       const pct = Number(node.getElementsByTagName("PercentComplete")[0]?.textContent) || 0;
+      const milestone = node.getElementsByTagName("Milestone")[0]?.textContent === "1";
+      const durationStr = node.getElementsByTagName("Duration")[0]?.textContent || "";
+      // MS Project duration is like "PT48H0M0S" — extract hours and convert to days
+      const durationMatch = durationStr.match(/PT(\d+)H/);
+      const durationDays = durationMatch ? Math.round(Number(durationMatch[1]) / 8) : null;
       const preds = Array.from(node.getElementsByTagName("PredecessorLink")).map((p) =>
         p.getElementsByTagName("PredecessorUID")[0]?.textContent
       ).filter(Boolean);
-      tasks.push({ uid, name, start, finish, pct, preds, isSummary });
+      const resources = assignmentMap[uid] || [];
+      tasks.push({ uid, name, start, finish, pct, preds, isSummary, outlineLevel, outlineNumber, milestone, durationDays, resources });
     });
     return tasks;
+  };
+
+  /**
+   * Derive phase from the WBS hierarchy.
+   * If the task's parent summary task name matches a known phase, use it.
+   * Otherwise fall back to the PHASES heuristic.
+   */
+  const derivePhaseFromHierarchy = (task, allParsed) => {
+    // Walk up the outline levels to find the topmost summary (outline level 1)
+    const ol = task.outlineLevel;
+    if (ol <= 1) return task.name; // This IS a phase-level summary
+    // Find the preceding summary at outline level 1
+    const taskIdx = allParsed.indexOf(task);
+    for (let i = taskIdx - 1; i >= 0; i--) {
+      if (allParsed[i].isSummary && allParsed[i].outlineLevel === 1) {
+        return allParsed[i].name;
+      }
+    }
+    return null;
+  };
+
+  const PHASE_NAME_MAP = {
+    "DETAILING": "Detailing",
+    "FABRICATION": "Fabrication",
+    "DELIVERY": "Delivery",
+    "EQUIPMENT": "Procurement",
+    "INSTALLATION": "Installation",
+    "INSTALLATION/ERECTION": "Installation",
+    "ERECTION": "Installation",
+    "CLOSEOUT": "Closeout",
+    "PRE-CONSTRUCTION": "Pre-Construction",
+    "PROCUREMENT": "Procurement",
   };
 
   const handleImportMPP = async (file) => {
@@ -180,29 +243,81 @@ export default function Schedule() {
     setImporting(true);
     try {
       const text = await file.text();
-      const tasks = parseMsProjectXml(text);
-      if (!tasks.length) {
+      const allParsed = parseMsProjectXml(text);
+      if (!allParsed.length) {
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }
-      const creates = tasks
-        .filter((t) => !t.isSummary)
-        .map((t) =>
-          base44.entities.ScheduleTask.create({
-            project_id: projectId || activeProject?.id,
-            task_name: t.name,
-            task_type: "Task",
-            phase: PHASES.includes("Fabrication") ? "Fabrication" : PHASES[0],
-            start_date: t.start || new Date().toISOString().split("T")[0],
-            end_date: t.finish || t.start || new Date().toISOString().split("T")[0],
-            status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
-            percent_complete: t.pct,
-            priority: "Normal",
-            notes: t.preds && t.preds.length ? `Predecessors: ${t.preds.join(", ")}` : undefined,
-          })
-        );
-      await Promise.all(creates);
+
+      const pid = projectId || activeProject?.id;
+      // UID → created task ID mapping (for linking predecessors + parent)
+      const uidToDbId = {};
+      // UID → parent UID mapping (based on outline levels)
+      const uidToParentUid = {};
+      const summaryStack = []; // stack of { uid, outlineLevel }
+
+      // First pass: determine parent relationships from outline levels
+      allParsed.forEach((t) => {
+        while (summaryStack.length > 0 && summaryStack[summaryStack.length - 1].outlineLevel >= t.outlineLevel) {
+          summaryStack.pop();
+        }
+        if (summaryStack.length > 0) {
+          uidToParentUid[t.uid] = summaryStack[summaryStack.length - 1].uid;
+        }
+        if (t.isSummary) {
+          summaryStack.push({ uid: t.uid, outlineLevel: t.outlineLevel });
+        }
+      });
+
+      // Create ALL tasks (including summaries) in order — sequential to preserve parent refs
+      for (const t of allParsed) {
+        const phaseName = derivePhaseFromHierarchy(t, allParsed);
+        const phase = PHASE_NAME_MAP[phaseName?.toUpperCase()] || phaseName || "Fabrication";
+
+        const parentUid = uidToParentUid[t.uid];
+        const parentDbId = parentUid ? uidToDbId[parentUid] : null;
+
+        const record = await base44.entities.ScheduleTask.create({
+          project_id: pid,
+          task_name: t.name,
+          task_type: t.milestone ? "Milestone" : (t.isSummary ? "Task" : "Task"),
+          phase: PHASES.includes(phase) ? phase : "Fabrication",
+          start_date: t.start || new Date().toISOString().split("T")[0],
+          end_date: t.finish || t.start || new Date().toISOString().split("T")[0],
+          status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
+          percent_complete: t.pct,
+          priority: "Normal",
+          milestone: t.milestone,
+          wbs_code: t.outlineNumber || null,
+          outline_level: t.outlineLevel,
+          duration: t.durationDays,
+          resource_names: t.resources.length > 0 ? t.resources.join(", ") : null,
+          parent_task_id: parentDbId,
+          // Dependencies will be set in a second pass after all tasks exist
+        });
+        uidToDbId[t.uid] = record.id;
+      }
+
+      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs
+      const depUpdates = [];
+      allParsed.forEach((t) => {
+        if (t.preds && t.preds.length > 0) {
+          const dbId = uidToDbId[t.uid];
+          const predDbIds = t.preds.map(pUid => uidToDbId[pUid]).filter(Boolean);
+          if (dbId && predDbIds.length > 0) {
+            depUpdates.push(
+              base44.entities.ScheduleTask.update(dbId, {
+                dependencies: JSON.stringify(predDbIds),
+              })
+            );
+          }
+        }
+      });
+      if (depUpdates.length > 0) {
+        await Promise.all(depUpdates);
+      }
+
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      toast.success(`Imported ${creates.length} tasks from ${file.name}`);
+      toast.success(`Imported ${Object.keys(uidToDbId).length} tasks from ${file.name}`);
     } catch (e) {
       toast.error(e.message || "Import failed");
     } finally {
