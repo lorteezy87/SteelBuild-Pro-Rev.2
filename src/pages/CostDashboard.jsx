@@ -95,7 +95,7 @@ export default function CostDashboard() {
   const { data: codes = [], isLoading } = useQuery({
     queryKey: ["cost-codes-dash", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.CostCode.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
@@ -108,7 +108,7 @@ export default function CostDashboard() {
   const { data: cos = [] } = useQuery({
     queryKey: ["change-orders-dash", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });

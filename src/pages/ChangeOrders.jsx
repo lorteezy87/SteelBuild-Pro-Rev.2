@@ -34,7 +34,7 @@ export default function ChangeOrders() {
   const { data: cos = [], isLoading, refetch } = useQuery({
     queryKey: ["change-orders", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });

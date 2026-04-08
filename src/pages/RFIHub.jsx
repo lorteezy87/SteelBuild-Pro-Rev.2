@@ -139,7 +139,7 @@ function RFIRow({ rfi, onSelect, selected }) {
 function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
   const qc = useQueryClient();
   const [editingAnswer, setEditingAnswer] = useState(false);
-  const [answerText, setAnswerText] = useState(rfi.response_text || "");
+  const [answerText, setAnswerText] = useState(rfi.answer || "");
 
   const updateMut = useMutation({
     mutationFn: (data) => base44.entities.RFI.update(rfi.id, data),
@@ -229,7 +229,7 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
             <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Response / Answer</div>
             {!editingAnswer && (
               <button onClick={() => setEditingAnswer(true)} style={{ ...mono, fontSize: 9, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
-                {rfi.response_text ? "Edit" : "+ Add Response"}
+                {rfi.answer ? "Edit" : "+ Add Response"}
               </button>
             )}
           </div>
@@ -244,21 +244,21 @@ function RFIDetailPanel({ rfi, onClose, onStatusChange }) {
               />
               <div style={{ display: "flex", gap: 6, marginTop: 7 }}>
                 <button onClick={() => {
-                  updateMut.mutate({ response_text: answerText });
+                  updateMut.mutate({ answer: answerText });
                   setEditingAnswer(false);
                   toast.success("Response saved");
                 }} style={{ background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
                   Save
                 </button>
-                <button onClick={() => { setEditingAnswer(false); setAnswerText(rfi.response_text || ""); }}
+                <button onClick={() => { setEditingAnswer(false); setAnswerText(rfi.answer || ""); }}
                   style={{ background: "var(--hover-bg)", color: "var(--text-muted)", border: "1px solid var(--border-default)", borderRadius: 2, padding: "6px 14px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
                   Cancel
                 </button>
               </div>
             </div>
-          ) : rfi.response_text ? (
+          ) : rfi.answer ? (
             <div style={{ fontSize: 12.5, color: "var(--text-primary)", lineHeight: 1.6, background: "var(--success-muted)", padding: "10px 12px", borderRadius: 2, borderLeft: "3px solid var(--status-success)" }}>
-              {rfi.response_text}
+              {rfi.answer}
             </div>
           ) : (
             <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "12px", border: "1px dashed var(--border-default)", borderRadius: 2, textAlign: "center" }}>

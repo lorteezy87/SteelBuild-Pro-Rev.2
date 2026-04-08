@@ -318,6 +318,6 @@ export function buildWaitingOnBoard(scoredItems) {
     grouped[party].push(item);
   });
   return Object.entries(grouped)
-    .map(([party, items]) => ({ party, items, count: items.length, maxScore: Math.max(...items.map((i) => i.score)) }))
+    .map(([party, items]) => ({ party, items, count: items.length, maxScore: items.length > 0 ? Math.max(...items.map((i) => i.score)) : 0 }))
     .sort((a, b) => b.maxScore - a.maxScore);
 }

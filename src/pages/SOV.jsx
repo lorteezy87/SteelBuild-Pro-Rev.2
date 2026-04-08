@@ -27,7 +27,7 @@ export default function SOV() {
   const { data: sovs = [], isLoading, refetch } = useQuery({
     queryKey: ["sov-items", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.SOVItem.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.SOVItem.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });

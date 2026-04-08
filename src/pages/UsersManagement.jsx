@@ -20,7 +20,7 @@ function UsersManagementContent() {
 
   const { data: users = [], isLoading, refetch } = useQuery({
     queryKey: ["users"],
-    queryFn: () => base44.entities.User.list("-created_date"),
+    queryFn: () => base44.entities.User.list("-created_at"),
   });
 
   const deleteUserMut = useMutation({

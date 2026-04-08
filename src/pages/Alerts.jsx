@@ -33,7 +33,7 @@ export default function Alerts() {
 
   const { data: alerts = [], isLoading, refetch } = useQuery({
     queryKey: ["alerts"],
-    queryFn: () => base44.entities.Alert.list("-created_date"),
+    queryFn: () => base44.entities.Alert.list("-created_at"),
     refetchInterval: 60000,
   });
 

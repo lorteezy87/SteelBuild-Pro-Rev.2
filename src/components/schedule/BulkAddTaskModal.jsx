@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PHASES } from "../../utils/phases";
 
 const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
@@ -55,6 +55,16 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
   const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
   const [nextId, setNextId] = useState(4);
   const [errors, setErrors] = useState({});
+
+  // Reset form state every time the modal opens so stale rows from a
+  // previous bulk-add session are never carried over.
+  useEffect(() => {
+    if (open) {
+      setRows([emptyRow(1), emptyRow(2), emptyRow(3)]);
+      setNextId(4);
+      setErrors({});
+    }
+  }, [open]);
 
   const updateRow = (id, key, val) => {
     setRows((prev) => prev.map((r) => r._id === id ? { ...r, [key]: val } : r));
