@@ -63,7 +63,7 @@ export default function EVMCard({ wps, project }) {
     const budgetRemaining = effectiveBac - ac;
     const workRemaining = effectiveBac - ev;
     const tcpi = budgetRemaining > 0 ? workRemaining / budgetRemaining : null;
-    const eac = ac > 0 && cpi > 0 ? ac + workRemaining / cpi : effectiveBac;
+    const eac = cpi > 0 ? ac + workRemaining / cpi : effectiveBac;
     const vac = effectiveBac - eac;
 
     // Labor productivity: tons installed per field man-hour

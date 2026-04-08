@@ -147,7 +147,7 @@ export default function DailyLogFormModal({
   };
 
   const addWPRow = () => {
-    set("wp_progress", [...(form.wp_progress || []), { wp_id: "", percent_complete: "", field_hours: "" }]);
+    set("wp_progress", [...(form.wp_progress || []), { wp_id: "", percent_complete: 0, field_hours: 0 }]);
   };
 
   const updateWPRow = (idx, field, value) => {

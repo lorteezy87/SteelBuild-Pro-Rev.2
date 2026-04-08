@@ -69,10 +69,10 @@ export function scoreItem(item) {
 
   const today = new Date();
   const overdueDays = item.due_date
-    ? Math.max(0, Math.ceil((today - new Date(item.due_date)) / 86400000))
+    ? Math.max(0, Math.ceil((today - new Date(item.due_date + "T00:00:00Z")) / 86400000))
     : 0;
   const dueSoonDays = item.due_date && !overdueDays
-    ? Math.ceil((new Date(item.due_date) - today) / 86400000)
+    ? Math.ceil((new Date(item.due_date + "T00:00:00Z") - today) / 86400000)
     : null;
 
   // 1. Base score by type priority

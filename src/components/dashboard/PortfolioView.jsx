@@ -800,7 +800,7 @@ export default function PortfolioView({
               <tbody>
                 {projectMetrics.slice(0, 8).map((p) => {
                   const rfiLevel = p.overdueRFIs === 0 ? "green" : p.overdueRFIs <= 2 ? "yellow" : "red";
-                  const budgetPct = p.budget > 0 ? (p.actual / p.budget) * 100 : 0;
+                  const budgetPct = p.budget > 0 ? ((Number(p.actual) || 0) / p.budget) * 100 : 0;
                   const budgetLevel = budgetPct <= 100 ? "green" : budgetPct <= 110 ? "yellow" : "red";
                   const delLevel = p.lateDeliveries === 0 ? "green" : p.lateDeliveries === 1 ? "yellow" : "red";
                   const stalledLevel = p.stalledWPs === 0 ? "green" : p.stalledWPs === 1 ? "yellow" : "red";

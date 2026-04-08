@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 
@@ -512,6 +513,7 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
 
 // ── Main Modal ─────────────────────────────────────────────────────
 export default function RevisionUploadModal({ open, onClose, onComplete, activeProject, preSelectedSet, drawingSets = [] }) {
+  const qc = useQueryClient();
   // Derive virtual sets from drawings if drawingSets is sparse
   const [derivedSets, setDerivedSets] = React.useState([]);
   useEffect(() => {
@@ -647,44 +649,53 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       existingDrawings = await base44.entities.Drawing.filter({ project_id: activeProject?.id, drawing_set_name: selectedSet.set_name });
     } catch (e) { console.error("Failed to fetch drawings for apply:", e); }
 
-    let updated = 0, added = 0, removed = 0;
+    let updated = 0, added = 0, removed = 0, failed = 0;
     for (const match of matchedSheets) {
-      const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
-      if (match.change === "removed") {
-        if (existing) { await base44.entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
-      } else if (match.change === "added") {
-        await base44.entities.Drawing.create({
-          sheet_number: match.newSheet.sheetNumber,
-          title: match.newSheet.sheetTitle,
-          project_id: activeProject?.id,
-          project_name: activeProject?.name,
-          discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
-          revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
-          stage: "Not Started",
-          issue_date: revMeta.issueDate,
-          issued_by: revMeta.issuedBy,
-          file_url: newFileUrl,
-          drawing_set_name: selectedSet.set_name,
-          ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
-          is_superseded: false,
-        });
-        added++;
-      } else {
-        if (existing) {
-          await base44.entities.Drawing.update(existing.id, {
-            revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
+      try {
+        const existing = existingDrawings.find(d => d.sheet_number === match.sheetNumber && !d.is_superseded);
+        if (match.change === "removed") {
+          if (existing) { await base44.entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
+        } else if (match.change === "added") {
+          await base44.entities.Drawing.create({
+            sheet_number: match.newSheet.sheetNumber,
+            title: match.newSheet.sheetTitle,
+            project_id: activeProject?.id,
+            project_name: activeProject?.name,
+            discipline: match.newSheet.discipline || selectedSet.discipline || "Structural",
+            revision_number: normalizeRevisionNumber(match.newSheet.revision ?? revMeta.revisionLabel),
+            stage: "Not Started",
             issue_date: revMeta.issueDate,
-            issued_by: revMeta.issuedBy || existing.issued_by,
+            issued_by: revMeta.issuedBy,
             file_url: newFileUrl,
+            drawing_set_name: selectedSet.set_name,
+            ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
           });
-          updated++;
+          added++;
+        } else {
+          if (existing) {
+            await base44.entities.Drawing.update(existing.id, {
+              revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
+              issue_date: revMeta.issueDate,
+              issued_by: revMeta.issuedBy || existing.issued_by,
+              file_url: newFileUrl,
+              is_superseded: false,
+            });
+            updated++;
+          }
         }
+      } catch (err) {
+        console.error("Failed to process sheet:", match.sheetNumber, err);
+        failed++;
       }
-      setProcessingPct(30 + Math.round((updated + added + removed) / matchedSheets.length * 60));
+      setProcessingPct(30 + Math.round((updated + added + removed + failed) / matchedSheets.length * 60));
     }
 
       setApplyStats({ updated, added, removed });
+      qc.invalidateQueries({ queryKey: ["drawings"] });
+      if (failed > 0) {
+        setFlowError(`${failed} sheet(s) failed to process. ${updated + added + removed} succeeded.`);
+      }
       setProcessingPct(100);
       await new Promise(r => setTimeout(r, 500));
       setStep("success");
