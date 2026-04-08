@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { calculateTaskDuration } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 
+/**
+ * Parse the `dependencies` TEXT column.
+ * Stored as JSON array of task IDs: ["uuid1","uuid2"]
+ * Returns an array of ID strings.
+ */
+function parseDeps(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
+  catch { return []; }
+}
+
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
@@ -13,10 +25,38 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
   if (!open || !task) return null;
 
   const handleSave = () => {
-    if (onUpdate) onUpdate({ ...formData, id: task.id });
+    if (!onUpdate) return;
+    // Build clean payload with only DB-valid fields
+    const { id, created_at, updated_at, created_date, updated_date, ...rest } = formData;
+    onUpdate({ ...rest, id: task.id });
   };
 
   const duration = calculateTaskDuration(formData.start_date, formData.end_date);
+  const predecessorIds = parseDeps(formData.dependencies);
+  const predecessorTasks = allTasks.filter(t => predecessorIds.includes(t.id));
+  const successorTasks = allTasks.filter(t => {
+    const deps = parseDeps(t.dependencies);
+    return deps.includes(task.id);
+  });
+
+  // Dependency management
+  const addPredecessor = (predId) => {
+    const current = parseDeps(formData.dependencies);
+    if (current.includes(predId)) return;
+    const updated = [...current, predId];
+    setFormData({ ...formData, dependencies: JSON.stringify(updated) });
+  };
+
+  const removePredecessor = (predId) => {
+    const current = parseDeps(formData.dependencies);
+    const updated = current.filter(id => id !== predId);
+    setFormData({ ...formData, dependencies: updated.length > 0 ? JSON.stringify(updated) : null });
+  };
+
+  // Available tasks to add as predecessors (not self, not already a predecessor)
+  const availablePreds = allTasks.filter(t =>
+    t.id !== task.id && !predecessorIds.includes(t.id)
+  );
 
   return (
     <>
@@ -52,7 +92,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 4 }}>
-              {formData.task_type}
+              {formData.task_type}{formData.wbs_code ? ` · ${formData.wbs_code}` : ''}
             </div>
             <h2 style={{ fontFamily: 'var(--font-body)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
               {formData.task_name}
@@ -125,6 +165,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 <FormField label="Phase" type="select" value={formData.phase} onChange={(v) => setFormData({ ...formData, phase: v })} options={PHASES} />
                 <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={['Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold']} />
                 <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+                <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
               </div>
 
               {/* Right column */}
@@ -133,26 +174,69 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
                 <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
                 <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
-                <FormField label="WBS Code" value={formData.wbs_code} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
+                <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
               </div>
             </div>
           )}
 
           {activeTab === 'dependencies' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Predecessors */}
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Predecessors</div>
-                {formData.predecessor_ids ? (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
-                    {formData.predecessor_ids}
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                  Predecessors ({predecessorTasks.length})
+                </div>
+                {predecessorTasks.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {predecessorTasks.map(pred => (
+                      <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
+                        <button onClick={() => removePredecessor(pred.id)} style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', fontSize: 12, padding: 2 }}>✕</button>
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>None</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No predecessors</div>
+                )}
+
+                {/* Add predecessor */}
+                {availablePreds.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <select
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value) { addPredecessor(e.target.value); e.target.value = ''; } }}
+                      style={{
+                        width: '100%', background: 'var(--bg-sidebar)', border: '1px solid rgba(255,255,255,0.10)',
+                        borderRadius: 6, padding: '6px 8px', fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value="">+ Add predecessor...</option>
+                      {availablePreds.map(t => (
+                        <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.task_name}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
+
+              {/* Successors (read-only) */}
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Successors</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>None</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                  Successors ({successorTasks.length})
+                </div>
+                {successorTasks.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {successorTasks.map(suc => (
+                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{suc.wbs_code || '—'}</span>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1 }}>{suc.task_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No successors</div>
+                )}
               </div>
             </div>
           )}
@@ -172,6 +256,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 fontSize: 12,
                 color: 'var(--text-primary)',
                 resize: 'none',
+                boxSizing: 'border-box',
               }}
               placeholder="Add notes..."
             />
@@ -265,17 +350,21 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
             fontFamily: 'var(--font-body)',
             fontSize: 11,
             color: 'var(--text-primary)',
-            }}
-            />
-      ) : type === 'slider' ? (
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={value || 0}
-          onChange={(e) => onChange(parseInt(e.target.value))}
-          style={{ width: '100%' }}
+            boxSizing: 'border-box',
+          }}
         />
+      ) : type === 'slider' ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={value || 0}
+            onChange={(e) => onChange(parseInt(e.target.value))}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', minWidth: 32, textAlign: 'right' }}>{value || 0}%</span>
+        </div>
       ) : (
         <input
           type={type}
@@ -291,6 +380,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
             fontFamily: 'var(--font-body)',
             fontSize: 11,
             color: 'var(--text-primary)',
+            boxSizing: 'border-box',
           }}
         />
       )}

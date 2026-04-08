@@ -21,6 +21,14 @@ function normalizePhase(task) {
 
 const PHASE_BY_KEY = Object.fromEntries(PHASES.map(p => [p.key, p]));
 
+// ── Dependency parsing ───────────────────────────────────────────────────
+function parseDeps(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
+  catch { return []; }
+}
+
 // ── Status helpers ────────────────────────────────────────────────────────
 const STATUS_COLOR = {
   "Complete":    "#10B981",
@@ -39,10 +47,17 @@ function fmtDate(d) {
   return dt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "UTC" });
 }
 
-// ── Summary gantt bar ─────────────────────────────────────────────────────
-function SummaryBar({ phase, leftPx, widthPx }) {
+function calcDuration(start, end) {
+  if (!start || !end) return "—";
+  const days = Math.round((new Date(end + "T00:00:00Z") - new Date(start + "T00:00:00Z")) / 86400000);
+  return days >= 0 ? `${days}d` : "—";
+}
+
+// ── Summary gantt bar with % rollup ──────────────────────────────────────
+function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
   const ph = PHASE_BY_KEY[phase.key];
   const color = ph?.color || "#888";
+  const pct = Math.round(pctComplete || 0);
   return (
     <div style={{
       position: "absolute",
@@ -51,20 +66,55 @@ function SummaryBar({ phase, leftPx, widthPx }) {
       height: 14,
       top: "50%",
       transform: "translateY(-50%)",
-      background: color,
+      background: `${color}40`,
       borderRadius: 2,
-      opacity: 0.85,
+      overflow: "hidden",
     }}>
-      {/* end caps */}
-      <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: color, filter: "brightness(1.3)", borderRadius: "2px 0 0 2px" }} />
-      <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: color, filter: "brightness(1.3)", borderRadius: "0 2px 2px 0" }} />
+      {/* Progress fill */}
+      <div style={{
+        position: "absolute", left: 0, top: 0, height: "100%",
+        width: `${Math.min(pct, 100)}%`,
+        background: color,
+        borderRadius: 2,
+        transition: "width 0.3s",
+      }} />
+      {/* End caps */}
+      <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: color, borderRadius: "2px 0 0 2px" }} />
+      <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: color, borderRadius: "0 2px 2px 0" }} />
+      {/* % label */}
+      {widthPx > 40 && (
+        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>
+          {pct}%
+        </span>
+      )}
     </div>
+  );
+}
+
+// ── Milestone diamond ────────────────────────────────────────────────────
+function MilestoneDiamond({ leftPx, task }) {
+  const color = task.status === "Complete" ? "#10B981" : "var(--accent)";
+  return (
+    <div style={{
+      position: "absolute",
+      left: leftPx - 7,
+      top: "50%",
+      transform: "translateY(-50%) rotate(45deg)",
+      width: 14, height: 14,
+      background: color,
+      border: `2px solid ${color}`,
+      boxShadow: `0 0 6px ${color}40`,
+    }} />
   );
 }
 
 // ── Task gantt bar ────────────────────────────────────────────────────────
 function TaskBar({ task, leftPx, widthPx }) {
   const pct = task.percent_complete || 0;
+
+  if (task.milestone) {
+    return <MilestoneDiamond leftPx={leftPx} task={task} />;
+  }
 
   if (task.status === "Complete") {
     return (
@@ -97,14 +147,6 @@ function TaskBar({ task, leftPx, widthPx }) {
   );
 }
 
-const ROW_H   = 40;
-const SUM_H   = 36;
-const HEAD_H  = 40;
-// Left panel column layout
-const LEFT_W  = 600;
-// grid: WBS | TASK NAME | START | FINISH | PRED | STATUS | %
-const GRID = "56px 1fr 72px 72px 56px 78px 42px";
-
 // ── Submittal bar ─────────────────────────────────────────────────────────
 function SubmittalBar({ submittal, leftPx, widthPx }) {
   const statusColors = {
@@ -117,23 +159,12 @@ function SubmittalBar({ submittal, leftPx, widthPx }) {
   };
   const c = statusColors[submittal.status] || statusColors["Draft"];
   const isLate = submittal.due_date && new Date(submittal.due_date) < new Date() && submittal.status !== "Approved" && submittal.status !== "Approved as Noted";
-
   return (
     <div style={{
-      position: "absolute",
-      left: leftPx,
-      width: Math.max(widthPx, 4),
-      height: 18,
-      top: "50%",
-      transform: "translateY(-50%)",
-      background: c.bg,
-      border: `1.5px dashed ${isLate ? "#EF4444" : c.border}`,
-      borderRadius: 3,
-      display: "flex",
-      alignItems: "center",
-      padding: "0 6px",
-      overflow: "hidden",
-      gap: 4,
+      position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 18,
+      top: "50%", transform: "translateY(-50%)",
+      background: c.bg, border: `1.5px dashed ${isLate ? "#EF4444" : c.border}`,
+      borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
     }}
     title={`📂 ${submittal.display_name || submittal.file_name}${isLate ? " — OVERDUE" : ""}`}
     >
@@ -145,6 +176,13 @@ function SubmittalBar({ submittal, leftPx, widthPx }) {
   );
 }
 
+const ROW_H   = 40;
+const SUM_H   = 36;
+const HEAD_H  = 40;
+const LEFT_W  = 680;
+// grid: WBS | TASK NAME | DUR | START | FINISH | PRED | RESOURCES | STATUS | %
+const GRID = "50px 1fr 40px 68px 68px 48px 80px 72px 36px";
+
 export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
@@ -152,7 +190,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
-  const [tooltip, setTooltip] = useState(null); // { task, x, y }
+  const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
@@ -298,20 +336,67 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
 
   const togglePhase = (key) => setCollapsed(c => ({ ...c, [key]: !c[key] }));
 
-  // Build flat row list for synchronized scroll
+  // Build flat row list for synchronized scroll + row position tracking
   const rows = useMemo(() => {
     const list = [];
     grouped.forEach(({ phase, tasks }) => {
-      // Phase summary row
+      // Calculate summary % complete (weighted by duration or simple average)
+      const tasksWithPct = tasks.filter(t => t.percent_complete !== undefined && t.percent_complete !== null);
+      const avgPct = tasksWithPct.length > 0
+        ? tasksWithPct.reduce((sum, t) => sum + (Number(t.percent_complete) || 0), 0) / tasksWithPct.length
+        : 0;
+
       const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
       const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
-      list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1] });
+      list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
       if (!collapsed[phase.key]) {
         tasks.forEach(t => list.push({ type: "task", task: t, phase }));
       }
     });
     return list;
   }, [grouped, collapsed]);
+
+  // Build task ID → row index + Y position map for dependency arrows
+  const taskPositions = useMemo(() => {
+    const posMap = {};
+    let y = 0;
+    rows.forEach((row) => {
+      if (row.type === "summary") {
+        y += SUM_H;
+      } else {
+        posMap[row.task.id] = { y: y + ROW_H / 2 }; // center of the row
+        y += ROW_H;
+      }
+    });
+    return posMap;
+  }, [rows]);
+
+  // Build dependency arrows
+  const depArrows = useMemo(() => {
+    const arrows = [];
+    rows.forEach((row) => {
+      if (row.type !== "task") return;
+      const task = row.task;
+      const deps = parseDeps(task.dependencies);
+      if (!deps.length) return;
+      const toPos = taskPositions[task.id];
+      if (!toPos || !task.start_date) return;
+      const toX = px(task.start_date);
+      deps.forEach((predId) => {
+        const predPos = taskPositions[predId];
+        if (!predPos) return; // predecessor not visible (collapsed or filtered)
+        const predTask = allTasks.find(t => t.id === predId);
+        if (!predTask || !predTask.end_date) return;
+        const fromX = px(predTask.end_date);
+        arrows.push({
+          key: `${predId}-${task.id}`,
+          fromX, fromY: predPos.y,
+          toX, toY: toPos.y,
+        });
+      });
+    });
+    return arrows;
+  }, [rows, taskPositions, allTasks]);
 
   const totalHeight = rows.reduce((h, r) => h + (r.type === "summary" ? SUM_H : ROW_H), 0);
 
@@ -339,17 +424,12 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
           <button
             onClick={() => setShowSubmittals(v => !v)}
             style={{
-              padding: "4px 10px",
-              borderRadius: 4,
+              padding: "4px 10px", borderRadius: 4,
               border: showSubmittals ? "1px solid #3B82F6" : "1px solid var(--divider)",
               background: showSubmittals ? "rgba(59,130,246,0.10)" : "transparent",
               color: showSubmittals ? "#3B82F6" : "var(--text-muted)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              cursor: "pointer",
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
             }}
           >
             📂 Submittals ({submittals.filter(s => s.is_submittal && s.linked_wp_id).length})
@@ -370,9 +450,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       {/* ── Synchronized header row ─────────────────────────────────── */}
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
         {/* Left header */}
-        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6 }}>
-          {["WBS", "TASK NAME", "START", "FINISH", "PRED", "STATUS", "%"].map((h, i) => (
-            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
+        <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
+          {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "%"].map((h, i) => (
+            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
           ))}
         </div>
         {/* Right timeline header */}
@@ -402,35 +482,41 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
         <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
           {rows.map((row, i) => {
             if (row.type === "summary") {
-              const { phase, tasks } = row;
+              const { phase, tasks, pctComplete } = row;
               const isOpen = !collapsed[phase.key];
               return (
-                <div key={`sum-${phase.key}`} onClick={() => togglePhase(phase.key)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none" }}>
+                <div key={`sum-${phase.key}`} onClick={() => togglePhase(phase.key)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none" }}>
                   <span style={{ color: phase.color, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
                   </div>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
                 </div>
               );
             }
             // Task row
             const { task, phase } = row;
-            const predecessor = task.predecessor_wbs || task.predecessor_task_id || task.predecessors || "—";
+            const deps = parseDeps(task.dependencies);
+            const depLabels = deps.map(dId => {
+              const dt = allTasks.find(t => t.id === dId);
+              return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
+            }).join(", ");
             const overdue = isOverdue(task);
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
+            const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 6, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
               >
                 {/* WBS */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || task.task_number || "—"}</span>
-                {/* Task name — inline edit or display */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || "—"}</span>
+                {/* Task name — with hierarchy indentation */}
                 {isEditing ? (
                   <input
                     autoFocus
@@ -444,30 +530,39 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   <span
                     title={task.task_name}
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
-                    style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: overdue ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  >{task.task_name}</span>
+                    style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: overdue ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: indent }}
+                  >
+                    {task.milestone && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
+                    {task.task_name}
+                  </span>
                 )}
+                {/* Duration */}
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
+                  {task.duration ? `${task.duration}d` : calcDuration(task.start_date, task.end_date)}
+                </span>
                 {/* Start */}
                 {isEditing ? (
-                  <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 9, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 4px", width: "100%" }} />
+                  <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
                 )}
                 {/* Finish */}
                 {isEditing ? (
-                  <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 9, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 4px", width: "100%" }} />
+                  <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
                 )}
-                {/* Predecessor */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{String(predecessor).slice(0, 8)}</span>
+                {/* Predecessors */}
+                <span title={depLabels || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{depLabels || "—"}</span>
+                {/* Resources */}
+                <span title={task.resource_names || task.assigned_to || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: task.resource_names || task.assigned_to ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.resource_names || task.assigned_to || "—"}</span>
                 {/* Status */}
                 {isEditing ? (
                   <select value={editDraft.status} onChange={e => setEditDraft(d => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
                     {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
                 )}
                 {/* % or save/cancel */}
                 {isEditing ? (
@@ -476,7 +571,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
                   </div>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
                 )}
               </div>
             );
@@ -494,16 +589,46 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
               </div>
             )}
 
-            {/* Week grid lines — brighter at month boundaries */}
+            {/* Week grid lines */}
             {dateRange.weeks.map((w, i) => {
-              const isMonthStart = w.getDate() <= 7; // first week of month
+              const isMonthStart = w.getDate() <= 7;
               return (
                 <div key={i} style={{
-                  position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: isMonthStart ? 1 : 1,
+                  position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
                   background: isMonthStart ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
                 }} />
               );
             })}
+
+            {/* Dependency arrows — SVG overlay */}
+            {depArrows.length > 0 && (
+              <svg style={{ position: "absolute", top: 0, left: 0, width: totalW, height: totalHeight, pointerEvents: "none", zIndex: 5 }}>
+                <defs>
+                  <marker id="depArrowHead" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280" />
+                  </marker>
+                </defs>
+                {depArrows.map(({ key, fromX, fromY, toX, toY }) => {
+                  // Finish-to-Start arrow: from end of predecessor to start of successor
+                  const gap = 8;
+                  const midX = fromX + gap;
+                  const sameRow = Math.abs(fromY - toY) < 4;
+                  if (sameRow) {
+                    // Horizontal arrow
+                    return (
+                      <line key={key} x1={fromX} y1={fromY} x2={toX - 2} y2={toY}
+                        stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#depArrowHead)" />
+                    );
+                  }
+                  // L-shaped connector: horizontal from pred end, then vertical, then horizontal to successor start
+                  const goDown = toY > fromY;
+                  const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX - 2} ${toY}`;
+                  return (
+                    <path key={key} d={path} fill="none" stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#depArrowHead)" />
+                  );
+                })}
+              </svg>
+            )}
 
             {/* Rows */}
             {(() => {
@@ -517,7 +642,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   const w = spanPx(row.start, row.end);
                   return (
                     <div key={`gs-${row.phase.key}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${row.phase.color}08`, borderBottom: `1px solid var(--divider)` }}>
-                      <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} />
+                      <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} pctComplete={row.pctComplete} />
                     </div>
                   );
                 }
@@ -544,19 +669,11 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     {showSubmittals && submittals
                       .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
                       .map(s => {
-                        // Submittal bar spans: upload date → due date (before the WP start)
                         const uploadIso = (s.uploaded_date || s.revision_date || task.start_date || "").split("T")[0];
                         const dueIso = s.due_date;
                         if (!uploadIso || !dueIso) return null;
-                        const leftPx2 = px(uploadIso);
-                        const w2 = spanPx(uploadIso, dueIso);
                         return (
-                          <SubmittalBar
-                            key={s.id}
-                            submittal={s}
-                            leftPx={leftPx2}
-                            widthPx={w2}
-                          />
+                          <SubmittalBar key={s.id} submittal={s} leftPx={px(uploadIso)} widthPx={spanPx(uploadIso, dueIso)} />
                         );
                       })
                     }
@@ -570,11 +687,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
 
       {/* ── Tooltip ─────────────────────────────────────────────────── */}
       {tooltip && (
-        <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 180, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
+        <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{tooltip.task.task_name}</div>
+          {tooltip.task.wbs_code && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>WBS: {tooltip.task.wbs_code}</div>}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.06em", marginBottom: 4 }}>{tooltip.task.status || "—"}</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{tooltip.task.percent_complete ?? 0}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
+          {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>Resources: {tooltip.task.resource_names || tooltip.task.assigned_to}</div>
+          )}
           {onSave && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, opacity: 0.7 }}>Double-click row to edit inline</div>}
         </div>
       )}
