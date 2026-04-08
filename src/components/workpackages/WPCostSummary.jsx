@@ -1,13 +1,13 @@
 import React from 'react';
-import { formatCurrency } from '../shared/formatters';
+import { formatCurrency, roundCurrency } from '../shared/formatters';
 import { Button } from '@/components/ui/button';
 
 export default function WPCostSummary({ wp, expenses = [], onViewExpenses }) {
   if (!wp?.id) return null;
 
   const wpExpenses = expenses.filter(e => e.work_package_id === wp.id && e.payment_status !== 'Voided');
-  const committed = wpExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  const paid = wpExpenses.filter(e => e.payment_status === 'Paid').reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const committed = roundCurrency(wpExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+  const paid = roundCurrency(wpExpenses.filter(e => e.payment_status === 'Paid').reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
   
   const budget = wp.shop_hours_budget ? Number(wp.shop_hours_budget) * 60 : 0; // Rough estimate
 
