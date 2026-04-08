@@ -8,7 +8,7 @@ import { formatCurrency } from "../shared/formatters";
 
 const empty = {
   project_id: "", project_name: "", application_number: 1,
-  period_from: "", period_to: "", line_item_number: 1,
+  period_from: null, period_to: null, line_item_number: 1,
   description: "", scheduled_value: 0,
   previous_percent_complete: 0, current_percent_complete: 0,
   retainage_percent: 10, status: "Draft",
@@ -37,7 +37,12 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
     if (!form.project_id) e.project_id = "Required";
     if (!form.description.trim()) e.description = "Required";
     if (Number(form.scheduled_value) <= 0) e.scheduled_value = "Must be > 0";
-    if (Number(form.current_percent_complete) < Number(form.previous_percent_complete)) {
+    if (Number(form.previous_percent_complete) < 0 || Number(form.previous_percent_complete) > 100) {
+      e.previous_percent_complete = "Must be between 0 and 100";
+    }
+    if (Number(form.current_percent_complete) < 0 || Number(form.current_percent_complete) > 100) {
+      e.current_percent_complete = "Must be between 0 and 100";
+    } else if (Number(form.current_percent_complete) < Number(form.previous_percent_complete)) {
       e.current_percent_complete = "Cannot be less than previous %";
     }
     setErrors(e);
@@ -102,11 +107,11 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
           </div>
           <div>
             <Label>Period From</Label>
-            <Input type="date" value={form.period_from} onChange={e => set("period_from", e.target.value)} />
+            <Input type="date" value={form.period_from || ""} onChange={e => set("period_from", e.target.value)} />
           </div>
           <div>
             <Label>Period To</Label>
-            <Input type="date" value={form.period_to} onChange={e => set("period_to", e.target.value)} />
+            <Input type="date" value={form.period_to || ""} onChange={e => set("period_to", e.target.value)} />
           </div>
           <div className="sm:col-span-2">
             <Label>Description *</Label>
@@ -121,6 +126,7 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
           <div>
             <Label>Previous % Complete</Label>
             <Input type="number" min="0" max="100" value={form.previous_percent_complete} onChange={e => set("previous_percent_complete", e.target.value)} />
+            {errors.previous_percent_complete && <p className="text-xs text-rose-500 mt-1">{errors.previous_percent_complete}</p>}
           </div>
           <div>
             <Label>Current % Complete</Label>

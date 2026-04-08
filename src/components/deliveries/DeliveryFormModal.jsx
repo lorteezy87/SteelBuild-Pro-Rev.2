@@ -80,6 +80,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       toast.error("Scheduled date required");
       return;
     }
+    if (
+      formData.required_date &&
+      formData.scheduled_date &&
+      new Date(formData.scheduled_date) > new Date(formData.required_date)
+    ) {
+      toast.warning("Scheduled date is after required date — verify this is intentional");
+    }
     mutation.mutate({
       ...formData,
       pieces: parseInt(formData.pieces) || 0,

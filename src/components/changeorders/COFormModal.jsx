@@ -7,7 +7,7 @@ const empty = {
   project_id: "", project_name: "", title: "", description: "",
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
   submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: "", co_amount: 0, approved_by: "", notes: "", attachments: "",
+  approved_date: null, co_amount: 0, approved_by: "", notes: "", attachments: "",
   co_number: "",
 };
 
@@ -26,6 +26,9 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     if (!form.project_id) e.project_id = "Required";
     if (!form.title?.trim()) e.title = "Required";
     if (!form.reason_code) e.reason_code = "Required";
+    if (form.co_amount !== 0 && form.co_amount !== "" && (isNaN(Number(form.co_amount)) || Number(form.co_amount) < 0)) {
+      e.co_amount = "Must be a valid non-negative number";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -82,7 +85,7 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
             <SelectContent>{["Draft","Submitted","Under Review","Approved","Rejected","Void"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
           </Select>
         </FormField>
-        <FormField label="CO Amount ($)">
+        <FormField label="CO Amount ($)" error={errors.co_amount}>
           <input type="number" style={inputStyle} value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
         </FormField>
         {selectedProject && (
