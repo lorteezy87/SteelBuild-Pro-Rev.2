@@ -237,25 +237,6 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
     setEditDraft({});
   };
 
-  const scrollToToday = () => {
-    if (rightBody.current) {
-      const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
-      rightBody.current.scrollLeft = Math.max(0, todayOffset - 200);
-    }
-  };
-
-  // Auto-scroll to today on mount so every project starts centred on the current date
-  useEffect(() => {
-    // Small delay so the DOM has rendered and scrollWidth is accurate
-    const timer = setTimeout(() => {
-      if (rightBody.current && dateRange.weeks.length > 0) {
-        const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
-        rightBody.current.scrollLeft = Math.max(0, todayOffset - rightBody.current.clientWidth / 3);
-      }
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [dateRange.start?.getTime?.(), dateRange.weeks.length]);
-
   // Sync vertical scroll between left and right body
   const syncScroll = (from) => {
     const other = from === "left" ? rightBody.current : leftRef.current;
@@ -329,6 +310,24 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
     return { start, end, weeks };
   }, [allTasks]);
+
+  const scrollToToday = () => {
+    if (rightBody.current) {
+      const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
+      rightBody.current.scrollLeft = Math.max(0, todayOffset - 200);
+    }
+  };
+
+  // Auto-scroll to today on mount so every project starts centred on the current date
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (rightBody.current && dateRange.weeks.length > 0) {
+        const todayOffset = (today - dateRange.start) / 86400000 * (WEEK_PX / 7);
+        rightBody.current.scrollLeft = Math.max(0, todayOffset - rightBody.current.clientWidth / 3);
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [dateRange.start?.getTime?.(), dateRange.weeks.length]);
 
   const dayCount = Math.ceil((dateRange.end - dateRange.start) / 86400000);
   const PX_PER_DAY = WEEK_PX / 7;

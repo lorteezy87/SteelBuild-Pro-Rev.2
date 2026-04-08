@@ -16,7 +16,7 @@ const CATEGORY_COLORS = {
   Other: "var(--text-muted)",
 };
 
-export default function ScopeItemList({ items }) {
+export default function ScopeItemList({ items, onEdit, onDelete }) {
   if (items.length === 0) {
     return (
       <div
@@ -88,6 +88,13 @@ export default function ScopeItemList({ items }) {
             </div>
 
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px" }}>
+              {/* Action Buttons */}
+              {onEdit && (
+                <button onClick={() => onEdit(item)} style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 4, padding: "3px 8px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>EDIT</button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(item)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, padding: "3px 7px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>✕</button>
+              )}
               {/* Type Badge */}
               <div
                 style={{

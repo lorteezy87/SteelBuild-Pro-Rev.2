@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -128,7 +128,7 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
 
 function StatStrip({ stats }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
       {stats.map((item) => (
         <div
           key={item.label}
@@ -187,7 +187,7 @@ function QuickActionRail({ actions, onNavigate }) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
         gap: 8,
       }}
     >
@@ -198,10 +198,11 @@ function QuickActionRail({ actions, onNavigate }) {
           onClick={() => onNavigate(action.page)}
           style={{
             background: action.primary ? "var(--accent)" : "var(--bg-surface-low)",
-            color: action.primary ? "var(--accent-text)" : "var(--text-secondary)",
+            color: action.primary ? "var(--accent-text)" : "var(--text-primary)",
             border: action.primary ? "none" : "1px solid var(--border-default)",
             borderRadius: "var(--radius-btn)",
             padding: "12px 10px",
+            minHeight: 44,
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-start",
@@ -213,7 +214,7 @@ function QuickActionRail({ actions, onNavigate }) {
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -224,8 +225,9 @@ function QuickActionRail({ actions, onNavigate }) {
           <span
             style={{
               fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: action.primary ? "var(--accent-text)" : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: 500,
+              color: action.primary ? "var(--accent-text)" : "var(--text-secondary)",
             }}
           >
             {action.detail}
@@ -449,6 +451,12 @@ export default function DrilldownView({
   const navigate = useNavigate();
   const { user } = useAuth();
   const today = useMemo(() => startOfToday(), []);
+
+  // Track last data sync time
+  const [lastSynced, setLastSynced] = useState(() => new Date());
+  useEffect(() => {
+    setLastSynced(new Date());
+  }, [rfis, cos, wps, drawings, deliveries, expenses]);
 
   const financials = useMemo(() => {
     const contractValue = Number(project.original_contract_value) || 0;
@@ -723,133 +731,138 @@ export default function DrilldownView({
         />
       </ErrorBoundary>
 
-      <ErrorBoundary label="Stats Overview">
-        <StatStrip stats={stats} />
-      </ErrorBoundary>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ flex: 1 }}>
+          <ErrorBoundary label="Stats Overview">
+            <StatStrip stats={stats} />
+          </ErrorBoundary>
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -6 }}>
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+          letterSpacing: "0.06em",
+        }}>
+          Last synced: {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
 
       <Card title="Quick Update Rail" tone="accent">
         <QuickActionRail actions={quickActions} onNavigate={openPage} />
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 14, alignItems: "start" }}>
-        <Card
-          title="Needs Attention Today"
-          tone="danger"
-          count={derived.attentionItems.length}
-          action={
-            <button
-              type="button"
-              onClick={() => openPage("AlertsCenter")}
-              style={{
-                background: "none",
-                border: "none",
+      {/* NEEDS ATTENTION — hero section, full width, high contrast */}
+      {derived.attentionItems.length > 0 && (
+        <div style={{
+          background: "var(--danger-muted)",
+          border: "1px solid var(--danger-border)",
+          borderLeft: "4px solid var(--status-error)",
+          borderRadius: "var(--radius-card)",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "14px 16px",
+            borderBottom: "1px solid var(--danger-border)",
+            background: "rgba(255,60,60,0.06)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 4, height: 20, background: "var(--status-error)", borderRadius: 2 }} />
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800,
+                letterSpacing: "0.10em", textTransform: "uppercase",
                 color: "var(--status-error)",
-                cursor: "pointer",
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              All alerts
+              }}>
+                Needs Attention Today
+              </span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800,
+                color: "#fff", background: "var(--status-error)",
+                borderRadius: 10, padding: "2px 10px",
+              }}>
+                {derived.attentionItems.length}
+              </span>
+            </div>
+            <button type="button" onClick={() => openPage("AlertsCenter")} style={{
+              background: "none", border: "none", color: "var(--status-error)",
+              cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              All alerts →
             </button>
+          </div>
+          <div style={{ padding: 14 }}>
+            <WorkList items={derived.attentionItems} empty="No immediate risk items" onOpen={openPage} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
+        <Card
+          title="My Next Actions"
+          tone="accent"
+          count={derived.myItems.length}
+          action={
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 8,
+              color: "var(--text-muted)", textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}>
+              {user?.full_name || user?.email || "Project user"}
+            </div>
           }
-          minHeight={420}
         >
-          <WorkList
-            items={derived.attentionItems}
-            empty="No immediate risk items"
-            onOpen={openPage}
-          />
+          <WorkList items={derived.myItems} empty="No directly assigned actions found" onOpen={openPage} />
         </Card>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Card
-            title="My Next Actions"
-            tone="accent"
-            count={derived.myItems.length}
-            action={
-              <div
+        <Card title="Blocked / At Risk" tone="warning">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {derived.blocked.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => openPage(item.page)}
                 style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
+                  background: "var(--bg-surface-low)",
+                  border: "1px solid var(--border-default)",
+                  borderTop: `2px solid ${item.color}`,
+                  borderRadius: "var(--radius-card)",
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  textAlign: "left",
                 }}
               >
-                {user?.full_name || user?.email || "Project user"}
-              </div>
-            }
-          >
-            <WorkList items={derived.myItems} empty="No directly assigned actions found" onOpen={openPage} />
-          </Card>
-
-          <Card title="Blocked / At Risk" tone="warning">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {derived.blocked.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => openPage(item.page)}
-                  style={{
-                    background: "var(--bg-surface-low)",
-                    border: "1px solid var(--border-default)",
-                    borderTop: `2px solid ${item.color}`,
-                    borderRadius: "var(--radius-card)",
-                    padding: "10px 12px",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 22,
-                      fontWeight: 800,
-                      lineHeight: 1,
-                      color: item.color,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {item.value}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {item.detail}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </Card>
-        </div>
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  color: "var(--text-muted)", letterSpacing: "0.10em",
+                  textTransform: "uppercase", marginBottom: 6,
+                }}>
+                  {item.label}
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800,
+                  lineHeight: 1, color: item.color, marginBottom: 4,
+                }}>
+                  {item.value}
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-body)", fontSize: 11,
+                  color: "var(--text-secondary)",
+                }}>
+                  {item.detail}
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
         <Card title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
           <FeedList items={derived.changeFeed} />
         </Card>
         <Card title="Execution Snapshot" tone="accent">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
             <ErrorBoundary label="Steel Execution Status">
               <SteelExecutionStatusCard wps={wps} drawings={drawings} />
             </ErrorBoundary>
@@ -860,96 +873,13 @@ export default function DrilldownView({
         </Card>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "stretch" }}>
         <ErrorBoundary label="Upcoming Deliveries">
           <UpcomingDeliveriesCard deliveries={deliveries} />
         </ErrorBoundary>
         <ErrorBoundary label="Drawing Approval Status">
           <DrawingApprovalStatusCard drawings={drawings} />
         </ErrorBoundary>
-        <Card title="What Needs Action Next" tone="warning">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[
-              {
-                label: "Open RFIs",
-                value: rfis.filter((r) => !["Answered", "Closed"].includes(r.status)).length,
-                detail: `${derived.overdueRfis.length} overdue`,
-                page: "RFIs",
-              },
-              {
-                label: "Pending revisions",
-                value: drawings.filter((d) => d.stage !== "Released").length,
-                detail: `${derived.lateDrawings.length} late`,
-                page: "Drawings",
-              },
-              {
-                label: "Open deliveries",
-                value: deliveries.filter((d) => d.status !== "Delivered").length,
-                detail: `${derived.lateDeliveries.length} late`,
-                page: "Deliveries",
-              },
-              {
-                label: "Active work packages",
-                value: wps.filter((wp) => wp.status !== "Complete").length,
-                detail: `${derived.blockedWps.length} blocked`,
-                page: "WorkPackages",
-              },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => openPage(item.page)}
-                style={{
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-card)",
-                  padding: "10px 12px",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: "0.10em",
-                      textTransform: "uppercase",
-                      color: "var(--text-muted)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {item.detail}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 20,
-                    fontWeight: 800,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {item.value}
-                </div>
-              </button>
-            ))}
-          </div>
-        </Card>
       </div>
 
       <ErrorBoundary label="Budget Overview Chart">

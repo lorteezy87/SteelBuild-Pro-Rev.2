@@ -11,6 +11,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const emptyForm = {
     project_id: projectId || "",
+    project_name: "",
+    delivery_title: "",
     work_package_id: "",
     vendor: "",
     po_number: "",
@@ -41,6 +43,19 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     setFormData(delivery ? { ...emptyForm, ...delivery } : { ...emptyForm, project_id: projectId || "" });
   }, [delivery, projectId]);
 
+  // Auto-populate project_name whenever project_id changes or projects load
+  useEffect(() => {
+    if (formData.project_id && projects.length > 0) {
+      const proj = projects.find(p => String(p.id) === String(formData.project_id));
+      if (proj) {
+        const name = proj.name || proj.project_name || "";
+        if (name && formData.project_name !== name) {
+          setFormData(prev => ({ ...prev, project_name: name }));
+        }
+      }
+    }
+  }, [formData.project_id, projects]);
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
@@ -68,6 +83,10 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = () => {
+    if (!formData.delivery_title?.trim()) {
+      toast.error("Delivery title is required");
+      return;
+    }
     if (!formData.project_id) {
       toast.error("Select a project");
       return;
@@ -87,8 +106,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     ) {
       toast.warning("Scheduled date is after required date — verify this is intentional");
     }
+    const proj = projects.find(p => p.id === formData.project_id);
+    const wp = workPackages.find(w => w.id === formData.work_package_id);
     mutation.mutate({
       ...formData,
+      delivery_title: formData.delivery_title.trim(),
+      project_name: proj?.name || proj?.project_name || formData.project_name || "",
+      description: wp ? (wp.name || wp.wp_number || formData.description || "") : formData.description || "",
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });
@@ -212,18 +236,37 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SectionLabel>Delivery Info</SectionLabel>
+            <div>
+              <label style={labelStyle}>Delivery Title *</label>
+              <input
+                type="text"
+                value={formData.delivery_title}
+                onChange={(e) => set("delivery_title", e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. Anchor Bolts — Phase 1, HSS Columns Load 3"
+                required
+              />
+            </div>
+
             <SectionLabel>Project & Assignment</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Project *</label>
-                <select value={formData.project_id} onChange={(e) => set("project_id", e.target.value)} style={inputStyle} required>
-                  <option value="">Select project...</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <label style={labelStyle}>Project {projectId ? "(auto)" : "*"}</label>
+                {projectId ? (
+                  <div style={{ ...inputStyle, background: "var(--bg-surface-secondary)", color: "var(--accent)", fontWeight: 600, display: "flex", alignItems: "center" }}>
+                    {formData.project_name || projects.find(p => String(p.id) === String(projectId))?.name || "—"}
+                  </div>
+                ) : (
+                  <select value={formData.project_id} onChange={(e) => set("project_id", e.target.value)} style={inputStyle} required>
+                    <option value="">Select project...</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>Work Package</label>
