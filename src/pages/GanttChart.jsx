@@ -375,7 +375,7 @@ export default function GanttChart() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["lookahead-gantt", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });

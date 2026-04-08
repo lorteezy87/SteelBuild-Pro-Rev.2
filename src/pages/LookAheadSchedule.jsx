@@ -142,7 +142,7 @@ export default function LookAheadSchedule() {
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["lookahead", activeProject?.id],
     queryFn: () => activeProject?.id
-      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_date")
+      ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
       : [],
     enabled: !!activeProject?.id,
   });
