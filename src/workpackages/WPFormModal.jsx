@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { formatPercent } from "../shared/formatters";
+import { formatBudgetPercent } from "../shared/formatters";
 import { getDraftDrawingsWarning } from "../shared/workflowValidation";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
 
@@ -204,7 +204,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="number" style={inputStyle} value={form.shop_hours_actual} onChange={e => set("shop_hours_actual", e.target.value)} />
         </FormField>
         <FormField label="Shop Burn % (calc)">
-          <input style={calcStyle(form.shop_hours_actual, form.shop_hours_budget)} value={formatPercent(shopBurn)} disabled readOnly />
+          <input style={calcStyle(form.shop_hours_actual, form.shop_hours_budget)} value={formatBudgetPercent(shopBurn)} disabled readOnly />
         </FormField>
         <FormField label="Field Hours Budget">
           <input type="number" style={inputStyle} value={form.field_hours_budget} onChange={e => set("field_hours_budget", e.target.value)} />
@@ -213,7 +213,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="number" style={inputStyle} value={form.field_hours_actual} onChange={e => set("field_hours_actual", e.target.value)} />
         </FormField>
         <FormField label="Field Burn % (calc)">
-          <input style={calcStyle(form.field_hours_actual, form.field_hours_budget)} value={formatPercent(fieldBurn)} disabled readOnly />
+          <input style={calcStyle(form.field_hours_actual, form.field_hours_budget)} value={formatBudgetPercent(fieldBurn)} disabled readOnly />
         </FormField>
         <FormField label="Total Budget (hrs)">
           <input style={inputDisabledStyle} value={totalBudget.toLocaleString()} disabled readOnly />
@@ -222,7 +222,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={inputDisabledStyle} value={totalActual.toLocaleString()} disabled readOnly />
         </FormField>
         <FormField label="Total Burn % (calc)" span2>
-          <input style={calcStyle(totalActual, totalBudget)} value={formatPercent(totalBurn)} disabled readOnly />
+          <input style={calcStyle(totalActual, totalBudget)} value={formatBudgetPercent(totalBurn)} disabled readOnly />
         </FormField>
 
         {/* ── Section 4: Linked Drawings ── */}

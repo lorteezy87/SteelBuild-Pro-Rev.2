@@ -8,7 +8,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import PageHeader from "@/components/shared/PageHeader";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
-import { formatCurrency, formatCurrencyShort, formatPercent } from "@/components/shared/formatters";
+import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -52,9 +52,11 @@ function safeNumber(value) {
 }
 
 function formatSigned(value) {
-  const num = safeNumber(value);
-  if (num === 0) return "-";
-  return `${num > 0 ? "+" : "-"}${formatCurrency(Math.abs(num))}`;
+  if (value == null || value === "") return "\u2014";
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return "\u2014";
+  if (raw === 0) return "$0";
+  return `${raw > 0 ? "+" : ""}${formatCurrency(raw)}`;
 }
 
 function varianceColor(value) {
@@ -556,7 +558,7 @@ export default function Financials() {
         <SummaryCard label="SOV Total" value={formatCurrencyShort(summary.sovTotal)} detail={`Variance to contract ${formatSigned(summary.sovVsContract)}`} tone={Math.abs(summary.sovVsContract) > 1 ? "var(--status-warning)" : "var(--accent)"} />
         <SummaryCard label="Revised Budget" value={formatCurrencyShort(summary.revisedBudget)} detail={`Approved extras ${formatCurrencyShort(summary.approvedExtras)}`} tone="var(--status-info)" />
         <SummaryCard label="Actual Cost" value={formatCurrencyShort(summary.actual)} detail={`Committed ${formatCurrencyShort(summary.committed)}`} tone="var(--status-warning)" />
-        <SummaryCard label="Exposure" value={formatCurrencyShort(summary.exposure)} detail={`Budget used ${formatPercent(summary.budgetSpentPct, 1)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-warning)"} />
+        <SummaryCard label="Exposure" value={formatCurrencyShort(summary.exposure)} detail={`Budget used ${formatBudgetPercent(summary.budgetSpentPct, 1)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-warning)"} />
         <SummaryCard label="Budget Remaining" value={formatSigned(summary.remainingBudget)} detail={`Margin at risk ${formatCurrencyShort(summary.marginAtRisk)}`} tone={summary.remainingBudget < 0 ? "var(--status-error)" : "var(--status-success)"} />
       </div>
 
@@ -668,7 +670,7 @@ export default function Financials() {
                 <PTD right mono>{formatCurrency(row.committed_cost)}</PTD>
                 <PTD right mono>{formatCurrency(row.exposure)}</PTD>
                 <PTD right mono style={{ color: varianceColor(row.remaining_budget) }}>{formatSigned(row.remaining_budget)}</PTD>
-                <PTD right mono style={{ color: row.used_pct > 100 ? "var(--status-error)" : row.used_pct > 85 ? "var(--status-warning)" : "var(--text-secondary)" }}>{formatPercent(row.used_pct, 1)}</PTD>
+                <PTD right mono style={{ color: row.used_pct > 100 ? "var(--status-error)" : row.used_pct > 85 ? "var(--status-warning)" : "var(--text-secondary)" }}>{formatBudgetPercent(row.used_pct, 1)}</PTD>
                 <PTD>{row.family_label}</PTD>
                 <PTD mono>{row.direct_billable ? "YES" : "REVIEW"}</PTD>
                 <PTD right>
