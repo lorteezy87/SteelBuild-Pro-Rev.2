@@ -5,8 +5,8 @@ import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, FormField } from "@
 const empty = {
   project_number: "", name: "", client: "", general_contractor: "", engineer_of_record: "",
   project_manager: "", superintendent: "", contract_type: "Lump Sum",
-  original_contract_value: 0, start_date: "", target_completion_date: "",
-  forecast_completion_date: "", phase: "Detailing", health_status: "On Track",
+  original_contract_value: 0, start_date: null, target_completion_date: null,
+  forecast_completion_date: null, phase: "Detailing", health_status: "On Track",
   retainage_percent: 10, contingency_amount: 0, address: "", notes: "",
 };
 
@@ -24,6 +24,9 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
     if (!form.project_number?.trim()) e.project_number = "Required";
     if (!form.name?.trim()) e.name = "Required";
     if (!form.client?.trim()) e.client = "Required";
+    if (form.start_date && form.target_completion_date && form.target_completion_date < form.start_date) {
+      e.target_completion_date = "Target completion must be on or after start date";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -35,6 +38,11 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
       original_contract_value: Number(form.original_contract_value) || 0,
       retainage_percent: Number(form.retainage_percent) || 0,
       contingency_amount: Number(form.contingency_amount) || 0,
+      address: form.address?.trim() || null,
+      notes: form.notes?.trim() || null,
+      start_date: form.start_date || null,
+      target_completion_date: form.target_completion_date || null,
+      forecast_completion_date: form.forecast_completion_date || null,
     });
   };
 
@@ -101,13 +109,13 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
           </Select>
         </FormField>
         <FormField label="Start Date">
-          <input type="date" style={inputStyle} value={form.start_date} onChange={e => set("start_date", e.target.value)} />
+          <input type="date" style={inputStyle} value={form.start_date || ""} onChange={e => set("start_date", e.target.value)} />
         </FormField>
-        <FormField label="Target Completion">
-          <input type="date" style={inputStyle} value={form.target_completion_date} onChange={e => set("target_completion_date", e.target.value)} />
+        <FormField label="Target Completion" error={errors.target_completion_date}>
+          <input type="date" style={inputStyle} value={form.target_completion_date || ""} onChange={e => set("target_completion_date", e.target.value)} />
         </FormField>
         <FormField label="Forecast Completion">
-          <input type="date" style={inputStyle} value={form.forecast_completion_date} onChange={e => set("forecast_completion_date", e.target.value)} />
+          <input type="date" style={inputStyle} value={form.forecast_completion_date || ""} onChange={e => set("forecast_completion_date", e.target.value)} />
         </FormField>
         <FormField label="Address" span2>
           <input style={inputStyle} value={form.address} onChange={e => set("address", e.target.value)} />

@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import PortfolioView from "../components/dashboard/PortfolioView";
 import DrilldownView from "../components/dashboard/DrilldownView";
 
@@ -46,33 +47,37 @@ export default function Dashboard() {
 
   if (!pid) {
     return (
-      <PortfolioView
-        projects={projects}
-        allRFIs={allRFIs}
-        allCOs={allCOs}
-        allCodes={allCodes}
-        allWPs={allWPs}
-        allDeliveries={allDeliveries}
-        allActionItems={allActionItems}
-        allExpenses={allExpenses}
-      />
+      <ErrorBoundary label="Portfolio Dashboard">
+        <PortfolioView
+          projects={projects}
+          allRFIs={allRFIs}
+          allCOs={allCOs}
+          allCodes={allCodes}
+          allWPs={allWPs}
+          allDeliveries={allDeliveries}
+          allActionItems={allActionItems}
+          allExpenses={allExpenses}
+        />
+      </ErrorBoundary>
     );
   }
 
   return (
-    <DrilldownView
-      project={activeProject}
-      rfis={rfis}
-      cos={cos}
-      codes={codes}
-      wps={wps}
-      drawings={drawings}
-      tasks={tasks}
-      actionItems={allActionItems.filter(a => a.project_id === pid)}
-      deliveries={deliveries}
-      expenses={expenses}
-      recentActivity={recentActivity}
-      onClearProject={() => setActiveProject(null)}
-    />
+    <ErrorBoundary label="Project Dashboard">
+      <DrilldownView
+        project={activeProject}
+        rfis={rfis}
+        cos={cos}
+        codes={codes}
+        wps={wps}
+        drawings={drawings}
+        tasks={tasks}
+        actionItems={allActionItems.filter(a => a.project_id === pid)}
+        deliveries={deliveries}
+        expenses={expenses}
+        recentActivity={recentActivity}
+        onClearProject={() => setActiveProject(null)}
+      />
+    </ErrorBoundary>
   );
 }

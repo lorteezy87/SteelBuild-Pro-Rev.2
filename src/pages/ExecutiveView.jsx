@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { formatCurrency, formatPercent } from "../components/shared/formatters";
+import { formatCurrency, formatBudgetPercent } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import KPIStrip from "../components/shared/KPIStrip";
 import {
@@ -74,7 +74,7 @@ export default function ExecutiveView() {
     { label: "Portfolio Value", value: formatCurrency(revisedTotal), color: "green" },
     { label: "Total Spend", value: formatCurrency(totalSpend), sub: `of ${formatCurrency(totalBudget)} budget`, color: totalSpend > totalBudget ? "rose" : "blue" },
     { label: "Approved COs", value: formatCurrency(approvedCOVal), sub: `${cos.filter((c) => c.status === "Approved").length} orders`, color: "purple" },
-    { label: "Labor Burn", value: formatPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
+    { label: "Labor Burn", value: formatBudgetPercent(totalBudgetHrs > 0 ? totalActualHrs / totalBudgetHrs * 100 : 0), sub: `${totalActualHrs.toLocaleString()} hrs actual`, color: "amber" },
     { label: "Open RFIs", value: rfis.filter((r) => r.status === "Open" || r.status === "Under Review").length, color: "blue" },
     { label: "At Risk Projects", value: projects.filter((p) => p.health_status === "At Risk").length, color: "rose" },
     {
@@ -404,7 +404,7 @@ export default function ExecutiveView() {
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>Spend</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: pctSpend > 100 ? "var(--status-error)" : "var(--text-secondary)" }}>{formatPercent(pctSpend)}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: pctSpend > 100 ? "var(--status-error)" : "var(--text-secondary)" }}>{formatBudgetPercent(pctSpend)}</span>
                   </div>
                   <div style={{ height: 3, background: "var(--bg-surface-highest)", borderRadius: 2, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${Math.min(100, pctSpend)}%`, background: pctSpend > 100 ? "var(--status-error)" : "var(--accent)", borderRadius: 2 }} />

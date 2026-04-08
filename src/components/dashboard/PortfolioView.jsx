@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency, isOverdue, daysOverdue } from "../shared/formatters";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import StatusBadge from "../shared/StatusBadge";
 import ProgressBar from "../shared/ProgressBar";
 
@@ -587,6 +588,7 @@ export default function PortfolioView({
         }}
       >
         {/* Project Health Table */}
+        <ErrorBoundary label="Project Health Overview">
         <Card style={{ gridColumn: "span 12" }}>
           <HeaderBar
             title="Project Health Overview"
@@ -727,7 +729,9 @@ export default function PortfolioView({
             </table>
           </div>
         </Card>
+        </ErrorBoundary>
         {/* Budget + Risk */}
+        <ErrorBoundary label="Budget vs Actual">
         <Card style={{ gridColumn: "span 8" }}>
           <HeaderBar title="Budget vs Actual — All Projects" />
           <div style={{ padding: "12px 16px", height: 320 }}>
@@ -758,7 +762,9 @@ export default function PortfolioView({
             </div>
           </div>
         </Card>
+        </ErrorBoundary>
 
+        <ErrorBoundary label="Risk Matrix">
         <Card style={{ gridColumn: "span 4" }}>
           <HeaderBar title="Risk Matrix" />
           <div style={{ padding: "12px 14px", overflowX: "auto" }}>
@@ -850,8 +856,10 @@ export default function PortfolioView({
             </div>
           </div>
         </Card>
+        </ErrorBoundary>
 
         {/* Production Snapshot */}
+        <ErrorBoundary label="Production Snapshot">
         <Card style={{ gridColumn: "span 12" }}>
           <HeaderBar title="Production Snapshot" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, padding: "16px 18px" }}>
@@ -963,8 +971,10 @@ export default function PortfolioView({
         </div>
       </div>
     </Card>
+    </ErrorBoundary>
 
     {/* Urgent Items card */}
+    <ErrorBoundary label="Urgent Items">
     <Card style={{ gridColumn: "span 12" }}>
       <HeaderBar title="Urgent Items — All Projects" count={urgentItems.length} />
       {urgentItems.length === 0 ? (
@@ -1031,6 +1041,7 @@ export default function PortfolioView({
         </div>
       )}
     </Card>
+    </ErrorBoundary>
   </div>
 </div>
 );
