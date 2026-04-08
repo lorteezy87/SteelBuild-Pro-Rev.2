@@ -50,8 +50,14 @@ const sortRfisForRepair = (a, b) => {
   const numericDiff = (extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER) - (extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER);
   if (numericDiff !== 0) return numericDiff;
 
-  const dateA = new Date(a.submitted_date || a.created_date || 0).getTime();
-  const dateB = new Date(b.submitted_date || b.created_date || 0).getTime();
+  // Use created_date (full timestamp) for precise ordering of bulk-uploaded RFIs
+  const createdA = new Date(a.created_date || 0).getTime();
+  const createdB = new Date(b.created_date || 0).getTime();
+  if (createdA !== createdB) return createdA - createdB;
+
+  // Fall back to submitted_date, then id
+  const dateA = new Date(a.submitted_date || 0).getTime();
+  const dateB = new Date(b.submitted_date || 0).getTime();
   if (dateA !== dateB) return dateA - dateB;
 
   return String(a.id).localeCompare(String(b.id));
@@ -248,13 +254,42 @@ export default function RFIs() {
     onError: (e) => toastCrudError(e, "Bulk update failed"),
   });
 
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids) => {
+      for (const id of ids) {
+        await base44.entities.RFI.delete(id);
+      }
+      return ids.length;
+    },
+    onSuccess: async (count) => {
+      setSelectedRFIs(new Set());
+      setShowBulkDelete(false);
+      if (selectedRFI && [...selectedRFIs].includes(selectedRFI.id)) setSelectedRFI(null);
+      await invalidateCrudQueries(qc, rfiQueryKeys);
+      toast.success(`${count} RFI${count === 1 ? "" : "s"} deleted`);
+    },
+    onError: (e) => toastCrudError(e, "Bulk delete failed"),
+  });
+
   const bulkImportMut = useMutation({
     mutationFn: async (rows) => {
+      // Determine the next RFI number based on existing records
+      const existingNumbers = rfis
+        .map((r) => extractRfiSequence(r.rfi_number))
+        .filter((n) => n != null);
+      let nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+
       const results = [];
+      const projectName = projects.find((p) => p.id === projectId)?.name || "";
+      const todayStr = new Date().toISOString().split("T")[0];
+
       for (const row of rows) {
+        nextNum += 1;
         const created = await base44.entities.RFI.create({
           project_id: projectId,
-          project_name: projects.find((p) => p.id === projectId)?.name || "",
+          project_name: projectName,
+          rfi_number: `RFI #${String(nextNum).padStart(3, "0")}`,
           title: row.title,
           description: row.description || "",
           priority: row.priority || "Medium",
@@ -263,7 +298,7 @@ export default function RFIs() {
           submitted_by: row.submitted_by || "",
           drawing_reference: row.drawing_reference || "",
           status: "Open",
-          submitted_date: new Date().toISOString().split("T")[0],
+          submitted_date: todayStr,
         });
         results.push(created);
       }
@@ -808,6 +843,10 @@ export default function RFIs() {
           <button onClick={() => { exportRFIsToCSV(filtered.filter((r) => selectedRFIs.has(r.id))); }}
             style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
             ↓ Export {selectedRFIs.size}
+          </button>
+          <button onClick={() => setShowBulkDelete(true)}
+            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
+            ✕ Delete {selectedRFIs.size}
           </button>
           <button onClick={() => setSelectedRFIs(new Set())}
             style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
@@ -1390,6 +1429,13 @@ export default function RFIs() {
         onConfirm={() => deleteMut.mutate(deleteTarget.id)}
         title="Delete RFI"
         description={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
+      />
+      <DeleteDialog
+        open={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedRFIs])}
+        title={`Delete ${selectedRFIs.size} RFIs`}
+        description={`Permanently delete ${selectedRFIs.size} selected RFI${selectedRFIs.size === 1 ? "" : "s"}? This cannot be undone.`}
       />
     </div>
   );
