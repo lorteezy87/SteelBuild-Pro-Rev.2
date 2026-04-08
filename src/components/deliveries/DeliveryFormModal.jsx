@@ -87,8 +87,12 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     ) {
       toast.warning("Scheduled date is after required date — verify this is intentional");
     }
+    const proj = projects.find(p => p.id === formData.project_id);
+    const wp = workPackages.find(w => w.id === formData.work_package_id);
     mutation.mutate({
       ...formData,
+      project_name: proj?.name || proj?.project_name || formData.project_name || "",
+      description: formData.description || (wp ? `${wp.wp_number || ""} — ${wp.name || ""}`.trim().replace(/^— /, "") : ""),
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });

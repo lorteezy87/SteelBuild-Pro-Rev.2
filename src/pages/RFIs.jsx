@@ -154,7 +154,7 @@ export default function RFIs() {
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterBIC, setFilterBIC] = useState("all");
   const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState("date_required");
+  const [sortField, setSortField] = useState("rfi_number");
   const [sortDir, setSortDir] = useState("asc");
   const [overdueFirst, setOverdueFirst] = useState(false);
   const [selectedRFIs, setSelectedRFIs] = useState(new Set());

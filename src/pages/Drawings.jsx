@@ -277,7 +277,41 @@ export default function Drawings() {
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
-    onSuccess: () => { invalidate(); toast.success("Sheet added"); setShowModal(false); },
+    onSuccess: async (created) => {
+      invalidate();
+      toast.success("Sheet added");
+      setShowModal(false);
+
+      // Auto-create a ScheduleTask so drawing dates appear on the schedule
+      if (created && (created.due_date || created.submitted_date)) {
+        try {
+          const startDate = created.submitted_date || created.due_date;
+          const endDate = created.due_date || created.submitted_date;
+          await base44.entities.ScheduleTask.create({
+            project_id: projectId,
+            project_name: activeProject?.name || "",
+            task_name: `${created.sheet_number || "DWG"} — ${created.title || "Drawing Review"}`,
+            task_type: "Submittal",
+            phase: "Detailing",
+            start_date: startDate,
+            end_date: endDate,
+            status: "Not Started",
+            priority: created.priority_flag ? "High" : "Normal",
+            percent_complete: 0,
+            notes: [
+              created.discipline ? `Discipline: ${created.discipline}` : "",
+              created.reviewer ? `Reviewer: ${created.reviewer}` : "",
+              created.spec_section ? `Spec: ${created.spec_section}` : "",
+            ].filter(Boolean).join(" | "),
+          });
+          qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
+          toast.success("Schedule task auto-created");
+        } catch (err) {
+          // Non-blocking — drawing was already created successfully
+          console.warn("Auto-schedule failed:", err);
+        }
+      }
+    },
     onError: (e) => toast.error("Failed to add: " + (e?.message || "unknown")),
   });
 
