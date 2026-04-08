@@ -27,7 +27,7 @@ export default function DrawingViewer() {
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
 
-  const initialId = searchParams.get("id");
+  const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
 
   const [activeId, setActiveId] = useState(initialId || null);
   const [search, setSearch] = useState("");
