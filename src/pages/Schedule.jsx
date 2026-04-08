@@ -37,7 +37,7 @@ export default function Schedule() {
     queryKey: ["schedule-tasks", projectId],
     queryFn: () =>
       projectId
-        ? base44.entities.ScheduleTask.filter({ project_id: projectId })
+        ? base44.entities.ScheduleTask.filter({ project_id: projectId }, "start_date")
         : [],
     enabled: !!projectId,
   });
