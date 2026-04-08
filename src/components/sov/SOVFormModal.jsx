@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "../shared/formatters";
+import { formatCurrency, roundCurrency } from "../shared/formatters";
 
 const empty = {
   project_id: "", project_name: "", application_number: 1,
@@ -71,12 +71,12 @@ export default function SOVFormModal({ open, onClose, onSave, sov, projects = []
   const sv = Number(form.scheduled_value) || 0;
   const prevPct = Number(form.previous_percent_complete) || 0;
   const curPct = Number(form.current_percent_complete) || 0;
-  const thisPeriod = sv * ((curPct - prevPct) / 100);
-  const toDate = sv * (curPct / 100);
-  const balance = sv - toDate;
+  const thisPeriod = roundCurrency(sv * ((curPct - prevPct) / 100));
+  const toDate = roundCurrency(sv * (curPct / 100));
+  const balance = roundCurrency(sv - toDate);
   const retPct = Number(form.retainage_percent) || 0;
-  const retAmt = toDate * (retPct / 100);
-  const netToDate = toDate - retAmt;
+  const retAmt = roundCurrency(toDate * (retPct / 100));
+  const netToDate = roundCurrency(toDate - retAmt);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
