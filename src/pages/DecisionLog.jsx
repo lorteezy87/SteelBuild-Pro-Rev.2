@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
 import DeleteDialog from '@/components/shared/DeleteDialog';
-import { useSaveMutation } from '@/hooks/useSaveMutation';
+import { toast } from 'sonner';
 
 const iStyle = {
   width: '100%',
@@ -58,16 +58,17 @@ export default function DecisionLog() {
   const [filterImpact, setFilterImpact] = useState('all');
   const [search, setSearch] = useState('');
 
-  // PMA entities removed — queries return empty arrays
+  const qc = useQueryClient();
+
   const { data: decisions = [], isLoading: loadingD } = useQuery({
     queryKey: ['decisions', projectId],
-    queryFn: () => [],
+    queryFn: () => base44.entities.PmaDecision.filter({ project_id: projectId }, '-created_date'),
     enabled: !!projectId,
   });
 
   const { data: assumptions = [], isLoading: loadingA } = useQuery({
     queryKey: ['assumptions', projectId],
-    queryFn: () => [],
+    queryFn: () => base44.entities.PmaAssumption.filter({ project_id: projectId }, '-created_date'),
     enabled: !!projectId,
   });
 
@@ -76,17 +77,36 @@ export default function DecisionLog() {
     queryFn: () => base44.entities.Project.list(),
   });
 
-  const decisionKeys = [['decisions', projectId]];
-  const assumptionKeys = [['assumptions', projectId]];
-
-  // PMA entities removed — mutations are no-ops
-  const noop = async () => {};
-  const createDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision logged', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } });
-  const updateDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision updated', onDone: () => { setShowDecisionForm(false); setEditingDecision(null); } });
-  const deleteDecision = useSaveMutation(noop, { invalidateKeys: decisionKeys, successMsg: 'Decision removed', onDone: () => setDeleteTarget(null) });
-  const createAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption logged', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } });
-  const updateAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption updated', onDone: () => { setShowAssumptionForm(false); setEditingAssumption(null); } });
-  const deleteAssumption = useSaveMutation(noop, { invalidateKeys: assumptionKeys, successMsg: 'Assumption removed', onDone: () => setDeleteTarget(null) });
+  const createDecision = useMutation({
+    mutationFn: (data) => base44.entities.PmaDecision.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision logged'); setShowDecisionForm(false); setEditingDecision(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
+  const updateDecision = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.PmaDecision.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision updated'); setShowDecisionForm(false); setEditingDecision(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
+  const deleteDecision = useMutation({
+    mutationFn: (id) => base44.entities.PmaDecision.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['decisions'] }); toast.success('Decision removed'); setDeleteTarget(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
+  const createAssumption = useMutation({
+    mutationFn: (data) => base44.entities.PmaAssumption.create({ ...data, project_id: projectId, created_date: data.created_date || new Date().toISOString().split('T')[0] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption logged'); setShowAssumptionForm(false); setEditingAssumption(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
+  const updateAssumption = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.PmaAssumption.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption updated'); setShowAssumptionForm(false); setEditingAssumption(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
+  const deleteAssumption = useMutation({
+    mutationFn: (id) => base44.entities.PmaAssumption.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['assumptions'] }); toast.success('Assumption removed'); setDeleteTarget(null); },
+    onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
+  });
 
   const today = new Date();
 

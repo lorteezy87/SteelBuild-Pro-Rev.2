@@ -3,9 +3,9 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export default function ScopeItemFormModal({ projectId, onClose }) {
+export default function ScopeItemFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(editing ? { ...editing } : {
     project_id: projectId,
     item_type: "Scope",
     category: "Structural",
@@ -20,7 +20,7 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
     initialData: [],
   });
 
-  const mutation = useMutation({
+  const createMut = useMutation({
     mutationFn: (data) => base44.entities.ScopeItem.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scope-items"] });
@@ -32,8 +32,14 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    mutation.mutate(formData);
+    if (editing && onSave) {
+      onSave(formData);
+    } else {
+      createMut.mutate(formData);
+    }
   };
+
+  const saving = createMut.isPending;
 
   return (
     <div
@@ -73,7 +79,7 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
             letterSpacing: "0.10em",
           }}
         >
-          New Scope Item
+          {editing ? "Edit Scope Item" : "New Scope Item"}
         </h2>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -339,7 +345,7 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
             </button>
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={saving}
               style={{
                 background: "var(--accent)",
                 color: "white",
@@ -349,14 +355,14 @@ export default function ScopeItemFormModal({ projectId, onClose }) {
                 fontFamily: "var(--font-mono)",
                 fontSize: "10px",
                 fontWeight: 700,
-                cursor: mutation.isPending ? "not-allowed" : "pointer",
+                cursor: saving ? "not-allowed" : "pointer",
                 transition: "background 0.15s",
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                opacity: mutation.isPending ? 0.5 : 1,
+                opacity: saving ? 0.5 : 1,
               }}
             >
-              {mutation.isPending ? "Creating..." : "Create Item"}
+              {saving ? "Saving..." : editing ? "Save" : "Create Item"}
             </button>
           </div>
         </form>

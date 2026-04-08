@@ -20,6 +20,7 @@ const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected
 function exportToCSV(deliveries, filename = "deliveries.csv") {
   const headers = [
     "Project",
+    "Delivery Title",
     "Description",
     "Vendor",
     "PO Number",
@@ -38,6 +39,7 @@ function exportToCSV(deliveries, filename = "deliveries.csv") {
   ];
   const rows = deliveries.map((d) => [
     d.project_name || "",
+    d.delivery_title || "",
     d.description || "",
     d.vendor || "",
     d.po_number || "",
@@ -145,6 +147,25 @@ export default function Deliveries() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () => projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : Promise.resolve([]),
+    enabled: !!projectId,
+  });
+
+  // Lookup maps: resolve project_id → name, work_package_id → name at display time
+  const projectMap = useMemo(() => {
+    const map = {};
+    for (const p of projects) map[p.id] = p.name || p.project_name || "";
+    return map;
+  }, [projects]);
+
+  const wpMap = useMemo(() => {
+    const map = {};
+    for (const wp of workPackages) map[wp.id] = wp.name || wp.wp_number || "";
+    return map;
+  }, [workPackages]);
+
   const projectCount = useMemo(() => {
     const ids = new Set(deliveries.map((d) => d.project_id));
     return ids.size;
@@ -173,7 +194,7 @@ export default function Deliveries() {
         const q = search.trim().toLowerCase();
         if (q.length) {
           const hay =
-            `${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
+            `${d.delivery_title} ${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -203,7 +224,7 @@ export default function Deliveries() {
   const grouped = useMemo(() => {
     if (projectId) return null;
     return filtered.reduce((acc, d) => {
-      const key = d.project_name || d.project_id || "Project";
+      const key = projectMap[d.project_id] || d.project_name || "Unassigned";
       acc[key] = acc[key] || [];
       acc[key].push(d);
       return acc;
@@ -361,19 +382,17 @@ export default function Deliveries() {
         <input type="checkbox" checked={selectedIds.has(delivery.id)} onChange={() => toggleSelect(delivery.id)} style={{ width: 16, height: 16 }} />
         <div>{renderStatusPill(delivery.status)}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {delivery.project_name || "Project"}
+          {projectMap[delivery.project_id] || delivery.project_name || "—"}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.description || "Material"}
+            {delivery.delivery_title || delivery.description || delivery.vendor || "—"}
             {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
             {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
           </div>
-          {delivery.notes && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {delivery.notes.slice(0, 60)}
-            </div>
-          )}
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {wpMap[delivery.work_package_id] || delivery.description || "—"}
+          </div>
         </div>
         <div style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
           {delivery.vendor}
@@ -495,7 +514,7 @@ export default function Deliveries() {
             {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </div>
         ))}
-        {(projectId ? [{ name: filtered[0]?.project_name || "Project", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
+        {(projectId ? [{ name: projectMap[projectId] || filtered[0]?.project_name || "—", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
           <React.Fragment key={grp.name}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{grp.name}</div>
             {timelineDays.map((day, idx) => {
@@ -507,7 +526,7 @@ export default function Deliveries() {
                     return (
                       <div
                         key={d.id}
-                        title={`${d.vendor} · ${d.description || ""}`}
+                        title={`${d.delivery_title || d.description || d.vendor} · ${d.vendor}`}
                         style={{
                           position: "absolute",
                           top: 2 + i2 * 14,
@@ -587,8 +606,12 @@ export default function Deliveries() {
             }}
           >
             {renderStatusPill(detail.status)}
-            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.vendor}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.project_name}</div>
+            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.delivery_title || detail.vendor}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{projectMap[detail.project_id] || detail.project_name || "—"}</div>
+            {detail.delivery_title && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
+            {detail.work_package_id && wpMap[detail.work_package_id] && (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>WP: {wpMap[detail.work_package_id]}</div>
+            )}
             {overdue && (
               <div style={{ background: "var(--status-error)", color: "#fff", padding: "4px 8px", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10 }}>
                 Overdue
@@ -606,7 +629,7 @@ export default function Deliveries() {
                 action={detail.tracking_number ? () => window.open(`https://www.google.com/search?q=${detail.tracking_number}`, "_blank") : null}
                 actionLabel="Track"
               />
-              <GridRow label="Work Package" value={detail.work_package_id || "—"} />
+              <GridRow label="Work Package" value={wpMap[detail.work_package_id] || "—"} />
               <GridRow label="Scheduled Date" value={detail.scheduled_date || "—"} />
               <GridRow label="Required Date" value={detail.required_date || "—"} />
               <GridRow label="Actual Date" value={detail.actual_date || "—"} />
@@ -862,7 +885,7 @@ export default function Deliveries() {
                     cursor: "pointer",
                   }}
                 >
-                  {d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
+                  {d.delivery_title || d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
                 </span>
               );
             })}
@@ -1140,7 +1163,7 @@ export default function Deliveries() {
                 <div> </div>
                 <div>Status</div>
                 <div>Project</div>
-                <div>Description</div>
+                <div>Delivery Title</div>
                 <div>Vendor</div>
                 <div>PO #</div>
                 <div>Sched</div>

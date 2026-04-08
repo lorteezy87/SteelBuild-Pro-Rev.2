@@ -800,6 +800,57 @@ function ThemeToggleButton() {
   );
 }
 
+// ─── Breadcrumb bar (renders inside ProjectProvider) ─────────────
+const PAGE_LABELS = {};
+ALL_MODULES.forEach((mod) => {
+  PAGE_LABELS[mod.page] = mod.name;
+});
+// Add pages not in ALL_MODULES
+Object.assign(PAGE_LABELS, {
+  Dashboard: "Dashboard",
+  Settings: "Settings",
+  UsersManagement: "User Management",
+  Expenses: "Expenses",
+});
+
+function Breadcrumbs({ currentPageName }) {
+  const { activeProject } = useProjectContext();
+  const navigate = useNavigate();
+  const label = PAGE_LABELS[currentPageName] || currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Page";
+
+  return (
+    <div style={{
+      padding: "6px 20px",
+      background: "var(--bg-surface)",
+      borderBottom: "1px solid var(--divider)",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      fontFamily: "var(--font-mono)",
+      fontSize: 10,
+      letterSpacing: "0.06em",
+      minHeight: 28,
+    }}>
+      <span
+        onClick={() => navigate(createPageUrl("Dashboard"))}
+        style={{ color: "var(--text-muted)", cursor: "pointer", transition: "color 0.1s" }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+      >
+        Projects
+      </span>
+      {activeProject && <>
+        <span style={{ color: "var(--text-muted)", opacity: 0.4 }}>/</span>
+        <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>
+          {activeProject.project_name || activeProject.name || "Project"}
+        </span>
+      </>}
+      <span style={{ color: "var(--text-muted)", opacity: 0.4 }}>/</span>
+      <span style={{ color: "var(--accent)", fontWeight: 700 }}>{label}</span>
+    </div>
+  );
+}
+
 // ─── Project error banner (renders inside ProjectProvider) ────────
 function ProjectErrorBanner() {
   const { projectLoadError } = useProjectContext();
@@ -1076,36 +1127,44 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT — Icons */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search icon */}
+            {/* Search bar with Cmd+K hint */}
             {!isMobile &&
                 <div
                   onClick={() => setSearchOpen(true)}
                   title="Search (Cmd+K)"
                   style={{
-                    width: 32, height: 32,
+                    height: 32,
                     borderRadius: 8,
                     background: "var(--hover-bg)",
                     border: "1px solid var(--border-default)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "0 10px",
                     cursor: "pointer",
-                    color: "var(--text-secondary)",
+                    color: "var(--text-muted)",
                     transition: "all 0.15s",
+                    minWidth: 180,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--accent-muted)";
                     e.currentTarget.style.borderColor = "var(--accent-border)";
-                    e.currentTarget.style.color = "var(--accent)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "var(--hover-bg)";
-                    e.currentTarget.style.borderColor = "var(--border)";
-                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.borderColor = "var(--border-default)";
                   }}>
-
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ flexShrink: 0, opacity: 0.6 }}>
                   <circle cx="8" cy="8" r="6" />
                   <line x1="14" y1="14" x2="19" y2="19" />
                 </svg>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", flex: 1 }}>Search...</span>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
+                  color: "var(--text-muted)", background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: 4, padding: "1px 5px", lineHeight: "16px",
+                }}>
+                  {navigator.platform?.includes("Mac") ? "⌘K" : "Ctrl+K"}
+                </span>
               </div>
                 }
 
@@ -1216,6 +1275,9 @@ export default function Layout({ children, currentPageName }) {
 
           </div>
         </nav>
+
+        {/* Breadcrumbs */}
+        <Breadcrumbs currentPageName={currentPageName} />
 
         {/* CONTENT */}
         <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>

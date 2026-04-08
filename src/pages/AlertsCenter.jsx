@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
@@ -21,13 +22,18 @@ const SEVERITY_BG = {
 export default function AlertsCenter() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { activeProject } = useProjectContext();
+  const projectId = searchParams.get("project") || activeProject?.id || null;
   const [generating, setGenerating] = useState(false);
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
   const { data: alerts = [], isLoading, refetch } = useQuery({
-    queryKey: ["alerts"],
-    queryFn: () => base44.entities.Alert.list("-created_at"),
+    queryKey: ["alerts", projectId],
+    queryFn: () => projectId
+      ? base44.entities.Alert.filter({ project_id: projectId }, "-created_at")
+      : base44.entities.Alert.list("-created_at"),
   });
 
   const updateMut = useMutation({
@@ -41,8 +47,15 @@ export default function AlertsCenter() {
   });
 
   const markRead = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_read: true } });
-  const markAllRead = () => {
-    alerts.filter(a => !a.is_read).forEach(a => updateMut.mutate({ id: a.id, data: { ...a, is_read: true } }));
+  const markAllRead = async () => {
+    const unread = alerts.filter(a => !a.is_read);
+    try {
+      await Promise.all(unread.map(a => base44.entities.Alert.update(a.id, { is_read: true })));
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      toast.success(`${unread.length} alerts marked as read`);
+    } catch (err) {
+      toast.error("Some alerts failed to update");
+    }
   };
   const dismiss = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_dismissed: true } });
 

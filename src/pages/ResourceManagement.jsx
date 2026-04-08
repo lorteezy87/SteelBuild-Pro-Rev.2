@@ -1,16 +1,21 @@
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import ResourceFormModal from "@/components/resources/ResourceFormModal";
 import ResourceList from "@/components/resources/ResourceList";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import { toast } from "sonner";
 
 export default function ResourceManagement() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
+  const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -46,6 +51,29 @@ export default function ResourceManagement() {
     available: resources.filter((r) => r.availability_status === "Available").length,
     allocated: resources.filter((r) => r.availability_status === "Allocated").length,
     overAllocated: resources.filter((r) => r.availability_status === "Over-Allocated").length,
+  };
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.Resource.update(id, {
+      ...data,
+      budget_hours: data.budget_hours ? parseFloat(data.budget_hours) : 0,
+      actual_hours: parseFloat(data.actual_hours) || 0,
+      forecast_hours: data.forecast_hours ? parseFloat(data.forecast_hours) : 0,
+      hourly_rate: data.hourly_rate ? parseFloat(data.hourly_rate) : 0,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource updated"); setShowForm(false); setEditing(null); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.Resource.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource deleted"); setDeleteTarget(null); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  const handleSave = (data) => {
+    if (editing) updateMut.mutate({ id: editing.id, data });
+    // create is handled by ResourceFormModal internally
   };
 
   const types = ["Labor", "Equipment", "Subcontractor", "Material"];
@@ -84,7 +112,7 @@ export default function ResourceManagement() {
         </div>
 
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
             background: "var(--accent)",
             color: "white",
@@ -196,11 +224,20 @@ export default function ResourceManagement() {
 
       {/* Form Modal */}
       {showForm && (
-        <ResourceFormModal projectId={projectId} onClose={() => setShowForm(false)} />
+        <ResourceFormModal projectId={projectId} editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
       )}
 
       {/* Resources List */}
-      <ResourceList resources={filtered} />
+      <ResourceList resources={filtered} onEdit={(r) => { setEditing(r); setShowForm(true); }} onDelete={setDeleteTarget} />
+
+      {/* Delete Dialog */}
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Resource"
+        description="Delete this resource? This cannot be undone."
+      />
     </div>
   );
 }

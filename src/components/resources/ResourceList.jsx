@@ -7,7 +7,7 @@ const STATUS_COLORS = {
   "On Leave": "var(--text-muted)",
 };
 
-export default function ResourceList({ resources }) {
+export default function ResourceList({ resources, onEdit, onDelete }) {
   if (resources.length === 0) {
     return (
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
@@ -46,11 +46,14 @@ export default function ResourceList({ resources }) {
               </div>
             </div>
 
-            {resource.notes && (
-              <div style={{ fontSize: "9px", color: "var(--text-secondary)", maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {resource.notes}
-              </div>
-            )}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {onEdit && (
+                <button onClick={() => onEdit(resource)} style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 4, padding: "3px 8px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>EDIT</button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(resource)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, padding: "3px 7px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>✕</button>
+              )}
+            </div>
           </div>
         );
       })}

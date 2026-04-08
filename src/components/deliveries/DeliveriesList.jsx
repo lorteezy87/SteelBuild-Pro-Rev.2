@@ -55,7 +55,7 @@ export default function DeliveriesList({ deliveries, onEdit }) {
           background: "var(--bg-surface-secondary)",
         }}
       >
-        {["Material", "Vendor", "Scheduled", "Tonnage", "Status", "Actions"].map(
+        {["Delivery Title", "Vendor", "Scheduled", "Tonnage", "Status", "Actions"].map(
           (col) => (
             <div
               key={col}
@@ -101,7 +101,7 @@ export default function DeliveriesList({ deliveries, onEdit }) {
               (e.currentTarget.style.background = isOverdue ? "var(--hover-bg)" : "transparent")
             }
           >
-            {/* Material */}
+            {/* Delivery Title */}
             <div>
               <div
                 style={{
@@ -110,7 +110,7 @@ export default function DeliveriesList({ deliveries, onEdit }) {
                   color: "var(--text-primary)",
                 }}
               >
-                {delivery.description || "Material"}
+                {delivery.delivery_title || delivery.description || delivery.vendor || "—"}
               </div>
               <div
                 style={{
