@@ -500,7 +500,7 @@ export default function Projects() {
   const [detailProject, setDetailProject] = useState(null);
 
   /* ── Data fetching ── */
-  const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_date"),    initialData: [] });
+  const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_at"),    initialData: [] });
   const { data: workPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list(),                initialData: [] });
   const { data: rfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list(),                        initialData: [] });
   const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list(),                initialData: [] });
