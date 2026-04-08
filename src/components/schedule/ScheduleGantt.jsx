@@ -233,13 +233,20 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       map[ph].push(t);
     });
 
+    // Sort tasks within each group by start_date ascending (earliest first)
+    const sortByStart = (a, b) => {
+      if (!a.start_date) return 1;
+      if (!b.start_date) return -1;
+      return new Date(a.start_date) - new Date(b.start_date);
+    };
+
     // Order by PHASES array, uncategorized last
     const ordered = [];
     PHASES.forEach(ph => {
-      if (map[ph.key]) ordered.push({ phase: ph, tasks: map[ph.key] });
+      if (map[ph.key]) ordered.push({ phase: ph, tasks: map[ph.key].sort(sortByStart) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: map["Uncategorized"] });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: map["Uncategorized"].sort(sortByStart) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
