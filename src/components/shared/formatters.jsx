@@ -1,5 +1,12 @@
 import { createLocalDateFromDateOnly, todayLocalISO } from "@/lib/dateOnly";
 
+/** Round to 2 decimal places for currency — avoids IEEE 754 float drift */
+export const roundCurrency = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+};
+
 export const formatCurrency = (value) => {
   const num = Number(value);
   if (value == null || isNaN(num)) return "$0.00";
