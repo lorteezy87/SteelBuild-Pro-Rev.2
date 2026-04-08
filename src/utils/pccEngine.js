@@ -191,7 +191,7 @@ export function mapRFIsToPCCItems(rfis) {
         id: `rfi-${r.id}`,
         entityId: r.id,
         type: "RFI",
-        title: r.question || r.subject || `RFI #${r.rfi_number || r.id}`,
+        title: r.question || r.subject || `RFI #${r.rfi_number || r.id?.slice(0, 8) || "?"}`,
         subtitle: `RFI #${r.rfi_number || ""}`,
         status: r.status,
         due_date: r.due_date || r.required_by,

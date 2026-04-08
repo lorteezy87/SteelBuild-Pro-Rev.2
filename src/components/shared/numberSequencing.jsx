@@ -38,7 +38,7 @@ export const getNextNumber = async (projectId, recordType) => {
 
 const extractNumericSuffix = (value) => {
   if (value == null) return null;
-  const match = String(value).match(/(\d+)(?!.*\d)/);
+  const match = String(value).match(/(\d+)\s*$/);
   return match ? Number(match[1]) : null;
 };
 

@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProjectCommandStrip from "./ProjectCommandStrip";
 import SteelExecutionStatusCard from "./SteelExecutionStatusCard";
 import FinancialSnapshotCard from "./FinancialSnapshotCard";
@@ -712,15 +713,19 @@ export default function DrilldownView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <ProjectCommandStrip
-        project={project}
-        wps={wps}
-        cos={cos}
-        financials={financials}
-        onClearProject={onClearProject}
-      />
+      <ErrorBoundary label="Project Command Strip">
+        <ProjectCommandStrip
+          project={project}
+          wps={wps}
+          cos={cos}
+          financials={financials}
+          onClearProject={onClearProject}
+        />
+      </ErrorBoundary>
 
-      <StatStrip stats={stats} />
+      <ErrorBoundary label="Stats Overview">
+        <StatStrip stats={stats} />
+      </ErrorBoundary>
 
       <Card title="Quick Update Rail" tone="accent">
         <QuickActionRail actions={quickActions} onNavigate={openPage} />
@@ -845,15 +850,23 @@ export default function DrilldownView({
         </Card>
         <Card title="Execution Snapshot" tone="accent">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <SteelExecutionStatusCard wps={wps} drawings={drawings} />
-            <FinancialSnapshotCard financials={financials} cos={cos} />
+            <ErrorBoundary label="Steel Execution Status">
+              <SteelExecutionStatusCard wps={wps} drawings={drawings} />
+            </ErrorBoundary>
+            <ErrorBoundary label="Financial Snapshot">
+              <FinancialSnapshotCard financials={financials} cos={cos} />
+            </ErrorBoundary>
           </div>
         </Card>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, alignItems: "stretch" }}>
-        <UpcomingDeliveriesCard deliveries={deliveries} />
-        <DrawingApprovalStatusCard drawings={drawings} />
+        <ErrorBoundary label="Upcoming Deliveries">
+          <UpcomingDeliveriesCard deliveries={deliveries} />
+        </ErrorBoundary>
+        <ErrorBoundary label="Drawing Approval Status">
+          <DrawingApprovalStatusCard drawings={drawings} />
+        </ErrorBoundary>
         <Card title="What Needs Action Next" tone="warning">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
@@ -939,13 +952,15 @@ export default function DrilldownView({
         </Card>
       </div>
 
-      <BudgetOverviewChart
-        summary={{
-          budget: financials.budgetCommitted,
-          actual: financials.actualSpend,
-          forecast: financials.committedCosts,
-        }}
-      />
+      <ErrorBoundary label="Budget Overview Chart">
+        <BudgetOverviewChart
+          summary={{
+            budget: financials.budgetCommitted,
+            actual: financials.actualSpend,
+            forecast: financials.committedCosts,
+          }}
+        />
+      </ErrorBoundary>
     </div>
   );
 }

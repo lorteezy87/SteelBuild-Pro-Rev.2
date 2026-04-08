@@ -60,7 +60,7 @@ export async function calculateProjectHealthScore(projectId, base44) {
 
     // ── Factor 5: Safety (10 points) ──
     const totalIncidents = dailyLogs.reduce((s, l) => s + (Number(l.safety_incidents) || 0), 0);
-    const safetyScore = totalIncidents > 0 ? 0 : 100;
+    const safetyScore = Math.max(0, 100 - (totalIncidents * 20));
 
     // Weighted average
     const score = Math.round(

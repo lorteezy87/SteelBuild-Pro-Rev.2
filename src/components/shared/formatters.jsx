@@ -56,6 +56,22 @@ export const safePct = (num, denom) => {
   return Math.min(100, Math.max(0, Math.round((n / d) * 100)));
 };
 
+/** Like safePct but does NOT cap at 100 — use for budget burn / spend ratios. */
+export const safeBudgetPct = (num, denom) => {
+  const n = Number(num) || 0;
+  const d = Number(denom) || 0;
+  if (d === 0) return 0;
+  return Math.max(0, Math.round((n / d) * 100));
+};
+
+/** Like formatPercent but does NOT clamp at 100% — use for budget usage displays. */
+export const formatBudgetPercent = (value, decimals = 0) => {
+  const num = Number(value);
+  if (value == null || isNaN(num)) return "0%";
+  const clamped = Math.max(0, num);
+  return decimals > 0 ? `${Number(clamped.toFixed(decimals))}%` : `${Math.round(clamped)}%`;
+};
+
 export const daysOverdue = (dueDate) => {
   if (!dueDate) return 0;
   const today = new Date();
