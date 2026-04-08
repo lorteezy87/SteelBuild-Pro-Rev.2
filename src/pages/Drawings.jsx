@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -482,10 +483,12 @@ export default function Drawings() {
       </div>
 
       {/* ── Stage Pipeline ─────────────────────────────────────────────────── */}
-      <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
-        <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 10 }}>SUBMITTAL STAGE PIPELINE</div>
-        <StagePipeline drawings={drawings} />
-      </div>
+      <ErrorBoundary label="Stage Pipeline">
+        <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 10 }}>SUBMITTAL STAGE PIPELINE</div>
+          <StagePipeline drawings={drawings} />
+        </div>
+      </ErrorBoundary>
 
       {/* ── Discipline Chips ───────────────────────────────────────────────── */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
@@ -560,29 +563,31 @@ export default function Drawings() {
       )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
-      {isLoading ? (
-        <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>LOADING SHEETS…</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ ...surface, padding: 48, textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
-          <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
-            {drawings.length === 0 ? "NO SHEETS YET — ADD YOUR FIRST DRAWING" : "NO SHEETS MATCH FILTERS"}
-          </p>
-        </div>
-      ) : view === "list" ? (
-        <ListView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
-          onToggleAll={toggleSelectAll} onEdit={d => { setEditing(d); setShowModal(true); }}
-          onDelete={handleDelete} onAdvance={handleAdvanceStage}
-          onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
-          setContextMenu={setContextMenu}
-          onSetApproval={openSetApproval} />
-      ) : (
-        <GridView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
-          onEdit={d => { setEditing(d); setShowModal(true); }}
-          onDelete={handleDelete} onAdvance={handleAdvanceStage}
-          onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
-          onSetApproval={openSetApproval} />
-      )}
+      <ErrorBoundary label="Drawings Content">
+        {isLoading ? (
+          <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>LOADING SHEETS…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ ...surface, padding: 48, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
+            <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
+              {drawings.length === 0 ? "NO SHEETS YET — ADD YOUR FIRST DRAWING" : "NO SHEETS MATCH FILTERS"}
+            </p>
+          </div>
+        ) : view === "list" ? (
+          <ListView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
+            onToggleAll={toggleSelectAll} onEdit={d => { setEditing(d); setShowModal(true); }}
+            onDelete={handleDelete} onAdvance={handleAdvanceStage}
+            onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
+            setContextMenu={setContextMenu}
+            onSetApproval={openSetApproval} />
+        ) : (
+          <GridView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
+            onEdit={d => { setEditing(d); setShowModal(true); }}
+            onDelete={handleDelete} onAdvance={handleAdvanceStage}
+            onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
+            onSetApproval={openSetApproval} />
+        )}
+      </ErrorBoundary>
 
       {/* ── Context Menu ───────────────────────────────────────────────────── */}
       {contextMenu && (

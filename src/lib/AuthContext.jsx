@@ -45,6 +45,18 @@ export const AuthProvider = ({ children }) => {
           setIsAuthenticated(true);
           setAuthError(null);
         } else {
+          // Session is null/expired — try refreshing before giving up
+          try {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData?.session?.user) {
+              setUser(await mapSupabaseUser(refreshData.session.user));
+              setIsAuthenticated(true);
+              setAuthError(null);
+              return;
+            }
+          } catch {
+            // Refresh failed — fall through to logout
+          }
           setUser(null);
           setIsAuthenticated(false);
           setAuthError({ type: 'auth_required', message: 'Authentication required' });
@@ -107,6 +119,19 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
       setAuthError(null);
     } else {
+      // Try refreshing the session before giving up
+      try {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData?.session?.user) {
+          setUser(await mapSupabaseUser(refreshData.session.user));
+          setIsAuthenticated(true);
+          setAuthError(null);
+          setIsLoadingAuth(false);
+          return;
+        }
+      } catch {
+        // Refresh failed — fall through to auth required
+      }
       setAuthError({ type: 'auth_required', message: 'Authentication required' });
     }
     setIsLoadingAuth(false);

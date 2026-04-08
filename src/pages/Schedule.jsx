@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from '../components/shared/useProjectContext';
 import { toast } from "sonner";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ScheduleGantt from "@/components/schedule/ScheduleGantt";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
@@ -572,48 +573,56 @@ export default function Schedule() {
       {/* View Content */}
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
         {view === "gantt" && (
-          <ScheduleGantt
-            tasks={enrichedTasks}
-            submittals={submittals}
-            expandedTask={expandedTask}
-            setExpandedTask={setExpandedTask}
-            onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-            onSave={async (data) => {
-              const { id, ...fields } = data;
-              try {
-                await base44.entities.ScheduleTask.update(id, fields);
-                qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-                toast.success("Task saved");
-              } catch (err) {
-                toast.error("Save failed: " + (err?.message || "unknown error"));
-                throw err;
-              }
-            }}
-            phaseFilter={phaseFilter}
-          />
+          <ErrorBoundary label="Gantt Chart">
+            <ScheduleGantt
+              tasks={enrichedTasks}
+              submittals={submittals}
+              expandedTask={expandedTask}
+              setExpandedTask={setExpandedTask}
+              onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+              onSave={async (data) => {
+                const { id, ...fields } = data;
+                try {
+                  await base44.entities.ScheduleTask.update(id, fields);
+                  qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                  toast.success("Task saved");
+                } catch (err) {
+                  toast.error("Save failed: " + (err?.message || "unknown error"));
+                  throw err;
+                }
+              }}
+              phaseFilter={phaseFilter}
+            />
+          </ErrorBoundary>
         )}
 
-        {view === "lookahead" && <LookaheadPlanner tasks={enrichedTasks} />}
+        {view === "lookahead" && (
+          <ErrorBoundary label="Lookahead Planner">
+            <LookaheadPlanner tasks={enrichedTasks} />
+          </ErrorBoundary>
+        )}
 
         {view === "list" && (
-          <ScheduleTaskList
-            tasks={enrichedTasks}
-            onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
-            onDelete={(task) => setDeleteTarget(task)}
-            onSave={async (data) => {
-              const { id, ...fields } = data;
-              try {
-                await base44.entities.ScheduleTask.update(id, fields);
-                qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-                toast.success("Task saved");
-              } catch (err) {
-                toast.error("Save failed: " + (err?.message || "unknown error"));
-                throw err;
-              }
-            }}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-          />
+          <ErrorBoundary label="Task List">
+            <ScheduleTaskList
+              tasks={enrichedTasks}
+              onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+              onDelete={(task) => setDeleteTarget(task)}
+              onSave={async (data) => {
+                const { id, ...fields } = data;
+                try {
+                  await base44.entities.ScheduleTask.update(id, fields);
+                  qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                  toast.success("Task saved");
+                } catch (err) {
+                  toast.error("Save failed: " + (err?.message || "unknown error"));
+                  throw err;
+                }
+              }}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+            />
+          </ErrorBoundary>
         )}
       </div>
 
