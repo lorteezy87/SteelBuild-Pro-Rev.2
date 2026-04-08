@@ -1,5 +1,4 @@
 import React from "react";
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from "recharts";
 
 const STAGES = [
   { key: "Detailing",   label: "DETAILING",   color: "var(--phase-detailing)", phase: "Detailing" },
@@ -67,22 +66,6 @@ export default function SteelExecutionStatusCard({ wps, drawings }) {
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Radar chart */}
-      <div style={{ padding: "0 16px 4px" }}>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Stage Coverage</div>
-        <ResponsiveContainer width="100%" height={160}>
-          <RadarChart data={metrics.map(m => ({ subject: m.key, value: m.pct, fullMark: 100 }))} margin={{ top: 0, right: 16, left: 16, bottom: 0 }}>
-            <PolarGrid stroke="var(--divider)" />
-            <PolarAngleAxis dataKey="subject" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} />
-            <Radar dataKey="value" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.15} strokeWidth={1.5} />
-            <Tooltip
-              contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
-              formatter={v => [`${v}%`, "Coverage"]}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
       </div>
 
       {/* Pipeline flow visual */}
