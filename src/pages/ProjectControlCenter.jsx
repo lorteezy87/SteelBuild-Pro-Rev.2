@@ -549,7 +549,7 @@ function RiskWatchlist({ items, onSelect }) {
               {item.title}
             </div>
             <div style={{ display: "flex", gap: 4, marginTop: 3, flexWrap: "wrap" }}>
-              {item.tags.slice(0, 2).map((t) => <ImpactTag key={t} tagKey={t} />)}
+              {(Array.isArray(item.tags) ? item.tags : []).slice(0, 2).map((t) => <ImpactTag key={t} tagKey={t} />)}
             </div>
           </div>
           <ActionBadge action={item.nextAction} />

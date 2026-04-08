@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import { toast } from "sonner";
 
 // ──────────────────────────────────────────────────────────────────────
 // HELPERS & UTILITIES
@@ -68,6 +69,19 @@ export default function ResourceScheduling() {
   const [undoToast, setUndoToast] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [hoverTooltip, setHoverTooltip] = useState(null);
+  const [showNewResource, setShowNewResource] = useState(false);
+  const [newRes, setNewRes] = useState({ name: "", resource_type: "Crew", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "" });
+
+  const createResMut = useMutation({
+    mutationFn: (data) => base44.entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      setShowNewResource(false);
+      setNewRes({ name: "", resource_type: "Crew", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "" });
+      toast.success("Resource created");
+    },
+    onError: (err) => toast.error(err.message || "Failed to create resource"),
+  });
 
   // Data queries
   const { data: workPackages = [] } = useQuery({
@@ -768,7 +782,108 @@ export default function ResourceScheduling() {
             )
           )}
         </div>
+
+        {/* New Resource button */}
+        <button
+          onClick={() => setShowNewResource(true)}
+          style={{
+            marginLeft: "auto",
+            padding: "6px 14px",
+            borderRadius: 6,
+            border: "1px solid var(--accent)",
+            background: "var(--accent)",
+            color: "#07090E",
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+        >
+          + New Resource
+        </button>
       </div>
+
+      {/* New Resource Modal */}
+      {showNewResource && (
+        <>
+          <div onClick={() => setShowNewResource(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 100 }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            borderRadius: 12, padding: 28, width: 420, zIndex: 101,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+          }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 20 }}>
+              New Resource
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { key: "name", label: "Name", type: "text", placeholder: "e.g. Crew Alpha, Bay 3 Crane" },
+                { key: "resource_type", label: "Type", type: "select", options: ["Crew", "Equipment", "Bay", "Subcontractor", "Other"] },
+                { key: "role", label: "Role / Specialty", type: "text", placeholder: "e.g. Ironworkers, Welders" },
+                { key: "capacity", label: "Capacity", type: "number", placeholder: "e.g. 40" },
+                { key: "unit", label: "Unit", type: "select", options: ["hours", "tons", "pieces", "days"] },
+                { key: "cost_rate", label: "Cost Rate ($/hr)", type: "number", placeholder: "0.00" },
+                { key: "availability", label: "Availability", type: "select", options: ["Available", "Partially Available", "Committed", "Unavailable"] },
+                { key: "notes", label: "Notes", type: "textarea", placeholder: "Optional notes..." },
+              ].map(({ key, label, type, placeholder, options }) => (
+                <div key={key}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                  {type === "select" ? (
+                    <select value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={{
+                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
+                    }}>
+                      {options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : type === "textarea" ? (
+                    <textarea value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} style={{
+                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
+                      minHeight: 50, resize: "vertical", boxSizing: "border-box",
+                    }} />
+                  ) : (
+                    <input type={type} value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} style={{
+                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box",
+                    }} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowNewResource(false)} style={{
+                padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border-default)",
+                background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+                fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
+              }}>Cancel</button>
+              <button onClick={() => {
+                if (!newRes.name.trim()) { toast.error("Name is required"); return; }
+                createResMut.mutate({
+                  name: newRes.name.trim(),
+                  resource_type: newRes.resource_type,
+                  role: newRes.role,
+                  capacity: newRes.capacity ? Number(newRes.capacity) : null,
+                  unit: newRes.unit,
+                  cost_rate: newRes.cost_rate ? Number(newRes.cost_rate) : null,
+                  availability: newRes.availability,
+                  notes: newRes.notes,
+                });
+              }} disabled={createResMut.isPending} style={{
+                padding: "8px 20px", borderRadius: 6, border: "none",
+                background: "var(--accent)", color: "#07090E", fontFamily: "var(--font-mono)",
+                fontSize: 10, fontWeight: 800, cursor: "pointer", textTransform: "uppercase",
+                letterSpacing: "0.08em", opacity: createResMut.isPending ? 0.6 : 1,
+              }}>{createResMut.isPending ? "Saving..." : "Create Resource"}</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── CAPACITY VIEW ── */}
       {viewMode === "capacity" && (
