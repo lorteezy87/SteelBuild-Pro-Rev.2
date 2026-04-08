@@ -7,6 +7,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const qc = useQueryClient();
   const isEdit = !!delivery;
 
+  const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
+
   const emptyForm = {
     project_id: projectId || "",
     work_package_id: "",
@@ -78,6 +80,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     if (!formData.scheduled_date) {
       toast.error("Scheduled date required");
       return;
+    }
+    if (
+      formData.required_date &&
+      formData.scheduled_date &&
+      new Date(formData.scheduled_date) > new Date(formData.required_date)
+    ) {
+      toast.warning("Scheduled date is after required date — verify this is intentional");
     }
     mutation.mutate({
       ...formData,

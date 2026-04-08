@@ -11,12 +11,12 @@ const empty = {
   project_id: '', project_name: '', description: '',
   expense_type: 'Materials', cost_code: '', cost_code_name: '',
   amount: 0, quantity: 1, unit_cost: 0, unit: 'EA',
-  vendor: '', invoice_number: '', invoice_date: '',
-  payment_status: 'Unpaid', payment_date: '',
+  vendor: '', invoice_number: '', invoice_date: null,
+  payment_status: 'Unpaid', payment_date: null,
   work_package_id: '', work_package_name: '',
   sov_line_item_id: '', sov_line_item_name: '',
   expense_date: new Date().toISOString().split('T')[0],
-  submitted_by: '', approved_by: '', approved_date: '',
+  submitted_by: '', approved_by: '', approved_date: null,
   notes: '', receipt_url: '', tags: '',
 };
 
@@ -90,6 +90,7 @@ export default function ExpenseFormModal({
     if (!form.description?.trim()) e.description = 'Required';
     if (!form.cost_code) e.cost_code = 'Required';
     if (!form.amount || Number(form.amount) <= 0) e.amount = 'Must be > 0';
+    if (form.quantity !== '' && form.quantity !== undefined && Number(form.quantity) < 0) e.quantity = 'Must be >= 0';
     if (!form.expense_date) e.expense_date = 'Required';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -127,7 +128,8 @@ export default function ExpenseFormModal({
     !!form.description?.trim() &&
     !!form.cost_code &&
     !!form.expense_date &&
-    Number(form.amount) > 0;
+    Number(form.amount) > 0 &&
+    !(form.quantity !== '' && form.quantity !== undefined && Number(form.quantity) < 0);
 
   if (!open) return null;
 
@@ -215,7 +217,8 @@ export default function ExpenseFormModal({
                 </div>
                 <div>
                   <label style={labelStyle}>Quantity</label>
-                  <input type="number" step="0.01" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} />
+                  <input type="number" step="0.01" min="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} style={{ ...iStyle, fontFamily: 'var(--font-mono)' }} />
+                  {errors.quantity && <p style={{ fontSize: 10, color: 'var(--status-error)', marginTop: 3 }}>{errors.quantity}</p>}
                 </div>
                 <div>
                   <label style={labelStyle}>Unit</label>
@@ -252,7 +255,7 @@ export default function ExpenseFormModal({
                 </div>
                 <div>
                   <label style={labelStyle}>Invoice Date</label>
-                  <input type="date" value={form.invoice_date} onChange={e => set('invoice_date', e.target.value)} style={iStyle} />
+                  <input type="date" value={form.invoice_date || ''} onChange={e => set('invoice_date', e.target.value)} style={iStyle} />
                 </div>
               </div>
               {/* Right */}
@@ -269,7 +272,7 @@ export default function ExpenseFormModal({
                 {form.payment_status === 'Paid' && (
                   <div>
                     <label style={labelStyle}>Payment Date</label>
-                    <input type="date" value={form.payment_date} onChange={e => set('payment_date', e.target.value)} style={iStyle} />
+                    <input type="date" value={form.payment_date || ''} onChange={e => set('payment_date', e.target.value)} style={iStyle} />
                   </div>
                 )}
                 <div>
