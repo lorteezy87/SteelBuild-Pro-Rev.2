@@ -77,21 +77,33 @@ export const getNextFormattedNumber = async (...rawArgs) => {
   if (!fieldName) throw new Error("fieldName is required");
   if (!prefix) throw new Error("prefix is required");
 
-  try {
-    const nextValue = await getNextNumber(projectId, recordType);
-    const formatted = formatSequenceValue(nextValue, prefix, padLength);
-    if (formatted) return formatted;
-  } catch {
-    // Fall back to scanning existing records
-  }
-
+  // Always scan existing records to find the real max — prevents duplicates
+  // when the sequence table is out of sync with actual data.
   const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
-  const maxNumber = existing.reduce((max, item) => {
+  const maxFromRecords = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
     return numericValue != null && numericValue > max ? numericValue : max;
   }, 0);
 
-  return `${prefix}${String(maxNumber + 1).padStart(padLength, "0")}`;
+  try {
+    const seqValue = await getNextNumber(projectId, recordType);
+    // Use whichever is higher: sequence value or (max from existing records + 1)
+    const actualNext = Math.max(seqValue, maxFromRecords + 1);
+
+    // Self-heal: if the sequence was behind, fast-forward it
+    if (actualNext > seqValue) {
+      await supabase
+        .from('number_sequences')
+        .update({ next_value: actualNext + 1, updated_at: new Date().toISOString() })
+        .eq('project_id', projectId)
+        .eq('record_type', recordType);
+    }
+
+    return `${prefix}${String(actualNext).padStart(padLength, "0")}`;
+  } catch {
+    // Sequence table unavailable — use record scan result
+    return `${prefix}${String(maxFromRecords + 1).padStart(padLength, "0")}`;
+  }
 };
 
 /**

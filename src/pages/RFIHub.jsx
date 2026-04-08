@@ -445,15 +445,24 @@ export default function RFIHub() {
   const createMut = useMutation({
     mutationFn: async (data) => {
       const selectedProject = projects.find((project) => project.id === data.project_id);
-      const rfiNumber = data.project_id
-        ? await getNextFormattedNumber({
-            projectId: data.project_id,
-            recordType: "RFI",
-            entityName: "RFI",
-            fieldName: "rfi_number",
-            prefix: "RFI #",
-          })
-        : `RFI #${String(Date.now()).slice(-3)}`;
+      let rfiNumber;
+      if (data.project_id) {
+        rfiNumber = await getNextFormattedNumber({
+          projectId: data.project_id,
+          recordType: "RFI",
+          entityName: "RFI",
+          fieldName: "rfi_number",
+          prefix: "RFI #",
+        });
+      } else {
+        // No project — scan ALL RFIs to find the global max number
+        const allRFIs = await base44.entities.RFI.list();
+        const maxNum = (allRFIs || []).reduce((max, r) => {
+          const m = String(r.rfi_number || "").match(/(\d+)(?!.*\d)/);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        rfiNumber = `RFI #${String(maxNum + 1).padStart(3, "0")}`;
+      }
       return base44.entities.RFI.create({
         ...data,
         project_name: selectedProject?.name || data.project_name || "",
