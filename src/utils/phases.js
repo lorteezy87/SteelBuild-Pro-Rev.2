@@ -58,25 +58,22 @@ export function derivePhase(task) {
   return 'Pre-Construction';
 }
 
-// Sort tasks by phase then chronologically within phase
+// Sort tasks by phase then by start_date ascending within each phase
 export function sortByPhase(tasks) {
   return [...tasks].sort((a, b) => {
     const pa = PHASE_ORDER[derivePhase(a)] ?? 0;
     const pb = PHASE_ORDER[derivePhase(b)] ?? 0;
     if (pa !== pb) return pa - pb;
 
-    const dateA = a.end_date
-      ? new Date(a.end_date)
-      : a.start_date
-      ? new Date(a.start_date)
-      : new Date('9999-12-31');
-    const dateB = b.end_date
-      ? new Date(b.end_date)
-      : b.start_date
-      ? new Date(b.start_date)
-      : new Date('9999-12-31');
+    // Primary sort: start date ascending (handles both schedule and lookahead fields)
+    const startA = new Date(a.start_date || a.planned_start || '9999-12-31');
+    const startB = new Date(b.start_date || b.planned_start || '9999-12-31');
+    if (startA - startB !== 0) return startA - startB;
 
-    if (dateA - dateB !== 0) return dateA - dateB;
+    // Secondary: end date ascending
+    const endA = new Date(a.end_date || a.planned_end || '9999-12-31');
+    const endB = new Date(b.end_date || b.planned_end || '9999-12-31');
+    if (endA - endB !== 0) return endA - endB;
 
     const prioOrder = { Critical: 0, High: 1, Normal: 2, medium: 2, Low: 3, low: 3 };
     return (prioOrder[a.priority] ?? 2) - (prioOrder[b.priority] ?? 2);
