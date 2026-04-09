@@ -386,13 +386,13 @@ function DeliveriesTab({ deliveries }) {
       ]} />
       <SectionCard>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
-          {['Description', 'Vendor', 'Status', 'Scheduled', 'Weight'].map(c => (
+          {['Delivery Title', 'Vendor', 'Status', 'Scheduled', 'Weight'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
         </div>
         {deliveries.map(d => (
           <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: `3px solid ${STATUS_COLOR[d.status] || 'var(--text-muted)'}` }}>
-            <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.description || '—'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.delivery_title || '—'}</div>
             <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.vendor || '—'}</div>
             <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: STATUS_COLOR[d.status] || 'var(--text-muted)', textTransform: 'uppercase' }}>{d.status}</div>
             <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)' }}>{formatDateShort(d.scheduled_date)}</div>
