@@ -25,6 +25,7 @@ export default function ScopeItemList({
   onClearFilters,
   onEdit,
   onDelete,
+  onToggleComplete,
 }) {
   if (items.length === 0) {
     // Two empty states: no data at all, vs filters hiding everything
@@ -147,26 +148,28 @@ export default function ScopeItemList({
         const typeMeta = TYPE_META[item.item_type] || { color: "var(--text-muted)", Icon: FileText };
         const TypeIcon = typeMeta.Icon;
         const categoryColor = CATEGORY_COLORS[item.category] || "var(--text-muted)";
+        const isComplete = !!item.is_completed;
         return (
           <div
             key={item.id}
             style={{
-              background: "var(--bg-surface)",
+              background: isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderLeft: `3px solid ${typeMeta.color}`,
+              borderLeft: `3px solid ${isComplete ? "var(--status-success)" : typeMeta.color}`,
               borderRadius: "12px",
               padding: "14px 16px",
               transition: "all 0.15s",
+              opacity: isComplete ? 0.65 : 1,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent-border)";
-              e.currentTarget.style.borderLeftColor = typeMeta.color;
+              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
               e.currentTarget.style.background = "var(--hover-bg)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border-default)";
-              e.currentTarget.style.borderLeftColor = typeMeta.color;
-              e.currentTarget.style.background = "var(--bg-surface)";
+              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
+              e.currentTarget.style.background = isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)";
             }}
           >
             {/* Header */}
@@ -179,18 +182,61 @@ export default function ScopeItemList({
                 marginBottom: "8px",
               }}
             >
+              {/* Checkbox */}
+              {onToggleComplete && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onToggleComplete(item); }}
+                  aria-label={isComplete ? "Mark incomplete" : "Mark complete"}
+                  title={isComplete ? "Mark incomplete" : "Mark complete"}
+                  style={{
+                    flexShrink: 0,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    border: `2px solid ${isComplete ? "var(--status-success)" : "var(--border-default)"}`,
+                    background: isComplete ? "var(--status-success)" : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    marginTop: 1,
+                    transition: "all 0.15s",
+                    padding: 0,
+                  }}
+                >
+                  {isComplete && <Check size={14} strokeWidth={3.5} color="#fff" />}
+                </button>
+              )}
+
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: "13px",
                     fontWeight: 600,
-                    color: "var(--text-primary)",
+                    color: isComplete ? "var(--text-muted)" : "var(--text-primary)",
                     marginBottom: "4px",
                     lineHeight: 1.4,
+                    textDecoration: isComplete ? "line-through" : "none",
+                    textDecorationColor: "var(--status-success)",
+                    textDecorationThickness: "1.5px",
                   }}
                 >
                   {item.description}
                 </div>
+                {isComplete && item.completed_at && (
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      color: "var(--status-success)",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    ✓ Completed {new Date(item.completed_at).toLocaleDateString()}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
