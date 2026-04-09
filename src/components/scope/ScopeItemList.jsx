@@ -1,9 +1,10 @@
 import React from "react";
+import { Check, X, Info, FileText, Plus, Filter } from "lucide-react";
 
-const TYPE_COLORS = {
-  Scope: "var(--status-success)",
-  Exclusion: "var(--status-error)",
-  Clarification: "var(--status-info)",
+const TYPE_META = {
+  Scope:         { color: "var(--status-success)", Icon: Check },
+  Exclusion:     { color: "var(--status-error)",   Icon: X },
+  Clarification: { color: "var(--status-info)",    Icon: Info },
 };
 
 const CATEGORY_COLORS = {
@@ -16,208 +17,340 @@ const CATEGORY_COLORS = {
   Other: "var(--text-muted)",
 };
 
-export default function ScopeItemList({ items, onEdit, onDelete }) {
+export default function ScopeItemList({
+  items,
+  totalCount = 0,
+  hasActiveFilters = false,
+  onCreateFirst,
+  onClearFilters,
+  onEdit,
+  onDelete,
+}) {
   if (items.length === 0) {
+    // Two empty states: no data at all, vs filters hiding everything
+    const isFilteredEmpty = totalCount > 0 && hasActiveFilters;
+
     return (
       <div
         style={{
           background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
+          border: "1px dashed var(--border-default)",
           borderRadius: "12px",
-          padding: "40px",
+          padding: "56px 24px",
           textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 16,
         }}
       >
-        <p
+        <div
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "10px",
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            background: "var(--bg-surface-low, rgba(255,255,255,0.03))",
+            border: "1px solid var(--border-default)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: isFilteredEmpty ? "var(--status-info)" : "var(--accent)",
           }}
         >
-          No scope items
-        </p>
+          {isFilteredEmpty ? <Filter size={26} strokeWidth={2} /> : <FileText size={26} strokeWidth={2} />}
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              marginBottom: 6,
+            }}
+          >
+            {isFilteredEmpty ? "No items match your filters" : "No scope items yet"}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              color: "var(--text-secondary)",
+              maxWidth: 420,
+              lineHeight: 1.5,
+            }}
+          >
+            {isFilteredEmpty
+              ? "Try clearing a filter or adjusting your search to see more results."
+              : "Track what's included, excluded, or clarified in the project contract. Start by adding your first scope item."}
+          </div>
+        </div>
+
+        {isFilteredEmpty ? (
+          <button
+            onClick={onClearFilters}
+            style={{
+              background: "var(--bg-surface)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 8,
+              padding: "10px 20px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            Clear Filters
+          </button>
+        ) : (
+          onCreateFirst && (
+            <button
+              onClick={onCreateFirst}
+              style={{
+                background: "var(--accent)",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                padding: "10px 20px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+              }}
+            >
+              <Plus size={12} strokeWidth={3} /> Add your first Scope Item
+            </button>
+          )
+        )}
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {items.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "12px",
-            padding: "16px",
-            transition: "all 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "var(--accent-border)";
-            e.currentTarget.style.background = "var(--hover-bg)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--border-default)";
-            e.currentTarget.style.background = "var(--bg-surface)";
-          }}
-        >
-          {/* Header */}
+      {items.map((item) => {
+        const typeMeta = TYPE_META[item.item_type] || { color: "var(--text-muted)", Icon: FileText };
+        const TypeIcon = typeMeta.Icon;
+        const categoryColor = CATEGORY_COLORS[item.category] || "var(--text-muted)";
+        return (
           <div
+            key={item.id}
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "8px",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderLeft: `3px solid ${typeMeta.color}`,
+              borderRadius: "12px",
+              padding: "14px 16px",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--accent-border)";
+              e.currentTarget.style.borderLeftColor = typeMeta.color;
+              e.currentTarget.style.background = "var(--hover-bg)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-default)";
+              e.currentTarget.style.borderLeftColor = typeMeta.color;
+              e.currentTarget.style.background = "var(--bg-surface)";
             }}
           >
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  marginBottom: "4px",
-                }}
-              >
-                {item.description.substring(0, 100)}
-                {item.description.length > 100 ? "..." : ""}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px" }}>
-              {/* Action Buttons */}
-              {onEdit && (
-                <button onClick={() => onEdit(item)} style={{ background: "transparent", border: "1px solid var(--border-default)", borderRadius: 4, padding: "3px 8px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>EDIT</button>
-              )}
-              {onDelete && (
-                <button onClick={() => onDelete(item)} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, padding: "3px 7px", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>✕</button>
-              )}
-              {/* Type Badge */}
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "4px 8px",
-                  background: `${TYPE_COLORS[item.item_type]}20`,
-                  border: `1px solid ${TYPE_COLORS[item.item_type]}40`,
-                  borderRadius: "6px",
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "8px",
-                    fontWeight: 600,
-                    color: TYPE_COLORS[item.item_type],
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  {item.item_type}
-                </span>
-              </div>
-
-              {/* Category Badge */}
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "4px 8px",
-                  background: `${CATEGORY_COLORS[item.category]}20`,
-                  border: `1px solid ${CATEGORY_COLORS[item.category]}40`,
-                  borderRadius: "6px",
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "8px",
-                    fontWeight: 600,
-                    color: CATEGORY_COLORS[item.category],
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  {item.category}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Full Description */}
-          <div style={{ paddingTop: "8px", borderTop: "1px solid var(--divider)" }}>
-            <p
-              style={{
-                fontSize: "11px",
-                color: "var(--text-secondary)",
-                lineHeight: 1.5,
-                margin: 0,
-              }}
-            >
-              {item.description}
-            </p>
-          </div>
-
-          {/* Footer */}
-          {(item.added_by || item.notes) && (
+            {/* Header */}
             <div
               style={{
-                marginTop: "8px",
-                paddingTop: "8px",
-                borderTop: "1px solid var(--divider)",
-                display: "grid",
-                gridTemplateColumns: "auto 1fr",
-                gap: "16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 12,
+                marginBottom: "8px",
               }}
             >
-              {item.added_by && (
-                <div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "8px",
-                      fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      marginBottom: "2px",
-                    }}
-                  >
-                    Added By
-                  </div>
-                  <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                    {item.added_by}
-                  </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    marginBottom: "4px",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item.description}
                 </div>
-              )}
+              </div>
 
-              {item.notes && (
-                <div>
-                  <div
+              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+                {/* Type Badge (with icon) */}
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "4px 8px",
+                    background: `${typeMeta.color}20`,
+                    border: `1px solid ${typeMeta.color}40`,
+                    borderRadius: "6px",
+                    color: typeMeta.color,
+                  }}
+                >
+                  <TypeIcon size={10} strokeWidth={3} />
+                  <span
                     style={{
                       fontFamily: "var(--font-mono)",
                       fontSize: "8px",
                       fontWeight: 700,
-                      color: "var(--text-muted)",
-                      letterSpacing: "0.08em",
                       textTransform: "uppercase",
-                      marginBottom: "2px",
+                      letterSpacing: "0.06em",
                     }}
                   >
-                    Notes
-                  </div>
-                  <div style={{ fontSize: "10px", color: "var(--text-secondary)" }}>
-                    {item.notes}
-                  </div>
+                    {item.item_type}
+                  </span>
                 </div>
-              )}
+
+                {/* Category Badge */}
+                {item.category && (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "4px 8px",
+                      background: `${categoryColor}20`,
+                      border: `1px solid ${categoryColor}40`,
+                      borderRadius: "6px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        fontWeight: 700,
+                        color: categoryColor,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      {item.category}
+                    </span>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(item)}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid var(--border-default)",
+                      borderRadius: 4,
+                      padding: "3px 8px",
+                      color: "var(--text-secondary)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(item)}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(239,68,68,0.3)",
+                      borderRadius: 4,
+                      padding: "3px 7px",
+                      color: "var(--status-error)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                    aria-label="Delete"
+                  >
+                    <X size={10} strokeWidth={3} />
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      ))}
+
+            {/* Footer */}
+            {(item.added_by || item.notes) && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px solid var(--divider)",
+                  display: "grid",
+                  gridTemplateColumns: item.added_by && item.notes ? "auto 1fr" : "1fr",
+                  gap: "16px",
+                }}
+              >
+                {item.added_by && (
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      Added By
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                      {item.added_by}
+                    </div>
+                  </div>
+                )}
+
+                {item.notes && (
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      Notes
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>
+                      {item.notes}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
