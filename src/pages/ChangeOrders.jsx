@@ -40,6 +40,12 @@ export default function ChangeOrders() {
   });
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
 
+  const projectMap = useMemo(() => {
+    const map = {};
+    for (const p of projects) map[p.id] = p.name || p.project_name || "";
+    return map;
+  }, [projects]);
+
   const createMut = useMutation({
     mutationFn: async (d) => {
       let coNumber;
@@ -174,7 +180,7 @@ export default function ChangeOrders() {
             <PTR key={c.id} onClick={() => { setEditing(c); setModalOpen(true); }}>
               <PTD mono accent>{c.co_number}</PTD>
               <PTD style={{ maxWidth: 180 }}>{c.title}</PTD>
-              <PTD muted>{c.project_name}</PTD>
+              <PTD muted>{projectMap[c.project_id] || "—"}</PTD>
               <PTD muted>{c.reason_code}</PTD>
               <PTD><StatusBadge status={c.status} /></PTD>
               <PTD>{formatDate(c.submitted_date)}</PTD>
