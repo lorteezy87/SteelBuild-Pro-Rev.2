@@ -4,10 +4,13 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import * as pdfjsLib from "pdfjs-dist";
+// Bundle the pdf.js worker with Vite so versions always match the installed
+// pdfjs-dist package. Previously we loaded `.min.js` from cdnjs, but pdfjs-dist
+// 4.x only ships `.mjs` workers and the file name was wrong, causing every
+// drawing to fail to render.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-// Use CDN worker to avoid bundler issues
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const STAGES = {
   "Not Started": { color: "#6B7280" },
