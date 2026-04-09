@@ -224,7 +224,7 @@ export default function Deliveries() {
   const grouped = useMemo(() => {
     if (projectId) return null;
     return filtered.reduce((acc, d) => {
-      const key = projectMap[d.project_id] || d.project_name || "Unassigned";
+      const key = projectMap[d.project_id] || "Unassigned";
       acc[key] = acc[key] || [];
       acc[key].push(d);
       return acc;
@@ -272,17 +272,19 @@ export default function Deliveries() {
           const daysLate = Math.floor((todayZero - sched) / 86400000);
           if (daysLate <= 0) continue;
           if (existingIds.has(d.id)) continue;
+          const liveProjectName = projectMap[d.project_id] || "";
+          const liveDesc = d.delivery_title || wpMap[d.work_package_id] || "Delivery";
           await base44.entities.Alert.create({
             alert_type: "Delivery_Overdue",
             severity: daysLate >= 7 ? "Critical" : daysLate >= 3 ? "High" : "Medium",
             title: `Delivery from ${d.vendor} is ${daysLate}d overdue`,
-            message: `${d.description || "Delivery"} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${
+            message: `${liveDesc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${
               d.scheduled_date
-            } · Status: ${d.status} · Project: ${d.project_name || "—"}`,
+            } · Status: ${d.status} · Project: ${liveProjectName || "—"}`,
             related_entity: "Delivery",
             related_record_id: d.id,
             project_id: d.project_id,
-            project_name: d.project_name || "",
+            project_name: liveProjectName,
             is_read: false,
             is_dismissed: false,
           });
@@ -382,16 +384,16 @@ export default function Deliveries() {
         <input type="checkbox" checked={selectedIds.has(delivery.id)} onChange={() => toggleSelect(delivery.id)} style={{ width: 16, height: 16 }} />
         <div>{renderStatusPill(delivery.status)}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {projectMap[delivery.project_id] || delivery.project_name || "—"}
+          {projectMap[delivery.project_id] || "—"}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.delivery_title || delivery.description || delivery.vendor || "—"}
+            {delivery.delivery_title || "—"}
             {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
             {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {wpMap[delivery.work_package_id] || delivery.description || "—"}
+            {wpMap[delivery.work_package_id] || "—"}
           </div>
         </div>
         <div style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -607,7 +609,7 @@ export default function Deliveries() {
           >
             {renderStatusPill(detail.status)}
             <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.delivery_title || detail.vendor}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{projectMap[detail.project_id] || detail.project_name || "—"}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{projectMap[detail.project_id] || "—"}</div>
             {detail.delivery_title && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
             {detail.work_package_id && wpMap[detail.work_package_id] && (
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>WP: {wpMap[detail.work_package_id]}</div>
@@ -885,7 +887,7 @@ export default function Deliveries() {
                     cursor: "pointer",
                   }}
                 >
-                  {d.delivery_title || d.description || "Delivery"} · {d.vendor} · {daysLate}d overdue
+                  {d.delivery_title || wpMap[d.work_package_id] || "Delivery"} · {d.vendor} · {daysLate}d overdue
                 </span>
               );
             })}
