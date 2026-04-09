@@ -1,14 +1,16 @@
 /**
  * Get human-readable display name for a delivery
- * Priority: description > vendor + PO > delivery number > fallback
- * Handles both camelCase and snake_case field names
+ * Priority: delivery_title > vendor + PO > delivery number > fallback
+ * Handles both camelCase and snake_case field names.
+ * NOTE: the legacy `description` field is intentionally NOT used —
+ * legacy rows contain literal strings like "Material" from old form code.
  */
 export const getDeliveryName = (delivery) => {
   if (!delivery) return "Unknown Delivery";
 
-  // Priority 1: description field
-  if (delivery.description?.trim()) {
-    return delivery.description.trim();
+  // Priority 1: delivery title (the new canonical label field)
+  if (delivery.delivery_title?.trim()) {
+    return delivery.delivery_title.trim();
   }
 
   // Priority 2: vendor + PO (handle both field name conventions)

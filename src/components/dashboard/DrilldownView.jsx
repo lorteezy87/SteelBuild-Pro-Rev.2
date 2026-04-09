@@ -558,7 +558,7 @@ export default function DrilldownView({
       ...lateDeliveries.map((delivery) => ({
         key: `delivery-${delivery.id}`,
         kicker: delivery.delivery_id || "Delivery",
-        title: delivery.description || delivery.vendor || "Delivery update needed",
+        title: delivery.delivery_title || delivery.vendor || "Delivery update needed",
         detail: `${delivery.vendor || "Vendor not set"} | Due ${fmtDate(delivery.scheduled_date)}`,
         badge: "DELIVERY",
         tone: "warning",
@@ -617,7 +617,7 @@ export default function DrilldownView({
         .map((delivery) => ({
           key: `my-delivery-${delivery.id}`,
           kicker: "DELIVERY",
-          title: delivery.description || delivery.vendor || "Assigned delivery",
+          title: delivery.delivery_title || delivery.vendor || "Assigned delivery",
           detail: `${delivery.status || "Open"} | Due ${delivery.scheduled_date ? fmtDate(delivery.scheduled_date) : "No date"}`,
           badge: delivery.status || "OPEN",
           tone: isDeliveryLate(delivery) ? "danger" : "accent",

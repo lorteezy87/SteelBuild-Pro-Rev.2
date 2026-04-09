@@ -662,7 +662,7 @@ export default function CostDashboard() {
           {procurementExposure.lateItems.map(d => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)', borderLeft: '3px solid var(--status-error)', background: 'var(--danger-muted)' }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.description || d.delivery_id || 'Delivery'}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.delivery_title || d.vendor || d.delivery_id || 'Delivery'}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-error)' }}>
@@ -673,7 +673,7 @@ export default function CostDashboard() {
           {procurementExposure.due30Items.map(d => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)', borderLeft: '3px solid var(--status-warning)' }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.description || d.delivery_id || 'Delivery'}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.delivery_title || d.vendor || d.delivery_id || 'Delivery'}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-warning)' }}>

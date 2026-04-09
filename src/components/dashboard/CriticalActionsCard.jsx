@@ -41,7 +41,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").forEach(d => {
     items.push({
       type: "DELIVERY", id: d.delivery_id,
-      title: d.description || d.vendor || "Delivery",
+      title: d.delivery_title || d.vendor || "Delivery",
       detail: `Late · ${d.vendor || ""}`,
       severity: "high",
       nav: "Deliveries",
