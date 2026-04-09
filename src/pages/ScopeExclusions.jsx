@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -7,6 +7,13 @@ import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
+import { Check, X, Info, Layers, Search, Plus } from "lucide-react";
+
+const TYPE_META = {
+  Scope:         { color: "var(--status-success)", Icon: Check },
+  Exclusion:     { color: "var(--status-error)",   Icon: X },
+  Clarification: { color: "var(--status-info)",    Icon: Info },
+};
 
 export default function ScopeExclusions() {
   const [searchParams] = useSearchParams();
@@ -18,6 +25,7 @@ export default function ScopeExclusions() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [search, setSearch] = useState("");
 
   const { data: scopeItems = [] } = useQuery({
     queryKey: ["scope-items", projectId],
@@ -53,11 +61,20 @@ export default function ScopeExclusions() {
     ? projects.find((p) => p.id === projectId)
     : null;
 
-  const filtered = scopeItems.filter((item) => {
-    const typeMatch = filterType === "all" || item.item_type === filterType;
-    const categoryMatch = filterCategory === "all" || item.category === filterCategory;
-    return typeMatch && categoryMatch;
-  });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return scopeItems.filter((item) => {
+      const typeMatch = filterType === "all" || item.item_type === filterType;
+      const categoryMatch = filterCategory === "all" || item.category === filterCategory;
+      const searchMatch =
+        !q ||
+        item.description?.toLowerCase().includes(q) ||
+        item.notes?.toLowerCase().includes(q) ||
+        item.added_by?.toLowerCase().includes(q) ||
+        item.category?.toLowerCase().includes(q);
+      return typeMatch && categoryMatch && searchMatch;
+    });
+  }, [scopeItems, filterType, filterCategory, search]);
 
   const stats = {
     total: scopeItems.length,
@@ -68,6 +85,8 @@ export default function ScopeExclusions() {
 
   const types = ["Scope", "Exclusion", "Clarification"];
   const categories = ["Structural", "Misc Metals", "Connections", "Coatings", "Erection", "Engineering", "Other"];
+
+  const openCreate = () => { setEditing(null); setShowForm(true); };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -90,19 +109,19 @@ export default function ScopeExclusions() {
           <p
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--text-muted)",
+              fontSize: 11,
+              color: "var(--text-secondary)",
               marginTop: 4,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
             }}
           >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Items
+            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} of {stats.total} Items
           </p>
         </div>
 
         <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
+          onClick={openCreate}
           style={{
             background: "var(--accent)",
             color: "white",
@@ -116,70 +135,166 @@ export default function ScopeExclusions() {
             transition: "background 0.15s",
             textTransform: "uppercase",
             letterSpacing: "0.08em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + New Item
+          <Plus size={12} strokeWidth={3} /> New Item
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — clickable filters */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <StatCard label="Total" value={stats.total} color="var(--accent)" />
-        <StatCard label="Scope" value={stats.scope} color="var(--status-success)" />
-        <StatCard label="Exclusion" value={stats.exclusion} color="var(--status-error)" />
-        <StatCard label="Clarification" value={stats.clarification} color="var(--status-info)" />
+        <StatCard
+          label="Total"
+          value={stats.total}
+          color="var(--accent)"
+          Icon={Layers}
+          active={filterType === "all"}
+          onClick={() => setFilterType("all")}
+        />
+        <StatCard
+          label="Scope"
+          value={stats.scope}
+          color="var(--status-success)"
+          Icon={Check}
+          active={filterType === "Scope"}
+          onClick={() => setFilterType(filterType === "Scope" ? "all" : "Scope")}
+        />
+        <StatCard
+          label="Exclusion"
+          value={stats.exclusion}
+          color="var(--status-error)"
+          Icon={X}
+          active={filterType === "Exclusion"}
+          onClick={() => setFilterType(filterType === "Exclusion" ? "all" : "Exclusion")}
+        />
+        <StatCard
+          label="Clarification"
+          value={stats.clarification}
+          color="var(--status-info)"
+          Icon={Info}
+          active={filterType === "Clarification"}
+          onClick={() => setFilterType(filterType === "Clarification" ? "all" : "Clarification")}
+        />
+      </div>
+
+      {/* Local search */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: 8,
+          padding: "8px 12px",
+        }}
+      >
+        <Search size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter by keyword — description, notes, category…"
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-body)",
+            fontSize: 12,
+          }}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch("")}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              padding: 2,
+            }}
+            aria-label="Clear search"
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        {/* Type Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
+        {/* Type Filter — segmented control */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "9px",
               color: "var(--text-muted)",
-              alignSelf: "center",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
             }}
           >
             Type:
           </span>
-          {["all", ...types].map((type) => (
-            <button
-              key={type}
-              onClick={() => setFilterType(type)}
-              style={{
-                background: filterType === type ? "var(--accent)" : "var(--bg-surface)",
-                color: filterType === type ? "white" : "var(--text-secondary)",
-                border: `1px solid ${filterType === type ? "var(--accent)" : "var(--border-default)"}`,
-                borderRadius: "6px",
-                padding: "6px 12px",
-                fontFamily: "var(--font-mono)",
-                fontSize: "8px",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
-              {type === "all" ? "All" : type}
-            </button>
-          ))}
+          <div
+            style={{
+              display: "inline-flex",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 8,
+              padding: 2,
+              gap: 2,
+            }}
+          >
+            {["all", ...types].map((type) => {
+              const active = filterType === type;
+              const meta = TYPE_META[type];
+              const Icon = meta?.Icon;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setFilterType(type)}
+                  style={{
+                    background: active ? "var(--accent)" : "transparent",
+                    color: active ? "white" : "var(--text-secondary)",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 12px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {Icon && <Icon size={10} strokeWidth={3} />}
+                  {type === "all" ? "All" : type}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Category Filter */}
-        <div style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "9px",
               color: "var(--text-muted)",
-              alignSelf: "center",
               letterSpacing: "0.08em",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
@@ -187,29 +302,32 @@ export default function ScopeExclusions() {
           >
             Category:
           </span>
-          {["all", ...categories].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilterCategory(cat)}
-              style={{
-                background: filterCategory === cat ? "var(--accent)" : "var(--bg-surface)",
-                color: filterCategory === cat ? "white" : "var(--text-secondary)",
-                border: `1px solid ${filterCategory === cat ? "var(--accent)" : "var(--border-default)"}`,
-                borderRadius: "6px",
-                padding: "6px 12px",
-                fontFamily: "var(--font-mono)",
-                fontSize: "8px",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {cat === "all" ? "All" : cat}
-            </button>
-          ))}
+          {["all", ...categories].map((cat) => {
+            const active = filterCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setFilterCategory(cat)}
+                style={{
+                  background: active ? "var(--accent)" : "var(--bg-surface)",
+                  color: active ? "white" : "var(--text-secondary)",
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
+                  borderRadius: "6px",
+                  padding: "6px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {cat === "all" ? "All" : cat}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -219,7 +337,15 @@ export default function ScopeExclusions() {
       )}
 
       {/* Scope Items List */}
-      <ScopeItemList items={filtered} onEdit={(item) => { setEditing(item); setShowForm(true); }} onDelete={setDeleteTarget} />
+      <ScopeItemList
+        items={filtered}
+        totalCount={stats.total}
+        hasActiveFilters={filterType !== "all" || filterCategory !== "all" || !!search.trim()}
+        onCreateFirst={openCreate}
+        onClearFilters={() => { setFilterType("all"); setFilterCategory("all"); setSearch(""); }}
+        onEdit={(item) => { setEditing(item); setShowForm(true); }}
+        onDelete={setDeleteTarget}
+      />
 
       {/* Delete Dialog */}
       <DeleteDialog
@@ -233,38 +359,73 @@ export default function ScopeExclusions() {
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, Icon, active, onClick }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "10px",
-        padding: "12px",
+        background: active ? `${color}14` : "var(--bg-surface)",
+        border: `1px solid ${active ? color : "var(--border-default)"}`,
         borderTop: `2px solid ${color}`,
+        borderRadius: "10px",
+        padding: "12px 14px",
+        textAlign: "left",
+        cursor: "pointer",
+        transition: "all 0.15s",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        boxShadow: active ? `0 0 0 1px ${color}40` : "none",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.borderColor = `${color}80`;
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.borderColor = "var(--border-default)";
       }}
     >
       <div
         style={{
-          fontSize: "18px",
-          fontWeight: 700,
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: `${color}20`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           color: color,
-          marginBottom: "4px",
+          flexShrink: 0,
         }}
       >
-        {value}
+        {Icon && <Icon size={16} strokeWidth={2.5} />}
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "8px",
-          color: "var(--text-muted)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: "20px",
+            fontWeight: 700,
+            color: color,
+            lineHeight: 1,
+            marginBottom: 4,
+            fontFamily: "var(--font-mono)",
+          }}
+        >
+          {value}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "9px",
+            color: active ? color : "var(--text-secondary)",
+            letterSpacing: "0.10em",
+            textTransform: "uppercase",
+            fontWeight: 700,
+          }}
+        >
+          {label}
+        </div>
       </div>
-    </div>
+    </button>
   );
 }
