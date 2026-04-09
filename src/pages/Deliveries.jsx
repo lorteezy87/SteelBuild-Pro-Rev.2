@@ -17,11 +17,11 @@ const STATUS_COLORS = {
 
 const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected"];
 
-function exportToCSV(deliveries, filename = "deliveries.csv") {
+function exportToCSV(deliveries, projectMap = {}, wpMap = {}, filename = "deliveries.csv") {
   const headers = [
     "Project",
     "Delivery Title",
-    "Description",
+    "Work Package",
     "Vendor",
     "PO Number",
     "Carrier",
@@ -38,9 +38,9 @@ function exportToCSV(deliveries, filename = "deliveries.csv") {
     "Notes",
   ];
   const rows = deliveries.map((d) => [
-    d.project_name || "",
+    projectMap[d.project_id] || "",
     d.delivery_title || "",
-    d.description || "",
+    wpMap[d.work_package_id] || "",
     d.vendor || "",
     d.po_number || "",
     d.carrier || "",
@@ -194,7 +194,7 @@ export default function Deliveries() {
         const q = search.trim().toLowerCase();
         if (q.length) {
           const hay =
-            `${d.delivery_title} ${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
+            `${d.delivery_title || ""} ${wpMap[d.work_package_id] || ""} ${d.vendor || ""} ${d.po_number || ""} ${projectMap[d.project_id] || ""} ${d.carrier || ""} ${d.tracking_number || ""}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -209,7 +209,7 @@ export default function Deliveries() {
           if (!aOver && bOver) return 1;
         }
         if (sortBy === "PROJECT") {
-          return (a.project_name || "").localeCompare(b.project_name || "");
+          return (projectMap[a.project_id] || "").localeCompare(projectMap[b.project_id] || "");
         }
         if (sortBy === "VENDOR") {
           return (a.vendor || "").localeCompare(b.vendor || "");
@@ -219,7 +219,7 @@ export default function Deliveries() {
         }
         return (aDate?.getTime() || 0) - (bDate?.getTime() || 0);
       });
-  }, [deliveries, filterStatus, search, sortBy, overdueFirst, today]);
+  }, [deliveries, filterStatus, search, sortBy, overdueFirst, today, projectMap, wpMap]);
 
   const grouped = useMemo(() => {
     if (projectId) return null;
@@ -229,7 +229,7 @@ export default function Deliveries() {
       acc[key].push(d);
       return acc;
     }, {});
-  }, [filtered, projectId]);
+  }, [filtered, projectId, projectMap]);
 
   const kpis = useMemo(() => {
     const scheduled = deliveries.filter((d) => d.status === "Scheduled").length;
@@ -516,7 +516,7 @@ export default function Deliveries() {
             {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </div>
         ))}
-        {(projectId ? [{ name: projectMap[projectId] || filtered[0]?.project_name || "—", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
+        {(projectId ? [{ name: projectMap[projectId] || "—", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
           <React.Fragment key={grp.name}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{grp.name}</div>
             {timelineDays.map((day, idx) => {
@@ -528,7 +528,7 @@ export default function Deliveries() {
                     return (
                       <div
                         key={d.id}
-                        title={`${d.delivery_title || d.description || d.vendor} · ${d.vendor}`}
+                        title={`${d.delivery_title || wpMap[d.work_package_id] || d.vendor} · ${d.vendor}`}
                         style={{
                           position: "absolute",
                           top: 2 + i2 * 14,
@@ -644,8 +644,8 @@ export default function Deliveries() {
               <GridRow label="Inspection Required" value={detail.inspection_required ? "Yes" : "No"} />
             </Section>
 
-            <Section title="Material Description">
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)" }}>{detail.description || "—"}</div>
+            <Section title="Work Package">
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)" }}>{wpMap[detail.work_package_id] || "—"}</div>
             </Section>
 
             <Section title="Notes / Issues">
@@ -771,7 +771,7 @@ export default function Deliveries() {
             ))}
           </div>
           <button
-            onClick={() => exportToCSV(deliveries)}
+            onClick={() => exportToCSV(deliveries, projectMap, wpMap)}
             style={{
               padding: "8px 12px",
               borderRadius: 8,
@@ -874,7 +874,7 @@ export default function Deliveries() {
                 <span
                   key={d.id}
                   onClick={() => {
-                    setSearch(d.project_name || "");
+                    setSearch(projectMap[d.project_id] || "");
                   }}
                   style={{
                     background: "rgba(239,68,68,0.14)",
@@ -1092,10 +1092,10 @@ export default function Deliveries() {
                           {renderStatusPill(d.status)}
                         </div>
                         <div style={{ fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {d.description}
+                          {d.delivery_title || wpMap[d.work_package_id] || "—"}
                         </div>
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                          {d.pieces || 0} pcs · {d.weight_tons || 0}T · {d.project_name || ""}
+                          {d.pieces || 0} pcs · {d.weight_tons || 0}T · {projectMap[d.project_id] || ""}
                           {isLate && <span style={{ marginLeft: 6, color: "var(--status-error)" }}>{Math.ceil((today - new Date(d.scheduled_date)) / 86400000)}d late</span>}
                         </div>
                       </div>
@@ -1118,7 +1118,7 @@ export default function Deliveries() {
             .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date))
             .map((d) => (
               <div key={d.id} style={{ padding: "6px 16px", borderBottom: "1px solid var(--divider)", fontSize: 10, color: "var(--text-primary)" }}>
-                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.description} · {d.weight_tons || 0}T
+                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.delivery_title || wpMap[d.work_package_id] || "—"} · {d.weight_tons || 0}T
               </div>
             ))}
         </div>
@@ -1253,7 +1253,7 @@ export default function Deliveries() {
             PARTIAL
           </button>
           <button
-            onClick={() => exportToCSV(deliveries.filter((d) => selectedIds.has(d.id)), "deliveries-selected.csv")}
+            onClick={() => exportToCSV(deliveries.filter((d) => selectedIds.has(d.id)), projectMap, wpMap, "deliveries-selected.csv")}
             style={{
               padding: "6px 10px",
               borderRadius: 6,

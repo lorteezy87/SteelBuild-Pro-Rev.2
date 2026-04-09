@@ -166,6 +166,12 @@ export default function RFIs() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  const projectMap = useMemo(() => {
+    const map = {};
+    for (const p of projects) map[p.id] = p.name || p.project_name || "";
+    return map;
+  }, [projects]);
+
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
@@ -445,15 +451,16 @@ export default function RFIs() {
           if (!isOD && !soon) continue;
           if (existingIds.has(r.id)) continue;
           const daysLate = isOD ? Math.floor((today - due) / 86400000) : 0;
+          const liveProjectName = projectMap[r.project_id] || "";
           await base44.entities.Alert.create({
             alert_type: "RFI_Overdue",
             severity: r.priority === "Critical" || daysLate >= 7 ? "Critical" : daysLate >= 3 || r.priority === "High" ? "High" : "Medium",
             title: isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in =3 days`,
-            message: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority} · Project: ${r.project_name || "—"}`,
+            message: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority} · Project: ${liveProjectName || "—"}`,
             related_entity: "RFI",
             related_record_id: r.id,
             project_id: r.project_id,
-            project_name: r.project_name || "",
+            project_name: liveProjectName,
             is_read: false,
             is_dismissed: false,
           });
@@ -1193,7 +1200,7 @@ export default function RFIs() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ ...mono, fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>{selectedRFI.rfi_number}</div>
                       <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.3, letterSpacing: "-0.01em" }}>{selectedRFI.title}</div>
-                      <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{selectedRFI.project_name || "—"}</div>
+                      <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{projectMap[selectedRFI.project_id] || "—"}</div>
                       <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                         <Pill label={selectedRFI.status} color={(STATUS_CFG[selectedRFI.status] || STATUS_CFG.Open).color} bg={(STATUS_CFG[selectedRFI.status] || STATUS_CFG.Open).bg} />
                         <Pill label={selectedRFI.priority} color={(PRIORITY_CFG[selectedRFI.priority] || PRIORITY_CFG.Medium).color} bg={(PRIORITY_CFG[selectedRFI.priority] || PRIORITY_CFG.Medium).bg} />

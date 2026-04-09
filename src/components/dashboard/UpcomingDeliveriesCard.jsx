@@ -42,7 +42,7 @@ export default function UpcomingDeliveriesCard({ deliveries }) {
             <div key={d.id} style={{ padding: "8px 10px", borderLeft: `3px solid ${borderColor}`, background: bgColor, borderRadius: "0 6px 6px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ minWidth: 0 }}>
                 {d.isLate && <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.12em", marginBottom: 2, fontWeight: 700 }}>LATE</div>}
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{d.description || d.vendor}</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{d.delivery_title || d.vendor}</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{d.vendor}{d.weight_tons ? ` · ${d.weight_tons}T` : ""}{d.pieces ? ` · ${d.pieces} pcs` : ""}</div>
               </div>
               <div style={{ flexShrink: 0, textAlign: "right", marginLeft: 10 }}>

@@ -175,6 +175,11 @@ export default function PortfolioView({
   allExpenses = [],
 }) {
   const navigate = useNavigate();
+  const projectMap = useMemo(() => {
+    const map = {};
+    for (const p of projects || []) map[p.id] = p.name || p.project_name || "";
+    return map;
+  }, [projects]);
   const today = useMemo(() => {
     const d = new Date();
     return d
@@ -281,8 +286,8 @@ export default function PortfolioView({
       ...overdueDeliveries.map((d) => ({
         type: "DEL",
         id: d.delivery_id || "—",
-        title: d.description || d.vendor || "Delivery",
-        project: d.project_name,
+        title: d.delivery_title || d.vendor || "Delivery",
+        project: projectMap[d.project_id] || "",
         days: Math.max(0, Math.floor((today - new Date(d.scheduled_date)) / 86400000)),
         severity: "warning",
         nav: "Deliveries",
@@ -300,7 +305,7 @@ export default function PortfolioView({
       const ord = { critical: 0, high: 1, warning: 2 };
       return (ord[a.severity] ?? 3) - (ord[b.severity] ?? 3);
     });
-  }, [allRFIs, allActionItems, allDeliveries, allCOs]);
+  }, [allRFIs, allActionItems, allDeliveries, allCOs, projectMap]);
 
   const totalTons = useMemo(() => allWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0), [allWPs]);
   const fabricatedTonnage = useMemo(
@@ -957,9 +962,9 @@ export default function PortfolioView({
                     >
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {d.vendor || d.description || "Delivery"}
+                          {d.delivery_title || d.vendor || "Delivery"}
                         </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{d.project_name || "Project"}</div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{projectMap[d.project_id] || "—"}</div>
                       </div>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", flexShrink: 0 }}>{d.daysLate}D</span>
                     </div>
