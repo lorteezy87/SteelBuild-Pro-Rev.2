@@ -43,6 +43,8 @@ export default function ModelViewer() {
   const [filterType, setFilterType] = useState("all");
   const [memberSearch, setMemberSearch] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
@@ -61,16 +63,17 @@ export default function ModelViewer() {
       const width = mountRef.current.clientWidth || 800;
       const height = mountRef.current.clientHeight || 600;
 
-      // Scene
+      // Scene — lighter background so steel is visible
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x080B12);
-      scene.fog = new THREE.FogExp2(0x080B12, 0.003);
+      scene.background = new THREE.Color(0x0D1117);
+      // Lighter fog, pushed far back so model isn't washed out
+      scene.fog = new THREE.FogExp2(0x0D1117, 0.0008);
 
-      // Camera
-      const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 2000);
-      camera.position.set(30, 20, 30);
+      // Camera — elevated and pulled back for better framing
+      const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 5000);
+      camera.position.set(40, 30, 50);
 
-      // Renderer (three 0.171 uses outputColorSpace / SRGBColorSpace)
+      // Renderer
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: false,
@@ -82,27 +85,35 @@ export default function ModelViewer() {
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.2;
+      renderer.toneMappingExposure = 1.6;
       mountRef.current.appendChild(renderer.domElement);
 
-      // Controls
+      // Controls — target slightly above grid so model appears elevated
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
       controls.minDistance = 0.5;
-      controls.maxDistance = 500;
-      controls.target.set(0, 0, 0);
+      controls.maxDistance = 1000;
+      controls.target.set(0, 5, 0);
 
-      // Lights
-      scene.add(new THREE.AmbientLight(0x404060, 1.0));
-      const sun = new THREE.DirectionalLight(0xFFE8D0, 1.8);
-      sun.position.set(50, 100, 50);
+      // Lights — much brighter to illuminate steel surfaces
+      scene.add(new THREE.AmbientLight(0x8090B0, 2.0));
+      const sun = new THREE.DirectionalLight(0xFFEED8, 3.0);
+      sun.position.set(60, 120, 80);
       sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
       scene.add(sun);
-      scene.add(new THREE.HemisphereLight(0x303060, 0x101020, 0.5));
+      // Back-fill light for depth
+      const fill = new THREE.DirectionalLight(0xC8D0E0, 1.2);
+      fill.position.set(-40, 60, -30);
+      scene.add(fill);
+      scene.add(new THREE.HemisphereLight(0x6080C0, 0x203040, 1.5));
 
-      // Grid
-      const grid = new THREE.GridHelper(100, 20, 0x1A1E2A, 0x0E1220);
+      // Grid — visible but subtle, placed at Y=0 (model sits above it)
+      const grid = new THREE.GridHelper(200, 40, 0x2A3040, 0x1A2030);
+      grid.material.opacity = 0.6;
+      grid.material.transparent = true;
       scene.add(grid);
 
       // Animation loop
@@ -146,6 +157,30 @@ export default function ModelViewer() {
         sceneRef.current = {};
       }
     };
+  }, []);
+
+  // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === '[') setLeftPanelOpen(p => !p);
+      if (e.key === ']') setRightPanelOpen(p => !p);
+      if (e.key === 'f' || e.key === 'F') {
+        // Fit view
+        const { scene, camera, controls } = sceneRef.current;
+        if (!scene || !camera) return;
+        const box = new THREE.Box3().setFromObject(scene);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3()).length();
+        if (size > 0) {
+          controls.target.copy(center);
+          camera.position.set(center.x + size * 0.6, center.y + size * 0.4, center.z + size * 0.6);
+          camera.lookAt(center);
+          controls.update();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // ─── MEMBER TYPE INFERENCE ────────────────────────────────────
@@ -277,9 +312,21 @@ export default function ModelViewer() {
         setMembers(memberList);
         applyColorMode(memberList, colorMode);
 
-        setLoadingModel(p => ({ 
-          ...p, progress: 100, 
-          status: `✓ ${memberList.length} members loaded` 
+        // Auto-frame the model so it sits visibly above the grid
+        { const bb = new THREE.Box3().setFromObject(scene);
+          const ctr = bb.getCenter(new THREE.Vector3());
+          const span = bb.getSize(new THREE.Vector3()).length();
+          if (span > 0) {
+            controls.target.copy(ctr);
+            camera.position.set(ctr.x + span * 0.6, ctr.y + span * 0.4, ctr.z + span * 0.6);
+            camera.lookAt(ctr);
+            controls.update();
+          }
+        }
+
+        setLoadingModel(p => ({
+          ...p, progress: 100,
+          status: `✓ ${memberList.length} members loaded`
         }));
 
         setTimeout(() => {
@@ -444,6 +491,18 @@ export default function ModelViewer() {
       setMembers(memberList);
       applyColorMode(memberList, colorMode);
 
+      // Auto-frame the IFC model
+      { const bb2 = new THREE.Box3().setFromObject(scene);
+        const ctr2 = bb2.getCenter(new THREE.Vector3());
+        const span2 = bb2.getSize(new THREE.Vector3()).length();
+        if (span2 > 0) {
+          controls.target.copy(ctr2);
+          camera.position.set(ctr2.x + span2 * 0.6, ctr2.y + span2 * 0.4, ctr2.z + span2 * 0.6);
+          camera.lookAt(ctr2);
+          controls.update();
+        }
+      }
+
       setLoadingModel(p => ({ ...p, progress: 100, status: `✓ ${memberList.length} elements loaded` }));
 
       setTimeout(() => {
@@ -592,6 +651,46 @@ export default function ModelViewer() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Panel toggles */}
+          {members.length > 0 && (
+            <button
+              onClick={() => setLeftPanelOpen(p => !p)}
+              title={leftPanelOpen ? "Hide member list" : "Show member list"}
+              style={{
+                padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
+                background: leftPanelOpen ? 'rgba(200,155,32,0.12)' : 'transparent',
+                color: leftPanelOpen ? 'var(--accent)' : 'var(--text-muted)',
+                fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              {leftPanelOpen ? '◁ LIST' : 'LIST ▷'}
+            </button>
+          )}
+
+          {/* Fit to view */}
+          {modelLoaded && (
+            <button
+              onClick={() => {
+                const { scene, camera, controls } = sceneRef.current;
+                if (!scene || !camera) return;
+                const box = new THREE.Box3().setFromObject(scene);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3()).length();
+                controls.target.copy(center);
+                camera.position.set(center.x + size * 0.6, center.y + size * 0.4, center.z + size * 0.6);
+                camera.lookAt(center);
+                controls.update();
+              }}
+              style={{
+                padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
+                background: 'transparent', color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              ⊞ FIT VIEW
+            </button>
+          )}
+
           <input
             type="file"
             accept=".gltf,.glb,.ifc"
@@ -603,7 +702,7 @@ export default function ModelViewer() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
-            background: 'var(--status-warning)',
+            background: 'var(--accent)',
             border: 'none',
             borderRadius: 8,
             padding: '6px 12px',
@@ -643,15 +742,17 @@ export default function ModelViewer() {
 
       {/* MAIN CONTENT */}
       <div style={{ display: 'flex', flex: 1, gap: 0, overflow: 'hidden' }}>
-        {/* LEFT PANEL — Member List */}
+        {/* LEFT PANEL — Member List (collapsible) */}
         {members.length > 0 && (
           <div style={{
-            width: 220,
+            width: leftPanelOpen ? 220 : 0,
+            minWidth: leftPanelOpen ? 220 : 0,
             background: 'var(--bg-surface-low)',
-            borderRight: '1px solid rgba(255,255,255,0.07)',
+            borderRight: leftPanelOpen ? '1px solid rgba(255,255,255,0.07)' : 'none',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            transition: 'width 0.2s ease, min-width 0.2s ease',
           }}>
             <div style={{
               padding: '10px 12px',
@@ -972,15 +1073,17 @@ export default function ModelViewer() {
           )}
         </div>
 
-        {/* RIGHT PANEL — Inspector */}
+        {/* RIGHT PANEL — Inspector (collapsible) */}
         {selectedMember && (
           <div style={{
-            width: 300,
+            width: rightPanelOpen ? 300 : 0,
+            minWidth: rightPanelOpen ? 300 : 0,
             background: 'var(--bg-surface-low)',
-            borderLeft: '3px solid var(--status-warning)',
+            borderLeft: rightPanelOpen ? '3px solid var(--status-warning)' : 'none',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            transition: 'width 0.2s ease, min-width 0.2s ease',
           }}>
             <div style={{
               padding: '12px 14px',
