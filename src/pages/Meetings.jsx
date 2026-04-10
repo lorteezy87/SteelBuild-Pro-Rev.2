@@ -269,7 +269,7 @@ export default function Meetings() {
       </div>
 
       {/* KPI Tiles - Interactive */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
         {kpiTiles.map((stat) => {
           const isActive = filterStatus === stat.statusFilter;
           const shouldPulse = stat.pulse && stat.value > 0;

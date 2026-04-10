@@ -659,7 +659,7 @@ export default function ExpensesPage() {
       />
 
       {/* ── KPI Strip (Interactive) ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
         {/* Total Budget */}
         <div
           onClick={() => handleKPIClick('budget')}
@@ -775,7 +775,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* ── Analytics Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '60% 40%', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 20 }}>
 
         {/* Left Column: Donut Chart + Budget vs Actual */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -934,7 +934,7 @@ export default function ExpensesPage() {
       )}
 
       {/* ── Filter Bar ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="filter-bar-responsive" style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           placeholder="Search description, #, vendor..."
           value={search}

@@ -89,10 +89,10 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
                 </div>
 
                 {/* Meta */}
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.45)", letterSpacing: "0.06em", lineHeight: 1.7 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.7)", letterSpacing: "0.06em", lineHeight: 1.7 }}>
                   {rev.issueDate && <div>{formatDate(rev.issueDate)} · {rev.sheetCount || 0} sheets</div>}
                   {rev.issuedBy && <div style={{ color: "var(--accent)" }}>{rev.issuedBy}</div>}
-                  {rev.notes && <div style={{ color: "rgba(160,175,210,0.35)", fontStyle: "italic", fontFamily: "var(--font-body)", fontSize: 10 }}>"{rev.notes}"</div>}
+                  {rev.notes && <div style={{ color: "rgba(160,175,210,0.7)", fontStyle: "italic", fontFamily: "var(--font-body)", fontSize: 10 }}>"{rev.notes}"</div>}
                 </div>
 
                 {/* Actions */}
@@ -109,7 +109,7 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
                     <button style={{
                       display: "flex", alignItems: "center", gap: 4, padding: "4px 9px", borderRadius: 6,
                       background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-                      color: "rgba(160,175,210,0.55)", fontFamily: "var(--font-mono)", fontSize: 8,
+                      color: "rgba(160,175,210,0.75)", fontFamily: "var(--font-mono)", fontSize: 8,
                       letterSpacing: "0.06em", cursor: "pointer"
                     }}>
                       VIEW {rev.sheets.length} SHEETS

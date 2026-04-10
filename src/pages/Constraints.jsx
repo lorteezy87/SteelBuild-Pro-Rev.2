@@ -373,7 +373,7 @@ export default function Constraints() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="filter-bar-responsive" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ position: "relative" }}>
             <span
               style={{
@@ -531,7 +531,7 @@ function KpiStrip({ kpis }) {
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
       {cards.map((c) => (
         <div
           key={c.label}
@@ -821,6 +821,8 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-card)",
         overflow: "hidden",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
       }}
     >
       <div
@@ -1081,7 +1083,7 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
         {c.description?.trim() ? c.description : <i style={{ color: "var(--text-muted)" }}>No details provided.</i>}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <Meta label="Assigned To" value={c.assigned_to || "�"} />
         <Meta label="Due Date" value={c.due_date ? formatDate(c.due_date) : "�"} />
         <Meta
@@ -1166,7 +1168,7 @@ function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
   }));
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, alignItems: "start" }}>
       {grouped.map((lane) => {
         const cfg = PRIORITY_CONFIG[lane.priority];
         return (

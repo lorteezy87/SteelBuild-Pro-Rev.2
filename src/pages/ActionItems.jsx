@@ -165,7 +165,7 @@ export default function ActionItems() {
       </div>
 
       {/* Clickable Stat Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
         {statCards.map((stat) => {
           const isActive = stat.filterKey
             ? filterStatus === stat.filterKey
@@ -209,7 +209,7 @@ export default function ActionItems() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
+      <div className="filter-bar-responsive" style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginRight: 2 }}>Status:</span>
           {["all", "Open", "In Progress", "Complete", "Cancelled"].map((status) => (

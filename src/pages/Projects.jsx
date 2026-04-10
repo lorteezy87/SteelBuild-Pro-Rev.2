@@ -286,7 +286,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       {/* 4-stat grid */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1fr 1fr 1fr",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
         gap: 6,
         margin: "0 16px 14px 16px",
       }}>
