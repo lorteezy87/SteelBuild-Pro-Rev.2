@@ -19,10 +19,18 @@ const LIFECYCLE_STAGES = [
 ];
 
 const PHASE_COLORS = {
-  Detailing: "var(--status-info)",
-  Fabrication: "var(--status-warning)",
-  Delivery: "var(--accent)",
-  Erection: "var(--status-success)",
+  Detailing: "var(--phase-detailing)",
+  Fabrication: "var(--phase-fab)",
+  Delivery: "var(--phase-delivery)",
+  Erection: "var(--phase-erection)",
+};
+
+/* Raw hex values for rgba manipulation */
+const PHASE_HEX = {
+  Detailing: "#C89B20",
+  Fabrication: "#3B82F6",
+  Delivery: "#8B5CF6",
+  Erection: "#22C55E",
 };
 
 const STATUS_COLORS = {
@@ -33,6 +41,46 @@ const STATUS_COLORS = {
 };
 
 const PHASE_COLORS_BAR = { ...PHASE_COLORS };
+
+/* Inline SVG phase icons */
+const PhaseIcon = ({ phase, size = 14 }) => {
+  const color = PHASE_COLORS[phase] || "var(--text-muted)";
+  const icons = {
+    Detailing: (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 14L2 2L10 2L14 6L14 14L2 14Z" stroke={color} strokeWidth="1.2" fill="none" />
+        <path d="M10 2L10 6L14 6" stroke={color} strokeWidth="1.2" fill="none" />
+        <line x1="5" y1="9" x2="11" y2="9" stroke={color} strokeWidth="1" />
+        <line x1="5" y1="11" x2="9" y2="11" stroke={color} strokeWidth="1" />
+      </svg>
+    ),
+    Fabrication: (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="6" width="14" height="9" rx="1" stroke={color} strokeWidth="1.2" fill="none" />
+        <path d="M4 6V4C4 2.9 4.9 2 6 2H10C11.1 2 12 2.9 12 4V6" stroke={color} strokeWidth="1.2" fill="none" />
+        <circle cx="8" cy="10.5" r="1.5" stroke={color} strokeWidth="1" fill="none" />
+      </svg>
+    ),
+    Delivery: (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="4" width="9" height="8" rx="1" stroke={color} strokeWidth="1.2" fill="none" />
+        <path d="M10 7H13L15 10V12H10V7Z" stroke={color} strokeWidth="1.2" fill="none" />
+        <circle cx="4" cy="13" r="1.5" stroke={color} strokeWidth="1" fill={color} />
+        <circle cx="12.5" cy="13" r="1.5" stroke={color} strokeWidth="1" fill={color} />
+      </svg>
+    ),
+    Erection: (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 1L8 11" stroke={color} strokeWidth="1.2" />
+        <path d="M3 5L8 1L13 5" stroke={color} strokeWidth="1.2" fill="none" />
+        <path d="M5 11L3 15" stroke={color} strokeWidth="1.2" />
+        <path d="M11 11L13 15" stroke={color} strokeWidth="1.2" />
+        <line x1="2" y1="15" x2="14" y2="15" stroke={color} strokeWidth="1.2" />
+      </svg>
+    ),
+  };
+  return icons[phase] || null;
+};
 
 const DRAWING_STAGES = [
   { id: "Not Started", label: "NOT STARTED", color: "var(--text-muted)" },
@@ -57,9 +105,9 @@ const STAGE_STYLES = {
 const STATUS_COLUMNS = ["Not Started", "In Progress", "Complete", "On Hold"];
 
 const VIEW_OPTIONS = [
-  { id: "list", label: "≡ List" },
-  { id: "board", label: "⊞ Board" },
-  { id: "drawings", label: "⊟ Drawings" },
+  { id: "list", label: "List" },
+  { id: "board", label: "Board" },
+  { id: "drawings", label: "Drawings" },
 ];
 
 const formatDate = (d) =>
@@ -69,7 +117,7 @@ const formatDate = (d) =>
         day: "numeric",
         year: "numeric",
       })
-    : "—";
+    : "\u2014";
 
 export default function WorkPackages() {
   const [searchParams] = useSearchParams();
@@ -208,7 +256,10 @@ export default function WorkPackages() {
         !q ||
         (wp.name || "").toLowerCase().includes(q) ||
         (wp.wp_number || "").toLowerCase().includes(q) ||
-        (wp.crew || "").toLowerCase().includes(q);
+        (wp.crew || "").toLowerCase().includes(q) ||
+        (wp.area || "").toLowerCase().includes(q) ||
+        (wp.sequence || "").toLowerCase().includes(q) ||
+        (wp.linked_drawing_ids || "").toLowerCase().includes(q);
       return statusMatch && phaseMatch && searchMatch;
     });
   }, [workPackages, filterStatus, filterPhase, search]);
@@ -241,7 +292,9 @@ export default function WorkPackages() {
     return ["Detailing", "Fabrication", "Delivery", "Erection"].map((phase) => ({
       phase,
       tons: workPackages.filter((w) => w.phase === phase).reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
+      completeTons: workPackages.filter((w) => w.phase === phase && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
       color: PHASE_COLORS_BAR[phase],
+      hex: PHASE_HEX[phase],
     }));
   }, [workPackages]);
 
@@ -274,60 +327,73 @@ export default function WorkPackages() {
     setWPModalOpen(true);
   };
 
-  const pill = (active, label, onClick, color) => (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "6px 10px",
-        border: "none",
-        borderRadius: "var(--radius-btn)",
-        background: active ? color : "var(--bg-surface-low)",
-        color: active ? "var(--accent-text)" : "var(--text-secondary)",
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  const renderKPI = (label, value, color) => (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        borderRadius: "var(--radius-card)",
-        borderTop: `2px solid ${color}`,
-        padding: 12,
-      }}
-    >
+  /* KPI tile — clickable for status filters */
+  const renderKPI = (label, value, color, statusKey) => {
+    const isClickable = !!statusKey;
+    const isActive = statusKey && filterStatus === statusKey;
+    return (
       <div
+        onClick={isClickable ? () => setFilterStatus(filterStatus === statusKey ? "all" : statusKey) : undefined}
         style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 22,
-          fontWeight: 600,
-          color,
-          marginBottom: 4,
+          background: "var(--bg-surface)",
+          borderRadius: "var(--radius-card)",
+          borderTop: `2px solid ${color}`,
+          padding: "14px 12px 12px",
+          cursor: isClickable ? "pointer" : "default",
+          border: isActive
+            ? `1px solid ${color}`
+            : "1px solid var(--border-default)",
+          borderTopWidth: 2,
+          borderTopColor: color,
+          boxShadow: isActive
+            ? `0 0 16px ${color}33, 0 0 32px ${color}11`
+            : "var(--shadow-card)",
+          transition: "border-color 0.2s, box-shadow 0.2s",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        {value}
+        {/* Phase icon for tonnage/progress tiles */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 22,
+                fontWeight: 600,
+                color,
+                marginBottom: 4,
+                lineHeight: 1,
+              }}
+            >
+              {value}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 8,
+                fontWeight: 700,
+                color: isActive ? color : "var(--text-muted)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}
+            >
+              {label}
+            </div>
+          </div>
+          {isActive && (
+            <div style={{
+              width: 6, height: 6, borderRadius: 3,
+              background: color,
+              boxShadow: `0 0 6px ${color}`,
+              marginTop: 2,
+              flexShrink: 0,
+            }} />
+          )}
+        </div>
       </div>
-      <div
-        style={{
-          fontFamily: "var(--font-body)",
-          fontSize: 8,
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderTonnageBar = () => {
     const total = Math.max(phaseTons.reduce((s, p) => s + p.tons, 0), 1);
@@ -356,8 +422,8 @@ export default function WorkPackages() {
             {total.toFixed(1)}T
           </div>
         </div>
-        {/* Segmented bar with in-bar labels */}
-        <div style={{ display: "flex", height: 28, overflow: "hidden", borderRadius: "var(--radius-badge)", marginBottom: 10, background: "rgba(255,255,255,0.03)" }}>
+        {/* Segmented bar with phase-specific colors and glow */}
+        <div style={{ display: "flex", height: 28, overflow: "hidden", borderRadius: "var(--radius-badge)", marginBottom: 12, background: "rgba(255,255,255,0.03)" }}>
           {phaseTons.map((p) => {
             const pct = (p.tons / total) * 100;
             const width = Math.max(pct > 0 ? 8 : 0, pct);
@@ -372,11 +438,12 @@ export default function WorkPackages() {
                   justifyContent: "center",
                   transition: "width 0.6s ease",
                   overflow: "hidden",
+                  boxShadow: p.tons > 0 ? `inset 0 0 12px ${p.hex}44, 0 0 8px ${p.hex}22` : "none",
                 }}
                 title={`${p.phase}: ${(Number(p.tons) || 0).toFixed(1)}T (${Math.round(pct)}%)`}
               >
                 {pct > 12 && (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>
                     {(Number(p.tons) || 0).toFixed(1)}T
                   </span>
                 )}
@@ -384,23 +451,49 @@ export default function WorkPackages() {
             );
           })}
         </div>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          {phaseTons.map((p) => (
-            <div
-              key={p.phase}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span style={{ width: 10, height: 10, borderRadius: 6, background: p.color, display: "inline-block" }} />
-              {p.phase}: {(Number(p.tons) || 0).toFixed(1)}T
-            </div>
-          ))}
+        {/* Phase KPI breakdown */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          {phaseTons.map((p) => {
+            const pct = p.tons > 0 ? Math.round((p.completeTons / p.tons) * 100) : 0;
+            return (
+              <div
+                key={p.phase}
+                style={{
+                  background: "var(--bg-surface-low)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--radius-badge)",
+                  padding: "8px 10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <PhaseIcon phase={p.phase} size={13} />
+                  <span style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: p.color,
+                  }}>
+                    {p.phase}
+                  </span>
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                  {p.completeTons.toFixed(1)}T / {p.tons.toFixed(1)}T
+                  <span style={{ fontSize: 9, fontWeight: 600, color: p.color, marginLeft: 4 }}>({pct}%)</span>
+                </div>
+                {/* Mini progress bar */}
+                <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    width: `${pct}%`,
+                    height: "100%",
+                    background: p.color,
+                    borderRadius: 2,
+                    transition: "width 0.5s ease",
+                    boxShadow: pct > 0 ? `0 0 6px ${p.hex}44` : "none",
+                  }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -451,6 +544,9 @@ export default function WorkPackages() {
 
             {items.map((wp) => {
               const phaseColor = PHASE_COLORS[wp.phase] || "var(--text-muted)";
+              /* Health indicators: blocked by RFI or awaiting material */
+              const hasRFIBlock = (wp.notes || "").toLowerCase().includes("rfi") || wp.rfi_blocked;
+              const hasMaterialPending = (wp.notes || "").toLowerCase().includes("material") || wp.material_pending;
               return (
                 <div
                   key={wp.id}
@@ -469,9 +565,28 @@ export default function WorkPackages() {
                   onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
-                      {wp.wp_number}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>
+                        {wp.wp_number}
+                      </span>
+                      {/* Health indicator dots */}
+                      {hasRFIBlock && (
+                        <span title="Blocked by RFI" style={{
+                          width: 7, height: 7, borderRadius: "50%",
+                          background: "var(--status-error)",
+                          boxShadow: "0 0 6px rgba(239,68,68,0.5)",
+                          display: "inline-block", flexShrink: 0,
+                        }} />
+                      )}
+                      {hasMaterialPending && (
+                        <span title="Material pending" style={{
+                          width: 7, height: 7, borderRadius: "50%",
+                          background: "var(--status-warning)",
+                          boxShadow: "0 0 6px rgba(245,158,11,0.5)",
+                          display: "inline-block", flexShrink: 0,
+                        }} />
+                      )}
+                    </div>
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
@@ -482,8 +597,12 @@ export default function WorkPackages() {
                         background: `${phaseColor}22`,
                         color: phaseColor,
                         letterSpacing: "0.08em",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
                       }}
                     >
+                      <PhaseIcon phase={wp.phase} size={9} />
                       {wp.phase}
                     </span>
                   </div>
@@ -518,9 +637,36 @@ export default function WorkPackages() {
                       {(Number(wp.tonnage) || 0).toFixed(1)}T
                     </span>
                   </div>
+                  {/* Health badges row */}
+                  {(hasRFIBlock || hasMaterialPending) && (
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
+                      {hasRFIBlock && (
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
+                          padding: "1px 6px", borderRadius: "var(--radius-badge)",
+                          background: "rgba(239,68,68,0.12)", color: "var(--status-error)",
+                          border: "1px solid rgba(239,68,68,0.25)",
+                          letterSpacing: "0.06em", textTransform: "uppercase",
+                        }}>
+                          RFI BLOCKED
+                        </span>
+                      )}
+                      {hasMaterialPending && (
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
+                          padding: "1px 6px", borderRadius: "var(--radius-badge)",
+                          background: "rgba(245,158,11,0.12)", color: "var(--status-warning)",
+                          border: "1px solid rgba(245,158,11,0.25)",
+                          letterSpacing: "0.06em", textTransform: "uppercase",
+                        }}>
+                          MTL PENDING
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)" }}>
-                      Crew: {wp.crew || "—"}
+                      Crew: {wp.crew || "\u2014"}
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
@@ -559,7 +705,7 @@ export default function WorkPackages() {
                           cursor: "pointer",
                         }}
                       >
-                        ✕
+                        \u2715
                       </button>
                     </div>
                   </div>
@@ -679,7 +825,7 @@ export default function WorkPackages() {
               );
             })}
             <div style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>
-              Total: {drawings.length} · Released: {drawingsByStage["Released"] || 0} (
+              Total: {drawings.length} \u00B7 Released: {drawingsByStage["Released"] || 0} (
               {(((drawingsByStage["Released"] || 0) / drawingTotal) * 100).toFixed(1)}%)
             </div>
           </div>
@@ -745,7 +891,7 @@ export default function WorkPackages() {
                   letterSpacing: "0.08em",
                 }}
               >
-                ⚠ {overdueDrawings.length} DRAWINGS OVERDUE — SUBMITTAL DEADLINE PASSED
+                {overdueDrawings.length} DRAWINGS OVERDUE \u2014 SUBMITTAL DEADLINE PASSED
               </div>
             )}
 
@@ -796,13 +942,13 @@ export default function WorkPackages() {
                   }}
                 >
                   <div style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 700, fontSize: 10 }}>
-                    {d.sheet_number || "—"}
+                    {d.sheet_number || "\u2014"}
                   </div>
                   <div style={{ color: "var(--text-primary)", fontFamily: "var(--font-body)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {d.title || "—"}
+                    {d.title || "\u2014"}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                    {(d.discipline || "—").toUpperCase().slice(0, 6)}
+                    {(d.discipline || "\u2014").toUpperCase().slice(0, 6)}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
                     {d.revision_number || "0"}
@@ -829,10 +975,10 @@ export default function WorkPackages() {
                       fontWeight: overdue ? 700 : 500,
                     }}
                   >
-                    {d.due_date ? formatDate(d.due_date).replace(", 2026", "") : "—"}
+                    {d.due_date ? formatDate(d.due_date).replace(", 2026", "") : "\u2014"}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700 }}>
-                    {linkedWP ? linkedWP.wp_number : "—"}
+                    {linkedWP ? linkedWP.wp_number : "\u2014"}
                   </div>
                 </div>
               );
@@ -849,6 +995,9 @@ export default function WorkPackages() {
     );
   };
 
+  /* Active filter count for badge display */
+  const activeFilterCount = (filterStatus !== "all" ? 1 : 0) + (filterPhase !== "all" ? 1 : 0);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "calc(100vh - 92px)", overflow: "auto" }}>
       {/* Header */}
@@ -856,7 +1005,7 @@ export default function WorkPackages() {
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div
             style={{
-              fontFamily: "var(--font-body)",
+              fontFamily: "var(--font-display)",
               fontSize: 24,
               fontWeight: 800,
               letterSpacing: "0.04em",
@@ -875,35 +1024,13 @@ export default function WorkPackages() {
               textTransform: "uppercase",
             }}
           >
-            {projectId ? projects.find((p) => p.id === projectId)?.name || "Project" : "All Projects"} · {workPackages.length} packages ·{" "}
+            {projectId ? projects.find((p) => p.id === projectId)?.name || "Project" : "All Projects"} \u00B7 {workPackages.length} packages \u00B7{" "}
             {stats.totalTons.toFixed(1)}T
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", maxWidth: 260, width: "100%" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "var(--text-muted)" }}>
-              🔍
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search packages..."
-              style={{
-                width: "100%",
-                padding: "8px 12px 8px 30px",
-                background: "var(--bg-input)",
-                border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-input)",
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-body)",
-                fontSize: 12,
-                outline: "none",
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: 4 }}>
             {VIEW_OPTIONS.map((v) => (
               <button
                 key={v.id}
@@ -919,6 +1046,7 @@ export default function WorkPackages() {
                   fontWeight: 700,
                   letterSpacing: "0.08em",
                   cursor: "pointer",
+                  textTransform: "uppercase",
                 }}
               >
                 {v.label}
@@ -928,7 +1056,7 @@ export default function WorkPackages() {
 
           <button
             onClick={() => setCompact((v) => !v)}
-            title={compact ? "Normal view" : "Compact view — more rows visible"}
+            title={compact ? "Normal view" : "Compact view \u2014 more rows visible"}
             style={{
               padding: "7px 12px", borderRadius: "var(--radius-btn)",
               border: "1px solid var(--border-default)",
@@ -936,9 +1064,10 @@ export default function WorkPackages() {
               color: compact ? "var(--accent)" : "var(--text-secondary)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.08em", cursor: "pointer",
+              textTransform: "uppercase",
             }}
           >
-            ⊟ {compact ? "COMPACT" : "COMPACT"}
+            COMPACT
           </button>
 
           <button
@@ -950,9 +1079,10 @@ export default function WorkPackages() {
               background: "var(--bg-surface-low)", color: "var(--text-secondary)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.08em", cursor: "pointer",
+              textTransform: "uppercase",
             }}
           >
-            ↓ CSV
+            CSV
           </button>
 
           <button
@@ -968,6 +1098,7 @@ export default function WorkPackages() {
               fontWeight: 700,
               textTransform: "uppercase",
               cursor: "pointer",
+              letterSpacing: "0.06em",
             }}
           >
             + NEW WP
@@ -975,30 +1106,149 @@ export default function WorkPackages() {
         </div>
       </div>
 
-      {/* KPI strip */}
+      {/* KPI strip — click to filter by status */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
-        {renderKPI("TOTAL WPS", stats.total, "var(--accent)")}
-        {renderKPI("NOT STARTED", stats.notStarted, "var(--text-muted)")}
-        {renderKPI("IN PROGRESS", stats.inProgress, "var(--status-warning)")}
-        {renderKPI("COMPLETE", stats.complete, "var(--status-success)")}
-        {renderKPI("ON HOLD", stats.onHold, "var(--status-error)")}
-        {renderKPI("TOTAL TONNAGE", `${stats.totalTons.toFixed(1)}T`, "var(--status-info)")}
-        {renderKPI("AVG PROGRESS", `${stats.avgProgress}%`, "var(--accent)")}
+        {renderKPI("TOTAL WPS", stats.total, "var(--accent)", null)}
+        {renderKPI("NOT STARTED", stats.notStarted, "var(--text-muted)", "Not Started")}
+        {renderKPI("IN PROGRESS", stats.inProgress, "var(--status-warning)", "In Progress")}
+        {renderKPI("COMPLETE", stats.complete, "var(--status-success)", "Complete")}
+        {renderKPI("ON HOLD", stats.onHold, "var(--status-error)", "On Hold")}
+        {renderKPI("TOTAL TONNAGE", `${stats.totalTons.toFixed(1)}T`, "var(--status-info)", null)}
+        {renderKPI("AVG PROGRESS", `${stats.avgProgress}%`, "var(--accent)", null)}
       </div>
 
       {renderTonnageBar()}
 
-      {/* Filters */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {pill(filterPhase === "all", "ALL PHASES", () => setFilterPhase("all"), "var(--accent)")}
-          {["Detailing", "Fabrication", "Delivery", "Erection"].map((p) =>
-            pill(filterPhase === p, p, () => setFilterPhase(p), "var(--accent)")
-          )}
-          <span style={{ width: 8 }} />
-          {pill(filterStatus === "all", "ALL STATUS", () => setFilterStatus("all"), "var(--accent)")}
-          {STATUS_COLUMNS.map((s) => pill(filterStatus === s, s.toUpperCase(), () => setFilterStatus(s), "var(--accent)"))}
+      {/* Consolidated Filter Bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          flexWrap: "wrap",
+        }}
+      >
+        {/* Search */}
+        <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200, maxWidth: 360 }}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }}>
+            <circle cx="7" cy="7" r="5.5" stroke="var(--text-muted)" strokeWidth="1.5" />
+            <line x1="11" y1="11" x2="14.5" y2="14.5" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by drawing #, sequence, or area..."
+            style={{
+              width: "100%",
+              padding: "7px 12px 7px 30px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-input)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
         </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 24, background: "var(--divider)", flexShrink: 0 }} />
+
+        {/* Phase pills */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", marginRight: 2 }}>PHASE</span>
+          {[{ key: "all", label: "ALL" }, ...["Detailing", "Fabrication", "Delivery", "Erection"].map(p => ({ key: p, label: p.toUpperCase().slice(0, 5) }))].map(({ key, label }) => {
+            const active = filterPhase === key;
+            const phColor = key !== "all" ? PHASE_COLORS[key] : "var(--accent)";
+            return (
+              <button
+                key={key}
+                onClick={() => setFilterPhase(key)}
+                style={{
+                  padding: "4px 8px",
+                  border: active ? `1px solid ${phColor}` : "1px solid transparent",
+                  borderRadius: "var(--radius-btn)",
+                  background: active ? `${PHASE_HEX[key] || "rgba(200,155,32,1)"}18` : "var(--bg-surface-low)",
+                  color: active ? phColor : "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                {key !== "all" && <PhaseIcon phase={key} size={9} />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 24, background: "var(--divider)", flexShrink: 0 }} />
+
+        {/* Status pills */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", marginRight: 2 }}>STATUS</span>
+          {[{ key: "all", label: "ALL" }, ...STATUS_COLUMNS.map(s => ({ key: s, label: s.toUpperCase() }))].map(({ key, label }) => {
+            const active = filterStatus === key;
+            const stColor = key !== "all" ? STATUS_COLORS[key] : "var(--accent)";
+            return (
+              <button
+                key={key}
+                onClick={() => setFilterStatus(key)}
+                style={{
+                  padding: "4px 8px",
+                  border: active ? `1px solid ${stColor}` : "1px solid transparent",
+                  borderRadius: "var(--radius-btn)",
+                  background: active ? `${stColor}18` : "var(--bg-surface-low)",
+                  color: active ? stColor : "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Active filter count + clear */}
+        {activeFilterCount > 0 && (
+          <>
+            <div style={{ width: 1, height: 24, background: "var(--divider)", flexShrink: 0 }} />
+            <button
+              onClick={() => { setFilterStatus("all"); setFilterPhase("all"); setSearch(""); }}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "var(--radius-btn)",
+                border: "1px solid var(--accent-border)",
+                background: "var(--accent-muted)",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.06em",
+              }}
+            >
+              CLEAR ({activeFilterCount})
+            </button>
+          </>
+        )}
       </div>
 
       {/* Bulk action bar */}
@@ -1012,7 +1262,7 @@ export default function WorkPackages() {
             {selectedWPs.size} selected
           </span>
           <span style={{ color: "var(--divider)" }}>|</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>SET STATUS</span>
           {STATUS_COLUMNS.map((s) => (
             <button key={s} disabled={bulkStatusMut.isPending}
               onClick={() => bulkStatusMut.mutate({ ids: [...selectedWPs], status: s })}
@@ -1030,11 +1280,11 @@ export default function WorkPackages() {
           ))}
           <button onClick={exportCSV}
             style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
-            ↓ Export {selectedWPs.size}
+            Export {selectedWPs.size}
           </button>
           <button onClick={() => setSelectedWPs(new Set())}
             style={{ padding: "4px 10px", borderRadius: "var(--radius-btn)", border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
-            ✕ Clear
+            Clear
           </button>
         </div>
       )}
@@ -1053,6 +1303,7 @@ export default function WorkPackages() {
           selected={selectedWPs}
           onToggleSelect={toggleSelectWP}
           onSelectAll={toggleSelectAll}
+          onCreateWP={handleWPCreate}
         />
       )}
 

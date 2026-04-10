@@ -8,6 +8,36 @@ import ResourceList from "@/components/resources/ResourceList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 
+// ── Keyframe injection (once) ──
+const STYLE_ID = "resource-mgmt-keyframes";
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
+    @keyframes overAllocPulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.15); }
+      50%      { box-shadow: 0 0 22px rgba(239,68,68,0.45); }
+    }
+    @keyframes ghostShimmer {
+      0%   { opacity: 0.25; }
+      50%  { opacity: 0.42; }
+      100% { opacity: 0.25; }
+    }
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ── Ghost placeholder data for empty state ──
+const GHOST_RESOURCES = [
+  { name: "Welding Team A", type: "Labor", role: "CWI / Fitter", hours: "320h budget" },
+  { name: "Trucking Fleet", type: "Equipment", role: "Flatbed / Lowboy", hours: "160h budget" },
+  { name: "Ironworkers Local 86", type: "Subcontractor", role: "Erection Crew", hours: "480h budget" },
+];
+
 export default function ResourceManagement() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
@@ -73,11 +103,12 @@ export default function ResourceManagement() {
 
   const handleSave = (data) => {
     if (editing) updateMut.mutate({ id: editing.id, data });
-    // create is handled by ResourceFormModal internally
   };
 
   const types = ["Labor", "Equipment", "Subcontractor", "Material"];
   const statuses = ["Available", "Allocated", "Over-Allocated", "On Leave"];
+
+  const isEmpty = resources.length === 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -86,9 +117,9 @@ export default function ResourceManagement() {
         <div>
           <h1
             style={{
-              fontFamily: "var(--font-mono)",
+              fontFamily: "var(--font-display)",
               fontSize: 24,
-              fontWeight: 700,
+              fontWeight: 800,
               color: "var(--text-primary)",
               margin: 0,
               textTransform: "uppercase",
@@ -107,31 +138,63 @@ export default function ResourceManagement() {
               textTransform: "uppercase",
             }}
           >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Resources
+            {selectedProject ? selectedProject.name : "All Projects"} {" \u00B7 "} {filtered.length} Resources
           </p>
         </div>
 
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            background: "var(--accent)",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 16px",
-            fontFamily: "var(--font-mono)",
-            fontSize: "10px",
-            fontWeight: 700,
-            cursor: "pointer",
-            transition: "background 0.15s",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          + Add Resource
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Sync Company Resources concept button */}
+          <button
+            onClick={() => toast.info("Company resource sync coming soon")}
+            style={{
+              background: "transparent",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border-strong)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 16px",
+              fontFamily: "var(--font-display)",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              minHeight: 44,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          >
+            Sync Company Resources
+          </button>
+
+          <button
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={{
+              background: "var(--accent)",
+              color: "#07090E",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 20px",
+              fontFamily: "var(--font-display)",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background 0.15s, box-shadow 0.15s",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              minHeight: 44,
+              display: "inline-flex",
+              alignItems: "center",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "0 0 16px rgba(200,155,32,0.25)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
+          >
+            + Add Resource
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -142,12 +205,12 @@ export default function ResourceManagement() {
         <StatCard label="Subs" value={stats.subcontractor} color="var(--accent)" />
         <StatCard label="Available" value={stats.available} color="var(--status-success)" />
         <StatCard label="Allocated" value={stats.allocated} color="var(--status-info)" />
-        <StatCard label="Over-Allocated" value={stats.overAllocated} color="var(--status-error)" />
+        <StatCard label="Over-Allocated" value={stats.overAllocated} color="var(--status-error)" pulse={stats.overAllocated > 0} />
       </div>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
@@ -166,17 +229,18 @@ export default function ResourceManagement() {
               onClick={() => setFilterType(type)}
               style={{
                 background: filterType === type ? "var(--accent)" : "var(--bg-surface)",
-                color: filterType === type ? "white" : "var(--text-secondary)",
+                color: filterType === type ? "#07090E" : "var(--text-secondary)",
                 border: `1px solid ${filterType === type ? "var(--accent)" : "var(--border-default)"}`,
-                borderRadius: "6px",
+                borderRadius: "var(--radius-badge)",
                 padding: "6px 12px",
                 fontFamily: "var(--font-mono)",
-                fontSize: "8px",
+                fontSize: "9px",
                 fontWeight: 600,
                 cursor: "pointer",
                 transition: "all 0.15s",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                minHeight: 32,
               }}
             >
               {type === "all" ? "All" : type}
@@ -184,7 +248,7 @@ export default function ResourceManagement() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
               fontFamily: "var(--font-mono)",
@@ -203,17 +267,18 @@ export default function ResourceManagement() {
               onClick={() => setFilterStatus(status)}
               style={{
                 background: filterStatus === status ? "var(--accent)" : "var(--bg-surface)",
-                color: filterStatus === status ? "white" : "var(--text-secondary)",
+                color: filterStatus === status ? "#07090E" : "var(--text-secondary)",
                 border: `1px solid ${filterStatus === status ? "var(--accent)" : "var(--border-default)"}`,
-                borderRadius: "6px",
+                borderRadius: "var(--radius-badge)",
                 padding: "6px 12px",
                 fontFamily: "var(--font-mono)",
-                fontSize: "8px",
+                fontSize: "9px",
                 fontWeight: 600,
                 cursor: "pointer",
                 transition: "all 0.15s",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                minHeight: 32,
               }}
             >
               {status === "all" ? "All" : status}
@@ -227,8 +292,116 @@ export default function ResourceManagement() {
         <ResourceFormModal projectId={projectId} editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
       )}
 
-      {/* Resources List */}
-      <ResourceList resources={filtered} onEdit={(r) => { setEditing(r); setShowForm(true); }} onDelete={setDeleteTarget} />
+      {/* Empty State with ghost placeholders */}
+      {isEmpty && (
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-card)",
+            padding: "40px 32px",
+            textAlign: "center",
+            animation: "fadeSlideUp 0.3s ease-out both",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 18,
+              fontWeight: 800,
+              color: "var(--text-primary)",
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            No Resources Yet
+          </div>
+          <p
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+              color: "var(--text-muted)",
+              margin: "0 0 24px 0",
+              lineHeight: 1.6,
+            }}
+          >
+            Add your first crew, equipment, or subcontractor to start tracking resources.
+          </p>
+
+          {/* Ghost placeholder cards */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 560, margin: "0 auto 24px" }}>
+            {GHOST_RESOURCES.map((ghost, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr auto",
+                  gap: 16,
+                  alignItems: "center",
+                  padding: "12px 16px",
+                  background: "var(--bg-surface-low)",
+                  border: "1px dashed rgba(255,255,255,0.08)",
+                  borderRadius: "var(--radius-card)",
+                  animation: `ghostShimmer 2.5s ease-in-out infinite`,
+                  animationDelay: `${i * 0.4}s`,
+                }}
+              >
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-disabled)" }}>{ghost.name}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)", marginTop: 2 }}>{ghost.type}</div>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)" }}>{ghost.role}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)", marginTop: 2 }}>{ghost.hours}</div>
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    color: "var(--text-disabled)",
+                    border: "1px dashed rgba(255,255,255,0.06)",
+                    borderRadius: 4,
+                    padding: "3px 8px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  Ghost
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={{
+              background: "var(--accent)",
+              color: "#07090E",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "10px 24px",
+              fontFamily: "var(--font-display)",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background 0.15s, box-shadow 0.15s",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              minHeight: 44,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-glow-gold)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
+          >
+            + Add First Resource
+          </button>
+        </div>
+      )}
+
+      {/* Resources List (only shown when not empty) */}
+      {!isEmpty && (
+        <ResourceList resources={filtered} onEdit={(r) => { setEditing(r); setShowForm(true); }} onDelete={setDeleteTarget} />
+      )}
 
       {/* Delete Dialog */}
       <DeleteDialog
@@ -242,23 +415,28 @@ export default function ResourceManagement() {
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, pulse }) {
   return (
     <div
       style={{
         background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "10px",
-        padding: "12px",
+        border: `1px solid ${pulse ? "rgba(239,68,68,0.35)" : "var(--border-default)"}`,
+        borderRadius: "var(--radius-card)",
+        padding: "14px 16px",
         borderTop: `2px solid ${color}`,
+        boxShadow: pulse ? undefined : "var(--shadow-card)",
+        animation: pulse ? "overAllocPulse 2s ease-in-out infinite" : undefined,
+        transition: "box-shadow 0.2s, border-color 0.2s",
       }}
     >
       <div
         style={{
-          fontSize: "18px",
-          fontWeight: 700,
+          fontFamily: "var(--font-display)",
+          fontSize: "22px",
+          fontWeight: 800,
           color: color,
           marginBottom: "4px",
+          lineHeight: 1,
         }}
       >
         {value}
@@ -266,7 +444,7 @@ function StatCard({ label, value, color }) {
       <div
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: "8px",
+          fontSize: "9px",
           color: "var(--text-muted)",
           letterSpacing: "0.10em",
           textTransform: "uppercase",

@@ -5,6 +5,73 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 
 // ──────────────────────────────────────────────────────────────────────
+// KEYFRAMES (injected once)
+// ──────────────────────────────────────────────────────────────────────
+const RS_STYLE_ID = "resource-sched-keyframes";
+if (typeof document !== "undefined" && !document.getElementById(RS_STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = RS_STYLE_ID;
+  style.textContent = `
+    @keyframes rsOverAllocPulse {
+      0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,0.15); color: #EF4444; }
+      50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); color: #FF6B6B; }
+    }
+    @keyframes rsDropGlow {
+      0%   { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
+      50%  { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.35); }
+      100% { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
+    }
+    @keyframes rsGhostShimmer {
+      0%   { opacity: 0.18; }
+      50%  { opacity: 0.32; }
+      100% { opacity: 0.18; }
+    }
+    @keyframes rsTodayPulse {
+      0%, 100% { box-shadow: 0 0 6px rgba(200,155,32,0.3); }
+      50%      { box-shadow: 0 0 14px rgba(200,155,32,0.6); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// GHOST PLACEHOLDER DATA
+// ──────────────────────────────────────────────────────────────────────
+const GHOST_RESOURCES_SCHED = [
+  { name: "Welding Team A", role: "CWI / Fitter", skills: ["CWI", "Fitter"] },
+  { name: "Bay 3 Crane", role: "Equipment", skills: ["Crane Op"] },
+  { name: "Erection Crew B", role: "Ironworkers", skills: ["Rigger", "Erector"] },
+];
+
+// ── Skill tag extraction (matches ResourceList logic) ──
+const KNOWN_SKILLS_RS = ["CWI", "Fitter", "Rigger", "Welder", "Erector", "Detailer", "PE", "QC", "Foreman", "Crane Op", "Ironworker", "Painter"];
+
+function extractSkillsRS(resource) {
+  const skills = [];
+  const text = `${resource.role || ""} ${resource.notes || ""} ${resource.resource_type || ""}`.toUpperCase();
+  KNOWN_SKILLS_RS.forEach((skill) => {
+    if (text.includes(skill.toUpperCase())) skills.push(skill);
+  });
+  if (resource.role) {
+    resource.role.split(/[,/]+/).forEach((part) => {
+      const trimmed = part.trim();
+      if (trimmed.length > 1 && trimmed.length <= 12 && !skills.find((s) => s.toUpperCase() === trimmed.toUpperCase())) {
+        skills.push(trimmed);
+      }
+    });
+  }
+  return skills.slice(0, 4);
+}
+
+// ── Capacity heatmap for resource rows ──
+function getRowCapacityBg(burnPct, isOverAllocated) {
+  if (isOverAllocated || burnPct > 100) return "rgba(239,68,68,0.04)";
+  if (burnPct > 80) return "rgba(245,158,11,0.03)";
+  if (burnPct > 0) return "rgba(34,197,94,0.02)";
+  return "transparent";
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // HELPERS & UTILITIES
 // ──────────────────────────────────────────────────────────────────────
 
@@ -301,6 +368,7 @@ export default function ResourceScheduling() {
     boardRef.current?.querySelectorAll("[data-resource-id]").forEach((row) => {
       row.style.background = "";
       row.style.outline = "";
+      row.style.boxShadow = "";
     });
 
     setDragTooltip(null);
@@ -405,12 +473,19 @@ export default function ResourceScheduling() {
     ghostRef.current.style.left = `${e.clientX - d.offsetX}px`;
     ghostRef.current.style.top = `${e.clientY - 20}px`;
 
-    // Highlight row
+    // Highlight drop zones: all rows get subtle glow, hovered row gets strong highlight
     boardRef.current?.querySelectorAll("[data-resource-id]").forEach((row) => {
       const r = row.getBoundingClientRect();
       const hit = e.clientY >= r.top && e.clientY <= r.bottom;
-      row.style.background = hit ? "rgba(245,158,11,0.07)" : "";
-      row.style.outline = hit ? "1px solid rgba(245,158,11,0.3)" : "";
+      if (hit) {
+        row.style.background = "rgba(200,155,32,0.10)";
+        row.style.outline = "1px solid rgba(200,155,32,0.45)";
+        row.style.boxShadow = "inset 0 0 12px rgba(200,155,32,0.08)";
+      } else {
+        row.style.background = "rgba(200,155,32,0.02)";
+        row.style.outline = "1px dashed rgba(200,155,32,0.12)";
+        row.style.boxShadow = "none";
+      }
     });
 
     // Tooltip
@@ -1005,13 +1080,82 @@ export default function ResourceScheduling() {
       <>
       {/* HERO EMPTY STATE — no resources or WPs yet */}
       {resources.length === 0 && workPackages.length === 0 && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 40 }}>
-          <div style={{ fontSize: 56, opacity: 0.2, lineHeight: 1 }}>👷</div>
-          <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             No Resources Assigned
           </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 340, textAlign: "center", lineHeight: 1.7 }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", maxWidth: 380, textAlign: "center", lineHeight: 1.7 }}>
             Add crew, equipment, and work packages to start building your resource schedule. Drag work packages onto resources to assign them.
+          </div>
+
+          {/* Ghost placeholder rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 520, marginTop: 8 }}>
+            {GHOST_RESOURCES_SCHED.map((ghost, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 16px",
+                  background: "var(--bg-surface-low)",
+                  border: "1px dashed rgba(255,255,255,0.08)",
+                  borderRadius: "var(--radius-card)",
+                  animation: "rsGhostShimmer 2.5s ease-in-out infinite",
+                  animationDelay: `${i * 0.35}s`,
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-disabled)" }}>{ghost.name}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-disabled)", marginTop: 2 }}>{ghost.role}</div>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {ghost.skills.map((s) => (
+                    <span key={s} style={{
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
+                      color: "var(--text-disabled)", background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10,
+                      padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}>{s}</span>
+                  ))}
+                </div>
+                <div style={{
+                  width: 100, height: 20, borderRadius: 4,
+                  background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.06)",
+                }} />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button
+              onClick={() => setShowNewResource(true)}
+              style={{
+                background: "var(--accent)", color: "#07090E", border: "none",
+                borderRadius: "var(--radius-btn)", padding: "10px 24px",
+                fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700,
+                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
+                minHeight: 44, transition: "background 0.15s, box-shadow 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "var(--shadow-glow-gold)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
+            >
+              + Add First Resource
+            </button>
+            <button
+              onClick={() => toast.info("Company resource sync coming soon")}
+              style={{
+                background: "transparent", color: "var(--text-muted)",
+                border: "1px solid var(--border-strong)", borderRadius: "var(--radius-btn)",
+                padding: "10px 20px", fontFamily: "var(--font-display)", fontSize: 12,
+                fontWeight: 600, cursor: "pointer", textTransform: "uppercase",
+                letterSpacing: "0.08em", minHeight: 44, transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              Sync Company Resources
+            </button>
           </div>
         </div>
       )}
@@ -1043,12 +1187,20 @@ export default function ResourceScheduling() {
             { label: "FIELD HRS", value: `${totalFieldActual.toLocaleString()} / ${totalFieldBudget.toLocaleString()}`, color: totalFieldActual > totalFieldBudget ? "var(--status-error)" : "var(--text-secondary)" },
             { label: "ASSIGNED / TOTAL", value: `${assignedWPCount} / ${filteredWorkPackages.length} WPs`, color: unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
             { label: "OVER-ALLOCATED", value: overAllocatedResources, color: overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)" },
-          ].map(({ label, value, color }) => (
-            <div key={label} style={{ padding: "6px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.05)" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
-            </div>
-          ));
+          ].map(({ label, value, color }) => {
+            const isOverAlloc = label === "OVER-ALLOCATED" && value > 0;
+            return (
+              <div key={label} style={{
+                padding: "6px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6,
+                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid rgba(255,255,255,0.05)",
+                animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
+                transition: "border-color 0.2s",
+              }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
+              </div>
+            );
+          });
         })()}
       </div>
 
@@ -1100,30 +1252,46 @@ export default function ResourceScheduling() {
                   const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
                   const resBudgetFromEntity = Number(res.budget_hours) || 0;
                   const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
+                  const resSkills = extractSkillsRS(res);
+                  const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
                   return (
                     <div key={res.id} style={{
-                      background: isOverAllocated ? "rgba(255,23,68,0.06)" : "var(--bg-surface-low)",
-                      border: isOverAllocated ? "1px solid rgba(255,23,68,0.20)" : "1px solid rgba(255,255,255,0.06)",
+                      background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
+                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid rgba(255,255,255,0.06)",
                       borderRadius: 8, padding: 8, marginBottom: 8,
+                      transition: "background 0.2s, border-color 0.2s",
                     }}>
                       <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2 }}>
                         {res.name}
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                        {res.role || "—"}
+                        {res.role || "\u2014"}
                       </div>
+                      {/* Skill tag badges */}
+                      {resSkills.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
+                          {resSkills.map((sk, si) => (
+                            <span key={si} style={{
+                              fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
+                              color: "var(--text-secondary)", background: "rgba(255,255,255,0.05)",
+                              border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8,
+                              padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
+                            }}>{sk}</span>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {resBudgetHrs}h bud · {resActualHrs}h act · {resBurnPct}%
+                        {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
                       </div>
                       <div style={{ width: "100%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)" }} />
+                        <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
-                        {assignedWPs.length} WPs · {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
+                        {assignedWPs.length} WPs {"\u00B7"} {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
                       </div>
                       {isOverAllocated && (
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                        ⚠ OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
+                        {"\u26A0"} OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
                         </div>
                       )}
                     </div>
@@ -1174,10 +1342,16 @@ export default function ResourceScheduling() {
                     {wp.name}
                   </div>
                   <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--status-warning)", marginTop: 2 }}>
-                    {wp.wp_number} · {wp.phase}
+                    {wp.wp_number} {"\u00B7"} {wp.phase}
                   </div>
-                  <div style={{ fontSize: 8, color: "rgba(255,176,32,0.6)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
-                    ↕ drag to assign to resource
+                  {/* Smart duration hint */}
+                  {((Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0)) > 0 && (
+                    <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--accent)", marginTop: 2, letterSpacing: "0.02em" }}>
+                      {"\u2248"} {Math.ceil(((Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0)) / 8)} days at 8h/day
+                    </div>
+                  )}
+                  <div style={{ fontSize: 8, color: "rgba(200,155,32,0.5)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
+                    {"\u2195"} drag to assign to resource
                   </div>
                 </div>
               ))}
@@ -1317,6 +1491,8 @@ export default function ResourceScheduling() {
             const resBudgetFromEntity = Number(resource.budget_hours) || 0;
             const isOverAllocated = resBudgetFromEntity > 0 && rowBudgetHrs > resBudgetFromEntity;
             const isEquipment = resource.resource_type === "Equipment";
+            const rowHeatBg = getRowCapacityBg(rowBurnPct, isOverAllocated);
+            const rowSkills = extractSkillsRS(resource);
             return (
             <div
               key={resource.id}
@@ -1324,9 +1500,10 @@ export default function ResourceScheduling() {
               data-resource-name={resource.name}
               style={{
                 display: "flex",
-                background: isOverAllocated ? "rgba(255,23,68,0.03)" : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-sidebar)"),
+                background: isOverAllocated ? "rgba(239,68,68,0.04)" : rowHeatBg !== "transparent" ? rowHeatBg : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-sidebar)"),
                 borderBottom: "1px solid rgba(255,255,255,0.04)",
                 minHeight: 60,
+                transition: "background 0.2s",
               }}
             >
               {/* Left label */}
@@ -1344,27 +1521,40 @@ export default function ResourceScheduling() {
               >
                 <div style={{ width: "100%" }}>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>
-                    {isEquipment ? "⚙ " : ""}{resource.name}
+                    {isEquipment ? "\u2699 " : ""}{resource.name}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                    {resource.role || "—"}
+                    {resource.role || "\u2014"}
                   </div>
+                  {/* Skill tag badges in timeline rows */}
+                  {rowSkills.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
+                      {rowSkills.map((sk, si) => (
+                        <span key={si} style={{
+                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
+                          color: "var(--text-secondary)", background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8,
+                          padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
+                        }}>{sk}</span>
+                      ))}
+                    </div>
+                  )}
                   {rowBudgetHrs > 0 && (
                     <>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: rowIsOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {rowBudgetHrs}h bud · {rowActualHrs}h act · {rowBurnPct}%
+                        {rowBudgetHrs}h bud {"\u00B7"} {rowActualHrs}h act {"\u00B7"} {rowBurnPct}%
                       </div>
                       <div style={{ width: "100%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, rowBurnPct)}%`, height: "100%", borderRadius: 2, background: rowBurnPct > 100 ? "var(--status-error)" : rowBurnPct > 80 ? "var(--status-warning)" : "var(--accent)" }} />
+                        <div style={{ width: `${Math.min(100, rowBurnPct)}%`, height: "100%", borderRadius: 2, background: rowBurnPct > 100 ? "var(--status-error)" : rowBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
-                        {rowAssignedWPs.length} WPs · {rowAssignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
+                        {rowAssignedWPs.length} WPs {"\u00B7"} {rowAssignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
                       </div>
                     </>
                   )}
                   {isOverAllocated && (
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                      ⚠ OVER-ALLOC
+                      {"\u26A0"} OVER-ALLOC
                     </div>
                   )}
                 </div>
@@ -1481,7 +1671,7 @@ export default function ResourceScheduling() {
                     );
                   })}
 
-                {/* Today line */}
+                {/* Today line - bright vertical accent line */}
                 <div
                   style={{
                     position: "absolute",
@@ -1490,11 +1680,32 @@ export default function ResourceScheduling() {
                     bottom: 0,
                     width: 2,
                     background: "var(--accent)",
-                    boxShadow: "0 0 8px rgba(245,158,11,0.6)",
+                    boxShadow: "0 0 10px rgba(200,155,32,0.6), 0 0 20px rgba(200,155,32,0.2)",
                     zIndex: 20,
                     pointerEvents: "none",
+                    animation: "rsTodayPulse 3s ease-in-out infinite",
                   }}
-                />
+                >
+                  {/* TODAY label at top of line */}
+                  <div style={{
+                    position: "absolute",
+                    top: -1,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 7,
+                    fontWeight: 700,
+                    color: "#07090E",
+                    background: "var(--accent)",
+                    borderRadius: 3,
+                    padding: "1px 5px",
+                    letterSpacing: "0.08em",
+                    whiteSpace: "nowrap",
+                    lineHeight: 1.4,
+                  }}>
+                    TODAY
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -1541,12 +1752,15 @@ export default function ResourceScheduling() {
             {hoverTooltip.wp.wp_number} — {hoverTooltip.wp.name}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", lineHeight: 1.8 }}>
-            Phase: {hoverTooltip.wp.phase} · Status: {hoverTooltip.wp.status}<br/>
-            Tonnage: {hoverTooltip.wp.tonnage || 0}T · Progress: {hoverTooltip.wp.percent_complete || 0}%<br/>
-            Shop: {hoverTooltip.shopAct}h / {hoverTooltip.shopBud}h · Field: {hoverTooltip.fieldAct}h / {hoverTooltip.fieldBud}h<br/>
+            Phase: {hoverTooltip.wp.phase} {"\u00B7"} Status: {hoverTooltip.wp.status}<br/>
+            Tonnage: {hoverTooltip.wp.tonnage || 0}T {"\u00B7"} Progress: {hoverTooltip.wp.percent_complete || 0}%<br/>
+            Shop: {hoverTooltip.shopAct}h / {hoverTooltip.shopBud}h {"\u00B7"} Field: {hoverTooltip.fieldAct}h / {hoverTooltip.fieldBud}h<br/>
             <span style={{ color: hoverTooltip.totalAct > hoverTooltip.totalBud ? "#FF3D3D" : "#00D68F", fontWeight: 700 }}>
               Total: {hoverTooltip.totalAct}h / {hoverTooltip.totalBud}h ({hoverTooltip.totalBud > 0 ? Math.round((hoverTooltip.totalAct / hoverTooltip.totalBud) * 100) : 0}%)
             </span>
+            {hoverTooltip.totalBud > 0 && (
+              <><br/><span style={{ color: "var(--accent)", fontWeight: 600 }}>{"\u2248"} {Math.ceil(hoverTooltip.totalBud / 8)} days at 8h/day</span></>
+            )}
           </div>
         </div>
       )}
