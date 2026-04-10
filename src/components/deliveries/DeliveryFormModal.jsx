@@ -39,6 +39,20 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const [formData, setFormData] = useState(delivery ? { ...emptyForm, ...delivery } : emptyForm);
 
+  // ─── Queries MUST be declared before any useEffect that reads them ─────
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => base44.entities.Project.list(),
+    initialData: [],
+  });
+
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", formData.project_id],
+    queryFn: () =>
+      formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
+    initialData: [],
+  });
+
   useEffect(() => {
     setFormData(delivery ? { ...emptyForm, ...delivery } : { ...emptyForm, project_id: projectId || "" });
   }, [delivery, projectId]);
@@ -55,19 +69,6 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       }
     }
   }, [formData.project_id, projects]);
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
-    initialData: [],
-  });
-
-  const { data: workPackages = [] } = useQuery({
-    queryKey: ["work-packages", formData.project_id],
-    queryFn: () =>
-      formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
-    initialData: [],
-  });
 
   const mutation = useMutation({
     mutationFn: (data) =>
