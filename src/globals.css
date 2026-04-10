@@ -9,8 +9,7 @@
    Primary gold #C89B20 · Dark navy-black · Professional
    ═══════════════════════════════════════════════════════════════ */
 :root,
-[data-theme="dark"],
-[data-theme="light"] {
+[data-theme="dark"] {
 
   /* ── Background scale — layered dark mode (Industrial OS) ── */
   --bg-void:                  #060810;
@@ -555,29 +554,171 @@ button { cursor: pointer; outline: none; }
 }
 
 /* ── Force dark in all modes ── */
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME — Enterprise "Warm Slate" Design System
+   Layered grays · Clinical whites · High-contrast typography
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  /* ── Background scale — layered light (Warm Slate) ── */
+  --bg-void:                  #EFF2F5;
+  --bg-page:                  #F8FAFC;
+  --bg-surface:               #FFFFFF;
+  --bg-surface-low:           #F1F5F9;
+  --bg-surface-mid:           #F8FAFC;
+  --bg-surface-high:          #E2E8F0;
+  --bg-surface-highest:       #CBD5E1;
+  --bg-surface-lowest:        #F1F5F9;
+  --bg-input:                 #FFFFFF;
+  --bg-sidebar:               #1E293B;
+  --bg-card:                  #FFFFFF;
+  --bg-base:                  #F8FAFC;
+  --bg-elevated:              #FFFFFF;
+  --bg-surface-secondary:     #F1F5F9;
+
+  /* ── NC tokens ── */
+  --nc-bg-primary:            #F8FAFC;
+  --nc-bg-secondary:          #F1F5F9;
+  --nc-bg-tertiary:           #E2E8F0;
+  --nc-bg-panel:              #F1F5F9;
+  --nc-accent-cyan:           #B8860B;
+  --nc-accent-orange:         #B8860B;
+  --nc-accent-blue:           #2563EB;
+  --nc-accent-green:          #16A34A;
+  --nc-accent-red:            #DC2626;
+  --nc-text-primary:          #0F172A;
+  --nc-text-muted:            #64748B;
+  --nc-text-cyan:             #B8860B;
+  --nc-text-orange:           #B8860B;
+  --nc-border-default:        rgba(0,0,0,0.08);
+  --nc-border-cyan:           rgba(184,134,11,0.35);
+  --nc-border-orange:         rgba(184,134,11,0.40);
+
+  /* ── Borders ── */
+  --border-default:           #E2E8F0;
+  --border-strong:            #CBD5E1;
+  --border:                   #E2E8F0;
+  --divider:                  rgba(148,163,184,0.25);
+  --outline:                  rgba(0,0,0,0.12);
+
+  /* ── Primary accent: Deep Gold (higher contrast for light bg) ── */
+  --accent:                   #B8860B;
+  --accent-light:             #D4A017;
+  --accent-hover:             #996F0A;
+  --accent-muted:             rgba(184,134,11,0.08);
+  --accent-border:            rgba(184,134,11,0.30);
+  --accent-text:              #FFFFFF;
+  --on-accent:                #FFFFFF;
+
+  /* ── Aliases ── */
+  --secondary:                #B8860B;
+  --secondary-muted:          rgba(184,134,11,0.06);
+  --secondary-border:         rgba(184,134,11,0.25);
+  --accent-orange:            #B8860B;
+  --accent-orange-light:      #D4A017;
+  --accent-orange-hover:      #996F0A;
+  --accent-orange-muted:      rgba(184,134,11,0.08);
+  --accent-orange-border:     rgba(184,134,11,0.20);
+
+  /* ── Text — strict hierarchy for light backgrounds ── */
+  --text-primary:             #0F172A;
+  --text-secondary:           #334155;
+  --text-muted:               #64748B;
+  --text-disabled:            rgba(100,116,139,0.45);
+
+  /* ── Semantic status colors — Muted Professional for light ── */
+  --status-success:           #16A34A;
+  --status-warning:           #CA8A04;
+  --status-error:             #DC2626;
+  --status-info:              #2563EB;
+  --success:                  #16A34A;
+  --success-muted:            rgba(22,163,74,0.08);
+  --success-border:           rgba(22,163,74,0.25);
+  --warning:                  #CA8A04;
+  --warning-muted:            rgba(202,138,4,0.06);
+  --warning-border:           rgba(202,138,4,0.25);
+  --danger:                   #DC2626;
+  --danger-muted:             rgba(220,38,38,0.06);
+  --danger-border:            rgba(220,38,38,0.25);
+  --info:                     #2563EB;
+  --info-muted:               rgba(37,99,235,0.06);
+  --info-border:              rgba(37,99,235,0.20);
+
+  /* ── Phase colors (slightly muted for light) ── */
+  --phase-detailing:          #B8860B;
+  --phase-fab:                #2563EB;
+  --phase-delivery:           #7C3AED;
+  --phase-erection:           #16A34A;
+  --phase-closeout:           #6B7280;
+
+  /* ── Shadows — diffuse, subtle for light mode ── */
+  --shadow-sm:                0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-card:              0 1px 3px rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+  --shadow-lg:                0 4px 6px rgba(0,0,0,0.07), 0 10px 15px rgba(0,0,0,0.05);
+  --shadow-orange-glow:       0 0 12px rgba(184,134,11,0.10);
+  --shadow-cyan-glow:         0 0 12px rgba(184,134,11,0.10);
+  --shadow-glow-gold:         0 0 12px rgba(184,134,11,0.12), 0 0 24px rgba(184,134,11,0.05);
+  --shadow-glow-red:          0 0 10px rgba(220,38,38,0.12), 0 0 20px rgba(220,38,38,0.05);
+  --shadow-glow-green:        0 0 10px rgba(22,163,74,0.12), 0 0 20px rgba(22,163,74,0.05);
+  --shadow-glow-blue:         0 0 10px rgba(37,99,235,0.12), 0 0 20px rgba(37,99,235,0.05);
+
+  /* ── Interaction ── */
+  --hover-bg:                 rgba(0,0,0,0.03);
+  --bg-hover:                 rgba(0,0,0,0.03);
+  --bg-row-hover:             rgba(0,0,0,0.02);
+  --nav-hover-bg:             rgba(184,134,11,0.08);
+
+  /* ── Glassmorphism — light variant ── */
+  --glass-bg:                 rgba(255,255,255,0.85);
+  --glass-border:             rgba(0,0,0,0.08);
+  --glass-blur:               20px;
+}
+
+/* ── Light theme element overrides ── */
 [data-theme="light"] body,
 [data-theme="light"] #root {
   background: var(--bg-page) !important;
   color: var(--text-primary) !important;
 }
-[data-theme="light"] aside { background: var(--bg-sidebar) !important; }
-[data-theme="light"] header {
-  background: var(--bg-sidebar) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
-  box-shadow: none !important;
-}
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
-  background: var(--bg-surface-high) !important;
-  border: 1px solid rgba(255,255,255,0.09) !important;
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border-default) !important;
   color: var(--text-primary) !important;
 }
 [data-theme="light"] input:focus,
 [data-theme="light"] textarea:focus,
 [data-theme="light"] select:focus {
-  border-color: rgba(200,155,32,0.50) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(184,134,11,0.12) !important;
 }
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+/* Sidebar stays dark for brand identity in light mode */
+[data-theme="light"] .nav-glass {
+  background: #1E293B !important;
+  border-bottom-color: rgba(255,255,255,0.08) !important;
+}
+/* Tailwind overrides for light mode */
+[data-theme="light"] .bg-white { background: var(--bg-surface) !important; }
+[data-theme="light"] .bg-gray-50, [data-theme="light"] .bg-slate-50 { background: var(--bg-surface-low) !important; }
+[data-theme="light"] .bg-gray-100, [data-theme="light"] .bg-slate-100 { background: var(--bg-surface) !important; }
+[data-theme="light"] .text-white { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-900, [data-theme="light"] .text-slate-900 { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-600, [data-theme="light"] .text-slate-600 { color: var(--text-secondary) !important; }
+[data-theme="light"] .text-gray-400, [data-theme="light"] .text-slate-400 { color: var(--text-muted) !important; }
+[data-theme="light"] .border-gray-200, [data-theme="light"] .border-slate-200 { border-color: var(--border-default) !important; }
 
 /* ── Executive highlight row animation ── */
 @keyframes rowHighlight {

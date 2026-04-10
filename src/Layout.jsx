@@ -1248,7 +1248,7 @@ export default function Layout({ children, currentPageName }) {
                 }
 
             {/* Theme Toggle */}
-            {!isMobile && <ThemeToggleButton />}
+            <ThemeToggleButton />
 
             {/* Bell with dropdown */}
             <BellDropdown
