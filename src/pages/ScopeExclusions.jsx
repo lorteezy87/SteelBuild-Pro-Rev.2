@@ -26,6 +26,7 @@ export default function ScopeExclusions() {
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [search, setSearch] = useState("");
+  const [hideCompleted, setHideCompleted] = useState(false);
 
   const { data: scopeItems = [] } = useQuery({
     queryKey: ["scope-items", projectId],
@@ -43,6 +44,18 @@ export default function ScopeExclusions() {
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ScopeItem.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); toast.success("Scope item updated"); setShowForm(false); setEditing(null); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  // Lightweight checkbox toggle — does not open the form modal. Writes the
+  // completed flag + timestamp so we have a record of when each item closed.
+  const toggleCompleteMut = useMutation({
+    mutationFn: ({ id, is_completed }) =>
+      base44.entities.ScopeItem.update(id, {
+        is_completed,
+        completed_at: is_completed ? new Date().toISOString() : null,
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
@@ -66,21 +79,23 @@ export default function ScopeExclusions() {
     return scopeItems.filter((item) => {
       const typeMatch = filterType === "all" || item.item_type === filterType;
       const categoryMatch = filterCategory === "all" || item.category === filterCategory;
+      const completedMatch = !hideCompleted || !item.is_completed;
       const searchMatch =
         !q ||
         item.description?.toLowerCase().includes(q) ||
         item.notes?.toLowerCase().includes(q) ||
         item.added_by?.toLowerCase().includes(q) ||
         item.category?.toLowerCase().includes(q);
-      return typeMatch && categoryMatch && searchMatch;
+      return typeMatch && categoryMatch && completedMatch && searchMatch;
     });
-  }, [scopeItems, filterType, filterCategory, search]);
+  }, [scopeItems, filterType, filterCategory, search, hideCompleted]);
 
   const stats = {
     total: scopeItems.length,
     scope: scopeItems.filter((i) => i.item_type === "Scope").length,
     exclusion: scopeItems.filter((i) => i.item_type === "Exclusion").length,
     clarification: scopeItems.filter((i) => i.item_type === "Clarification").length,
+    completed: scopeItems.filter((i) => i.is_completed).length,
   };
 
   const types = ["Scope", "Exclusion", "Clarification"];
@@ -117,6 +132,9 @@ export default function ScopeExclusions() {
             }}
           >
             {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} of {stats.total} Items
+            {stats.total > 0 && (
+              <> • <span style={{ color: "var(--status-success)" }}>{stats.completed} Complete</span></>
+            )}
           </p>
         </div>
 
@@ -227,6 +245,40 @@ export default function ScopeExclusions() {
             <X size={12} />
           </button>
         )}
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+            paddingLeft: 12,
+            borderLeft: "1px solid var(--border-default)",
+            marginLeft: 4,
+            flexShrink: 0,
+            userSelect: "none",
+          }}
+          title="Hide items that have been marked complete"
+        >
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={(e) => setHideCompleted(e.target.checked)}
+            style={{ accentColor: "var(--status-success)", cursor: "pointer" }}
+          />
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              color: "var(--text-secondary)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Hide Completed
+          </span>
+        </label>
       </div>
 
       {/* Filters */}
@@ -340,11 +392,14 @@ export default function ScopeExclusions() {
       <ScopeItemList
         items={filtered}
         totalCount={stats.total}
-        hasActiveFilters={filterType !== "all" || filterCategory !== "all" || !!search.trim()}
+        hasActiveFilters={filterType !== "all" || filterCategory !== "all" || !!search.trim() || hideCompleted}
         onCreateFirst={openCreate}
-        onClearFilters={() => { setFilterType("all"); setFilterCategory("all"); setSearch(""); }}
+        onClearFilters={() => { setFilterType("all"); setFilterCategory("all"); setSearch(""); setHideCompleted(false); }}
         onEdit={(item) => { setEditing(item); setShowForm(true); }}
         onDelete={setDeleteTarget}
+        onToggleComplete={(item) =>
+          toggleCompleteMut.mutate({ id: item.id, is_completed: !item.is_completed })
+        }
       />
 
       {/* Delete Dialog */}
