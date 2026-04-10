@@ -34,6 +34,7 @@ export default function DrawingViewer() {
 
   const [activeId, setActiveId] = useState(initialId || null);
   const [search, setSearch] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -175,6 +176,8 @@ export default function DrawingViewer() {
         setCurrentPage(p => Math.min(totalPages, p + 1));
       } else if (e.key === "PageUp" || e.key === "k") {
         setCurrentPage(p => Math.max(1, p - 1));
+      } else if (e.key === "[" || e.key === "]") {
+        setSidebarOpen(o => !o);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -205,8 +208,17 @@ export default function DrawingViewer() {
   return (
     <div style={{ display: "flex", height: "100vh", background: "var(--bg-page)", overflow: "hidden" }}>
 
-      {/* ── Sheet List Sidebar ──────────────────────────────────────────────── */}
-      <div style={{ width: 260, flexShrink: 0, borderRight: "1px solid var(--border-default)", display: "flex", flexDirection: "column", background: "var(--bg-surface)" }}>
+      {/* ── Sheet List Sidebar (collapsible) ──────────────────────────────── */}
+      <div style={{
+        width: sidebarOpen ? 260 : 0,
+        flexShrink: 0,
+        borderRight: sidebarOpen ? "1px solid var(--border-default)" : "none",
+        display: "flex",
+        flexDirection: "column",
+        background: "var(--bg-surface)",
+        overflow: "hidden",
+        transition: "width 0.2s ease",
+      }}>
 
         {/* Sidebar header */}
         <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--border-default)" }}>
@@ -274,6 +286,22 @@ export default function DrawingViewer() {
 
         {/* Viewer toolbar */}
         <div style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
+          {/* Sidebar toggle */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            title={sidebarOpen ? "Hide sheet list (more drawing space)" : "Show sheet list"}
+            style={{
+              ...toolBtn,
+              fontSize: 14,
+              padding: "4px 8px",
+              color: sidebarOpen ? "var(--accent)" : "var(--text-muted)",
+              background: sidebarOpen ? "var(--accent-muted)" : "none",
+              border: sidebarOpen ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
+              flexShrink: 0,
+            }}
+          >
+            {sidebarOpen ? "◁" : "▷"}
+          </button>
           {/* Sheet info */}
           <div style={{ flex: 1, overflow: "hidden" }}>
             {activeDrawing ? (
@@ -359,7 +387,7 @@ export default function DrawingViewer() {
 
         {/* Keyboard shortcuts hint */}
         <div style={{ padding: "6px 16px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "var(--bg-surface)", display: "flex", gap: 16 }}>
-          {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
+          {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
             <span key={key} style={{ ...mono, fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
               <span style={{ color: "rgba(255,255,255,0.4)" }}>{key}</span> {desc}
             </span>
