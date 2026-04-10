@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
@@ -11,23 +11,43 @@ const ICON_MAP = {
   WorkPackage: "☰",
   ChangeOrder: "$",
   Contact: "👤",
+  Module: "◈",
 };
 
 const COLOR_MAP = {
   Project: "var(--accent)",
-  RFI: "var(--status-info)",
-  Drawing: "var(--status-warning)",
-  WorkPackage: "var(--status-success)",
-  ChangeOrder: "var(--status-error)",
+  RFI: "#FFB400",
+  Drawing: "#0EA5E9",
+  WorkPackage: "#E8650A",
+  ChangeOrder: "#FF9F43",
   Contact: "#8B5CF6",
+  Module: "var(--accent)",
 };
+
+/* ── Quick-nav modules for empty-query state ────────────────────────────── */
+const QUICK_NAV = [
+  { icon: "◈", name: "Dashboard",    page: "Dashboard",               group: "Navigate" },
+  { icon: "⊕", name: "PCC",          page: "ProjectControlCenter",    group: "Navigate" },
+  { icon: "⚑", name: "RFI Hub",      page: "RFIs",                    group: "Navigate" },
+  { icon: "▦", name: "Drawings",     page: "Drawings",                group: "Navigate" },
+  { icon: "☰", name: "Work Packages",page: "WorkPackages",            group: "Navigate" },
+  { icon: "📦", name: "Deliveries",  page: "Deliveries",              group: "Navigate" },
+  { icon: "◎", name: "Financials",   page: "Financials",              group: "Navigate" },
+  { icon: "▨", name: "Resources",    page: "ResourceScheduling",      group: "Navigate" },
+  { icon: "📋", name: "Daily Logs",  page: "DailyLogs",               group: "Navigate" },
+  { icon: "$", name: "Change Orders", page: "ChangeOrders",            group: "Navigate" },
+  { icon: "👥", name: "Contacts",    page: "Contacts",                group: "Navigate" },
+  { icon: "✨", name: "Portfolio",   page: "AIInsights",              group: "Navigate" },
+];
 
 export default function GlobalSearchModal({ open, onClose }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,9 +59,10 @@ export default function GlobalSearchModal({ open, onClose }) {
     if (!open) {
       setQuery("");
       setResults([]);
-      setSelectedIndex(-1);
+      setSelectedIndex(0);
+      setLoading(false);
     } else {
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
@@ -56,12 +77,39 @@ export default function GlobalSearchModal({ open, onClose }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Debounced search — fires 250ms after the user stops typing
+  // Debounced search
   useEffect(() => {
-    if (query.length < 2) { setResults([]); return; }
+    if (query.length < 2) { setResults([]); setLoading(false); return; }
+    setLoading(true);
     const t = setTimeout(() => runSearch(query), 250);
     return () => clearTimeout(t);
-  }, [query]);  
+  }, [query]);
+
+  // Module quick-nav filtered by query
+  const filteredModules = useMemo(() => {
+    if (query.length >= 2) return []; // search results take over
+    if (query.length === 0) return QUICK_NAV;
+    const ql = query.toLowerCase();
+    return QUICK_NAV.filter((m) => m.name.toLowerCase().includes(ql));
+  }, [query]);
+
+  // Combined display items
+  const displayItems = useMemo(() => {
+    if (results.length > 0) return results;
+    return filteredModules.map((m) => ({
+      type: "Module",
+      id: m.page,
+      title: m.name,
+      subtitle: m.group,
+      page: m.page,
+      icon: m.icon,
+    }));
+  }, [results, filteredModules]);
+
+  // Reset selection when items change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [displayItems.length]);
 
   const runSearch = useCallback(async (q) => {
     const ql = q.toLowerCase();
@@ -78,26 +126,26 @@ export default function GlobalSearchModal({ open, onClose }) {
       const searchResults = [];
 
       projects
-        .filter(p => p.name.toLowerCase().includes(ql) || p.project_number?.toLowerCase().includes(ql))
+        .filter(p => p.name?.toLowerCase().includes(ql) || p.project_number?.toLowerCase().includes(ql))
         .forEach(p => searchResults.push({ type: "Project", id: p.id, title: p.name, subtitle: `${p.project_number} · ${p.phase || "—"}`, status: p.health_status, projectId: p.id, page: "Projects" }));
 
       rfis
-        .filter(r => r.rfi_number?.toLowerCase().includes(ql) || r.title.toLowerCase().includes(ql) || r.description?.toLowerCase().includes(ql))
+        .filter(r => r.rfi_number?.toLowerCase().includes(ql) || r.title?.toLowerCase().includes(ql) || r.description?.toLowerCase().includes(ql))
         .slice(0, 5)
         .forEach(r => searchResults.push({ type: "RFI", id: r.id, title: `${r.rfi_number} · ${r.title}`, subtitle: `${r.project_name} · ${r.status}`, status: r.priority, projectId: r.project_id, page: "RFIs" }));
 
       drawings
-        .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title.toLowerCase().includes(ql))
+        .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title?.toLowerCase().includes(ql))
         .slice(0, 5)
         .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Documents" }));
 
       workPackages
-        .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name.toLowerCase().includes(ql))
+        .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name?.toLowerCase().includes(ql))
         .slice(0, 5)
         .forEach(w => searchResults.push({ type: "WorkPackage", id: w.id, title: `${w.wp_number} · ${w.name}`, subtitle: `${w.project_name} · ${w.status}`, status: w.status, projectId: w.project_id, page: "WorkPackages" }));
 
       changeOrders
-        .filter(c => c.co_number?.toLowerCase().includes(ql) || c.title.toLowerCase().includes(ql))
+        .filter(c => c.co_number?.toLowerCase().includes(ql) || c.title?.toLowerCase().includes(ql))
         .slice(0, 5)
         .forEach(c => searchResults.push({ type: "ChangeOrder", id: c.id, title: `${c.co_number} · ${c.title}`, subtitle: `${c.project_name} · ${c.status}`, status: c.status, projectId: c.project_id, page: "ChangeOrders" }));
 
@@ -109,17 +157,21 @@ export default function GlobalSearchModal({ open, onClose }) {
       setResults(searchResults.slice(0, 12));
     } catch (error) {
       console.error("Search error:", error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   const handleSearch = useCallback((q) => {
     setQuery(q);
-    setSelectedIndex(-1);
+    setSelectedIndex(0);
   }, []);
 
   const handleSelect = (result) => {
-    const searches = [result.title, ...recentSearches.filter((s) => s !== result.title)].slice(0, 5);
-    localStorage.setItem("__steelbuild_recent_searches", JSON.stringify(searches));
+    if (result.type !== "Module") {
+      const searches = [result.title, ...recentSearches.filter((s) => s !== result.title)].slice(0, 5);
+      localStorage.setItem("__steelbuild_recent_searches", JSON.stringify(searches));
+    }
     navigate(createPageUrl(result.page));
     onClose?.();
   };
@@ -129,63 +181,79 @@ export default function GlobalSearchModal({ open, onClose }) {
       onClose?.();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+      setSelectedIndex((prev) => Math.min(prev + 1, displayItems.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((prev) => Math.max(prev - 1, -1));
-    } else if (e.key === "Enter" && selectedIndex >= 0) {
-      handleSelect(results[selectedIndex]);
+      setSelectedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === "Enter" && selectedIndex >= 0 && displayItems[selectedIndex]) {
+      handleSelect(displayItems[selectedIndex]);
     }
   };
+
+  // Auto-scroll selected item into view
+  useEffect(() => {
+    if (listRef.current && selectedIndex >= 0) {
+      const el = listRef.current.children[selectedIndex];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [selectedIndex]);
 
   if (!open) return null;
 
   return (
     <>
+      {/* Backdrop */}
       <div
         onClick={onClose}
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.7)",
+          background: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
           zIndex: 1000,
+          animation: "fadeIn 0.15s ease",
         }}
       />
 
+      {/* Command Palette */}
       <div
         style={{
           position: "fixed",
-          top: "20%",
+          top: "15%",
           left: "50%",
           transform: "translateX(-50%)",
-          width: "90%",
-          maxWidth: 640,
-          background: "var(--bg-surface-low)",
+          width: "92%",
+          maxWidth: 680,
+          background: "var(--glass-bg, rgba(16,18,24,0.92))",
           border: "1px solid var(--accent-border)",
-          borderRadius: 16,
-          backdropFilter: "blur(8px)",
+          borderRadius: 14,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
           zIndex: 1001,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(59,130,246,0.08)",
+          animation: "slideUp 0.2s ease",
+          overflow: "hidden",
         }}
       >
         {/* Search Input */}
         <div
           style={{
-            padding: "12px 16px",
+            padding: "14px 18px",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
           }}
         >
-          <Search size={18} color="var(--text-muted)" />
+          <Search size={18} color="var(--accent)" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => handleSearch(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search RFIs, drawings, projects, work packages..."
+            placeholder="Search or jump to... (RFIs, drawings, projects, contacts)"
             style={{
               flex: 1,
               background: "transparent",
@@ -196,153 +264,179 @@ export default function GlobalSearchModal({ open, onClose }) {
               outline: "none",
             }}
           />
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--text-muted)",
-              padding: 4,
-            }}
-          >
-            <X size={18} />
-          </button>
+          {loading && (
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+              animation: "gentlePulse 1s ease infinite",
+            }}>
+              SEARCHING...
+            </span>
+          )}
+          <kbd style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 4, padding: "2px 6px",
+          }}>
+            ESC
+          </kbd>
         </div>
 
-        {/* Results or Recent */}
-        <div
-          style={{
-            maxHeight: 400,
-            overflowY: "auto",
-            padding: "8px 0",
-          }}
-        >
-          {query.length < 2 && recentSearches.length > 0 && (
-            <div>
-              <div
-                style={{
-                  padding: "8px 16px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Recent Searches
+        {/* Results / Quick Nav */}
+        <div ref={listRef} style={{ maxHeight: 420, overflowY: "auto", padding: "4px 0" }}>
+          {/* Recent searches when no query */}
+          {query.length === 0 && recentSearches.length > 0 && (
+            <>
+              <div style={{
+                padding: "8px 18px 4px",
+                fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
+                letterSpacing: "0.14em", textTransform: "uppercase",
+              }}>
+                Recent
               </div>
-              {recentSearches.map((search, i) => (
+              {recentSearches.slice(0, 3).map((search, i) => (
                 <div
-                  key={i}
+                  key={`recent-${i}`}
                   onClick={() => handleSearch(search)}
                   style={{
-                    padding: "8px 16px",
+                    padding: "8px 18px",
                     cursor: "pointer",
                     color: "var(--text-secondary)",
-                    fontSize: 13,
-                    borderLeft: "2px solid transparent",
-                    transition: "all 0.1s",
+                    fontFamily: "var(--font-mono)", fontSize: 12,
+                    display: "flex", alignItems: "center", gap: 8,
+                    transition: "background 0.1s",
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--accent-muted)";
-                    e.currentTarget.style.borderLeftColor = "var(--accent)";
-                    e.currentTarget.style.color = "var(--accent)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.borderLeftColor = "transparent";
-                    e.currentTarget.style.color = "var(--text-secondary)";
-                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>↩</span>
                   {search}
                 </div>
               ))}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.04)", margin: "4px 18px" }} />
+            </>
+          )}
+
+          {/* Section label */}
+          {displayItems.length > 0 && (
+            <div style={{
+              padding: "8px 18px 4px",
+              fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
+              letterSpacing: "0.14em", textTransform: "uppercase",
+            }}>
+              {results.length > 0 ? `${results.length} Results` : "Quick Navigation"}
             </div>
           )}
 
-          {results.length > 0 && (
-            <div>
-              {results.map((result, idx) => (
-                <div
-                  key={`${result.type}-${result.id}`}
-                  onClick={() => handleSelect(result)}
-                  style={{
-                    padding: "10px 16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    cursor: "pointer",
-                    background:
-                      selectedIndex === idx ? "var(--accent-muted)" : "transparent",
-                    borderLeft:
-                      selectedIndex === idx
-                        ? "2px solid var(--accent)"
-                        : "2px solid transparent",
-                    transition: "all 0.1s",
-                  }}
-                  onMouseEnter={(e) => setSelectedIndex(idx)}
-                >
-                  <span
-                    style={{
-                      fontSize: 16,
-                      color: COLOR_MAP[result.type],
-                      flexShrink: 0,
-                    }}
-                  >
-                    {ICON_MAP[result.type]}
-                  </span>
+          {/* Items */}
+          {displayItems.map((item, idx) => {
+            const isSelected = selectedIndex === idx;
+            const typeColor = COLOR_MAP[item.type] || "var(--text-muted)";
+            return (
+              <div
+                key={`${item.type}-${item.id}`}
+                onClick={() => handleSelect(item)}
+                style={{
+                  padding: "10px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  cursor: "pointer",
+                  background: isSelected ? "rgba(59,130,246,0.08)" : "transparent",
+                  borderLeft: isSelected ? "2px solid var(--accent)" : "2px solid transparent",
+                  transition: "all 0.1s",
+                  minHeight: 44,
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                {/* Type icon */}
+                <span style={{
+                  fontSize: 16,
+                  color: typeColor,
+                  flexShrink: 0,
+                  width: 24,
+                  textAlign: "center",
+                }}>
+                  {item.icon || ICON_MAP[item.type]}
+                </span>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-body)",
-                        fontSize: 13,
-                        color: "var(--text-primary)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {result.title}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 10,
-                        color: "var(--text-muted)",
-                        marginTop: 2,
-                      }}
-                    >
-                      {result.subtitle}
-                    </div>
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)",
+                    fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {item.title}
                   </div>
-
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      color: "var(--text-muted)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    ↵
-                  </div>
+                  {item.subtitle && (
+                    <div style={{
+                      fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)",
+                      marginTop: 1,
+                    }}>
+                      {item.subtitle}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {query.length >= 2 && results.length === 0 && (
-            <div
-              style={{
-                padding: "40px 16px",
-                textAlign: "center",
-                color: "var(--text-muted)",
-                fontSize: 13,
-              }}
-            >
+                {/* Type badge */}
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  color: typeColor, background: `${typeColor}15`,
+                  border: `1px solid ${typeColor}30`,
+                  borderRadius: 4, padding: "2px 8px",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  flexShrink: 0,
+                }}>
+                  {item.type === "Module" ? "GO" : item.type.replace("WorkPackage", "WP").replace("ChangeOrder", "CO")}
+                </span>
+
+                {/* Enter hint for selected */}
+                {isSelected && (
+                  <kbd style={{
+                    fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+                    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 3, padding: "1px 5px", flexShrink: 0,
+                  }}>
+                    ↵
+                  </kbd>
+                )}
+              </div>
+            );
+          })}
+
+          {/* No results */}
+          {query.length >= 2 && results.length === 0 && !loading && (
+            <div style={{
+              padding: "40px 18px",
+              textAlign: "center",
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-mono)", fontSize: 11,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.3 }}>⌕</div>
               No results for "{query}"
+              <div style={{ fontSize: 9, marginTop: 8, color: "var(--text-muted)" }}>
+                Try searching by RFI number, drawing sheet, project name, or contact
+              </div>
             </div>
           )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+          padding: "8px 18px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+        }}>
+          <div style={{ display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↑↓</kbd> Navigate</span>
+            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↵</kbd> Open</span>
+            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>esc</kbd> Close</span>
+          </div>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
+            STEELBUILD COMMAND PALETTE
+          </span>
         </div>
       </div>
     </>
