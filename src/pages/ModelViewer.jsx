@@ -1,19 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-// Use the installed npm packages so version/API stays consistent and works
-// offline. Prior to this we loaded three@0.128 from jsdelivr via a <script>
-// tag into window.THREE, and tried to dynamic-import web-ifc-three from a CDN
-// — which never resolved bare imports in the browser, so IFC was always
-// "loader not available".
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { IFCLoader } from "web-ifc-three/IFCLoader.js";
 
-// web-ifc WASM files are copied into /public/wasm at build time, so they are
-// served from the app's own origin and work behind corp proxies / offline.
+// ─── IFC via runtime-loaded web-ifc (NOT bundled through Rollup) ──────────
+// Rollup's minification corrupts Emscripten's WASM glue code, so we load
+// web-ifc-api-browser.js as a classic <script> from /public/wasm/.  The IIFE
+// assigns `var WebIFC = (...)()` which becomes a global in classic-script mode.
 const IFC_WASM_PATH = "/wasm/";
+
+let _webIfcPromise = null;
+function loadWebIFC() {
+  if (_webIfcPromise) return _webIfcPromise;
+  _webIfcPromise = new Promise((resolve, reject) => {
+    if (window.WebIFC) return resolve(window.WebIFC);
+    const s = document.createElement("script");
+    s.src = "/wasm/web-ifc-api-browser.js";
+    s.onload = () => (window.WebIFC ? resolve(window.WebIFC) : reject(new Error("WebIFC not found after script load")));
+    s.onerror = () => reject(new Error("Failed to load web-ifc from /wasm/"));
+    document.head.appendChild(s);
+  });
+  return _webIfcPromise;
+}
 
 // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────────
 export default function ModelViewer() {
@@ -319,35 +329,73 @@ export default function ModelViewer() {
     }
 
     try {
-      // Re-use an existing loader if this isn't the first IFC file loaded.
-      let loader = sceneRef.current.ifcLoader;
-      if (!loader) {
-        loader = new IFCLoader();
-        // WASM is served from /public/wasm (copied at install time). Must end
-        // with a trailing slash — web-ifc appends "web-ifc.wasm" to this path.
-        await loader.ifcManager.setWasmPath(IFC_WASM_PATH);
-        sceneRef.current.ifcLoader = loader;
+      setLoadingModel(p => ({ ...p, progress: 5, status: 'Loading IFC engine...' }));
+
+      const WebIFC = await loadWebIFC();
+
+      // Re-use IfcAPI instance across loads
+      let ifcApi = sceneRef.current.ifcApi;
+      if (!ifcApi) {
+        ifcApi = new WebIFC.IfcAPI();
+        ifcApi.SetWasmPath(IFC_WASM_PATH);
+        await ifcApi.Init();
+        sceneRef.current.ifcApi = ifcApi;
       }
 
-      setLoadingModel(p => ({ ...p, progress: 20, status: 'Loading IFC file...' }));
+      setLoadingModel(p => ({ ...p, progress: 20, status: 'Reading IFC file...' }));
 
-      const url = URL.createObjectURL(file);
+      const buffer = await file.arrayBuffer();
+      const data = new Uint8Array(buffer);
+      const modelID = ifcApi.OpenModel(data);
 
-      const model = await new Promise((resolve, reject) => {
-        loader.load(
-          url,
-          (ifcModel) => resolve(ifcModel),
-          (xhr) => {
-            if (xhr.total > 0) {
-              const pct = Math.round((xhr.loaded / xhr.total) * 60);
-              setLoadingModel(p => ({ ...p, progress: 20 + pct, status: `Parsing IFC... ${pct}%` }));
-            }
-          },
-          reject
-        );
-      });
+      setLoadingModel(p => ({ ...p, progress: 40, status: 'Extracting geometry...' }));
 
-      URL.revokeObjectURL(url);
+      // Load all geometry from the IFC model
+      const flatMeshes = ifcApi.LoadAllGeometry(modelID);
+      const model = new THREE.Group();
+      model.name = file.name;
+
+      for (let i = 0; i < flatMeshes.size(); i++) {
+        const flatMesh = flatMeshes.get(i);
+        for (let j = 0; j < flatMesh.geometries.size(); j++) {
+          const placement = flatMesh.geometries.get(j);
+          const ifcGeom = ifcApi.GetGeometry(modelID, placement.geometryExpressID);
+
+          const verts = ifcApi.GetVertexArray(ifcGeom.GetVertexData(), ifcGeom.GetVertexDataSize());
+          const idx = ifcApi.GetIndexArray(ifcGeom.GetIndexData(), ifcGeom.GetIndexDataSize());
+
+          // web-ifc returns 6 floats per vertex: x,y,z, nx,ny,nz
+          const posArr = new Float32Array(verts.length / 2);
+          const normArr = new Float32Array(verts.length / 2);
+          for (let v = 0; v < verts.length; v += 6) {
+            const o = (v / 6) * 3;
+            posArr[o] = verts[v]; posArr[o+1] = verts[v+1]; posArr[o+2] = verts[v+2];
+            normArr[o] = verts[v+3]; normArr[o+1] = verts[v+4]; normArr[o+2] = verts[v+5];
+          }
+
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute("position", new THREE.Float32BufferAttribute(posArr, 3));
+          geom.setAttribute("normal", new THREE.Float32BufferAttribute(normArr, 3));
+          geom.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+
+          const c = placement.color;
+          const mat = new THREE.MeshPhongMaterial({
+            color: new THREE.Color(c.x, c.y, c.z),
+            opacity: c.w,
+            transparent: c.w < 1,
+            side: THREE.DoubleSide,
+          });
+
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.applyMatrix4(new THREE.Matrix4().fromArray(placement.flatTransformation));
+          mesh.userData.expressID = flatMesh.expressID;
+          model.add(mesh);
+
+          ifcGeom.delete();
+        }
+      }
+
+      ifcApi.CloseModel(modelID);
 
       setLoadingModel(p => ({ ...p, progress: 85, status: 'Indexing elements...' }));
 
