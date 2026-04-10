@@ -45,6 +45,7 @@ export default function ModelViewer() {
   const [isDragging, setIsDragging] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [showEdges, setShowEdges] = useState(true);
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
@@ -63,17 +64,28 @@ export default function ModelViewer() {
       const width = mountRef.current.clientWidth || 800;
       const height = mountRef.current.clientHeight || 600;
 
-      // Scene — lighter background so steel is visible
+      // Scene — bright CAD-style background like BIMvision
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0D1117);
-      // Lighter fog, pushed far back so model isn't washed out
-      scene.fog = new THREE.FogExp2(0x0D1117, 0.0008);
+      // Gradient sky: light gray top to white bottom
+      const canvas = document.createElement('canvas');
+      canvas.width = 2; canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0, '#E8ECF0');
+      grad.addColorStop(0.4, '#F2F4F6');
+      grad.addColorStop(1, '#FFFFFF');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 2, 512);
+      const bgTex = new THREE.CanvasTexture(canvas);
+      bgTex.mapping = THREE.EquirectangularReflectionMapping;
+      scene.background = bgTex;
+      // No fog — BIMvision doesn't use it
 
       // Camera — elevated and pulled back for better framing
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 5000);
       camera.position.set(40, 30, 50);
 
-      // Renderer
+      // Renderer — bright, no tone mapping (CAD-style direct colors)
       const renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: false,
@@ -84,8 +96,7 @@ export default function ModelViewer() {
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.6;
+      renderer.toneMapping = THREE.NoToneMapping;
       mountRef.current.appendChild(renderer.domElement);
 
       // Controls — target slightly above grid so model appears elevated
@@ -96,23 +107,27 @@ export default function ModelViewer() {
       controls.maxDistance = 1000;
       controls.target.set(0, 5, 0);
 
-      // Lights — much brighter to illuminate steel surfaces
-      scene.add(new THREE.AmbientLight(0x8090B0, 2.0));
-      const sun = new THREE.DirectionalLight(0xFFEED8, 3.0);
-      sun.position.set(60, 120, 80);
+      // Lights — bright studio lighting for vivid steel colors
+      scene.add(new THREE.AmbientLight(0xFFFFFF, 0.6));
+      const sun = new THREE.DirectionalLight(0xFFFFFF, 1.4);
+      sun.position.set(50, 100, 60);
       sun.castShadow = true;
       sun.shadow.mapSize.width = 2048;
       sun.shadow.mapSize.height = 2048;
       scene.add(sun);
-      // Back-fill light for depth
-      const fill = new THREE.DirectionalLight(0xC8D0E0, 1.2);
-      fill.position.set(-40, 60, -30);
+      // Key light from opposite side
+      const fill = new THREE.DirectionalLight(0xE8F0FF, 0.8);
+      fill.position.set(-40, 80, -30);
       scene.add(fill);
-      scene.add(new THREE.HemisphereLight(0x6080C0, 0x203040, 1.5));
+      // Rim light from below for depth
+      const rim = new THREE.DirectionalLight(0xFFFFFF, 0.3);
+      rim.position.set(0, -20, 40);
+      scene.add(rim);
+      scene.add(new THREE.HemisphereLight(0xDDE4EE, 0xA0B0C0, 0.8));
 
-      // Grid — visible but subtle, placed at Y=0 (model sits above it)
-      const grid = new THREE.GridHelper(200, 40, 0x2A3040, 0x1A2030);
-      grid.material.opacity = 0.6;
+      // Grid — visible professional CAD grid on the ground plane
+      const grid = new THREE.GridHelper(200, 40, 0xB0B8C4, 0xD0D8E0);
+      grid.material.opacity = 0.5;
       grid.material.transparent = true;
       scene.add(grid);
 
@@ -196,15 +211,16 @@ export default function ModelViewer() {
     return 'MEMBER';
   };
 
+  // BIMvision-style vivid steel colors
   const TYPE_COLORS = {
-    COLUMN: 0xF59E0B,
-    GIRDER: 0xF59E0B,
-    BEAM: 0x3B82F6,
-    SLAB: 0x8B5CF6,
-    BRACE: 0x00D68F,
-    STAIR: 0xFFB020,
-    WALL: 0x6B7A8D,
-    MEMBER: 0x2A3040,
+    COLUMN: 0x9B59B6,  // vivid purple
+    GIRDER: 0x2C3E50,  // dark steel blue
+    BEAM:   0x3498DB,  // bright blue
+    SLAB:   0x27AE60,  // strong green
+    BRACE:  0xE67E22,  // burnt orange
+    STAIR:  0xF1C40F,  // golden yellow
+    WALL:   0x95A5A6,  // silver gray
+    MEMBER: 0x7F8C8D,  // warm gray
   };
 
   const getStatusColor = (type) => {
@@ -216,13 +232,50 @@ export default function ModelViewer() {
     if (!sceneRef.current.scene || !memberList) return;
 
     memberList.forEach((member) => {
-      let color = TYPE_COLORS[member.type] || TYPE_COLORS.MEMBER;
+      const color = TYPE_COLORS[member.type] || TYPE_COLORS.MEMBER;
 
-      if (mode === "workpackage" && member.mesh?.material?.color) {
+      if (mode === "none" && member.mesh?.userData?.originalMaterial) {
+        // Restore original material
+        member.mesh.material = member.mesh.userData.originalMaterial.clone();
+      } else if (member.mesh?.material) {
         member.mesh.material.color.setHex(color);
-      } else if (member.mesh?.material?.color) {
-        member.mesh.material.color.setHex(color);
+        // Boost vivid appearance
+        if (member.mesh.material.shininess !== undefined) {
+          member.mesh.material.shininess = 40;
+        }
       }
+    });
+  }, []);
+
+  // ─── VIEW PRESETS ──────────────────────────────────────────────
+  const setViewPreset = useCallback((preset) => {
+    const { scene, camera, controls } = sceneRef.current;
+    if (!scene || !camera) return;
+    const box = new THREE.Box3().setFromObject(scene);
+    const ctr = box.getCenter(new THREE.Vector3());
+    const span = box.getSize(new THREE.Vector3()).length();
+    if (span <= 0) return;
+    const d = span * 0.7;
+    switch (preset) {
+      case 'front':  camera.position.set(ctr.x, ctr.y, ctr.z + d); break;
+      case 'back':   camera.position.set(ctr.x, ctr.y, ctr.z - d); break;
+      case 'top':    camera.position.set(ctr.x, ctr.y + d, ctr.z + 0.01); break;
+      case 'right':  camera.position.set(ctr.x + d, ctr.y, ctr.z); break;
+      case 'left':   camera.position.set(ctr.x - d, ctr.y, ctr.z); break;
+      case 'iso':
+      default:       camera.position.set(ctr.x + d * 0.6, ctr.y + d * 0.5, ctr.z + d * 0.6); break;
+    }
+    controls.target.copy(ctr);
+    camera.lookAt(ctr);
+    controls.update();
+  }, []);
+
+  // ─── TOGGLE EDGE OUTLINES ────────────────────────────────────
+  const toggleEdges = useCallback((visible) => {
+    const model = sceneRef.current.loadedModel;
+    if (!model) return;
+    model.traverse((child) => {
+      if (child.userData?._isEdge) child.visible = visible;
     });
   }, []);
 
@@ -311,6 +364,19 @@ export default function ModelViewer() {
 
         setMembers(memberList);
         applyColorMode(memberList, colorMode);
+
+        // Add edge outlines to GLTF meshes for BIMvision-style crisp edges
+        model.traverse((child) => {
+          if (child.isMesh && child.geometry) {
+            try {
+              const edgesGeom = new THREE.EdgesGeometry(child.geometry, 15);
+              const edgesMat = new THREE.LineBasicMaterial({ color: 0x2C3E50, opacity: 0.5, transparent: true });
+              const edges = new THREE.LineSegments(edgesGeom, edgesMat);
+              edges.userData._isEdge = true;
+              child.add(edges);
+            } catch(_) {}
+          }
+        });
 
         // Auto-frame the model so it sits visibly above the grid
         { const bb = new THREE.Box3().setFromObject(scene);
@@ -431,12 +497,24 @@ export default function ModelViewer() {
             opacity: c.w,
             transparent: c.w < 1,
             side: THREE.DoubleSide,
+            shininess: 40,
+            specular: new THREE.Color(0x444444),
           });
 
           const mesh = new THREE.Mesh(geom, mat);
           mesh.applyMatrix4(new THREE.Matrix4().fromArray(placement.flatTransformation));
           mesh.userData.expressID = flatMesh.expressID;
           model.add(mesh);
+
+          // Edge outlines for crisp BIMvision look
+          try {
+            const edgesGeom = new THREE.EdgesGeometry(geom, 15);
+            const edgesMat = new THREE.LineBasicMaterial({ color: 0x2C3E50, opacity: 0.5, transparent: true });
+            const edges = new THREE.LineSegments(edgesGeom, edgesMat);
+            edges.applyMatrix4(new THREE.Matrix4().fromArray(placement.flatTransformation));
+            edges.userData._isEdge = true;
+            model.add(edges);
+          } catch(_) {}
 
           ifcGeom.delete();
         }
@@ -667,28 +745,54 @@ export default function ModelViewer() {
             </button>
           )}
 
-          {/* Fit to view */}
+          {/* View presets */}
           {modelLoaded && (
-            <button
-              onClick={() => {
-                const { scene, camera, controls } = sceneRef.current;
-                if (!scene || !camera) return;
-                const box = new THREE.Box3().setFromObject(scene);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3()).length();
-                controls.target.copy(center);
-                camera.position.set(center.x + size * 0.6, center.y + size * 0.4, center.z + size * 0.6);
-                camera.lookAt(center);
-                controls.update();
-              }}
-              style={{
-                padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
-                background: 'transparent', color: 'var(--text-secondary)',
-                fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
-              }}
-            >
-              ⊞ FIT VIEW
-            </button>
+            <>
+              <button
+                onClick={() => setViewPreset('iso')}
+                style={{
+                  padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'transparent', color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                }}
+                title="Isometric view (F)"
+              >
+                ⊞ FIT
+              </button>
+              {['Front', 'Top', 'Right', 'Back'].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setViewPreset(v.toLowerCase())}
+                  style={{
+                    padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'transparent', color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, cursor: 'pointer',
+                    textTransform: 'uppercase', letterSpacing: '0.06em',
+                  }}
+                >
+                  {v}
+                </button>
+              ))}
+
+              {/* Edge toggle */}
+              <button
+                onClick={() => {
+                  const next = !showEdges;
+                  setShowEdges(next);
+                  toggleEdges(next);
+                }}
+                style={{
+                  padding: '5px 10px', borderRadius: 6,
+                  border: showEdges ? '1px solid rgba(52,152,219,0.5)' : '1px solid rgba(255,255,255,0.12)',
+                  background: showEdges ? 'rgba(52,152,219,0.12)' : 'transparent',
+                  color: showEdges ? '#3498DB' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                }}
+                title="Toggle edge outlines"
+              >
+                EDGES
+              </button>
+            </>
           )}
 
           <input
