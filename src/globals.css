@@ -744,3 +744,76 @@ button { cursor: pointer; outline: none; }
   box-shadow: var(--shadow-lg);
   border-color: rgba(255,255,255,0.08);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE — mobile & tablet breakpoints
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Tablet (≤1024px) */
+@media (max-width: 1024px) {
+  :root {
+    --density-padding: 10px;
+    --density-gap: 10px;
+  }
+  .kpi-card { padding: 12px 14px; }
+  .kpi-value { font-size: 22px; }
+}
+
+/* Mobile (≤768px) */
+@media (max-width: 768px) {
+  :root {
+    --density-padding: 8px;
+    --density-gap: 8px;
+    --radius-card: 8px;
+  }
+
+  /* Force single-column KPI grids */
+  .kpi-grid-responsive {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Stack analytics panels */
+  .analytics-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Horizontal-scroll data tables */
+  .table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reduce page-level padding */
+  .page-content {
+    padding: 12px 8px;
+  }
+
+  /* Touch-friendly buttons */
+  button, [role="button"], a[href] {
+    min-height: 36px;
+  }
+
+  /* Stack filter bars vertically */
+  .filter-bar-responsive {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  .filter-bar-responsive > * {
+    width: 100% !important;
+  }
+
+  .kpi-card { padding: 10px 12px; }
+  .kpi-value { font-size: 18px; }
+}
+
+/* Small phone (≤480px) */
+@media (max-width: 480px) {
+  .kpi-grid-responsive {
+    grid-template-columns: 1fr !important;
+  }
+  .kpi-value { font-size: 16px; }
+  .sbp-table thead th { font-size: 7px; padding: 6px 8px; }
+  .sbp-table tbody td { font-size: 10px; padding: 6px 8px; }
+}

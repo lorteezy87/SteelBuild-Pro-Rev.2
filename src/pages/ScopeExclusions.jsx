@@ -165,7 +165,7 @@ export default function ScopeExclusions() {
       </div>
 
       {/* Stats — clickable filters */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
         <StatCard
           label="Total"
           value={stats.total}

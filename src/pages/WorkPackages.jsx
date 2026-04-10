@@ -452,7 +452,7 @@ export default function WorkPackages() {
           })}
         </div>
         {/* Phase KPI breakdown */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
           {phaseTons.map((p) => {
             const pct = p.tons > 0 ? Math.round((p.completeTons / p.tons) * 100) : 0;
             return (
@@ -500,7 +500,7 @@ export default function WorkPackages() {
   };
 
   const renderBoard = () => (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, alignItems: "start" }}>
       {STATUS_COLUMNS.map((col) => {
         const items = filtered.filter((w) => w.status === col);
         const color = STATUS_COLORS[col];
@@ -1107,7 +1107,7 @@ export default function WorkPackages() {
       </div>
 
       {/* KPI strip — click to filter by status */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         {renderKPI("TOTAL WPS", stats.total, "var(--accent)", null)}
         {renderKPI("NOT STARTED", stats.notStarted, "var(--text-muted)", "Not Started")}
         {renderKPI("IN PROGRESS", stats.inProgress, "var(--status-warning)", "In Progress")}
@@ -1121,6 +1121,7 @@ export default function WorkPackages() {
 
       {/* Consolidated Filter Bar */}
       <div
+        className="filter-bar-responsive"
         style={{
           display: "flex",
           alignItems: "center",

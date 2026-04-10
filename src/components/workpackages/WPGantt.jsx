@@ -259,7 +259,7 @@ export default function WPGantt({ wps, updateMut }) {
               <button
                 key={z.id}
                 onClick={() => setZoomId(z.id)}
-                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "rgba(160,175,210,0.55)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
+                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "rgba(160,175,210,0.75)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
               >
                 {z.label.toUpperCase()}
               </button>

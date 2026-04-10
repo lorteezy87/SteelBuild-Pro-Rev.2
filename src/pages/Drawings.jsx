@@ -544,7 +544,7 @@ export default function Drawings() {
       </div>
 
       {/* ── Stats Bar (clickable filters) ─────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
         {[
           { label: "TOTAL SHEETS", value: stats.total, color: "var(--text-primary)", filterKey: null },
           { label: "IFC / RELEASED", value: stats.released, color: "#10B981", filterKey: "Released" },
@@ -591,7 +591,7 @@ export default function Drawings() {
       </ErrorBoundary>
 
       {/* ── Discipline Chips ───────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+      <div className="filter-bar-responsive" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
         {["ALL", ...DISCIPLINES].map(d => {
           const count = disciplineCounts[d] || 0;
           const active = discipline === d;
@@ -609,7 +609,7 @@ export default function Drawings() {
       </div>
 
       {/* ── Toolbar ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="filter-bar-responsive" style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
         {/* Search */}
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search sheets, titles, reviewers…"

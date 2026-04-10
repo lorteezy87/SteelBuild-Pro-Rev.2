@@ -159,7 +159,7 @@ export default function AlertsCenter() {
                     {!alert.is_read && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.44)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
                   </div>
                 </div>
               </div>

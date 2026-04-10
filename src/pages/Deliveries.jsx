@@ -896,6 +896,7 @@ export default function Deliveries() {
 
       {/* Filter toolbar */}
       <div
+        className="filter-bar-responsive"
         style={{
           minHeight: 48,
           flexShrink: 0,
@@ -1143,7 +1144,7 @@ export default function Deliveries() {
               </button>
             </div>
           ) : view === "TABLE" ? (
-            <div>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <div
                 style={{
                   position: "sticky",

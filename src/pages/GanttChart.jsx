@@ -502,7 +502,7 @@ export default function GanttChart() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 14 }}>
         {[
           { label: "Total Activities", value: stats.total, color: "var(--status-warning)" },
           { label: "Complete", value: stats.complete, color: "var(--status-success)" },
