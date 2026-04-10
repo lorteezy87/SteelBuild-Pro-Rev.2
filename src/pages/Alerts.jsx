@@ -169,7 +169,7 @@ export default function Alerts() {
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {RECORD_PAGE[alert.record_type] && (
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600" onClick={() => navigateTo(alert)}>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-400" onClick={() => navigateTo(alert)}>
                       <ExternalLink className="w-3 h-3 mr-1" />View
                     </Button>
                   )}
@@ -178,7 +178,7 @@ export default function Alerts() {
                       <CheckCheck className="w-3 h-3 mr-1" />Read
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400" onClick={e => dismiss(alert, e)}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-300" onClick={e => dismiss(alert, e)}>
                     <BellOff className="w-3 h-3" />
                   </Button>
                 </div>
