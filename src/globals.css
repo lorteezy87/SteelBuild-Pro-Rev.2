@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -12,21 +12,21 @@
 [data-theme="dark"],
 [data-theme="light"] {
 
-  /* ── Background scale — layered dark mode ── */
+  /* ── Background scale — layered dark mode (Industrial OS) ── */
   --bg-void:                  #060810;
-  --bg-page:                  #0A0C10;
-  --bg-surface:               #12151A;
+  --bg-page:                  #0B0E11;
+  --bg-surface:               #161B22;
   --bg-surface-low:           #0E1116;
-  --bg-surface-mid:           #181C22;
-  --bg-surface-high:          #1E2228;
-  --bg-surface-highest:       #262A32;
+  --bg-surface-mid:           #1C2128;
+  --bg-surface-high:          #21262D;
+  --bg-surface-highest:       #2D333B;
   --bg-surface-lowest:        #08090D;
-  --bg-input:                 #181C22;
-  --bg-sidebar:               #0C0E13;
-  --bg-card:                  #161920;
-  --bg-base:                  #0A0C10;
-  --bg-elevated:              #1E2228;
-  --bg-surface-secondary:     #12151A;
+  --bg-input:                 #1C2128;
+  --bg-sidebar:               #0D1117;
+  --bg-card:                  #161B22;
+  --bg-base:                  #0B0E11;
+  --bg-elevated:              #21262D;
+  --bg-surface-secondary:     #161B22;
 
   /* ── NC tokens ── */
   --nc-bg-primary:            #0A0C10;
@@ -46,11 +46,11 @@
   --nc-border-cyan:           rgba(200,155,32,0.30);
   --nc-border-orange:         rgba(200,155,32,0.35);
 
-  /* ── Borders — subtle, slightly luminous ── */
-  --border-default:           rgba(255,255,255,0.07);
-  --border-strong:            rgba(255,255,255,0.12);
-  --border:                   rgba(255,255,255,0.07);
-  --divider:                  rgba(255,255,255,0.05);
+  /* ── Borders — #30363D per spec ── */
+  --border-default:           #30363D;
+  --border-strong:            #484F58;
+  --border:                   #30363D;
+  --divider:                  rgba(48,54,61,0.60);
   --outline:                  rgba(255,255,255,0.20);
 
   /* ── Primary accent: Executive Gold ── */
@@ -78,23 +78,23 @@
   --text-muted:               #5A6880;
   --text-disabled:            rgba(90,104,128,0.50);
 
-  /* ── Semantic status colors — full saturation ── */
-  --status-success:           #22C55E;
-  --status-warning:           #F59E0B;
-  --status-error:             #EF4444;
-  --status-info:              #3B82F6;
-  --success:                  #22C55E;
-  --success-muted:            rgba(34,197,94,0.10);
-  --success-border:           rgba(34,197,94,0.30);
-  --warning:                  #F59E0B;
-  --warning-muted:            rgba(245,158,11,0.08);
-  --warning-border:           rgba(245,158,11,0.30);
-  --danger:                   #EF4444;
-  --danger-muted:             rgba(239,68,68,0.08);
-  --danger-border:            rgba(239,68,68,0.30);
-  --info:                     #3B82F6;
-  --info-muted:               rgba(59,130,246,0.08);
-  --info-border:              rgba(59,130,246,0.25);
+  /* ── Semantic status colors — Safety-First Palette ── */
+  --status-success:           #3FB950;
+  --status-warning:           #E3B341;
+  --status-error:             #F85149;
+  --status-info:              #58A6FF;
+  --success:                  #3FB950;
+  --success-muted:            rgba(63,185,80,0.10);
+  --success-border:           rgba(63,185,80,0.30);
+  --warning:                  #E3B341;
+  --warning-muted:            rgba(227,179,65,0.08);
+  --warning-border:           rgba(227,179,65,0.30);
+  --danger:                   #F85149;
+  --danger-muted:             rgba(248,81,73,0.08);
+  --danger-border:            rgba(248,81,73,0.30);
+  --info:                     #58A6FF;
+  --info-muted:               rgba(88,166,255,0.08);
+  --info-border:              rgba(88,166,255,0.25);
 
   /* ── Phase colors ── */
   --phase-detailing:          #C89B20;
@@ -103,10 +103,10 @@
   --phase-erection:           #22C55E;
   --phase-closeout:           #6B7280;
 
-  /* ── Shadows — soft, layered ── */
-  --shadow-sm:                0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.15);
-  --shadow-card:              0 2px 8px rgba(0,0,0,0.25), 0 4px 16px rgba(0,0,0,0.15);
-  --shadow-lg:                0 4px 12px rgba(0,0,0,0.2), 0 12px 40px rgba(0,0,0,0.3);
+  /* ── Shadows — elevation-based per spec ── */
+  --shadow-sm:                0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-card:              0 4px 20px rgba(0,0,0,0.5);
+  --shadow-lg:                0 8px 30px rgba(0,0,0,0.4), 0 12px 60px rgba(0,0,0,0.3);
   --shadow-orange-glow:       0 0 20px rgba(200,155,32,0.15);
   --shadow-cyan-glow:         0 0 20px rgba(200,155,32,0.15);
   --shadow-glow-gold:         0 0 20px rgba(200,155,32,0.20), 0 0 40px rgba(200,155,32,0.08);
@@ -139,8 +139,9 @@
 
   /* ── Fonts ── */
   --font-display:             'Barlow Condensed', 'Inter', sans-serif;
-  --font-body:                'Barlow', 'Inter', sans-serif;
+  --font-body:                'Inter', 'Barlow', sans-serif;
   --font-mono:                'IBM Plex Mono', 'Courier New', monospace;
+  --font-data:                'JetBrains Mono', 'IBM Plex Mono', monospace;
 }
 
 /* ── Base ── */

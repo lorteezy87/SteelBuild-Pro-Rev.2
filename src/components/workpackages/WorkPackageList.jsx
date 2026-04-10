@@ -36,6 +36,7 @@ export default function WorkPackageList({
   selected = new Set(),
   onToggleSelect,
   onSelectAll,
+  onCreateWP,
 }) {
   const drawingMap = useMemo(() => {
     const m = {};
@@ -47,31 +48,75 @@ export default function WorkPackageList({
     return (
       <div
         style={{
-          padding: "40px 24px",
+          padding: "48px 32px",
           textAlign: "center",
           background: "var(--bg-surface)",
           border: "2px dashed var(--border-default)",
           borderRadius: "var(--radius-card)",
         }}
       >
-        <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.25 }}>⬜</div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-          No Work Packages Match
+        {/* Hierarchy diagram */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          {[
+            { label: "AREA", color: "var(--phase-delivery)", icon: "\u25A3" },
+            { label: "SEQUENCE", color: "var(--phase-fab)", icon: "\u25B6" },
+            { label: "WORK PKG", color: "var(--accent)", icon: "\u25C8" },
+          ].map((item, i) => (
+            <React.Fragment key={item.label}>
+              {i > 0 && (
+                <svg width="20" height="12" viewBox="0 0 20 12" style={{ flexShrink: 0, opacity: 0.35 }}>
+                  <path d="M2 6H15M15 6L11 2M15 6L11 10" stroke="var(--text-muted)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                </svg>
+              )}
+              <div style={{
+                padding: "6px 14px", borderRadius: "var(--radius-badge)",
+                border: `1px solid ${item.color}`,
+                background: `${item.color}12`,
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: item.color, letterSpacing: "0.08em" }}>
+                  {item.icon} {item.label}
+                </span>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-faint, var(--text-muted))", marginBottom: 16 }}>
-          Try adjusting your filters, or add the first work package.
+
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 6 }}>
+          No Work Packages Found
         </div>
-        <button
-          onClick={() => onEdit?.({})}
-          style={{
-            padding: "7px 18px", borderRadius: "var(--radius-btn)",
-            border: "1px solid var(--accent)", background: "var(--accent-muted)",
-            color: "var(--accent)", fontFamily: "var(--font-mono)",
-            fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-          }}
-        >
-          + Create Work Package
-        </button>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 6, maxWidth: 420, margin: "0 auto 6px" }}>
+          Work packages organize steel by the hierarchy above.
+          Each package tracks tonnage, drawings, and crew through the fabrication lifecycle.
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 20, letterSpacing: "0.06em" }}>
+          Try adjusting your filters, or create the first package to get started.
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+          <button
+            onClick={() => onCreateWP ? onCreateWP() : onEdit?.({})}
+            style={{
+              padding: "8px 20px", borderRadius: "var(--radius-btn)",
+              border: "none", background: "var(--accent)",
+              color: "var(--accent-text)", fontFamily: "var(--font-mono)",
+              fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
+            }}
+          >
+            + Create Work Package
+          </button>
+          <button
+            onClick={() => { /* CSV import placeholder */ }}
+            title="Import work packages from a CSV file (coming soon)"
+            style={{
+              padding: "8px 20px", borderRadius: "var(--radius-btn)",
+              border: "1px solid var(--border-strong)",
+              background: "transparent",
+              color: "var(--text-secondary)", fontFamily: "var(--font-mono)",
+              fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
+            }}
+          >
+            Import from CSV
+          </button>
+        </div>
       </div>
     );
   }

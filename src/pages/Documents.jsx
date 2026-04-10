@@ -13,6 +13,7 @@ import {
   Upload, Grid3x3, List, Folder, CloudUpload, FileDown,
   Download, Trash2, ArrowUpDown, FileSpreadsheet, CheckSquare,
   XCircle, AlertCircle, ChevronDown,
+  FileText, FileImage, FileCode, File, FileArchive,
 } from "lucide-react";
 import { generateTransmittal } from "../lib/generateTransmittal";
 
@@ -432,7 +433,7 @@ export default function Documents() {
           {/* Search */}
           <input
             type="text"
-            placeholder="Search documents..."
+            placeholder="Search documents, drawings, revisions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -664,25 +665,45 @@ export default function Documents() {
               Loading documents...
             </div>
           ) : allDocuments.length === 0 ? (
-            /* Hero empty state */
+            /* Hero empty state with dashed drop zone and document type icons */
             <div
               onClick={() => setUploadOpen(true)}
               style={{
                 flex: 1, display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 14,
+                alignItems: "center", justifyContent: "center", gap: 16,
                 margin: "12px 0", border: "2px dashed rgba(255,255,255,0.12)",
-                borderRadius: 12, padding: "60px 24px", cursor: "pointer",
+                borderRadius: 16, padding: "60px 24px", cursor: "pointer",
                 transition: "border-color 0.2s, background 0.2s",
+                backgroundImage: "radial-gradient(circle at 50% 50%, rgba(200,155,32,0.03) 0%, transparent 70%)",
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--accent-muted)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.background = "transparent"; }}
             >
-              <CloudUpload size={52} style={{ color: "var(--accent)", opacity: 0.4 }} />
-              <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-disabled)" }}>
-                Upload Project Documents
+              {/* Document type icons row */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 4 }}>
+                {[
+                  { Icon: FileText, label: "PDF", color: "#F87171" },
+                  { Icon: FileCode, label: "DWG", color: "#38BDF8" },
+                  { Icon: File,     label: "IFC", color: "#A78BFA" },
+                  { Icon: FileImage, label: "IMG", color: "#2DD4BF" },
+                  { Icon: FileArchive, label: "ZIP", color: "#FBBF24" },
+                ].map(({ Icon, label, color }) => (
+                  <div key={label} style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    opacity: 0.45,
+                  }}>
+                    <Icon size={24} style={{ color }} />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color, letterSpacing: "0.08em" }}>{label}</span>
+                  </div>
+                ))}
               </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 360, textAlign: "center", lineHeight: 1.7 }}>
-                Drag drawings, specs, or submittals here, or click to browse. Files are organized by category, discipline, and revision automatically.
+
+              <CloudUpload size={52} style={{ color: "var(--accent)", opacity: 0.4 }} />
+              <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text-secondary)" }}>
+                Drag files here or click Upload
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", maxWidth: 380, textAlign: "center", lineHeight: 1.7 }}>
+                Drop drawings, specs, submittals, or any project document. Files are organized by category, discipline, and revision automatically.
               </div>
               <div style={{
                 marginTop: 8, padding: "8px 20px",
@@ -729,15 +750,16 @@ export default function Documents() {
               ))}
             </div>
           ) : viewMode === "list" ? (
-            /* ── List View ──────────────────────────── */
+            /* ── List View with sortable sticky headers ──────── */
             <div style={{ overflowY: "auto", flex: 1 }}>
-              {/* Header */}
+              {/* Sticky sortable header */}
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "28px 1fr 100px 80px 70px 80px 90px 100px",
-                gap: 8, padding: "6px 12px",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 1,
+                gap: 8, padding: "8px 12px",
+                borderBottom: "2px solid rgba(255,255,255,0.10)",
+                position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 2,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
               }}>
                 <div onClick={() => {
                   if (selectedIds.size === filteredDocs.length) deselectAll();
@@ -750,9 +772,43 @@ export default function Documents() {
                     display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff",
                   }}>{selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "\u2713" : ""}</div>
                 </div>
-                {["Name", "Doc #", "Rev", "Type", "Status", "Size", "Date"].map(h => (
-                  <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{h}</div>
-                ))}
+                {[
+                  { label: "Name",   sort: "name-asc",  sortAlt: "name-desc" },
+                  { label: "Doc #",  sort: "doc-num",    sortAlt: null },
+                  { label: "Rev",    sort: null,         sortAlt: null },
+                  { label: "Type",   sort: null,         sortAlt: null },
+                  { label: "Status", sort: "status",     sortAlt: null },
+                  { label: "Size",   sort: "size-desc",  sortAlt: "size-asc" },
+                  { label: "Date",   sort: "date-desc",  sortAlt: "date-asc" },
+                ].map(col => {
+                  const isSortable = col.sort !== null;
+                  const isActive = sortKey === col.sort || sortKey === col.sortAlt;
+                  return (
+                    <div
+                      key={col.label}
+                      onClick={isSortable ? () => {
+                        if (sortKey === col.sort && col.sortAlt) setSortKey(col.sortAlt);
+                        else setSortKey(col.sort);
+                      } : undefined}
+                      style={{
+                        fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                        color: isActive ? "var(--accent)" : "var(--text-muted)",
+                        letterSpacing: "0.10em", textTransform: "uppercase",
+                        cursor: isSortable ? "pointer" : "default",
+                        display: "flex", alignItems: "center", gap: 3,
+                        userSelect: "none", transition: "color 0.15s",
+                      }}
+                    >
+                      {col.label}
+                      {isSortable && (
+                        <ArrowUpDown size={9} style={{
+                          opacity: isActive ? 1 : 0.3,
+                          color: isActive ? "var(--accent)" : "var(--text-muted)",
+                        }} />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {/* Rows */}
               {filteredDocs.map(doc => {
@@ -761,6 +817,33 @@ export default function Documents() {
                 const sizeMB = fsk ? (fsk / 1024).toFixed(1) + " MB" : "\u2014";
                 const rawDate = doc.uploadedDate || doc.created_at;
                 const dateStr = rawDate ? new Date(rawDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "\u2014";
+
+                /* Vibrant file type badge in list view */
+                const listFileTypeCfg = {
+                  pdf:  { bg: "rgba(239,68,68,0.18)",   color: "#F87171" },
+                  dwg:  { bg: "rgba(56,189,248,0.18)",  color: "#38BDF8" },
+                  ifc:  { bg: "rgba(167,139,250,0.18)", color: "#A78BFA" },
+                  gltf: { bg: "rgba(167,139,250,0.18)", color: "#A78BFA" },
+                  xlsx: { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
+                  docx: { bg: "rgba(96,165,250,0.18)",  color: "#60A5FA" },
+                  img:  { bg: "rgba(45,212,191,0.18)",  color: "#2DD4BF" },
+                  zip:  { bg: "rgba(251,191,36,0.18)",  color: "#FBBF24" },
+                }[doc.fileType] || { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" };
+
+                /* Status colors for list view */
+                const listStatusCfg = {
+                  "Approved":               { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
+                  "Approved with Comments":  { bg: "rgba(52,211,153,0.12)", color: "#34D399" },
+                  "Under Review":           { bg: "rgba(251,191,36,0.18)",  color: "#FBBF24" },
+                  "Revise & Resubmit":       { bg: "rgba(251,146,60,0.18)", color: "#FB923C" },
+                  "Rejected":               { bg: "rgba(248,113,113,0.18)", color: "#F87171" },
+                  "Draft":                  { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" },
+                  "Issued":                 { bg: "rgba(96,165,250,0.18)",  color: "#60A5FA" },
+                  "Superseded":             { bg: "rgba(100,116,139,0.12)", color: "#94A3B8" },
+                  "Archived":               { bg: "rgba(100,116,139,0.08)", color: "#64748B" },
+                  "Void":                   { bg: "rgba(248,113,113,0.10)", color: "#F87171" },
+                }[doc.status] || { bg: "rgba(160,175,210,0.12)", color: "#A0AED2" };
+
                 return (
                   <div key={doc.id}
                     onClick={() => setSelectedDoc(doc)}
@@ -785,7 +868,12 @@ export default function Documents() {
                       }}>{isSelected ? "\u2713" : ""}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, padding: "2px 5px", borderRadius: 3, background: "rgba(255,255,255,0.06)", color: "var(--text-muted)", flexShrink: 0 }}>
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
+                        padding: "2px 6px", borderRadius: 4,
+                        background: listFileTypeCfg.bg, color: listFileTypeCfg.color,
+                        flexShrink: 0, letterSpacing: "0.04em",
+                      }}>
                         {(doc.fileType || "file").toUpperCase().slice(0,4)}
                       </span>
                       <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -797,9 +885,9 @@ export default function Documents() {
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", display: "flex", alignItems: "center", textTransform: "uppercase" }}>{doc.fileType || "\u2014"}</div>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                        background: doc.status === "Approved" ? "rgba(0,214,143,0.15)" : doc.status === "Rejected" ? "rgba(255,61,61,0.15)" : "rgba(255,176,32,0.15)",
-                        color: doc.status === "Approved" ? "#00D68F" : doc.status === "Rejected" ? "#FF3D3D" : "#FFB020",
+                        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
+                        padding: "2px 6px", borderRadius: 10,
+                        background: listStatusCfg.bg, color: listStatusCfg.color,
                       }}>{doc.status || "Draft"}</span>
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center" }}>{sizeMB}</div>
