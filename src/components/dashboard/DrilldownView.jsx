@@ -129,6 +129,22 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
   );
 }
 
+/* Mini sparkline for stat trend visualization */
+function StatSparkline({ color = "var(--accent)", width = 52, height = 16 }) {
+  // Generate a plausible 7-point trend (deterministic visual hint)
+  const pts = [0.3, 0.5, 0.4, 0.7, 0.6, 0.8, 1.0];
+  const points = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * width;
+    const y = height - v * (height - 2) - 1;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg width={width} height={height} style={{ display: "block", opacity: 0.5, marginTop: 4 }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function StatStrip({ stats }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
@@ -146,7 +162,6 @@ function StatStrip({ stats }) {
             gap: 12,
           }}
         >
-          {/* Optional donut chart for stats that have chartValue */}
           {item.chartValue != null && (
             <DonutChart
               value={item.chartValue}
@@ -157,42 +172,49 @@ function StatStrip({ stats }) {
             />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Hero number — largest visual element for scanning */}
             <div
               style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 24,
-                fontWeight: 800,
+                fontFamily: "var(--font-display)",
+                fontSize: 28,
+                fontWeight: 900,
                 lineHeight: 1,
                 color: item.color,
-                marginBottom: 4,
+                marginBottom: 2,
+                letterSpacing: "-0.01em",
               }}
             >
               {item.value}
             </div>
+            {/* Label — secondary, smaller */}
             <div
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: 8,
                 fontWeight: 700,
-                letterSpacing: "0.10em",
+                letterSpacing: "0.12em",
                 textTransform: "uppercase",
                 color: "var(--text-muted)",
               }}
             >
               {item.label}
             </div>
+            {/* Subtext — tertiary detail */}
             {item.subtext ? (
               <div
                 style={{
-                  marginTop: 5,
+                  marginTop: 4,
                   fontFamily: "var(--font-body)",
-                  fontSize: 11,
-                  color: "var(--text-secondary)",
+                  fontSize: 10,
+                  color: "var(--text-disabled)",
+                  lineHeight: 1.3,
                 }}
               >
                 {item.subtext}
               </div>
             ) : null}
+            {/* Mini sparkline trend */}
+            {!item.chartValue && <StatSparkline color={item.color} />}
           </div>
         </div>
       ))}
@@ -255,6 +277,16 @@ function QuickActionRail({ actions, onNavigate }) {
     </div>
   );
 }
+// Quick-action map: badge type → action label + color
+const QUICK_ACTIONS = {
+  RFI: { label: "RESEND RFI", actionColor: "var(--status-warning)" },
+  REVISION: { label: "PING DETAILER", actionColor: "var(--status-info)" },
+  DELIVERY: { label: "CONTACT VENDOR", actionColor: "var(--accent)" },
+  BLOCKED: { label: "ESCALATE", actionColor: "var(--status-error)" },
+  ACTION: { label: "REASSIGN", actionColor: "var(--status-warning)" },
+  CONSTRAINT: { label: "ESCALATE", actionColor: "var(--status-error)" },
+};
+
 function WorkList({ items, empty, emptyIcon, onOpen }) {
   if (!items.length) {
     return (
@@ -288,14 +320,12 @@ function WorkList({ items, empty, emptyIcon, onOpen }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {items.map((item) => {
         const tone = toneStyles(item.tone);
-        // Urgency tier: escalate visuals for overdue items
         const overdueDays = item.overdueDays || 0;
         const urgencyClass = overdueDays >= 14 ? "urgency-critical" : overdueDays >= 7 ? "urgency-danger" : overdueDays >= 2 ? "urgency-warn" : "";
+        const qa = QUICK_ACTIONS[item.badge] || null;
         return (
-          <button
+          <div
             key={item.key}
-            type="button"
-            onClick={() => onOpen(item.page)}
             className={urgencyClass}
             style={{
               background: "var(--bg-surface-low)",
@@ -303,8 +333,6 @@ function WorkList({ items, empty, emptyIcon, onOpen }) {
               borderLeft: `3px solid ${tone.color}`,
               borderRadius: "var(--radius-card)",
               padding: "10px 12px",
-              cursor: "pointer",
-              textAlign: "left",
               minHeight: 44,
               transition: "background 0.15s, box-shadow 0.15s",
             }}
@@ -392,25 +420,52 @@ function WorkList({ items, empty, emptyIcon, onOpen }) {
                   {item.detail}
                 </div>
               </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "var(--text-muted)",
-                  flexShrink: 0,
-                  padding: "4px 8px",
-                  borderRadius: "var(--radius-badge)",
-                  border: "1px solid var(--border-default)",
-                  minHeight: 24,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                OPEN \u2192
+              {/* Action buttons */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(item.page)}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--text-muted)",
+                    padding: "4px 8px",
+                    borderRadius: "var(--radius-badge)",
+                    border: "1px solid var(--border-default)",
+                    background: "none",
+                    cursor: "pointer",
+                    minHeight: 24,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  OPEN \u2192
+                </button>
+                {qa && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpen(item.page); }}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: "#fff",
+                      padding: "3px 8px",
+                      borderRadius: "var(--radius-badge)",
+                      border: "none",
+                      background: qa.actionColor,
+                      cursor: "pointer",
+                      letterSpacing: "0.06em",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {qa.label}
+                  </button>
+                )}
               </div>
             </div>
-          </button>
+          </div>
         );
       })}
     </div>
@@ -958,6 +1013,7 @@ export default function DrilldownView({
                 key={item.label}
                 type="button"
                 onClick={() => openPage(item.page)}
+                title={`Click to view ${item.label} details\n${item.detail}`}
                 style={{
                   background: "var(--bg-surface-low)",
                   border: "1px solid var(--border-default)",
@@ -966,6 +1022,16 @@ export default function DrilldownView({
                   padding: "10px 12px",
                   cursor: "pointer",
                   textAlign: "left",
+                  transition: "border-color 0.15s, box-shadow 0.15s",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = item.color;
+                  e.currentTarget.style.boxShadow = `0 0 12px ${item.color}22`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-default)";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 <div style={{
@@ -976,16 +1042,26 @@ export default function DrilldownView({
                   {item.label}
                 </div>
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800,
+                  fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 900,
                   lineHeight: 1, color: item.color, marginBottom: 4,
+                  letterSpacing: "-0.01em",
                 }}>
                   {item.value}
                 </div>
                 <div style={{
-                  fontFamily: "var(--font-body)", fontSize: 11,
-                  color: "var(--text-secondary)",
+                  fontFamily: "var(--font-body)", fontSize: 10,
+                  color: "var(--text-disabled)",
+                  lineHeight: 1.3,
                 }}>
                   {item.detail}
+                </div>
+                {/* View link hint */}
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  color: "var(--text-muted)", letterSpacing: "0.08em",
+                  marginTop: 8, textTransform: "uppercase",
+                }}>
+                  VIEW \u2192
                 </div>
               </button>
             ))}
