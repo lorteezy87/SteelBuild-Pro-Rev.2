@@ -200,7 +200,7 @@ export default function ModelViewer() {
         const size = box.getSize(new THREE.Vector3()).length();
         if (size > 0) {
           controls.target.copy(center);
-          camera.position.set(center.x + size * 0.6, center.y + size * 0.4, center.z + size * 0.6);
+          camera.position.set(center.x + size * 1.0, center.y + size * 0.6, center.z + size * 1.0);
           camera.lookAt(center);
           controls.update();
         }
@@ -267,7 +267,7 @@ export default function ModelViewer() {
     const ctr = box.getCenter(new THREE.Vector3());
     const span = box.getSize(new THREE.Vector3()).length();
     if (span <= 0) return;
-    const d = span * 0.7;
+    const d = span * 1.2;
     switch (preset) {
       case 'front':  camera.position.set(ctr.x, ctr.y, ctr.z + d); break;
       case 'back':   camera.position.set(ctr.x, ctr.y, ctr.z - d); break;
@@ -275,7 +275,7 @@ export default function ModelViewer() {
       case 'right':  camera.position.set(ctr.x + d, ctr.y, ctr.z); break;
       case 'left':   camera.position.set(ctr.x - d, ctr.y, ctr.z); break;
       case 'iso':
-      default:       camera.position.set(ctr.x + d * 0.6, ctr.y + d * 0.5, ctr.z + d * 0.6); break;
+      default:       camera.position.set(ctr.x + d * 0.7, ctr.y + d * 0.5, ctr.z + d * 0.7); break;
     }
     controls.target.copy(ctr);
     camera.lookAt(ctr);
@@ -343,9 +343,9 @@ export default function ModelViewer() {
         // Center model at origin
         model.position.sub(center);
 
-        camera.position.set(dist * 0.7, dist * 0.5, dist * 0.7);
+        camera.position.set(dist * 1.2, dist * 0.8, dist * 1.2);
         camera.near = dist * 0.001;
-        camera.far = dist * 10;
+        camera.far = dist * 20;
         camera.updateProjectionMatrix();
         controls.target.set(0, 0, 0);
         controls.update();
@@ -396,7 +396,7 @@ export default function ModelViewer() {
           const span = bb.getSize(new THREE.Vector3()).length();
           if (span > 0) {
             controls.target.copy(ctr);
-            camera.position.set(ctr.x + span * 0.6, ctr.y + span * 0.4, ctr.z + span * 0.6);
+            camera.position.set(ctr.x + span * 1.0, ctr.y + span * 0.6, ctr.z + span * 1.0);
             camera.lookAt(ctr);
             controls.update();
           }
@@ -547,9 +547,9 @@ export default function ModelViewer() {
       const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
 
       model.position.sub(center);
-      camera.position.set(dist * 0.7, dist * 0.5, dist * 0.7);
+      camera.position.set(dist * 1.2, dist * 0.8, dist * 1.2);
       camera.near = dist * 0.001;
-      camera.far = dist * 10;
+      camera.far = dist * 20;
       camera.updateProjectionMatrix();
       controls.target.set(0, 0, 0);
       controls.update();
@@ -587,7 +587,7 @@ export default function ModelViewer() {
         const span2 = bb2.getSize(new THREE.Vector3()).length();
         if (span2 > 0) {
           controls.target.copy(ctr2);
-          camera.position.set(ctr2.x + span2 * 0.6, ctr2.y + span2 * 0.4, ctr2.z + span2 * 0.6);
+          camera.position.set(ctr2.x + span2 * 1.0, ctr2.y + span2 * 0.6, ctr2.z + span2 * 1.0);
           camera.lookAt(ctr2);
           controls.update();
         }
