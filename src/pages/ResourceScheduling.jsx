@@ -473,22 +473,36 @@ export default function ResourceScheduling() {
     ghostRef.current.style.left = `${e.clientX - d.offsetX}px`;
     ghostRef.current.style.top = `${e.clientY - 20}px`;
 
-    // Highlight drop zones: all rows get subtle glow, hovered row gets strong highlight
+    // Smart drop zones: capacity-aware glow (green = available, yellow = nearing, red = over)
     boardRef.current?.querySelectorAll("[data-resource-id]").forEach((row) => {
       const r = row.getBoundingClientRect();
       const hit = e.clientY >= r.top && e.clientY <= r.bottom;
+      const resId = row.getAttribute("data-resource-id");
+      const res = resources.find((r) => r.id === resId);
+      const resCapacity = Number(res?.budget_hours || res?.capacity) || 0;
+      const resAssigned = scheduledWps
+        .filter((wp) => wp.crew === row.getAttribute("data-resource-name"))
+        .reduce((s, wp) => s + (Number(wp.shop_hours_budget) || Number(wp.field_hours_budget) || 0), 0);
+      const utilPct = resCapacity > 0 ? (resAssigned / resCapacity) * 100 : 0;
+      const isOverAlloc = resCapacity > 0 && resAssigned >= resCapacity;
+
       if (hit) {
-        row.style.background = "rgba(200,155,32,0.10)";
-        row.style.outline = "1px solid rgba(200,155,32,0.45)";
-        row.style.boxShadow = "inset 0 0 12px rgba(200,155,32,0.08)";
+        // Strong highlight on hovered row
+        const hoverColor = isOverAlloc ? "rgba(248,81,73,0.15)" : utilPct > 80 ? "rgba(227,179,65,0.12)" : "rgba(63,185,80,0.10)";
+        const borderColor = isOverAlloc ? "rgba(248,81,73,0.5)" : utilPct > 80 ? "rgba(227,179,65,0.45)" : "rgba(63,185,80,0.4)";
+        row.style.background = hoverColor;
+        row.style.outline = `1px solid ${borderColor}`;
+        row.style.boxShadow = `inset 0 0 16px ${borderColor.replace("0.5", "0.1").replace("0.45", "0.1").replace("0.4", "0.08")}`;
       } else {
-        row.style.background = "rgba(200,155,32,0.02)";
-        row.style.outline = "1px dashed rgba(200,155,32,0.12)";
+        // Subtle capacity indicator on non-hovered rows
+        const bgColor = isOverAlloc ? "rgba(248,81,73,0.04)" : utilPct > 80 ? "rgba(227,179,65,0.03)" : "rgba(63,185,80,0.02)";
+        row.style.background = bgColor;
+        row.style.outline = `1px dashed ${isOverAlloc ? "rgba(248,81,73,0.15)" : "rgba(200,155,32,0.12)"}`;
         row.style.boxShadow = "none";
       }
     });
 
-    // Tooltip
+    // Enhanced tooltip with projected dates + daily load calculation
     const timelineEl = timelineRef.current;
     if (timelineEl) {
       const tRect = timelineEl.getBoundingClientRect();
@@ -496,11 +510,19 @@ export default function ResourceScheduling() {
       const daysIn = relX / pxPerDay;
       const newStart = addDays(timelineStart, Math.round(daysIn));
       const newEnd = new Date(newStart.getTime() + d.durationMs);
+      const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
+
+      // Calculate daily load from WP budget hours
+      const wp = workPackages.find((w) => w.id === d.wpId);
+      const totalHrs = Number(wp?.shop_hours_budget) || Number(wp?.field_hours_budget) || 0;
+      const dailyLoad = totalHrs > 0 ? (totalHrs / durationDays).toFixed(1) : null;
+      const isShop = wp?.location === "Shop" || wp?.phase === "Fabrication" || wp?.phase === "Detailing";
 
       setDragTooltip({
         x: e.clientX,
-        y: e.clientY - 44,
-        text: `${fmt(newStart)} → ${fmt(newEnd)}`,
+        y: e.clientY - 54,
+        text: `${fmt(newStart)} → ${fmt(newEnd)} · ${durationDays}d`,
+        subText: dailyLoad ? `${dailyLoad}h/day · ${totalHrs}h total · ${isShop ? "SHOP" : "FIELD"}` : null,
       });
     }
   };
@@ -539,6 +561,23 @@ export default function ResourceScheduling() {
     // Cleanup visual state first
     cleanupDrag();
 
+    // Auto-hour distribution: spread total budget hours evenly across duration
+    const droppedWp = workPackages.find((w) => w.id === d.wpId);
+    const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
+    const isShop = droppedWp?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
+    const totalEstHrs = Number(droppedWp?.estimated_hours) || Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
+    const dailyLoad = totalEstHrs > 0 ? +(totalEstHrs / durationDays).toFixed(1) : 0;
+    const autoHours = {};
+    if (totalEstHrs > 0) {
+      if (isShop) {
+        autoHours.shop_hours_budget = totalEstHrs;
+        autoHours.shop_daily_load = dailyLoad;
+      } else {
+        autoHours.field_hours_budget = totalEstHrs;
+        autoHours.field_daily_load = dailyLoad;
+      }
+    }
+
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
       qc.setQueryData(["work-packages", activeProject?.id], (prev) =>
@@ -548,6 +587,7 @@ export default function ResourceScheduling() {
           startDate: newStart.toISOString(),
           endDate: newEnd.toISOString(),
           crew: newResourceName || "",
+          ...autoHours,
         } : wp) || []
       );
       try {
@@ -556,6 +596,7 @@ export default function ResourceScheduling() {
           startDate: newStart.toISOString(),
           endDate: newEnd.toISOString(),
           crew: newResourceName || "",
+          ...autoHours,
         });
         setUndoToast({ id: Date.now(), message: `${d.wpName} → ${newResourceName} · ${fmt(newStart)}` });
       } catch (err) {
@@ -574,7 +615,7 @@ export default function ResourceScheduling() {
 
     if (!dateChanged && !resourceChanged) return;
 
-    // Optimistic update
+    // Optimistic update (includes auto-hour distribution)
     qc.setQueryData(
       ["work-packages", activeProject?.id],
       (prev) =>
@@ -585,6 +626,7 @@ export default function ResourceScheduling() {
                 startDate: newStart.toISOString(),
                 endDate: newEnd.toISOString(),
                 ...(resourceChanged && { crew: newResourceName }),
+                ...autoHours,
               }
             : wp
         ) || []
@@ -598,11 +640,12 @@ export default function ResourceScheduling() {
     setUndoToast({ id: Date.now(), message: toastMsg });
     setTimeout(() => setUndoToast(null), 8000);
 
-    // Persist to DB
+    // Persist to DB (includes auto-hour distribution)
     try {
       const updatePayload = {
         startDate: newStart.toISOString(),
         endDate: newEnd.toISOString(),
+        ...autoHours,
       };
       if (resourceChanged) {
         updatePayload.crew = newResourceName;
@@ -1736,6 +1779,11 @@ export default function ResourceScheduling() {
           }}
         >
           {dragTooltip.text}
+          {dragTooltip.subText && (
+            <div style={{ fontSize: 9, fontWeight: 500, color: "var(--text-secondary)", marginTop: 2, letterSpacing: "0.03em" }}>
+              {dragTooltip.subText}
+            </div>
+          )}
         </div>
       )}
 
