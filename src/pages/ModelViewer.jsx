@@ -337,7 +337,7 @@ export default function ModelViewer() {
       let ifcApi = sceneRef.current.ifcApi;
       if (!ifcApi) {
         ifcApi = new WebIFC.IfcAPI();
-        ifcApi.SetWasmPath(IFC_WASM_PATH);
+        ifcApi.SetWasmPath(IFC_WASM_PATH, true);
         await ifcApi.Init();
         sceneRef.current.ifcApi = ifcApi;
       }
