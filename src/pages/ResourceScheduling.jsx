@@ -1068,7 +1068,7 @@ export default function ResourceScheduling() {
                 <div style={{ width: 3, height: 14, background: "var(--accent)", borderRadius: 2 }} />
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Active Workload by Phase</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                 {[
                   { label: "Detailing", count: capacity.byPhase.Detailing, color: "var(--phase-detailing)" },
                   { label: "Fabrication", count: capacity.byPhase.Fabrication, color: "var(--phase-fab)" },
@@ -1204,7 +1204,7 @@ export default function ResourceScheduling() {
       )}
       {/* HOURS SUMMARY STRIP */}
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8,
+        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8,
         padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
         background: "var(--bg-page)", flexShrink: 0,
       }}>

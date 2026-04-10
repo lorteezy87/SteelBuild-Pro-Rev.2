@@ -748,7 +748,7 @@ export default function SOV() {
 
       {/* ── Main data table ── */}
       <PhoenixPanel title="Schedule of Values" count={filtered.length}>
-        <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 380px)", overflowY: "auto" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxHeight: "calc(100vh - 380px)", overflowY: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             {/* Requirement 3 — Sticky thead */}
             <thead>

@@ -500,7 +500,7 @@ export default function ChangeOrders() {
       )}
 
       {/* ── Filters + Export ── */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <div className="filter-bar-responsive" style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ flex: 1 }}>
           <SearchFilter search={search} onSearchChange={setSearch} filters={[
             { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: ["Draft", "Submitted", "Under Review", "Approved", "Rejected", "Void"] },

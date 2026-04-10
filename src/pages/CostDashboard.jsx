@@ -510,7 +510,7 @@ export default function CostDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
 
         <PhoenixPanel title="CO Aging & Recovery" count={coAging.filter(c => c.isStale).length > 0 ? `${coAging.filter(c => c.isStale).length} stale` : coAging.length}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
             {[
               { label: 'Pending', value: cos_all.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length, color: 'var(--status-warning)' },
               { label: 'Approved', value: cos_all.filter(c => c.status === 'Approved').length, color: 'var(--status-success)' },
@@ -576,7 +576,7 @@ export default function CostDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
 
           <PhoenixPanel title="Shop Fabrication Productivity">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
               {[
                 { label: 'Budget Hrs', value: productivity.shopBudget.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Actual Hrs', value: productivity.shopActual.toLocaleString(), color: 'var(--text-primary)' },
@@ -615,7 +615,7 @@ export default function CostDashboard() {
           </PhoenixPanel>
 
           <PhoenixPanel title="Field Install Productivity">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
               {[
                 { label: 'Budget Hrs', value: productivity.fieldBudget.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Actual Hrs', value: productivity.fieldActual.toLocaleString(), color: 'var(--text-primary)' },
@@ -646,7 +646,7 @@ export default function CostDashboard() {
       {/* ── Procurement Exposure ── */}
       {procurementExposure.total > 0 && (
         <PhoenixPanel title="Procurement Exposure" count={`${procurementExposure.late} late`} style={{ marginTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
             {[
               { label: 'Total Open', value: procurementExposure.total, color: 'var(--text-primary)' },
               { label: 'Overdue', value: procurementExposure.late, color: procurementExposure.late > 0 ? 'var(--status-error)' : 'var(--text-muted)' },

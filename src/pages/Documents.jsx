@@ -359,7 +359,7 @@ export default function Documents() {
       )}
 
       {/* ── Toolbar ──────────────────────────────────────── */}
-      <div style={{
+      <div className="filter-bar-responsive" style={{
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
         borderRadius: 12, padding: 12, flexWrap: "wrap",
@@ -751,7 +751,7 @@ export default function Documents() {
             </div>
           ) : viewMode === "list" ? (
             /* ── List View with sortable sticky headers ──────── */
-            <div style={{ overflowY: "auto", flex: 1 }}>
+            <div style={{ overflowY: "auto", overflowX: "auto", WebkitOverflowScrolling: "touch", flex: 1 }}>
               {/* Sticky sortable header */}
               <div style={{
                 display: "grid",

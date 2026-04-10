@@ -741,7 +741,7 @@ export default function RFIs() {
         </div>
       )}
       {/* Filters */}
-      <div style={{ height: 40, flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", overflowX: "auto" }}>
+      <div className="filter-bar-responsive" style={{ height: 40, flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", overflowX: "auto" }}>
         <input
           placeholder="Search RFIs..."
           value={search}
@@ -1032,7 +1032,7 @@ export default function RFIs() {
         )}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {view === "BOARD" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, padding: 12, width: "100%", overflow: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, padding: 12, width: "100%", overflow: "auto" }}>
               {statusColumns.map((st) => {
                 const col = filtered.filter((r) => r.status === st);
                 return (
@@ -1082,7 +1082,7 @@ export default function RFIs() {
               })}
             </div>
           ) : (
-            <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+            <div style={{ flex: 1, overflow: "auto", overflowX: "auto", WebkitOverflowScrolling: "touch", position: "relative" }}>
               <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 52px 90px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
                 <div><input type="checkbox" checked={filtered.length > 0 && selectedRFIs.size === filtered.length} onChange={toggleSelectAll} style={{ cursor: "pointer", accentColor: "var(--accent)" }} /></div>
                 <div>RFI #</div>
@@ -1306,7 +1306,7 @@ export default function RFIs() {
 
                 <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
                   <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>Workflow</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6 }}>
                     {statusColumns.map((s) => {
                       const active = selectedRFI.status === s;
                       const past = statusColumns.indexOf(selectedRFI.status) > statusColumns.indexOf(s);
