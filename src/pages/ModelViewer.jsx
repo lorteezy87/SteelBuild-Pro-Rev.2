@@ -192,23 +192,12 @@ export default function ModelViewer() {
       if (e.key === '[') setLeftPanelOpen(p => !p);
       if (e.key === ']') setRightPanelOpen(p => !p);
       if (e.key === 'f' || e.key === 'F') {
-        // Fit view
-        const { scene, camera, controls } = sceneRef.current;
-        if (!scene || !camera) return;
-        const box = new THREE.Box3().setFromObject(scene);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3()).length();
-        if (size > 0) {
-          controls.target.copy(center);
-          camera.position.set(center.x + size * 1.0, center.y + size * 0.6, center.z + size * 1.0);
-          camera.lookAt(center);
-          controls.update();
-        }
+        fitCameraToModel('iso');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [fitCameraToModel]);
 
   // ─── MEMBER TYPE INFERENCE ────────────────────────────────────
   const inferMemberType = (name = '') => {
@@ -259,15 +248,27 @@ export default function ModelViewer() {
     });
   }, []);
 
-  // ─── VIEW PRESETS ──────────────────────────────────────────────
-  const setViewPreset = useCallback((preset) => {
-    const { scene, camera, controls } = sceneRef.current;
-    if (!scene || !camera) return;
-    const box = new THREE.Box3().setFromObject(scene);
+  // ─── FIT CAMERA TO MODEL (FOV-based) ───────────────────────────
+  // Computes exact distance so entire model fits in view with padding
+  const fitCameraToModel = useCallback((preset = 'iso') => {
+    const { camera, controls, loadedModel } = sceneRef.current;
+    if (!camera || !loadedModel) return;
+
+    const box = new THREE.Box3().setFromObject(loadedModel);
     const ctr = box.getCenter(new THREE.Vector3());
-    const span = box.getSize(new THREE.Vector3()).length();
-    if (span <= 0) return;
-    const d = span * 1.2;
+    const sz = box.getSize(new THREE.Vector3());
+    const radius = sz.length() / 2;
+    if (radius <= 0) return;
+
+    // Distance so bounding sphere fits in vertical FOV, with 40% padding
+    const fovRad = camera.fov * (Math.PI / 180);
+    const d = (radius / Math.tan(fovRad / 2)) * 1.4;
+
+    // Update near/far to accommodate model scale
+    camera.near = d * 0.001;
+    camera.far = d * 20;
+    camera.updateProjectionMatrix();
+
     switch (preset) {
       case 'front':  camera.position.set(ctr.x, ctr.y, ctr.z + d); break;
       case 'back':   camera.position.set(ctr.x, ctr.y, ctr.z - d); break;
@@ -275,7 +276,7 @@ export default function ModelViewer() {
       case 'right':  camera.position.set(ctr.x + d, ctr.y, ctr.z); break;
       case 'left':   camera.position.set(ctr.x - d, ctr.y, ctr.z); break;
       case 'iso':
-      default:       camera.position.set(ctr.x + d * 0.7, ctr.y + d * 0.5, ctr.z + d * 0.7); break;
+      default:       camera.position.set(ctr.x + d * 0.6, ctr.y + d * 0.45, ctr.z + d * 0.6); break;
     }
     controls.target.copy(ctr);
     camera.lookAt(ctr);
@@ -332,23 +333,10 @@ export default function ModelViewer() {
         scene.add(model);
         sceneRef.current.loadedModel = model;
 
-        // Fit camera to model
+        // Center model at origin so it sits on the grid
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const fov = camera.fov * (Math.PI / 180);
-        const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-
-        // Center model at origin
         model.position.sub(center);
-
-        camera.position.set(dist * 1.2, dist * 0.8, dist * 1.2);
-        camera.near = dist * 0.001;
-        camera.far = dist * 20;
-        camera.updateProjectionMatrix();
-        controls.target.set(0, 0, 0);
-        controls.update();
 
         // Build member index
         setLoadingModel(p => ({ ...p, progress: 90, status: 'Indexing members...' }));
@@ -390,17 +378,8 @@ export default function ModelViewer() {
           }
         });
 
-        // Auto-frame the model so it sits visibly above the grid
-        { const bb = new THREE.Box3().setFromObject(scene);
-          const ctr = bb.getCenter(new THREE.Vector3());
-          const span = bb.getSize(new THREE.Vector3()).length();
-          if (span > 0) {
-            controls.target.copy(ctr);
-            camera.position.set(ctr.x + span * 1.0, ctr.y + span * 0.6, ctr.z + span * 1.0);
-            camera.lookAt(ctr);
-            controls.update();
-          }
-        }
+        // Auto-frame using FOV-based calculation
+        fitCameraToModel('iso');
 
         setLoadingModel(p => ({
           ...p, progress: 100,
@@ -539,20 +518,10 @@ export default function ModelViewer() {
       scene.add(model);
       sceneRef.current.loadedModel = model;
 
+      // Center model at origin
       const box = new THREE.Box3().setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      const dist = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-
       model.position.sub(center);
-      camera.position.set(dist * 1.2, dist * 0.8, dist * 1.2);
-      camera.near = dist * 0.001;
-      camera.far = dist * 20;
-      camera.updateProjectionMatrix();
-      controls.target.set(0, 0, 0);
-      controls.update();
 
       const IFC_TYPE_MAP = {
         'IFCBEAM': 'BEAM', 'IFCCOLUMN': 'COLUMN', 'IFCSLAB': 'SLAB',
@@ -581,17 +550,8 @@ export default function ModelViewer() {
       setMembers(memberList);
       applyColorMode(memberList, colorMode);
 
-      // Auto-frame the IFC model
-      { const bb2 = new THREE.Box3().setFromObject(scene);
-        const ctr2 = bb2.getCenter(new THREE.Vector3());
-        const span2 = bb2.getSize(new THREE.Vector3()).length();
-        if (span2 > 0) {
-          controls.target.copy(ctr2);
-          camera.position.set(ctr2.x + span2 * 1.0, ctr2.y + span2 * 0.6, ctr2.z + span2 * 1.0);
-          camera.lookAt(ctr2);
-          controls.update();
-        }
-      }
+      // Auto-frame using FOV-based calculation
+      fitCameraToModel('iso');
 
       setLoadingModel(p => ({ ...p, progress: 100, status: `✓ ${memberList.length} elements loaded` }));
 
@@ -763,7 +723,7 @@ export default function ModelViewer() {
           {modelLoaded && (
             <>
               <button
-                onClick={() => setViewPreset('iso')}
+                onClick={() => fitCameraToModel('iso')}
                 style={{
                   padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
                   background: 'transparent', color: 'var(--text-secondary)',
@@ -776,7 +736,7 @@ export default function ModelViewer() {
               {['Front', 'Top', 'Right', 'Back'].map(v => (
                 <button
                   key={v}
-                  onClick={() => setViewPreset(v.toLowerCase())}
+                  onClick={() => fitCameraToModel(v.toLowerCase())}
                   style={{
                     padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)',
                     background: 'transparent', color: 'var(--text-muted)',
