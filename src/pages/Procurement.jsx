@@ -225,7 +225,7 @@ export default function Procurement() {
 
       {/* KPI strip */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
         borderRadius: 'var(--radius-card)', overflow: 'hidden',
       }}>

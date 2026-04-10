@@ -581,7 +581,7 @@ export default function RFIHub() {
         </div>
 
         {/* KPI strip — collapsible */}
-        {statsOpen && <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: "var(--divider)", border: "1px solid var(--divider)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
+        {statsOpen && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 1, background: "var(--divider)", border: "1px solid var(--divider)", borderRadius: 2, overflow: "hidden", marginBottom: 12 }}>
           {[
             { label: "Total",      value: kpis.total,      color: "var(--text-primary)",    filter: null },
             { label: "Open",       value: kpis.open,        color: "var(--accent)",           filter: "open" },

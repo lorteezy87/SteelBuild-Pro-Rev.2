@@ -708,7 +708,7 @@ export default function FabRelease() {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
         {[
           { label: "Total Packages", value: stats.total, color: "var(--accent)" },
           { label: "Total Tonnage", value: `${stats.totalTons}T`, color: "var(--status-info)" },
@@ -824,7 +824,7 @@ export default function FabRelease() {
       )}
 
       {view === "board" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           {STATUS_ORDER.map((s) => (
             <BoardColumn key={s} status={s} />
           ))}
