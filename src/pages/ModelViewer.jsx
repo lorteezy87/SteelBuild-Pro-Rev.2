@@ -1,20 +1,32 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+// Use the installed npm packages so version/API stays consistent and works
+// offline. Prior to this we loaded three@0.128 from jsdelivr via a <script>
+// tag into window.THREE, and tried to dynamic-import web-ifc-three from a CDN
+// — which never resolved bare imports in the browser, so IFC was always
+// "loader not available".
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { IFCLoader } from "web-ifc-three/IFCLoader.js";
+
+// web-ifc WASM files are copied into /public/wasm at build time, so they are
+// served from the app's own origin and work behind corp proxies / offline.
+const IFC_WASM_PATH = "/wasm/";
 
 // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────────
 export default function ModelViewer() {
   const mountRef = useRef(null);
   const sceneRef = useRef({});
-  const [threeReady, setThreeReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   // State
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [uploadError, setUploadError] = useState(null);
-  const [loadingModel, setLoadingModel] = useState({ 
-    active: false, progress: 0, status: "", fileName: "" 
+  const [loadingModel, setLoadingModel] = useState({
+    active: false, progress: 0, status: "", fileName: ""
   });
   const [modelLoaded, setModelLoaded] = useState(null);
   const [colorMode, setColorMode] = useState("none");
@@ -27,73 +39,15 @@ export default function ModelViewer() {
     queryFn: () => base44.entities.WorkPackage.list(),
   });
 
-  // ─── SCRIPT LOADING (Sequential) ───────────────────────────────
-  useEffect(() => {
-    const loadScripts = async () => {
-      const scripts = [
-        'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
-        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
-        'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
-      ];
-
-      for (const src of scripts) {
-        await new Promise((resolve) => {
-          if (document.querySelector(`script[src=\"${src}\"]`)) { resolve(); return; }
-          const script = document.createElement('script');
-          script.src = src;
-          script.onload = resolve;
-          script.onerror = () => {
-            console.warn(`Failed to load: ${src}`);
-            resolve();
-          };
-          document.head.appendChild(script);
-        });
-      }
-
-      if (!window.THREE) {
-        setLoadError('THREE.js failed to load. Check network connectivity and try refreshing.');
-        return;
-      }
-
-      setThreeReady(true);
-    };
-
-    loadScripts();
-  }, []);
-
-  let cachedIFCLoader = null;
-  const loadIFCScript = async () => {
-    if (cachedIFCLoader) return cachedIFCLoader;
-    const sources = [
-      'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/IFCLoader.js?module',
-      'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.module.js',
-      'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.36/IFCLoader.js?module',
-    ];
-    for (const src of sources) {
-      try {
-        const mod = await import(/* @vite-ignore */ src);
-        const IFCLoaderClass = mod.IFCLoader || mod.default || mod;
-        if (IFCLoaderClass) {
-          cachedIFCLoader = IFCLoaderClass;
-          return IFCLoaderClass;
-        }
-      } catch (e) {
-        console.warn('IFC loader import failed from', src, e);
-      }
-    }
-    return null;
-  };
-
   // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────
   useEffect(() => {
-    if (!threeReady || !mountRef.current) return;
+    if (!mountRef.current) return;
     if (sceneRef.current.initialized) return;
 
     let rafInit;
     rafInit = requestAnimationFrame(() => {
       if (!mountRef.current || sceneRef.current.initialized) return;
 
-      const THREE = window.THREE;
       const width = mountRef.current.clientWidth || 800;
       const height = mountRef.current.clientHeight || 600;
 
@@ -106,9 +60,9 @@ export default function ModelViewer() {
       const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 2000);
       camera.position.set(30, 20, 30);
 
-      // Renderer
-      const renderer = new THREE.WebGLRenderer({ 
-        antialias: true, 
+      // Renderer (three 0.171 uses outputColorSpace / SRGBColorSpace)
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
         alpha: false,
         powerPreference: 'high-performance'
       });
@@ -116,25 +70,18 @@ export default function ModelViewer() {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.2;
       mountRef.current.appendChild(renderer.domElement);
 
       // Controls
-      const OrbitControlsClass = THREE.OrbitControls || window.OrbitControls;
-      let controls;
-      if (OrbitControlsClass) {
-        controls = new OrbitControlsClass(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.minDistance = 0.5;
-        controls.maxDistance = 500;
-        controls.target.set(0, 0, 0);
-      } else {
-        console.warn('OrbitControls unavailable — orbit disabled');
-        controls = { update: () => {}, dispose: () => {}, target: new THREE.Vector3() };
-      }
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 0.5;
+      controls.maxDistance = 500;
+      controls.target.set(0, 0, 0);
 
       // Lights
       scene.add(new THREE.AmbientLight(0x404060, 1.0));
@@ -189,7 +136,7 @@ export default function ModelViewer() {
         sceneRef.current = {};
       }
     };
-  }, [threeReady]);
+  }, []);
 
   // ─── MEMBER TYPE INFERENCE ────────────────────────────────────
   const inferMemberType = (name = '') => {
@@ -222,7 +169,6 @@ export default function ModelViewer() {
   // ─── COLOR MODE APPLICATION ───────────────────────────────────
   const applyColorMode = useCallback((memberList, mode) => {
     if (!sceneRef.current.scene || !memberList) return;
-    const THREE = window.THREE;
 
     memberList.forEach((member) => {
       let color = TYPE_COLORS[member.type] || TYPE_COLORS.MEMBER;
@@ -242,7 +188,6 @@ export default function ModelViewer() {
       return;
     }
 
-    const THREE = window.THREE;
     const { scene, camera, controls } = sceneRef.current;
 
     // Validate file
@@ -253,9 +198,9 @@ export default function ModelViewer() {
     }
 
 
-    setLoadingModel({ 
-      active: true, progress: 0, 
-      status: 'Reading file...', fileName: file.name 
+    setLoadingModel({
+      active: true, progress: 0,
+      status: 'Reading file...', fileName: file.name
     });
 
     // Remove existing model
@@ -265,13 +210,7 @@ export default function ModelViewer() {
     }
 
     const url = URL.createObjectURL(file);
-    const GLTFLoaderClass = THREE.GLTFLoader || window.GLTFLoader;
-    if (!GLTFLoaderClass) {
-      setUploadError('GLTF loader not available. Please refresh the page.');
-      setLoadingModel({ active: false });
-      return;
-    }
-    const loader = new GLTFLoaderClass();
+    const loader = new GLTFLoader();
 
     loader.load(
       url,
@@ -370,7 +309,6 @@ export default function ModelViewer() {
       return;
     }
 
-    const THREE = window.THREE;
     const { scene, camera, controls } = sceneRef.current;
 
     setLoadingModel({ active: true, progress: 0, status: 'Initializing IFC loader...', fileName: file.name });
@@ -381,15 +319,15 @@ export default function ModelViewer() {
     }
 
     try {
-      const IFCLoaderClass = await loadIFCScript();
-      if (!IFCLoaderClass) {
-        throw new Error('IFC loader not available. Try refreshing the page.');
+      // Re-use an existing loader if this isn't the first IFC file loaded.
+      let loader = sceneRef.current.ifcLoader;
+      if (!loader) {
+        loader = new IFCLoader();
+        // WASM is served from /public/wasm (copied at install time). Must end
+        // with a trailing slash — web-ifc appends "web-ifc.wasm" to this path.
+        await loader.ifcManager.setWasmPath(IFC_WASM_PATH);
+        sceneRef.current.ifcLoader = loader;
       }
-
-      const loader = new IFCLoaderClass();
-      sceneRef.current.ifcLoader = loader;
-
-      await loader.ifcManager.setWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.36/');
 
       setLoadingModel(p => ({ ...p, progress: 20, status: 'Loading IFC file...' }));
 
@@ -520,7 +458,6 @@ export default function ModelViewer() {
   const handleCanvasClick = useCallback(async (e) => {
     if (!sceneRef.current.camera || !sceneRef.current.renderer || members.length === 0) return;
 
-    const THREE = window.THREE;
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -574,36 +511,10 @@ export default function ModelViewer() {
         gap: 16,
       }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--status-error)', fontWeight: 700 }}>
-          Script Load Error
+          3D Engine Error
         </div>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', maxWidth: 400, textAlign: 'center' }}>
           {loadError}
-        </div>
-      </div>
-    );
-  }
-
-  if (!threeReady) {
-    return (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-page)',
-        flexDirection: 'column',
-        gap: 16,
-      }}>
-        <div style={{
-          width: 40,
-          height: 40,
-          border: '2px solid rgba(245,158,11,0.2)',
-          borderTop: '2px solid var(--status-warning)',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-muted)' }}>
-          Loading 3D engine...
         </div>
       </div>
     );
