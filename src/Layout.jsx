@@ -287,9 +287,11 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
     <div ref={ref} style={{
       position: "absolute", top: "calc(100% + 4px)", right: 0,
       width: dropdownWidth,
-      background: "var(--bg-surface-secondary)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 14,
+      background: "var(--glass-bg)",
+      backdropFilter: "blur(var(--glass-blur))",
+      WebkitBackdropFilter: "blur(var(--glass-blur))",
+      border: "1px solid var(--glass-border)",
+      borderRadius: "var(--radius-card)",
       boxShadow: "var(--shadow-lg)",
       zIndex: 999,
       overflow: "hidden",
@@ -888,6 +890,14 @@ export default function Layout({ children, currentPageName }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
+  // Initialize density preference from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sbp-density");
+      if (saved) document.documentElement.setAttribute("data-density", saved);
+    } catch {}
+  }, []);
+
   // Track active project ID from localStorage (set by ProjectContext)
   const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("activeProjectId"));
   useEffect(() => {
@@ -1174,6 +1184,32 @@ export default function Layout({ children, currentPageName }) {
                 <div
                     onClick={() => setGridOpen((g) => !g)}
                     title="All Modules"
+                    style={{
+                      width: 32, height: 32,
+                      borderRadius: 8,
+                      background: "var(--hover-bg)",
+                      border: "1px solid var(--border)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      transition: "all 0.15s",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                    }}
+                    title="Toggle compact/comfortable density"
+                    onClick={() => {
+                      const html = document.documentElement;
+                      const current = html.getAttribute("data-density");
+                      const next = current === "compact" ? "comfortable" : "compact";
+                      html.setAttribute("data-density", next);
+                      try { localStorage.setItem("sbp-density", next); } catch {}
+                    }}>
+                    {"\u2261"}
+                  </div>
+
+                  <div
+                    onClick={() => setGridOpen((o) => !o)}
                     style={{
                       width: 32, height: 32,
                       borderRadius: 8,

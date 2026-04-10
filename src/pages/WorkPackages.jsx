@@ -8,7 +8,15 @@ import WorkPackageList from "@/components/workpackages/WorkPackageList";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import ChevronPipeline from "@/components/shared/ChevronPipeline";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+
+const LIFECYCLE_STAGES = [
+  { key: "Detailing", label: "DETAIL", color: "var(--phase-detailing)" },
+  { key: "Fabrication", label: "FAB", color: "var(--phase-fab)" },
+  { key: "Delivery", label: "SHIP", color: "var(--phase-delivery)" },
+  { key: "Erection", label: "ERECT", color: "var(--phase-erection)" },
+];
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -329,27 +337,54 @@ export default function WorkPackages() {
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card)",
-          padding: 12,
+          padding: 14,
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.1em",
-            marginBottom: 8,
-          }}
-        >
-          TONNAGE PIPELINE
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              color: "var(--text-muted)",
+              letterSpacing: "0.12em",
+              fontWeight: 700,
+            }}
+          >
+            TONNAGE PIPELINE
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 800, color: "var(--accent)" }}>
+            {total.toFixed(1)}T
+          </div>
         </div>
-        <div style={{ display: "flex", height: 10, overflow: "hidden", borderRadius: 4, marginBottom: 8 }}>
+        {/* Segmented bar with in-bar labels */}
+        <div style={{ display: "flex", height: 28, overflow: "hidden", borderRadius: "var(--radius-badge)", marginBottom: 10, background: "rgba(255,255,255,0.03)" }}>
           {phaseTons.map((p) => {
-            const width = Math.max(4, (p.tons / total) * 100);
-            return <div key={p.phase} style={{ width: `${width}%`, background: p.color, transition: "width 0.2s" }} />;
+            const pct = (p.tons / total) * 100;
+            const width = Math.max(pct > 0 ? 8 : 0, pct);
+            return (
+              <div
+                key={p.phase}
+                style={{
+                  width: `${width}%`,
+                  background: p.color,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "width 0.6s ease",
+                  overflow: "hidden",
+                }}
+                title={`${p.phase}: ${(Number(p.tons) || 0).toFixed(1)}T (${Math.round(pct)}%)`}
+              >
+                {pct > 12 && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
+                    {(Number(p.tons) || 0).toFixed(1)}T
+                  </span>
+                )}
+              </div>
+            );
           })}
         </div>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           {phaseTons.map((p) => (
             <div
               key={p.phase}
@@ -455,6 +490,15 @@ export default function WorkPackages() {
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
                     {wp.name}
                   </div>
+                  {/* Lifecycle chevron */}
+                  <div style={{ marginBottom: 6 }}>
+                    <ChevronPipeline
+                      stages={LIFECYCLE_STAGES}
+                      currentStage={wp.phase}
+                      completedStages={LIFECYCLE_STAGES.slice(0, LIFECYCLE_STAGES.findIndex(s => s.key === wp.phase)).map(s => s.key)}
+                      height={22}
+                    />
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <div style={{ flex: 1, height: 4, background: "var(--bg-surface-high)", borderRadius: 2 }}>
                       <div
@@ -463,6 +507,7 @@ export default function WorkPackages() {
                           height: "100%",
                           background: phaseColor,
                           borderRadius: 2,
+                          transition: "width 0.5s ease",
                         }}
                       />
                     </div>

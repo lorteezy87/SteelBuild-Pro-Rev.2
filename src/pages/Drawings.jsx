@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import ChevronPipeline from "@/components/shared/ChevronPipeline";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -70,23 +71,60 @@ function isOverdue(drawing) {
 
 // ─── Stage Pipeline ───────────────────────────────────────────────────────────
 
-function StagePipeline({ drawings }) {
-  const total = drawings.length || 1;
+function StagePipeline({ drawings, onStageClick, activeStage }) {
+  const released = drawings.filter(d => d.stage === "Released").length;
+  const completedStages = [];
+  // Mark stages as "completed" if all drawings past that stage
+  let seenCurrent = false;
+  const stageData = STAGES.slice(1).map(s => {
+    const count = drawings.filter(d => d.stage === s.key).length;
+    if (count > 0) seenCurrent = true;
+    return { key: s.key, label: s.label, color: s.color, count };
+  });
+  // Find the most advanced stage with drawings
+  let currentStage = null;
+  for (let i = stageData.length - 1; i >= 0; i--) {
+    if (stageData[i].count > 0) { currentStage = stageData[i].key; break; }
+  }
+  // Mark earlier stages as completed if released exists
+  if (released > 0) {
+    for (const s of stageData) {
+      if (s.key === "Released") break;
+      completedStages.push(s.key);
+    }
+  }
+
   return (
-    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-      {STAGES.slice(1).map(s => {
-        const count = drawings.filter(d => d.stage === s.key).length;
-        const pct = Math.round((count / total) * 100);
-        return (
-          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 90 }}>
-            <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: s.color, letterSpacing: "0.08em", width: 34 }}>{s.label}</span>
-            <div style={{ flex: 1, height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden", minWidth: 50 }}>
-              <div style={{ height: "100%", width: `${pct}%`, background: s.color, borderRadius: 3, transition: "width 0.4s ease" }} />
-            </div>
-            <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", width: 22, textAlign: "right" }}>{count}</span>
-          </div>
-        );
-      })}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <ChevronPipeline
+        stages={stageData}
+        currentStage={activeStage || currentStage}
+        completedStages={completedStages}
+        height={36}
+        onStageClick={onStageClick}
+      />
+      {/* Legend row with counts */}
+      <div style={{ display: "flex", gap: 4, justifyContent: "space-around" }}>
+        {stageData.map(s => (
+          <button
+            key={s.key}
+            onClick={() => onStageClick?.(s.key)}
+            style={{
+              background: activeStage === s.key ? `${s.color}20` : "none",
+              border: activeStage === s.key ? `1px solid ${s.color}40` : "1px solid transparent",
+              borderRadius: "var(--radius-badge)",
+              padding: "2px 8px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: s.color }}>{s.label}</span>
+            <span style={{ ...mono, fontSize: 10, fontWeight: 800, color: s.count > 0 ? s.color : "var(--text-disabled)" }}>{s.count}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -341,7 +379,12 @@ export default function Drawings() {
       );
     }
     if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
-    if (stageFilter !== "ALL") list = list.filter(d => d.stage === stageFilter);
+    if (stageFilter !== "ALL") {
+      if (stageFilter === "_overdue") list = list.filter(d => isOverdue(d));
+      else if (stageFilter === "_inReview") list = list.filter(d => ["OFA", "BFA", "OFS", "BFS", "FFF"].includes(d.stage));
+      else if (stageFilter === "_priority") list = list.filter(d => d.priority_flag);
+      else list = list.filter(d => d.stage === stageFilter);
+    }
     return list;
   }, [drawings, search, discipline, stageFilter]);
 
@@ -500,27 +543,50 @@ export default function Drawings() {
         </div>
       </div>
 
-      {/* ── Stats Bar ──────────────────────────────────────────────────────── */}
+      {/* ── Stats Bar (clickable filters) ─────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
         {[
-          { label: "TOTAL SHEETS", value: stats.total, color: "var(--text-primary)" },
-          { label: "IFC / RELEASED", value: stats.released, color: "#10B981" },
-          { label: "IN REVIEW", value: stats.inReview, color: "#3B82F6" },
-          { label: "OVERDUE", value: stats.overdue, color: "var(--status-error)" },
-          { label: "PRIORITY", value: stats.priority, color: "var(--accent)" },
-        ].map(s => (
-          <div key={s.label} style={{ ...surface, padding: "12px 16px" }}>
-            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1, ...mono }}>{s.value}</div>
-          </div>
-        ))}
+          { label: "TOTAL SHEETS", value: stats.total, color: "var(--text-primary)", filterKey: null },
+          { label: "IFC / RELEASED", value: stats.released, color: "#10B981", filterKey: "Released" },
+          { label: "IN REVIEW", value: stats.inReview, color: "#3B82F6", filterKey: "_inReview" },
+          { label: "OVERDUE", value: stats.overdue, color: "var(--status-error)", filterKey: "_overdue" },
+          { label: "PRIORITY", value: stats.priority, color: "var(--accent)", filterKey: "_priority" },
+        ].map(s => {
+          const isActive = s.filterKey && stageFilter === s.filterKey;
+          return (
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => {
+                if (!s.filterKey) return;
+                setStageFilter(prev => prev === s.filterKey ? "ALL" : s.filterKey);
+              }}
+              style={{
+                ...surface,
+                padding: "12px 16px",
+                cursor: s.filterKey ? "pointer" : "default",
+                textAlign: "left",
+                borderColor: isActive ? `${s.color}60` : undefined,
+                boxShadow: isActive ? `0 0 12px ${s.color}20` : undefined,
+                transition: "border-color 0.2s, box-shadow 0.2s",
+              }}
+            >
+              <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: isActive ? s.color : "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1, ...mono }}>{s.value}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Stage Pipeline ─────────────────────────────────────────────────── */}
       <ErrorBoundary label="Stage Pipeline">
         <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
           <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 10 }}>SUBMITTAL STAGE PIPELINE</div>
-          <StagePipeline drawings={drawings} />
+          <StagePipeline
+            drawings={drawings}
+            activeStage={stageFilter !== "ALL" && !stageFilter.startsWith("_") ? stageFilter : null}
+            onStageClick={(key) => setStageFilter(prev => prev === key ? "ALL" : key)}
+          />
         </div>
       </ErrorBoundary>
 
@@ -556,15 +622,30 @@ export default function Drawings() {
           {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
 
+        {/* IFC Only toggle */}
+        <button
+          onClick={() => setStageFilter(prev => prev === "Released" ? "ALL" : "Released")}
+          style={{
+            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+            padding: "6px 12px", borderRadius: "var(--radius-btn)", cursor: "pointer",
+            background: stageFilter === "Released" ? "rgba(16,185,129,0.15)" : "none",
+            border: `1px solid ${stageFilter === "Released" ? "rgba(16,185,129,0.35)" : "var(--border-default)"}`,
+            color: stageFilter === "Released" ? "#10B981" : "var(--text-muted)",
+            transition: "all 0.15s",
+          }}
+        >
+          IFC ONLY
+        </button>
+
         {/* View toggle */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", overflow: "hidden" }}>
           {["list", "grid"].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               ...mono, fontSize: 10, fontWeight: 700, padding: "6px 12px", border: "none", cursor: "pointer",
               background: view === v ? "rgba(200,155,32,0.2)" : "none",
               color: view === v ? "var(--accent)" : "var(--text-muted)",
             }}>
-              {v === "list" ? "☰ LIST" : "⊞ GRID"}
+              {v === "list" ? "\u2630 LIST" : "\u229E GRID"}
             </button>
           ))}
         </div>
@@ -704,10 +785,17 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
           {drawings.map(d => {
             const overdue = isOverdue(d);
             const isSel = selected.has(d.id);
+            const daysLate = overdue && d.due_date ? Math.max(1, Math.floor((new Date() - new Date(d.due_date)) / 86400000)) : 0;
+            const urgencyClass = daysLate >= 14 ? "urgency-critical" : daysLate >= 7 ? "urgency-danger" : daysLate > 0 ? "urgency-warn" : "";
             return (
               <tr key={d.id}
+                className={urgencyClass}
                 onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, drawing: d }); }}
-                style={{ background: isSel ? "rgba(200,155,32,0.06)" : "none", cursor: "default" }}>
+                style={{
+                  background: isSel ? "rgba(200,155,32,0.06)" : overdue ? "rgba(239,68,68,0.04)" : "none",
+                  cursor: "default",
+                  borderLeft: overdue ? "4px solid var(--status-error)" : "4px solid transparent",
+                }}>
                 <td style={tdStyle}>
                   <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(d.id)} style={{ cursor: "pointer" }} />
                 </td>
@@ -726,10 +814,16 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                 <td style={{ ...tdStyle }}><StageChip stage={d.stage} /></td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
                 <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ ...mono, fontSize: 10, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>{d.due_date || "—"}</span>
-                    {overdue && <OverdueBadge />}
-                  </div>
+                  {overdue && daysLate > 0 ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ ...mono, fontSize: 11, fontWeight: 800, color: "var(--status-error)" }}>
+                        {daysLate}d late
+                      </span>
+                      <OverdueBadge />
+                    </div>
+                  ) : (
+                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.due_date || "\u2014"}</span>
+                  )}
                 </td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
                 <td style={{ ...tdStyle }}>

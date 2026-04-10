@@ -160,6 +160,8 @@ export default function RFIs() {
   const [selectedRFIs, setSelectedRFIs] = useState(new Set());
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkImportText, setBulkImportText] = useState("");
+  const [showVoided, setShowVoided] = useState(false);
+  const [agingFilter, setAgingFilter] = useState(null);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -349,9 +351,20 @@ export default function RFIs() {
   };
   const filtered = useMemo(() => {
     return rfis
+      .filter((r) => showVoided || r.status !== "Void")
       .filter((r) => (filterStatus === "all" ? true : r.status === filterStatus))
       .filter((r) => (filterPriority === "all" ? true : r.priority === filterPriority))
       .filter((r) => (filterBIC === "all" ? true : r.ball_in_court === filterBIC))
+      .filter((r) => {
+        if (!agingFilter) return true;
+        if (!["Open", "Under Review"].includes(r.status)) return false;
+        const d = daysOpen(r);
+        if (agingFilter === "fresh") return d < 7;
+        if (agingFilter === "aging") return d >= 7 && d < 15;
+        if (agingFilter === "stale") return d >= 15 && d < 31;
+        if (agingFilter === "critical") return d >= 31;
+        return true;
+      })
       .filter((r) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
@@ -390,7 +403,7 @@ export default function RFIs() {
         }
         return 0;
       });
-  }, [rfis, filterStatus, filterPriority, filterBIC, search, sortField, sortDir, overdueFirst]);
+  }, [rfis, filterStatus, filterPriority, filterBIC, search, sortField, sortDir, overdueFirst, showVoided, agingFilter]);
 
   const kpis = useMemo(() => {
     const open = rfis.filter((r) => r.status === "Open").length;
@@ -826,6 +839,10 @@ export default function RFIs() {
         >
           Export
         </button>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", cursor: "pointer", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={showVoided} onChange={() => setShowVoided((v) => !v)} style={{ cursor: "pointer", accentColor: "var(--accent)" }} />
+          Show Voided
+        </label>
       </div>
 
       {/* Bulk action bar */}
@@ -939,15 +956,35 @@ export default function RFIs() {
                 { label: "7–14 days", key: "aging", color: "var(--status-warning)" },
                 { label: "15–30 days", key: "stale", color: "var(--status-error)" },
                 { label: "> 30 days", key: "critical", color: "var(--status-error)" },
-              ].map((b) => (
-                <div key={b.key} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 80 }}>{b.label}</div>
-                  <div style={{ flex: 1, height: 6, background: "var(--bg-surface-low)", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{ width: `${Math.min(100, (agingBuckets[b.key] / Math.max(1, kpis.open)) * 100)}%`, height: "100%", background: b.color }} />
+              ].map((b) => {
+                const isActive = agingFilter === b.key;
+                return (
+                  <div
+                    key={b.key}
+                    onClick={() => setAgingFilter(isActive ? null : b.key)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 6,
+                      cursor: "pointer",
+                      padding: "4px 6px",
+                      borderRadius: 6,
+                      borderLeft: isActive ? `3px solid ${b.color}` : "3px solid transparent",
+                      background: isActive ? "var(--hover-bg)" : "transparent",
+                      transition: "background 0.15s, border-color 0.15s",
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--hover-bg)"; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <div style={{ fontSize: 10, color: "var(--text-secondary)", minWidth: 80 }}>{b.label}</div>
+                    <div style={{ flex: 1, height: 6, background: "var(--bg-surface-low)", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, (agingBuckets[b.key] / Math.max(1, kpis.open)) * 100)}%`, height: "100%", background: b.color }} />
+                    </div>
+                    <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: b.color }}>{agingBuckets[b.key]}</span>
                   </div>
-                  <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: b.color }}>{agingBuckets[b.key]}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", flex: 1, overflowY: "auto" }}>
               <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
@@ -1046,7 +1083,7 @@ export default function RFIs() {
             </div>
           ) : (
             <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
-              <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 90px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
+              <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 52px 90px", background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
                 <div><input type="checkbox" checked={filtered.length > 0 && selectedRFIs.size === filtered.length} onChange={toggleSelectAll} style={{ cursor: "pointer", accentColor: "var(--accent)" }} /></div>
                 <div>RFI #</div>
                 <div>Subject</div>
@@ -1055,6 +1092,7 @@ export default function RFIs() {
                 <div>Ball in Court</div>
                 <div>Due</div>
                 <div>Days</div>
+                <div>Held</div>
                 <div>Actions</div>
               </div>
               {Object.entries(groupedByProject).map(([proj, rows]) => (
@@ -1074,15 +1112,21 @@ export default function RFIs() {
                     const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
                     const due = r.date_required ? new Date(r.date_required) : null;
                     const diff = due ? Math.ceil((due - new Date()) / 86400000) : null;
+                    const overdueDays = overdue && diff != null ? Math.abs(diff) : 0;
                     const rowBg = overdue ? "rgba(255,61,61,0.12)" : "transparent";
                     const leftBorder = overdue && r.priority === "Critical" ? "3px solid var(--status-error)" : overdue ? "3px solid rgba(255,61,61,0.7)" : r.priority === "Critical" ? "3px solid var(--status-warning)" : "3px solid transparent";
+                    const urgencyClass = overdue && overdueDays >= 7 ? "urgency-danger" : overdue && overdueDays >= 1 ? "urgency-warn" : "";
+                    const heldDate = r.ball_in_court_date || r.submitted_date;
+                    const heldDays = heldDate ? Math.max(0, Math.floor((new Date() - new Date(heldDate)) / 86400000)) : null;
+                    const heldColor = heldDays != null && heldDays > 14 ? "var(--status-error)" : heldDays != null && heldDays > 7 ? "var(--status-warning)" : "var(--text-muted)";
                     return (
                       <div
                         key={r.id}
+                        className={urgencyClass}
                         onClick={() => setSelectedRFI(r)}
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 90px",
+                          gridTemplateColumns: "28px 80px 2fr 90px 100px 110px 72px 52px 52px 90px",
                           padding: "10px 12px",
                           alignItems: "center",
                           borderBottom: "1px solid var(--divider)",
@@ -1099,6 +1143,21 @@ export default function RFIs() {
                         <div style={{ ...mono, fontSize: 11, fontWeight: 800, color: "var(--accent)" }}>
                           {r.priority === "Critical" && <span style={{ color: "var(--status-error)", marginRight: 4 }}>?</span>}
                           {r.rfi_number}
+                          {r.cost_impact === true && (
+                            <span style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 8,
+                              fontWeight: 700,
+                              borderRadius: "var(--radius-badge, 3px)",
+                              padding: "1px 4px",
+                              marginLeft: 4,
+                              display: "inline-block",
+                              background: Number(r.cost_impact_amount) > 25000 ? "var(--danger-muted)" : Number(r.cost_impact_amount) > 5000 ? "var(--warning-muted)" : "var(--hover-bg)",
+                              color: Number(r.cost_impact_amount) > 25000 ? "var(--status-error)" : Number(r.cost_impact_amount) > 5000 ? "var(--status-warning)" : "var(--text-muted)",
+                            }}>
+                              {Number(r.cost_impact_amount) > 25000 ? "$$$" : Number(r.cost_impact_amount) > 5000 ? "$$" : "$"}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <div style={{ fontFamily: "var(--font-body)", fontSize: 12.5, fontWeight: 500, color: "var(--text-primary)", textDecoration: r.status === "Closed" ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</div>
@@ -1123,6 +1182,7 @@ export default function RFIs() {
                           {overdue && <div style={{ fontSize: 8, color: "var(--status-error)" }}>{Math.abs(diff)}d LATE</div>}
                         </div>
                         <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: daysOpen(r) > 30 ? "var(--status-error)" : daysOpen(r) > 14 ? "var(--status-warning)" : "var(--status-success)" }}>{daysOpen(r)}d</div>
+                        <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: heldColor }}>{heldDays != null ? `${heldDays}d` : "—"}</div>
                         <div style={{ display: "flex", gap: 4 }}>
                           <button
                             onClick={(e) => {
@@ -1133,13 +1193,17 @@ export default function RFIs() {
                               border: "1px solid var(--border-default)",
                               background: "var(--bg-surface)",
                               borderRadius: 4,
-                              padding: "4px 6px",
-                              ...mono,
+                              padding: "4px 8px",
+                              fontFamily: "var(--font-mono)",
                               fontSize: 8,
+                              fontWeight: 700,
+                              minHeight: 28,
                               cursor: "pointer",
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
                             }}
                           >
-                            {r.status === "Open" ? "? Review" : r.status === "Under Review" ? "? Answer" : "?"}
+                            STATUS
                           </button>
                           <button
                             onClick={(e) => {
@@ -1151,13 +1215,17 @@ export default function RFIs() {
                               border: "1px solid var(--border-default)",
                               background: "var(--bg-surface)",
                               borderRadius: 4,
-                              padding: "4px 6px",
-                              ...mono,
+                              padding: "4px 8px",
+                              fontFamily: "var(--font-mono)",
                               fontSize: 8,
+                              fontWeight: 700,
+                              minHeight: 28,
                               cursor: "pointer",
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
                             }}
                           >
-                            ?
+                            EDIT
                           </button>
                           <button
                             onClick={(e) => {
@@ -1168,14 +1236,18 @@ export default function RFIs() {
                               border: "1px solid rgba(255,61,61,0.25)",
                               background: "rgba(255,61,61,0.08)",
                               borderRadius: 4,
-                              padding: "4px 6px",
-                              ...mono,
+                              padding: "4px 8px",
+                              fontFamily: "var(--font-mono)",
                               fontSize: 8,
+                              fontWeight: 700,
+                              minHeight: 28,
                               color: "var(--status-error)",
                               cursor: "pointer",
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
                             }}
                           >
-                            ??
+                            DEL
                           </button>
                         </div>
                       </div>

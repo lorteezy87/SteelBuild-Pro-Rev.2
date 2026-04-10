@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import DonutChart from "@/components/shared/DonutChart";
+import TrendIndicator from "@/components/shared/TrendIndicator";
 import {
   mapRFIsToPCCItems,
   mapDrawingsToPCCItems,
@@ -36,29 +38,36 @@ const TYPE_CONFIG = {
 };
 
 // ─── Signal KPI Card ─────────────────────────────────────────────────────────
-function SignalCard({ label, value, color, sub, onClick, active }) {
+function SignalCard({ label, value, color, sub, onClick, active, previous, invertTrend }) {
+  const numericValue = typeof value === "number" ? value : parseInt(value, 10);
+  const hasValue = !isNaN(numericValue) && numericValue > 0;
   return (
     <div
       onClick={onClick}
       style={{
         flex: 1,
         minWidth: 100,
-        padding: "10px 14px",
+        minHeight: 44,
+        padding: "14px 18px",
         background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.06)"}`,
-        borderRadius: 8,
+        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}40` : "rgba(255,255,255,0.06)"}`,
+        borderRadius: "var(--radius-card, 10px)",
         cursor: onClick ? "pointer" : "default",
-        transition: "all 0.15s",
+        boxShadow: hasValue ? `0 0 16px ${color}25` : "var(--shadow-card, none)",
+        transition: "box-shadow 0.3s ease, border-color 0.3s ease, background 0.15s ease",
       }}
     >
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1, marginBottom: 2 }}>
-        {value}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1 }}>
+          {value}
+        </div>
+        <TrendIndicator current={numericValue} previous={previous} invert={!!invertTrend} />
       </div>
       {sub && (
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>
           {sub}
         </div>
       )}
@@ -110,8 +119,8 @@ function ImpactTag({ tagKey }) {
   );
 }
 
-// ─── Priority feed row ────────────────────────────────────────────────────────
-function PriorityRow({ item, expanded, onToggle, onOpenDrawer }) {
+// ─── Priority feed row (card-based layout) ──────────────────────────────────
+function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }) {
   const tc = TYPE_CONFIG[item.type] || { icon: "◉", label: item.type, color: "var(--text-muted)" };
   const overdueTxt = item.overdueDays > 0
     ? `${item.overdueDays}d overdue`
@@ -122,134 +131,163 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer }) {
   return (
     <div
       style={{
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
-        background: expanded ? "rgba(255,255,255,0.015)" : "transparent",
-        transition: "background 0.12s",
+        display: "flex",
+        background: expanded ? "rgba(255,255,255,0.025)" : "var(--bg-card, var(--bg-surface))",
+        border: "1px solid var(--border-default, rgba(255,255,255,0.06))",
+        borderRadius: "var(--radius-card, 10px)",
+        minHeight: 48,
+        overflow: "hidden",
+        transition: "background 0.15s ease, box-shadow 0.15s ease",
       }}
     >
-      {/* Main row */}
-      <div
-        onClick={onToggle}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "4px 28px 68px 80px 1fr 100px 100px 80px 120px",
-          alignItems: "center",
-          height: 40,
-          padding: "0 16px",
-          cursor: "pointer",
-          gap: 8,
-        }}
-      >
-        {/* Severity stripe */}
-        <div style={{ height: 40, width: 4, background: item.severity.color, borderRadius: 2, marginLeft: -16 }} />
+      {/* Severity color stripe — left edge, 4px, full height */}
+      <div style={{ width: 4, flexShrink: 0, background: item.severity.color }} />
 
-        {/* Score */}
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: item.severity.color, textAlign: "right" }}>
-          {item.score}
-        </span>
+      {/* Content area */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {/* Main clickable row */}
+        <div
+          onClick={onToggle}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            padding: "10px 14px",
+            cursor: "pointer",
+            minHeight: 48,
+            justifyContent: "center",
+          }}
+        >
+          {/* Top row: score + severity + type + title + drawer button */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {/* Score */}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: item.severity.color, flexShrink: 0, minWidth: 24, textAlign: "right" }}>
+              {item.score}
+            </span>
 
-        {/* Severity badge */}
-        <SeverityBadge severity={item.severity} />
+            {/* Severity badge */}
+            <SeverityBadge severity={item.severity} />
 
-        {/* Type badge */}
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.09em",
-          color: tc.color, background: `${tc.color}15`, border: `1px solid ${tc.color}30`,
-          padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap",
-        }}>
-          {tc.icon} {tc.label}
-        </span>
+            {/* Type badge */}
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.09em",
+              color: tc.color, background: `${tc.color}15`, border: `1px solid ${tc.color}30`,
+              padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              {tc.icon} {tc.label}
+            </span>
 
-        {/* Title */}
-        <div style={{ minWidth: 0 }}>
-          <div style={{
-            fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500,
-            color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {item.title}
-          </div>
-          {item.subtitle && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
-              {item.subtitle}
-            </div>
-          )}
-        </div>
-
-        {/* Timing */}
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 9,
-          color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)",
-          whiteSpace: "nowrap",
-        }}>
-          {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—")}
-        </span>
-
-        {/* Owner */}
-        <span style={{
-          fontFamily: "var(--font-body)", fontSize: 11, color: item.assigned_to ? "var(--text-secondary)" : "rgba(255,100,100,0.55)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {item.assigned_to || "Unassigned"}
-        </span>
-
-        {/* Reasons (top 1) */}
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.reasons[0] || ""}
-        </span>
-
-        {/* Next action */}
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <ActionBadge action={item.nextAction} />
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
-            title="View details"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(160,175,210,0.50)", fontSize: 10, flexShrink: 0 }}
-          >⤢</button>
-        </div>
-      </div>
-
-      {/* Expanded detail */}
-      {expanded && (
-        <div style={{ padding: "10px 16px 14px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* Impact tags */}
-          {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {(Array.isArray(item.tags) ? item.tags : []).map((t) => <ImpactTag key={t} tagKey={t} />)}
-            </div>
-          )}
-
-          {/* All reasons */}
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {item.reasons.map((r, i) => (
-              <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 4 }}>
-                {r}
+            {/* Title — deep-link clickable */}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span
+                onClick={(e) => { e.stopPropagation(); onNavigateTitle?.(item); }}
+                style={{
+                  fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500,
+                  color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  cursor: "pointer", borderBottom: "1px solid transparent",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderBottomColor = "var(--accent)"}
+                onMouseLeave={(e) => e.currentTarget.style.borderBottomColor = "transparent"}
+                title={`Open ${item.type}: ${item.subtitle || item.title}`}
+              >
+                {item.title}
               </span>
-            ))}
+              {item.subtitle && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em", flexShrink: 0 }}>
+                  {item.subtitle}
+                </span>
+              )}
+            </div>
+
+            {/* Drawer button — 36x36 touch-friendly */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
+              title="View details"
+              style={{
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "var(--radius-btn, 8px)", width: 36, height: 36,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", color: "rgba(160,175,210,0.50)", fontSize: 12, flexShrink: 0,
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.10)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+            >⤢</button>
           </div>
 
-          {/* Detail row */}
-          <div style={{ display: "flex", gap: 24 }}>
-            {item.project_name && (
-              <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>PROJECT</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>{item.project_name}</div>
+          {/* Bottom row: timing + owner + reason + next action */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, paddingLeft: 32, flexWrap: "wrap" }}>
+            {/* Timing */}
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9,
+              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)",
+              whiteSpace: "nowrap",
+            }}>
+              {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—")}
+            </span>
+
+            {/* Owner */}
+            <span style={{
+              fontFamily: "var(--font-body)", fontSize: 11, color: item.assigned_to ? "var(--text-secondary)" : "rgba(255,100,100,0.55)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120,
+            }}>
+              {item.assigned_to || "Unassigned"}
+            </span>
+
+            {/* Reason (top 1) */}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
+              {item.reasons[0] || ""}
+            </span>
+
+            {/* Next action */}
+            <ActionBadge action={item.nextAction} />
+          </div>
+        </div>
+
+        {/* Expanded detail */}
+        {expanded && (
+          <div style={{ padding: "10px 14px 14px 46px", display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            {/* Impact tags */}
+            {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {(Array.isArray(item.tags) ? item.tags : []).map((t) => <ImpactTag key={t} tagKey={t} />)}
               </div>
             )}
-            {item.waiting_on && (
+
+            {/* All reasons */}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {item.reasons.map((r, i) => (
+                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 4 }}>
+                  {r}
+                </span>
+              ))}
+            </div>
+
+            {/* Detail row */}
+            <div style={{ display: "flex", gap: 24 }}>
+              {item.project_name && (
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>PROJECT</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>{item.project_name}</div>
+                </div>
+              )}
+              {item.waiting_on && (
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>WAITING ON</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#FFB400" }}>{item.waiting_on}</div>
+                </div>
+              )}
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>WAITING ON</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#FFB400" }}>{item.waiting_on}</div>
-              </div>
-            )}
-            <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>SCORE BREAKDOWN</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: item.severity.color, fontWeight: 700 }}>
-                {item.score} pts → {item.severity.label}
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>SCORE BREAKDOWN</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: item.severity.color, fontWeight: 700 }}>
+                  {item.score} pts → {item.severity.label}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -385,7 +423,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={{
               flex: 1, background: "var(--accent)", border: "none", borderRadius: 6,
-              padding: "9px 14px", color: "#07090E", fontFamily: "var(--font-mono)", fontSize: 10,
+              padding: "9px 14px", minHeight: 44, color: "#07090E", fontFamily: "var(--font-mono)", fontSize: 10,
               fontWeight: 800, cursor: "pointer", letterSpacing: "0.09em", textTransform: "uppercase",
             }}>
               → {item.nextAction}
@@ -395,7 +433,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
                 onClick={() => { onNavigate(item); onClose(); }}
                 style={{
                   background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 6, padding: "9px 14px", color: "var(--text-secondary)",
+                  borderRadius: 6, padding: "9px 14px", minHeight: 44, color: "var(--text-secondary)",
                   fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
                   letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap",
                 }}
@@ -405,7 +443,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
             )}
             <button onClick={onClose} style={{
               background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
-              borderRadius: 6, padding: "9px 14px", color: "var(--text-muted)",
+              borderRadius: 6, padding: "9px 14px", minHeight: 44, color: "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
               letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
@@ -559,6 +597,135 @@ function RiskWatchlist({ items, onSelect }) {
   );
 }
 
+// ─── AI Summary Banner ───────────────────────────────────────────────────────
+function AISummaryBanner({ kpis }) {
+  const coDisplay = kpis.coExposure >= 1000
+    ? `$${(kpis.coExposure / 1000).toFixed(0)}k`
+    : `$${kpis.coExposure}`;
+  return (
+    <div style={{
+      margin: "12px 0 8px 0",
+      padding: "12px 16px",
+      borderLeft: "3px solid var(--accent)",
+      background: "rgba(200,155,32,0.04)",
+      borderRadius: "0 var(--radius-card) var(--radius-card) 0",
+      fontFamily: "var(--font-body)",
+      fontSize: 13,
+      color: "var(--text-secondary)",
+      lineHeight: 1.55,
+    }}>
+      You have <strong style={{ color: SEVERITY.CRITICAL?.color || "#FF5C5C" }}>{kpis.critical} critical</strong> items
+      and <strong style={{ color: "#FF7A7A" }}>{kpis.overdueAll} overdue</strong>.
+      {kpis.blocksFab > 0 && (
+        <> <strong style={{ color: "#E8650A" }}>{kpis.blocksFab}</strong> items are blocking fabrication.</>
+      )}
+      {" "}CO exposure: <strong style={{ color: kpis.coExposure > 10000 ? "#FFB400" : "var(--text-primary)" }}>{coDisplay}</strong>.
+    </div>
+  );
+}
+
+// ─── Health Summary Panel ────────────────────────────────────────────────────
+function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
+  const total = scoredFeed.length;
+  const critCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL").length;
+  const highCount = scoredFeed.filter((i) => i.severityKey === "HIGH").length;
+  const medCount  = scoredFeed.filter((i) => i.severityKey === "MEDIUM").length;
+  const lowCount  = scoredFeed.filter((i) => i.severityKey === "LOW").length;
+
+  // Top 3 waiting-on parties
+  const topWaiting = waitingBoard.slice(0, 3);
+
+  // Severity segments for mini stacked bar
+  const segments = [
+    { key: "CRITICAL", count: critCount, color: SEVERITY.CRITICAL?.color || "#FF5C5C" },
+    { key: "HIGH",     count: highCount, color: SEVERITY.HIGH?.color || "#FF9F43" },
+    { key: "MEDIUM",   count: medCount,  color: SEVERITY.MEDIUM?.color || "#FFB400" },
+    { key: "LOW",      count: lowCount,  color: SEVERITY.LOW?.color || "#8898A8" },
+  ];
+
+  return (
+    <div style={{
+      background: "var(--bg-surface)",
+      border: "1px solid var(--divider)",
+      borderRadius: "var(--radius-card)",
+      padding: "16px 18px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 16,
+      height: "100%",
+      overflow: "auto",
+    }}>
+      {/* Header */}
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>
+        HEALTH SUMMARY
+      </div>
+
+      {/* Total items + donut */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <DonutChart
+          value={critCount + highCount}
+          max={total || 1}
+          size={64}
+          stroke={6}
+          color={SEVERITY.CRITICAL?.color || "#FF5C5C"}
+          label={`${total}`}
+        />
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1 }}>{total}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>TOTAL OPEN ITEMS</div>
+        </div>
+      </div>
+
+      {/* Severity breakdown bar */}
+      <div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>SEVERITY BREAKDOWN</div>
+        <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 8, background: "rgba(255,255,255,0.04)" }}>
+          {segments.map((seg) => (
+            seg.count > 0 && (
+              <div key={seg.key} style={{ width: `${(seg.count / (total || 1)) * 100}%`, background: seg.color, transition: "width 0.3s" }} title={`${seg.key}: ${seg.count}`} />
+            )
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+          {segments.map((seg) => (
+            <div key={seg.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 6, height: 6, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{seg.key}: {seg.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Top waiting-on parties */}
+      {topWaiting.length > 0 && (
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>TOP WAITING ON</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {topWaiting.map(({ party, count }) => (
+              <div key={party} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{party}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#FFB400" }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Key metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
+        </div>
+        <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main PCC Page ────────────────────────────────────────────────────────────
 export default function ProjectControlCenter() {
   const { activeProject } = useProjectContext();
@@ -609,10 +776,66 @@ export default function ProjectControlCenter() {
 
   const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
 
-  // ── Navigate to source record page ────────────────────────────
+  // ── localStorage KPI trend caching ────────────────────────────
+  const [previousKpis, setPreviousKpis] = useState(null);
+
+  useEffect(() => {
+    if (!activeProject?.id || !kpis) return;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const storageKey = `pcc-kpis-${activeProject.id}`;
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      // Find yesterday's data (most recent date that is NOT today)
+      const dates = Object.keys(stored).filter((d) => d !== today).sort().reverse();
+      if (dates.length > 0) {
+        setPreviousKpis(stored[dates[0]]);
+      }
+
+      // Save today's KPIs
+      stored[today] = {
+        critical: kpis.critical,
+        highRisk: kpis.highRisk,
+        overdueAll: kpis.overdueAll,
+        external: kpis.external,
+        blocksFab: kpis.blocksFab,
+        blocksErec: kpis.blocksErec,
+        coExposure: kpis.coExposure,
+      };
+
+      // Keep only last 7 days
+      const allDates = Object.keys(stored).sort().reverse();
+      const trimmed = {};
+      allDates.slice(0, 7).forEach((d) => { trimmed[d] = stored[d]; });
+      localStorage.setItem(storageKey, JSON.stringify(trimmed));
+    } catch {
+      // Silently ignore localStorage errors
+    }
+  }, [activeProject?.id, kpis]);
+
+  // ── Navigate to source record page (deep link with search) ────
   const handleNavigate = (item) => {
     const page = TYPE_PAGE_MAP[item.type];
-    if (page) navigate(createPageUrl(page));
+    if (!page) return;
+    const baseUrl = createPageUrl(page);
+    const searchTypes = ["RFI", "Drawing"];
+    if (searchTypes.includes(item.type) && item.subtitle) {
+      navigate(`${baseUrl}?search=${encodeURIComponent(item.subtitle)}`);
+    } else {
+      navigate(baseUrl);
+    }
+  };
+
+  // ── Deep-link from PriorityRow title text ─────────────────────
+  const handleNavigateTitle = (item) => {
+    const search = item.subtitle || item.title;
+    if (item.type === "Drawing") {
+      navigate(`${createPageUrl("Drawings")}?search=${encodeURIComponent(search)}`);
+    } else if (item.type === "RFI") {
+      navigate(`${createPageUrl("RFIs")}?search=${encodeURIComponent(search)}`);
+    } else {
+      handleNavigate(item);
+    }
   };
 
   // ── Export daily briefing CSV ──────────────────────────────────
@@ -734,6 +957,8 @@ export default function ProjectControlCenter() {
           sub="items"
           onClick={() => setSeverityFilter(severityFilter === "CRITICAL" ? "all" : "CRITICAL")}
           active={severityFilter === "CRITICAL"}
+          previous={previousKpis?.critical}
+          invertTrend
         />
         <SignalCard
           label="HIGH RISK"
@@ -742,12 +967,16 @@ export default function ProjectControlCenter() {
           sub="items"
           onClick={() => setSeverityFilter(severityFilter === "HIGH" ? "all" : "HIGH")}
           active={severityFilter === "HIGH"}
+          previous={previousKpis?.highRisk}
+          invertTrend
         />
         <SignalCard
           label="OVERDUE"
           value={kpis.overdueAll}
           color={kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)"}
           sub="items"
+          previous={previousKpis?.overdueAll}
+          invertTrend
         />
         <SignalCard
           label="EXTERNAL WAIT"
@@ -755,148 +984,175 @@ export default function ProjectControlCenter() {
           color={kpis.external > 0 ? "#8898A8" : "var(--text-muted)"}
           sub="items"
           onClick={() => setActiveTab("waiting")}
+          previous={previousKpis?.external}
+          invertTrend
         />
         <SignalCard
           label="BLOCKS FAB"
           value={kpis.blocksFab}
           color={kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)"}
           sub="items"
+          previous={previousKpis?.blocksFab}
+          invertTrend
         />
         <SignalCard
           label="BLOCKS ERECTION"
           value={kpis.blocksErec}
           color={kpis.blocksErec > 0 ? "#06B6D4" : "var(--text-muted)"}
           sub="items"
+          previous={previousKpis?.blocksErec}
+          invertTrend
         />
         <SignalCard
           label="CO EXPOSURE"
           value={kpis.coExposure > 0 ? `$${(kpis.coExposure / 1000).toFixed(0)}k` : "$0"}
           color={kpis.coExposure > 50000 ? "#FF7A7A" : kpis.coExposure > 10000 ? "#FFB400" : "var(--text-muted)"}
           sub="open COs"
+          previous={previousKpis?.coExposure != null ? (previousKpis.coExposure > 0 ? parseInt((previousKpis.coExposure / 1000).toFixed(0), 10) : 0) : undefined}
+          invertTrend
         />
       </div>
 
-      {/* ═══ TAB BAR ═══════════════════════════════════════════════ */}
-      <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 24px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
-              padding: "10px 16px",
-              background: "transparent",
-              border: "none",
-              borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-              color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 6,
-            }}
-          >
-            {tab.label}
-            {tab.count > 0 && (
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 8,
-                background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "rgba(255,255,255,0.05)",
-                color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
-                border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.08)"}`,
-                padding: "0 5px", borderRadius: 3,
-              }}>
-                {tab.count}
-              </span>
+      {/* ═══ SPLIT-PANE: Left (tabs+content) / Right (health summary) ═══ */}
+      <div className="pcc-split-pane" style={{ flex: 1, overflow: "hidden", display: "grid", gridTemplateColumns: "3fr 2fr", gap: 0 }}>
+        <style>{`
+          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @media (max-width: 900px) {
+            .pcc-split-pane { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+
+        {/* ─── LEFT COLUMN: Tab bar + Tab content ─── */}
+        <div className="pcc-split-left" style={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRight: "1px solid var(--divider)" }}>
+
+          {/* Tab bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 24px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+                  padding: "10px 16px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+                  color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 8,
+                    background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "rgba(255,255,255,0.05)",
+                    color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
+                    border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.08)"}`,
+                    padding: "0 5px", borderRadius: 3,
+                  }}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+
+            {/* No project selected */}
+            {noProject && (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(160,175,210,0.10)" }}>⊙</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SELECT A PROJECT TO LOAD PCC</div>
+              </div>
             )}
-          </button>
-        ))}
-      </div>
 
-      {/* ═══ CONTENT AREA ══════════════════════════════════════════ */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {/* Loading state */}
+            {!noProject && isLoading && (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+                <div style={{ width: 28, height: 28, border: "3px solid var(--border-default)", borderTop: "3px solid var(--accent)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SCORING {activeProject?.name || "PROJECT"} DATA...</div>
+              </div>
+            )}
 
-        {/* No project selected */}
-        {noProject && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(160,175,210,0.10)" }}>⊙</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SELECT A PROJECT TO LOAD PCC</div>
+            {/* Empty state */}
+            {!noProject && !isLoading && isEmpty && (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>NO OPEN ITEMS — PROJECT IS CLEAR</div>
+              </div>
+            )}
+
+            {/* Morning Scan — with AI summary banner */}
+            {!noProject && !isLoading && activeTab === "morning" && (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                <div style={{ padding: "0 20px", flexShrink: 0 }}>
+                  <AISummaryBanner kpis={kpis} />
+                </div>
+                <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
+              </div>
+            )}
+
+            {/* Priority Feed — card layout (no grid header) */}
+            {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
+              <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+                {filteredFeed.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                    No items match current filters
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 12px" }}>
+                    {filteredFeed.map((item) => (
+                      <PriorityRow
+                        key={item.id}
+                        item={item}
+                        expanded={expandedId === item.id}
+                        onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                        onOpenDrawer={setDrawerItem}
+                        onNavigateTitle={handleNavigateTitle}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Waiting On Board */}
+            {!noProject && !isLoading && activeTab === "waiting" && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {waitingBoard.length === 0 ? (
+                  <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                    No items waiting on external parties
+                  </div>
+                ) : (
+                  <WaitingOnBoard board={waitingBoard} />
+                )}
+              </div>
+            )}
+
+            {/* Risk Watchlist */}
+            {!noProject && !isLoading && activeTab === "risk" && (
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <RiskWatchlist items={scoredFeed} onSelect={setDrawerItem} />
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Loading state */}
-        {!noProject && isLoading && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-            <div style={{ width: 28, height: 28, border: "3px solid var(--border-default)", borderTop: "3px solid var(--accent)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SCORING {activeProject?.name || "PROJECT"} DATA...</div>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!noProject && !isLoading && isEmpty && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(0,214,143,0.20)" }}>✓</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>NO OPEN ITEMS — PROJECT IS CLEAR</div>
-          </div>
-        )}
-
-        {/* Morning Scan */}
-        {!noProject && !isLoading && activeTab === "morning" && (
-          <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
-        )}
-
-        {/* Priority Feed */}
-        {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {/* Column headers */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "4px 28px 68px 80px 1fr 100px 100px 80px 120px",
-              alignItems: "center", height: 26, padding: "0 16px", gap: 8,
-              background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.05)",
-              position: "sticky", top: 0, zIndex: 5,
-            }}>
-              {["", "SCORE", "SEVERITY", "TYPE", "TITLE / SET", "TIMING", "OWNER", "REASON", "NEXT ACTION"].map((h, i) => (
-                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "rgba(160,175,210,0.30)", letterSpacing: "0.12em" }}>
-                  {h}
-                </span>
-              ))}
+        {/* ─── RIGHT COLUMN: Health Summary ─── */}
+        <div className="pcc-split-right" style={{ overflow: "auto", padding: 12 }}>
+          {!noProject && !isLoading && !isEmpty ? (
+            <HealthSummaryPanel scoredFeed={scoredFeed} waitingBoard={waitingBoard} kpis={kpis} />
+          ) : (
+            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
+                {noProject ? "NO PROJECT" : isLoading ? "LOADING..." : "NO DATA"}
+              </div>
             </div>
-
-            {filteredFeed.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                No items match current filters
-              </div>
-            ) : (
-              filteredFeed.map((item) => (
-                <PriorityRow
-                  key={item.id}
-                  item={item}
-                  expanded={expandedId === item.id}
-                  onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                  onOpenDrawer={setDrawerItem}
-                />
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Waiting On Board */}
-        {!noProject && !isLoading && activeTab === "waiting" && (
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {waitingBoard.length === 0 ? (
-              <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                No items waiting on external parties
-              </div>
-            ) : (
-              <WaitingOnBoard board={waitingBoard} />
-            )}
-          </div>
-        )}
-
-        {/* Risk Watchlist */}
-        {!noProject && !isLoading && activeTab === "risk" && (
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            <RiskWatchlist items={scoredFeed} onSelect={setDrawerItem} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Detail drawer */}
