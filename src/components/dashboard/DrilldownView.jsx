@@ -1,8 +1,11 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import DonutChart from "@/components/shared/DonutChart";
+import CollapsibleCard from "@/components/shared/CollapsibleCard";
 import ProjectCommandStrip from "./ProjectCommandStrip";
 import SteelExecutionStatusCard from "./SteelExecutionStatusCard";
 import FinancialSnapshotCard from "./FinancialSnapshotCard";
@@ -138,44 +141,59 @@ function StatStrip({ stats }) {
             borderTop: `2px solid ${item.color}`,
             borderRadius: "var(--radius-card)",
             padding: "12px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
           }}
         >
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              fontWeight: 800,
-              lineHeight: 1,
-              color: item.color,
-              marginBottom: 4,
-            }}
-          >
-            {item.value}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-            }}
-          >
-            {item.label}
-          </div>
-          {item.subtext ? (
+          {/* Optional donut chart for stats that have chartValue */}
+          {item.chartValue != null && (
+            <DonutChart
+              value={item.chartValue}
+              max={item.chartMax || 100}
+              size={48}
+              stroke={4}
+              color={item.color}
+            />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                marginTop: 5,
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: "var(--text-secondary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 24,
+                fontWeight: 800,
+                lineHeight: 1,
+                color: item.color,
+                marginBottom: 4,
               }}
             >
-              {item.subtext}
+              {item.value}
             </div>
-          ) : null}
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+              }}
+            >
+              {item.label}
+            </div>
+            {item.subtext ? (
+              <div
+                style={{
+                  marginTop: 5,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 11,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {item.subtext}
+              </div>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
@@ -237,20 +255,31 @@ function QuickActionRail({ actions, onNavigate }) {
     </div>
   );
 }
-function WorkList({ items, empty, onOpen }) {
+function WorkList({ items, empty, emptyIcon, onOpen }) {
   if (!items.length) {
     return (
       <div
         style={{
-          padding: "18px 10px",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-muted)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
+          padding: "24px 10px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
         }}
       >
-        {empty}
+        <div style={{ fontSize: 22, opacity: 0.4 }}>{emptyIcon || "\u2713"}</div>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--text-muted)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {empty}
+        </div>
       </div>
     );
   }
@@ -259,11 +288,15 @@ function WorkList({ items, empty, onOpen }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {items.map((item) => {
         const tone = toneStyles(item.tone);
+        // Urgency tier: escalate visuals for overdue items
+        const overdueDays = item.overdueDays || 0;
+        const urgencyClass = overdueDays >= 14 ? "urgency-critical" : overdueDays >= 7 ? "urgency-danger" : overdueDays >= 2 ? "urgency-warn" : "";
         return (
           <button
             key={item.key}
             type="button"
             onClick={() => onOpen(item.page)}
+            className={urgencyClass}
             style={{
               background: "var(--bg-surface-low)",
               border: `1px solid ${tone.border}`,
@@ -272,6 +305,8 @@ function WorkList({ items, empty, onOpen }) {
               padding: "10px 12px",
               cursor: "pointer",
               textAlign: "left",
+              minHeight: 44,
+              transition: "background 0.15s, box-shadow 0.15s",
             }}
           >
             <div
@@ -295,7 +330,7 @@ function WorkList({ items, empty, onOpen }) {
                   <span
                     style={{
                       fontFamily: "var(--font-mono)",
-                      fontSize: 8,
+                      fontSize: 9,
                       fontWeight: 700,
                       letterSpacing: "0.10em",
                       textTransform: "uppercase",
@@ -308,18 +343,33 @@ function WorkList({ items, empty, onOpen }) {
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 8,
+                        fontSize: 9,
                         fontWeight: 700,
                         color: tone.color,
                         background: tone.bg,
                         border: `1px solid ${tone.border}`,
                         borderRadius: "var(--radius-badge)",
-                        padding: "1px 7px",
+                        padding: "2px 8px",
                       }}
                     >
                       {item.badge}
                     </span>
                   ) : null}
+                  {overdueDays > 0 && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        color: overdueDays >= 7 ? "var(--status-error)" : "var(--status-warning)",
+                        background: overdueDays >= 7 ? "var(--danger-muted)" : "var(--warning-muted)",
+                        borderRadius: "var(--radius-badge)",
+                        padding: "2px 8px",
+                      }}
+                    >
+                      {overdueDays}d late
+                    </span>
+                  )}
                 </div>
                 <div
                   style={{
@@ -346,11 +396,18 @@ function WorkList({ items, empty, onOpen }) {
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 10,
+                  fontWeight: 600,
                   color: "var(--text-muted)",
                   flexShrink: 0,
+                  padding: "4px 8px",
+                  borderRadius: "var(--radius-badge)",
+                  border: "1px solid var(--border-default)",
+                  minHeight: 24,
+                  display: "flex",
+                  alignItems: "center",
                 }}
               >
-                OPEN
+                OPEN \u2192
               </div>
             </div>
           </button>
@@ -365,15 +422,31 @@ function FeedList({ items }) {
     return (
       <div
         style={{
-          padding: "18px 10px",
+          padding: "24px 10px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <div style={{ fontSize: 22, opacity: 0.4 }}>{"\u2714"}</div>
+        <div style={{
           fontFamily: "var(--font-mono)",
           fontSize: 10,
           color: "var(--text-muted)",
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-        }}
-      >
-        No changes captured since yesterday
+        }}>
+          No changes since yesterday
+        </div>
+        <div style={{
+          fontFamily: "var(--font-body)",
+          fontSize: 11,
+          color: "var(--text-disabled)",
+        }}>
+          Activity will appear here as project data is updated.
+        </div>
       </div>
     );
   }
@@ -449,6 +522,7 @@ export default function DrilldownView({
   onClearProject,
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const today = useMemo(() => startOfToday(), []);
 
@@ -537,33 +611,45 @@ export default function DrilldownView({
     );
 
     const attentionItems = [
-      ...overdueRfis.map((rfi) => ({
-        key: `rfi-${rfi.id}`,
-        kicker: rfi.rfi_number || "RFI",
-        title: rfi.title || "Open RFI requires response",
-        detail: `${daysBetween(today, parseDate(rfi.due_date))}d overdue | ${rfi.status} | ${rfi.priority || "No priority"}`,
-        badge: "RFI",
-        tone: rfi.priority === "Critical" ? "danger" : "warning",
-        page: "RFIs",
-      })),
-      ...lateDrawings.map((drawing) => ({
-        key: `dwg-${drawing.id}`,
-        kicker: drawing.sheet_number || "Drawing",
-        title: drawing.title || "Drawing review pending",
-        detail: `${drawing.stage} | Due ${fmtDate(drawing.due_date)} | Rev ${drawing.revision_number || 0}`,
-        badge: "REVISION",
-        tone: "danger",
-        page: "Drawings",
-      })),
-      ...lateDeliveries.map((delivery) => ({
-        key: `delivery-${delivery.id}`,
-        kicker: delivery.delivery_id || "Delivery",
-        title: delivery.delivery_title || delivery.vendor || "Delivery update needed",
-        detail: `${delivery.vendor || "Vendor not set"} | Due ${fmtDate(delivery.scheduled_date)}`,
-        badge: "DELIVERY",
-        tone: "warning",
-        page: "Deliveries",
-      })),
+      ...overdueRfis.map((rfi) => {
+        const od = Math.abs(daysBetween(today, parseDate(rfi.due_date)));
+        return {
+          key: `rfi-${rfi.id}`,
+          kicker: rfi.rfi_number || "RFI",
+          title: rfi.title || "Open RFI requires response",
+          detail: `${od}d overdue | ${rfi.status} | ${rfi.priority || "No priority"}`,
+          badge: "RFI",
+          tone: rfi.priority === "Critical" ? "danger" : "warning",
+          overdueDays: od,
+          page: "RFIs",
+        };
+      }),
+      ...lateDrawings.map((drawing) => {
+        const od = Math.abs(daysBetween(today, parseDate(drawing.due_date)));
+        return {
+          key: `dwg-${drawing.id}`,
+          kicker: drawing.sheet_number || "Drawing",
+          title: drawing.title || "Drawing review pending",
+          detail: `${drawing.stage} | Due ${fmtDate(drawing.due_date)} | Rev ${drawing.revision_number || 0}`,
+          badge: "REVISION",
+          tone: "danger",
+          overdueDays: od,
+          page: "Drawings",
+        };
+      }),
+      ...lateDeliveries.map((delivery) => {
+        const od = Math.abs(daysBetween(today, parseDate(delivery.scheduled_date)));
+        return {
+          key: `delivery-${delivery.id}`,
+          kicker: delivery.delivery_id || "Delivery",
+          title: delivery.delivery_title || delivery.vendor || "Delivery update needed",
+          detail: `${delivery.vendor || "Vendor not set"} | Due ${fmtDate(delivery.scheduled_date)}`,
+          badge: "DELIVERY",
+          tone: "warning",
+          overdueDays: od,
+          page: "Deliveries",
+        };
+      }),
       ...blockedWps.map((wp) => ({
         key: `wp-${wp.id}`,
         kicker: wp.wp_number || "WP",
@@ -571,17 +657,22 @@ export default function DrilldownView({
         detail: `${wp.phase || "No phase"} | ${wp.crew || "Crew not set"} | On Hold`,
         badge: "BLOCKED",
         tone: "danger",
+        overdueDays: 0,
         page: "WorkPackages",
       })),
-      ...overdueActions.map((item) => ({
-        key: `action-${item.id}`,
-        kicker: item.priority || "Action",
-        title: item.title || "Action overdue",
-        detail: `${item.assigned_to || "Unassigned"} | Due ${fmtDate(item.due_date)}`,
-        badge: isConstraint(item) ? "CONSTRAINT" : "ACTION",
-        tone: isConstraint(item) ? "danger" : "warning",
-        page: isConstraint(item) ? "Constraints" : "ActionItems",
-      })),
+      ...overdueActions.map((item) => {
+        const od = item.due_date ? Math.abs(daysBetween(today, parseDate(item.due_date))) : 0;
+        return {
+          key: `action-${item.id}`,
+          kicker: item.priority || "Action",
+          title: item.title || "Action overdue",
+          detail: `${item.assigned_to || "Unassigned"} | Due ${fmtDate(item.due_date)}`,
+          badge: isConstraint(item) ? "CONSTRAINT" : "ACTION",
+          tone: isConstraint(item) ? "danger" : "warning",
+          overdueDays: od,
+          page: isConstraint(item) ? "Constraints" : "ActionItems",
+        };
+      }),
     ]
       .sort((a, b) => {
         const order = { danger: 0, warning: 1, accent: 2, muted: 3 };
@@ -679,6 +770,20 @@ export default function DrilldownView({
       blocked,
     };
   }, [rfis, drawings, deliveries, wps, actionItems, financials, recentActivity, today, userTokens]);
+
+  // Computed WP progress & tonnage for donut charts
+  const wpProgress = useMemo(() => {
+    if (!wps.length) return { avg: 0, fabPct: 0, totalTons: 0, fabTons: 0 };
+    const total = wps.reduce((s, wp) => s + (Number(wp.percent_complete) || 0), 0);
+    const avg = Math.round(total / wps.length);
+    const totalTons = wps.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
+    const fabTons = wps
+      .filter(wp => ["Fabrication", "Delivery", "Erection"].includes(wp.phase) && Number(wp.percent_complete) >= 50)
+      .reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
+    const fabPct = totalTons > 0 ? Math.round((fabTons / totalTons) * 100) : 0;
+    return { avg, fabPct, totalTons, fabTons };
+  }, [wps]);
+
   const stats = [
     {
       label: "Needs Attention",
@@ -687,10 +792,12 @@ export default function DrilldownView({
       color: derived.attentionItems.length ? "var(--status-error)" : "var(--status-success)",
     },
     {
-      label: "Changes Since Yesterday",
-      value: derived.changeFeed.length,
-      subtext: recentActivity?.length ? "Live activity feed is flowing" : "No recent activity posted",
+      label: "WP Progress",
+      value: `${wpProgress.avg}%`,
+      subtext: `${wps.length} packages across all phases`,
       color: "var(--accent)",
+      chartValue: wpProgress.avg,
+      chartMax: 100,
     },
     {
       label: "Blocked / At Risk",
@@ -702,10 +809,12 @@ export default function DrilldownView({
           : "var(--text-muted)",
     },
     {
-      label: "My Next Actions",
-      value: derived.myItems.length,
-      subtext: user?.full_name || user?.email || "Signed-in user",
-      color: derived.myItems.length ? "var(--accent)" : "var(--text-muted)",
+      label: "Fab Progress",
+      value: `${wpProgress.fabPct}%`,
+      subtext: `${Math.round(wpProgress.fabTons)}T of ${Math.round(wpProgress.totalTons)}T fabricated`,
+      color: "var(--phase-fab)",
+      chartValue: wpProgress.fabPct,
+      chartMax: 100,
     },
   ];
 
@@ -738,18 +847,44 @@ export default function DrilldownView({
           </ErrorBoundary>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -6 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: -6 }}>
         <span style={{
           fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
           letterSpacing: "0.06em",
         }}>
           Last synced: {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
+        <button
+          type="button"
+          onClick={() => {
+            queryClient.invalidateQueries();
+            setLastSynced(new Date());
+          }}
+          title="Refresh all data"
+          style={{
+            background: "none",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            padding: "3px 8px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            transition: "color 0.15s, border-color 0.15s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+        >
+          &#x21BB; REFRESH
+        </button>
       </div>
 
-      <Card title="Quick Update Rail" tone="accent">
+      <CollapsibleCard id="dashboard-quick-rail" title="Quick Update Rail" tone="accent">
         <QuickActionRail actions={quickActions} onNavigate={openPage} />
-      </Card>
+      </CollapsibleCard>
 
       {/* NEEDS ATTENTION — hero section, full width, high contrast */}
       {derived.attentionItems.length > 0 && (
@@ -798,13 +933,14 @@ export default function DrilldownView({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <Card
+        <CollapsibleCard
+          id="dashboard-my-actions"
           title="My Next Actions"
           tone="accent"
           count={derived.myItems.length}
           action={
             <div style={{
-              fontFamily: "var(--font-mono)", fontSize: 8,
+              fontFamily: "var(--font-mono)", fontSize: 9,
               color: "var(--text-muted)", textTransform: "uppercase",
               letterSpacing: "0.08em",
             }}>
@@ -812,10 +948,10 @@ export default function DrilldownView({
             </div>
           }
         >
-          <WorkList items={derived.myItems} empty="No directly assigned actions found" onOpen={openPage} />
-        </Card>
+          <WorkList items={derived.myItems} empty="No directly assigned actions found" emptyIcon="\u2605" onOpen={openPage} />
+        </CollapsibleCard>
 
-        <Card title="Blocked / At Risk" tone="warning">
+        <CollapsibleCard id="dashboard-blocked" title="Blocked / At Risk" tone="warning">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {derived.blocked.map((item) => (
               <button
@@ -854,14 +990,14 @@ export default function DrilldownView({
               </button>
             ))}
           </div>
-        </Card>
+        </CollapsibleCard>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <Card title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
+        <CollapsibleCard id="dashboard-changes" title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
           <FeedList items={derived.changeFeed} />
-        </Card>
-        <Card title="Execution Snapshot" tone="accent">
+        </CollapsibleCard>
+        <CollapsibleCard id="dashboard-execution" title="Execution Snapshot" tone="accent">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
             <ErrorBoundary label="Steel Execution Status">
               <SteelExecutionStatusCard wps={wps} drawings={drawings} />
@@ -870,7 +1006,7 @@ export default function DrilldownView({
               <FinancialSnapshotCard financials={financials} cos={cos} />
             </ErrorBoundary>
           </div>
-        </Card>
+        </CollapsibleCard>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "stretch" }}>
@@ -882,15 +1018,17 @@ export default function DrilldownView({
         </ErrorBoundary>
       </div>
 
-      <ErrorBoundary label="Budget Overview Chart">
-        <BudgetOverviewChart
-          summary={{
-            budget: financials.budgetCommitted,
-            actual: financials.actualSpend,
-            forecast: financials.committedCosts,
-          }}
-        />
-      </ErrorBoundary>
+      <CollapsibleCard id="dashboard-budget" title="Budget Overview" tone="accent">
+        <ErrorBoundary label="Budget Overview Chart">
+          <BudgetOverviewChart
+            summary={{
+              budget: financials.budgetCommitted,
+              actual: financials.actualSpend,
+              forecast: financials.committedCosts,
+            }}
+          />
+        </ErrorBoundary>
+      </CollapsibleCard>
     </div>
   );
 }

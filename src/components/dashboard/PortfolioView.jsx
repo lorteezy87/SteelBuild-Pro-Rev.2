@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -23,6 +23,15 @@ const PHASE_DOT = {
   "Erection/Installation": "#8B5CF6",
   Closeout: "var(--status-success)",
 };
+
+function healthColor(status) {
+  switch (status) {
+    case "On Track": return "var(--status-success)";
+    case "Watch": return "var(--status-warning)";
+    case "At Risk": return "var(--status-error)";
+    default: return "var(--text-muted)";
+  }
+}
 
 function riskCell(level) {
   const c = RISK_COLOR[level];
@@ -129,14 +138,19 @@ const HeaderBar = ({ title, right, count }) => (
   </div>
 );
 
-const KPIBlock = ({ label, value, color, bordered }) => (
+const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
   <div
+    onClick={onClick}
     style={{
       padding: "12px 24px",
       borderRight: bordered ? "1px solid var(--divider)" : "none",
       display: "flex",
       flexDirection: "column",
       gap: 4,
+      cursor: onClick ? "pointer" : "default",
+      borderTop: active ? "3px solid var(--accent)" : "3px solid transparent",
+      boxShadow: active ? "0 0 12px rgba(59,130,246,0.25)" : "none",
+      transition: "box-shadow 0.2s, border-top 0.2s",
     }}
   >
     <span
@@ -175,6 +189,8 @@ export default function PortfolioView({
   allExpenses = [],
 }) {
   const navigate = useNavigate();
+  const [sortMode, setSortMode] = useState("health");
+  const [kpiFilter, setKpiFilter] = useState(null);
   const projectMap = useMemo(() => {
     const map = {};
     for (const p of projects || []) map[p.id] = p.name || p.project_name || "";
@@ -233,6 +249,34 @@ export default function PortfolioView({
       })
       .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
+
+  const displayMetrics = useMemo(() => {
+    let list = [...projectMetrics];
+    // Apply KPI filter
+    if (kpiFilter === "overdueRFIs") {
+      list = list.filter((p) => p.overdueRFIs > 0);
+    } else if (kpiFilter === "atRisk") {
+      list = list.filter((p) => p.health_status === "At Risk");
+    }
+    // Apply sort
+    if (sortMode === "rfi") {
+      list.sort((a, b) => b.openRFIs - a.openRFIs);
+    } else if (sortMode === "deadline") {
+      list.sort((a, b) => {
+        const aDate = allDeliveries.filter((d) => d.project_id === a.id && d.status !== "Delivered").reduce((min, d) => {
+          const dt = d.scheduled_date ? new Date(d.scheduled_date).getTime() : Infinity;
+          return dt < min ? dt : min;
+        }, Infinity);
+        const bDate = allDeliveries.filter((d) => d.project_id === b.id && d.status !== "Delivered").reduce((min, d) => {
+          const dt = d.scheduled_date ? new Date(d.scheduled_date).getTime() : Infinity;
+          return dt < min ? dt : min;
+        }, Infinity);
+        return aDate - bDate;
+      });
+    }
+    // default "health" sort is already applied from projectMetrics
+    return list;
+  }, [projectMetrics, sortMode, kpiFilter, allDeliveries]);
 
   const portfolioKPIs = useMemo(() => {
     const portfolioValue =
@@ -477,25 +521,37 @@ export default function PortfolioView({
           bordered
           color={portfolioKPIs.totalSpend > (portfolioKPIs.totalBudget || 0) ? "var(--status-error)" : "var(--status-success)"}
         />
-        {/* Overdue RFIs — glows red when non-zero */}
-        <div style={{
-          padding: "12px 24px",
-          borderRight: "1px solid var(--divider)",
-          borderTop: portfolioKPIs.overdueRFIs > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
-          background: portfolioKPIs.overdueRFIs > 0 ? "var(--danger-muted)" : "transparent",
-          display: "flex", flexDirection: "column", gap: 4,
-        }}>
+        {/* Overdue RFIs — glows red when non-zero, clickable filter */}
+        <div
+          onClick={() => setKpiFilter(kpiFilter === "overdueRFIs" ? null : "overdueRFIs")}
+          style={{
+            padding: "12px 24px",
+            borderRight: "1px solid var(--divider)",
+            borderTop: kpiFilter === "overdueRFIs" ? "3px solid var(--accent)" : portfolioKPIs.overdueRFIs > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+            background: portfolioKPIs.overdueRFIs > 0 ? "var(--danger-muted)" : "transparent",
+            display: "flex", flexDirection: "column", gap: 4,
+            cursor: "pointer",
+            boxShadow: kpiFilter === "overdueRFIs" ? "0 0 12px rgba(59,130,246,0.25)" : "none",
+            transition: "box-shadow 0.2s, border-top 0.2s",
+          }}
+        >
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)" }}>Overdue RFIs</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.overdueRFIs}</span>
         </div>
-        {/* At Risk — glows red when non-zero */}
-        <div style={{
-          padding: "12px 24px",
-          borderRight: "1px solid var(--divider)",
-          borderTop: portfolioKPIs.atRisk > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
-          background: portfolioKPIs.atRisk > 0 ? "var(--danger-muted)" : "transparent",
-          display: "flex", flexDirection: "column", gap: 4,
-        }}>
+        {/* At Risk — glows red when non-zero, clickable filter */}
+        <div
+          onClick={() => setKpiFilter(kpiFilter === "atRisk" ? null : "atRisk")}
+          style={{
+            padding: "12px 24px",
+            borderRight: "1px solid var(--divider)",
+            borderTop: kpiFilter === "atRisk" ? "3px solid var(--accent)" : portfolioKPIs.atRisk > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
+            background: portfolioKPIs.atRisk > 0 ? "var(--danger-muted)" : "transparent",
+            display: "flex", flexDirection: "column", gap: 4,
+            cursor: "pointer",
+            boxShadow: kpiFilter === "atRisk" ? "0 0 12px rgba(59,130,246,0.25)" : "none",
+            transition: "box-shadow 0.2s, border-top 0.2s",
+          }}
+        >
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--text-muted)" }}>At Risk</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.atRisk}</span>
         </div>
@@ -597,26 +653,74 @@ export default function PortfolioView({
         <Card style={{ gridColumn: "span 12" }}>
           <HeaderBar
             title="Project Health Overview"
-            count={projectMetrics.length}
+            count={displayMetrics.length}
             right={
-              <button
-                onClick={() => navigate("/Projects")}
-                style={{
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-btn)",
-                  color: "var(--accent)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  padding: "6px 10px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  cursor: "pointer",
-                }}
-              >
-                Manage Projects →
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {[
+                  { key: "health", label: "Default" },
+                  { key: "rfi", label: "Most RFIs" },
+                  { key: "deadline", label: "Soonest Deadline" },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setSortMode(opt.key)}
+                    style={{
+                      background: sortMode === opt.key ? "var(--accent)" : "var(--bg-surface)",
+                      color: sortMode === opt.key ? "var(--accent-text)" : "var(--text-secondary)",
+                      border: sortMode === opt.key ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
+                      borderRadius: 999,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: "5px 12px",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                {kpiFilter && (
+                  <button
+                    onClick={() => setKpiFilter(null)}
+                    style={{
+                      background: "var(--danger-muted)",
+                      color: "var(--status-error)",
+                      border: "1px solid var(--danger-border)",
+                      borderRadius: 999,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: "5px 12px",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Clear Filter ✕
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate("/Projects")}
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius-btn)",
+                    color: "var(--accent)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "6px 10px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    cursor: "pointer",
+                  }}
+                >
+                  Manage Projects →
+                </button>
+              </div>
             }
           />
           <div style={{ overflowX: "auto" }}>
@@ -643,13 +747,14 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody>
-                {projectMetrics.map((p, i) => {
+                {displayMetrics.map((p, i) => {
                   const variance = p.hasBudgetData ? p.budget - p.actual : null;
                   const isOverBudget = variance !== null && variance < 0;
                   const rowBg = p.health_status === "At Risk" ? "rgba(255,61,61,0.04)" : p.health_status === "Watch" ? "rgba(245,158,11,0.03)" : "transparent";
+                  const hColor = healthColor(p.health_status);
                   return (
+                    <React.Fragment key={p.id}>
                     <tr
-                      key={p.id}
                       onClick={() => navigate(`/ProjectDashboard?project=${p.id}`)}
                       style={{
                         borderBottom: "1px solid var(--divider)",
@@ -657,6 +762,7 @@ export default function PortfolioView({
                         height: ROW_HEIGHT,
                         cursor: "pointer",
                         transition: "background 0.12s",
+                        borderLeft: `4px solid ${hColor}`,
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
                       onMouseLeave={e => e.currentTarget.style.background = rowBg}
@@ -676,56 +782,111 @@ export default function PortfolioView({
                         <StatusBadge status={p.health_status} />
                       </td>
                       {/* Budget */}
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasBudgetData ? "normal" : "italic" }}>
+                      <td
+                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasBudgetData ? "normal" : "italic" }}
+                      >
                         {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : "Pending"}
                       </td>
                       {/* Actual */}
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasActualData ? "normal" : "italic" }}>
+                      <td
+                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasActualData ? "normal" : "italic" }}
+                      >
                         {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : "Pending"}
                       </td>
                       {/* Variance = Budget - Actual (positive = under budget) */}
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)" }}>
+                      <td
+                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)" }}
+                      >
                         {variance === null ? "—" : (isOverBudget ? "−" : "+") + formatCurrency(Math.abs(variance)).replace(/\.\d+/, "")}
                       </td>
-                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text-primary)", fontSize: 10 }}>{p.openRFIs}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)", fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400 }}>{p.overdueRFIs}</td>
+                      <td
+                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
+                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-primary)", fontSize: 16, fontWeight: 800 }}
+                      >
+                        {p.openRFIs}
+                      </td>
+                      <td
+                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
+                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)", fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400 }}
+                      >
+                        {p.overdueRFIs}
+                      </td>
                       <td style={{ padding: "6px 8px", minWidth: 130 }}>
                         <ProgressBar value={p.avgProgress || 0} />
                       </td>
-                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>
+                      <td
+                        title={`${p.pendingCOs.length} pending COs totaling ${formatCurrency(p.pendingCOValue)}`}
+                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: p.pendingCOs.length > 0 ? 16 : 10, fontWeight: p.pendingCOs.length > 0 ? 800 : 400, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)" }}
+                      >
                         {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
                       </td>
-                      <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : "—"}</td>
+                      <td title={`${p.tonnage}T total tonnage, ${p.avgProgress}% WP progress`} style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : "—"}</td>
                     </tr>
+                    <tr style={{ height: 3, padding: 0 }}>
+                      <td colSpan={12} style={{ padding: 0, border: "none" }}>
+                        <div style={{ width: "100%", height: 3, background: "var(--bg-sidebar)" }}>
+                          <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
+                        </div>
+                      </td>
+                    </tr>
+                    </React.Fragment>
                   );
                 })}
-                {projectMetrics.length === 0 && (
+                {displayMetrics.length === 0 && (
                   <tr>
                     <td colSpan={12} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
-                        <svg width="48" height="48" viewBox="0 0 36 36" aria-hidden style={{ opacity: 0.15 }}>
-                          <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--text-muted)" />
-                          <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--text-muted)" />
-                          <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--text-muted)" />
-                        </svg>
-                        NO ACTIVE PROJECTS — Add a project to begin tracking
-                        <button
-                          onClick={() => navigate("/Projects")}
-                          style={{
-                            background: "var(--accent)",
-                            color: "var(--accent-text)",
-                            borderRadius: "var(--radius-btn)",
-                            border: "1px solid var(--accent-border)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "6px 12px",
-                            letterSpacing: "0.08em",
-                            cursor: "pointer",
-                          }}
-                        >
-                          + New Project
-                        </button>
+                        {kpiFilter ? (
+                          <>
+                            No projects match the active filter.
+                            <button
+                              onClick={() => setKpiFilter(null)}
+                              style={{
+                                background: "var(--bg-surface)",
+                                color: "var(--accent)",
+                                borderRadius: "var(--radius-btn)",
+                                border: "1px solid var(--accent-border)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "6px 12px",
+                                letterSpacing: "0.08em",
+                                cursor: "pointer",
+                              }}
+                            >
+                              Clear Filter
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <svg width="48" height="48" viewBox="0 0 36 36" aria-hidden style={{ opacity: 0.15 }}>
+                              <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--text-muted)" />
+                              <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--text-muted)" />
+                              <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--text-muted)" />
+                            </svg>
+                            NO ACTIVE PROJECTS — Add a project to begin tracking
+                            <button
+                              onClick={() => navigate("/Projects")}
+                              style={{
+                                background: "var(--accent)",
+                                color: "var(--accent-text)",
+                                borderRadius: "var(--radius-btn)",
+                                border: "1px solid var(--accent-border)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "6px 12px",
+                                letterSpacing: "0.08em",
+                                cursor: "pointer",
+                              }}
+                            >
+                              + New Project
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
