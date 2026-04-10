@@ -140,21 +140,32 @@ export default function ModelViewer() {
       };
       animate();
 
-      // Resize handler
+      // Resize handler — use ResizeObserver for reliable container tracking
       const onResize = () => {
         if (!mountRef.current) return;
-        const w = mountRef.current.clientWidth || width;
-        const h = mountRef.current.clientHeight || height;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+        const w = mountRef.current.clientWidth;
+        const h = mountRef.current.clientHeight;
+        if (w > 0 && h > 0) {
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        }
       };
       window.addEventListener('resize', onResize);
 
+      let resizeObserver;
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => onResize());
+        resizeObserver.observe(mountRef.current);
+      }
+
+      // Also trigger resize after flex layout settles
+      setTimeout(onResize, 100);
+
       // Store refs
-      sceneRef.current = { 
-        scene, camera, renderer, controls, 
-        initialized: true, animFrameId, onResize 
+      sceneRef.current = {
+        scene, camera, renderer, controls,
+        initialized: true, animFrameId, onResize, resizeObserver
       };
     });
 
@@ -164,6 +175,7 @@ export default function ModelViewer() {
       if (sceneRef.current.initialized) {
         cancelAnimationFrame(sceneRef.current.animFrameId);
         if (sceneRef.current.onResize) window.removeEventListener('resize', sceneRef.current.onResize);
+        if (sceneRef.current.resizeObserver) sceneRef.current.resizeObserver.disconnect();
         sceneRef.current.controls?.dispose();
         sceneRef.current.renderer?.dispose();
         if (mountRef.current && sceneRef.current.renderer?.domElement?.parentNode === mountRef.current) {
@@ -709,6 +721,8 @@ export default function ModelViewer() {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
+      flex: 1,
+      minHeight: 0,
       height: '100%',
       background: 'var(--bg-page)',
     }}>
