@@ -101,7 +101,6 @@ export default function ActionItems() {
       id: item.id,
       data: {
         status: isComplete ? "Open" : "Complete",
-        resolved_date: isComplete ? null : new Date().toISOString().split("T")[0],
       },
     });
   };
