@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -6,6 +6,53 @@ import { formatCurrency, isOverdue, daysOverdue } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import StatusBadge from "../shared/StatusBadge";
 import ProgressBar from "../shared/ProgressBar";
+
+/* ── Mini SVG Sparkline for KPI tiles ──────────────────────────────────────── */
+function MiniSparkline({ data = [], color = "var(--accent)", width = 48, height = 18 }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 2) - 1;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg width={width} height={height} style={{ display: "block", opacity: 0.7 }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ── Compute auto health based on project metrics ─────────────────────────── */
+function computeAutoHealth(p) {
+  if (p.overdueRFIs > 3 || p.lateDeliveries > 2 || (p.hasBudgetData && p.budget > 0 && p.actual / p.budget > 1.05))
+    return "At Risk";
+  if (p.overdueRFIs > 0 || p.lateDeliveries > 0 || p.stalledWPs > 1 || (p.hasBudgetData && p.budget > 0 && p.actual / p.budget > 0.95))
+    return "Watch";
+  return "On Track";
+}
+
+/* ── Stoplight health pill ─────────────────────────────────────────────────── */
+function HealthPill({ status }) {
+  const cfg = {
+    "On Track": { bg: "var(--status-success)", text: "#fff", label: "ON TRACK" },
+    "Watch":    { bg: "var(--status-warning)", text: "#000", label: "WATCH" },
+    "At Risk":  { bg: "var(--status-error)",   text: "#fff", label: "AT RISK" },
+  };
+  const s = cfg[status] || cfg["On Track"];
+  return (
+    <span style={{
+      background: s.bg, color: s.text,
+      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+      letterSpacing: "0.08em", padding: "3px 10px",
+      borderRadius: 999, whiteSpace: "nowrap",
+    }}>
+      {s.label}
+    </span>
+  );
+}
 
 const ROW_HEIGHT = 40;
 const HEALTH_ORDER = { "At Risk": 0, "Watch": 1, "On Track": 2 };
@@ -191,6 +238,16 @@ export default function PortfolioView({
   const navigate = useNavigate();
   const [sortMode, setSortMode] = useState("health");
   const [kpiFilter, setKpiFilter] = useState(null);
+
+  // ── Sparkline history: store 7-day KPI snapshots in localStorage ──────────
+  const [sparkHistory, setSparkHistory] = useState({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("sbp-portfolio-spark");
+      if (raw) setSparkHistory(JSON.parse(raw));
+    } catch { /* noop */ }
+  }, []);
+
   const projectMap = useMemo(() => {
     const map = {};
     for (const p of projects || []) map[p.id] = p.name || p.project_name || "";
@@ -250,13 +307,29 @@ export default function PortfolioView({
       .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
 
+  // Enrich metrics with auto-computed health
+  const enrichedMetrics = useMemo(() =>
+    projectMetrics.map((p) => ({
+      ...p,
+      autoHealth: computeAutoHealth(p),
+      effectiveHealth: computeAutoHealth(p),  // auto-health overrides manual when worse
+    })),
+    [projectMetrics]
+  );
+
   const displayMetrics = useMemo(() => {
-    let list = [...projectMetrics];
+    let list = [...enrichedMetrics];
     // Apply KPI filter
     if (kpiFilter === "overdueRFIs") {
       list = list.filter((p) => p.overdueRFIs > 0);
+    } else if (kpiFilter === "openRFIs") {
+      list = list.filter((p) => p.openRFIs > 0);
     } else if (kpiFilter === "atRisk") {
-      list = list.filter((p) => p.health_status === "At Risk");
+      list = list.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch");
+    } else if (kpiFilter === "pendingCOs") {
+      list = list.filter((p) => p.pendingCOs.length > 0);
+    } else if (kpiFilter === "lateDeliveries") {
+      list = list.filter((p) => p.lateDeliveries > 0);
     }
     // Apply sort
     if (sortMode === "rfi") {
@@ -276,7 +349,7 @@ export default function PortfolioView({
     }
     // default "health" sort is already applied from projectMetrics
     return list;
-  }, [projectMetrics, sortMode, kpiFilter, allDeliveries]);
+  }, [enrichedMetrics, sortMode, kpiFilter, allDeliveries]);
 
   const portfolioKPIs = useMemo(() => {
     const portfolioValue =
@@ -285,10 +358,42 @@ export default function PortfolioView({
     const totalBudget = allCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
     const totalSpend = allExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const overdueRFIs = allRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
-    const atRisk = projects.filter((p) => p.health_status === "At Risk").length;
+    const openRFIs = allRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
+    const pendingCOs = allCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status)).length;
+    const lateDeliveries = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < new Date() && d.status !== "Delivered").length;
+    const atRisk = projects.filter((p) => p.health_status === "At Risk" || p.health_status === "Watch").length;
     const activeWPs = allWPs.filter((w) => w.status === "In Progress").length;
-    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, atRisk, activeWPs };
-  }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses]);
+    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs };
+  }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries]);
+
+  // ── Persist sparkline snapshot once per day ────────────────────────────────
+  useEffect(() => {
+    if (!portfolioKPIs) return;
+    try {
+      const dateKey = new Date().toISOString().slice(0, 10);
+      const hist = { ...sparkHistory };
+      hist[dateKey] = {
+        overdueRFIs: portfolioKPIs.overdueRFIs,
+        openRFIs: portfolioKPIs.openRFIs,
+        pendingCOs: portfolioKPIs.pendingCOs,
+        lateDeliveries: portfolioKPIs.lateDeliveries,
+        atRisk: portfolioKPIs.atRisk,
+      };
+      // keep last 7 days only
+      const keys = Object.keys(hist).sort().slice(-7);
+      const trimmed = {};
+      keys.forEach((k) => (trimmed[k] = hist[k]));
+      localStorage.setItem("sbp-portfolio-spark", JSON.stringify(trimmed));
+      setSparkHistory(trimmed);
+    } catch { /* noop */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portfolioKPIs]);
+
+  const sparkFor = (field) => {
+    const days = Object.keys(sparkHistory).sort();
+    if (days.length < 2) return [];
+    return days.map((d) => sparkHistory[d]?.[field] ?? 0);
+  };
 
   const budgetChartData = useMemo(
     () =>
@@ -378,8 +483,25 @@ export default function PortfolioView({
         ...d,
         daysLate: Math.max(0, Math.floor((today - new Date(d.scheduled_date)) / 86400000)),
       }));
-    return { scheduled, inTransit, late, lateList };
+    // Next upcoming delivery
+    const upcoming = allDeliveries
+      .filter((d) => d.scheduled_date && new Date(d.scheduled_date) >= today && d.status !== "Delivered")
+      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+    const nextDelivery = upcoming[0] || null;
+    return { scheduled, inTransit, late, lateList, nextDelivery };
   }, [allDeliveries]);
+
+  // ── RFI turnaround metric ──────────────────────────────────────────────────
+  const rfiTurnaround = useMemo(() => {
+    const closed = allRFIs.filter((r) => ["Answered", "Closed"].includes(r.status) && r.submitted_date && r.responded_date);
+    if (closed.length === 0) return null;
+    const totalDays = closed.reduce((s, r) => {
+      const submitted = new Date(r.submitted_date);
+      const responded = new Date(r.responded_date);
+      return s + Math.max(0, Math.floor((responded - submitted) / 86400000));
+    }, 0);
+    return (totalDays / closed.length).toFixed(1);
+  }, [allRFIs]);
 
   const stageTons = useMemo(() => {
     const stages = ["drawings_approved", "material_on_hand", "released", "in_fab", "fabricated", "finish", "rts"];
@@ -490,16 +612,17 @@ export default function PortfolioView({
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar — all tiles are clickable filters with sparklines */}
       <div
         style={{
           background: "var(--bg-surface)",
           borderBottom: "1px solid var(--divider)",
           display: "flex",
           flexShrink: 0,
+          flexWrap: "wrap",
         }}
       >
-        {/* Portfolio Value — featured (wider) */}
+        {/* Portfolio Value — featured (wider, not filterable) */}
         <div style={{
           padding: "12px 28px",
           borderRight: "1px solid var(--divider)",
@@ -521,41 +644,43 @@ export default function PortfolioView({
           bordered
           color={portfolioKPIs.totalSpend > (portfolioKPIs.totalBudget || 0) ? "var(--status-error)" : "var(--status-success)"}
         />
-        {/* Overdue RFIs — glows red when non-zero, clickable filter */}
-        <div
-          onClick={() => setKpiFilter(kpiFilter === "overdueRFIs" ? null : "overdueRFIs")}
-          style={{
-            padding: "12px 24px",
-            borderRight: "1px solid var(--divider)",
-            borderTop: kpiFilter === "overdueRFIs" ? "3px solid var(--accent)" : portfolioKPIs.overdueRFIs > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
-            background: portfolioKPIs.overdueRFIs > 0 ? "var(--danger-muted)" : "transparent",
-            display: "flex", flexDirection: "column", gap: 4,
-            cursor: "pointer",
-            boxShadow: kpiFilter === "overdueRFIs" ? "0 0 12px rgba(59,130,246,0.25)" : "none",
-            transition: "box-shadow 0.2s, border-top 0.2s",
-          }}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)" }}>Overdue RFIs</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.overdueRFIs}</span>
-        </div>
-        {/* At Risk — glows red when non-zero, clickable filter */}
-        <div
-          onClick={() => setKpiFilter(kpiFilter === "atRisk" ? null : "atRisk")}
-          style={{
-            padding: "12px 24px",
-            borderRight: "1px solid var(--divider)",
-            borderTop: kpiFilter === "atRisk" ? "3px solid var(--accent)" : portfolioKPIs.atRisk > 0 ? "3px solid var(--status-error)" : "3px solid transparent",
-            background: portfolioKPIs.atRisk > 0 ? "var(--danger-muted)" : "transparent",
-            display: "flex", flexDirection: "column", gap: 4,
-            cursor: "pointer",
-            boxShadow: kpiFilter === "atRisk" ? "0 0 12px rgba(59,130,246,0.25)" : "none",
-            transition: "box-shadow 0.2s, border-top 0.2s",
-          }}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--text-muted)" }}>At Risk</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: portfolioKPIs.atRisk > 0 ? "var(--status-error)" : "var(--status-success)" }}>{portfolioKPIs.atRisk}</span>
-        </div>
-        <KPIBlock label="Active Work Pkgs" value={portfolioKPIs.activeWPs} color="var(--accent)" />
+        {/* Open RFIs — clickable filter with sparkline */}
+        {[
+          { key: "openRFIs",       label: "Open RFIs",       val: portfolioKPIs.openRFIs,       warn: portfolioKPIs.openRFIs > 3,       color: "var(--status-warning)", sparkField: "openRFIs" },
+          { key: "overdueRFIs",    label: "Overdue RFIs",    val: portfolioKPIs.overdueRFIs,    warn: portfolioKPIs.overdueRFIs > 0,     color: "var(--status-error)",   sparkField: "overdueRFIs" },
+          { key: "pendingCOs",     label: "Pending COs",     val: portfolioKPIs.pendingCOs,     warn: portfolioKPIs.pendingCOs > 0,      color: "var(--status-warning)", sparkField: "pendingCOs" },
+          { key: "lateDeliveries", label: "Late Deliveries", val: portfolioKPIs.lateDeliveries, warn: portfolioKPIs.lateDeliveries > 0,  color: "var(--status-error)",   sparkField: "lateDeliveries" },
+          { key: "atRisk",         label: "At Risk / Watch", val: portfolioKPIs.atRisk,         warn: portfolioKPIs.atRisk > 0,          color: "var(--status-error)",   sparkField: "atRisk" },
+        ].map((tile, idx) => {
+          const isActive = kpiFilter === tile.key;
+          return (
+            <div
+              key={tile.key}
+              onClick={() => setKpiFilter(isActive ? null : tile.key)}
+              style={{
+                padding: "10px 18px",
+                borderRight: idx < 4 ? "1px solid var(--divider)" : "none",
+                borderTop: isActive ? "3px solid var(--accent)" : tile.warn ? `3px solid ${tile.color}` : "3px solid transparent",
+                background: isActive ? "rgba(59,130,246,0.08)" : tile.warn ? `${tile.color}10` : "transparent",
+                display: "flex", flexDirection: "column", gap: 3,
+                cursor: "pointer",
+                boxShadow: isActive ? "0 0 12px rgba(59,130,246,0.25)" : "none",
+                transition: "box-shadow 0.2s, border-top 0.2s, background 0.2s",
+                minWidth: 100,
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: tile.warn ? tile.color : "var(--text-muted)" }}>
+                {tile.label}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, lineHeight: 1, color: tile.warn ? tile.color : "var(--status-success)" }}>
+                  {tile.val}
+                </span>
+                <MiniSparkline data={sparkFor(tile.sparkField)} color={tile.warn ? tile.color : "var(--text-muted)"} />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {urgentItems.length > 0 && (
@@ -723,11 +848,11 @@ export default function PortfolioView({
               </div>
             }
           />
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 520 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
-                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage"].map((h, idx) => (
+                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
                       style={{
@@ -739,6 +864,10 @@ export default function PortfolioView({
                         padding: "10px 8px",
                         textAlign: idx <= 2 ? "left" : "center",
                         whiteSpace: "nowrap",
+                        position: "sticky",
+                        top: 0,
+                        background: "var(--bg-sidebar)",
+                        zIndex: 2,
                       }}
                     >
                       {h}
@@ -750,8 +879,9 @@ export default function PortfolioView({
                 {displayMetrics.map((p, i) => {
                   const variance = p.hasBudgetData ? p.budget - p.actual : null;
                   const isOverBudget = variance !== null && variance < 0;
-                  const rowBg = p.health_status === "At Risk" ? "rgba(255,61,61,0.04)" : p.health_status === "Watch" ? "rgba(245,158,11,0.03)" : "transparent";
-                  const hColor = healthColor(p.health_status);
+                  const hStatus = p.effectiveHealth || p.health_status;
+                  const rowBg = hStatus === "At Risk" ? "rgba(255,61,61,0.04)" : hStatus === "Watch" ? "rgba(245,158,11,0.03)" : "transparent";
+                  const hColor = healthColor(hStatus);
                   return (
                     <React.Fragment key={p.id}>
                     <tr
@@ -779,7 +909,7 @@ export default function PortfolioView({
                         {p.phase || "—"}
                       </td>
                       <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                        <StatusBadge status={p.health_status} />
+                        <HealthPill status={hStatus} />
                       </td>
                       {/* Budget */}
                       <td
@@ -824,9 +954,32 @@ export default function PortfolioView({
                         {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
                       </td>
                       <td title={`${p.tonnage}T total tonnage, ${p.avgProgress}% WP progress`} style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : "—"}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/ProjectDashboard?project=${p.id}`); }}
+                          style={{
+                            background: "var(--bg-surface)",
+                            border: "1px solid var(--accent-border)",
+                            borderRadius: "var(--radius-btn)",
+                            color: "var(--accent)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 8,
+                            fontWeight: 700,
+                            padding: "5px 10px",
+                            cursor: "pointer",
+                            letterSpacing: "0.06em",
+                            whiteSpace: "nowrap",
+                            transition: "background 0.15s",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)", e.currentTarget.style.color = "var(--accent-text)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)", e.currentTarget.style.color = "var(--accent)")}
+                        >
+                          OPEN →
+                        </button>
+                      </td>
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
-                      <td colSpan={12} style={{ padding: 0, border: "none" }}>
+                      <td colSpan={13} style={{ padding: 0, border: "none" }}>
                         <div style={{ width: "100%", height: 3, background: "var(--bg-sidebar)" }}>
                           <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
                         </div>
@@ -837,7 +990,7 @@ export default function PortfolioView({
                 })}
                 {displayMetrics.length === 0 && (
                   <tr>
-                    <td colSpan={12} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    <td colSpan={13} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
                         {kpiFilter ? (
                           <>
@@ -900,32 +1053,42 @@ export default function PortfolioView({
         <ErrorBoundary label="Budget vs Actual">
         <Card style={{ gridColumn: "span 8" }}>
           <HeaderBar title="Budget vs Actual — All Projects" />
-          <div style={{ padding: "12px 16px", height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={budgetChartData}>
-                <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
-                <YAxis tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
-                <Tooltip content={<PhoenixTooltip />} />
-                <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" />
-                <Bar dataKey="Actual" name="Actual">
-                  {budgetChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.overBudget ? "var(--status-error)" : "var(--accent)"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div
-              style={{
-                marginTop: 8,
-                fontFamily: "var(--font-mono)",
-                fontSize: 8,
-                color: "var(--text-muted)",
-                letterSpacing: "0.10em",
-                textTransform: "uppercase",
-              }}
-            >
-              Amounts shown in USD · Red bars indicate over-budget
-            </div>
+          <div style={{ padding: "12px 16px", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(320, budgetChartData.length * 36 + 40) : 320 }}>
+            {budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={budgetChartData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                    <YAxis dataKey="name" type="category" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} width={80} />
+                    <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
+                    <Tooltip content={<PhoenixTooltip />} />
+                    <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={10} />
+                    <Bar dataKey="Actual" name="Actual" barSize={10}>
+                      {budgetChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.overBudget ? "var(--status-error)" : "var(--accent)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
+                  Amounts shown in USD · Red bars indicate over-budget
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
+                <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden style={{ opacity: 0.15 }}>
+                  <rect x="4" y="36" width="8" height="16" rx="2" fill="var(--text-muted)" />
+                  <rect x="16" y="24" width="8" height="28" rx="2" fill="var(--text-muted)" />
+                  <rect x="28" y="16" width="8" height="36" rx="2" fill="var(--text-muted)" />
+                  <rect x="40" y="8" width="8" height="44" rx="2" fill="var(--text-muted)" />
+                </svg>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                  WAITING FOR FINANCIAL DATA
+                </span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", maxWidth: 280, textAlign: "center", lineHeight: 1.5 }}>
+                  Budget and actual cost data will appear here once cost codes and expenses are entered for your projects.
+                </span>
+              </div>
+            )}
           </div>
         </Card>
         </ErrorBoundary>
@@ -970,7 +1133,7 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody>
-                {projectMetrics.slice(0, 8).map((p) => {
+                {enrichedMetrics.map((p) => {
                   const rfiLevel = p.overdueRFIs === 0 ? "green" : p.overdueRFIs <= 2 ? "yellow" : "red";
                   const budgetPct = p.budget > 0 ? ((Number(p.actual) || 0) / p.budget) * 100 : 0;
                   const budgetLevel = budgetPct <= 100 ? "green" : budgetPct <= 110 ? "yellow" : "red";
@@ -1132,7 +1295,34 @@ export default function PortfolioView({
                   ))}
                 </div>
           ) : (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>No late deliveries</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)", fontWeight: 600 }}>
+                ALL DELIVERIES ON TRACK
+              </div>
+              {deliveriesStats.nextDelivery && (
+                <div style={{
+                  borderLeft: "3px solid var(--accent)",
+                  background: "var(--accent-muted)",
+                  borderRadius: "0 2px 2px 0",
+                  padding: "6px 8px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 10,
+                }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 2 }}>Next Delivery</div>
+                  <div style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: 11 }}>
+                    {deliveriesStats.nextDelivery.delivery_title || deliveriesStats.nextDelivery.vendor || "—"}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                    {projectMap[deliveriesStats.nextDelivery.project_id] || "—"} · {new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </div>
+                </div>
+              )}
+              {rfiTurnaround && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 4 }}>
+                  Avg RFI turnaround: <span style={{ color: "var(--accent)", fontWeight: 700 }}>{rfiTurnaround} days</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1144,7 +1334,18 @@ export default function PortfolioView({
     <Card style={{ gridColumn: "span 12" }}>
       <HeaderBar title="Urgent Items — All Projects" count={urgentItems.length} />
       {urgentItems.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>NO URGENT ITEMS ACROSS PORTFOLIO</div>
+        <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ color: "var(--status-success)", fontWeight: 700 }}>ALL CLEAR</span>
+            <span>No urgent items across portfolio</span>
+            {rfiTurnaround && <span>· Avg RFI turnaround: <span style={{ color: "var(--accent)", fontWeight: 700 }}>{rfiTurnaround}d</span></span>}
+            {deliveriesStats.nextDelivery && (
+              <span>· Next delivery: <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+                {new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span></span>
+            )}
+          </div>
+        </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8, padding: 12 }}>
           {urgentItems.slice(0, 12).map((item, i) => {
