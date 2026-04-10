@@ -129,6 +129,7 @@ export default function ModelViewer() {
       const grid = new THREE.GridHelper(200, 40, 0xB0B8C4, 0xD0D8E0);
       grid.material.opacity = 0.5;
       grid.material.transparent = true;
+      grid.name = '__grid__';
       scene.add(grid);
 
       // Animation loop
@@ -254,33 +255,56 @@ export default function ModelViewer() {
     const { camera, controls, loadedModel } = sceneRef.current;
     if (!camera || !loadedModel) return;
 
+    // Force world matrix update after any position changes
+    loadedModel.updateMatrixWorld(true);
+
     const box = new THREE.Box3().setFromObject(loadedModel);
     const ctr = box.getCenter(new THREE.Vector3());
     const sz = box.getSize(new THREE.Vector3());
-    const radius = sz.length() / 2;
-    if (radius <= 0) return;
+    const maxDim = Math.max(sz.x, sz.y, sz.z);
+    if (maxDim <= 0) return;
 
-    // Distance so bounding sphere fits in vertical FOV, with 40% padding
+    // Use the largest single dimension (not diagonal) for more intuitive framing,
+    // then apply generous 2.5x padding so the full structure is clearly visible
     const fovRad = camera.fov * (Math.PI / 180);
-    const d = (radius / Math.tan(fovRad / 2)) * 1.4;
+    const d = (maxDim / Math.tan(fovRad / 2)) * 2.5;
 
-    // Update near/far to accommodate model scale
-    camera.near = d * 0.001;
-    camera.far = d * 20;
+    // Update near/far planes for the model's scale
+    camera.near = Math.max(0.1, d * 0.001);
+    camera.far = d * 30;
     camera.updateProjectionMatrix();
 
+    // Place camera at exactly distance d along the chosen direction
+    const dir = new THREE.Vector3();
     switch (preset) {
-      case 'front':  camera.position.set(ctr.x, ctr.y, ctr.z + d); break;
-      case 'back':   camera.position.set(ctr.x, ctr.y, ctr.z - d); break;
-      case 'top':    camera.position.set(ctr.x, ctr.y + d, ctr.z + 0.01); break;
-      case 'right':  camera.position.set(ctr.x + d, ctr.y, ctr.z); break;
-      case 'left':   camera.position.set(ctr.x - d, ctr.y, ctr.z); break;
+      case 'front':  dir.set(0, 0, 1); break;
+      case 'back':   dir.set(0, 0, -1); break;
+      case 'top':    dir.set(0, 1, 0.001); break;
+      case 'right':  dir.set(1, 0, 0); break;
+      case 'left':   dir.set(-1, 0, 0); break;
       case 'iso':
-      default:       camera.position.set(ctr.x + d * 0.6, ctr.y + d * 0.45, ctr.z + d * 0.6); break;
+      default:       dir.set(1, 0.75, 1); break;
     }
+    dir.normalize();
+    camera.position.copy(ctr).addScaledVector(dir, d);
+
     controls.target.copy(ctr);
     camera.lookAt(ctr);
     controls.update();
+
+    // Scale grid to match model extent
+    const { scene } = sceneRef.current;
+    if (scene) {
+      const oldGrid = scene.getObjectByName('__grid__');
+      if (oldGrid) scene.remove(oldGrid);
+      const gridSize = maxDim * 3;
+      const gridDivs = 40;
+      const newGrid = new THREE.GridHelper(gridSize, gridDivs, 0xB0B8C4, 0xD0D8E0);
+      newGrid.material.opacity = 0.5;
+      newGrid.material.transparent = true;
+      newGrid.name = '__grid__';
+      scene.add(newGrid);
+    }
   }, []);
 
   // ─── TOGGLE EDGE OUTLINES ────────────────────────────────────
