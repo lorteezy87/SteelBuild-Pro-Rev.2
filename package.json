@@ -76,7 +76,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.171.0",
     "vaul": "^1.1.2",
-    "web-ifc": "^0.0.57",
+    "web-ifc": "^0.0.39",
     "web-ifc-three": "^0.0.125",
     "zod": "^3.24.2"
   },

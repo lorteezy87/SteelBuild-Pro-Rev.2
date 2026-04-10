@@ -24,6 +24,12 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  optimizeDeps: {
+    // web-ifc uses Emscripten-generated WASM glue code that breaks if Vite's
+    // dependency pre-bundler rewrites it.  Exclude both packages so the
+    // original module structure is preserved at build time.
+    exclude: ['web-ifc', 'web-ifc-three'],
+  },
   test: {
     globals: true,
     environment: 'node',
