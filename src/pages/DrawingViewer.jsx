@@ -1,13 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import * as pdfjsLib from "pdfjs-dist";
-// Bundle the pdf.js worker with Vite so versions always match the installed
-// pdfjs-dist package. Previously we loaded `.min.js` from cdnjs, but pdfjs-dist
-// 4.x only ships `.mjs` workers and the file name was wrong, causing every
-// drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -23,6 +19,66 @@ const STAGES = {
 };
 
 const mono = { fontFamily: "var(--font-mono)" };
+
+// ── Sheet Reference Patterns ────────────────────────────────────────────────
+// Matches structural drawing callout patterns found on steel construction sheets
+// Examples: "S2-003", "A560", "25531-011", "3/S5-001", "S-101", "A5.01"
+const SHEET_REF_PATTERNS = [
+  // "Detail/SheetRef" pattern: "3/S5-001" or "A/S2-003"
+  /(\d+)\s*\/\s*([A-Z][\w]*[-.][\w.]+)/gi,
+  // Standard sheet patterns: "S2-003", "A560", "S-101", "A5.01", "M1-001"
+  /\b([A-Z]{1,2}\d{0,2}[-.]?\d{2,4})\b/g,
+  // Long number patterns like "25531-011"
+  /\b(\d{4,6}[-]\d{2,4})\b/g,
+];
+
+/**
+ * Extract text items from a PDF page with their positions.
+ * Returns items that match known sheet numbers in the project.
+ */
+async function extractSheetReferences(page, viewport, sheetNumberSet) {
+  const textContent = await page.getTextContent();
+  const links = [];
+  const seen = new Set();
+
+  for (const item of textContent.items) {
+    const text = item.str?.trim();
+    if (!text || text.length < 3) continue;
+
+    // Check each pattern against the text
+    for (const pattern of SHEET_REF_PATTERNS) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        // For detail/sheet pattern, the sheet ref is group 2
+        const candidate = match[2] || match[1] || match[0];
+        const normalized = candidate.toUpperCase().trim();
+
+        // Check if this matches any sheet in the project
+        if (sheetNumberSet.has(normalized)) {
+          // Compute bounding box in canvas coordinates
+          const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+          const x = tx[4];
+          const y = tx[5] - item.height;
+          const w = item.width || text.length * 6;
+          const h = item.height || 12;
+
+          const key = `${normalized}-${Math.round(x)}-${Math.round(y)}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            links.push({
+              sheetNumber: normalized,
+              detailNumber: match[2] ? match[1] : null,
+              x, y, w: w + 8, h: h + 4,
+              text: match[0],
+            });
+          }
+        }
+      }
+    }
+  }
+  return links;
+}
 
 export default function DrawingViewer() {
   const [searchParams] = useSearchParams();
@@ -43,6 +99,13 @@ export default function DrawingViewer() {
   const [pdfError, setPdfError] = useState(null);
   const [resolvedUrl, setResolvedUrl] = useState(null);
 
+  // ── Callout Hyperlinking State ──────────────────────────────────────────────
+  const [linkMode, setLinkMode] = useState(true);
+  const [calloutLinks, setCalloutLinks] = useState([]);
+  const [hoveredLink, setHoveredLink] = useState(null);
+  const [navHistory, setNavHistory] = useState([]); // stack of sheet IDs for back nav
+  const [scanningLinks, setScanningLinks] = useState(false);
+
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
 
@@ -54,6 +117,23 @@ export default function DrawingViewer() {
     staleTime: 30000,
   });
 
+  // Build lookup maps for sheet matching
+  const sheetNumberSet = useMemo(() => {
+    const set = new Set();
+    drawings.forEach(d => {
+      if (d.sheet_number) set.add(d.sheet_number.toUpperCase().trim());
+    });
+    return set;
+  }, [drawings]);
+
+  const sheetToDrawing = useMemo(() => {
+    const map = new Map();
+    drawings.forEach(d => {
+      if (d.sheet_number) map.set(d.sheet_number.toUpperCase().trim(), d);
+    });
+    return map;
+  }, [drawings]);
+
   const filtered = search.trim()
     ? drawings.filter(d =>
         d.sheet_number?.toLowerCase().includes(search.toLowerCase()) ||
@@ -62,8 +142,25 @@ export default function DrawingViewer() {
     : drawings;
 
   const activeDrawing = drawings.find(d => d.id === activeId);
-
   const activeIndex = filtered.findIndex(d => d.id === activeId);
+
+  // ── Navigate to a sheet via callout link ─────────────────────────────────────
+  const navigateToSheet = useCallback((sheetNumber) => {
+    const target = sheetToDrawing.get(sheetNumber.toUpperCase().trim());
+    if (!target) return;
+    // Push current sheet to history stack
+    if (activeId) {
+      setNavHistory(prev => [...prev, activeId]);
+    }
+    setActiveId(target.id);
+  }, [sheetToDrawing, activeId]);
+
+  const navigateBack = useCallback(() => {
+    if (navHistory.length === 0) return;
+    const prev = navHistory[navHistory.length - 1];
+    setNavHistory(h => h.slice(0, -1));
+    setActiveId(prev);
+  }, [navHistory]);
 
   // Resolve file_url (storage path) to a signed URL
   useEffect(() => {
@@ -73,6 +170,7 @@ export default function DrawingViewer() {
     setPdfError(null);
     setCurrentPage(1);
     setTotalPages(0);
+    setCalloutLinks([]);
 
     const rawUrl = activeDrawing?.file_url;
     if (!rawUrl) return;
@@ -132,6 +230,7 @@ export default function DrawingViewer() {
     }
 
     setRendering(true);
+    setCalloutLinks([]);
     try {
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: zoom });
@@ -142,6 +241,22 @@ export default function DrawingViewer() {
 
       renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
       await renderTaskRef.current.promise;
+
+      // After render, scan for sheet references if link mode is on
+      if (linkMode && sheetNumberSet.size > 0) {
+        setScanningLinks(true);
+        try {
+          const links = await extractSheetReferences(page, viewport, sheetNumberSet);
+          // Filter out self-references
+          const selfSheet = activeDrawing?.sheet_number?.toUpperCase().trim();
+          const filtered = links.filter(l => l.sheetNumber !== selfSheet);
+          setCalloutLinks(filtered);
+        } catch (err) {
+          console.warn("Callout scan failed:", err);
+        } finally {
+          setScanningLinks(false);
+        }
+      }
     } catch (err) {
       if (err?.name !== "RenderingCancelledException") {
         console.error("Render error:", err);
@@ -150,7 +265,7 @@ export default function DrawingViewer() {
       setRendering(false);
       renderTaskRef.current = null;
     }
-  }, [pdfDoc, currentPage, zoom]);
+  }, [pdfDoc, currentPage, zoom, linkMode, sheetNumberSet, activeDrawing?.sheet_number]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
 
@@ -178,11 +293,16 @@ export default function DrawingViewer() {
         setCurrentPage(p => Math.max(1, p - 1));
       } else if (e.key === "[" || e.key === "]") {
         setSidebarOpen(o => !o);
+      } else if (e.key === "l" || e.key === "L") {
+        setLinkMode(m => !m);
+      } else if (e.key === "Backspace" && navHistory.length > 0) {
+        e.preventDefault();
+        navigateBack();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [filtered, activeIndex, totalPages]);
+  }, [filtered, activeIndex, totalPages, navHistory, navigateBack]);
 
   // ── Fit width ──────────────────────────────────────────────────────────────
   const handleFitWidth = async () => {
@@ -196,7 +316,7 @@ export default function DrawingViewer() {
   // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async () => {
     const url = resolvedUrl || await resolveFileUrl(activeDrawing?.file_url);
-    if (!url) { toast?.error?.("No file URL available"); return; }
+    if (!url) return;
     const a = document.createElement("a");
     a.href = url;
     a.download = activeDrawing?.file_name || activeDrawing?.title || "drawing.pdf";
@@ -204,6 +324,14 @@ export default function DrawingViewer() {
     a.click();
     a.remove();
   };
+
+  // Get the previous sheet title for the back button
+  const prevSheetTitle = useMemo(() => {
+    if (navHistory.length === 0) return null;
+    const prevId = navHistory[navHistory.length - 1];
+    const d = drawings.find(dr => dr.id === prevId);
+    return d ? d.sheet_number : null;
+  }, [navHistory, drawings]);
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "var(--bg-page)", overflow: "hidden" }}>
@@ -236,7 +364,7 @@ export default function DrawingViewer() {
 
         {/* Sheet list */}
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {filtered.map((d, i) => {
+          {filtered.map((d) => {
             const isActive = d.id === activeId;
             const stageColor = STAGES[d.stage]?.color || "#6B7280";
             return (
@@ -283,6 +411,48 @@ export default function DrawingViewer() {
 
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+        {/* Breadcrumb back bar (when navigated via callout) */}
+        {navHistory.length > 0 && (
+          <div style={{
+            padding: "6px 16px",
+            background: "rgba(59,130,246,0.08)",
+            borderBottom: "1px solid rgba(59,130,246,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={navigateBack}
+              style={{
+                ...mono, fontSize: 10, fontWeight: 700,
+                background: "rgba(59,130,246,0.15)",
+                border: "1px solid rgba(59,130,246,0.3)",
+                borderRadius: 4,
+                color: "#3B82F6",
+                padding: "3px 10px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              ← Back to {prevSheetTitle}
+            </button>
+            <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+              {navHistory.length} sheet{navHistory.length > 1 ? "s" : ""} deep
+            </span>
+            {navHistory.length > 1 && (
+              <button
+                onClick={() => { setActiveId(navHistory[0]); setNavHistory([]); }}
+                style={{ ...mono, fontSize: 9, background: "none", border: "none", color: "#3B82F6", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+              >
+                Return to start
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Viewer toolbar */}
         <div style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
@@ -342,6 +512,44 @@ export default function DrawingViewer() {
 
           <button onClick={() => setZoom(1.0)} style={{ ...toolBtn, ...mono, fontSize: 9 }}>1:1</button>
           <button onClick={handleFitWidth} style={{ ...toolBtn, ...mono, fontSize: 9 }}>FIT</button>
+
+          {/* Link Mode Toggle */}
+          <button
+            onClick={() => setLinkMode(m => !m)}
+            title={linkMode ? "Disable callout links (L)" : "Enable callout links (L)"}
+            style={{
+              ...toolBtn,
+              ...mono,
+              fontSize: 9,
+              color: linkMode ? "#3B82F6" : "var(--text-muted)",
+              background: linkMode ? "rgba(59,130,246,0.12)" : "none",
+              border: linkMode ? "1px solid rgba(59,130,246,0.4)" : "1px solid var(--border-default)",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            LINKS
+            {calloutLinks.length > 0 && (
+              <span style={{
+                background: "#3B82F6",
+                color: "white",
+                borderRadius: 8,
+                padding: "0 5px",
+                fontSize: 8,
+                fontWeight: 700,
+                minWidth: 14,
+                textAlign: "center",
+              }}>
+                {calloutLinks.length}
+              </span>
+            )}
+          </button>
+
           <button onClick={handleDownload} disabled={!activeDrawing?.file_url}
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
@@ -381,17 +589,124 @@ export default function DrawingViewer() {
                 </div>
               )}
               <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }} />
+
+              {/* ── Callout Link Overlay ──────────────────────────────────────── */}
+              {linkMode && calloutLinks.length > 0 && !rendering && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: canvasRef.current?.width || 0,
+                  height: canvasRef.current?.height || 0,
+                  pointerEvents: "none",
+                }}>
+                  {calloutLinks.map((link, i) => {
+                    const isHovered = hoveredLink === i;
+                    const target = sheetToDrawing.get(link.sheetNumber);
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => navigateToSheet(link.sheetNumber)}
+                        onMouseEnter={() => setHoveredLink(i)}
+                        onMouseLeave={() => setHoveredLink(null)}
+                        style={{
+                          position: "absolute",
+                          left: link.x - 4,
+                          top: link.y - 2,
+                          width: link.w,
+                          height: link.h,
+                          border: isHovered
+                            ? "2px solid #3B82F6"
+                            : "1.5px solid rgba(59,130,246,0.45)",
+                          borderRadius: 3,
+                          background: isHovered
+                            ? "rgba(59,130,246,0.18)"
+                            : "rgba(59,130,246,0.06)",
+                          cursor: "pointer",
+                          pointerEvents: "auto",
+                          transition: "all 0.12s ease",
+                          boxShadow: isHovered ? "0 0 8px rgba(59,130,246,0.4)" : "none",
+                        }}
+                        title={`Go to ${link.sheetNumber}${target ? ` — ${target.title}` : ""}`}
+                      >
+                        {/* Hover tooltip */}
+                        {isHovered && (
+                          <div style={{
+                            position: "absolute",
+                            bottom: "calc(100% + 6px)",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            background: "rgba(15,17,23,0.95)",
+                            border: "1px solid rgba(59,130,246,0.4)",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                            whiteSpace: "nowrap",
+                            zIndex: 20,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                            animation: "fadeIn 0.1s ease",
+                          }}>
+                            <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "#3B82F6", marginBottom: 2 }}>
+                              → {link.sheetNumber}
+                            </div>
+                            {target && (
+                              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                                {target.title}
+                                {target.stage && ` · ${target.stage === "Released" ? "IFC" : target.stage}`}
+                              </div>
+                            )}
+                            <div style={{ ...mono, fontSize: 8, color: "rgba(59,130,246,0.6)", marginTop: 2 }}>
+                              Click to navigate
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Scanning indicator */}
+              {scanningLinks && (
+                <div style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  ...mono,
+                  fontSize: 9,
+                  color: "#3B82F6",
+                  background: "rgba(15,17,23,0.85)",
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  border: "1px solid rgba(59,130,246,0.3)",
+                  animation: "gentlePulse 1s ease infinite",
+                }}>
+                  Scanning for links…
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16 }}>
-          {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
+        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {[
+            ["← →", "Sheets"],
+            ["+ −", "Zoom"],
+            ["0", "Reset"],
+            ["[ ]", "Sidebar"],
+            ["L", "Links"],
+            ...(navHistory.length > 0 ? [["⌫", "Back"]] : []),
+            ...(totalPages > 1 ? [["PgUp/Dn", "Pages"]] : []),
+          ].map(([key, desc]) => (
             <span key={key} style={{ ...mono, fontSize: 9, color: "var(--border-strong)" }}>
               <span style={{ color: "var(--text-muted)" }}>{key}</span> {desc}
             </span>
           ))}
+          {linkMode && calloutLinks.length > 0 && (
+            <span style={{ ...mono, fontSize: 9, color: "rgba(59,130,246,0.7)", marginLeft: "auto" }}>
+              {calloutLinks.length} link{calloutLinks.length !== 1 ? "s" : ""} detected
+            </span>
+          )}
         </div>
       </div>
     </div>
