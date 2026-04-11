@@ -75,6 +75,43 @@ const DATE_RANGES = [
   { key: "all", label: "All Time" },
 ];
 
+/* ── Export Functions ── */
+
+function exportReportCSV(rows, portfolioValue, openRFICount, pendingCOCount, budgetVar) {
+  const headers = ["Project #", "Project Name", "Phase", "Health", "Budget", "Actual", "Variance", "Var %", "Open RFIs", "Open COs", "WP Progress %"];
+  const csvRows = rows.map(r => [
+    r.number, r.name, r.phase, r.health,
+    r.budget.toFixed(2), r.actual.toFixed(2), r.variance.toFixed(2),
+    r.var_pct.toFixed(1) + "%", r.openRFIs, r.openCOs, r.wpPct.toFixed(0) + "%",
+  ]);
+
+  // Summary row
+  const summaryRows = [
+    [], ["PORTFOLIO SUMMARY"],
+    ["Total Value", formatCurrency(portfolioValue)],
+    ["Open RFIs", openRFICount],
+    ["Pending COs", pendingCOCount],
+    ["Budget Variance", formatCurrency(budgetVar)],
+    ["Generated", new Date().toLocaleString()],
+  ];
+
+  const csv = [...[headers], ...csvRows, ...summaryRows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `portfolio_report_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function printReport() {
+  window.print();
+}
+
 function isInDateRange(dateStr, range) {
   if (range === "all" || !dateStr) return true;
   const d = new Date(dateStr);
@@ -619,6 +656,8 @@ export default function Reports() {
   const [sortField, setSortField] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [viewMode, setViewMode] = useState("pm"); // "pm" | "executive"
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
 
   /* ── Data queries ── */
   const { data: projects = [] } = useQuery({
@@ -864,6 +903,44 @@ export default function Reports() {
     return items;
   }, [overdueRFIs, pendingCOs, lateDeliveries, projects, navigate]);
 
+  /* ── Weekly Summary Data ── */
+  const weeklySummary = useMemo(() => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const newRFIs = rfis.filter(r => r.created_date && new Date(r.created_date) >= weekAgo);
+    const closedRFIs = rfis.filter(r => r.status === "Closed" && r.date_answered && new Date(r.date_answered) >= weekAgo);
+    const newCOs = changeOrders.filter(c => c.created_date && new Date(c.created_date) >= weekAgo);
+    const approvedCOs = changeOrders.filter(c => c.status === "Approved" && c.approval_date && new Date(c.approval_date) >= weekAgo);
+    const approvedCOValue = approvedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const completedActions = actionItems.filter(a =>
+      (a.status === "Complete" || a.status === "Closed") && a.completed_date && new Date(a.completed_date) >= weekAgo
+    );
+    const recentDeliveries = deliveries.filter(d =>
+      d.status === "Delivered" && d.actual_delivery_date && new Date(d.actual_delivery_date) >= weekAgo
+    );
+
+    // Risk items this week
+    const criticalRFIs = openRFIs.filter(r => r.priority === "Critical");
+    const highValuePendingCOs = pendingCOs.filter(c => (Number(c.co_amount) || 0) > 50000);
+
+    return {
+      newRFIs: newRFIs.length,
+      closedRFIs: closedRFIs.length,
+      newCOs: newCOs.length,
+      approvedCOs: approvedCOs.length,
+      approvedCOValue,
+      completedActions: completedActions.length,
+      recentDeliveries: recentDeliveries.length,
+      criticalRFIs: criticalRFIs.length,
+      highValueCOs: highValuePendingCOs.length,
+      overdueActions: overdueActions.length,
+      lateDeliveries: lateDeliveries.length,
+      weekStart: weekAgo.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      weekEnd: now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    };
+  }, [rfis, changeOrders, actionItems, deliveries, openRFIs, pendingCOs, overdueActions, lateDeliveries]);
+
   /* ── FULL EMPTY STATE ── */
   if (projects.length === 0) {
     return (
@@ -977,7 +1054,46 @@ export default function Reports() {
             </button>
           ))}
         </div>
-        <button
+        {/* View Mode Toggle */}
+        <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", overflow: "hidden" }}>
+          {[{ key: "pm", label: "PM VIEW" }, { key: "executive", label: "EXECUTIVE" }].map(v => (
+            <button key={v.key} onClick={() => setViewMode(v.key)} style={{
+              background: viewMode === v.key ? "var(--accent)" : "transparent",
+              color: viewMode === v.key ? "#fff" : "var(--text-muted)",
+              border: "none", borderRight: "1px solid var(--border-default)",
+              padding: "8px 14px", ...mono, fontSize: 8, fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+              transition: "background 0.15s, color 0.15s",
+            }}>{v.label}</button>
+          ))}
+        </div>
+
+        {/* Weekly Summary Toggle */}
+        <button onClick={() => setShowWeeklySummary(p => !p)} style={{
+          background: showWeeklySummary ? "rgba(200,155,32,0.15)" : "transparent",
+          color: showWeeklySummary ? "var(--accent)" : "var(--text-muted)",
+          border: `1px solid ${showWeeklySummary ? "var(--accent-border)" : "var(--border-default)"}`,
+          borderRadius: "var(--radius-btn)", padding: "8px 14px",
+          ...mono, fontSize: 8, fontWeight: 700, textTransform: "uppercase",
+          letterSpacing: "0.08em", cursor: "pointer",
+        }}>
+          WEEKLY SUMMARY
+        </button>
+
+        {/* CSV Export */}
+        <button onClick={() => exportReportCSV(filteredRows, portfolioValue, openRFIs.length, pendingCOs.length, budgetVariance)}
+          style={{
+            background: "transparent", color: "var(--text-muted)",
+            border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)",
+            padding: "8px 14px", ...mono, fontSize: 8, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 6,
+          }}>
+          ↓ CSV
+        </button>
+
+        {/* Print/PDF */}
+        <button onClick={printReport}
           style={{
             background: "var(--accent)",
             color: "#fff",
@@ -1000,9 +1116,75 @@ export default function Reports() {
             <polyline points="7 10 12 15 17 10" />
             <line x1={12} y1={15} x2={12} y2={3} />
           </svg>
-          Export
+          PDF
         </button>
       </div>
+
+      {/* ── Weekly Summary Panel ── */}
+      {showWeeklySummary && (
+        <div style={{ ...CARD, borderLeft: "3px solid var(--accent)", padding: "18px 22px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <div style={{ ...CARD_TITLE, marginBottom: 2 }}>Weekly Summary Report</div>
+              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+                {weeklySummary.weekStart} — {weeklySummary.weekEnd}
+              </div>
+            </div>
+            <button onClick={() => setShowWeeklySummary(false)} style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: "var(--text-muted)", fontSize: 16, lineHeight: 1,
+            }}>×</button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            {/* Activity */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 8 }}>ACTIVITY</div>
+              {[
+                { label: "New RFIs", value: weeklySummary.newRFIs, color: "var(--status-info)" },
+                { label: "Closed RFIs", value: weeklySummary.closedRFIs, color: "var(--status-success)" },
+                { label: "New COs", value: weeklySummary.newCOs, color: "#F97316" },
+                { label: "Approved COs", value: `${weeklySummary.approvedCOs} (${formatCurrency(weeklySummary.approvedCOValue)})`, color: "var(--status-success)" },
+              ].map(item => (
+                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid var(--divider)" }}>
+                  <span style={{ ...body, fontSize: 11, color: "var(--text-secondary)" }}>{item.label}</span>
+                  <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: item.color }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Progress */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 8 }}>PROGRESS</div>
+              {[
+                { label: "Actions Completed", value: weeklySummary.completedActions, color: "var(--status-success)" },
+                { label: "Deliveries Received", value: weeklySummary.recentDeliveries, color: "var(--status-info)" },
+              ].map(item => (
+                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid var(--divider)" }}>
+                  <span style={{ ...body, fontSize: 11, color: "var(--text-secondary)" }}>{item.label}</span>
+                  <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: item.color }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Risks */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.12em", marginBottom: 8 }}>RISK ITEMS</div>
+              {[
+                { label: "Critical RFIs", value: weeklySummary.criticalRFIs, color: "var(--status-error)" },
+                { label: "High-Value COs (>$50K)", value: weeklySummary.highValueCOs, color: "#F97316" },
+                { label: "Overdue Actions", value: weeklySummary.overdueActions, color: "var(--status-error)" },
+                { label: "Late Deliveries", value: weeklySummary.lateDeliveries, color: "var(--status-warning)" },
+              ].map(item => (
+                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid var(--divider)" }}>
+                  <span style={{ ...body, fontSize: 11, color: "var(--text-secondary)" }}>{item.label}</span>
+                  <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: item.value > 0 ? item.color : "var(--text-muted)" }}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 2. KPI CARDS ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
@@ -1058,10 +1240,87 @@ export default function Reports() {
         />
       </div>
 
-      {/* ── 3. PROJECT STATUS MATRIX ── */}
+      {/* ── 3. PROJECT STATUS MATRIX (PM) / EXECUTIVE SUMMARY ── */}
+      {viewMode === "executive" && (
+        <div style={{ ...CARD, padding: "20px 24px" }}>
+          <div style={{ ...CARD_TITLE, marginBottom: 16 }}>Executive Summary</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+            {/* Portfolio Health */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 10 }}>PORTFOLIO HEALTH</div>
+              {(() => {
+                const atRisk = filteredRows.filter(r => r.health === "risk").length;
+                const watching = filteredRows.filter(r => r.health === "watch").length;
+                const healthy = filteredRows.filter(r => r.health === "good").length;
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>At Risk</span>
+                      <span style={{ ...mono, fontSize: 18, fontWeight: 800, color: atRisk > 0 ? "var(--status-error)" : "var(--text-muted)" }}>{atRisk}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Watch</span>
+                      <span style={{ ...mono, fontSize: 18, fontWeight: 800, color: watching > 0 ? "var(--status-warning)" : "var(--text-muted)" }}>{watching}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Healthy</span>
+                      <span style={{ ...mono, fontSize: 18, fontWeight: 800, color: "var(--status-success)" }}>{healthy}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Financial Snapshot */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 10 }}>FINANCIAL SNAPSHOT</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Total Budget</span>
+                  <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{formatCurrency(portfolioValue)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Variance</span>
+                  <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: budgetVariance <= 0 ? "var(--status-success)" : "var(--status-error)" }}>{formatCurrency(budgetVariance)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Pending CO Value</span>
+                  <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: "#F97316" }}>{formatCurrency(pendingCOValue)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Required */}
+            <div>
+              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.12em", marginBottom: 10 }}>ACTION REQUIRED</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {overdueRFIs.length > 0 && (
+                  <div style={{ ...body, fontSize: 12, color: "var(--status-error)", borderLeft: "3px solid var(--status-error)", paddingLeft: 10 }}>
+                    {overdueRFIs.length} overdue RFI{overdueRFIs.length !== 1 ? "s" : ""} need response
+                  </div>
+                )}
+                {overdueActions.length > 0 && (
+                  <div style={{ ...body, fontSize: 12, color: "var(--status-warning)", borderLeft: "3px solid var(--status-warning)", paddingLeft: 10 }}>
+                    {overdueActions.length} overdue action item{overdueActions.length !== 1 ? "s" : ""}
+                  </div>
+                )}
+                {lateDeliveries.length > 0 && (
+                  <div style={{ ...body, fontSize: 12, color: "#F97316", borderLeft: "3px solid #F97316", paddingLeft: 10 }}>
+                    {lateDeliveries.length} late deliver{lateDeliveries.length !== 1 ? "ies" : "y"}
+                  </div>
+                )}
+                {overdueRFIs.length === 0 && overdueActions.length === 0 && lateDeliveries.length === 0 && (
+                  <div style={{ ...body, fontSize: 12, color: "var(--status-success)" }}>No critical actions pending</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ ...CARD, padding: 0, overflow: "hidden" }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={CARD_TITLE}>Project Status Matrix</div>
+          <div style={CARD_TITLE}>{viewMode === "executive" ? "Project Overview" : "Project Status Matrix"}</div>
           {kpiFilter && (
             <button
               onClick={() => setKpiFilter(null)}
@@ -1125,18 +1384,25 @@ export default function Reports() {
                   padding: "10px 16px",
                   gap: 8,
                   borderBottom: "1px solid var(--divider)",
+                  borderLeft: row.health === "risk" ? "3px solid var(--status-error)" : row.health === "watch" ? "3px solid var(--status-warning)" : "3px solid transparent",
                   alignItems: "center",
                   minWidth: 960,
                   transition: "background 0.1s",
                   cursor: "default",
+                  background: row.health === "risk" ? "rgba(239,68,68,0.03)" : "transparent",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-row-hover)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = row.health === "risk" ? "rgba(239,68,68,0.06)" : "var(--bg-row-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = row.health === "risk" ? "rgba(239,68,68,0.03)" : "transparent")}
               >
                 {/* # */}
                 <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{row.number}</div>
                 {/* Name */}
-                <div style={{ ...body, fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div
+                  onClick={() => navigate(createPageUrl("Projects") + `?id=${row.id}`)}
+                  style={{ ...body, fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", textDecoration: "none" }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
+                  onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-primary)"}
+                >
                   {row.name}
                 </div>
                 {/* Phase */}
@@ -1187,12 +1453,30 @@ export default function Reports() {
                 >
                   {row.variance === 0 ? "\u2014" : (row.variance > 0 ? "+" : "") + formatCurrency(row.variance)}
                 </div>
-                {/* Open RFIs */}
-                <div style={{ ...mono, fontSize: 11, color: row.openRFIs > 0 ? "var(--status-warning)" : "var(--text-muted)", textAlign: "center", fontWeight: row.openRFIs > 0 ? 700 : 400 }}>
+                {/* Open RFIs — clickable */}
+                <div
+                  onClick={row.openRFIs > 0 ? () => navigate(createPageUrl("RFIs")) : undefined}
+                  style={{
+                    ...mono, fontSize: 11, textAlign: "center", fontWeight: row.openRFIs > 0 ? 700 : 400,
+                    color: row.openRFIs > 0 ? "var(--status-warning)" : "var(--text-muted)",
+                    cursor: row.openRFIs > 0 ? "pointer" : "default",
+                    textDecoration: row.openRFIs > 0 ? "underline" : "none",
+                    textDecorationStyle: "dotted",
+                    textUnderlineOffset: 2,
+                  }}>
                   {row.openRFIs}
                 </div>
-                {/* COs */}
-                <div style={{ ...mono, fontSize: 11, color: row.openCOs > 0 ? "#F97316" : "var(--text-muted)", textAlign: "center", fontWeight: row.openCOs > 0 ? 700 : 400 }}>
+                {/* COs — clickable */}
+                <div
+                  onClick={row.openCOs > 0 ? () => navigate(createPageUrl("ChangeOrders")) : undefined}
+                  style={{
+                    ...mono, fontSize: 11, textAlign: "center", fontWeight: row.openCOs > 0 ? 700 : 400,
+                    color: row.openCOs > 0 ? "#F97316" : "var(--text-muted)",
+                    cursor: row.openCOs > 0 ? "pointer" : "default",
+                    textDecoration: row.openCOs > 0 ? "underline" : "none",
+                    textDecorationStyle: "dotted",
+                    textUnderlineOffset: 2,
+                  }}>
                   {row.openCOs}
                 </div>
                 {/* WP Progress */}
@@ -1321,8 +1605,16 @@ export default function Reports() {
         </div>
       )}
 
-      {/* Shimmer animation for skeleton elements */}
-      <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      {/* Shimmer animation + Print styles */}
+      <style>{`
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @media print {
+          body { background: #fff !important; color: #000 !important; }
+          button, input, select { display: none !important; }
+          div[style*="overflowX"] { overflow: visible !important; }
+          div[style*="gap: 8"] { gap: 4px !important; }
+        }
+      `}</style>
     </div>
   );
 }
