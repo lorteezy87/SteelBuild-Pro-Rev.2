@@ -43,8 +43,8 @@ export function useDeliveries(projectId, filters = {}) {
     queryKey,
     queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   // ── Derived: filtered + sorted ──────────────────────────────────────

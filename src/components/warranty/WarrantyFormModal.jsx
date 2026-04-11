@@ -63,6 +63,7 @@ export default function WarrantyFormModal({ projectId, warranty = null, onClose,
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {

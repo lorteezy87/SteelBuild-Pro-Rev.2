@@ -44,13 +44,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", formData.project_id],
     queryFn: () =>
       formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
-    initialData: [],
   });
 
   useEffect(() => {

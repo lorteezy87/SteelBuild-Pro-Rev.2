@@ -96,36 +96,42 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     queryKey: ["modal-wps", pid],
     queryFn: () => base44.entities.WorkPackage.filter({ project_id: pid }),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: cos = [], isLoading: cosLoading } = useQuery({
     queryKey: ["modal-cos", pid],
     queryFn: () => base44.entities.ChangeOrder.filter({ project_id: pid }),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["modal-rfis", pid],
     queryFn: () => base44.entities.RFI.filter({ project_id: pid }),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: codes = [], isLoading: codesLoading } = useQuery({
     queryKey: ["modal-codes", pid],
     queryFn: () => base44.entities.CostCode.filter({ project_id: pid }),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery({
     queryKey: ["modal-logs", pid],
     queryFn: () => base44.entities.DailyLog.filter({ project_id: pid }, "-date", 20),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["modal-deliveries", pid],
     queryFn: () => base44.entities.Delivery.filter({ project_id: pid }, "-scheduled_date", 10),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const isLoading = wpsLoading || cosLoading || rfisLoading || codesLoading || logsLoading;

@@ -26,6 +26,7 @@ export default function QCFormModal({ projectId, onClose }) {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({

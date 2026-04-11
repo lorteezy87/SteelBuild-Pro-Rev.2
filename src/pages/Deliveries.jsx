@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { batchProcess } from "@/utils/batchProcess";
 
 const STATUS_COLORS = {
   Scheduled: { bg: "rgba(234,179,8,0.18)", text: "var(--status-warning)", border: "var(--status-warning)" },
@@ -118,19 +119,26 @@ export default function Deliveries() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }) => {
-      await Promise.all(
-        ids.map((id) =>
-          base44.entities.Delivery.update(id, {
-            status,
-            actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
-          })
-        )
+      const { succeeded, failed } = await batchProcess(
+        ids,
+        (id) => base44.entities.Delivery.update(id, {
+          status,
+          actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
+        }),
       );
+      if (failed.length > 0 && succeeded.length === 0) {
+        throw new Error(`All ${failed.length} updates failed.`);
+      }
+      return { succeeded, failed };
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
       qc.invalidateQueries({ queryKey: ["deliveries"] });
       setSelectedIds(new Set());
-      toast.success("Deliveries updated");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("Deliveries updated");
+      }
     },
     onError: () => toast.error("Bulk update failed"),
   });
@@ -139,12 +147,14 @@ export default function Deliveries() {
     queryKey: ["deliveries", projectId],
     queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
-    refetchInterval: 30000,
+    staleTime: 60000,
+    refetchInterval: 60000,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: workPackages = [] } = useQuery({

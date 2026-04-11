@@ -8,6 +8,7 @@ import { Bell, BellOff, RefreshCw, CheckCheck, ExternalLink, AlertTriangle, Load
 import { formatDate } from "../components/shared/formatters";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
+import { batchProcess } from "@/utils/batchProcess";
 
 const SEV_COLORS = {
   Critical: "bg-rose-50 border-rose-300 border-l-4 border-l-rose-500",
@@ -43,6 +44,7 @@ export default function Alerts() {
       ? base44.entities.Alert.filter({ project_id: projectId }, "-created_at")
       : base44.entities.Alert.list("-created_at"),
     refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const updateMut = useMutation({
@@ -61,11 +63,16 @@ export default function Alerts() {
   const markAllRead = async () => {
     const unread = alerts.filter(a => !a.is_read);
     try {
-      await Promise.all(unread.map(a =>
-        base44.entities.Alert.update(a.id, { is_read: true })
-      ));
+      const { succeeded, failed } = await batchProcess(
+        unread,
+        (a) => base44.entities.Alert.update(a.id, { is_read: true }),
+      );
       qc.invalidateQueries({ queryKey: ["alerts"] });
-      toast.success(`${unread.length} alerts marked as read`);
+      if (failed.length > 0) {
+        toast.warning(`${succeeded.length} marked as read, ${failed.length} failed`);
+      } else {
+        toast.success(`${succeeded.length} alerts marked as read`);
+      }
     } catch (err) {
       toast.error("Some alerts failed to update");
     }
