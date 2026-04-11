@@ -147,8 +147,8 @@ function StepChoice({ onNewSet, onNewRevision, onClose }) {
             onMouseLeave={() => setHovered(null)}
             style={{
               padding: "16px 18px", borderRadius: 10, cursor: "pointer",
-              background: hovered === opt.id ? "var(--warning-muted)" : "rgba(255,255,255,0.02)",
-              border: `1px solid ${hovered === opt.id ? "var(--warning-border)" : "rgba(255,255,255,0.08)"}`,
+              background: hovered === opt.id ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${hovered === opt.id ? "var(--warning-border)" : "var(--bg-surface-high)"}`,
               transition: "all 0.12s", display: "flex", alignItems: "flex-start", gap: 14
             }}>
             <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>{opt.icon}</span>
@@ -206,13 +206,13 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
         onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
 
       {files.length > 0 && (
-        <div style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
           {files.map((f, i) => {
             const tooBig = f.size / (1024 * 1024) > MAX_PDF_SIZE_MB;
             return (
               <div key={f.name} style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
-                borderBottom: i < files.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                borderBottom: i < files.length - 1 ? "1px solid var(--divider)" : "none",
               }}>
                 <span style={{ fontSize: 14 }}>📄</span>
                 <span style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
@@ -323,7 +323,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
 
       {/* Progress bar */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
+        <div style={{ background: "var(--bg-surface-high)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
           <div style={{ height: "100%", background: "var(--accent)", borderRadius: 20, width: `${progress}%`, transition: "width 0.4s ease" }} />
         </div>
         <div style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 5 }}>{progress}%</div>
@@ -340,7 +340,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
               display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px",
               borderRadius: 8,
               background: isActive ? "var(--warning-muted)" : isDone ? "rgba(0,214,143,0.04)" : "transparent",
-              border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "rgba(255,255,255,0.04)"}`,
+              border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "var(--hover-bg)"}`,
               transition: "all 0.2s",
             }}>
               <span style={{
@@ -371,7 +371,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
         <button
           onClick={onCancel}
           style={{
-            background: "none", border: "none", color: "rgba(160,175,210,0.35)",
+            background: "none", border: "none", color: "var(--text-muted)",
             fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer",
             letterSpacing: "0.08em", textDecoration: "underline",
           }}
@@ -435,17 +435,17 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
       {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <button onClick={() => toggleAll(true)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "none", border: "1px solid var(--warning-border)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☑ ALL</button>
-        <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
+        <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
         <input placeholder="Search sheets..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 100, background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
+          style={{ flex: 1, minWidth: 100, background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
         <select value={discFilter} onChange={e => setDiscFilter(e.target.value)}
-          style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+          style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
           <option value="all">All Disciplines</option>
           {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         {multiFile && (
           <select value={fileFilter} onChange={e => setFileFilter(e.target.value)}
-            style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
+            style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
             <option value="all">All Files</option>
             {uniqueFiles.map(f => <option key={f} value={f}>{f.replace(/\.pdf$/i, "")}</option>)}
           </select>
@@ -456,7 +456,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
       </div>
 
       {/* Table */}
-      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, marginBottom: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "var(--bg-surface-low)", position: "sticky", top: 0, zIndex: 1 }}>
@@ -470,7 +470,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
           </thead>
           <tbody>
             {filtered.map((s, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
+              <tr key={i} style={{ borderBottom: "1px solid var(--divider)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
                   <input type="checkbox" checked={!!s.selected} onChange={() => toggleOne(i)} style={{ accentColor: "var(--accent)", cursor: "pointer" }} />
                 </td>
@@ -488,7 +488,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <select value={s.discipline || "Structural"} onChange={e => updateSheet(i, "discipline", e.target.value)}
-                    style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+                    style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
                     {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </td>
@@ -786,7 +786,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
               {step !== 3 && (
                 <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
                   {[0, 1, 2, 4, 5].map(s => (
-                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: step >= s ? "var(--accent)" : "rgba(255,255,255,0.08)" }} />
+                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: step >= s ? "var(--accent)" : "var(--bg-surface-high)" }} />
                   ))}
                 </div>
               )}

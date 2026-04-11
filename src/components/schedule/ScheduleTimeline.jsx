@@ -97,7 +97,7 @@ export default function ScheduleTimeline({
             width,
             height: 8,
             top: 18,
-            background: "rgba(255,255,255,0.12)",
+            background: "var(--border-default)",
             borderRadius: 4,
             pointerEvents: "none",
           }}
@@ -120,12 +120,12 @@ export default function ScheduleTimeline({
             width: 16,
             height: 16,
             top: 14,
-            background: isCritical ? "#FF3D3D" : "#F2F4F8",
+            background: isCritical ? "#FF3D3D" : "var(--text-primary)",
             transform: "rotate(45deg)",
             cursor: "pointer",
             boxShadow: isCritical
               ? "0 0 12px rgba(255,61,61,0.5)"
-              : "0 0 8px rgba(255,255,255,0.2)",
+              : "0 0 8px var(--border-strong)",
             borderRadius: 1,
           }}
           title={task.name}
@@ -219,7 +219,7 @@ export default function ScheduleTimeline({
             refY="3"
             orient="auto"
           >
-            <polygon points="0 0, 10 3, 0 6" fill="rgba(255,255,255,0.20)" />
+            <polygon points="0 0, 10 3, 0 6" fill="var(--border-strong)" />
           </marker>
           <marker
             id="arrowhead-critical"
@@ -255,7 +255,7 @@ export default function ScheduleTimeline({
               <path
                 key={`${depId}-${task.id}`}
                 d={`M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`}
-                stroke={isCritical ? "#FF3D3D" : "rgba(255,255,255,0.20)"}
+                stroke={isCritical ? "#FF3D3D" : "var(--border-strong)"}
                 strokeWidth="1.5"
                 fill="none"
                 markerEnd={
@@ -278,7 +278,7 @@ export default function ScheduleTimeline({
           top: 0,
           display: "flex",
           background: "var(--bg-surface-low)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--bg-surface-high)",
           zIndex: 20,
         }}
       >
@@ -301,10 +301,10 @@ export default function ScheduleTimeline({
                   fontWeight: 700,
                   color: "var(--text-muted)",
                   fontFamily: "var(--font-mono)",
-                  borderRight: "1px solid rgba(255,255,255,0.05)",
+                  borderRight: "1px solid var(--hover-bg)",
                   background:
                     col.date.getMonth() % 2 === 0
-                      ? "rgba(255,255,255,0.01)"
+                      ? "var(--hover-bg)"
                       : "transparent",
                 }}
               >
@@ -325,7 +325,7 @@ export default function ScheduleTimeline({
           top: 20,
           display: "flex",
           background: "var(--bg-page)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--divider)",
           zIndex: 15,
         }}
       >
@@ -344,11 +344,11 @@ export default function ScheduleTimeline({
                 fontWeight: isToday ? 700 : 600,
                 color: isToday ? "var(--accent)" : "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
-                borderRight: "1px solid rgba(255,255,255,0.05)",
+                borderRight: "1px solid var(--hover-bg)",
                 background: isToday
                   ? "var(--warning-muted)"
                   : col.date.getDay() === 0 || col.date.getDay() === 6
-                    ? "rgba(255,255,255,0.02)"
+                    ? "var(--hover-bg)"
                     : "transparent",
                 borderTop: isToday ? "2px solid var(--accent)" : "none",
               }}
@@ -382,13 +382,13 @@ export default function ScheduleTimeline({
             height: 44,
             display: "flex",
             alignItems: "center",
-            borderBottom: "1px solid rgba(255,255,255,0.03)",
+            borderBottom: "1px solid var(--hover-bg)",
             background:
               selectedTask?.id === task.id
                 ? "var(--warning-muted)"
                 : idx % 2 === 0
                   ? "transparent"
-                  : "rgba(255,255,255,0.01)",
+                  : "var(--hover-bg)",
             position: "relative",
           }}
         >

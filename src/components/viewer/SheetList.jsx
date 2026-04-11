@@ -11,7 +11,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
       style={{
         width: 220,
         background: "var(--bg-sidebar)",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
+        borderRight: "1px solid var(--bg-surface-high)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"
@@ -21,7 +21,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
       <div
         style={{
           padding: 12,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--bg-surface-high)",
           fontFamily: "var(--font-mono)",
           fontSize: 9,
           fontWeight: 600,
@@ -49,7 +49,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
                 padding: "8px 12px",
                 background: "none",
                 border: "none",
-                color: "rgba(220,225,240,0.70)",
+                color: "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 10,
                 fontWeight: 600,
@@ -58,7 +58,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                borderBottom: "1px solid rgba(255,255,255,0.04)"
+                borderBottom: "1px solid var(--hover-bg)"
               }}
             >
               <span>{expanded[discipline] ? "▾" : "▸"}</span>
@@ -73,7 +73,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
                   borderLeft: currentPage === 1 ? "2px solid var(--accent)" : "2px solid transparent",
                   background: currentPage === 1 ? "var(--accent-muted)" : "transparent",
                   cursor: "pointer",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  borderBottom: "1px solid var(--hover-bg)",
                   transition: "all 0.15s"
                 }}
               >

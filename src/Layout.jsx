@@ -124,7 +124,7 @@ function NavTab({ tab, active, onClick }) {
         fontWeight: active ? 700 : 600,
         letterSpacing: "0.12em",
         textTransform: "uppercase",
-        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "rgba(168,180,200,0.65)",
+        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
         padding: "0 16px",
         height: 48,
         display: "flex", alignItems: "center",
@@ -496,7 +496,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
           textAlign: "center",
           fontFamily: "var(--font-body)",
           fontSize: 11,
-          color: "rgba(200,210,230,0.35)"
+          color: "var(--text-muted)"
         }}>
               No modules match "{search}"
             </div>
@@ -652,7 +652,7 @@ function BellDropdown({ alerts, unreadCount, onMarkAllRead, onViewAll }) {
 }
 
 function AlertRow({ alert }) {
-  const color = SEVERITY_COLOR[alert.severity] || "rgba(200,210,230,0.44)";
+  const color = SEVERITY_COLOR[alert.severity] || "var(--text-muted)";
   return (
     <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--divider)", display: "flex", gap: 8, alignItems: "flex-start" }}>
       <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 4, boxShadow: `0 0 5px ${color}88` }} />
@@ -679,7 +679,7 @@ function HamburgerMenu({ open, onToggle }) {
       }}>
 
       {open ?
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.60)" strokeWidth="1.5" strokeLinecap="round">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinecap="round">
           <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
         </svg> :
 
@@ -1059,8 +1059,8 @@ export default function Layout({ children, currentPageName }) {
         {/* TOP NAV */}
         <nav className="nav-glass" style={{
               height: 48,
-              background: "rgba(7,9,14,0.97)",
-              borderBottom: "1px solid rgba(255,255,255,0.07)",
+              background: "var(--nav-bg)",
+              borderBottom: "1px solid var(--border-default)",
               padding: "0 16px",
               display: "flex",
               alignItems: "center",
@@ -1169,8 +1169,8 @@ export default function Layout({ children, currentPageName }) {
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", flex: 1 }}>Search...</span>
                 <span style={{
                   fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                  color: "var(--text-muted)", background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.10)",
+                  color: "var(--text-muted)", background: "var(--bg-surface-high)",
+                  border: "1px solid var(--border-default)",
                   borderRadius: 4, padding: "1px 5px", lineHeight: "16px",
                 }}>
                   {navigator.platform?.includes("Mac") ? "⌘K" : "Ctrl+K"}

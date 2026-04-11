@@ -241,7 +241,7 @@ export default function DrawingViewer() {
             const stageColor = STAGES[d.stage]?.color || "#6B7280";
             return (
               <div key={d.id} onClick={() => setActiveId(d.id)}
-                style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.03)", background: isActive ? "rgba(200,155,32,0.12)" : "none", borderLeft: `3px solid ${isActive ? "var(--accent)" : "transparent"}`, transition: "background 0.1s" }}>
+                style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--hover-bg)", background: isActive ? "rgba(200,155,32,0.12)" : "none", borderLeft: `3px solid ${isActive ? "var(--accent)" : "transparent"}`, transition: "background 0.1s" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
                   <div>
                     <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: isActive ? "var(--accent)" : "var(--text-primary)", marginBottom: 2 }}>
@@ -353,8 +353,8 @@ export default function DrawingViewer() {
           {!activeDrawing ? (
             <div style={{ margin: "auto", textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
-              <p style={{ ...mono, fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.2em" }}>SELECT A SHEET FROM THE SIDEBAR</p>
-              <p style={{ ...mono, fontSize: 9, color: "rgba(255,255,255,0.15)", marginTop: 8 }}>← → to navigate · + − to zoom · 0 to reset</p>
+              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>SELECT A SHEET FROM THE SIDEBAR</p>
+              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 8 }}>← → to navigate · + − to zoom · 0 to reset</p>
             </div>
           ) : pdfError ? (
             <div style={{ margin: "auto", textAlign: "center" }}>
@@ -370,8 +370,8 @@ export default function DrawingViewer() {
           ) : !activeDrawing.file_url ? (
             <div style={{ margin: "auto", textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.15 }}>📄</div>
-              <p style={{ ...mono, fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
-              <p style={{ ...mono, fontSize: 9, color: "rgba(255,255,255,0.15)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
+              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
+              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
             </div>
           ) : (
             <div style={{ position: "relative" }}>
@@ -386,10 +386,10 @@ export default function DrawingViewer() {
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div style={{ padding: "6px 16px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "var(--bg-surface)", display: "flex", gap: 16 }}>
+        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16 }}>
           {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
-            <span key={key} style={{ ...mono, fontSize: 9, color: "rgba(255,255,255,0.2)" }}>
-              <span style={{ color: "rgba(255,255,255,0.4)" }}>{key}</span> {desc}
+            <span key={key} style={{ ...mono, fontSize: 9, color: "var(--border-strong)" }}>
+              <span style={{ color: "var(--text-muted)" }}>{key}</span> {desc}
             </span>
           ))}
         </div>

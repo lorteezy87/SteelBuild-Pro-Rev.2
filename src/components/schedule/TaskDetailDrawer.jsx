@@ -80,7 +80,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
           bottom: 0,
           width: 480,
           background: 'var(--bg-surface-low)',
-          borderLeft: '1px solid rgba(255,255,255,0.10)',
+          borderLeft: '1px solid var(--border-default)',
           boxShadow: '-4px 0 20px rgba(0,0,0,0.5)',
           zIndex: 999,
           display: 'flex',
@@ -89,7 +89,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--divider)' }}>
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 4 }}>
               {formData.task_type}{formData.wbs_code ? ` · ${formData.wbs_code}` : ''}
@@ -131,7 +131,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'var(--bg-sidebar)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--divider)', background: 'var(--bg-sidebar)' }}>
           {['DETAILS', 'DEPENDENCIES', 'NOTES', 'HISTORY'].map(tab => (
             <button
               key={tab}
@@ -189,7 +189,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 {predecessorTasks.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {predecessorTasks.map(pred => (
-                      <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                      <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
                         <button onClick={() => removePredecessor(pred.id)} style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', fontSize: 12, padding: 2 }}>✕</button>
@@ -207,7 +207,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                       defaultValue=""
                       onChange={(e) => { if (e.target.value) { addPredecessor(e.target.value); e.target.value = ''; } }}
                       style={{
-                        width: '100%', background: 'var(--bg-sidebar)', border: '1px solid rgba(255,255,255,0.10)',
+                        width: '100%', background: 'var(--bg-sidebar)', border: '1px solid var(--border-default)',
                         borderRadius: 6, padding: '6px 8px', fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)',
                       }}
                     >
@@ -228,7 +228,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 {successorTasks.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {successorTasks.map(suc => (
-                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{suc.wbs_code || '—'}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1 }}>{suc.task_name}</span>
                       </div>
@@ -249,7 +249,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 width: '100%',
                 height: 200,
                 background: 'var(--bg-sidebar)',
-                border: '1px solid rgba(255,255,255,0.10)',
+                border: '1px solid var(--border-default)',
                 borderRadius: 8,
                 padding: 12,
                 fontFamily: 'var(--font-body)',
@@ -270,13 +270,13 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid var(--divider)' }}>
           <button
             onClick={onClose}
             style={{
               flex: 1,
               background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.12)',
+              border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
               fontFamily: 'var(--font-body)',
@@ -323,7 +323,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           style={{
             width: '100%',
             background: 'var(--bg-sidebar)',
-            border: '1px solid rgba(255,255,255,0.10)',
+            border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',
@@ -344,7 +344,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           style={{
             width: '100%',
             background: 'var(--bg-sidebar)',
-            border: '1px solid rgba(255,255,255,0.10)',
+            border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',
@@ -373,8 +373,8 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           readOnly={readOnly}
           style={{
             width: '100%',
-            background: readOnly ? 'rgba(255,255,255,0.03)' : 'var(--bg-sidebar)',
-            border: '1px solid rgba(255,255,255,0.10)',
+            background: readOnly ? 'var(--hover-bg)' : 'var(--bg-sidebar)',
+            border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',
             fontFamily: 'var(--font-body)',

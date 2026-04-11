@@ -19,7 +19,7 @@ const StatCard = ({ label, value, color, sublabel }) => {
     red:    { bg: "var(--danger-muted)",     border: "rgba(255,23,68,0.25)",     text: "var(--status-error)" },
     amber:  { bg: "var(--warning-muted)",    border: "rgba(255,179,0,0.25)",     text: "var(--status-warning)" },
     green:  { bg: "var(--success-muted)",    border: "rgba(0,230,118,0.25)",     text: "#00E676" },
-    slate:  { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)", text: "var(--text-secondary)" },
+    slate:  { bg: "var(--hover-bg)", border: "var(--bg-surface-high)", text: "var(--text-secondary)" },
   };
   const c = colors[color] || colors.slate;
 
@@ -45,7 +45,7 @@ const SectionHeader = ({ title, count, color = "var(--accent)" }) => (
     {count != null && (
       <span style={{ background: `${color}25`, border: `1px solid ${color}55`, color, borderRadius: 8, padding: "1px 7px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>{count}</span>
     )}
-    <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+    <div style={{ flex: 1, height: 1, background: "var(--divider)" }} />
   </div>
 );
 
@@ -59,7 +59,7 @@ const MiniRow = ({ rfi, onClick }) => {
       style={{
         display: "flex", alignItems: "center", gap: 12,
         padding: "8px 14px",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        borderBottom: "1px solid var(--hover-bg)",
         borderLeft: overdue
           ? (days > 14 ? `3px solid var(--status-error)` : `3px solid var(--status-warning)`)
           : "3px solid var(--accent)",
@@ -69,7 +69,7 @@ const MiniRow = ({ rfi, onClick }) => {
         cursor: "pointer",
         transition: "background 0.15s",
       }}
-      onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+      onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
       onMouseLeave={(e) => e.currentTarget.style.background = overdue ? (days > 14 ? "var(--danger-muted)" : "var(--warning-muted)") : "rgba(0,229,255,0.06)"}
     >
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 600, minWidth: 70, flexShrink: 0 }}>{rfi.rfi_number || "—"}</div>
@@ -135,7 +135,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "12px 20px",
           background: "var(--info-muted)",
-          borderBottom: collapsed ? "none" : "1px solid rgba(255,255,255,0.06)",
+          borderBottom: collapsed ? "none" : "1px solid var(--divider)",
           cursor: "pointer",
           userSelect: "none",
         }}
@@ -172,7 +172,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
           {stats.overdueItems.length > 0 && (
             <div>
               <SectionHeader title="Overdue Items" count={stats.overdueItems.length} color="var(--status-error)" />
-              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--divider)" }}>
                 {stats.overdueItems.slice(0, 8).map((r) => (
                   <MiniRow key={r.id} rfi={r} onClick={() => onEditRFI?.(r)} />
                 ))}
@@ -189,7 +189,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
           {stats.upcoming.length > 0 && (
             <div>
               <SectionHeader title="Due Within 7 Days" count={stats.upcoming.length} color="var(--status-warning)" />
-              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid var(--divider)" }}>
                 {stats.upcoming.map((r) => (
                   <MiniRow key={r.id} rfi={r} onClick={() => onEditRFI?.(r)} />
                 ))}
@@ -240,7 +240,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
                     />
                     <Tooltip
                       contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
-                      cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                      cursor={{ fill: "var(--hover-bg)" }}
                     />
                     <Bar dataKey="count" radius={[0, 2, 2, 0]}>
                       {bicBreakdown.map((entry) => (
