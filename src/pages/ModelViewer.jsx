@@ -227,9 +227,10 @@ export default function ModelViewer() {
 
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    // Use full bounding-box diagonal so elongated models fit completely
+    const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
     const fov = camera.fov * (Math.PI / 180);
-    const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.8;
+    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
 
     // Position camera at isometric angle
     const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
@@ -357,7 +358,7 @@ export default function ModelViewer() {
   // ─── FILE HANDLING ──────────────────────────────────────────────
   const handleFile = useCallback((file) => {
     if (!file) return;
-    const ext = file.name.split(".").pop().toLowerCase();
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
     if (["gltf", "glb"].includes(ext)) handleGLTFUpload(file);
     else if (ext === "ifc") handleIFCUpload(file);
     else setUploadError("Unsupported format. Use .gltf, .glb, or .ifc");
@@ -380,9 +381,9 @@ export default function ModelViewer() {
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
+    const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
     const fov = camera.fov * (Math.PI / 180);
-    const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.8;
+    const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
 
     const dir = new THREE.Vector3();
     switch (preset) {

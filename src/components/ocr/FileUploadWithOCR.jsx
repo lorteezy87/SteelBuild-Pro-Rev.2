@@ -54,7 +54,12 @@ async function runOCR(file, fileType) {
   });
 
   const clean = (raw || '{}').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(clean);
+  try {
+    return JSON.parse(clean);
+  } catch {
+    console.error("OCR returned malformed JSON:", clean.slice(0, 200));
+    return {};
+  }
 }
 
 function OCRResultCard({ result, fileType }) {

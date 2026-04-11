@@ -288,9 +288,11 @@ export default function Financials() {
         .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
       const committed = relatedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
       const signedExtras = safeNumber(byCostCodeId[costCode.id]);
-      const revisedBudget = safeNumber(costCode.budget_amount);
-      const originalEstimate = revisedBudget - signedExtras;
-      const exposure = actual + committed;
+      const originalBudget = safeNumber(costCode.budget_amount);
+      const revisedBudget = originalBudget + signedExtras;
+      const originalEstimate = originalBudget;
+      // Committed already includes paid (actual) amounts — don't double-count
+      const exposure = committed;
       const remainingBudget = revisedBudget - exposure;
       const usedPct = revisedBudget > 0 ? (exposure / revisedBudget) * 100 : 0;
       const family = getFamilyMeta(`${costCode.phase || ""} ${costCode.description || ""}`);
