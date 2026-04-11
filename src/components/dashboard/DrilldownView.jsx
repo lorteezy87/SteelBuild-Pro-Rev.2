@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { statusIs, statusIn } from "@/components/shared/formatters";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { createPageUrl } from "@/utils";
@@ -691,20 +692,20 @@ export default function DrilldownView({
   const financials = useMemo(() => {
     const contractValue = Number(project.original_contract_value) || 0;
     const approvedCOVal = cos
-      .filter((c) => c.status === "Approved")
+      .filter((c) => statusIs(c.status, "Approved"))
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const revisedValue = contractValue + approvedCOVal;
-    const activeExpenses = expenses.filter((expense) => expense.payment_status !== "Voided");
+    const activeExpenses = expenses.filter((expense) => !statusIs(expense.payment_status, "Voided"));
     const budgetCommitted = codes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
     const actualSpend = activeExpenses
-      .filter((expense) => expense.payment_status === "Paid")
+      .filter((expense) => statusIs(expense.payment_status, "Paid"))
       .reduce((s, expense) => s + (Number(expense.amount) || 0), 0);
     const committedCosts = activeExpenses.reduce(
       (s, expense) => s + (Number(expense.amount) || 0),
       0
     );
     const pendingCOVal = cos
-      .filter((c) => ["Submitted", "Under Review"].includes(c.status))
+      .filter((c) => statusIn(c.status, ["Submitted", "Under Review"]))
       .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     return {
       contractValue,
@@ -727,18 +728,18 @@ export default function DrilldownView({
     return Array.from(tokens);
   }, [user]);
   const derived = useMemo(() => {
-    const isOpenRFI = (rfi) => !["Answered", "Closed"].includes(rfi.status);
+    const isOpenRFI = (rfi) => !statusIn(rfi.status, ["Answered", "Closed"]);
     const isDrawingLate = (drawing) =>
       drawing.due_date &&
       parseDate(drawing.due_date) &&
       parseDate(drawing.due_date) < today &&
-      drawing.stage !== "Released";
+      !statusIs(drawing.stage, "Released");
     const isDeliveryLate = (delivery) =>
       delivery.scheduled_date &&
       parseDate(delivery.scheduled_date) &&
       parseDate(delivery.scheduled_date) < today &&
-      delivery.status !== "Delivered";
-    const isActionOpen = (item) => !["Complete", "Closed", "Cancelled", "Resolved"].includes(item.status);
+      !statusIs(delivery.status, "Delivered");
+    const isActionOpen = (item) => !statusIn(item.status, ["Complete", "Closed", "Cancelled", "Resolved"]);
     const isConstraint = (item) => item.category === "CONSTRAINT";
     const isMine = (value) => {
       const normalized = (value || "").toLowerCase();
@@ -748,7 +749,7 @@ export default function DrilldownView({
     const overdueRfis = rfis.filter((r) => isOpenRFI(r) && r.due_date && parseDate(r.due_date) < today);
     const lateDrawings = drawings.filter(isDrawingLate);
     const lateDeliveries = deliveries.filter(isDeliveryLate);
-    const blockedWps = wps.filter((wp) => wp.status === "On Hold");
+    const blockedWps = wps.filter((wp) => statusIs(wp.status, "On Hold"));
     const pendingCosts = financials.committedCosts - financials.actualSpend;
     const openActions = actionItems.filter(isActionOpen);
     const overdueActions = openActions.filter((item) => item.due_date && parseDate(item.due_date) < today);
@@ -760,10 +761,10 @@ export default function DrilldownView({
       return due && due >= today && daysBetween(due, today) <= 3;
     });
     const pendingRevisions = drawings.filter((drawing) =>
-      ["OFA", "BFA", "OFS", "BFS", "FFF"].includes(drawing.stage)
+      statusIn(drawing.stage, ["OFA", "BFA", "OFS", "BFS", "FFF"])
     );
     const stalledPackages = wps.filter(
-      (wp) => wp.status !== "Complete" && Number(wp.percent_complete || 0) === 0
+      (wp) => !statusIs(wp.status, "Complete") && Number(wp.percent_complete || 0) === 0
     );
 
     const attentionItems = [
@@ -775,7 +776,7 @@ export default function DrilldownView({
           title: rfi.title || "Open RFI requires response",
           detail: `${od}d overdue | ${rfi.status} | ${rfi.priority || "No priority"}`,
           badge: "RFI",
-          tone: rfi.priority === "Critical" ? "danger" : "warning",
+          tone: statusIs(rfi.priority, "Critical") ? "danger" : "warning",
           overdueDays: od,
           page: "RFIs",
         };
@@ -938,7 +939,7 @@ export default function DrilldownView({
     const avg = Math.round(total / wps.length);
     const totalTons = wps.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
     const fabTons = wps
-      .filter(wp => ["Fabrication", "Delivery", "Erection"].includes(wp.phase) && Number(wp.percent_complete) >= 50)
+      .filter(wp => statusIn(wp.phase, ["Fabrication", "Delivery", "Erection"]) && Number(wp.percent_complete) >= 50)
       .reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0);
     const fabPct = totalTons > 0 ? Math.round((fabTons / totalTons) * 100) : 0;
     return { avg, fabPct, totalTons, fabTons };
@@ -985,10 +986,10 @@ export default function DrilldownView({
   ];
 
   const quickActions = [
-    { label: "Update RFIs", detail: `${rfis.filter((r) => !["Answered", "Closed"].includes(r.status)).length} open`, page: "RFIs", primary: true },
-    { label: "Drawing Revisions", detail: `${drawings.filter((d) => d.stage !== "Released").length} active`, page: "Drawings" },
-    { label: "Deliveries", detail: `${deliveries.filter((d) => d.status !== "Delivered").length} in play`, page: "Deliveries" },
-    { label: "Work Packages", detail: `${wps.filter((wp) => wp.status !== "Complete").length} active`, page: "WorkPackages" },
+    { label: "Update RFIs", detail: `${rfis.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length} open`, page: "RFIs", primary: true },
+    { label: "Drawing Revisions", detail: `${drawings.filter((d) => !statusIs(d.stage, "Released")).length} active`, page: "Drawings" },
+    { label: "Deliveries", detail: `${deliveries.filter((d) => !statusIs(d.status, "Delivered")).length} in play`, page: "Deliveries" },
+    { label: "Work Packages", detail: `${wps.filter((wp) => !statusIs(wp.status, "Complete")).length} active`, page: "WorkPackages" },
     { label: "Costs", detail: `$${Math.round(financials.committedCosts).toLocaleString()} committed`, page: "Financials" },
   ];
 

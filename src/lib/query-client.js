@@ -10,6 +10,7 @@ export const queryClientInstance = new QueryClient({
 			// slow enough to avoid hammering the API when switching between pages quickly.
 			// initialData: [] was removed from all page queries (was suppressing the first fetch).
 			staleTime: 30 * 1000,
+			initialDataUpdatedAt: 0,  // Treat initialData as immediately stale
 		},
 	},
 });

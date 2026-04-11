@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
@@ -323,6 +324,14 @@ export default function CostDashboard() {
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="page" />
+      </div>
+    );
+  }
 
   return (
     <div>
