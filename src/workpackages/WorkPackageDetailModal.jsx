@@ -17,6 +17,7 @@ export default function WorkPackageDetailModal({ wp, onClose }) {
     queryFn: () => base44.entities.Drawing.filter({ project_id: wp.project_id }),
     enabled: !!wp.project_id,
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: wpDeliveries = [] } = useQuery({
@@ -24,6 +25,7 @@ export default function WorkPackageDetailModal({ wp, onClose }) {
     queryFn: () => base44.entities.Delivery.filter({ work_package_id: wp.id }),
     enabled: !!wp.id,
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: scheduleTasks = [] } = useQuery({
@@ -34,6 +36,7 @@ export default function WorkPackageDetailModal({ wp, onClose }) {
         linked_entity_type: "WorkPackage",
       }),
     initialData: [],
+    staleTime: 2 * 60 * 1000,
   });
 
   const shopHoursBudget = wp.shop_hours_budget || 0;

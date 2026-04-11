@@ -625,41 +625,35 @@ export default function Reports() {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list(),
-    initialData: [],
   });
   const { data: changeOrders = [] } = useQuery({
     queryKey: ["change-orders-global"],
     queryFn: () => base44.entities.ChangeOrder.list(),
-    initialData: [],
   });
   const { data: expenses = [] } = useQuery({
     queryKey: ["expenses-all"],
     queryFn: () => base44.entities.Expense.list(),
-    initialData: [],
   });
   const { data: actionItems = [] } = useQuery({
     queryKey: ["action-items-all"],
     queryFn: () => base44.entities.ActionItem.list(),
-    initialData: [],
   });
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries-all"],
     queryFn: () => base44.entities.Delivery.list(),
-    initialData: [],
   });
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages-global"],
     queryFn: () => base44.entities.WorkPackage.list(),
-    initialData: [],
   });
   const { data: costCodes = [] } = useQuery({
     queryKey: ["cost-codes-global"],
     queryFn: () => base44.entities.CostCode.list(),
-    initialData: [],
   });
 
   /* ── Derived data ── */

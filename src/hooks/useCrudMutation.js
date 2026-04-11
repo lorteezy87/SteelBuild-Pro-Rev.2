@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { validate } from "@/services/validation";
 import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
+import { batchProcess } from "@/utils/batchProcess";
 
 // ─── Entity name → base44 entity mapping ────────────────────────────────
 const ENTITY_MAP = {
@@ -177,15 +178,14 @@ export function useCrudMutation(entityName, options = {}) {
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, data }) => {
       if (!ids?.length) throw new Error("No records selected.");
-      const results = { succeeded: [], failed: [] };
-      for (const id of ids) {
-        try {
-          const updated = await entityClient.update(id, data);
-          results.succeeded.push({ id, record: updated });
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
-        }
-      }
+      const { succeeded, failed } = await batchProcess(
+        ids,
+        (id) => entityClient.update(id, data).then((record) => ({ id, record })),
+      );
+      const results = {
+        succeeded: succeeded.map((s) => s.value),
+        failed: failed.map((f) => ({ id: f.item, error: f.error })),
+      };
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} updates failed.`);
       }
@@ -213,15 +213,14 @@ export function useCrudMutation(entityName, options = {}) {
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids) => {
       if (!ids?.length) throw new Error("No records selected.");
-      const results = { succeeded: [], failed: [] };
-      for (const id of ids) {
-        try {
-          await entityClient.delete(id);
-          results.succeeded.push(id);
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
-        }
-      }
+      const { succeeded, failed } = await batchProcess(
+        ids,
+        (id) => entityClient.delete(id).then(() => id),
+      );
+      const results = {
+        succeeded: succeeded.map((s) => s.value),
+        failed: failed.map((f) => ({ id: f.item, error: f.error })),
+      };
       if (results.failed.length > 0 && results.succeeded.length === 0) {
         throw new Error(`All ${results.failed.length} deletes failed.`);
       }

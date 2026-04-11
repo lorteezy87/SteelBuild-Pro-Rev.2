@@ -21,6 +21,7 @@ function UsersManagementContent() {
   const { data: users = [], isLoading, refetch } = useQuery({
     queryKey: ["users"],
     queryFn: () => base44.entities.User.list("-created_at"),
+    staleTime: 5 * 60 * 1000,
   });
 
   const deleteUserMut = useMutation({

@@ -58,6 +58,7 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleSubmit = () => {

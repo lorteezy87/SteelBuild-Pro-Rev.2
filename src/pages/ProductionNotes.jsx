@@ -52,12 +52,14 @@ export default function ProductionNotes() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: notes = [] } = useQuery({
     queryKey: ["production-notes"],
     queryFn: () => base44.entities.ProductionNote.list("-note_date"),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const { data: allWPs = [] } = useQuery({

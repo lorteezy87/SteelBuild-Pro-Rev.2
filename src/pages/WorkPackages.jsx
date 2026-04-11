@@ -11,6 +11,7 @@ import WPFormModal from "@/components/workpackages/WPFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ChevronPipeline from "@/components/shared/ChevronPipeline";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { batchProcess } from "@/utils/batchProcess";
 
 const LIFECYCLE_STAGES = [
   { key: "Detailing", label: "DETAIL", color: "var(--phase-detailing)" },
@@ -153,6 +154,7 @@ export default function WorkPackages() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: drawings = [] } = useQuery({
@@ -211,13 +213,22 @@ export default function WorkPackages() {
   });
 
   const bulkStatusMut = useMutation({
-    mutationFn: ({ ids, status }) =>
-      Promise.all(ids.map((id) => base44.entities.WorkPackage.update(id, { status }))),
-    onSuccess: () => {
+    mutationFn: async ({ ids, status }) => {
+      const results = await batchProcess(ids, (id) => base44.entities.WorkPackage.update(id, { status }));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: (results) => {
       qc.invalidateQueries({ queryKey: ["work-packages"] });
       qc.invalidateQueries({ queryKey: ["wps-all"] });
       setSelectedWPs(new Set());
-      toast.success("Status updated");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("Status updated");
+      }
     },
     onError: () => toast.error("Bulk update failed"),
   });

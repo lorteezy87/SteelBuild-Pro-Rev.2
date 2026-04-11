@@ -3,6 +3,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FileText, Flag, PenLine, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { batchProcess } from "@/utils/batchProcess";
 
 const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 
@@ -348,8 +349,8 @@ export default function DrawingKanban({ drawings, onStageChange, onEdit, onAnnot
       })
     );
 
-    // Persist all sheets in the set
-    await Promise.all(setGroup.sheets.map(d => onStageChange(d, newStage)));
+    // Persist all sheets in the set (batched to avoid overwhelming server)
+    await batchProcess(setGroup.sheets, (d) => onStageChange(d, newStage));
   };
 
   return (

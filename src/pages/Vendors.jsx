@@ -18,6 +18,7 @@ export default function Vendors() {
   const { data: vendors = [] } = useQuery({
     queryKey: ["vendors"],
     queryFn: () => base44.entities.Vendor.list("-is_preferred"),
+    staleTime: 5 * 60 * 1000,
   });
 
   const filtered = vendors.filter((vendor) => {

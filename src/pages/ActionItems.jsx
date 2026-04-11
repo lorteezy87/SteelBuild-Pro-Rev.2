@@ -72,6 +72,7 @@ export default function ActionItems() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : null;

@@ -15,6 +15,7 @@ export default function ExecutiveDashboard() {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: rfis = [] } = useQuery({
