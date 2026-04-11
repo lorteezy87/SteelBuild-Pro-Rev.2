@@ -240,7 +240,7 @@ export default function GlobalSearchModal({ open, onClose }) {
         <div
           style={{
             padding: "14px 18px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid var(--divider)",
             display: "flex",
             alignItems: "center",
             gap: 10,
@@ -274,7 +274,7 @@ export default function GlobalSearchModal({ open, onClose }) {
           )}
           <kbd style={{
             fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+            background: "var(--bg-surface-high)", border: "1px solid var(--border-default)",
             borderRadius: 4, padding: "2px 6px",
           }}>
             ESC
@@ -305,14 +305,14 @@ export default function GlobalSearchModal({ open, onClose }) {
                     display: "flex", alignItems: "center", gap: 8,
                     transition: "background 0.1s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                 >
                   <span style={{ fontSize: 12, color: "var(--text-muted)" }}>↩</span>
                   {search}
                 </div>
               ))}
-              <div style={{ height: 1, background: "rgba(255,255,255,0.04)", margin: "4px 18px" }} />
+              <div style={{ height: 1, background: "var(--hover-bg)", margin: "4px 18px" }} />
             </>
           )}
 
@@ -393,7 +393,7 @@ export default function GlobalSearchModal({ open, onClose }) {
                 {isSelected && (
                   <kbd style={{
                     fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-                    background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                    background: "var(--bg-surface-high)", border: "1px solid var(--border-default)",
                     borderRadius: 3, padding: "1px 5px", flexShrink: 0,
                   }}>
                     ↵
@@ -422,7 +422,7 @@ export default function GlobalSearchModal({ open, onClose }) {
 
         {/* Footer */}
         <div style={{
-          borderTop: "1px solid rgba(255,255,255,0.04)",
+          borderTop: "1px solid var(--hover-bg)",
           padding: "8px 18px",
           display: "flex",
           alignItems: "center",
@@ -430,9 +430,9 @@ export default function GlobalSearchModal({ open, onClose }) {
           gap: 16,
         }}>
           <div style={{ display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↑↓</kbd> Navigate</span>
-            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↵</kbd> Open</span>
-            <span><kbd style={{ background: "rgba(255,255,255,0.06)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>esc</kbd> Close</span>
+            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↑↓</kbd> Navigate</span>
+            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↵</kbd> Open</span>
+            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>esc</kbd> Close</span>
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
             STEELBUILD COMMAND PALETTE

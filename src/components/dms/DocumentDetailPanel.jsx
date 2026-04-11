@@ -98,14 +98,14 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 420,
         background: "var(--bg-surface-low)",
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: "1px solid var(--bg-surface-high)",
         borderLeft: "2px solid var(--accent-border)",
         zIndex: 2000, display: "flex", flexDirection: "column",
         animation: "slideInRight 0.25s ease-out",
       }}
     >
       {/* Header */}
-      <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div style={{ padding: 16, borderBottom: "1px solid var(--bg-surface-high)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 17, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
             {doc.displayName || doc.display_name || doc.fileName || doc.file_name || "Untitled"}
@@ -118,24 +118,24 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
               {doc.status || "Draft"}
             </span>
             {doc.category && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", background: "rgba(255,255,255,0.06)", color: "var(--text-muted)", borderRadius: 3 }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", background: "var(--bg-surface-high)", color: "var(--text-muted)", borderRadius: 3 }}>
                 {doc.category}
               </span>
             )}
             {doc.discipline && doc.discipline !== "General" && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", background: "rgba(255,255,255,0.06)", color: "var(--text-muted)", borderRadius: 3 }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 6px", background: "var(--bg-surface-high)", color: "var(--text-muted)", borderRadius: 3 }}>
                 {doc.discipline}
               </span>
             )}
           </div>
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(220,225,240,0.60)", cursor: "pointer", fontSize: 20, padding: 0, marginLeft: 8 }}>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 20, padding: 0, marginLeft: 8 }}>
           {"\u00D7"}
         </button>
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: "flex", gap: 6, padding: 12, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+      <div style={{ display: "flex", gap: 6, padding: 12, borderBottom: "1px solid var(--bg-surface-high)" }}>
         {[
           { label: "DOWNLOAD", handler: handleDownload, accent: true },
           { label: "VIEW",     handler: handleView },
@@ -148,8 +148,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
             style={{
               flex: 1, padding: "6px 8px",
               background: btn.accent ? "var(--accent-muted)" : "transparent",
-              border: btn.accent ? "1px solid var(--accent-border)" : "1px solid rgba(255,255,255,0.12)",
-              color: btn.accent ? "var(--accent)" : "rgba(220,225,240,0.70)",
+              border: btn.accent ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
+              color: btn.accent ? "var(--accent)" : "var(--text-secondary)",
               borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600, cursor: "pointer",
             }}
           >
@@ -159,7 +159,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+      <div style={{ display: "flex", borderBottom: "1px solid var(--bg-surface-high)" }}>
         {["details", "linked", "versions", "activity"].map(tab => (
           <button
             key={tab}
@@ -204,31 +204,31 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
               { label: "UPLOADED",   value: formatDate(doc.uploadedDate || doc.uploaded_date || doc.created_at) },
             ].map(({ label, value, color }) => (
               <div key={label}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginBottom: 3 }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>{label}</div>
                 <div style={{ color: color || "var(--text-primary)", fontFamily: color ? "var(--font-mono)" : "var(--font-body)" }}>{value || "\u2014"}</div>
               </div>
             ))}
             {(doc.drawingNumber || doc.drawing_number) && (
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginBottom: 3 }}>DRAWING #</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>DRAWING #</div>
                 <div style={{ color: "var(--text-primary)" }}>{doc.drawingNumber || doc.drawing_number}</div>
               </div>
             )}
             {(doc.uploadedBy || doc.uploaded_by) && (
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginBottom: 3 }}>UPLOADED BY</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>UPLOADED BY</div>
                 <div style={{ color: "var(--text-primary)" }}>{doc.uploadedBy || doc.uploaded_by}</div>
               </div>
             )}
             {doc.description && (
               <div style={{ gridColumn: "1 / -1" }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginBottom: 3 }}>DESCRIPTION</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>DESCRIPTION</div>
                 <div style={{ color: "var(--text-primary)", lineHeight: 1.5 }}>{doc.description}</div>
               </div>
             )}
             {doc.tags?.length > 0 && (
               <div style={{ gridColumn: "1 / -1" }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginBottom: 3 }}>TAGS</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>TAGS</div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {(Array.isArray(doc.tags) ? doc.tags : []).map(tag => (
                     <span key={tag} style={{ padding: "2px 6px", background: "var(--accent-muted)", color: "var(--accent)", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 9 }}>
@@ -307,13 +307,13 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
                       key={ver.id}
                       style={{
                         padding: "10px 14px",
-                        background: isCurrent ? "rgba(200,155,32,0.06)" : "rgba(255,255,255,0.02)",
-                        border: isCurrent ? "1px solid rgba(200,155,32,0.25)" : "1px solid rgba(255,255,255,0.06)",
+                        background: isCurrent ? "rgba(200,155,32,0.06)" : "var(--hover-bg)",
+                        border: isCurrent ? "1px solid rgba(200,155,32,0.25)" : "1px solid var(--divider)",
                         borderRadius: 6, cursor: isCurrent ? "default" : "pointer",
                         transition: "border-color 0.15s",
                       }}
-                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)"; }}
-                      onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; }}
+                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.borderColor = "var(--border-strong)"; }}
+                      onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.borderColor = "var(--divider)"; }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -350,8 +350,8 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
             ) : (
               <>
                 <div style={{
-                  padding: "10px 14px", background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6,
+                  padding: "10px 14px", background: "var(--hover-bg)",
+                  border: "1px solid var(--divider)", borderRadius: 6,
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
@@ -380,7 +380,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
         {/* ── Activity Tab ─────────────────────── */}
         {activeTab === "activity" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid var(--divider)" }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", marginTop: 4, flexShrink: 0 }} />
               <div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>Document uploaded</div>
@@ -390,7 +390,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
               </div>
             </div>
             {doc.status !== "Draft" && (
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid var(--divider)" }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: (STATUS_COLORS[doc.status] || STATUS_COLORS.Draft).color, marginTop: 4, flexShrink: 0 }} />
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>

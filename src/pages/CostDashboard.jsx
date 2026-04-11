@@ -43,7 +43,7 @@ function VarianceAlertCard({ code, description, phase, variance, pctOver, contin
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "10px 16px",
-      borderBottom: "1px solid rgba(255,255,255,0.04)",
+      borderBottom: "1px solid var(--hover-bg)",
       borderLeft: exceedsContingency ? "3px solid var(--status-error)" : "3px solid var(--status-warning)",
       background: exceedsContingency ? "var(--danger-muted)" : "var(--warning-muted)",
     }}>
@@ -314,8 +314,8 @@ export default function CostDashboard() {
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view Cost Dashboard</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Select a project to view Cost Dashboard</div>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
     </div>
   );
 
@@ -348,15 +348,15 @@ export default function CostDashboard() {
         <PhoenixPanel title="Budget vs Actual vs Committed" style={{ gridColumn: barChartData.length > 6 ? "span 2" : "span 1" }}>
           <div style={{ padding: 16 }}>
             {barChartData.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 32, color: "rgba(200,210,230,0.44)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No cost data to display</div>
+              <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No cost data to display</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="label" tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} />
-                  <YAxis tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} tickFormatter={v => formatCurrencyShort(v)} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
+                  <XAxis dataKey="label" tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} />
+                  <YAxis tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} tickFormatter={v => formatCurrencyShort(v)} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                  <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="actual" name="Actual" fill="var(--accent)" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="committed" name="Committed" fill="#FFB300" radius={[3, 3, 0, 0]} />
@@ -370,7 +370,7 @@ export default function CostDashboard() {
           <PhoenixPanel title="Spend by Category">
             <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
               {categoryPieData.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 32, color: "rgba(200,210,230,0.44)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No spend data</div>
+                <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No spend data</div>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
@@ -378,7 +378,7 @@ export default function CostDashboard() {
                       {categoryPieData.map((d, i) => <Cell key={i} fill={CATEGORY_COLORS[d.name] || "var(--accent)"} />)}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                    <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -402,11 +402,11 @@ export default function CostDashboard() {
                     <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="name" tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} />
-                <YAxis tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} tickFormatter={v => formatCurrencyShort(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
+                <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} />
+                <YAxis tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} tickFormatter={v => formatCurrencyShort(v)} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                 {contingency > 0 && (
                   <ReferenceLine y={totalBudget + contingency} stroke="var(--status-error)" strokeDasharray="5 5" label={{ value: "Contingency Limit", fill: "var(--status-error)", fontSize: 9, fontFamily: "var(--font-mono)" }} />
                 )}

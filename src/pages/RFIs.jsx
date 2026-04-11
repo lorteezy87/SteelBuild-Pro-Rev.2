@@ -847,7 +847,7 @@ export default function RFIs() {
 
       {/* Bulk action bar */}
       {selectedRFIs.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px", background: "rgba(99,102,241,0.10)", borderBottom: "1px solid var(--accent)", flexShrink: 0, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px", background: "var(--accent-muted)", borderBottom: "1px solid var(--accent)", flexShrink: 0, flexWrap: "wrap" }}>
           <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{selectedRFIs.size} selected</span>
           <span style={{ color: "var(--divider)" }}>|</span>
           <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
@@ -1544,8 +1544,8 @@ function ContentBox({ children, accent, success }) {
       style={{
         padding: "12px 14px",
         borderRadius: 4,
-        border: "1px solid " + (accent ? "rgba(0,229,255,0.25)" : success ? "var(--success-border)" : "var(--border-default)"),
-        background: accent ? "rgba(0,229,255,0.08)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
+        border: "1px solid " + (accent ? "var(--accent-border)" : success ? "var(--success-border)" : "var(--border-default)"),
+        background: accent ? "var(--accent-muted)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
         borderLeft: "3px solid " + (accent ? "var(--accent)" : success ? "var(--status-success)" : "var(--accent)"),
         fontFamily: "var(--font-body)",
         fontSize: 13,

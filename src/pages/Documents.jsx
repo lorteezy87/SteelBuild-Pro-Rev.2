@@ -49,13 +49,13 @@ const BATCH_STATUS_OPTIONS = [
 function FolderSection({ name, docs, selectedIds, onToggleSelect, onViewDoc, onDownloadDoc, onEditDoc, onDeleteDoc }) {
   const [open, setOpen] = React.useState(true);
   return (
-    <div style={{ border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, overflow: "hidden" }}>
+    <div style={{ border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
       <div
         onClick={() => setOpen(o => !o)}
         style={{
           display: "flex", alignItems: "center", gap: 8, padding: "10px 14px",
-          background: "rgba(255,255,255,0.03)", cursor: "pointer",
-          borderBottom: open ? "1px solid rgba(255,255,255,0.06)" : "none",
+          background: "var(--hover-bg)", cursor: "pointer",
+          borderBottom: open ? "1px solid var(--divider)" : "none",
         }}
       >
         <span style={{ fontSize: 14, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", display: "inline-block" }}>{"\u25B6"}</span>
@@ -72,9 +72,9 @@ function FolderSection({ name, docs, selectedIds, onToggleSelect, onViewDoc, onD
                   position: "absolute", top: 8, left: 8, zIndex: 10,
                   width: 16, height: 16, borderRadius: 3,
                   background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
-                  border: "2px solid " + (selectedIds.has(doc.id) ? "#10B981" : "rgba(255,255,255,0.25)"),
+                  border: "2px solid " + (selectedIds.has(doc.id) ? "#10B981" : "var(--text-muted)"),
                   cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 9, color: "#fff",
+                  fontSize: 9, color: "var(--text-primary)",
                 }}
               >{selectedIds.has(doc.id) ? "\u2713" : ""}</div>
               <DocumentCard
@@ -321,7 +321,7 @@ export default function Documents() {
   if (!activeProject) {
     return (
       <div style={{ padding: 32, textAlign: "center" }}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "rgba(200,210,230,0.70)" }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)" }}>
           Select a project to view documents
         </div>
       </div>
@@ -371,7 +371,7 @@ export default function Documents() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
             {allDocuments.length} DOC{allDocuments.length !== 1 ? "S" : ""}
           </span>
-          <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.10)" }} />
+          <div style={{ width: 1, height: 24, background: "var(--border-default)" }} />
           <button
             onClick={() => setUploadOpen(true)}
             style={{
@@ -448,8 +448,8 @@ export default function Documents() {
             <button
               onClick={() => setShowSortMenu(o => !o)}
               style={{
-                padding: "6px 10px", background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-secondary)",
+                padding: "6px 10px", background: "var(--bg-surface-high)",
+                border: "1px solid var(--border-default)", color: "var(--text-secondary)",
                 borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
               }}
@@ -461,7 +461,7 @@ export default function Documents() {
                 <div onClick={() => setShowSortMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
                 <div style={{
                   position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 100,
-                  background: "var(--bg-surface)", border: "1px solid rgba(255,255,255,0.12)",
+                  background: "var(--bg-surface)", border: "1px solid var(--border-default)",
                   borderRadius: 8, padding: 4, minWidth: 160,
                   boxShadow: "0 12px 32px rgba(0,0,0,0.60)",
                 }}>
@@ -487,7 +487,7 @@ export default function Documents() {
           </div>
 
           {/* View mode toggle */}
-          <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.06)", borderRadius: 6, padding: 2 }}>
+          <div style={{ display: "flex", gap: 2, background: "var(--bg-surface-high)", borderRadius: 6, padding: 2 }}>
             {[
               { mode: "grid",   icon: <Grid3x3 size={14} /> },
               { mode: "list",   icon: <List size={14} /> },
@@ -523,17 +523,17 @@ export default function Documents() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#10B981" }}>
             {selectedIds.size} SELECTED
           </span>
-          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
+          <div style={{ width: 1, height: 20, background: "var(--bg-surface-high)" }} />
 
           {/* Select all / Deselect */}
-          <button onClick={selectAll} style={batchBtnStyle("rgba(255,255,255,0.06)", "rgba(255,255,255,0.12)", "var(--text-secondary)")}>
+          <button onClick={selectAll} style={batchBtnStyle("var(--bg-surface-high)", "var(--border-default)", "var(--text-secondary)")}>
             SELECT ALL ({filteredDocs.length})
           </button>
-          <button onClick={deselectAll} style={batchBtnStyle("rgba(255,255,255,0.06)", "rgba(255,255,255,0.12)", "var(--text-secondary)")}>
+          <button onClick={deselectAll} style={batchBtnStyle("var(--bg-surface-high)", "var(--border-default)", "var(--text-secondary)")}>
             <XCircle size={12} /> DESELECT
           </button>
 
-          <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.08)" }} />
+          <div style={{ width: 1, height: 20, background: "var(--bg-surface-high)" }} />
 
           {/* Batch status change */}
           <div style={{ position: "relative" }}>
@@ -549,7 +549,7 @@ export default function Documents() {
                 <div onClick={() => setBatchStatusOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
                 <div style={{
                   position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 100,
-                  background: "var(--bg-surface)", border: "1px solid rgba(255,255,255,0.12)",
+                  background: "var(--bg-surface)", border: "1px solid var(--border-default)",
                   borderRadius: 8, padding: 4, minWidth: 180,
                   boxShadow: "0 12px 32px rgba(0,0,0,0.60)",
                 }}>
@@ -563,7 +563,7 @@ export default function Documents() {
                         cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10,
                         color: "var(--text-secondary)",
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-surface-high)"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                     >
                       {s}
@@ -596,7 +596,7 @@ export default function Documents() {
               >
                 {bulkDeleteMut.isPending ? "..." : "CONFIRM"}
               </button>
-              <button onClick={() => setConfirmBulkDelete(false)} style={batchBtnStyle("rgba(255,255,255,0.06)", "rgba(255,255,255,0.12)", "var(--text-muted)")}>
+              <button onClick={() => setConfirmBulkDelete(false)} style={batchBtnStyle("var(--bg-surface-high)", "var(--border-default)", "var(--text-muted)")}>
                 CANCEL
               </button>
             </div>
@@ -643,7 +643,7 @@ export default function Documents() {
                     <span style={{
                       fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                       padding: "1px 5px", borderRadius: 3,
-                      background: statusTab === tab.key ? "var(--accent-muted)" : "rgba(255,255,255,0.06)",
+                      background: statusTab === tab.key ? "var(--accent-muted)" : "var(--bg-surface-high)",
                       color: statusTab === tab.key ? "var(--accent)" : "var(--text-muted)",
                     }}>{count}</span>
                   )}
@@ -661,7 +661,7 @@ export default function Documents() {
 
           {/* Content */}
           {isLoading ? (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)" }}>
+            <div style={{ padding: 32, textAlign: "center", color: "var(--text-secondary)" }}>
               Loading documents...
             </div>
           ) : allDocuments.length === 0 ? (
@@ -671,13 +671,13 @@ export default function Documents() {
               style={{
                 flex: 1, display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center", gap: 16,
-                margin: "12px 0", border: "2px dashed rgba(255,255,255,0.12)",
+                margin: "12px 0", border: "2px dashed var(--border-default)",
                 borderRadius: 16, padding: "60px 24px", cursor: "pointer",
                 transition: "border-color 0.2s, background 0.2s",
                 backgroundImage: "radial-gradient(circle at 50% 50%, rgba(200,155,32,0.03) 0%, transparent 70%)",
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.background = "var(--accent-muted)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.background = "transparent"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "transparent"; }}
             >
               {/* Document type icons row */}
               <div style={{ display: "flex", gap: 12, marginBottom: 4 }}>
@@ -715,7 +715,7 @@ export default function Documents() {
               </div>
             </div>
           ) : filteredDocs.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "rgba(200,210,230,0.60)", fontFamily: "var(--font-body)", fontSize: 13 }}>
+            <div style={{ padding: 32, textAlign: "center", color: "var(--text-secondary)", fontFamily: "var(--font-body)", fontSize: 13 }}>
               No documents match the current filters.{" "}
               <button onClick={handleClearAllFilters} style={{ color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700 }}>
                 CLEAR FILTERS
@@ -732,7 +732,7 @@ export default function Documents() {
                       position: "absolute", top: 8, left: 8, zIndex: 10,
                       width: 18, height: 18, borderRadius: 4,
                       background: selectedIds.has(doc.id) ? "#10B981" : "rgba(0,0,0,0.5)",
-                      border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid rgba(255,255,255,0.25)",
+                      border: selectedIds.has(doc.id) ? "2px solid #10B981" : "2px solid var(--text-muted)",
                       cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                   >
@@ -757,7 +757,7 @@ export default function Documents() {
                 display: "grid",
                 gridTemplateColumns: "28px 1fr 100px 80px 70px 80px 90px 100px",
                 gap: 8, padding: "8px 12px",
-                borderBottom: "2px solid rgba(255,255,255,0.10)",
+                borderBottom: "2px solid var(--border-default)",
                 position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 2,
                 boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
               }}>
@@ -767,9 +767,9 @@ export default function Documents() {
                 }} style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{
                     width: 14, height: 14, borderRadius: 3,
-                    border: "2px solid " + (selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "#10B981" : "rgba(255,255,255,0.25)"),
+                    border: "2px solid " + (selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "#10B981" : "var(--text-muted)"),
                     background: selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "#10B981" : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "var(--text-primary)",
                   }}>{selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? "\u2713" : ""}</div>
                 </div>
                 {[
@@ -851,7 +851,7 @@ export default function Documents() {
                       display: "grid",
                       gridTemplateColumns: "28px 1fr 100px 80px 70px 80px 90px 100px",
                       gap: 8, padding: "8px 12px", cursor: "pointer",
-                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      borderBottom: "1px solid var(--divider)",
                       background: isSelected ? "rgba(16,185,129,0.06)" : "transparent",
                       transition: "background 0.1s",
                     }}
@@ -862,9 +862,9 @@ export default function Documents() {
                       style={{ display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                       <div style={{
                         width: 14, height: 14, borderRadius: 3,
-                        border: "2px solid " + (isSelected ? "#10B981" : "rgba(255,255,255,0.25)"),
+                        border: "2px solid " + (isSelected ? "#10B981" : "var(--text-muted)"),
                         background: isSelected ? "#10B981" : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "var(--text-primary)",
                       }}>{isSelected ? "\u2713" : ""}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
@@ -966,14 +966,14 @@ export default function Documents() {
             onClick={e => e.stopPropagation()}
             style={{
               background: "var(--bg-surface-low)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid var(--bg-surface-high)",
               borderTop: "3px solid #10B981",
               borderRadius: 12, width: 520, maxHeight: "85vh",
               display: "flex", flexDirection: "column",
               boxShadow: "0 24px 60px rgba(0,0,0,0.75)", overflow: "hidden",
             }}
           >
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--bg-surface-high)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#10B981", letterSpacing: "0.06em" }}>GENERATE TRANSMITTAL</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{selectedIds.size} document{selectedIds.size !== 1 ? "s" : ""} selected</div>
@@ -994,7 +994,7 @@ export default function Documents() {
                     placeholder={placeholder}
                     value={transmittalForm[key]}
                     onChange={e => setTransmittalForm(prev => ({ ...prev, [key]: e.target.value }))}
-                    style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }}
+                    style={{ width: "100%", padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--border-default)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }}
                   />
                 </div>
               ))}
@@ -1003,7 +1003,7 @@ export default function Documents() {
                 <select
                   value={transmittalForm.purpose}
                   onChange={e => setTransmittalForm(prev => ({ ...prev, purpose: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12 }}
+                  style={{ width: "100%", padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--border-default)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12 }}
                 >
                   {["For Review", "For Approval", "For Construction", "For Record", "For Information", "Resubmitted"].map(p => <option key={p}>{p}</option>)}
                 </select>
@@ -1015,14 +1015,14 @@ export default function Documents() {
                   placeholder="Any remarks or special instructions..."
                   value={transmittalForm.notes}
                   onChange={e => setTransmittalForm(prev => ({ ...prev, notes: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, resize: "vertical", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--border-default)", color: "var(--text-primary)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 12, resize: "vertical", boxSizing: "border-box" }}
                 />
               </div>
 
-              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 6, padding: "10px 12px" }}>
+              <div style={{ background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "10px 12px" }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 8 }}>Documents Included</div>
                 {allDocuments.filter(d => selectedIds.has(d.id)).map(d => (
-                  <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid var(--divider)" }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{d.displayName || d.fileName}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>R{d.revisionNumber || "0"}</span>
                   </div>
@@ -1030,8 +1030,8 @@ export default function Documents() {
               </div>
             </div>
 
-            <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setTransmittalOpen(false)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--bg-surface-high)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setTransmittalOpen(false)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
                 CANCEL
               </button>
               <button

@@ -123,7 +123,7 @@ export default function UploadModal({ projectId, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--bg-surface-low)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          border: "1px solid var(--divider)",
           borderTop: "2px solid var(--accent-border)",
           borderRadius: 12,
           width: "90%",
@@ -138,7 +138,7 @@ export default function UploadModal({ projectId, onClose }) {
         <div
           style={{
             padding: 16,
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid var(--divider)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between"
@@ -157,7 +157,7 @@ export default function UploadModal({ projectId, onClose }) {
             style={{
               background: "none",
               border: "none",
-              color: "rgba(220,225,240,0.60)",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               fontSize: 20
             }}
@@ -188,7 +188,7 @@ export default function UploadModal({ projectId, onClose }) {
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", marginBottom: 6 }}>
                 Drop files here or click to browse
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(160,175,210,0.50)" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
                 PDF · DWG · IFC · GLTF · XLSX · DOCX · PNG · JPG · ZIP
               </div>
               <button
@@ -220,7 +220,7 @@ export default function UploadModal({ projectId, onClose }) {
                     key={file.name}
                     style={{
                       background: "var(--bg-surface-mid)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      border: "1px solid var(--divider)",
                       borderRadius: 8,
                       padding: 12
                     }}
@@ -230,7 +230,7 @@ export default function UploadModal({ projectId, onClose }) {
                         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
                           📄 {file.name}
                         </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(160,175,210,0.50)" }}>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>
                           {(file.size / 1024).toFixed(1)} KB
                         </div>
                       </div>
@@ -239,7 +239,7 @@ export default function UploadModal({ projectId, onClose }) {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "rgba(220,225,240,0.60)",
+                          color: "var(--text-secondary)",
                           cursor: "pointer",
                           fontSize: 16
                         }}
@@ -256,8 +256,8 @@ export default function UploadModal({ projectId, onClose }) {
                         onChange={(e) => updateMetadata(file.name, "displayName", e.target.value)}
                         style={{
                           padding: "6px 8px",
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "var(--hover-bg)",
+                          border: "1px solid var(--border-default)",
                           color: "var(--text-primary)",
                           borderRadius: 4,
                           fontFamily: "var(--font-body)",
@@ -269,8 +269,8 @@ export default function UploadModal({ projectId, onClose }) {
                         onChange={(e) => updateMetadata(file.name, "category", e.target.value)}
                         style={{
                           padding: "6px 8px",
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "var(--hover-bg)",
+                          border: "1px solid var(--border-default)",
                           color: "var(--text-primary)",
                           borderRadius: 4,
                           fontFamily: "var(--font-body)",
@@ -285,8 +285,8 @@ export default function UploadModal({ projectId, onClose }) {
                         onChange={(e) => updateMetadata(file.name, "discipline", e.target.value)}
                         style={{
                           padding: "6px 8px",
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "var(--hover-bg)",
+                          border: "1px solid var(--border-default)",
                           color: "var(--text-primary)",
                           borderRadius: 4,
                           fontFamily: "var(--font-body)",
@@ -303,8 +303,8 @@ export default function UploadModal({ projectId, onClose }) {
                         onChange={(e) => updateMetadata(file.name, "drawingNumber", e.target.value)}
                         style={{
                           padding: "6px 8px",
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(255,255,255,0.12)",
+                          background: "var(--hover-bg)",
+                          border: "1px solid var(--border-default)",
                           color: "var(--text-primary)",
                           borderRadius: 4,
                           fontFamily: "var(--font-body)",
@@ -323,7 +323,7 @@ export default function UploadModal({ projectId, onClose }) {
         {files.length > 0 && (
           <div style={{
             margin: "0 16px 16px",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
+            borderTop: "1px solid var(--divider)",
             paddingTop: 14,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -351,7 +351,7 @@ export default function UploadModal({ projectId, onClose }) {
                     style={{
                       width: "100%",
                       padding: "7px 10px",
-                      background: "rgba(255,255,255,0.04)",
+                      background: "var(--hover-bg)",
                       border: "1px solid var(--accent-border)",
                       color: scheduleLink.linkedWpId ? "var(--text-primary)" : "var(--text-muted)",
                       borderRadius: 6,
@@ -381,7 +381,7 @@ export default function UploadModal({ projectId, onClose }) {
                       style={{
                         width: 60,
                         padding: "7px 8px",
-                        background: "rgba(255,255,255,0.04)",
+                        background: "var(--hover-bg)",
                         border: "1px solid var(--accent-border)",
                         color: "var(--text-primary)",
                         borderRadius: 6,
@@ -411,7 +411,7 @@ export default function UploadModal({ projectId, onClose }) {
         <div
           style={{
             padding: 16,
-            borderTop: "1px solid rgba(255,255,255,0.08)",
+            borderTop: "1px solid var(--divider)",
             display: "flex",
             gap: 8,
             justifyContent: "flex-end"
@@ -422,8 +422,8 @@ export default function UploadModal({ projectId, onClose }) {
             style={{
               padding: "8px 16px",
               background: "transparent",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "rgba(220,225,240,0.70)",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)",
               borderRadius: 6,
               fontFamily: "var(--font-mono)",
               fontSize: 10,
