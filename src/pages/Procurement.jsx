@@ -140,9 +140,8 @@ export default function Procurement() {
       && !['Received', 'Cancelled'].includes(item.status);
     const isOverdue = required && !['Received', 'Cancelled'].includes(item.status)
       && required < today;
-    const daysExposure = required && promised
-      ? Math.ceil((promised - required) / 86400000)
-      : null;
+    const diff = required && promised ? promised - required : NaN;
+    const daysExposure = Number.isFinite(diff) ? Math.ceil(diff / 86400000) : null;
     return { ...item, isLate, isOverdue, daysExposure };
   }), [items, today]);
 
