@@ -62,8 +62,10 @@ export default function GlobalSearchModal({ open, onClose }) {
   const { activeProject } = useProjectContext();
 
   useEffect(() => {
-    const stored = localStorage.getItem("__steelbuild_recent_searches");
-    if (stored) setRecentSearches(JSON.parse(stored));
+    try {
+      const stored = localStorage.getItem("__steelbuild_recent_searches");
+      if (stored) setRecentSearches(JSON.parse(stored));
+    } catch (e) { /* corrupted data, ignore */ }
   }, []);
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function GlobalSearchModal({ open, onClose }) {
     setLoading(true);
     const t = setTimeout(() => runSearch(query), 250);
     return () => clearTimeout(t);
-  }, [query, searchScope]);
+  }, [query, searchScope, runSearch]);
 
   // Module quick-nav filtered by query
   const filteredModules = useMemo(() => {
@@ -219,17 +221,15 @@ export default function GlobalSearchModal({ open, onClose }) {
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
       onClose?.();
-    } else if (e.key === "Tab") {
-      // Cycle scope when no result is actively highlighted via arrow keys,
-      // or always allow Tab to cycle scope (since Tab is explicitly for scope switching)
+    } else if (e.key === "1" && e.altKey) {
       e.preventDefault();
-      setSearchScope((prev) => {
-        const idx = SCOPE_OPTIONS.findIndex((s) => s.key === prev);
-        const next = e.shiftKey
-          ? (idx - 1 + SCOPE_OPTIONS.length) % SCOPE_OPTIONS.length
-          : (idx + 1) % SCOPE_OPTIONS.length;
-        return SCOPE_OPTIONS[next].key;
-      });
+      setSearchScope("project");
+    } else if (e.key === "2" && e.altKey) {
+      e.preventDefault();
+      setSearchScope("all");
+    } else if (e.key === "3" && e.altKey) {
+      e.preventDefault();
+      setSearchScope("contacts");
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((prev) => Math.min(prev + 1, displayItems.length - 1));
@@ -374,7 +374,7 @@ export default function GlobalSearchModal({ open, onClose }) {
             opacity: 0.6,
             letterSpacing: "0.06em",
           }}>
-            Tab to switch scope
+            Alt+1/2/3 to switch scope
           </span>
         </div>
 
@@ -545,7 +545,7 @@ export default function GlobalSearchModal({ open, onClose }) {
           <div style={{ display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↑↓</kbd> Navigate</span>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↵</kbd> Open</span>
-            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>Tab</kbd> Scope</span>
+            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>Alt+1/2/3</kbd> Scope</span>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>esc</kbd> Close</span>
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>

@@ -19,9 +19,9 @@ const PRIMARY_TABS = [
 { label: "PROJECTS", pages: ["Projects", "ExecutiveView"] },
 { label: "RFIs", pages: ["RFIs", "RFIHub"] },
 { label: "DRAWINGS", pages: ["Drawings", "DrawingViewer", "Documents"] },
-{ label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAhead", "LookAheadSchedule", "GanttChart"] },
+{ label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAheadSchedule"] },
 { label: "DELIVERIES", pages: ["Deliveries"] },
-{ label: "SCHEDULE", pages: ["Schedule", "GanttChart", "LookAheadSchedule"] },
+{ label: "SCHEDULE", pages: ["Schedule", "GanttChart"] },
 { label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes"] },
 { label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV"] },
 { label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
@@ -1523,8 +1523,14 @@ export default function Layout({ children, currentPageName }) {
             {!isMobile &&
                 <div style={{ position: "relative" }}>
                 <div
-                    onClick={() => setGridOpen((g) => !g)}
-                    title="All Modules"
+                    title="Toggle compact/comfortable density"
+                    onClick={() => {
+                      const html = document.documentElement;
+                      const current = html.getAttribute("data-density");
+                      const next = current === "compact" ? "comfortable" : "compact";
+                      html.setAttribute("data-density", next);
+                      try { localStorage.setItem("sbp-density", next); } catch {}
+                    }}
                     style={{
                       width: 32, height: 32,
                       borderRadius: 8,
@@ -1537,19 +1543,12 @@ export default function Layout({ children, currentPageName }) {
                       fontFamily: "var(--font-mono)",
                       fontSize: 9,
                       fontWeight: 700,
-                    }}
-                    title="Toggle compact/comfortable density"
-                    onClick={() => {
-                      const html = document.documentElement;
-                      const current = html.getAttribute("data-density");
-                      const next = current === "compact" ? "comfortable" : "compact";
-                      html.setAttribute("data-density", next);
-                      try { localStorage.setItem("sbp-density", next); } catch {}
                     }}>
                     {"\u2261"}
                   </div>
 
                   <div
+                    title="All Modules"
                     onClick={() => setGridOpen((o) => !o)}
                     style={{
                       width: 32, height: 32,

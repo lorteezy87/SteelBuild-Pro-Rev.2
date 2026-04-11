@@ -34,9 +34,9 @@ const SORT_OPTIONS = [
   { key: "date-desc",  label: "Newest First",   fn: (a, b) => new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0) },
   { key: "date-asc",   label: "Oldest First",   fn: (a, b) => new Date(a.uploadedDate || a.created_at || 0) - new Date(b.uploadedDate || b.created_at || 0) },
   { key: "status",     label: "Status",         fn: (a, b) => (a.status || "").localeCompare(b.status || "") },
-  { key: "size-desc",  label: "Largest First",  fn: (a, b) => (b.fileSizeKb || 0) - (a.fileSizeKb || 0) },
-  { key: "size-asc",   label: "Smallest First", fn: (a, b) => (a.fileSizeKb || 0) - (b.fileSizeKb || 0) },
-  { key: "doc-num",    label: "Document #",      fn: (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "") },
+  { key: "size-desc",  label: "Largest First",  fn: (a, b) => (Number(b.fileSizeKb) || 0) - (Number(a.fileSizeKb) || 0) },
+  { key: "size-asc",   label: "Smallest First", fn: (a, b) => (Number(a.fileSizeKb) || 0) - (Number(b.fileSizeKb) || 0) },
+  { key: "doc-num",    label: "Document #",      fn: (a, b) => (a.documentNumber || "").localeCompare(b.documentNumber || "", undefined, { numeric: true }) },
 ];
 
 const BATCH_STATUS_OPTIONS = [

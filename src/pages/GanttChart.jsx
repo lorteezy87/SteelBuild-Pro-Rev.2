@@ -36,8 +36,8 @@ const ZOOM_LEVELS = {
 };
 
 function getDaysBetween(d1, d2) {
-  const a = new Date(d1); a.setHours(0, 0, 0, 0);
-  const b = new Date(d2); b.setHours(0, 0, 0, 0);
+  const a = new Date(d1); a.setUTCHours(0, 0, 0, 0);
+  const b = new Date(d2); b.setUTCHours(0, 0, 0, 0);
   return Math.round((b - a) / 86400000);
 }
 
@@ -209,7 +209,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
     if (!start || !end) return null;
     const startDate = new Date(start + "T00:00:00Z");
     const endDate = new Date(end + "T00:00:00Z");
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
     const totalDuration = getDaysBetween(startDate, endDate);
     if (totalDuration <= 0) return null;
     const elapsed = getDaysBetween(startDate, today);
