@@ -9,7 +9,7 @@ const STAGES = [
   { key: "Erected",     label: "ERECTED",     color: "var(--phase-erection)",  phase: "Erection" },
 ];
 
-export default function SteelExecutionStatusCard({ wps, drawings }) {
+export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
   // Calculate tonnage per stage from WPs
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0) || 1;
 
@@ -19,9 +19,9 @@ export default function SteelExecutionStatusCard({ wps, drawings }) {
   const approvedDrawings = drawings.filter(d => ["OFS","BFS","FFF","Released"].includes(d.stage)).length;
   const totalDrawings = drawings.length || 1;
   const releasedTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const fabTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase) && (w.status === "In Progress" || w.status === "Complete")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const shippedTons = wps.filter(w => w.phase === "Delivery" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const erectedTons = wps.filter(w => w.phase === "Erection" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const fabTons = wps.filter(w => w.phase === "Fabrication" && (w.status === "In Progress" || w.status === "Complete")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const shippedTons = wps.filter(w => w.phase === "Delivery" || w.status === "Shipped").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const erectedTons = wps.filter(w => w.phase === "Erection" || w.status === "Erected").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
 
   const metrics = [
     { key: "Detailing",   value: detailingTons, pct: Math.round(detailingTons / totalTons * 100), unit: "T", color: "var(--phase-detailing)" },

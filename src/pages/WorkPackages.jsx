@@ -307,7 +307,8 @@ export default function WorkPackages() {
     return m;
   }, [drawings]);
 
-  const drawingTotal = drawings.length || 1;
+  const drawingTotal = drawings.length;
+  const hasDrawings = drawings.length > 0;
   const overdueDrawings = drawings.filter(
     (d) => d.due_date && new Date(`${d.due_date}T00:00:00Z`) < new Date() && d.stage !== "Released"
   );
@@ -786,7 +787,7 @@ export default function WorkPackages() {
             </div>
             {DRAWING_STAGES.map((stage) => {
               const count = drawingsByStage[stage.id] || 0;
-              const pct = ((count / drawingTotal) * 100).toFixed(1);
+              const pct = hasDrawings ? ((count / drawingTotal) * 100).toFixed(1) : "0.0";
               return (
                 <div
                   key={stage.id}
@@ -825,8 +826,9 @@ export default function WorkPackages() {
               );
             })}
             <div style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>
-              Total: {drawings.length} \u00B7 Released: {drawingsByStage["Released"] || 0} (
-              {(((drawingsByStage["Released"] || 0) / drawingTotal) * 100).toFixed(1)}%)
+              {hasDrawings
+                ? <>Total: {drawings.length} {"\u00B7"} Released: {drawingsByStage["Released"] || 0} ({(((drawingsByStage["Released"] || 0) / drawingTotal) * 100).toFixed(1)}%)</>
+                : "No drawings linked"}
             </div>
           </div>
         </div>
@@ -925,7 +927,7 @@ export default function WorkPackages() {
                   .split(",")
                   .map((s) => s.trim())
                   .filter(Boolean)
-                  .includes(d.id)
+                  .includes(String(d.id))
               );
 
               return (

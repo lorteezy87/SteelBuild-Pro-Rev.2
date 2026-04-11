@@ -3,15 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../shared/formatters";
 
-export default function UpcomingDeliveriesCard({ deliveries }) {
+export default function UpcomingDeliveriesCard({ deliveries = [] }) {
   const navigate = useNavigate();
   const today = new Date(); today.setHours(0,0,0,0);
   const threeWeeks = new Date(today.getTime() + 21 * 86400000);
 
-  const late = deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered")
-    .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
-  const upcoming = deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) >= today && new Date(d.scheduled_date) <= threeWeeks && d.status !== "Delivered")
-    .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+  const late = deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date + "T00:00:00") < today && d.status !== "Delivered")
+    .sort((a, b) => new Date(a.scheduled_date + "T00:00:00") - new Date(b.scheduled_date + "T00:00:00"));
+  const upcoming = deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date + "T00:00:00") >= today && new Date(d.scheduled_date + "T00:00:00") <= threeWeeks && d.status !== "Delivered")
+    .sort((a, b) => new Date(a.scheduled_date + "T00:00:00") - new Date(b.scheduled_date + "T00:00:00"));
 
   const allShown = [
     ...late.map(d => ({ ...d, isLate: true })),
@@ -43,7 +43,7 @@ export default function UpcomingDeliveriesCard({ deliveries }) {
               <div style={{ minWidth: 0 }}>
                 {d.isLate && <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.12em", marginBottom: 2, fontWeight: 700 }}>LATE</div>}
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{d.delivery_title || d.vendor}</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{d.vendor}{d.weight_tons ? ` · ${d.weight_tons}T` : ""}{d.pieces ? ` · ${d.pieces} pcs` : ""}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{d.delivery_title ? d.vendor : ""}{d.weight_tons ? `${d.delivery_title ? " · " : ""}${d.weight_tons}T` : ""}{d.pieces ? ` · ${d.pieces} pcs` : ""}</div>
               </div>
               <div style={{ flexShrink: 0, textAlign: "right", marginLeft: 10 }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: borderColor, fontWeight: 700 }}>{formatDate(d.scheduled_date)}</div>

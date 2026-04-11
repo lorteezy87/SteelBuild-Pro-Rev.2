@@ -19,7 +19,7 @@ function FinRow({ label, value, valueColor, isTotal = false }) {
   );
 }
 
-export default function FinancialSnapshotCard({ financials, cos }) {
+export default function FinancialSnapshotCard({ financials = {}, cos }) {
   const navigate = useNavigate();
   const contractValue = Number(financials.contractValue) || 0;
   const approvedCOVal = Number(financials.approvedCOVal) || 0;
