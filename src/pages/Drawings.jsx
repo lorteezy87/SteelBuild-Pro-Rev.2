@@ -70,6 +70,93 @@ function isOverdue(drawing) {
   return new Date(drawing.due_date) < new Date();
 }
 
+// ─── Alert Banner ─────────────────────────────────────────────────────────────
+
+function AlertBanner({ alert, onDismiss, onFilter }) {
+  const [dismissed, setDismissed] = React.useState(false);
+  if (dismissed) return null;
+  return (
+    <div style={{
+      display: "flex", alignItems: "flex-start", gap: 10,
+      padding: "10px 14px", borderRadius: 2,
+      background: alert.bg,
+      border: `1px solid ${alert.border}`,
+      marginBottom: 8,
+    }}>
+      <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>{alert.icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: alert.color, letterSpacing: "0.04em", marginBottom: 2 }}>
+          {alert.title}
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+          {alert.detail}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {onFilter && (
+          <button onClick={() => onFilter(alert.sheets)} style={{
+            ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.1em",
+            padding: "4px 10px", borderRadius: 2, cursor: "pointer",
+            background: "none", border: `1px solid ${alert.border}`,
+            color: alert.color, whiteSpace: "nowrap",
+          }}>SHOW</button>
+        )}
+        <button onClick={() => setDismissed(true)} style={{
+          background: "none", border: "none", cursor: "pointer",
+          color: "var(--text-muted)", fontSize: 14, lineHeight: 1, padding: "2px 4px",
+        }}>×</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── RFI Link Badge ───────────────────────────────────────────────────────────
+
+function RFILinkBadge({ linkedIds, rfiMap }) {
+  if (!linkedIds) return null;
+  const nums = linkedIds.split(",").map(s => s.trim()).filter(Boolean);
+  if (nums.length === 0) return null;
+
+  const openCount = nums.filter(n => {
+    const rfi = rfiMap[n];
+    return rfi && rfi.status !== "Closed" && rfi.status !== "Answered";
+  }).length;
+  const closedCount = nums.length - openCount;
+
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 2 }}>
+      <span style={{
+        ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.06em",
+        padding: "1px 6px", borderRadius: 2,
+        background: openCount > 0 ? "rgba(245,158,11,0.12)" : "rgba(16,185,129,0.12)",
+        border: `1px solid ${openCount > 0 ? "rgba(245,158,11,0.25)" : "rgba(16,185,129,0.25)"}`,
+        color: openCount > 0 ? "var(--status-warning)" : "var(--status-success)",
+      }}>
+        {openCount > 0 ? `${openCount} OPEN RFI${openCount !== 1 ? "S" : ""}` : `${closedCount} RFI${closedCount !== 1 ? "S" : ""} RESOLVED`}
+      </span>
+      {nums.map(n => (
+        <span key={n} style={{
+          ...mono, fontSize: 8, color: rfiMap[n] && rfiMap[n].status !== "Closed" && rfiMap[n].status !== "Answered" ? "var(--status-warning)" : "var(--text-muted)",
+          opacity: 0.8,
+        }}>{n}</span>
+      ))}
+    </div>
+  );
+}
+
+// ─── Superseded Badge ─────────────────────────────────────────────────────────
+
+function SupersededBadge() {
+  return (
+    <span style={{
+      ...mono, fontSize: 7, fontWeight: 700, letterSpacing: "0.1em",
+      color: "var(--status-error)", background: "rgba(239,68,68,0.10)",
+      border: "1px solid rgba(239,68,68,0.25)", borderRadius: 2,
+      padding: "1px 5px", whiteSpace: "nowrap",
+    }}>SUPERSEDED</span>
+  );
+}
+
 // ─── Stage Pipeline ───────────────────────────────────────────────────────────
 
 function StagePipeline({ drawings, onStageClick, activeStage }) {
@@ -310,6 +397,20 @@ export default function Drawings() {
     staleTime: 30000,
   });
 
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 60000,
+  });
+
+  // ── RFI lookup map (for linking) ──────────────────────────────────────────
+  const rfiMap = useMemo(() => {
+    const map = {};
+    rfis.forEach(r => { if (r.rfi_number) map[r.rfi_number] = r; });
+    return map;
+  }, [rfis]);
+
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["drawings", projectId] });
@@ -415,6 +516,89 @@ export default function Drawings() {
     });
     return map; // { "Set A": [drawing, ...], ... }
   }, [drawings]);
+
+  // ── Revision & Superseded Alerts ────────────────────────────────────────────
+
+  const revisionAlerts = useMemo(() => {
+    const alerts = [];
+    const today = new Date();
+
+    // 1. Unacknowledged revisions: revised (rev > 0) but no approval status
+    const unacknowledged = drawings.filter(d =>
+      Number(d.revision_number || 0) > 0 &&
+      !d.set_approval_status &&
+      d.stage !== "Released"
+    );
+    if (unacknowledged.length > 0) {
+      alerts.push({
+        type: "warning",
+        icon: "⚠",
+        title: `${unacknowledged.length} Unacknowledged Revision${unacknowledged.length !== 1 ? "s" : ""}`,
+        detail: `${unacknowledged.map(d => d.sheet_number).slice(0, 5).join(", ")}${unacknowledged.length > 5 ? ` +${unacknowledged.length - 5} more` : ""} — revised but not yet reviewed/approved`,
+        sheets: unacknowledged,
+        color: "var(--status-warning)",
+        bg: "rgba(245,158,11,0.08)",
+        border: "rgba(245,158,11,0.25)",
+      });
+    }
+
+    // 2. Superseded drawings still referenced
+    const superseded = drawings.filter(d =>
+      (d.is_superseded || d.set_approval_status === "superseded") &&
+      d.stage !== "Released"
+    );
+    if (superseded.length > 0) {
+      alerts.push({
+        type: "danger",
+        icon: "⛔",
+        title: `${superseded.length} Superseded Drawing${superseded.length !== 1 ? "s" : ""} Still Active`,
+        detail: `${superseded.map(d => d.sheet_number).slice(0, 5).join(", ")}${superseded.length > 5 ? ` +${superseded.length - 5} more` : ""} — marked superseded but not at IFC stage. Remove or replace.`,
+        sheets: superseded,
+        color: "var(--status-error)",
+        bg: "rgba(239,68,68,0.06)",
+        border: "rgba(239,68,68,0.25)",
+      });
+    }
+
+    // 3. Drawings with linked RFIs that are still open
+    const withOpenRFIs = drawings.filter(d => {
+      if (!d.linked_rfi_ids) return false;
+      const rfiNums = d.linked_rfi_ids.split(",").map(s => s.trim());
+      return rfiNums.some(num => {
+        const rfi = rfiMap[num];
+        return rfi && rfi.status !== "Closed" && rfi.status !== "Answered";
+      });
+    });
+    if (withOpenRFIs.length > 0) {
+      alerts.push({
+        type: "info",
+        icon: "🔗",
+        title: `${withOpenRFIs.length} Drawing${withOpenRFIs.length !== 1 ? "s" : ""} Blocked by Open RFIs`,
+        detail: `${withOpenRFIs.map(d => d.sheet_number).slice(0, 5).join(", ")}${withOpenRFIs.length > 5 ? ` +${withOpenRFIs.length - 5} more` : ""} — linked RFIs still unresolved`,
+        sheets: withOpenRFIs,
+        color: "var(--status-info)",
+        bg: "rgba(59,130,246,0.06)",
+        border: "rgba(59,130,246,0.25)",
+      });
+    }
+
+    // 4. Rejected drawings needing resubmission
+    const rejected = drawings.filter(d => d.set_approval_status === "rejected");
+    if (rejected.length > 0) {
+      alerts.push({
+        type: "danger",
+        icon: "✕",
+        title: `${rejected.length} Rejected Drawing${rejected.length !== 1 ? "s" : ""} Need Resubmission`,
+        detail: `${rejected.map(d => d.sheet_number).slice(0, 5).join(", ")}${rejected.length > 5 ? ` +${rejected.length - 5} more` : ""}`,
+        sheets: rejected,
+        color: "var(--status-error)",
+        bg: "rgba(239,68,68,0.06)",
+        border: "rgba(239,68,68,0.25)",
+      });
+    }
+
+    return alerts;
+  }, [drawings, rfiMap]);
 
   // ── Save handlers ──────────────────────────────────────────────────────────
 
@@ -592,6 +776,25 @@ export default function Drawings() {
         })}
       </div>
 
+      {/* ── Revision Control Alerts ─────────────────────────────────────────── */}
+      {revisionAlerts.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 6 }}>
+            REVISION CONTROL — {revisionAlerts.length} ALERT{revisionAlerts.length !== 1 ? "S" : ""}
+          </div>
+          {revisionAlerts.map((alert, i) => (
+            <AlertBanner
+              key={i}
+              alert={alert}
+              onFilter={(sheets) => {
+                const ids = new Set(sheets.map(s => s.id));
+                setSelected(ids);
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* ── Stage Pipeline ─────────────────────────────────────────────────── */}
       <ErrorBoundary label="Stage Pipeline">
         <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
@@ -714,13 +917,15 @@ export default function Drawings() {
             onDelete={handleDelete} onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             setContextMenu={setContextMenu}
-            onSetApproval={openSetApproval} />
+            onSetApproval={openSetApproval}
+            rfiMap={rfiMap} />
         ) : (
           <GridView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
             onEdit={d => { setEditing(d); setShowModal(true); }}
             onDelete={handleDelete} onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
-            onSetApproval={openSetApproval} />
+            onSetApproval={openSetApproval}
+            rfiMap={rfiMap} />
         )}
       </ErrorBoundary>
 
@@ -740,12 +945,7 @@ export default function Drawings() {
             }] : []),
             { label: "Delete Sheet", action: () => handleDelete(contextMenu.drawing.id), danger: true },
           ].map(item => (
-            <button key={item.label} onClick={item.action} style={{
-              display: "block", width: "100%", textAlign: "left", padding: "8px 16px",
-              background: "none", border: "none", cursor: "pointer", ...mono, fontSize: 10,
-              fontWeight: 700, letterSpacing: "0.08em", color: item.danger ? "var(--status-error)" : "var(--text-primary)",
-              ":hover": { background: "var(--hover-bg)" },
-            }}>{item.label}</button>
+            <ContextMenuItem key={item.label} label={item.label} onClick={item.action} danger={item.danger} />
           ))}
         </div>
       )}
@@ -776,7 +976,7 @@ export default function Drawings() {
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
+function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval, rfiMap }) {
   const allSelected = selected.size === drawings.length && drawings.length > 0;
   const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
   const tdStyle = { padding: "10px 12px", borderBottom: "1px solid var(--divider)", verticalAlign: "middle" };
@@ -825,9 +1025,12 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                     {d.sheet_number}
                   </div>
                 </td>
-                <td style={{ ...tdStyle, maxWidth: 260 }}>
+                <td style={{ ...tdStyle, maxWidth: 280 }}>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div>
-                  {d.linked_rfi_ids && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{d.linked_rfi_ids}</div>}
+                  <RFILinkBadge linkedIds={d.linked_rfi_ids} rfiMap={rfiMap} />
+                  {(d.is_superseded || d.set_approval_status === "superseded") && (
+                    <div style={{ marginTop: 3 }}><SupersededBadge /></div>
+                  )}
                 </td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
@@ -885,18 +1088,48 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
   );
 }
 
-function ActionBtn({ label, onClick, danger, disabled, title }) {
+function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
+  const [hovered, setHovered] = React.useState(false);
+  const baseColor = primary ? "var(--accent)" : danger ? "var(--status-error)" : "var(--text-muted)";
+  const hoverBg = primary ? "rgba(200,155,32,0.12)" : danger ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.04)";
   return (
     <button onClick={onClick} disabled={disabled} title={title}
-      style={{ ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 2, border: `1px solid ${danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`, background: "none", color: danger ? "var(--status-error)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.3 : 1, whiteSpace: "nowrap" }}>
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      style={{
+        ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 2,
+        border: `1px solid ${hovered && !disabled ? baseColor + "60" : danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`,
+        background: hovered && !disabled ? hoverBg : "none",
+        color: baseColor,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.3 : 1, whiteSpace: "nowrap",
+        transition: "all 0.15s",
+      }}>
       {label}
     </button>
   );
 }
 
+// ─── Context Menu Item ────────────────────────────────────────────────────────
+
+function ContextMenuItem({ label, onClick, danger }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "block", width: "100%", textAlign: "left", padding: "8px 16px",
+        background: hovered ? (danger ? "rgba(239,68,68,0.08)" : "var(--hover-bg)") : "none",
+        border: "none", cursor: "pointer", ...mono, fontSize: 10,
+        fontWeight: 700, letterSpacing: "0.08em",
+        color: danger ? "var(--status-error)" : "var(--text-primary)",
+        transition: "background 0.1s",
+      }}>{label}</button>
+  );
+}
+
 // ─── Grid View ────────────────────────────────────────────────────────────────
 
-function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval }) {
+function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval, rfiMap }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
       {drawings.map(d => {
@@ -923,16 +1156,20 @@ function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdva
                 {d.title}
               </div>
 
-              {/* Stage + Rev */}
+              {/* Stage + Rev + Badges */}
               <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
                 <StageChip stage={d.stage} />
                 <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>R{d.revision_number ?? "0"}</span>
                 {overdue && <OverdueBadge />}
+                {(d.is_superseded || d.set_approval_status === "superseded") && <SupersededBadge />}
               </div>
+
+              {/* RFI Links */}
+              <RFILinkBadge linkedIds={d.linked_rfi_ids} rfiMap={rfiMap} />
 
               {/* Due date */}
               {d.due_date && (
-                <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>
+                <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)", marginTop: 4 }}>
                   DUE {d.due_date}
                 </div>
               )}
