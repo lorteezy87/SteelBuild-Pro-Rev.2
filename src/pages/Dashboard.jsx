@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import PortfolioView from "../components/dashboard/PortfolioView";
 import DrilldownView from "../components/dashboard/DrilldownView";
 
@@ -11,8 +12,8 @@ export default function Dashboard() {
   const pid = activeProject?.id;
 
   // ── Portfolio-wide queries (always loaded) ──
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
+  const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
   const { data: allCOs = [] } = useQuery({ queryKey: ["cos-all"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
   const { data: allCodes = [] } = useQuery({ queryKey: ["codes-all"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
   const { data: allWPs = [] } = useQuery({
@@ -44,6 +45,12 @@ export default function Dashboard() {
   const wps = useMemo(() => pid ? allWPs.filter(w => w.project_id === pid) : [], [allWPs, pid]);
   const deliveries = useMemo(() => pid ? allDeliveries.filter(d => d.project_id === pid) : [], [allDeliveries, pid]);
   const expenses = useMemo(() => pid ? allExpenses.filter(e => e.project_id === pid) : [], [allExpenses, pid]);
+
+  const isLoading = projectsLoading || rfisLoading;
+
+  if (isLoading) {
+    return <LoadingSkeleton variant="page" />;
+  }
 
   if (!pid) {
     return (

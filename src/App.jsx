@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import LocalLoginForm from '@/components/LocalLoginForm';
 import { ThemeProvider } from '@/components/shared/ThemeContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import PageErrorBoundary from '@/components/shared/ErrorBoundary';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
 import Dashboard from './pages/Dashboard';
@@ -15,7 +16,9 @@ import Dashboard from './pages/Dashboard';
 const { Pages, Layout } = pagesConfig;
 
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
-  <Layout currentPageName={currentPageName}>{children}</Layout>
+  <PageErrorBoundary label="Layout" key="layout-boundary">
+    <Layout currentPageName={currentPageName}>{children}</Layout>
+  </PageErrorBoundary>
   : <>{children}</>;
 
 const AuthenticatedApp = () => {
@@ -63,7 +66,9 @@ const AuthenticatedApp = () => {
         path="/"
         element={
           <LayoutWrapper currentPageName="Dashboard">
-            <Dashboard />
+            <PageErrorBoundary label="Dashboard" key="Dashboard">
+              <Dashboard />
+            </PageErrorBoundary>
           </LayoutWrapper>
         }
       />
@@ -73,13 +78,15 @@ const AuthenticatedApp = () => {
           path={`/${path}`}
           element={
             <LayoutWrapper currentPageName={path}>
-              <Page />
+              <PageErrorBoundary label={path} key={path}>
+                <Page />
+              </PageErrorBoundary>
             </LayoutWrapper>
           }
         />
       ))}
-      <Route path="/Landing" element={<LayoutWrapper currentPageName="Landing"><Landing /></LayoutWrapper>} />
-      <Route path="/RFIHub" element={<LayoutWrapper currentPageName="RFIHub"><RFIHub /></LayoutWrapper>} />
+      <Route path="/Landing" element={<LayoutWrapper currentPageName="Landing"><PageErrorBoundary label="Landing" key="Landing"><Landing /></PageErrorBoundary></LayoutWrapper>} />
+      <Route path="/RFIHub" element={<LayoutWrapper currentPageName="RFIHub"><PageErrorBoundary label="RFIHub" key="RFIHub"><RFIHub /></PageErrorBoundary></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
