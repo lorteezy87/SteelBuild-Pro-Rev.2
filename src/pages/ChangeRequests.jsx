@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestFormModal";
 import ChangeRequestList from "@/components/changerequest/ChangeRequestList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import StatCard from "@/components/shared/StatCard";
 
 export default function ChangeRequests() {
   const [searchParams] = useSearchParams();
@@ -166,15 +167,6 @@ export default function ChangeRequests() {
         title="Delete Request"
         description="Delete this record? This cannot be undone."
       />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "12px", borderTop: `2px solid ${color}` }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 600, color: color, marginBottom: "4px" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
     </div>
   );
 }

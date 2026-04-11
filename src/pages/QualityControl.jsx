@@ -8,6 +8,7 @@ import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import StatCard from "@/components/shared/StatCard";
 
 export default function QualityControl() {
   const [searchParams] = useSearchParams();
@@ -252,34 +253,3 @@ export default function QualityControl() {
   );
 }
 
-function StatCard({ label, value, color, onClick, active }) {
-  const isClickable = typeof onClick === "function";
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: "var(--bg-surface)",
-        border: active ? `1.5px solid ${color}` : "1.5px solid transparent",
-        borderRadius: "var(--radius-card)",
-        padding: "12px",
-        borderTop: `2px solid ${color}`,
-        cursor: isClickable ? "pointer" : "default",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxShadow: active ? `0 0 0 2px ${color}33` : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (isClickable && !active) {
-          e.currentTarget.style.borderColor = color;
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (isClickable && !active) {
-          e.currentTarget.style.borderColor = "transparent";
-        }
-      }}
-    >
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 600, color: color, marginBottom: "4px" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
-    </div>
-  );
-}

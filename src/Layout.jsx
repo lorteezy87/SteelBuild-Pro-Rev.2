@@ -59,7 +59,6 @@ const ALL_MODULES = [
 { icon: "▦", name: "Drawings & Submittals", group: "Detailing", page: "Drawings" },
 { icon: "△", name: "3D Model Viewer", group: "Detailing", page: "ModelViewer" },
 { icon: "⚑", name: "RFI Hub", group: "Comms", page: "RFIs" },
-{ icon: "⚑", name: "RFI Command Center", group: "Comms", page: "RFIHub" },
 { icon: "📝", name: "Production Notes", group: "Comms", page: "ProductionNotes" },
 { icon: "👥", name: "Meetings", group: "Comms", page: "Meetings" },
 { icon: "✓", name: "Action Items", group: "Comms", page: "ActionItems" },
@@ -1240,23 +1239,9 @@ export default function Layout({ children, currentPageName }) {
     } catch {}
   }, []);
 
-  // Track active project ID from localStorage (set by ProjectContext)
-  const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("activeProjectId"));
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === "activeProjectId") setActiveProjectId(e.newValue);
-    };
-    window.addEventListener("storage", onStorage);
-    // Also poll briefly since storage events don't fire in the same tab
-    const interval = setInterval(() => {
-      const current = localStorage.getItem("activeProjectId");
-      setActiveProjectId((prev) => (prev !== current ? current : prev));
-    }, 1000);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
-    };
-  }, []);
+  // Track active project ID from context (no more localStorage polling)
+  const { activeProject: ctxActiveProject } = useProjectContext();
+  const activeProjectId = ctxActiveProject?.id || null;
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 900);
@@ -1361,7 +1346,6 @@ export default function Layout({ children, currentPageName }) {
 
   // Noise texture SVG data URI
   return (
-    <ProjectProvider>
         <div style={{
           minHeight: "100vh",
           width: "100%",
@@ -1698,7 +1682,6 @@ export default function Layout({ children, currentPageName }) {
 
       </div>
     </div>
-    </ProjectProvider>
   );
 
 

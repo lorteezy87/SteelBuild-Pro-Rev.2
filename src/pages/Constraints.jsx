@@ -35,17 +35,17 @@ const TYPE_COLORS = {
 };
 
 const TYPE_ICONS = {
-  "Missing Embeds": "?",
-  "Anchor Bolt Issue": "?",
-  "Approved Submittal Missing": "?",
-  "Release Pending": "?",
-  "Field Measurement Needed": "?",
-  "Access Issue": "?",
-  "Crane / Logistics Conflict": "?",
-  "Predecessor Not Complete": "?",
-  "Material Not Available": "?",
-  "Design Change Pending": "?",
-  Other: "?",
+  "Missing Embeds": "\u2B1C",
+  "Anchor Bolt Issue": "\u2693",
+  "Approved Submittal Missing": "\u2709",
+  "Release Pending": "\u23F3",
+  "Field Measurement Needed": "\u{1F4CF}",
+  "Access Issue": "\u{1F6AB}",
+  "Crane / Logistics Conflict": "\u{1F3D7}",
+  "Predecessor Not Complete": "\u26D4",
+  "Material Not Available": "\u{1F4E6}",
+  "Design Change Pending": "\u270F",
+  Other: "\u2022",
 };
 
 const PRIORITY_CONFIG = {

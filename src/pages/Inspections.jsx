@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import StatCard from "@/components/shared/StatCard";
 
 const TYPES = [
   "Steel Fabrication",
@@ -461,54 +462,6 @@ export default function Inspections() {
         title="Delete Inspection"
         description="Delete this record? This cannot be undone."
       />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color, active, onClick }) {
-  const isClickable = !!onClick;
-  return (
-    <div
-      onClick={onClick}
-      role={isClickable ? "button" : undefined}
-      tabIndex={isClickable ? 0 : undefined}
-      aria-pressed={isClickable ? active : undefined}
-      onKeyDown={isClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      style={{
-        background: active ? `${color}10` : "var(--bg-surface)",
-        border: active ? `1px solid ${color}40` : "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        padding: "14px 14px 12px",
-        borderLeft: `3px solid ${color}`,
-        cursor: isClickable ? "pointer" : "default",
-        transition: "all 0.15s",
-        outline: "none",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 22,
-          fontWeight: 800,
-          color: color,
-          marginBottom: 4,
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
     </div>
   );
 }

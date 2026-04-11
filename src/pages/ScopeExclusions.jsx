@@ -8,6 +8,7 @@ import ScopeItemList from "@/components/scope/ScopeItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { Check, X, Info, Layers, Search, Plus } from "lucide-react";
+import StatCard from "@/components/shared/StatCard";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -412,76 +413,5 @@ export default function ScopeExclusions() {
         description="Delete this scope item? This cannot be undone."
       />
     </div>
-  );
-}
-
-function StatCard({ label, value, color, Icon, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: active ? `${color}14` : "var(--bg-surface)",
-        border: `1px solid ${active ? color : "var(--border-default)"}`,
-        borderTop: `2px solid ${color}`,
-        borderRadius: "10px",
-        padding: "12px 14px",
-        textAlign: "left",
-        cursor: "pointer",
-        transition: "all 0.15s",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        boxShadow: active ? `0 0 0 1px ${color}40` : "none",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.borderColor = `${color}80`;
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.borderColor = "var(--border-default)";
-      }}
-    >
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
-          background: `${color}20`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: color,
-          flexShrink: 0,
-        }}
-      >
-        {Icon && <Icon size={16} strokeWidth={2.5} />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: "20px",
-            fontWeight: 700,
-            color: color,
-            lineHeight: 1,
-            marginBottom: 4,
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          {value}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "9px",
-            color: active ? color : "var(--text-secondary)",
-            letterSpacing: "0.10em",
-            textTransform: "uppercase",
-            fontWeight: 700,
-          }}
-        >
-          {label}
-        </div>
-      </div>
-    </button>
   );
 }

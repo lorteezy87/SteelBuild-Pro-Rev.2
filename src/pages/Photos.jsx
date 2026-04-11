@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
+import StatCard from "@/components/shared/StatCard";
 
 export default function Photos() {
   const [searchParams] = useSearchParams();
@@ -218,44 +219,6 @@ export default function Photos() {
 
       {/* Photo Gallery */}
       <PhotoGallery photos={filtered} />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: "none",
-        borderRadius: "var(--radius-card)",
-        padding: "12px",
-        borderTop: `2px solid ${color}`,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "18px",
-          fontWeight: 600,
-          color: color,
-          marginBottom: "4px",
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-body)",
-          fontSize: "8px",
-          fontWeight: 700,
-          color: "var(--text-muted)",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
     </div>
   );
 }
