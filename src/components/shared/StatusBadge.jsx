@@ -80,23 +80,32 @@ const badgeMap = {
 
 const DEFAULT = { color: "var(--text-muted)", bg: "var(--hover-bg)", border: "var(--border-default)" };
 
-const StatusBadge = React.memo(function StatusBadge({ status }) {
+const StatusBadge = React.memo(function StatusBadge({ status, variant, glow }) {
   const s = badgeMap[status] || DEFAULT;
+  const isPill = variant === "pill";
+  const glowShadow = glow ? (s.glow || `0 0 10px ${s.color}33`) : undefined;
   return (
     <span style={{
       display: "inline-flex",
       alignItems: "center",
-      padding: "3px 10px",
+      gap: isPill ? 4 : undefined,
+      padding: isPill ? "2px 8px" : "3px 10px",
       borderRadius: 9999,
-      fontSize: 11,
-      fontWeight: 600,
-      letterSpacing: "0.02em",
+      fontSize: isPill ? 9 : 11,
+      fontWeight: isPill ? 700 : 600,
+      letterSpacing: isPill ? "0.06em" : "0.02em",
+      textTransform: isPill ? "uppercase" : undefined,
       whiteSpace: "nowrap",
-      background: s.bg,
-      color: s.color,
+      background: isPill ? s.color : s.bg,
+      color: isPill ? "#fff" : s.color,
       border: "none",
-      fontFamily: "var(--font-body)",
+      fontFamily: isPill ? "var(--font-mono)" : "var(--font-body)",
+      boxShadow: glowShadow,
+      transition: glow ? "box-shadow 0.3s ease" : undefined,
     }}>
+      {isPill && (
+        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", display: "inline-block", flexShrink: 0, opacity: 0.7 }} />
+      )}
       {status || "—"}
     </span>
   );

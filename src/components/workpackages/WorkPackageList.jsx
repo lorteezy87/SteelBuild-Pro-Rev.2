@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import StatusBadge from "../shared/StatusBadge";
 
 const PHASE_COLORS = {
   Detailing: "var(--status-info)",
@@ -238,10 +239,7 @@ export default function WorkPackageList({
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-badge)", background: `${phaseColor}15`, color: phaseColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {wp.phase || "—"}
                 </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-badge)", background: `${statusColor}15`, color: statusColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, display: "inline-block", flexShrink: 0 }} />
-                  {wp.status || "—"}
-                </span>
+                <StatusBadge status={wp.status} variant="pill" />
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)" }}>
                 {(Number(wp.tonnage) || 0).toFixed(1)}T

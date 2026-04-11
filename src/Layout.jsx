@@ -179,8 +179,7 @@ const NAV_GROUPS = [
 {
   label: "COMMUNICATIONS",
   items: [
-  { label: "RFI Hub (Classic)", icon: "⚑", page: "RFIs", badgeKey: "rfi" },
-  { label: "RFI Hub (Command Center)", icon: "⚑", page: "RFIHub", badgeKey: "rfi" },
+  { label: "RFI Hub", icon: "⚑", page: "RFIs", badgeKey: "rfi" },
   { label: "Meetings", icon: "👥", page: "Meetings" },
   { label: "Action Items", icon: "☑", page: "ActionItems" },
   { label: "Production Notes", icon: "📝", page: "ProductionNotes" }]

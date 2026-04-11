@@ -238,6 +238,7 @@ export default function PortfolioView({
   const navigate = useNavigate();
   const [sortMode, setSortMode] = useState("health");
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [phaseFilter, setPhaseFilter] = useState(null);
 
   // ── Sparkline history: store 7-day KPI snapshots in localStorage ──────────
   const [sparkHistory, setSparkHistory] = useState({});
@@ -326,6 +327,10 @@ export default function PortfolioView({
 
   const displayMetrics = useMemo(() => {
     let list = [...enrichedMetrics];
+    // Apply phase filter
+    if (phaseFilter) {
+      list = list.filter((p) => p.phase === phaseFilter);
+    }
     // Apply KPI filter
     if (kpiFilter === "overdueRFIs") {
       list = list.filter((p) => p.overdueRFIs > 0);
@@ -356,7 +361,7 @@ export default function PortfolioView({
     }
     // default "health" sort is already applied from projectMetrics
     return list;
-  }, [enrichedMetrics, sortMode, kpiFilter, allDeliveries]);
+  }, [enrichedMetrics, sortMode, kpiFilter, phaseFilter, allDeliveries]);
 
   const portfolioKPIs = useMemo(() => {
     const portfolioValue =
@@ -838,9 +843,36 @@ export default function PortfolioView({
                     {opt.label}
                   </button>
                 ))}
-                {kpiFilter && (
+                <span style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 4px" }} />
+                {Object.entries(PHASE_DOT).map(([phase, color]) => (
                   <button
-                    onClick={() => setKpiFilter(null)}
+                    key={phase}
+                    onClick={() => setPhaseFilter(phaseFilter === phase ? null : phase)}
+                    style={{
+                      background: phaseFilter === phase ? `${color}` : "var(--bg-surface)",
+                      color: phaseFilter === phase ? "#fff" : "var(--text-secondary)",
+                      border: phaseFilter === phase ? `1px solid ${color}` : "1px solid var(--border-default)",
+                      borderRadius: 999,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: "5px 12px",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: phaseFilter === phase ? "#fff" : color, flexShrink: 0 }} />
+                    {phase}
+                  </button>
+                ))}
+                {(kpiFilter || phaseFilter) && (
+                  <button
+                    onClick={() => { setKpiFilter(null); setPhaseFilter(null); }}
                     style={{
                       background: "var(--danger-muted)",
                       color: "var(--status-error)",
