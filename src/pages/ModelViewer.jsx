@@ -208,19 +208,6 @@ export default function ModelViewer() {
     };
   }, []);
 
-  // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === '[') setLeftPanelOpen(p => !p);
-      if (e.key === ']') setRightPanelOpen(p => !p);
-      if (e.key === 'f' || e.key === 'F') {
-        fitCameraToModel('iso');
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [fitCameraToModel]);
-
   // ─── MEMBER TYPE INFERENCE ────────────────────────────────────
   const inferMemberType = (name = '') => {
     const n = name.toUpperCase();
@@ -327,6 +314,19 @@ export default function ModelViewer() {
       scene.add(newGrid);
     }
   }, []);
+
+  // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === '[') setLeftPanelOpen(p => !p);
+      if (e.key === ']') setRightPanelOpen(p => !p);
+      if (e.key === 'f' || e.key === 'F') {
+        fitCameraToModel('iso');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fitCameraToModel]);
 
   // ─── TOGGLE EDGE OUTLINES ────────────────────────────────────
   const toggleEdges = useCallback((visible) => {

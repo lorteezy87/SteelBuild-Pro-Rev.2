@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -7,6 +7,29 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import DailyLogForm from "@/components/fieldops/DailyLogForm";
 import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+
+function getDateCutoff(preset) {
+  const now = new Date();
+  if (preset === "today") {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      .toISOString()
+      .slice(0, 10);
+  }
+  if (preset === "week") {
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(now.getFullYear(), now.getMonth(), diff)
+      .toISOString()
+      .slice(0, 10);
+  }
+  if (preset === "month") {
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString()
+      .slice(0, 10);
+  }
+  return null;
+}
 
 export default function DailyLogs() {
   const [searchParams] = useSearchParams();
@@ -16,10 +39,12 @@ export default function DailyLogs() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState("all");
 
   const qc = useQueryClient();
 
-  const { data: logs = [] } = useQuery({
+  const { data: logs = [], isLoading } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
@@ -32,6 +57,56 @@ export default function DailyLogs() {
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
+
+  const filteredLogs = useMemo(() => {
+    let result = logs;
+
+    // Date range filter
+    const cutoff = getDateCutoff(dateRange);
+    if (cutoff) {
+      result = result.filter((log) => log.date >= cutoff);
+    }
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.trim().toLowerCase();
+      result = result.filter((log) => {
+        const fields = [
+          log.activities,
+          log.delays,
+          log.crew_name,
+          log.superintendent,
+        ];
+        return fields.some(
+          (f) => typeof f === "string" && f.toLowerCase().includes(term)
+        );
+      });
+    }
+
+    return result;
+  }, [logs, searchTerm, dateRange]);
+
+  // Key metrics computed from filtered logs
+  const metrics = useMemo(() => {
+    const totalManHours = filteredLogs.reduce(
+      (sum, log) => sum + (log.hours_worked || 0) * (log.headcount || 0),
+      0
+    );
+    const avgCrewSize =
+      filteredLogs.length > 0
+        ? filteredLogs.reduce((sum, log) => sum + (log.headcount || 0), 0) /
+          filteredLogs.length
+        : 0;
+    const safetyIncidents = filteredLogs.reduce(
+      (sum, log) => sum + (log.safety_incidents || 0),
+      0
+    );
+    const delayHours = filteredLogs.reduce(
+      (sum, log) => sum + (log.delay_hours || 0),
+      0
+    );
+    return { totalManHours, avgCrewSize, safetyIncidents, delayHours };
+  }, [filteredLogs]);
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.DailyLog.create(data),
@@ -77,9 +152,53 @@ export default function DailyLogs() {
     }
   };
 
+  const handleCopyFromYesterday = () => {
+    if (logs.length === 0) {
+      toast.error("No previous logs to copy from");
+      return;
+    }
+    const sorted = [...logs].sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+    const mostRecent = sorted[0];
+    const today = new Date().toISOString().slice(0, 10);
+    setEditing({
+      crew_name: mostRecent.crew_name || "",
+      headcount: mostRecent.headcount || 0,
+      superintendent: mostRecent.superintendent || "",
+      equipment_used: mostRecent.equipment_used || "",
+      activities: "",
+      delays: "",
+      safety_notes: "",
+      date: today,
+    });
+    setShowForm(true);
+  };
+
   const selectedProject = projectId
     ? projects.find((p) => p.id === projectId)
     : null;
+
+  const datePresets = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "month", label: "This Month" },
+    { key: "all", label: "All Time" },
+  ];
+
+  const presetBtnStyle = (active) => ({
+    background: active ? "var(--accent)" : "var(--bg-surface)",
+    color: active ? "white" : "var(--text-secondary)",
+    border: "none",
+    borderRadius: "var(--radius-btn)",
+    padding: "6px 12px",
+    fontFamily: "var(--font-mono)",
+    fontSize: "10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -110,30 +229,120 @@ export default function DailyLogs() {
               textTransform: "uppercase",
             }}
           >
-            {selectedProject ? selectedProject.name : "All Projects"} • {logs.length} Entries
+            {selectedProject ? selectedProject.name : "All Projects"} • {filteredLogs.length} Entries
           </p>
         </div>
 
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={handleCopyFromYesterday}
+            style={{
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 16px",
+              fontFamily: "var(--font-body)",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+          >
+            Copy From Yesterday
+          </button>
+          <button
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            style={{
+              background: "var(--accent)",
+              color: "white",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 16px",
+              fontFamily: "var(--font-body)",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            + New Log
+          </button>
+        </div>
+      </div>
+
+      {/* Key Metrics Bar */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid var(--accent)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "var(--accent)", marginBottom: 4 }}>
+            {metrics.totalManHours.toLocaleString()}
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Total Man-Hours
+          </div>
+        </div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #3b82f6" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#3b82f6", marginBottom: 4 }}>
+            {metrics.avgCrewSize.toFixed(1)}
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Avg Crew Size
+          </div>
+        </div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #ef4444" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#ef4444", marginBottom: 4 }}>
+            {metrics.safetyIncidents}
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Safety Incidents
+          </div>
+        </div>
+        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #f59e0b" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#f59e0b", marginBottom: 4 }}>
+            {metrics.delayHours}
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Delay Hours
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Date Range Filters */}
+      <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          placeholder="Search logs..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
           style={{
-            background: "var(--accent)",
-            color: "white",
-            border: "none",
+            flex: "1 1 200px",
+            background: "var(--bg-surface)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border)",
             borderRadius: "var(--radius-btn)",
-            padding: "8px 16px",
-            fontFamily: "var(--font-body)",
-            fontSize: "10px",
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: "12px",
+            outline: "none",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          + New Log
-        </button>
+        />
+        <div style={{ display: "flex", gap: "4px" }}>
+          {datePresets.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setDateRange(p.key)}
+              style={presetBtnStyle(dateRange === p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Form */}
@@ -148,11 +357,15 @@ export default function DailyLogs() {
       )}
 
       {/* Logs List */}
-      <DailyLogsList
-        logs={logs}
-        onEdit={(log) => { setEditing(log); setShowForm(true); }}
-        onDelete={(log) => setDeleteTarget(log)}
-      />
+      {isLoading ? (
+        <LoadingSkeleton variant="table" rows={4} />
+      ) : (
+        <DailyLogsList
+          logs={filteredLogs}
+          onEdit={(log) => { setEditing(log); setShowForm(true); }}
+          onDelete={(log) => setDeleteTarget(log)}
+        />
+      )}
 
       {/* Delete Confirmation */}
       <DeleteDialog

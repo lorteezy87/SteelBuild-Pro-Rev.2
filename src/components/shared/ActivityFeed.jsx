@@ -10,6 +10,15 @@ const ENTITY_COLORS = {
   Project: "var(--accent)",
 };
 
+const ACTION_COLORS = {
+  created: "var(--status-success)",
+  updated: "var(--status-warning)",
+  deleted: "var(--status-error)",
+  status_changed: "var(--status-info)",
+  moved: "var(--accent)",
+  uploaded: "var(--status-info)",
+};
+
 const ACTION_VERBS = {
   created: "created",
   updated: "updated",
@@ -67,6 +76,8 @@ function groupByDate(activities) {
 export default function ActivityFeed({ activities = [], compact = false }) {
   const grouped = useMemo(() => groupByDate(activities), [activities]);
 
+  if (activities.length === 0) return null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 0 : 12 }}>
       {Object.entries(grouped).map(([period, items]) => {
@@ -108,10 +119,10 @@ export default function ActivityFeed({ activities = [], compact = false }) {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: ENTITY_COLORS[activity.entityType] || "var(--accent)",
+                    background: ACTION_COLORS[activity.action] || "var(--accent)",
                     flexShrink: 0,
                     marginTop: 3,
-                    boxShadow: `0 0 4px ${ENTITY_COLORS[activity.entityType] || "var(--accent)"}`,
+                    boxShadow: `0 0 4px ${ACTION_COLORS[activity.action] || "var(--accent)"}`,
                   }}
                 />
 
@@ -188,20 +199,6 @@ export default function ActivityFeed({ activities = [], compact = false }) {
           </div>
         );
       })}
-
-      {activities.length === 0 && (
-        <div
-          style={{
-            padding: "24px 0",
-            textAlign: "center",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-            color: "var(--text-muted)",
-          }}
-        >
-          No activity yet
-        </div>
-      )}
     </div>
   );
 }
