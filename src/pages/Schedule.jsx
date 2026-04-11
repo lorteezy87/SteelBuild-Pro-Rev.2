@@ -14,6 +14,7 @@ import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import { PHASES } from "@/utils/phases";
 import { useRef, useMemo } from "react";
+import { batchProcess } from "@/utils/batchProcess";
 
 /* ── Phase abbreviation map for WBS codes ────────────────────────────── */
 const PHASE_ABBREV = {
@@ -76,6 +77,7 @@ export default function Schedule() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch submittals linked to this project for Gantt overlay
@@ -120,14 +122,11 @@ export default function Schedule() {
     });
     // Background-persist generated WBS codes to DB (fire-and-forget)
     if (toBackfill.length > 0) {
-      Promise.all(
-        toBackfill.map(({ id, wbs }) =>
-          base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {})
-        )
+      batchProcess(
+        toBackfill,
+        ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
       ).then(() => {
-        if (toBackfill.length > 0) {
-          qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-        }
+        qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       });
     }
     return result;
@@ -180,33 +179,51 @@ export default function Schedule() {
   });
 
   const bulkUpdateMut = useMutation({
-    mutationFn: async ({ ids, status }) =>
-      Promise.all(
-        ids.map((id) =>
-          base44.entities.ScheduleTask.update(id, {
-            status,
-            percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
-          })
-        )
-      ),
-    onSuccess: (_, variables) => {
+    mutationFn: async ({ ids, status }) => {
+      const results = await batchProcess(
+        ids,
+        (id) => base44.entities.ScheduleTask.update(id, {
+          status,
+          percent_complete: status === "Complete" ? 100 : status === "Not Started" ? 0 : undefined,
+        }),
+      );
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: (results, variables) => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setSelectedIds(new Set());
-      toast.success(`Updated ${variables.ids.length} tasks`);
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Updated ${variables.ids.length} tasks`);
+      }
     },
     onError: () => toast.error("Bulk update failed"),
   });
 
   const bulkDeleteMut = useMutation({
-    mutationFn: async (ids) => Promise.all(ids.map((id) => base44.entities.ScheduleTask.delete(id))),
-    onSuccess: (_, ids) => {
+    mutationFn: async (ids) => {
+      const results = await batchProcess(ids, (id) => base44.entities.ScheduleTask.delete(id));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} deletes failed.`);
+      }
+      return results;
+    },
+    onSuccess: (results, ids) => {
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
       setSelectedIds(new Set());
       if (selectedTask?.id && ids.includes(selectedTask.id)) {
         setSelectedTask(null);
         setShowDrawer(false);
       }
-      toast.success("Tasks deleted");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} deleted, ${results.failed.length} failed`);
+      } else {
+        toast.success("Tasks deleted");
+      }
     },
     onError: () => toast.error("Bulk delete failed"),
   });
@@ -377,22 +394,23 @@ export default function Schedule() {
       }
 
       // Second pass: set dependencies (predecessors) now that all tasks have DB IDs
-      const depUpdates = [];
+      const depItems = [];
       allParsed.forEach((t) => {
         if (t.preds && t.preds.length > 0) {
           const dbId = uidToDbId[t.uid];
           const predDbIds = t.preds.map(pUid => uidToDbId[pUid]).filter(Boolean);
           if (dbId && predDbIds.length > 0) {
-            depUpdates.push(
-              base44.entities.ScheduleTask.update(dbId, {
-                dependencies: JSON.stringify(predDbIds),
-              })
-            );
+            depItems.push({ dbId, predDbIds });
           }
         }
       });
-      if (depUpdates.length > 0) {
-        await Promise.all(depUpdates);
+      if (depItems.length > 0) {
+        await batchProcess(
+          depItems,
+          ({ dbId, predDbIds }) => base44.entities.ScheduleTask.update(dbId, {
+            dependencies: JSON.stringify(predDbIds),
+          }),
+        );
       }
 
       qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });

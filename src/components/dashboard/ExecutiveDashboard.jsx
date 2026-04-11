@@ -14,36 +14,32 @@ export default function ExecutiveDashboard() {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: rfis = [] } = useQuery({
     queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list(),
-    initialData: [],
   });
 
   const { data: deliveries = [] } = useQuery({
     queryKey: ["deliveries"],
     queryFn: () => base44.entities.Delivery.list(),
-    initialData: [],
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
-    initialData: [],
   });
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["action-items"],
     queryFn: () => base44.entities.ActionItem.list(),
-    initialData: [],
   });
 
   const { data: alerts = [] } = useQuery({
     queryKey: ["alerts"],
     queryFn: () => base44.entities.Alert.filter({ is_dismissed: false }),
-    initialData: [],
   });
 
   // Calculate KPIs

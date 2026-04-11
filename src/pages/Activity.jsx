@@ -12,13 +12,13 @@ export default function ActivityPage() {
   const { data: activities = [] } = useQuery({
     queryKey: ["activities"],
     queryFn: () => base44.entities.Activity.list("-timestamp"),
-    initialData: []
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
-    initialData: []
+    initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const uniqueUsers = useMemo(

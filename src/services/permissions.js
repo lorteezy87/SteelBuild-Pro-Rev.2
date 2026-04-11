@@ -76,7 +76,6 @@ export function usePermissions() {
     queryKey: ["user-permissions"],
     queryFn: fetchUserRole,
     staleTime: 5 * 60 * 1000, // re-fetch every 5 minutes
-    refetchOnWindowFocus: true,
     initialData: { role: "viewer", email: null, id: null },
   });
 

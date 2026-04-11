@@ -17,6 +17,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { batchProcess } from "@/utils/batchProcess";
 
 const mono = { fontFamily: "var(--font-mono)" };
 const BIC_COLORS = {
@@ -167,6 +168,7 @@ export default function RFIs() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const projectMap = useMemo(() => {
@@ -254,11 +256,21 @@ export default function RFIs() {
   });
 
   const bulkUpdateMut = useMutation({
-    mutationFn: ({ ids, data }) => Promise.all(ids.map((id) => base44.entities.RFI.update(id, data))),
-    onSuccess: async () => {
+    mutationFn: async ({ ids, data }) => {
+      const results = await batchProcess(ids, (id) => base44.entities.RFI.update(id, data));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: async (results) => {
       setSelectedRFIs(new Set());
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      toast.success("RFIs updated");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("RFIs updated");
+      }
     },
     onError: (e) => toastCrudError(e, "Bulk update failed"),
   });
@@ -266,17 +278,23 @@ export default function RFIs() {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const bulkDeleteMut = useMutation({
     mutationFn: async (ids) => {
-      for (const id of ids) {
-        await base44.entities.RFI.delete(id);
+      const results = await batchProcess(ids, (id) => base44.entities.RFI.delete(id));
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} deletes failed.`);
       }
-      return ids.length;
+      return results;
     },
-    onSuccess: async (count) => {
+    onSuccess: async (results) => {
+      const count = results.succeeded.length;
       setSelectedRFIs(new Set());
       setShowBulkDelete(false);
       if (selectedRFI && [...selectedRFIs].includes(selectedRFI.id)) setSelectedRFI(null);
       await invalidateCrudQueries(qc, rfiQueryKeys);
-      toast.success(`${count} RFI${count === 1 ? "" : "s"} deleted`);
+      if (results.failed.length > 0) {
+        toast.warning(`${count} deleted, ${results.failed.length} failed`);
+      } else {
+        toast.success(`${count} RFI${count === 1 ? "" : "s"} deleted`);
+      }
     },
     onError: (e) => toastCrudError(e, "Bulk delete failed"),
   });

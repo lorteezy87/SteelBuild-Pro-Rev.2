@@ -11,6 +11,7 @@ import { useProjectContext } from "./components/shared/useProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "./components/shared/ThemeContext";
+import { batchProcess } from "@/utils/batchProcess";
 
 // ─── Tab → page mapping ───────────────────────────────────────────
 const PRIMARY_TABS = [
@@ -1279,15 +1280,14 @@ export default function Layout({ children, currentPageName }) {
   const { data: allAlerts = [] } = useQuery({
     queryKey: ["alerts-nav", activeProjectId],
     queryFn: () => base44.entities.Alert.filter({ is_dismissed: false, project_id: activeProjectId }),
-    initialData: [],
-    staleTime: 30000,
+    refetchInterval: 120000,
+    staleTime: 60000,
     enabled: !!activeProjectId,
   });
 
   const { data: navRFIs = [] } = useQuery({
     queryKey: ["rfis-nav-count", activeProjectId],
     queryFn: () => base44.entities.RFI.filter({ project_id: activeProjectId }),
-    initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
     enabled: !!activeProjectId,
@@ -1296,7 +1296,6 @@ export default function Layout({ children, currentPageName }) {
   const { data: navDrawings = [] } = useQuery({
     queryKey: ["drawings-nav-count", activeProjectId],
     queryFn: () => base44.entities.Drawing.filter({ project_id: activeProjectId }),
-    initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
     enabled: !!activeProjectId,
@@ -1305,7 +1304,6 @@ export default function Layout({ children, currentPageName }) {
   const { data: navDeliveries = [] } = useQuery({
     queryKey: ["deliveries-nav-count", activeProjectId],
     queryFn: () => base44.entities.Delivery.filter({ project_id: activeProjectId }),
-    initialData: [],
     refetchInterval: 120000,
     staleTime: 60000,
     enabled: !!activeProjectId,
@@ -1330,9 +1328,10 @@ export default function Layout({ children, currentPageName }) {
   ).length;
 
   const markAllReadMut = useMutation({
-    mutationFn: () => Promise.all(
-      allAlerts.filter((a) => !a.is_read).map((a) => base44.entities.Alert.update(a.id, { is_read: true }))
-    ),
+    mutationFn: () => {
+      const unread = allAlerts.filter((a) => !a.is_read);
+      return batchProcess(unread, (a) => base44.entities.Alert.update(a.id, { is_read: true }));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts-nav"] })
   });
 

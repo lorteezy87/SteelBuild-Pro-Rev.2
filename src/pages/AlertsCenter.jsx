@@ -9,6 +9,7 @@ import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { toast } from "sonner";
+import { batchProcess } from "@/utils/batchProcess";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -50,9 +51,16 @@ export default function AlertsCenter() {
   const markAllRead = async () => {
     const unread = alerts.filter(a => !a.is_read);
     try {
-      await Promise.all(unread.map(a => base44.entities.Alert.update(a.id, { is_read: true })));
+      const { succeeded, failed } = await batchProcess(
+        unread,
+        (a) => base44.entities.Alert.update(a.id, { is_read: true }),
+      );
       qc.invalidateQueries({ queryKey: ["alerts"] });
-      toast.success(`${unread.length} alerts marked as read`);
+      if (failed.length > 0) {
+        toast.warning(`${succeeded.length} marked as read, ${failed.length} failed`);
+      } else {
+        toast.success(`${succeeded.length} alerts marked as read`);
+      }
     } catch (err) {
       toast.error("Some alerts failed to update");
     }

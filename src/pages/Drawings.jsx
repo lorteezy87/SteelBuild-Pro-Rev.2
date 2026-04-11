@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import ChevronPipeline from "@/components/shared/ChevronPipeline";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import { batchProcess } from "@/utils/batchProcess";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -444,11 +445,21 @@ export default function Drawings() {
     setContextMenu(null);
   };
 
-  const handleBulkStageApply = () => {
+  const handleBulkStageApply = async () => {
     if (!bulkStage || selected.size === 0) return;
-    Promise.all([...selected].map(id => base44.entities.Drawing.update(id, { stage: bulkStage })))
-      .then(() => { invalidate(); setSelected(new Set()); setBulkStage(""); toast.success(`Updated ${selected.size} sheets`); })
-      .catch(err => { invalidate(); toast.error("Bulk update failed: " + (err?.message || "Unknown error")); });
+    const ids = [...selected];
+    const { succeeded, failed } = await batchProcess(
+      ids,
+      (id) => base44.entities.Drawing.update(id, { stage: bulkStage }),
+    );
+    invalidate();
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
+    } else {
+      setSelected(new Set());
+      setBulkStage("");
+      toast.success(`Updated ${succeeded.length} sheets`);
+    }
   };
 
   const handleSetApproval = async ({ status, revision, approvedBy, approvalDate, applyToSheets, notes }) => {
@@ -456,18 +467,21 @@ export default function Drawings() {
     setSavingApproval(true);
     try {
       const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
-      await Promise.all(
-        sheetsToUpdate.map(s =>
-          base44.entities.Drawing.update(s.id, {
-            set_approval_status: status,
-            set_approved_date: approvalDate || new Date().toISOString().split("T")[0],
-            ...(revision ? { revision_number: revision } : {}),
-            ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
-          })
-        )
+      const { succeeded, failed } = await batchProcess(
+        sheetsToUpdate,
+        (s) => base44.entities.Drawing.update(s.id, {
+          set_approval_status: status,
+          set_approved_date: approvalDate || new Date().toISOString().split("T")[0],
+          ...(revision ? { revision_number: revision } : {}),
+          ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
+        }),
       );
       invalidate();
-      toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+      if (failed.length > 0) {
+        toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
+      } else {
+        toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+      }
       setApprovalSet(null);
     } catch (err) {
       toast.error("Approval update failed: " + (err?.message || "Unknown error"));
@@ -667,11 +681,17 @@ export default function Drawings() {
               SET APPROVAL
             </button>
           )}
-          <button style={btnGhost} onClick={() => {
+          <button style={btnGhost} onClick={async () => {
             if (!confirm(`Delete ${selected.size} sheets? This cannot be undone.`)) return;
-            Promise.all([...selected].map(id => base44.entities.Drawing.delete(id)))
-              .then(() => { invalidate(); setSelected(new Set()); toast.success("Sheets deleted"); })
-              .catch(err => { invalidate(); toast.error("Some deletions failed: " + (err?.message || "Unknown error")); });
+            const ids = [...selected];
+            const { succeeded, failed } = await batchProcess(ids, (id) => base44.entities.Drawing.delete(id));
+            invalidate();
+            if (failed.length > 0) {
+              toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
+            } else {
+              setSelected(new Set());
+              toast.success("Sheets deleted");
+            }
           }}>DELETE</button>
           <button style={btnGhost} onClick={() => setSelected(new Set())}>CLEAR</button>
         </div>

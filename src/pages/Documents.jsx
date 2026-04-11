@@ -17,6 +17,7 @@ import {
   FileText, FileImage, FileCode, File, FileArchive,
 } from "lucide-react";
 import { generateTransmittal } from "../lib/generateTransmittal";
+import { batchProcess } from "@/utils/batchProcess";
 
 /* ── constants ──────────────────────────────────────────────────────── */
 
@@ -226,15 +227,24 @@ export default function Documents() {
   const bulkStatusMut = useMutation({
     mutationFn: async (newStatus) => {
       const ids = [...selectedIds];
-      for (const id of ids) {
-        await base44.entities.Document.update(id, { status: newStatus });
+      const { succeeded, failed } = await batchProcess(
+        ids,
+        (id) => base44.entities.Document.update(id, { status: newStatus }),
+      );
+      if (failed.length > 0 && succeeded.length === 0) {
+        throw new Error(`All ${failed.length} updates failed.`);
       }
+      return { succeeded, failed };
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
       setSelectedIds(new Set());
       setBatchStatusOpen(false);
-      toast.success(`Updated ${selectedIds.size} document(s)`);
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Updated ${results.succeeded.length} document(s)`);
+      }
     },
     onError: (err) => toast.error(err?.message || "Bulk status update failed"),
   });
@@ -242,16 +252,25 @@ export default function Documents() {
   const bulkDeleteMut = useMutation({
     mutationFn: async () => {
       const ids = [...selectedIds];
-      for (const id of ids) {
-        await base44.entities.Document.delete(id);
+      const { succeeded, failed } = await batchProcess(
+        ids,
+        (id) => base44.entities.Document.delete(id),
+      );
+      if (failed.length > 0 && succeeded.length === 0) {
+        throw new Error(`All ${failed.length} deletes failed.`);
       }
+      return { succeeded, failed };
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
-      const count = selectedIds.size;
+      const count = results.succeeded.length;
       setSelectedIds(new Set());
       setConfirmBulkDelete(false);
-      toast.success(`Deleted ${count} document(s)`);
+      if (results.failed.length > 0) {
+        toast.warning(`${count} deleted, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Deleted ${count} document(s)`);
+      }
     },
     onError: (err) => toast.error(err?.message || "Bulk delete failed"),
   });
@@ -291,8 +310,9 @@ export default function Documents() {
   const handleBulkDownload = async () => {
     const docs = allDocuments.filter(d => selectedIds.has(d.id));
     toast.info(`Downloading ${docs.length} file(s)...`);
-    for (const doc of docs) {
-      await handleDownloadDoc(doc);
+    const { failed } = await batchProcess(docs, (doc) => handleDownloadDoc(doc), 3);
+    if (failed.length > 0) {
+      toast.warning(`${docs.length - failed.length} downloaded, ${failed.length} failed`);
     }
   };
 
