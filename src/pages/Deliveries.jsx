@@ -70,7 +70,7 @@ function exportToCSV(deliveries, projectMap = {}, wpMap = {}, filename = "delive
 }
 
 export default function Deliveries() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
@@ -940,7 +940,12 @@ export default function Deliveries() {
             value={projectId || ""}
             onChange={(e) => {
               const val = e.target.value;
-              window.location.href = val ? `?project=${val}` : window.location.pathname;
+              if (val) {
+                searchParams.set("project", val);
+              } else {
+                searchParams.delete("project");
+              }
+              setSearchParams(searchParams);
             }}
             style={{
               height: 32,

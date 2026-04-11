@@ -1,9 +1,10 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 
 export default function PageNotFound({}) {
     const location = useLocation();
+    const navigate = useNavigate();
     const pageName = location.pathname.substring(1);
 
     const { data: authData, isFetched } = useQuery({
@@ -43,7 +44,7 @@ export default function PageNotFound({}) {
                 )}
 
                 <button
-                    onClick={() => window.location.href = '/'}
+                    onClick={() => navigate('/')}
                     style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", background: "var(--nc-accent-orange)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer" }}
                 >
                     ← GO HOME
