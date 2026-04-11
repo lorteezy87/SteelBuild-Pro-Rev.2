@@ -273,9 +273,9 @@ export default function ModelViewer() {
     if (maxDim <= 0) return;
 
     // Use the largest single dimension (not diagonal) for more intuitive framing,
-    // then apply generous 2.5x padding so the full structure is clearly visible
+    // then apply generous padding so the full structure is clearly visible
     const fovRad = camera.fov * (Math.PI / 180);
-    const d = (maxDim / Math.tan(fovRad / 2)) * 2.5;
+    const d = (maxDim / Math.tan(fovRad / 2)) * 4.0;
 
     // Update near/far planes for the model's scale
     camera.near = Math.max(0.1, d * 0.001);
