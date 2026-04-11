@@ -1,10 +1,11 @@
 ﻿
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
@@ -113,8 +114,8 @@ const buildRfiNumberRepairs = (records) => {
 
 const daysOpen = (r) => {
   if (!r.submitted_date) return 0;
-  const start = new Date(r.submitted_date);
-  const end = r.date_answered && ["Answered", "Closed"].includes(r.status) ? new Date(r.date_answered) : new Date();
+  const start = new Date(r.submitted_date + "T00:00:00");
+  const end = r.date_answered && ["Answered", "Closed"].includes(r.status) ? new Date(r.date_answered + "T00:00:00") : new Date();
   return Math.max(0, Math.floor((end - start) / 86400000));
 };
 const isClosed = (r) => ["Answered", "Closed"].includes(r.status);
@@ -174,7 +175,7 @@ export default function RFIs() {
     return map;
   }, [projects]);
 
-  const { data: rfis = [] } = useQuery({
+  const { data: rfis = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis", projectId],
     queryFn: () => base44.entities.RFI.filter({ project_id: projectId }, "-submitted_date"),
     enabled: !!projectId,
@@ -397,8 +398,8 @@ export default function RFIs() {
           );
         if (sortField === "days") return (daysOpen(a) - daysOpen(b)) * dir;
         if (sortField === "date_required") {
-          const da = a.date_required ? new Date(a.date_required) : new Date("2100-01-01");
-          const db = b.date_required ? new Date(b.date_required) : new Date("2100-01-01");
+          const da = a.date_required ? new Date(a.date_required + "T00:00:00") : new Date("2100-01-01");
+          const db = b.date_required ? new Date(b.date_required + "T00:00:00") : new Date("2100-01-01");
           return (da - db) * dir;
         }
         return 0;
@@ -423,8 +424,8 @@ export default function RFIs() {
     const durations = rfis
       .filter((r) => r.status === "Answered" && r.submitted_date && r.date_answered)
       .map((r) => {
-        const a = new Date(r.submitted_date);
-        const b = new Date(r.date_answered);
+        const a = new Date(r.submitted_date + "T00:00:00");
+        const b = new Date(r.date_answered + "T00:00:00");
         return Math.max(0, Math.floor((b - a) / 86400000));
       });
     const avgResponse = durations.length ? Math.round(durations.reduce((s, v) => s + v, 0) / durations.length) : null;
@@ -445,6 +446,8 @@ export default function RFIs() {
   }, [rfis]);
   const numberingIssues = repairPlan.repairs.length;
 
+  const alertsCreatedRef = useRef(new Set());
+
   useEffect(() => {
     if (!rfis.length) return;
     const createRFIAlerts = async () => {
@@ -457,8 +460,8 @@ export default function RFIs() {
         for (const r of rfis) {
           if (["Answered", "Closed"].includes(r.status)) continue;
           if (!r.date_required) continue;
-          const due = new Date(r.date_required);
-          due.setHours(0, 0, 0, 0);
+          if (alertsCreatedRef.current.has(r.id)) continue;
+          const due = new Date(r.date_required + "T00:00:00");
           const isOD = due < today;
           const soon = !isOD && due <= in3;
           if (!isOD && !soon) continue;
@@ -477,6 +480,7 @@ export default function RFIs() {
             is_read: false,
             is_dismissed: false,
           });
+          alertsCreatedRef.current.add(r.id);
         }
       } catch (e) {
         console.warn("RFI alert:", e);
@@ -484,7 +488,7 @@ export default function RFIs() {
     };
     const t = setTimeout(createRFIAlerts, 2500);
     return () => clearTimeout(t);
-  }, [rfis.length]);
+  }, [rfis, projectMap]);
 
   const overdueList = filtered.filter((r) => isOverdue(r)).slice(0, 3);
   const groupedByProject = useMemo(() => {
@@ -574,7 +578,6 @@ export default function RFIs() {
       "Answer",
     ];
     const data = rows.map((r) => {
-      const days = r.submitted_date ? Math.floor((new Date() - new Date(r.submitted_date)) / 86400000) : "";
       return [
         r.rfi_number || "",
         r.project_name || "",
@@ -590,7 +593,7 @@ export default function RFIs() {
         r.drawing_reference || "",
         r.spec_section || "",
         r.assigned_to || "",
-        days,
+        daysOpen(r),
         r.cost_impact ? "Yes" : "No",
         r.cost_impact_amount || "",
         r.schedule_impact ? "Yes" : "No",
@@ -610,6 +613,14 @@ export default function RFIs() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (rfisLoading) {
+    return (
+      <div style={{ padding: 24, background: "var(--bg-page)", height: "calc(100vh - 92px)" }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)", background: "var(--bg-page)", overflow: "hidden" }}>
@@ -999,7 +1010,7 @@ export default function RFIs() {
                   in7.setDate(today.getDate() + 7);
                   return d >= today && d <= in7;
                 })
-                .sort((a, b) => new Date(a.date_required) - new Date(b.date_required))
+                .sort((a, b) => new Date(a.date_required + "T00:00:00") - new Date(b.date_required + "T00:00:00"))
                 .map((r) => {
                   const cfg = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
                   const due = parseUTCDate(r.date_required);
@@ -1069,7 +1080,7 @@ export default function RFIs() {
                             <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
                               <Pill label={r.ball_in_court || "Contractor"} color={bic.text} bg={bic.bg} />
                               <span style={{ ...mono, fontSize: 8, color: overdue ? "var(--status-error)" : "var(--text-muted)", fontWeight: overdue ? 700 : 500 }}>
-                                {r.date_required ? new Date(r.date_required).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                                {r.date_required ? new Date(r.date_required + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
                               </span>
                               <span style={{ ...mono, fontSize: 8, color: "var(--text-secondary)" }}>{daysOpen(r)}d</span>
                             </div>
@@ -1110,7 +1121,7 @@ export default function RFIs() {
                     const pr = PRIORITY_CFG[r.priority] || PRIORITY_CFG.Medium;
                     const st = STATUS_CFG[r.status] || STATUS_CFG.Open;
                     const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
-                    const due = r.date_required ? new Date(r.date_required) : null;
+                    const due = r.date_required ? new Date(r.date_required + "T00:00:00") : null;
                     const diff = due ? Math.ceil((due - new Date()) / 86400000) : null;
                     const overdueDays = overdue && diff != null ? Math.abs(diff) : 0;
                     const rowBg = overdue ? "rgba(255,61,61,0.12)" : "transparent";
