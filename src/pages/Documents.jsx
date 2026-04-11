@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { toast } from "sonner";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "../components/dms/DocumentCard";
 import DocumentFilters from "../components/dms/DocumentFilters";
 import DocumentLeftPanel from "../components/dms/DocumentLeftPanel";
@@ -661,8 +662,8 @@ export default function Documents() {
 
           {/* Content */}
           {isLoading ? (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--text-secondary)" }}>
-              Loading documents...
+            <div style={{ padding: 16 }}>
+              <LoadingSkeleton variant="table" rows={6} />
             </div>
           ) : allDocuments.length === 0 ? (
             /* Hero empty state with dashed drop zone and document type icons */

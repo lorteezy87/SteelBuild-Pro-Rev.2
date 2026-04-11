@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WorkPackageList from "@/components/workpackages/WorkPackageList";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
@@ -138,7 +139,7 @@ export default function WorkPackages() {
   const [compact, setCompact] = useState(false);
   const [selectedWPs, setSelectedWPs] = useState(new Set());
 
-  const { data: workPackages = [] } = useQuery({
+  const { data: workPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
       if (projectId) {
@@ -999,6 +1000,14 @@ export default function WorkPackages() {
 
   /* Active filter count for badge display */
   const activeFilterCount = (filterStatus !== "all" ? 1 : 0) + (filterPhase !== "all" ? 1 : 0);
+
+  if (wpLoading) {
+    return (
+      <div style={{ padding: 24, height: "calc(100vh - 92px)" }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "calc(100vh - 92px)", overflow: "auto" }}>

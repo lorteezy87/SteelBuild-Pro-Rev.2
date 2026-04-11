@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { statusIs, statusIn } from "@/components/shared/formatters";
 
 const HEALTH = {
   CRITICAL: {
@@ -73,20 +74,20 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
 
   // RFIs
   const openRfis = safeRfis.filter(
-    (r) => r.status !== "Closed" && r.status !== "Void"
+    (r) => !statusIs(r.status, "Closed") && !statusIs(r.status, "Void")
   );
   const overdueRfis = safeRfis.filter((r) => {
-    if (r.status === "Closed" || r.status === "Void") return false;
+    if (statusIs(r.status, "Closed") || statusIs(r.status, "Void")) return false;
     const due = toDate(r.date_required);
     return due && due < today;
   });
 
   // Work Packages
   const blockedPackages = safeWPs.filter(
-    (w) => w.status === "Blocked" || w.status === "At Risk"
+    (w) => statusIn(w.status, ["Blocked", "At Risk"])
   );
   const fabricationTonnage = safeWPs.reduce((sum, w) => {
-    if (w.phase === "Fabrication") return sum + (Number(w.tonnage) || 0);
+    if (statusIs(w.phase, "Fabrication")) return sum + (Number(w.tonnage) || 0);
     return sum;
   }, 0);
   const totalTonnage = safeWPs.reduce(
@@ -96,30 +97,30 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
 
   // Completed / shipped work packages (by tonnage)
   const completedTonnage = safeWPs
-    .filter((w) => w.status === "Complete" || w.phase === "Delivery" || w.phase === "Erection")
+    .filter((w) => statusIs(w.status, "Complete") || statusIs(w.phase, "Delivery") || statusIs(w.phase, "Erection"))
     .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
   const shippedTonnage = safeWPs
-    .filter((w) => w.phase === "Delivery" && w.status === "Complete")
+    .filter((w) => statusIs(w.phase, "Delivery") && statusIs(w.status, "Complete"))
     .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
   const completedWPs = safeWPs.filter(
-    (w) => w.status === "Complete" || w.status === "Shipped"
+    (w) => statusIn(w.status, ["Complete", "Shipped"])
   ).length;
 
   // Released drawings count
   const releasedDrawings = safeDrawings.filter(
-    (d) => d.current_stage === "Released"
+    (d) => statusIs(d.current_stage, "Released")
   ).length;
 
   // Drawings
   const lateDrawings = safeDrawings.filter((d) => {
-    if (d.current_stage === "Released") return false;
+    if (statusIs(d.current_stage, "Released")) return false;
     const due = toDate(d.due_date);
     return due && due < today;
   });
 
   // Change Orders
   const pendingCOs = safeCOs.filter(
-    (c) => c.status !== "Approved" && c.status !== "Rejected"
+    (c) => !statusIs(c.status, "Approved") && !statusIs(c.status, "Rejected")
   );
   const coExposure = pendingCOs.reduce(
     (sum, c) => sum + (Number(c.amount) || 0),
@@ -128,12 +129,12 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
 
   // Deliveries
   const lateDeliveries = safeDeliveries.filter((d) => {
-    if (d.status === "Delivered") return false;
+    if (statusIs(d.status, "Delivered")) return false;
     const sched = toDate(d.scheduled_date);
     return sched && sched < today;
   });
   const upcomingDeliveries = safeDeliveries.filter((d) => {
-    if (d.status === "Delivered") return false;
+    if (statusIs(d.status, "Delivered")) return false;
     const sched = toDate(d.scheduled_date);
     if (!sched || sched < today) return false;
     const weekOut = new Date(today);
@@ -143,16 +144,14 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
 
   // Action Items
   const overdueActions = safeActions.filter((a) => {
-    if (a.status === "Done" || a.status === "Complete" || a.status === "Cancelled") return false;
+    if (statusIn(a.status, ["Done", "Complete", "Cancelled"])) return false;
     const due = toDate(a.due_date);
     return due && due < today;
   });
   const criticalActions = safeActions.filter(
     (a) =>
-      (a.priority === "Critical" || a.priority === "High") &&
-      a.status !== "Done" &&
-      a.status !== "Complete" &&
-      a.status !== "Cancelled"
+      statusIn(a.priority, ["Critical", "High"]) &&
+      !statusIn(a.status, ["Done", "Complete", "Cancelled"])
   );
 
   // Data freshness — find the most recent date across all input data
