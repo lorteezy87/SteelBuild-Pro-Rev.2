@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
   FileText, Download, Loader2, CheckCircle2,
-  AlertCircle, Building2, Calendar, ChevronRight, RefreshCw, Search, X
+  AlertCircle, Building2, Calendar, ChevronRight, RefreshCw, Search, X,
+  ArrowUpDown,
 } from "lucide-react";
 import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 const HEALTH = {
@@ -18,6 +20,29 @@ const today = new Date().toLocaleDateString("en-US", {
   weekday: "long", year: "numeric", month: "long", day: "numeric",
   timeZone: "America/Phoenix",
 });
+
+const PHASE_COLORS = {
+  Detailing:    "#3B82F6",
+  Fabrication:  "#8B5CF6",
+  Delivery:     "#F59E0B",
+  Erection:     "#F97316",
+};
+
+const HEALTH_SORT_ORDER = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+
+function getReportAge(project) {
+  const d = project.last_report_date || project.lastReportDate;
+  if (!d) return null;
+  const ms = Date.now() - new Date(d).getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+function freshnessColor(daysAgo) {
+  if (daysAgo === null) return "var(--status-error)";
+  if (daysAgo <= 1) return "var(--status-success)";
+  if (daysAgo <= 5) return "var(--status-warning)";
+  return "var(--status-error)";
+}
 
 // ─── Single project row ───────────────────────────────────────────
 function ProjectReportRow({ project, index, onDrilldown }) {
@@ -126,14 +151,29 @@ function ProjectReportRow({ project, index, onDrilldown }) {
               {project.project_number}
             </span>
           )}
-          {project.phase && (
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 8,
-              color: "var(--text-muted)", letterSpacing: "0.06em",
-            }}>
-              {project.phase}
-            </span>
-          )}
+          {project.phase && (() => {
+            const phaseColor = PHASE_COLORS[project.phase];
+            return phaseColor ? (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
+                letterSpacing: "0.06em",
+                background: `${phaseColor}20`,
+                color: phaseColor,
+                border: `1px solid ${phaseColor}40`,
+                padding: "3px 8px",
+                borderRadius: 6,
+              }}>
+                {project.phase}
+              </span>
+            ) : (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 8,
+                color: "var(--text-muted)", letterSpacing: "0.06em",
+              }}>
+                {project.phase}
+              </span>
+            );
+          })()}
           {project.client && (
             <span style={{
               fontFamily: "var(--font-body)", fontSize: 10,
@@ -142,6 +182,24 @@ function ProjectReportRow({ project, index, onDrilldown }) {
               · {project.client}
             </span>
           )}
+          {(() => {
+            const age = getReportAge(project);
+            return age !== null ? (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 8,
+                color: "var(--text-muted)", letterSpacing: "0.04em",
+              }}>
+                · Generated {age}d ago
+              </span>
+            ) : (
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 8,
+                color: "var(--text-disabled)", letterSpacing: "0.04em", fontStyle: "italic",
+              }}>
+                · Not yet generated
+              </span>
+            );
+          })()}
         </div>
       </div>
 
@@ -199,6 +257,21 @@ function ProjectReportRow({ project, index, onDrilldown }) {
           <><Download size={10} /> PDF</>
         )}
       </button>
+
+      {/* Freshness indicator */}
+      <div
+        title={(() => {
+          const age = getReportAge(project);
+          if (age === null) return "Never generated";
+          if (age <= 1) return "Generated within 24h";
+          return `Generated ${age}d ago`;
+        })()}
+        style={{
+          width: 8, height: 8, borderRadius: "50%",
+          background: freshnessColor(getReportAge(project)),
+          flexShrink: 0,
+        }}
+      />
     </div>
   );
 }
@@ -216,15 +289,26 @@ export default function JobStatusReport() {
   const [bulkError, setBulkError] = useState("");
   const [drilldownProject, setDrilldownProject] = useState(null);
   const [search, setSearch] = useState("");
+  const [groupByHealth, setGroupByHealth] = useState(false);
 
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter(p =>
-      (p.name || "").toLowerCase().includes(q) ||
-      (p.project_number || "").toLowerCase().includes(q)
-    );
-  }, [projects, search]);
+    let result = projects;
+    if (q) {
+      result = result.filter(p =>
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.project_number || "").toLowerCase().includes(q)
+      );
+    }
+    if (groupByHealth) {
+      result = [...result].sort((a, b) => {
+        const aOrder = HEALTH_SORT_ORDER[a.health_status] ?? 3;
+        const bOrder = HEALTH_SORT_ORDER[b.health_status] ?? 3;
+        return aOrder - bOrder;
+      });
+    }
+    return result;
+  }, [projects, search, groupByHealth]);
 
   const handleGenerateAll = async () => {
     setBulkStatus("loading");
@@ -342,49 +426,68 @@ export default function JobStatusReport() {
          ))}
        </div>
 
-      {/* ── Search bar ── */}
-      <div style={{ position: "relative", marginBottom: 16 }}>
-        <Search size={13} color="var(--text-muted)" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-        <input
-          type="text"
-          placeholder="Search by project name or number…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            width: "100%",
-            background: "var(--bg-surface-low)",
-            border: "none",
-            borderRadius: "var(--radius-input)",
-            padding: "10px 36px 10px 36px",
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            color: "var(--text-primary)",
-            outline: "none",
-            transition: "border-color 0.15s, box-shadow 0.15s",
-            boxSizing: "border-box",
-          }}
-          onFocus={e => { e.target.style.outline = "1px solid var(--accent)"; }}
-          onBlur={e => { e.target.style.outline = "none"; }}
-        />
-        {search && (
-          <button onClick={() => setSearch("")} style={{
-            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-            background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)",
-            display: "flex", alignItems: "center",
-          }}>
-            <X size={13} />
-          </button>
-        )}
-      </div>
-
-      {/* ── Generate All button + bulk results ── */}
+      {/* ── Project count + Search bar + Sort toggle ── */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex", alignItems: "center", gap: 12,
         marginBottom: 14,
       }}>
-        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+        <span style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0 }}>
           {filteredProjects.length}{search ? ` of ${projects.length}` : ""} Project{projects.length !== 1 ? "s" : ""}
         </span>
+
+        <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+          <Search size={13} color="var(--text-muted)" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+          <input
+            type="text"
+            placeholder="Search by project name or number…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              background: "var(--bg-surface-low)",
+              border: "none",
+              borderRadius: "var(--radius-input)",
+              padding: "8px 36px 8px 36px",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              color: "var(--text-primary)",
+              outline: "none",
+              transition: "border-color 0.15s, box-shadow 0.15s",
+              boxSizing: "border-box",
+            }}
+            onFocus={e => { e.target.style.outline = "1px solid var(--accent)"; }}
+            onBlur={e => { e.target.style.outline = "none"; }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--text-muted)",
+              display: "flex", alignItems: "center",
+            }}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={() => setGroupByHealth(v => !v)}
+          title={groupByHealth ? "Clear health grouping" : "Group by health status"}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "7px 12px",
+            background: groupByHealth ? "var(--accent-muted)" : "var(--bg-surface-low)",
+            border: groupByHealth ? "1px solid var(--accent-border)" : "1px solid transparent",
+            borderRadius: "var(--radius-btn)",
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+            color: groupByHealth ? "var(--accent-light)" : "var(--text-muted)",
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            flexShrink: 0,
+            transition: "all 0.15s",
+          }}
+        >
+          <ArrowUpDown size={11} /> HEALTH
+        </button>
 
         <button
           onClick={handleGenerateAll}
@@ -483,12 +586,7 @@ export default function JobStatusReport() {
 
       {/* ── Project list ── */}
       {isLoading ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "32px 0", justifyContent: "center" }}>
-          <Loader2 size={14} className="spin-icon" color="var(--accent)" />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-            LOADING PROJECTS…
-          </span>
-        </div>
+        <LoadingSkeleton variant="table" rows={6} />
       ) : filteredProjects.length === 0 ? (
         <div style={{ textAlign: "center", padding: "48px 0" }}>
           <Building2 size={36} color="var(--text-disabled)" style={{ margin: "0 auto 12px" }} />

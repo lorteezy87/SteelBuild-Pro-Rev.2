@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { AuthContext } from "@/components/shared/AuthContext";
 import { toast } from "sonner";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
@@ -11,12 +12,22 @@ import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 
 const TABS = [
-  { id: 'profile', label: 'Profile', icon: '👤', desc: 'Your account information' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔', desc: 'Alerts and digest settings' },
-  { id: 'display', label: 'Display', icon: '🎨', desc: 'Theme, layout, and format' },
-  { id: 'roles', label: 'Roles', icon: '👑', desc: 'Permissions and access', adminOnly: true },
-  { id: 'system', label: 'System', icon: '⚙', desc: 'Data and app management', adminOnly: true },
+  { id: 'profile', label: 'Profile', icon: '\u{1F464}', desc: 'Your account information' },
+  { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts and digest settings' },
+  { id: 'display', label: 'Display', icon: '\u{1F3A8}', desc: 'Theme, layout, and format' },
+  { id: 'roles', label: 'Roles', icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
+  { id: 'system', label: 'System', icon: '\u2699', desc: 'Data and app management', adminOnly: true },
 ];
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 export default function Settings() {
   const authCtx = useContext(AuthContext);
@@ -24,7 +35,10 @@ export default function Settings() {
   const isLoadingAuth = authCtx?.isLoadingAuth;
   const [activeTab, setActiveTab] = useState('profile');
   const [userPrefs, setUserPrefs] = useState({});
+  const [showSaved, setShowSaved] = useState(false);
+  const [hoveredTab, setHoveredTab] = useState(null);
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
 
   const { data: userSettings } = useQuery({
     queryKey: ['user-settings', user?.id],
@@ -45,63 +59,144 @@ export default function Settings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['user-settings'] });
       toast.success('Settings saved');
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
     },
     onError: () => toast.error('Failed to save settings'),
   });
 
-  const handleSavePrefs = (prefs) => {
+  const handleSavePrefs = useCallback((prefs) => {
     setUserPrefs((prev) => ({ ...prev, ...prefs }));
     updatePrefsMut.mutate(prefs);
-  };
+  }, [updatePrefsMut]);
 
   if (isLoadingAuth) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-          Loading settings...
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton variant="page" />;
   }
 
   // If auth has finished loading but there's still no user, render the page anyway
   // (the user must be authenticated to reach this route; the guard is in the router).
 
+  const visibleTabs = TABS.filter(tab => !tab.adminOnly || user?.role === 'admin');
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : '220px 1fr',
+      gap: isMobile ? 16 : 24,
+      maxWidth: 1100,
+      margin: '0 auto',
+    }}>
       {/* Sidebar */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px', marginBottom: 8 }}>
-          Settings
-        </div>
-        {TABS.filter(tab => !tab.adminOnly || user?.role === 'admin').map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
-              padding: '10px 12px',
-              background: activeTab === tab.id ? 'var(--accent-muted)' : 'transparent',
-              border: `1px solid ${activeTab === tab.id ? 'var(--accent-border)' : 'transparent'}`,
-              borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 14 }}>{tab.icon}</span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-primary)' }}>
-                {tab.label}
-              </span>
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', paddingLeft: 22 }}>
-              {tab.desc}
-            </div>
-          </button>
-        ))}
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'row' : 'column',
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        gap: 4,
+      }}>
+        {!isMobile && (
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'var(--text-secondary)',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            padding: '0 12px',
+            marginBottom: 8,
+          }}>
+            Settings
+          </div>
+        )}
+        {visibleTabs.map(tab => {
+          const isActive = activeTab === tab.id;
+          const isHovered = hoveredTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              onMouseEnter={() => setHoveredTab(tab.id)}
+              onMouseLeave={() => setHoveredTab(null)}
+              style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'row' : 'column',
+                alignItems: isMobile ? 'center' : 'flex-start',
+                gap: isMobile ? 8 : 2,
+                padding: '10px 12px',
+                background: isActive
+                  ? 'var(--accent-muted)'
+                  : isHovered
+                    ? 'var(--bg-hover, rgba(255,255,255,0.04))'
+                    : 'transparent',
+                border: `1px solid ${isActive ? 'var(--accent-border)' : 'transparent'}`,
+                borderLeft: !isMobile && isActive ? '3px solid var(--accent)' : !isMobile ? '3px solid transparent' : undefined,
+                borderRadius: 8,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s',
+                flex: isMobile ? '0 0 auto' : undefined,
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{tab.icon}</span>
+                <span style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                }}>
+                  {tab.label}
+                </span>
+                {isActive && showSaved && (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8,
+                    fontWeight: 700,
+                    color: 'var(--status-success, #22c55e)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    animation: 'fadeIn 0.2s ease',
+                  }}>
+                    SAVED
+                  </span>
+                )}
+              </div>
+              {!isMobile && (
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: 'var(--text-muted)',
+                  paddingLeft: 22,
+                }}>
+                  {tab.desc}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Content */}
-      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-card)', padding: 28, minHeight: 500 }}>
-        {activeTab === 'profile' && <UserSettingsTab user={user} onSave={handleSavePrefs} />}
+      {/* Content — key forces remount on tab switch for the fade animation */}
+      <div
+        key={activeTab}
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-card)',
+          padding: isMobile ? 16 : 28,
+          minHeight: isMobile ? 300 : 500,
+          animation: 'fadeIn 0.2s ease',
+        }}
+      >
+        {activeTab === 'profile' && (
+          <UserSettingsTab
+            user={user}
+            onSave={handleSavePrefs}
+            isSaving={updatePrefsMut.isPending}
+            lockIcon /* email is read-only; UserSettingsTab can use this to show a lock icon */
+          />
+        )}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
@@ -110,4 +205,3 @@ export default function Settings() {
     </div>
   );
 }
-
