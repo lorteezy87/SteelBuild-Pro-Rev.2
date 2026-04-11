@@ -32,6 +32,7 @@ export default function RolesTab({ user }) {
     queryKey: ['all-users'],
     queryFn: () => base44.entities.User.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const isAdmin = user?.role === 'admin';

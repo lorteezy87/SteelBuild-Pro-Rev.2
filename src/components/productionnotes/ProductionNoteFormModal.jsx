@@ -188,6 +188,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const mutation = useMutation({

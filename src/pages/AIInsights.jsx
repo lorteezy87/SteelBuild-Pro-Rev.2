@@ -50,14 +50,14 @@ function SectionTitle({ title, sub }) {
 export default function PortfolioOverview() {
   const navigate = useNavigate();
 
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
-  const { data: allCOs = [] } = useQuery({ queryKey: ["all-cos-portfolio"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
-  const { data: allWPs = [] } = useQuery({ queryKey: ["all-wps-portfolio"], queryFn: () => base44.entities.WorkPackage.list(), initialData: [] });
-  const { data: allCodes = [] } = useQuery({ queryKey: ["all-codes-portfolio"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
-  const { data: allLogs = [] } = useQuery({ queryKey: ["all-logs-portfolio"], queryFn: () => base44.entities.DailyLog.list(), initialData: [] });
-  const { data: allDeliveries = [] } = useQuery({ queryKey: ["all-deliveries-portfolio"], queryFn: () => base44.entities.Delivery.list(), initialData: [] });
-  const { data: allActionItems = [] } = useQuery({ queryKey: ["all-action-items-portfolio"], queryFn: () => base44.entities.ActionItem.list(), initialData: [] });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
+  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list() });
+  const { data: allCOs = [] } = useQuery({ queryKey: ["all-cos-portfolio"], queryFn: () => base44.entities.ChangeOrder.list() });
+  const { data: allWPs = [] } = useQuery({ queryKey: ["all-wps-portfolio"], queryFn: () => base44.entities.WorkPackage.list() });
+  const { data: allCodes = [] } = useQuery({ queryKey: ["all-codes-portfolio"], queryFn: () => base44.entities.CostCode.list() });
+  const { data: allLogs = [] } = useQuery({ queryKey: ["all-logs-portfolio"], queryFn: () => base44.entities.DailyLog.list() });
+  const { data: allDeliveries = [] } = useQuery({ queryKey: ["all-deliveries-portfolio"], queryFn: () => base44.entities.Delivery.list() });
+  const { data: allActionItems = [] } = useQuery({ queryKey: ["all-action-items-portfolio"], queryFn: () => base44.entities.ActionItem.list() });
 
   const stats = useMemo(() => {
     const today = new Date();
