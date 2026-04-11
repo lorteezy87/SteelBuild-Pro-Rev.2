@@ -27,7 +27,7 @@ const STATUS_COLORS = {
   Closed: "var(--accent)",
 };
 
-export default function SafetyIncidentList({ incidents }) {
+export default function SafetyIncidentList({ incidents = [] }) {
   const [expanded, setExpanded] = useState(null);
 
   if (incidents.length === 0) {
@@ -53,10 +53,10 @@ export default function SafetyIncidentList({ incidents }) {
 
             <div>
               <div style={{ display: "flex", gap: "6px" }}>
-                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: `${SEVERITY_COLORS[incident.severity]}20`, border: `1px solid ${SEVERITY_COLORS[incident.severity]}40`, borderRadius: "4px" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: SEVERITY_COLORS[incident.severity], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.severity}</span>
                 </div>
-                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: `${STATUS_COLORS[incident.status]}20`, border: `1px solid ${STATUS_COLORS[incident.status]}40`, borderRadius: "4px" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", padding: "3px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "4px" }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "7px", fontWeight: 600, color: STATUS_COLORS[incident.status], textTransform: "uppercase", letterSpacing: "0.05em" }}>{incident.status}</span>
                 </div>
               </div>
@@ -121,12 +121,12 @@ export default function SafetyIncidentList({ incidents }) {
               {(incident.investigation_completed || incident.safety_trained) && (
                 <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
                   {incident.investigation_completed && (
-                    <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 8px", background: "var(--status-success)20", border: "1px solid var(--status-success)40", borderRadius: "4px" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 8px", background: "var(--success-muted)", border: "1px solid var(--success-border)", borderRadius: "4px" }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 600, color: "var(--status-success)", textTransform: "uppercase" }}>✓ Investigated</span>
                     </div>
                   )}
                   {incident.safety_trained && (
-                    <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 8px", background: "var(--status-success)20", border: "1px solid var(--status-success)40", borderRadius: "4px" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", padding: "4px 8px", background: "var(--success-muted)", border: "1px solid var(--success-border)", borderRadius: "4px" }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 600, color: "var(--status-success)", textTransform: "uppercase" }}>✓ Trained</span>
                     </div>
                   )}

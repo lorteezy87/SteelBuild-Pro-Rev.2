@@ -42,7 +42,12 @@ export default function SystemTab({ user }) {
   const handleClearCache = () => {
     try {
       if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
+      // Preserve auth/preference keys while clearing cache data
+      const preserve = ['current_user_email', 'current_user_id', 'activeProjectId', 'sbp-theme', 'sbp_app_roles', 'supabase.auth.token'];
+      const saved = {};
+      preserve.forEach(k => { const v = localStorage.getItem(k); if (v !== null) saved[k] = v; });
       localStorage.clear();
+      Object.entries(saved).forEach(([k, v]) => localStorage.setItem(k, v));
       sessionStorage.clear();
       toast.success('Cache cleared');
     } catch (err) {

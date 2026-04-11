@@ -74,11 +74,14 @@ export function useAppSecurity() {
   const roleLevel = ROLE_LEVELS[role] ?? 1;
 
   // ── Permission check ──────────────────────────────────────────
+  // Minimum role levels: delete/admin require admin, create/edit require field+
+  const ACTION_MIN_LEVEL = { view: 0, create: 1, edit: 1, delete: 3, admin: 3 };
+
   const can = useCallback((action, record = null) => {
     if (!isAuthenticated) return false;
-    // All authenticated users have full access
-    return true;
-  }, [isAuthenticated]);
+    const minLevel = ACTION_MIN_LEVEL[action] ?? 1;
+    return roleLevel >= minLevel;
+  }, [isAuthenticated, roleLevel]);
 
   // ── Stamp created_by on new records ──────────────────────────
   const stamp = useCallback((data) => {

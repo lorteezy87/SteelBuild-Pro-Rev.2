@@ -347,7 +347,7 @@ export const auth = {
    */
   loginViaEmailPassword: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw { message: error.message, status: error.status };
+    if (error) { const e = new Error(error.message); e.status = error.status; throw e; }
     return data;
   },
 

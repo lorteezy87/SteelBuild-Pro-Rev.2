@@ -8,7 +8,7 @@ const STATUS_COLORS = {
   Rejected: { bg: "var(--status-error)", text: "#fff" },
 };
 
-export default function DeliveriesList({ deliveries, onEdit }) {
+export default function DeliveriesList({ deliveries = [], onEdit }) {
   if (deliveries.length === 0) {
     return (
       <div

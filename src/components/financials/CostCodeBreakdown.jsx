@@ -66,7 +66,7 @@ export default function CostCodeBreakdown({ costCodes }) {
 
       {/* Rows */}
       {costCodes.map((cc) => {
-        const variance = (cc.budget_amount || 0) - (cc.actual_cost || 0);
+        const variance = (Number(cc.budget_amount) || 0) - (Number(cc.actual_cost) || 0);
         const isOverBudget = variance < 0;
 
         return (
@@ -119,7 +119,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--text-secondary)",
               }}
             >
-              ${(cc.budget_amount / 1000).toFixed(0)}K
+              ${((Number(cc.budget_amount) || 0) / 1000).toFixed(0)}K
             </div>
 
             {/* Actual */}
@@ -130,7 +130,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--accent)",
               }}
             >
-              ${(cc.actual_cost / 1000).toFixed(0)}K
+              ${((Number(cc.actual_cost) || 0) / 1000).toFixed(0)}K
             </div>
 
             {/* Committed */}
@@ -141,7 +141,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--status-warning)",
               }}
             >
-              ${(cc.committed_cost / 1000).toFixed(0)}K
+              ${((Number(cc.committed_cost) || 0) / 1000).toFixed(0)}K
             </div>
 
             {/* Variance */}

@@ -26,7 +26,7 @@ const CATEGORY_ICONS = {
   Other: "📌",
 };
 
-export default function PunchlistList({ items }) {
+export default function PunchlistList({ items = [] }) {
   const [expanded, setExpanded] = useState(null);
 
   if (items.length === 0) {

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function DailyLogsList({ logs }) {
+export default function DailyLogsList({ logs = [] }) {
   const [expandedId, setExpandedId] = useState(null);
 
   if (logs.length === 0) {

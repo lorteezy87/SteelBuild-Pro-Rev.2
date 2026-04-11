@@ -14,7 +14,7 @@ const STATUS_COLORS = {
   Rejected: "var(--status-error)",
 };
 
-export default function QCList({ records }) {
+export default function QCList({ records = [] }) {
   const [expanded, setExpanded] = useState(null);
 
   if (records.length === 0) {

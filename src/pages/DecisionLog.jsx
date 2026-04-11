@@ -138,7 +138,7 @@ export default function DecisionLog() {
       const db = b.created_date ? new Date(b.created_date) : new Date(0);
       return db - da;
     });
-  }, [assumptions, filterImpact, search]);
+  }, [assumptions, filterImpact, search, today]);
 
   const selectedProject = projects.find(p => p.id === projectId);
   const overdueAssumptions = assumptions.filter(a => a.review_date && new Date(a.review_date) < today && a.status === 'Active').length;

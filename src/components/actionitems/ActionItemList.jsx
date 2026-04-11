@@ -32,7 +32,7 @@ function relativeDueDate(dateStr, status) {
   return { label: due.toLocaleDateString("en-US", { month: "short", day: "numeric" }), overdue: false, urgent: false };
 }
 
-export default function ActionItemList({ actionItems, onEdit, onResolve, onDelete }) {
+export default function ActionItemList({ actionItems = [], onEdit, onResolve, onDelete }) {
   if (actionItems.length === 0) {
     return (
       <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>

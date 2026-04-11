@@ -26,16 +26,16 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
       month.setMonth(month.getMonth() + i);
       const monthStr = month.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
 
-      // Simple S-curve distribution (realistic for construction)
+      // S-curve projection (modeled baseline — not sourced from time-phased actuals)
       const progress = i / monthCount;
       const sCurve = progress < 0.5 ? 0.5 * Math.pow(progress * 2, 1.5) : 1 - 0.5 * Math.pow(2 - progress * 2, 1.5);
 
       chartData.push({
         month: monthStr,
-        PV: totalBudget * sCurve, // Planned Value
-        EV: (totalActual + totalCommitted) * sCurve, // Earned Value
-        AC: totalActual * (i / monthCount), // Actual Cost (linear for demo)
-        EAC: totalBudget + totalForecast, // Estimate at Completion (line)
+        PV: totalBudget * sCurve, // Planned Value (modeled)
+        EV: (totalActual + totalCommitted) * sCurve, // Earned Value (modeled)
+        AC: totalActual * (i / monthCount), // Actual Cost (modeled)
+        EAC: totalBudget + totalForecast, // Estimate at Completion
       });
     }
 

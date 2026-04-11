@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { formatDate, formatDateShort as formatShortDate } from "@/components/shared/formatters";
 
 const CONSTRAINT_TYPES = [
   "Missing Embeds",
@@ -105,22 +106,6 @@ const labelStyle = {
   marginBottom: 4,
 };
 
-function formatDate(d) {
-  if (!d) return "�";
-  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatShortDate(d) {
-  if (!d) return "�";
-  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function abbreviateType(type) {
   const map = {
@@ -357,15 +342,15 @@ export default function Constraints() {
             }}
           >
             <span>{activeProject?.name || projects.find((p) => p.id === projectId)?.name || "Project"}</span>
-            <span style={{ color: "var(--border-strong)" }}>�</span>
+            <span style={{ color: "var(--border-strong)" }}>·</span>
             <span>{openCount} Open</span>
-            <span style={{ color: "var(--border-strong)" }}>�</span>
+            <span style={{ color: "var(--border-strong)" }}>·</span>
             <span>
               {kpis.total} Total
             </span>
             {overdueCount > 0 && (
               <>
-                <span style={{ color: "var(--border-strong)" }}>�</span>
+                <span style={{ color: "var(--border-strong)" }}>·</span>
                 <span style={{ color: "var(--status-error)", fontWeight: 700 }}>
                   {overdueCount} Overdue
                 </span>
@@ -652,7 +637,7 @@ function OverdueStrip({ overdue, onClickItem }) {
           gap: 8,
         }}
       >
-        ? {overdue.length} Constraint{overdue.length === 1 ? "" : "s"} Past Due � Immediate Resolution Required
+        ? {overdue.length} Constraint{overdue.length === 1 ? "" : "s"} Past Due · Immediate Resolution Required
       </div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
         {overdue.map((c) => (
@@ -677,7 +662,7 @@ function OverdueStrip({ overdue, onClickItem }) {
           >
             <span>{TYPE_ICONS[c.constraint_type] || "?"}</span>
             <span>{(c.title || "").slice(0, 30)}</span>
-            <span>� Due {formatShortDate(c.due_date)}</span>
+            <span>· Due {formatShortDate(c.due_date)}</span>
           </div>
         ))}
       </div>
@@ -719,7 +704,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
         ))}
       </div>
 
-      <span style={{ color: "var(--border-strong)" }}>�</span>
+      <span style={{ color: "var(--border-strong)" }}>·</span>
 
       <div style={{ display: "flex", gap: 6 }}>
         {priorityOptions.map((p) => (
@@ -745,7 +730,7 @@ function FilterBar({ filterStatus, filterPriority, filterType, setFilterStatus, 
         ))}
       </div>
 
-      <span style={{ color: "var(--border-strong)" }}>�</span>
+      <span style={{ color: "var(--border-strong)" }}>·</span>
 
       <div>
         <select
@@ -966,10 +951,10 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
                 </span>
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700 }}>
-                {wp ? wp.wp_number : "�"}
+                {wp ? wp.wp_number : "—"}
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                {c.project_area ? c.project_area.slice(0, 10) : "�"}
+                {c.project_area ? c.project_area.slice(0, 10) : "—"}
               </div>
               <div
                 style={{
@@ -979,7 +964,7 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
                   fontWeight: overdue ? 700 : 500,
                 }}
               >
-                {c.due_date ? formatShortDate(c.due_date) : "�"}
+                {c.due_date ? formatShortDate(c.due_date) : "—"}
               </div>
               <div style={{ display: "flex", gap: 4, justifyContent: "flex-start" }}>
                 {!["Resolved", "Closed"].includes(c.status) && (
@@ -1085,8 +1070,8 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-        <Meta label="Assigned To" value={c.assigned_to || "�"} />
-        <Meta label="Due Date" value={c.due_date ? formatDate(c.due_date) : "�"} />
+        <Meta label="Assigned To" value={c.assigned_to || "—"} />
+        <Meta label="Due Date" value={c.due_date ? formatDate(c.due_date) : "—"} />
         <Meta
           label="Priority"
           value={
@@ -1126,7 +1111,7 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
       </div>
 
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-        WP: {wp ? wp.wp_number : "�"} � Area: {c.project_area || "�"}
+        WP: {wp ? wp.wp_number : "—"} · Area: {c.project_area || "—"}
       </div>
 
       <div style={{ display: "flex", gap: 6, borderTop: "1px solid var(--divider)", paddingTop: 12, alignItems: "center" }}>
@@ -1215,7 +1200,7 @@ function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
                     color: "var(--text-muted)",
                   }}
                 >
-                  �
+                  —
                 </div>
               ) : (
                 lane.items.map((c) => {
@@ -1329,7 +1314,7 @@ function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
                           marginBottom: 8,
                         }}
                       >
-                        {wp ? wp.wp_number : "No WP"} � {c.project_area || "�"}
+                        {wp ? wp.wp_number : "No WP"} · {c.project_area || "—"}
                       </div>
 
                       <div style={{ display: "flex", gap: 4, borderTop: "1px solid var(--divider)", paddingTop: 8 }}>
@@ -1537,14 +1522,14 @@ function ConstraintFormModal({ projectId, constraint, wps, onClose, onSave }) {
               letterSpacing: "0.10em",
             }}
           >
-            {isEdit ? `Edit � ${constraint.title}` : "New Constraint"}
+            {isEdit ? `Edit · ${constraint.title}` : "New Constraint"}
           </div>
           <button
             type="button"
             onClick={onClose}
             style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
           >
-            �
+            ×
           </button>
         </div>
 
@@ -1631,7 +1616,7 @@ function ConstraintFormModal({ projectId, constraint, wps, onClose, onSave }) {
                 <option value="">None</option>
                 {wps.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.wp_number} � {w.name}
+                    {w.wp_number} · {w.name}
                   </option>
                 ))}
               </select>

@@ -160,7 +160,7 @@ export default function EVMCard({ wps, project }) {
               ];
               return (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>EV / AC Curve</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>EV / AC Curve <span style={{ fontStyle: "italic", opacity: 0.7 }}>(Projected)</span></div>
                   <ResponsiveContainer width="100%" height={80}>
                     <LineChart data={pts} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                       <XAxis dataKey="x" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />

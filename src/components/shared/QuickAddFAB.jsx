@@ -31,8 +31,6 @@ export default function QuickAddFAB() {
     navigate(createPageUrl(pageMap[action]));
   };
 
-  const angle = (360 / QUICK_ADD_OPTIONS.length) * (Math.PI / 180);
-
   return (
     <>
       {expanded && (

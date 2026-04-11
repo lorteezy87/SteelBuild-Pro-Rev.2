@@ -75,7 +75,7 @@ export function sortByPhase(tasks) {
     const endB = new Date(b.end_date || b.planned_end || '9999-12-31');
     if (endA - endB !== 0) return endA - endB;
 
-    const prioOrder = { Critical: 0, High: 1, Normal: 2, medium: 2, Low: 3, low: 3 };
+    const prioOrder = { Critical: 0, critical: 0, High: 1, high: 1, Normal: 2, Medium: 2, medium: 2, Low: 3, low: 3 };
     return (prioOrder[a.priority] ?? 2) - (prioOrder[b.priority] ?? 2);
   });
 }
