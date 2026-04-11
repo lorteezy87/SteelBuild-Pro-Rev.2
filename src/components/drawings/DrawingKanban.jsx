@@ -10,7 +10,7 @@ const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 const STAGE_ORDER = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 
 const STAGE_ACCENT = {
-  "Not Started": { color: "var(--text-muted)", bg: "rgba(160,175,210,0.06)", border: "rgba(160,175,210,0.15)" },
+  "Not Started": { color: "var(--text-muted)", bg: "var(--bg-surface-high)", border: "var(--border-strong)" },
   OFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   BFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   OFS:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
@@ -77,8 +77,8 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
           onMouseLeave={() => setHovered(false)}
           style={{
             background: snapshot.isDragging ? "var(--bg-surface-high)" : hovered ? "var(--bg-surface-mid)" : "var(--bg-surface-low)",
-            border: `1px solid ${snapshot.isDragging ? "var(--warning-border)" : hasRejected ? "rgba(255,61,61,0.30)" : isOverdue ? "rgba(255,61,61,0.20)" : "rgba(255,255,255,0.07)"}`,
-            borderLeft: hasRejected ? "3px solid var(--status-error)" : allApproved ? `3px solid var(--status-success)` : `1px solid rgba(255,255,255,0.07)`,
+            border: `1px solid ${snapshot.isDragging ? "var(--warning-border)" : hasRejected ? "rgba(255,61,61,0.30)" : isOverdue ? "rgba(255,61,61,0.20)" : "var(--bg-surface-high)"}`,
+            borderLeft: hasRejected ? "3px solid var(--status-error)" : allApproved ? `3px solid var(--status-success)` : `1px solid var(--bg-surface-high)`,
             borderRadius: 8,
             padding: "9px 10px",
             marginBottom: 7,
@@ -174,13 +174,13 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
 
           {/* Expanded sheet list */}
           {expanded && (
-            <div style={{ marginTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 6 }}>
+            <div style={{ marginTop: 6, borderTop: "1px solid var(--divider)", paddingTop: 6 }}>
               {sheets.map(s => {
                 const sa = STAGE_ACCENT[s.stage] || STAGE_ACCENT["Not Started"];
                 return (
                   <div key={s.id} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"
+                    padding: "3px 0", borderBottom: "1px solid var(--hover-bg)"
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
                       {s.priority_flag && <Flag style={{ width: 7, height: 7, color: "var(--status-error)", flexShrink: 0 }} />}
@@ -262,7 +262,7 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 8,
-              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--bg-surface-high)", border: "1px solid var(--bg-surface-high)",
               borderRadius: 10, padding: "1px 7px", color: "var(--text-muted)"
             }}>{setGroups.length} sets</span>
             {totalSheets > 0 && setGroups.length !== totalSheets && (
@@ -285,8 +285,8 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
               flex: 1,
               overflowY: "auto",
               padding: "8px 6px",
-              background: snapshot.isDraggingOver ? "var(--accent-muted)" : "rgba(255,255,255,0.015)",
-              border: `1px solid ${snapshot.isDraggingOver ? a.border : "rgba(255,255,255,0.06)"}`,
+              background: snapshot.isDraggingOver ? "var(--accent-muted)" : "var(--hover-bg)",
+              border: `1px solid ${snapshot.isDraggingOver ? a.border : "var(--divider)"}`,
               borderTop: "none",
               borderRadius: "0 0 8px 8px",
               minHeight: 80,

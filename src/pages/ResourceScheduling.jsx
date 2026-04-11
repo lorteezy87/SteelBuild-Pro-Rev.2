@@ -755,7 +755,7 @@ export default function ResourceScheduling() {
       <div
         style={{
           background: "var(--bg-surface)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--divider)",
           padding: "10px 20px",
           display: "flex",
           alignItems: "center",
@@ -800,7 +800,7 @@ export default function ResourceScheduling() {
       <div
         style={{
           background: "var(--bg-page)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
+          borderBottom: "1px solid var(--border-default)",
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -825,9 +825,9 @@ export default function ResourceScheduling() {
           {[{ id: "board", label: "⊞ Board" }, { id: "capacity", label: "◎ Capacity" }].map(v => (
             <button key={v.id} onClick={() => setViewMode(v.id)} style={{
               padding: "4px 12px", borderRadius: 6,
-              border: viewMode === v.id ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.12)",
+              border: viewMode === v.id ? "1px solid var(--accent)" : "1px solid var(--border-default)",
               background: viewMode === v.id ? "rgba(0,229,255,0.06)" : "transparent",
-              color: viewMode === v.id ? "var(--accent)" : "rgba(255,255,255,0.50)",
+              color: viewMode === v.id ? "var(--accent)" : "var(--text-secondary)",
               fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
               letterSpacing: "0.08em", cursor: "pointer", transition: "all 0.1s",
             }}>{v.label}</button>
@@ -846,13 +846,13 @@ export default function ResourceScheduling() {
                 border:
                   zoomMode === mode
                     ? "1px solid var(--accent)"
-                    : "1px solid rgba(255,255,255,0.12)",
+                    : "1px solid var(--border-default)",
                     background:
                     zoomMode === mode ? "rgba(245,158,11,0.12)" : "transparent",
                     color:
                     zoomMode === mode
                       ? "var(--status-warning)"
-                      : "rgba(255,255,255,0.50)",
+                      : "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 9,
                 fontWeight: 600,
@@ -879,7 +879,7 @@ export default function ResourceScheduling() {
                   border:
                     filterPhase === p
                       ? "1px solid var(--accent)"
-                        : "1px solid rgba(255,255,255,0.12)",
+                        : "1px solid var(--border-default)",
                       background:
                         filterPhase === p
                           ? "rgba(245,158,11,0.08)"
@@ -887,7 +887,7 @@ export default function ResourceScheduling() {
                       color:
                         filterPhase === p
                           ? "var(--status-warning)"
-                          : "rgba(255,255,255,0.40)",
+                          : "var(--text-muted)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 9,
                   fontWeight: 500,
@@ -1142,7 +1142,7 @@ export default function ResourceScheduling() {
                   gap: 12,
                   padding: "12px 16px",
                   background: "var(--bg-surface-low)",
-                  border: "1px dashed rgba(255,255,255,0.08)",
+                  border: "1px dashed var(--bg-surface-high)",
                   borderRadius: "var(--radius-card)",
                   animation: "rsGhostShimmer 2.5s ease-in-out infinite",
                   animationDelay: `${i * 0.35}s`,
@@ -1156,15 +1156,15 @@ export default function ResourceScheduling() {
                   {ghost.skills.map((s) => (
                     <span key={s} style={{
                       fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
-                      color: "var(--text-disabled)", background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10,
+                      color: "var(--text-disabled)", background: "var(--hover-bg)",
+                      border: "1px solid var(--divider)", borderRadius: 10,
                       padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.04em",
                     }}>{s}</span>
                   ))}
                 </div>
                 <div style={{
                   width: 100, height: 20, borderRadius: 4,
-                  background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.06)",
+                  background: "var(--hover-bg)", border: "1px dashed var(--divider)",
                 }} />
               </div>
             ))}
@@ -1205,7 +1205,7 @@ export default function ResourceScheduling() {
       {/* HOURS SUMMARY STRIP */}
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8,
-        padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "8px 16px", borderBottom: "1px solid var(--divider)",
         background: "var(--bg-page)", flexShrink: 0,
       }}>
         {(() => {
@@ -1234,8 +1234,8 @@ export default function ResourceScheduling() {
             const isOverAlloc = label === "OVER-ALLOCATED" && value > 0;
             return (
               <div key={label} style={{
-                padding: "6px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 6,
-                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid rgba(255,255,255,0.05)",
+                padding: "6px 10px", background: "var(--hover-bg)", borderRadius: 6,
+                border: isOverAlloc ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--hover-bg)",
                 animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
                 transition: "border-color 0.2s",
               }}>
@@ -1253,7 +1253,7 @@ export default function ResourceScheduling() {
           style={{
             width: 260,
             background: "var(--bg-page)",
-            borderRight: "1px solid rgba(255,255,255,0.07)",
+            borderRight: "1px solid var(--border-default)",
             padding: "12px",
             display: "flex",
             flexDirection: "column",
@@ -1283,7 +1283,7 @@ export default function ResourceScheduling() {
                 <div style={{
                   fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)",
                     letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
-                  borderBottom: "1px solid rgba(255,255,255,0.04)", marginBottom: 6,
+                  borderBottom: "1px solid var(--hover-bg)", marginBottom: 6,
                 }}>
                   {type === "Equipment" ? "⚙" : type === "Subcontractor" ? "🔨" : type === "Material" ? "📦" : "👷"} {type} ({typeResources.length})
                 </div>
@@ -1300,7 +1300,7 @@ export default function ResourceScheduling() {
                   return (
                     <div key={res.id} style={{
                       background: isOverAllocated ? "rgba(239,68,68,0.06)" : heatBg !== "transparent" ? heatBg : "var(--bg-surface-low)",
-                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid rgba(255,255,255,0.06)",
+                      border: isOverAllocated ? "1px solid rgba(239,68,68,0.20)" : "1px solid var(--divider)",
                       borderRadius: 8, padding: 8, marginBottom: 8,
                       transition: "background 0.2s, border-color 0.2s",
                     }}>
@@ -1316,8 +1316,8 @@ export default function ResourceScheduling() {
                           {resSkills.map((sk, si) => (
                             <span key={si} style={{
                               fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
-                              color: "var(--text-secondary)", background: "rgba(255,255,255,0.05)",
-                              border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8,
+                              color: "var(--text-secondary)", background: "var(--hover-bg)",
+                              border: "1px solid var(--bg-surface-high)", borderRadius: 8,
                               padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
                             }}>{sk}</span>
                           ))}
@@ -1326,7 +1326,7 @@ export default function ResourceScheduling() {
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
                         {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
                       </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", marginTop: 3 }}>
+                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
                         <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
@@ -1348,7 +1348,7 @@ export default function ResourceScheduling() {
           {unscheduledWps.length > 0 && (
             <div
               style={{
-                borderTop: "1px solid rgba(255,255,255,0.08)",
+                borderTop: "1px solid var(--bg-surface-high)",
                 padding: "12px 12px 8px 0",
                 marginTop: 12,
               }}
@@ -1371,7 +1371,7 @@ export default function ResourceScheduling() {
                   key={wp.id}
                   onPointerDown={(e) => onUnscheduledPointerDown(e, wp)}
                   style={{
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--hover-bg)",
                     border: "1px dashed rgba(245,158,11,0.3)",
                     borderRadius: 8,
                     padding: "8px 10px",
@@ -1424,7 +1424,7 @@ export default function ResourceScheduling() {
                 position: "sticky",
                 top: 0,
                 background: "var(--bg-surface-low)",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                borderBottom: "1px solid var(--bg-surface-high)",
                 display: "flex",
                 zIndex: 20,
                 }}
@@ -1434,7 +1434,7 @@ export default function ResourceScheduling() {
                   width: 220,
                   flexShrink: 0,
                   background: "var(--bg-page)",
-                  borderRight: "1px solid rgba(255,255,255,0.07)",
+                  borderRight: "1px solid var(--border-default)",
                 }}
               />
               <div style={{ display: "flex" }}>
@@ -1445,7 +1445,7 @@ export default function ResourceScheduling() {
                       width: banner.width,
                       padding: "6px 8px",
                       textAlign: "center",
-                      borderRight: "1px solid rgba(255,255,255,0.05)",
+                      borderRight: "1px solid var(--hover-bg)",
                       flexShrink: 0,
                     }}
                   >
@@ -1453,7 +1453,7 @@ export default function ResourceScheduling() {
                       style={{
                         fontFamily: "var(--font-mono)",
                         fontSize: 9,
-                        color: "#F2F4F8",
+                        color: "var(--text-primary)",
                         fontWeight: 700,
                       }}
                     >
@@ -1471,7 +1471,7 @@ export default function ResourceScheduling() {
               position: "sticky",
               top: zoomMode === "month" ? 32 : 0,
               background: "var(--bg-surface-low)",
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid var(--bg-surface-high)",
               display: "flex",
               zIndex: 19,
             }}
@@ -1481,7 +1481,7 @@ export default function ResourceScheduling() {
                 width: 220,
                 flexShrink: 0,
                 background: "var(--bg-page)",
-                borderRight: "1px solid rgba(255,255,255,0.07)",
+                borderRight: "1px solid var(--border-default)",
               }}
             />
             <div ref={timelineRef} style={{ display: "flex" }}>
@@ -1490,7 +1490,7 @@ export default function ResourceScheduling() {
                   key={idx}
                   style={{
                     width: h.width,
-                    borderRight: "1px solid rgba(255,255,255,0.05)",
+                    borderRight: "1px solid var(--hover-bg)",
                     padding: "6px 8px",
                     textAlign: "center",
                     background: h.isToday ? "rgba(245,158,11,0.08)" : "transparent",
@@ -1544,7 +1544,7 @@ export default function ResourceScheduling() {
               style={{
                 display: "flex",
                 background: isOverAllocated ? "rgba(239,68,68,0.04)" : rowHeatBg !== "transparent" ? rowHeatBg : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-sidebar)"),
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                borderBottom: "1px solid var(--hover-bg)",
                 minHeight: 60,
                 transition: "background 0.2s",
               }}
@@ -1556,7 +1556,7 @@ export default function ResourceScheduling() {
                   padding: "8px 12px",
                   flexShrink: 0,
                   background: "var(--bg-page)",
-                  borderRight: "1px solid rgba(255,255,255,0.07)",
+                  borderRight: "1px solid var(--border-default)",
                   display: "flex",
                   alignItems: "flex-start",
                   justifyContent: "space-between",
@@ -1575,8 +1575,8 @@ export default function ResourceScheduling() {
                       {rowSkills.map((sk, si) => (
                         <span key={si} style={{
                           fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
-                          color: "var(--text-secondary)", background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8,
+                          color: "var(--text-secondary)", background: "var(--hover-bg)",
+                          border: "1px solid var(--bg-surface-high)", borderRadius: 8,
                           padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
                         }}>{sk}</span>
                       ))}
@@ -1587,7 +1587,7 @@ export default function ResourceScheduling() {
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: rowIsOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
                         {rowBudgetHrs}h bud {"\u00B7"} {rowActualHrs}h act {"\u00B7"} {rowBurnPct}%
                       </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.06)", marginTop: 3 }}>
+                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
                         <div style={{ width: `${Math.min(100, rowBurnPct)}%`, height: "100%", borderRadius: 2, background: rowBurnPct > 100 ? "var(--status-error)" : rowBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
@@ -1796,7 +1796,7 @@ export default function ResourceScheduling() {
           padding: "10px 14px", zIndex: 10001, pointerEvents: "none",
           boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
         }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "#F2F4F8", marginBottom: 6 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
             {hoverTooltip.wp.wp_number} — {hoverTooltip.wp.name}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", lineHeight: 1.8 }}>
@@ -1818,13 +1818,13 @@ export default function ResourceScheduling() {
         <div
           style={{
             position: "fixed", left: contextMenu.x, top: contextMenu.y,
-            background: "var(--bg-surface-low)", border: "1px solid rgba(255,255,255,0.12)",
+            background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
             borderRadius: 8, padding: "4px 0", zIndex: 10000,
             boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
           }}
           onClick={e => e.stopPropagation()}
         >
-          <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", borderBottom: "1px solid rgba(255,255,255,0.06)", marginBottom: 4 }}>
+          <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", borderBottom: "1px solid var(--divider)", marginBottom: 4 }}>
             {contextMenu.wp.wp_number} — {contextMenu.wp.name}
           </div>
           <div style={{ padding: "2px 12px 4px", fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Reassign to</div>
@@ -1844,10 +1844,10 @@ export default function ResourceScheduling() {
             }}
             onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.10)"}
             onMouseLeave={e => e.currentTarget.style.background = contextMenu.wp.crew === res.name ? "var(--accent-muted)" : "transparent"}>
-              {res.name} <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(200,210,230,0.40)" }}>({res.role})</span>
+              {res.name} <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>({res.role})</span>
             </button>
           ))}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "4px 0" }} />
+          <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
           <button onClick={async () => {
             await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: "", released_date: "", startDate: "", endDate: "" });
             qc.invalidateQueries({ queryKey: ["work-packages"] });

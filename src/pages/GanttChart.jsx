@@ -51,9 +51,9 @@ function isWeekend(d) { const day = d.getDay(); return day === 0 || day === 6; }
 function isToday(d) { const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }
 function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }); }
 
-function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase }) {
+function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode }) {
   return (
-    <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+    <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
       <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--accent-border)" }}>
         {["Activity", "Start", "End", "Status"].map(h => (
           <span key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>{h}</span>
@@ -111,10 +111,16 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
           const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
           return (
             <div key={task.id} onClick={() => onSelect(task.id)} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
-              style={{ height: ROW_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", paddingLeft: 28, gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)", borderLeft: isActive ? `3px solid ${phase.solid}` : "3px solid transparent", background: isActive ? phase.bg : isHovered ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", transition: "background 0.1s" }}>
+              style={{ height: ROW_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", paddingLeft: 28, gap: 4, borderBottom: "1px solid var(--hover-bg)", borderLeft: isActive ? `3px solid ${phase.solid}` : "3px solid transparent", background: isActive ? phase.bg : isHovered ? "var(--hover-bg)" : "transparent", cursor: "pointer", transition: "background 0.1s" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: phase.solid, flexShrink: 0 }} />
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.activity}</span>
+                {smartMode && (task.status === "Blocked" || task.status === "Delayed" || task.constraints) && (
+                  <span
+                    title={task.constraints ? `Constraint: ${task.constraints}` : task.status === "Blocked" ? "Constraint: Blocked by RFI" : "Constraint: Schedule delay detected"}
+                    style={{ flexShrink: 0, fontSize: 11, color: "var(--status-warning)", cursor: "help", lineHeight: 1 }}
+                  >&#9888;</span>
+                )}
               </div>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
                 {task.planned_start ? new Date(task.planned_start + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
@@ -123,7 +129,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
                 {task.planned_end ? new Date(task.planned_end + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
               </span>
               <div style={{ display: "flex", alignItems: "center" }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[task.status] || "rgba(200,210,230,0.40)" }} />
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS[task.status] || "var(--text-muted)" }} />
               </div>
             </div>
           );
@@ -133,7 +139,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
   );
 }
 
-function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
+function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode }) {
   const scrollRef = useRef(null);
   const { minDate, maxDate } = dateRange;
   const { pxPerDay } = ZOOM_LEVELS[zoom];
@@ -196,6 +202,28 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
     };
   };
 
+  const getSmartDelay = (task) => {
+    if (!smartMode || task.isSummary) return null;
+    const start = task.planned_start || task.forecast_start;
+    const end = task.planned_end || task.forecast_end;
+    if (!start || !end) return null;
+    const startDate = new Date(start + "T00:00:00Z");
+    const endDate = new Date(end + "T00:00:00Z");
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const totalDuration = getDaysBetween(startDate, endDate);
+    if (totalDuration <= 0) return null;
+    const elapsed = getDaysBetween(startDate, today);
+    if (elapsed <= 0) return null;
+    const expectedProgress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+    const pct = Number(task.percent_complete) || 0;
+    const gap = expectedProgress - pct;
+    if (gap <= 10) return null;
+    const delayDays = Math.max(1, Math.round((gap / 100) * totalDuration));
+    const barPos = getBarPosition(task);
+    if (!barPos) return null;
+    return { delayDays, ghostLeft: barPos.left + barPos.width, ghostWidth: delayDays * pxPerDay, gap: Math.round(gap) };
+  };
+
   const todayLine = getDaysBetween(minDate, new Date()) * pxPerDay;
   const totalHeight = tasks.length * ROW_HEIGHT;
 
@@ -203,14 +231,14 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
     <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "hidden", position: "relative" }}>
       <div style={{ width: timelineWidth, minHeight: "100%" }}>
         <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--bg-sidebar)" }}>
-          <div style={{ display: "flex", height: 24, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", height: 24, borderBottom: "1px solid var(--divider)" }}>
             {monthHeaders.map((h, i) => (
-              <div key={i} style={{ width: h.width, padding: "0 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", display: "flex", alignItems: "center", borderRight: "1px solid rgba(255,255,255,0.06)" }}>{h.label}</div>
+              <div key={i} style={{ width: h.width, padding: "0 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", display: "flex", alignItems: "center", borderRight: "1px solid var(--divider)" }}>{h.label}</div>
             ))}
           </div>
           <div style={{ display: "flex", height: HEADER_HEIGHT - 24, borderBottom: "1px solid var(--accent-border)" }}>
             {days.map((d, i) => (
-              <div key={i} style={{ width: pxPerDay, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: pxPerDay >= 20 ? 7 : 0, color: isToday(d) ? "var(--accent)" : isWeekend(d) ? "var(--text-muted)" : "var(--text-muted)", fontWeight: isToday(d) ? 700 : 400, borderRight: "1px solid rgba(255,255,255,0.03)" }}>
+              <div key={i} style={{ width: pxPerDay, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: pxPerDay >= 20 ? 7 : 0, color: isToday(d) ? "var(--accent)" : isWeekend(d) ? "var(--text-muted)" : "var(--text-muted)", fontWeight: isToday(d) ? 700 : 400, borderRight: "1px solid var(--hover-bg)" }}>
                 {pxPerDay >= 20 ? d.getDate() : ""}
               </div>
             ))}
@@ -218,7 +246,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
         </div>
 
         <div style={{ position: "relative" }}>
-          {days.map((d, i) => isWeekend(d) ? <div key={`we-${i}`} style={{ position: "absolute", top: 0, left: i * pxPerDay, width: pxPerDay, height: totalHeight, background: "rgba(255,255,255,0.015)", pointerEvents: "none" }} /> : null)}
+          {days.map((d, i) => isWeekend(d) ? <div key={`we-${i}`} style={{ position: "absolute", top: 0, left: i * pxPerDay, width: pxPerDay, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} /> : null)}
           {todayLine > 0 && todayLine < timelineWidth && (
             <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: "linear-gradient(180deg, var(--accent), rgba(0,229,255,0.06))", zIndex: 3, pointerEvents: "none" }} />
           )}
@@ -228,7 +256,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
               const pos = getBarPosition(task);
               const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
               if (!pos) {
-                return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid rgba(255,255,255,0.04)", background: `${phase.solid}08` }} />;
+                return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)", background: `${phase.solid}08` }} />;
               }
               return (
                 <div key={task.id} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
@@ -239,7 +267,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
               );
             }
             const pos = getBarPosition(task);
-            if (!pos) return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid rgba(255,255,255,0.04)" }} />;
+            if (!pos) return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)" }} />;
             const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
             const isActive = task.id === selectedId;
             const isHov = task.id === hoveredId;
@@ -248,13 +276,76 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
 
             return (
               <div key={task.id} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
-                style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid rgba(255,255,255,0.04)", background: isActive ? phase.bg : isHov ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--hover-bg)", background: isActive ? phase.bg : isHov ? "var(--hover-bg)" : "transparent" }}>
                 <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "#00D68F" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
-                  {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "rgba(255,255,255,0.18)", borderRight: "2px solid rgba(255,255,255,0.40)" }} />}
+                  {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "var(--border-strong)", borderRight: "2px solid var(--text-muted)" }} />}
                   {pos.width > 50 && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{pct > 0 ? `${pct}%` : ""} {pos.width > 100 ? task.activity : ""}</span>}
                 </div>
                 {forecastOverlay && <div style={{ position: "absolute", top: 10, left: forecastOverlay.left, width: forecastOverlay.width, height: 20, borderRadius: "0 4px 4px 0", background: "repeating-linear-gradient(45deg, rgba(255,61,61,0.15), rgba(255,61,61,0.15) 3px, transparent 3px, transparent 6px)", border: "1px dashed rgba(255,61,61,0.40)", borderLeft: "none" }} />}
                 {task.constraints && <div style={{ position: "absolute", top: 6, left: pos.left + pos.width + 4, width: 14, height: 14, borderRadius: "50%", background: "var(--status-warning)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, color: "#111" }} title={task.constraints}>!</div>}
+                {(() => {
+                  const delay = getSmartDelay(task);
+                  if (!delay) return null;
+                  return (
+                    <>
+                      {/* Ghost predicted delay bar */}
+                      <div style={{
+                        position: "absolute",
+                        top: 10,
+                        left: delay.ghostLeft,
+                        width: Math.max(delay.ghostWidth, 20),
+                        height: 20,
+                        borderRadius: "0 4px 4px 0",
+                        background: "repeating-linear-gradient(45deg, transparent, transparent 4px, var(--status-error) 4px, var(--status-error) 5px)",
+                        opacity: 0.3,
+                        border: "1px dashed var(--status-error)",
+                        borderLeft: "none",
+                        pointerEvents: "none",
+                      }} />
+                      {/* Ghost bar delay label (outside opacity container) */}
+                      <span style={{
+                        position: "absolute",
+                        top: 14,
+                        left: delay.ghostLeft + Math.max(delay.ghostWidth, 20) - 4,
+                        transform: "translateX(-100%)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 8,
+                        fontWeight: 700,
+                        color: "var(--status-error)",
+                        whiteSpace: "nowrap",
+                        pointerEvents: "none",
+                      }}>+{delay.delayDays}d</span>
+                      {/* Float risk label */}
+                      <div style={{
+                        position: "absolute",
+                        top: -2,
+                        left: delay.ghostLeft + 2,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 3,
+                        pointerEvents: "none",
+                      }}>
+                        <span style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 8,
+                          fontWeight: 700,
+                          color: "var(--status-error)",
+                          background: "rgba(255,61,61,0.10)",
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          whiteSpace: "nowrap",
+                          lineHeight: "12px",
+                        }}>+{delay.delayDays}d FLOAT RISK</span>
+                        <span style={{
+                          fontSize: 6,
+                          color: "var(--status-error)",
+                          lineHeight: 1,
+                          marginTop: 2,
+                        }}>&#9660;</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             );
           })}
@@ -274,7 +365,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
           >
             <defs>
               <marker id="gantt-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="rgba(255,255,255,0.45)" />
+                <polygon points="0 0, 8 3, 0 6" fill="var(--text-muted)" />
               </marker>
             </defs>
             {tasks.map((task) => {
@@ -290,7 +381,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange }) {
                   <path
                     key={`${depId}-${task.id}`}
                     d={`M ${source.endX} ${source.y} H ${midX} V ${target.y} H ${target.startX}`}
-                    stroke="rgba(255,255,255,0.35)"
+                    stroke="var(--text-muted)"
                     strokeWidth="1.2"
                     fill="none"
                     markerEnd="url(#gantt-arrow)"
@@ -329,14 +420,14 @@ function DetailPanel({ task, onClose }) {
         ].map(({ label, value, warn }) => (
           <div key={label}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: warn ? "#FF3D3D" : "#F2F4F8", fontWeight: warn ? 700 : 500 }}>{value}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: warn ? "#FF3D3D" : "var(--text-primary)", fontWeight: warn ? 700 : 500 }}>{value}</div>
           </div>
         ))}
       </div>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 6 }}>Progress</div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+          <div style={{ flex: 1, height: 8, borderRadius: 4, background: "var(--bg-surface-high)", overflow: "hidden" }}>
             <div style={{ width: `${task.percent_complete || 0}%`, height: "100%", borderRadius: 4, background: phase.bar, transition: "width 0.3s" }} />
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: phase.solid }}>{task.percent_complete || 0}%</span>
@@ -371,6 +462,7 @@ export default function GanttChart() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showDetail, setShowDetail] = useState(false);
   const [collapsedPhases, setCollapsedPhases] = useState(new Set());
+  const [smartMode, setSmartMode] = useState(true);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["lookahead-gantt", activeProject?.id],
@@ -465,8 +557,8 @@ export default function GanttChart() {
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view Gantt Chart</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Select a project to view Gantt Chart</div>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
     </div>
   );
 
@@ -494,9 +586,31 @@ export default function GanttChart() {
               {["Not Started", "In Progress", "Complete", "Delayed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <div style={{ display: "flex", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 6, overflow: "hidden" }}>
+          <button
+            onClick={() => setSmartMode(!smartMode)}
+            style={{
+              padding: "4px 10px",
+              border: smartMode ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              color: smartMode ? "var(--accent)" : "var(--text-secondary)",
+              background: smartMode ? "var(--info-muted)" : "transparent",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              transition: "all 0.15s",
+            }}
+          >
+            <span style={{ fontSize: 11, lineHeight: 1 }}>{smartMode ? "\u2728" : "\u2606"}</span>
+            SMART
+          </button>
+          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
             {Object.entries(ZOOM_LEVELS).map(([key, { label }]) => (
-              <button key={key} onClick={() => setZoom(key)} style={{ padding: "4px 10px", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoom === key ? "var(--accent)" : "rgba(200,210,230,0.55)", background: zoom === key ? "var(--info-muted)" : "transparent" }}>{label}</button>
+              <button key={key} onClick={() => setZoom(key)} style={{ padding: "4px 10px", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoom === key ? "var(--accent)" : "var(--text-secondary)", background: zoom === key ? "var(--info-muted)" : "transparent" }}>{label}</button>
             ))}
           </div>
         </div>
@@ -510,7 +624,7 @@ export default function GanttChart() {
           { label: "Slipping", value: stats.slipping, color: "var(--status-warning)" },
           { label: "Avg Progress", value: `${stats.avgProgress}%`, color: "var(--accent)" },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: "var(--bg-surface-low)", border: "1px solid rgba(255,255,255,0.07)", borderTop: `2px solid ${color}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div key={label} style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderTop: `2px solid ${color}`, borderRadius: 10, padding: "10px 12px" }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color }}>{value}</div>
           </div>
@@ -532,6 +646,12 @@ export default function GanttChart() {
           <div style={{ width: 2, height: 12, background: "var(--accent)" }} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>Today</span>
         </div>
+        {smartMode && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 16, height: 6, borderRadius: "0 3px 3px 0", background: "repeating-linear-gradient(45deg, transparent, transparent 4px, var(--status-error) 4px, var(--status-error) 5px)", opacity: 0.3, border: "1px dashed var(--status-error)" }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)" }}>AI Predicted Delay</span>
+          </div>
+        )}
       </div>
 
       <PhoenixPanel style={{ position: "relative" }}>
@@ -541,8 +661,8 @@ export default function GanttChart() {
           <div style={{ textAlign: "center", padding: 48, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>No look-ahead items found. Add activities from the Look-Ahead Schedule page.</div>
         ) : (
           <div style={{ display: "flex", overflow: "hidden" }}>
-            <TaskList tasks={visibleRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id === selectedId ? null : id); setShowDetail(id !== selectedId); }} onHover={setHoveredId} hoveredId={hoveredId} collapsedPhases={collapsedPhases} onTogglePhase={togglePhase} />
-            <Timeline tasks={visibleRows} selectedId={selectedId} hoveredId={hoveredId} onHover={setHoveredId} zoom={zoom} dateRange={dateRange} />
+            <TaskList tasks={visibleRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id === selectedId ? null : id); setShowDetail(id !== selectedId); }} onHover={setHoveredId} hoveredId={hoveredId} collapsedPhases={collapsedPhases} onTogglePhase={togglePhase} smartMode={smartMode} />
+            <Timeline tasks={visibleRows} selectedId={selectedId} hoveredId={hoveredId} onHover={setHoveredId} zoom={zoom} dateRange={dateRange} smartMode={smartMode} />
             {showDetail && selectedTask && <DetailPanel task={selectedTask} onClose={() => { setShowDetail(false); setSelectedId(null); }} />}
           </div>
         )}

@@ -78,7 +78,7 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
           position: 'sticky',
           top: 0,
           background: 'var(--bg-sidebar)',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--border-default)',
           padding: '0 12px',
           height: 28,
           alignItems: 'center',
@@ -152,16 +152,16 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '48px 1fr 80px 86px 86px 44px 44px 80px',
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                      borderBottom: '1px solid var(--divider)',
+                      background: idx % 2 === 0 ? 'transparent' : 'var(--hover-bg)',
                       padding: '0 12px',
                       height: 34,
                       alignItems: 'center',
                       cursor: 'pointer',
                       transition: 'background 0.1s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--hover-bg)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'var(--hover-bg)')}
                   >
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
                       {task.wbs_code || '—'}
@@ -173,17 +173,17 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ background: `${TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task}40`, color: TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task, borderRadius: 4, padding: '2px 6px', fontFamily: 'IBM Plex Mono', fontSize: 8, fontWeight: 600 }}>
+                      <span style={{ background: `${TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task}40`, color: TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task, borderRadius: 4, padding: '2px 6px', fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 600 }}>
                         {task.task_type}
                       </span>
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, color: 'rgba(160,175,210,0.55)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-secondary)' }}>
                       {formatDateShort(task.start_date)}
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, color: 'rgba(160,175,210,0.55)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-secondary)' }}>
                       {formatDateShort(task.end_date)}
                     </div>
-                    <div style={{ fontFamily: 'IBM Plex Mono', fontSize: 9, color: 'rgba(160,175,210,0.55)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-secondary)' }}>
                       {duration}d
                     </div>
                     <div
@@ -220,7 +220,7 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ background: task.status === 'Complete' ? 'var(--success-muted)' : task.status === 'In Progress' ? 'var(--accent-muted)' : 'rgba(160,175,210,0.2)', color: task.status === 'Complete' ? 'var(--status-success)' : task.status === 'In Progress' ? 'var(--accent)' : 'var(--text-muted)', borderRadius: 4, padding: '2px 6px', fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 600 }}>
+                      <span style={{ background: task.status === 'Complete' ? 'var(--success-muted)' : task.status === 'In Progress' ? 'var(--accent-muted)' : 'var(--bg-surface-high)', color: task.status === 'Complete' ? 'var(--status-success)' : task.status === 'In Progress' ? 'var(--accent)' : 'var(--text-muted)', borderRadius: 4, padding: '2px 6px', fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 600 }}>
                         {task.status === 'Not Started' ? 'Pending' : task.status}
                       </span>
                     </div>

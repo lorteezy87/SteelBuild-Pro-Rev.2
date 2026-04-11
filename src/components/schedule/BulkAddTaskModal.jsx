@@ -41,7 +41,7 @@ const INPUT_STYLE = {
 const SELECT_STYLE = {
   width: "100%",
   background: "var(--bg-input)",
-  border: "1px solid rgba(255,255,255,0.07)",
+  border: "1px solid var(--bg-surface-high)",
   borderRadius: 3,
   color: "var(--text-secondary)",
   fontFamily: "var(--font-mono)",
@@ -128,7 +128,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         {/* Header */}
-        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--bg-surface-high)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.04em" }}>
@@ -147,12 +147,12 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
           display: "grid", gridTemplateColumns: COL_WIDTHS,
           gap: 0, padding: "0 16px",
           height: 28, background: "rgba(0,0,0,0.25)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--divider)",
           flexShrink: 0, alignItems: "center",
         }}>
           <div />
           {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", ""].map((h) => (
-            <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "rgba(160,175,210,0.35)", letterSpacing: "0.12em", padding: "0 6px" }}>
+            <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 6px" }}>
               {h}
             </div>
           ))}
@@ -168,19 +168,19 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 style={{
                   display: "grid", gridTemplateColumns: COL_WIDTHS,
                   alignItems: "center", height: 36,
-                  borderBottom: "1px solid rgba(255,255,255,0.04)",
-                  background: hasErr ? "rgba(255,59,59,0.06)" : idx % 2 === 1 ? "rgba(255,255,255,0.01)" : "transparent",
+                  borderBottom: "1px solid var(--hover-bg)",
+                  background: hasErr ? "rgba(255,59,59,0.06)" : idx % 2 === 1 ? "var(--hover-bg)" : "transparent",
                   border: hasErr ? "1px solid rgba(255,59,59,0.25)" : undefined,
                   padding: "0 16px",
                 }}
               >
                 {/* Row number */}
                 <div style={{ ...CELL, justifyContent: "center" }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.25)" }}>{idx + 1}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{idx + 1}</span>
                 </div>
 
                 {/* Task name */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)", position: "relative" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)", position: "relative" }}>
                   <input
                     value={row.task_name}
                     onChange={(e) => updateRow(row._id, "task_name", e.target.value)}
@@ -192,21 +192,21 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 </div>
 
                 {/* Task type */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <select value={row.task_type} onChange={(e) => updateRow(row._id, "task_type", e.target.value)} style={SELECT_STYLE}>
                     {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
 
                 {/* Phase */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <select value={row.phase} onChange={(e) => updateRow(row._id, "phase", e.target.value)} style={SELECT_STYLE}>
                     {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
 
                 {/* Start date */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <input
                     type="date"
                     value={row.start_date}
@@ -216,7 +216,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 </div>
 
                 {/* End date */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <input
                     type="date"
                     value={row.end_date}
@@ -226,14 +226,14 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 </div>
 
                 {/* Status */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <select value={row.status} onChange={(e) => updateRow(row._id, "status", e.target.value)} style={SELECT_STYLE}>
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
                 {/* Priority */}
-                <div style={{ ...CELL, borderRight: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <select value={row.priority} onChange={(e) => updateRow(row._id, "priority", e.target.value)} style={SELECT_STYLE}>
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -244,7 +244,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                   <button
                     onClick={() => duplicateRow(row._id)}
                     title="Duplicate row"
-                    style={{ background: "none", border: "none", color: "rgba(160,175,210,0.30)", cursor: "pointer", fontSize: 11, padding: 2, lineHeight: 1 }}
+                    style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 11, padding: 2, lineHeight: 1 }}
                   >⧉</button>
                   <button
                     onClick={() => removeRow(row._id)}
@@ -264,7 +264,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
               padding: "8px 24px", cursor: "pointer",
               color: "rgba(200,155,32,0.50)", fontFamily: "var(--font-mono)", fontSize: 10,
               letterSpacing: "0.08em", fontWeight: 700,
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              borderBottom: "1px solid var(--hover-bg)",
               transition: "color 0.12s",
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = "var(--accent)"}
@@ -277,7 +277,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         {/* Footer */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "12px 24px", borderTop: "1px solid rgba(255,255,255,0.07)",
+          padding: "12px 24px", borderTop: "1px solid var(--bg-surface-high)",
           background: "rgba(0,0,0,0.20)", flexShrink: 0,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
@@ -287,7 +287,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
             <button
               onClick={handleClose}
               style={{
-                background: "transparent", border: "1px solid rgba(255,255,255,0.10)",
+                background: "transparent", border: "1px solid var(--border-default)",
                 borderRadius: 6, padding: "7px 18px", color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer",
                 letterSpacing: "0.09em", textTransform: "uppercase",

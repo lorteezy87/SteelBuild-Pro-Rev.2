@@ -85,7 +85,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
         className="max-w-2xl max-h-[90vh] overflow-y-auto"
         style={{
           background: 'var(--bg-surface)',
-          color: '#FFFFFF',
+          color: 'var(--text-primary)',
           borderRadius: 14,
           border: '1px solid var(--accent-border)',
           boxShadow: '0 24px 80px rgba(0,0,0,0.8)'
@@ -119,7 +119,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 background: 'var(--bg-sidebar)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
-                color: '#FFFFFF'
+                color: 'var(--text-primary)'
               }} className="bg-transparent text-slate-50 px-3 py-2 text-sm rounded-md flex h-9 w-full items-center justify-between whitespace-nowrap border border-input shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
                 <SelectValue placeholder="Select project" />
               </SelectTrigger>
@@ -161,7 +161,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                   border: '1px solid var(--border-default)',
                   borderRadius: 8,
                   padding: '0 28px 0 12px',
-                  color: selectedCode ? '#FFFFFF' : 'rgba(255,255,255,0.30)',
+                  color: selectedCode ? 'var(--text-primary)' : 'var(--text-muted)',
                   fontFamily: 'var(--font-body)',
                   fontSize: 12,
                   cursor: costCode ? 'not-allowed' : 'pointer',
@@ -187,7 +187,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                         key={cc.code}
                         value={cc.code}
                         disabled={alreadyAdded}
-                        style={{ background: 'var(--bg-sidebar)', color: alreadyAdded ? 'rgba(160,175,210,0.25)' : '#F2F4F8' }}>
+                        style={{ background: 'var(--bg-sidebar)', color: alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)' }}>
 
                           {cc.code} — {cc.name}{alreadyAdded ? ' (already added)' : ''}
                         </option>);
@@ -228,7 +228,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                   fontFamily: 'var(--font-mono)',
                   fontSize: 18,
                   fontWeight: 700,
-                  color: selectedCode ? 'var(--accent)' : 'rgba(255,255,255,0.20)',
+                  color: selectedCode ? 'var(--accent)' : 'var(--border-strong)',
                   letterSpacing: '0.05em'
                 }}>
                   {selectedCode || '—'}
@@ -258,7 +258,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 boxSizing: 'border-box'
@@ -287,7 +287,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 boxSizing: 'border-box'
@@ -316,7 +316,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 boxSizing: 'border-box'
@@ -345,7 +345,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 boxSizing: 'border-box'
@@ -395,7 +395,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
-              color: pctUsed > 100 ? '#FF1744' : '#FFFFFF',
+              color: pctUsed > 100 ? '#FF1744' : 'var(--text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 12
             }}>
@@ -424,7 +424,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontSize: 12,
                 boxSizing: 'border-box'
