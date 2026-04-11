@@ -1,11 +1,34 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../shared/useProjectContext";
 
 export default function ProjectPillDropdown() {
   const { projects, activeProject, setActiveProject, loading } = useProjectContext();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const searchRef = useRef(null);
 
+  // Fetch RFI counts for quick stats when dropdown is open
+  const { data: allRFIs = [] } = useQuery({
+    queryKey: ["pill-rfis-quick"],
+    queryFn: () => base44.entities.RFI.list(),
+    enabled: open,
+    staleTime: 60_000,
+    initialData: [],
+  });
+
+  // Build per-project open RFI counts
+  const rfiCountByProject = {};
+  allRFIs.forEach((rfi) => {
+    if (rfi.status === "Open" || rfi.status === "Under Review") {
+      const pid = rfi.project_id;
+      if (pid) rfiCountByProject[pid] = (rfiCountByProject[pid] || 0) + 1;
+    }
+  });
+
+  // Click-outside handler
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
@@ -15,19 +38,63 @@ export default function ProjectPillDropdown() {
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
 
+  // Escape key handler
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open]);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (open && searchRef.current) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+    if (!open) setSearch("");
+  }, [open]);
+
+  const handleSelect = useCallback(
+    (p) => {
+      setActiveProject(p);
+      setOpen(false);
+      setSearch("");
+    },
+    [setActiveProject]
+  );
+
   const label =
-    loading ? "Loading..." :
-    activeProject ? `${activeProject.name.slice(0, 20)} · ${activeProject.project_number || "—"}` :
-    projects.length === 0 ? "NO PROJECTS" :
-    "SELECT PROJECT";
+    loading
+      ? "Loading..."
+      : activeProject
+        ? `${activeProject.name.slice(0, 20)} · ${activeProject.project_number || "—"}`
+        : projects.length === 0
+          ? "NO PROJECTS"
+          : "SELECT PROJECT";
+
+  // Filter projects by search
+  const filtered = projects.filter((p) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (p.name || "").toLowerCase().includes(q) ||
+      (p.project_number || "").toLowerCase().includes(q)
+    );
+  });
 
   const grouped = {
-    active: projects.filter(p => p.phase !== "Closeout"),
-    closeout: projects.filter(p => p.phase === "Closeout")
+    active: filtered.filter((p) => p.phase !== "Closeout"),
+    closeout: filtered.filter((p) => p.phase === "Closeout"),
   };
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      {/* Pill trigger */}
       <div
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -48,69 +115,100 @@ export default function ProjectPillDropdown() {
           userSelect: "none",
           maxWidth: 280,
           overflow: "hidden",
-          textOverflow: "ellipsis"
+          textOverflow: "ellipsis",
         }}
         title={label}
       >
         {activeProject && (
-          <span style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background:
-              activeProject.health_status === "On Track" ? "var(--status-success)" :
-              activeProject.health_status === "Watch" ? "var(--status-warning)" : "var(--status-error)",
-            flexShrink: 0,
-            boxShadow: `0 0 4px var(--warning-muted)`
-          }} />
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background:
+                activeProject.health_status === "On Track"
+                  ? "var(--status-success)"
+                  : activeProject.health_status === "Watch"
+                    ? "var(--status-warning)"
+                    : "var(--status-error)",
+              flexShrink: 0,
+              boxShadow: "0 0 4px var(--warning-muted)",
+            }}
+          />
         )}
         {label}
-        <span style={{ marginLeft: 4 }}>▾</span>
+        <span
+          style={{
+            marginLeft: 4,
+            transition: "transform 0.15s",
+            display: "inline-block",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          }}
+        >
+          ▾
+        </span>
       </div>
 
+      {/* Dropdown panel */}
       {open && (
         <div
           style={{
-            position: "fixed",
-            top: "52px",
-            right: "16px",
-            width: 340,
-            maxHeight: "70vh",
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            width: 360,
+            maxHeight: 300,
             overflowY: "auto",
-            background: "var(--bg-surface-low)",
+            background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
-            borderRadius: 12,
-            boxShadow: "0 20px 50px rgba(0,0,0,0.7)",
-            zIndex: 2000
+            borderRadius: 8,
+            boxShadow:
+              "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
+            zIndex: 1000,
+            padding: 8,
           }}
         >
-          {/* Header */}
-          <div
-            style={{
-              padding: "10px 12px 8px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              color: "var(--text-muted)",
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              borderBottom: "1px solid var(--divider)"
-            }}
-          >
-            Switch Project
+          {/* Search filter */}
+          <div style={{ marginBottom: 8 }}>
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search projects..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "7px 10px",
+                background: "var(--bg-surface-high, var(--bg-surface-low))",
+                border: "1px solid var(--border-default)",
+                borderRadius: 6,
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                color: "var(--text-primary)",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+              onFocus={(e) =>
+                (e.target.style.borderColor = "var(--accent)")
+              }
+              onBlur={(e) =>
+                (e.target.style.borderColor = "var(--border-default)")
+              }
+            />
           </div>
 
           {/* Empty state */}
-          {projects.length === 0 && (
+          {filtered.length === 0 && (
             <div
               style={{
                 padding: "16px 12px",
                 textAlign: "center",
                 fontFamily: "var(--font-body)",
                 fontSize: 12,
-                color: "var(--text-muted)"
+                color: "var(--text-muted)",
               }}
             >
-              No projects yet
+              {search ? "No matching projects" : "No projects yet"}
             </div>
           )}
 
@@ -119,60 +217,52 @@ export default function ProjectPillDropdown() {
             <div>
               <div
                 style={{
-                  padding: "8px 12px 4px",
+                  padding: "6px 8px 4px",
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
-                  letterSpacing: "0.18em",
+                  fontSize: 8,
+                  letterSpacing: "0.16em",
                   color: "var(--text-muted)",
-                  textTransform: "uppercase"
+                  textTransform: "uppercase",
                 }}
               >
-                Active
+                Active ({grouped.active.length})
               </div>
-              <div style={{ padding: 8 }}>
-                {grouped.active.map((p) => (
-                  <ProjectOption
-                    key={p.id}
-                    project={p}
-                    isActive={activeProject?.id === p.id}
-                    onClick={() => {
-                      setActiveProject(p);
-                      setOpen(false);
-                    }}
-                  />
-                ))}
-              </div>
+              {grouped.active.map((p) => (
+                <ProjectOption
+                  key={p.id}
+                  project={p}
+                  isActive={activeProject?.id === p.id}
+                  openRFIs={rfiCountByProject[p.id] || 0}
+                  onClick={() => handleSelect(p)}
+                />
+              ))}
             </div>
           )}
 
           {/* Closeout projects */}
           {grouped.closeout.length > 0 && (
-            <div>
+            <div style={{ marginTop: 4 }}>
               <div
                 style={{
-                  padding: "8px 12px 4px",
+                  padding: "6px 8px 4px",
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
-                  letterSpacing: "0.18em",
+                  fontSize: 8,
+                  letterSpacing: "0.16em",
                   color: "var(--text-muted)",
-                  textTransform: "uppercase"
+                  textTransform: "uppercase",
                 }}
               >
-                Closeout
+                Closeout ({grouped.closeout.length})
               </div>
-              <div style={{ padding: 8 }}>
-                {grouped.closeout.map((p) => (
-                  <ProjectOption
-                    key={p.id}
-                    project={p}
-                    isActive={activeProject?.id === p.id}
-                    onClick={() => {
-                      setActiveProject(p);
-                      setOpen(false);
-                    }}
-                  />
-                ))}
-              </div>
+              {grouped.closeout.map((p) => (
+                <ProjectOption
+                  key={p.id}
+                  project={p}
+                  isActive={activeProject?.id === p.id}
+                  openRFIs={rfiCountByProject[p.id] || 0}
+                  onClick={() => handleSelect(p)}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -181,12 +271,43 @@ export default function ProjectPillDropdown() {
   );
 }
 
-function ProjectOption({ project, isActive, onClick }) {
+/* ── Individual project row ── */
+function ProjectOption({ project, isActive, openRFIs, onClick }) {
   const [hovered, setHovered] = useState(false);
+
   const healthColor =
-    project.health_status === "On Track" ? "var(--status-success)" :
-    project.health_status === "Watch" ? "var(--status-warning)" :
-    project.health_status === "At Risk" ? "var(--status-error)" : "var(--text-muted)";
+    project.health_status === "On Track"
+      ? "var(--status-success)"
+      : project.health_status === "Watch"
+        ? "var(--status-warning)"
+        : project.health_status === "At Risk"
+          ? "var(--status-error)"
+          : "var(--text-muted)";
+
+  const statusLabel =
+    project.phase === "Closeout"
+      ? "Complete"
+      : project.phase
+        ? "Active"
+        : "Active";
+
+  const statusColor =
+    statusLabel === "Complete"
+      ? "var(--status-success)"
+      : "var(--accent, var(--status-info))";
+
+  // Build quick-stat text
+  let quickStat = null;
+  if (project.health_status === "At Risk") {
+    quickStat = { text: "At Risk", color: "var(--status-error)" };
+  } else if (project.health_status === "Watch") {
+    quickStat = { text: "Watch", color: "var(--status-warning)" };
+  } else if (openRFIs > 0) {
+    quickStat = {
+      text: `${openRFIs} open RFI${openRFIs !== 1 ? "s" : ""}`,
+      color: "var(--status-warning)",
+    };
+  }
 
   return (
     <div
@@ -194,56 +315,126 @@ function ProjectOption({ project, isActive, onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: "10px 12px",
+        padding: "8px 10px",
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: 8,
         cursor: "pointer",
-        background: isActive ? "var(--accent-muted)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderLeft: isActive || hovered ? "2px solid var(--accent)" : "2px solid transparent",
-        borderRadius: 8,
+        background: isActive
+          ? "var(--accent-muted)"
+          : hovered
+            ? "var(--bg-hover)"
+            : "transparent",
+        borderLeft: isActive
+          ? "3px solid var(--accent)"
+          : hovered
+            ? "3px solid var(--border-default)"
+            : "3px solid transparent",
+        borderRadius: 6,
         transition: "all 0.1s",
-        marginBottom: 4
+        marginBottom: 2,
       }}
     >
+      {/* Health indicator dot */}
       <div
         style={{
-          width: 6,
-          height: 6,
+          width: 7,
+          height: 7,
           borderRadius: "50%",
           background: healthColor,
           flexShrink: 0,
-          boxShadow: `0 0 4px ${healthColor}88`
+          boxShadow: `0 0 4px ${healthColor}88`,
         }}
       />
+
+      {/* Project info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            color: "var(--text-primary)",
-            fontWeight: 500,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          {project.name}
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 12.5,
+              color: "var(--text-primary)",
+              fontWeight: isActive ? 600 : 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {project.name}
+          </div>
+          {/* Status badge */}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 8,
+              letterSpacing: "0.06em",
+              color: statusColor,
+              background: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
+              padding: "1px 6px",
+              borderRadius: 4,
+              flexShrink: 0,
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
+            {statusLabel}
+          </span>
         </div>
+
         <div
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--accent)",
-            letterSpacing: "0.06em",
-            marginTop: 2
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 2,
           }}
         >
-          {project.project_number} · {project.phase || "—"}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              color: "var(--accent)",
+              letterSpacing: "0.06em",
+            }}
+          >
+            {project.project_number || "—"} · {project.phase || "—"}
+          </span>
+          {quickStat && (
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 8.5,
+                color: quickStat.color,
+                letterSpacing: "0.04em",
+                opacity: 0.85,
+              }}
+            >
+              · {quickStat.text}
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Active checkmark */}
       {isActive && (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        >
           <polyline points="11.5 3 5.5 9.5 2 6" />
         </svg>
       )}
