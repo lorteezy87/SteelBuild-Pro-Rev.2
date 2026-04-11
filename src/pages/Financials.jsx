@@ -27,23 +27,21 @@ const VIEW_TABS = [
   { key: "unmapped", label: "Unmapped Costs" },
 ];
 
+// SOV family rules aligned with cost code categories (costCodes.jsx)
+// Each rule maps SOV descriptions → the matching cost code category
 const FAMILY_RULES = [
-  { key: "detailing", label: "Detailing / Engineering", direct: true, test: (text) => /detail|engineering/.test(text) },
-  { key: "material_family", label: "Material / Fasteners", direct: true, test: (text) => /anchor|embed|raw material|material|fastener/.test(text) },
-  { key: "joist_deck_family", label: "Joist / Deck Buyout", direct: true, test: (text) => /joist|deck/.test(text) },
-  { key: "shop_fab_family", label: "Shop Labor & Fabrication", direct: true, test: (text) => /shop|fab|fabrication/.test(text) },
-  { key: "field_family", label: "Field Labor", direct: true, test: (text) => /field|erection|install/.test(text) },
-  { key: "equipment_family", label: "Equipment / Crane", direct: true, test: (text) => /equipment|crane/.test(text) },
-  { key: "shipping", label: "Shipping", direct: true, test: (text) => /shipping|freight|truck/.test(text) },
-  { key: "special_coatings", label: "Special Coatings", direct: true, test: (text) => /coat|galv|paint/.test(text) },
-  { key: "travel", label: "Travel / Out-of-Town", direct: false, test: (text) => /travel|hotel|per diem|out of town/.test(text) },
-  { key: "indirect", label: "Indirect / General Conditions", direct: false, test: (text) => /pm\/admin|admin|indirect/.test(text) },
+  { key: "labor",         label: "Labor",         direct: true,  test: (text) => /shop labor|shop|fabrication|fab |field labor|structural|erect|install|shipping|freight|truck/.test(text) },
+  { key: "materials",     label: "Materials",      direct: true,  test: (text) => /anchor bolt|embed|joist|deck\b|raw material|material|fastener|steel|plate|angle|channel/.test(text) },
+  { key: "subcontractor", label: "Subcontractor",  direct: true,  test: (text) => /detail|engineering|deck install|subcontract|sub /.test(text) },
+  { key: "equipment",     label: "Equipment",      direct: true,  test: (text) => /equipment|crane|forklift|rigging|scaffold/.test(text) },
+  { key: "misc",          label: "Misc.",           direct: true,  test: (text) => /coat|galv|paint|special coat|misc|sundry/.test(text) },
+  { key: "overhead",      label: "Overhead",        direct: false, test: (text) => /pm\/admin|admin|overhead|indirect|insurance|bond|travel|hotel|per diem/.test(text) },
 ];
 
 function getFamilyMeta(text) {
   const normalized = String(text || "").toLowerCase();
   const match = FAMILY_RULES.find((rule) => rule.test(normalized));
-  return match || { key: "misc_family", label: "Misc / Catch-All", direct: false };
+  return match || { key: "misc", label: "Misc.", direct: true };
 }
 
 function safeNumber(value) {
@@ -151,7 +149,7 @@ function FilterBar({ search, setSearch, filterPhase, setFilterPhase, phases }) {
           fontSize: 10,
         }}
       >
-        <option value="all">ALL COST FAMILIES</option>
+        <option value="all">ALL COST CATEGORIES</option>
         {phases.map((phase) => (
           <option key={phase} value={phase}>
             {phase.toUpperCase()}
