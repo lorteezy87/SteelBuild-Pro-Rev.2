@@ -141,40 +141,6 @@ export default function GlobalSearchModal({ open, onClose }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Debounced search — re-run when scope changes or cached data updates
-  useEffect(() => {
-    if (query.length < 2) { setResults([]); setLoading(false); return; }
-    setLoading(true);
-    const t = setTimeout(() => runSearch(query), 250);
-    return () => clearTimeout(t);
-  }, [query, searchScope, runSearch]);
-
-  // Module quick-nav filtered by query
-  const filteredModules = useMemo(() => {
-    if (query.length >= 2) return []; // search results take over
-    if (query.length === 0) return QUICK_NAV;
-    const ql = query.toLowerCase();
-    return QUICK_NAV.filter((m) => m.name.toLowerCase().includes(ql));
-  }, [query]);
-
-  // Combined display items
-  const displayItems = useMemo(() => {
-    if (results.length > 0) return results;
-    return filteredModules.map((m) => ({
-      type: "Module",
-      id: m.page,
-      title: m.name,
-      subtitle: m.group,
-      page: m.page,
-      icon: m.icon,
-    }));
-  }, [results, filteredModules]);
-
-  // Reset selection when items change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [displayItems.length]);
-
   const runSearch = useCallback((q) => {
     if (!q || q.length < 2) { setResults([]); setLoading(false); return; }
     setLoading(true);
@@ -242,6 +208,40 @@ export default function GlobalSearchModal({ open, onClose }) {
     setResults(searchResults.slice(0, 12));
     setLoading(false);
   }, [cachedProjects, cachedRFIs, cachedDrawings, cachedWPs, cachedCOs, cachedContacts, searchScope, activeProject]);
+
+  // Debounced search — re-run when scope changes or cached data updates
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); setLoading(false); return; }
+    setLoading(true);
+    const t = setTimeout(() => runSearch(query), 250);
+    return () => clearTimeout(t);
+  }, [query, searchScope, runSearch]);
+
+  // Module quick-nav filtered by query
+  const filteredModules = useMemo(() => {
+    if (query.length >= 2) return []; // search results take over
+    if (query.length === 0) return QUICK_NAV;
+    const ql = query.toLowerCase();
+    return QUICK_NAV.filter((m) => m.name.toLowerCase().includes(ql));
+  }, [query]);
+
+  // Combined display items
+  const displayItems = useMemo(() => {
+    if (results.length > 0) return results;
+    return filteredModules.map((m) => ({
+      type: "Module",
+      id: m.page,
+      title: m.name,
+      subtitle: m.group,
+      page: m.page,
+      icon: m.icon,
+    }));
+  }, [results, filteredModules]);
+
+  // Reset selection when items change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [displayItems.length]);
 
   const handleSearch = useCallback((q) => {
     setQuery(q);
