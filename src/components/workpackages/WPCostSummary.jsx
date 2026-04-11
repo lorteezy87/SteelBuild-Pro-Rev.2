@@ -15,7 +15,7 @@ export default function WPCostSummary({ wp, expenses = [], onViewExpenses }) {
     <div
       style={{
         background: 'var(--bg-surface-low)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid var(--border-default)',
         borderRadius: 12,
         padding: '16px 20px',
         marginTop: 12,

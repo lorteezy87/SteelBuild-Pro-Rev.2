@@ -50,7 +50,7 @@ export default function ScopeItemList({
             width: 64,
             height: 64,
             borderRadius: "50%",
-            background: "var(--bg-surface-low, rgba(255,255,255,0.03))",
+            background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
             display: "flex",
             alignItems: "center",
@@ -153,7 +153,7 @@ export default function ScopeItemList({
           <div
             key={item.id}
             style={{
-              background: isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)",
+              background: isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)",
               border: "1px solid var(--border-default)",
               borderLeft: `3px solid ${isComplete ? "var(--status-success)" : typeMeta.color}`,
               borderRadius: "12px",
@@ -169,7 +169,7 @@ export default function ScopeItemList({
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border-default)";
               e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
-              e.currentTarget.style.background = isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)";
+              e.currentTarget.style.background = isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)";
             }}
           >
             {/* Header */}

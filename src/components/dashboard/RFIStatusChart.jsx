@@ -58,7 +58,7 @@ export default function RFIStatusChart({ rfis }) {
               />
               <Tooltip
                 contentStyle={{ background: 'var(--bg-surface-high)', border: 'none', borderRadius: 2, fontFamily: 'var(--font-mono)', fontSize: 10 }}
-                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                cursor={{ fill: 'var(--hover-bg)' }}
               />
               <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                 {chartData.map((entry, i) => (

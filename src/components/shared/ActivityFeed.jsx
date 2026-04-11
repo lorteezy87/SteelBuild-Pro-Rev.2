@@ -95,7 +95,7 @@ export default function ActivityFeed({ activities = [], compact = false }) {
                 key={activity.id}
                 style={{
                   padding: compact ? "8px 0" : "12px 0",
-                  borderLeft: `2px solid ${ENTITY_COLORS[activity.entityType] || "rgba(255,255,255,0.10)"}`,
+                  borderLeft: `2px solid ${ENTITY_COLORS[activity.entityType] || "var(--border-default)"}`,
                   paddingLeft: 12,
                   display: "flex",
                   gap: 8,
