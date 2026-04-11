@@ -7,61 +7,143 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import StatusBadge from "../shared/StatusBadge";
 import ProgressBar from "../shared/ProgressBar";
 
-/* ── Mini SVG Sparkline for KPI tiles ──────────────────────────────────────── */
-function MiniSparkline({ data = [], color = "var(--accent)", width = 48, height = 18 }) {
+/* ── Enhanced Mini SVG Sparkline with area fill and trend arrow ────────────── */
+function MiniSparkline({ data = [], color = "var(--accent)", width = 56, height = 22, showTrend = true }) {
   if (data.length < 2) return null;
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const range = max - min || 1;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((v - min) / range) * (height - 2) - 1;
-    return `${x},${y}`;
-  }).join(" ");
+  const id = `spark-${Math.random().toString(36).slice(2, 8)}`;
+  const coords = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * width,
+    y: height - ((v - min) / range) * (height - 4) - 2,
+  }));
+  const linePoints = coords.map(c => `${c.x},${c.y}`).join(" ");
+  const areaPoints = `0,${height} ${linePoints} ${width},${height}`;
+  const trend = data[data.length - 1] - data[0];
+  const trendChar = trend > 0 ? "▲" : trend < 0 ? "▼" : "—";
   return (
-    <svg width={width} height={height} style={{ display: "block", opacity: 0.7 }}>
-      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <svg width={width} height={height} style={{ display: "block" }}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <polygon points={areaPoints} fill={`url(#${id})`} />
+        <polyline points={linePoints} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx={coords[coords.length-1].x} cy={coords[coords.length-1].y} r={2} fill={color} />
+      </svg>
+      {showTrend && trend !== 0 && (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color, fontWeight: 700, lineHeight: 1 }}>
+          {trendChar}
+        </span>
+      )}
+    </div>
   );
 }
 
-/* ── Compute auto health based on project metrics ─────────────────────────── */
-function computeAutoHealth(p) {
-  if (p.overdueRFIs > 3 || p.lateDeliveries > 2 || (p.hasBudgetData && p.budget > 0 && p.actual / p.budget > 1.05))
-    return "At Risk";
-  if (p.overdueRFIs > 0 || p.lateDeliveries > 0 || p.stalledWPs > 1 || (p.hasBudgetData && p.budget > 0 && p.actual / p.budget > 0.95))
-    return "Watch";
-  return "On Track";
+/* ── Aggressive health scoring — real signals, not optimistic defaults ────── */
+function computeWeightedHealth(p) {
+  const reasons = [];
+
+  // Factor 1: RFI health (30%) — any overdue = immediate penalty
+  let rfiScore = 100;
+  if (p.overdueRFIs > 0) {
+    rfiScore = p.overdueRFIs >= 3 ? 10 : p.overdueRFIs >= 2 ? 30 : 50;
+    reasons.push(`${p.overdueRFIs} overdue RFI${p.overdueRFIs > 1 ? "s" : ""}`);
+  } else if (p.openRFIs > 5) {
+    rfiScore = 65;
+    reasons.push(`${p.openRFIs} open RFIs (backlog)`);
+  }
+
+  // Factor 2: Budget health (25%) — burn rate matters
+  let budgetScore = 100;
+  if (p.hasBudgetData && p.budget > 0) {
+    const burnPct = p.actual / p.budget;
+    if (burnPct > 1.10) { budgetScore = 0; reasons.push("Budget exceeded by 10%+"); }
+    else if (burnPct > 1.05) { budgetScore = 25; reasons.push("Over budget"); }
+    else if (burnPct > 0.95) { budgetScore = 55; reasons.push("Budget burn > 95%"); }
+    else if (burnPct > 0.85) budgetScore = 80;
+  } else if (!p.hasBudgetData) {
+    budgetScore = 70; // Unknown = not healthy, penalize missing data
+    reasons.push("No budget set up");
+  }
+
+  // Factor 3: Delivery performance (25%) — late = critical in steel
+  let delScore = 100;
+  if (p.lateDeliveries > 0) {
+    delScore = p.lateDeliveries >= 3 ? 10 : p.lateDeliveries >= 2 ? 35 : 55;
+    reasons.push(`${p.lateDeliveries} late deliver${p.lateDeliveries > 1 ? "ies" : "y"}`);
+  }
+
+  // Factor 4: Production health (20%) — stalled = blocked job
+  let prodScore = 100;
+  if (p.stalledWPs > 0) {
+    prodScore = Math.max(0, 100 - p.stalledWPs * 30);
+    reasons.push(`${p.stalledWPs} stalled WP${p.stalledWPs > 1 ? "s" : ""}`);
+  }
+  if (p.avgProgress < 15 && p.stalledWPs > 0) prodScore = Math.min(prodScore, 30);
+
+  // CO exposure penalty (bonus factor) — pending COs = financial risk
+  const coPenalty = p.pendingCOs?.length >= 3 ? 10 : p.pendingCOs?.length >= 1 ? 5 : 0;
+  if (p.pendingCOs?.length > 0) reasons.push(`${p.pendingCOs.length} pending CO${p.pendingCOs.length > 1 ? "s" : ""}`);
+
+  const raw = Math.round(
+    rfiScore    * 0.30 +
+    budgetScore * 0.25 +
+    delScore    * 0.25 +
+    prodScore   * 0.20
+  ) - coPenalty;
+  const score = Math.min(100, Math.max(0, raw));
+
+  let label;
+  if (score >= 75) label = "On Track";
+  else if (score >= 50) label = "Watch";
+  else label = "At Risk";
+
+  return {
+    score,
+    label,
+    reasons,
+    factors: { rfi: rfiScore, budget: budgetScore, delivery: delScore, production: prodScore },
+  };
 }
 
-/* ── Stoplight health pill ─────────────────────────────────────────────────── */
-function HealthPill({ status }) {
+/* ── Health pill with score + reason tooltip ──────────────────────────────── */
+function HealthPill({ status, score, reasons }) {
   const cfg = {
     "On Track": { bg: "var(--status-success)", text: "#fff", label: "ON TRACK" },
     "Watch":    { bg: "var(--status-warning)", text: "#000", label: "WATCH" },
     "At Risk":  { bg: "var(--status-error)",   text: "#fff", label: "AT RISK" },
   };
   const s = cfg[status] || cfg["On Track"];
+  const tip = reasons?.length > 0 ? reasons.join(" · ") : "All signals healthy";
   return (
-    <span style={{
-      background: s.bg, color: s.text,
-      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-      letterSpacing: "0.08em", padding: "3px 10px",
-      borderRadius: 999, whiteSpace: "nowrap",
-    }}>
-      {s.label}
-    </span>
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }} title={tip}>
+      {score != null && (
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800,
+          color: s.bg, lineHeight: 1, minWidth: 20, textAlign: "right",
+        }}>
+          {score}
+        </span>
+      )}
+      <span style={{
+        background: s.bg, color: s.text,
+        fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+        letterSpacing: "0.08em", padding: "3px 10px",
+        borderRadius: 999, whiteSpace: "nowrap",
+      }}>
+        {s.label}
+      </span>
+    </div>
   );
 }
 
 const ROW_HEIGHT = 40;
 const HEALTH_ORDER = { "At Risk": 0, "Watch": 1, "On Track": 2 };
-
-const RISK_COLOR = {
-  green: { bg: "var(--success-muted)", text: "var(--status-success)" },
-  yellow: { bg: "var(--warning-muted)", text: "var(--status-warning)" },
-  red: { bg: "var(--danger-muted)", text: "var(--status-error)" },
-};
 
 const PHASE_DOT = {
   Detailing: "var(--status-info)",
@@ -78,26 +160,6 @@ function healthColor(status) {
     case "At Risk": return "var(--status-error)";
     default: return "var(--text-muted)";
   }
-}
-
-function riskCell(level) {
-  const c = RISK_COLOR[level];
-  return (
-    <div
-      style={{
-        background: c.bg,
-        color: c.text,
-        fontFamily: "var(--font-mono)",
-        fontSize: 8,
-        fontWeight: 700,
-        borderRadius: 2,
-        padding: "3px 6px",
-        textAlign: "center",
-      }}
-    >
-      {level === "green" ? "ON TRACK" : level === "yellow" ? "WATCH" : "AT RISK"}
-    </div>
-  );
 }
 
 const PhoenixTooltip = ({ active, payload, label }) => {
@@ -308,20 +370,24 @@ export default function PortfolioView({
       .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
 
-  // Enrich metrics with auto-computed health
+  // Enrich metrics with weighted health scoring + reason strings
   const enrichedMetrics = useMemo(() =>
-    projectMetrics.map((p) => ({
-      ...p,
-      autoHealth: computeAutoHealth(p),
-      effectiveHealth: (() => {
-        const auto = computeAutoHealth(p);
-        const manual = p.health_status || "On Track";
-        const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
-        const autoSev = SEVERITY[auto] ?? 2;
-        const manualSev = SEVERITY[manual] ?? 2;
-        return autoSev <= manualSev ? auto : manual;
-      })(),
-    })),
+    projectMetrics.map((p) => {
+      const weighted = computeWeightedHealth(p);
+      const manual = p.health_status || "On Track";
+      const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+      const autoSev = SEVERITY[weighted.label] ?? 2;
+      const manualSev = SEVERITY[manual] ?? 2;
+      const effectiveHealth = autoSev <= manualSev ? weighted.label : manual;
+      return {
+        ...p,
+        healthScore: weighted.score,
+        healthFactors: weighted.factors,
+        healthReasons: weighted.reasons,
+        autoHealth: weighted.label,
+        effectiveHealth,
+      };
+    }),
     [projectMetrics]
   );
 
@@ -419,70 +485,128 @@ export default function PortfolioView({
     [projectMetrics]
   );
 
-  const urgentItems = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const overdueRFIs = allRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"]));
-    const overdueAI = allActionItems.filter((a) => a.status !== "Complete" && a.due_date && new Date(a.due_date) < today);
-    const overdueDeliveries = allDeliveries.filter((d) => d.status !== "Delivered" && d.scheduled_date && new Date(d.scheduled_date) < today);
-    const pendingCOs = allCOs.filter((c) => c.status === "Submitted" || c.status === "Under Review");
-    return [
-      ...overdueRFIs.map((r) => ({
-        type: "RFI",
-        id: r.rfi_number || "—",
-        title: r.title,
-        project: r.project_name,
-        days: Math.max(0, daysOverdue(r.due_date)),
-        severity: r.priority === "Critical" ? "critical" : "high",
+  // ── PCC: Priority Command Center data ──────────────────────────────────────
+  const pccData = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // TODAY'S PRIORITIES — ranked by severity, deterministic
+    const priorities = [];
+
+    // Overdue RFIs — blocking scope
+    const overdueRFIs = allRFIs
+      .filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"]))
+      .sort((a, b) => new Date(a.due_date || 0) - new Date(b.due_date || 0));
+    overdueRFIs.forEach((r) => {
+      const days = Math.max(0, daysOverdue(r.due_date));
+      priorities.push({
+        rank: r.priority === "Critical" ? 0 : days >= 14 ? 1 : 2,
+        type: "RFI", id: r.rfi_number || "—",
+        title: r.title, project: r.project_name || projectMap[r.project_id] || "",
+        owner: r.assigned_to || r.ball_in_court || "Unassigned",
+        days, severity: r.priority === "Critical" ? "critical" : days >= 7 ? "high" : "medium",
+        action: days >= 14 ? "Escalate immediately" : days >= 7 ? "Follow up today" : "Response needed",
         nav: "RFIs",
-      })),
-      ...overdueAI.map((a) => ({
-        type: "AI",
-        id: "—",
-        title: a.title || "Action Item",
-        project: a.project_name,
-        days: Math.max(0, Math.floor((today - new Date(a.due_date)) / 86400000)),
-        severity: "high",
-        nav: "ActionItems",
-      })),
-      ...overdueDeliveries.map((d) => ({
-        type: "DEL",
-        id: d.delivery_id || "—",
+      });
+    });
+
+    // Late deliveries — blocking erection
+    const lateDeliveries = allDeliveries
+      .filter((d) => d.status !== "Delivered" && d.scheduled_date && new Date(d.scheduled_date) < now)
+      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+    lateDeliveries.forEach((d) => {
+      const days = Math.max(0, Math.floor((now - new Date(d.scheduled_date)) / 86400000));
+      priorities.push({
+        rank: days >= 7 ? 1 : 3,
+        type: "DEL", id: d.delivery_id || "—",
         title: d.delivery_title || d.vendor || "Delivery",
         project: projectMap[d.project_id] || "",
-        days: Math.max(0, Math.floor((today - new Date(d.scheduled_date)) / 86400000)),
-        severity: "warning",
+        owner: d.vendor || "Vendor",
+        days, severity: days >= 7 ? "high" : "medium",
+        action: days >= 7 ? "Expedite — blocking production" : "Track status with vendor",
         nav: "Deliveries",
-      })),
-      ...pendingCOs.map((c) => ({
-        type: "CO",
-        id: c.co_number || "—",
-        title: c.title,
-        project: c.project_name,
-        days: 0,
-        severity: "warning",
-        nav: "ChangeOrders",
-      })),
-    ].sort((a, b) => {
-      const ord = { critical: 0, high: 1, warning: 2 };
-      return (ord[a.severity] ?? 3) - (ord[b.severity] ?? 3);
+      });
     });
-  }, [allRFIs, allActionItems, allDeliveries, allCOs, projectMap]);
+
+    // Overdue action items
+    const overdueAI = allActionItems
+      .filter((a) => a.status !== "Complete" && a.due_date && new Date(a.due_date) < now)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    overdueAI.forEach((a) => {
+      const days = Math.max(0, Math.floor((now - new Date(a.due_date)) / 86400000));
+      priorities.push({
+        rank: 4, type: "ACTION", id: "—",
+        title: a.title || "Action Item", project: a.project_name || projectMap[a.project_id] || "",
+        owner: a.assigned_to || "Unassigned",
+        days, severity: days >= 7 ? "medium" : "low",
+        action: "Close out or reassign",
+        nav: "ActionItems",
+      });
+    });
+
+    priorities.sort((a, b) => a.rank - b.rank || b.days - a.days);
+
+    // WAITING ON — items pending external response
+    const waitingOn = [];
+    // RFIs submitted, waiting for response
+    allRFIs.filter((r) => r.status === "Submitted" || r.status === "Open").forEach((r) => {
+      waitingOn.push({
+        type: "RFI", id: r.rfi_number || "—",
+        title: r.title, project: r.project_name || projectMap[r.project_id] || "",
+        waitingFor: r.assigned_to || r.ball_in_court || "Architect/Engineer",
+        submitted: r.submitted_date,
+        days: r.submitted_date ? Math.max(0, Math.floor((now - new Date(r.submitted_date)) / 86400000)) : 0,
+        nav: "RFIs",
+      });
+    });
+    // COs under review
+    allCOs.filter((c) => c.status === "Submitted" || c.status === "Under Review").forEach((c) => {
+      waitingOn.push({
+        type: "CO", id: c.co_number || "—",
+        title: c.title, project: c.project_name || projectMap[c.project_id] || "",
+        waitingFor: "Owner/GC",
+        submitted: c.submitted_date,
+        days: c.submitted_date ? Math.max(0, Math.floor((now - new Date(c.submitted_date)) / 86400000)) : 0,
+        amount: Number(c.co_amount) || 0,
+        nav: "ChangeOrders",
+      });
+    });
+    // Deliveries in transit
+    allDeliveries.filter((d) => d.status === "In Transit").forEach((d) => {
+      waitingOn.push({
+        type: "DEL", id: d.delivery_id || "—",
+        title: d.delivery_title || d.vendor || "Delivery",
+        project: projectMap[d.project_id] || "",
+        waitingFor: d.vendor || "Vendor",
+        submitted: d.scheduled_date,
+        days: 0,
+        nav: "Deliveries",
+      });
+    });
+    waitingOn.sort((a, b) => b.days - a.days);
+
+    // RISK WATCHLIST — projects trending toward trouble
+    const riskWatch = enrichedMetrics
+      .filter((p) => p.effectiveHealth !== "On Track" || p.healthScore < 80)
+      .sort((a, b) => (a.healthScore || 0) - (b.healthScore || 0))
+      .slice(0, 5)
+      .map((p) => ({
+        project: p.name || p.project_number,
+        projectId: p.id,
+        score: p.healthScore,
+        status: p.effectiveHealth,
+        reasons: p.healthReasons || [],
+        topReason: p.healthReasons?.[0] || "Scoring below threshold",
+      }));
+
+    return { priorities, waitingOn, riskWatch };
+  }, [allRFIs, allActionItems, allDeliveries, allCOs, projectMap, enrichedMetrics]);
 
   const totalTons = useMemo(() => allWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0), [allWPs]);
   const fabricatedTonnage = useMemo(
     () => allWPs.filter((w) => w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
     [allWPs]
   );
-  const pipelineBuckets = useMemo(() => {
-    const byStatus = { "Not Started": 0, "In Progress": 0, Complete: 0, "On Hold": 0 };
-    allWPs.forEach((w) => {
-      byStatus[w.status] = (byStatus[w.status] || 0) + 1;
-    });
-    return byStatus;
-  }, [allWPs]);
-  const stageColors = ["var(--text-muted)", "var(--status-warning)", "var(--status-success)", "var(--status-error)"];
-
   const deliveriesStats = useMemo(() => {
     const today = new Date();
     const scheduled = allDeliveries.filter((d) => d.status === "Scheduled").length;
@@ -516,58 +640,58 @@ export default function PortfolioView({
     return (totalDays / closed.length).toFixed(1);
   }, [allRFIs]);
 
-  const stageTons = useMemo(() => {
-    const stages = ["drawings_approved", "material_on_hand", "released", "in_fab", "fabricated", "finish", "rts"];
-    const values = {
-      drawings_approved: 0,
-      material_on_hand: 0,
-      released: 0,
-      in_fab: 0,
-      fabricated: 0,
-      finish: 0,
-      rts: 0,
-    };
-
-    // Map WP phase/status to the pipeline stage it has reached
-    const phaseToStage = {
-      "Detailing": "drawings_approved",
-      "Approval": "drawings_approved",
-      "Fabrication": "in_fab",
-      "Delivery": "released",
-      "Shipping": "released",
-      "Erection": "rts",
-    };
-
-    allWPs.forEach((w) => {
-      const ton = Number(w.tonnage) || 0;
-      const pct = Number(w.percent_complete) || 0;
-
-      if (w.status === "Complete") {
-        // Complete WPs count toward all stages
-        stages.forEach((s) => (values[s] += ton));
-        return;
-      }
-
-      // Determine the furthest stage this WP has reached
-      let reachedStage = null;
-      if (pct >= 75) reachedStage = "finish";
-      else if (pct >= 25 || w.status === "In Progress") reachedStage = "in_fab";
-      else if (w.released_date) reachedStage = "released";
-      else if (w.vif_confirmed && w.load_list_complete) reachedStage = "material_on_hand";
-      else if (w.phase && phaseToStage[w.phase]) reachedStage = phaseToStage[w.phase];
-      else reachedStage = "drawings_approved";
-
-      // Add tonnage to the reached stage and all preceding stages
-      const reachedIdx = stages.indexOf(reachedStage);
-      if (reachedIdx >= 0) {
-        for (let i = 0; i <= reachedIdx; i++) {
-          values[stages[i]] += ton;
-        }
-      }
+  // ── Data completeness scoring ──────────────────────────────────────────────
+  const dataIssues = useMemo(() => {
+    const issues = [];
+    enrichedMetrics.forEach((p) => {
+      if (!p.hasBudgetData) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "No budget / cost codes set up", severity: "high", fix: "Set up cost codes" });
+      if (!p.original_contract_value) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "Missing contract value", severity: "high", fix: "Enter contract value" });
+      if (!p.phase) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "No phase assigned", severity: "medium", fix: "Set project phase" });
     });
+    // RFIs without due dates
+    const rfisNoDue = allRFIs.filter((r) => !r.due_date && !["Answered", "Closed"].includes(r.status));
+    if (rfisNoDue.length > 0) issues.push({ project: `${rfisNoDue.length} RFIs`, projectId: null, issue: "RFIs missing due dates", severity: "high", fix: "Add due dates" });
+    // COs without values
+    const cosNoVal = allCOs.filter((c) => !c.co_amount && !["Rejected", "Void"].includes(c.status));
+    if (cosNoVal.length > 0) issues.push({ project: `${cosNoVal.length} COs`, projectId: null, issue: "COs missing dollar values", severity: "medium", fix: "Add CO amounts" });
+    return issues;
+  }, [enrichedMetrics, allRFIs, allCOs]);
 
-    return values;
-  }, [allWPs]);
+  // ── Financial control layer — CO pipeline + margin at risk ────────────────
+  const financials = useMemo(() => {
+    const approvedCOs = allCOs.filter((c) => c.status === "Approved");
+    const pendingCOs = allCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status));
+    const rejectedCOs = allCOs.filter((c) => c.status === "Rejected");
+    const approvedValue = approvedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const pendingValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const rejectedValue = rejectedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+    const totalBudget = portfolioKPIs.totalBudget;
+    const totalSpend = portfolioKPIs.totalSpend;
+    const remaining = totalBudget - totalSpend;
+    const marginAtRisk = pendingValue + (totalSpend > totalBudget ? totalSpend - totalBudget : 0);
+    return { approvedCOs: approvedCOs.length, pendingCOs: pendingCOs.length, rejectedCOs: rejectedCOs.length, approvedValue, pendingValue, rejectedValue, remaining, marginAtRisk, totalBudget, totalSpend };
+  }, [allCOs, portfolioKPIs]);
+
+  // ── Production readiness per project ──────────────────────────────────────
+  const productionData = useMemo(() => {
+    const todayMs = new Date().setHours(0, 0, 0, 0);
+    return enrichedMetrics.map((p) => {
+      const pWPs = allWPs.filter((w) => w.project_id === p.id);
+      const inFab = pWPs.filter((w) => w.status === "In Progress");
+      const complete = pWPs.filter((w) => w.status === "Complete");
+      const onHold = pWPs.filter((w) => w.status === "On Hold");
+      const totalTon = pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+      const fabTon = complete.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+      const fabPct = totalTon > 0 ? Math.round((fabTon / totalTon) * 100) : 0;
+      // Constraints: WPs on hold, missing drawings, late deliveries
+      const constraints = [];
+      if (onHold.length > 0) constraints.push(`${onHold.length} WP${onHold.length > 1 ? "s" : ""} on hold`);
+      if (p.overdueRFIs > 0) constraints.push(`${p.overdueRFIs} overdue RFI${p.overdueRFIs > 1 ? "s" : ""} blocking scope`);
+      if (p.lateDeliveries > 0) constraints.push(`${p.lateDeliveries} late delivery — material gap`);
+      const erectionReady = p.lateDeliveries === 0 && onHold.length === 0 && p.overdueRFIs === 0;
+      return { ...p, inFabCount: inFab.length, completeCount: complete.length, onHoldCount: onHold.length, totalTon, fabTon, fabPct, constraints, erectionReady, wpTotal: pWPs.length };
+    });
+  }, [enrichedMetrics, allWPs]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)" }}>
@@ -719,85 +843,38 @@ export default function PortfolioView({
         })}
       </div>
 
-      {urgentItems.length > 0 && (
-        <div
-          style={{
-            background: "var(--danger-muted)",
-            border: "1px solid var(--danger-border)",
-            padding: "10px 24px",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            overflowX: "auto",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              color: "var(--status-error)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              flexShrink: 0,
-            }}
-          >
-            ⚑ Urgent
+      {/* PCC Alert Strip — top priority only */}
+      {pccData.priorities.length > 0 && (
+        <div style={{
+          background: pccData.priorities[0]?.severity === "critical" ? "rgba(248,81,73,0.12)" : "rgba(227,179,65,0.08)",
+          borderBottom: `2px solid ${pccData.priorities[0]?.severity === "critical" ? "var(--status-error)" : "var(--status-warning)"}`,
+          padding: "8px 24px", display: "flex", alignItems: "center", gap: 16, flexShrink: 0,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.12em", flexShrink: 0 }}>
+            #1 PRIORITY
           </span>
-          {urgentItems.slice(0, 8).map((item, i) => {
-            const isCrit = item.severity === "critical";
-            return (
-              <div
-                key={i}
-                onClick={() => navigate(createPageUrl(item.nav))}
-                style={{
-                  background: "rgba(255,61,61,0.12)",
-                  border: "1px solid rgba(255,61,61,0.25)",
-                  borderRadius: 3,
-                  padding: "4px 10px",
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  color: "var(--text-primary)",
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    color: "var(--status-error)",
-                  }}
-                >
-                  {item.type}
-                </span>
-                <span style={{ fontSize: 10, fontFamily: "var(--font-body)", maxWidth: 160, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
-                  {item.title}
-                </span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{item.project}</span>
-                {item.days > 0 && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "var(--status-error)",
-                      background: isCrit ? "rgba(255,61,61,0.18)" : "var(--danger-muted)",
-                      padding: "1px 6px",
-                      borderRadius: 2,
-                    }}
-                  >
-                    {item.days}D
-                  </span>
-                )}
-              </div>
-            );
-          })}
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+            {pccData.priorities[0].title}
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+            {pccData.priorities[0].project}
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>
+            {pccData.priorities[0].action}
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto", flexShrink: 0 }}>
+            Owner: <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{pccData.priorities[0].owner}</span>
+          </span>
+          {pccData.priorities[0].days > 0 && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>
+              {pccData.priorities[0].days}D OVERDUE
+            </span>
+          )}
         </div>
       )}
 
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      {/* Main content area */}
       <div
         style={{
           padding: "20px 24px",
@@ -807,6 +884,7 @@ export default function PortfolioView({
           flex: 1,
           overflowY: "auto",
           background: "var(--bg-page)",
+          alignContent: "start",
         }}
       >
         {/* Project Health Table */}
@@ -972,40 +1050,77 @@ export default function PortfolioView({
                         {p.phase || "—"}
                       </td>
                       <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                        <HealthPill status={hStatus} />
+                        <HealthPill status={hStatus} score={p.healthScore} reasons={p.healthReasons} />
+                        {p.healthReasons?.length > 0 && hStatus !== "On Track" && (
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2, maxWidth: 130, lineHeight: 1.3 }}>
+                            {p.healthReasons[0]}
+                          </div>
+                        )}
                       </td>
                       {/* Budget */}
                       <td
-                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasBudgetData ? "normal" : "italic" }}
+                        title={p.hasBudgetData ? `Budget: ${formatCurrency(p.budget)} · Source: Cost Codes` : "No cost codes set up — add cost codes to track budget"}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--status-warning)" }}
                       >
-                        {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : "Pending"}
+                        {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : (
+                          <span style={{ fontSize: 8, fontWeight: 600, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 3, padding: "1px 5px" }}>
+                            SET UP
+                          </span>
+                        )}
                       </td>
                       {/* Actual */}
                       <td
-                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", fontStyle: p.hasActualData ? "normal" : "italic" }}
+                        title={p.hasActualData ? `Actual spend: ${formatCurrency(p.actual)} · Source: Paid Expenses` : "No expense data — enter expenses to track actuals"}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)" }}
                       >
-                        {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : "Pending"}
+                        {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : (
+                          <span style={{ fontSize: 8, color: "var(--text-muted)" }}>$0</span>
+                        )}
                       </td>
                       {/* Variance = Budget - Actual (positive = under budget) */}
                       <td
                         title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)" }}
+                        style={{
+                          padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                          color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)",
+                          background: isOverBudget ? "rgba(248,81,73,0.06)" : "transparent",
+                        }}
                       >
-                        {variance === null ? "—" : (isOverBudget ? "−" : "+") + formatCurrency(Math.abs(variance)).replace(/\.\d+/, "")}
+                        {variance === null ? "—" : (
+                          <span style={{
+                            background: isOverBudget ? "var(--danger-muted)" : "var(--success-muted)",
+                            border: `1px solid ${isOverBudget ? "var(--danger-border)" : "var(--success-border)"}`,
+                            borderRadius: 3, padding: "1px 6px",
+                          }}>
+                            {(isOverBudget ? "−" : "+") + formatCurrency(Math.abs(variance)).replace(/\.\d+/, "")}
+                          </span>
+                        )}
                       </td>
                       <td
                         title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
-                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-primary)", fontSize: 16, fontWeight: 800 }}
+                        style={{
+                          padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
+                          color: p.overdueRFIs > 0 ? "var(--status-error)" : p.openRFIs > 3 ? "var(--status-warning)" : "var(--text-primary)",
+                          fontSize: 16, fontWeight: 800,
+                          background: p.overdueRFIs > 2 ? "rgba(248,81,73,0.08)" : p.openRFIs > 5 ? "rgba(227,179,65,0.06)" : "transparent",
+                        }}
                       >
                         {p.openRFIs}
                       </td>
                       <td
                         title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
-                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)", fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400 }}
+                        style={{
+                          padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
+                          color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)",
+                          fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400,
+                          background: p.overdueRFIs > 0 ? "rgba(248,81,73,0.06)" : "transparent",
+                        }}
                       >
-                        {p.overdueRFIs}
+                        {p.overdueRFIs > 0 ? (
+                          <span style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "1px 6px" }}>
+                            {p.overdueRFIs}
+                          </span>
+                        ) : p.overdueRFIs}
                       </td>
                       <td style={{ padding: "6px 8px", minWidth: 130 }}>
                         <ProgressBar value={p.avgProgress || 0} />
@@ -1016,29 +1131,38 @@ export default function PortfolioView({
                       >
                         {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
                       </td>
-                      <td title={`${p.tonnage}T total tonnage, ${p.avgProgress}% WP progress`} style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : "—"}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/ProjectDashboard?project=${p.id}`); }}
-                          style={{
-                            background: "var(--bg-surface)",
-                            border: "1px solid var(--accent-border)",
-                            borderRadius: "var(--radius-btn)",
-                            color: "var(--accent)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 8,
-                            fontWeight: 700,
-                            padding: "5px 10px",
-                            cursor: "pointer",
-                            letterSpacing: "0.06em",
-                            whiteSpace: "nowrap",
-                            transition: "background 0.15s",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)", e.currentTarget.style.color = "var(--accent-text)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)", e.currentTarget.style.color = "var(--accent)")}
-                        >
-                          OPEN →
-                        </button>
+                      <td title={p.tonnage > 0 ? `${p.tonnage}T total · ${p.avgProgress}% WP progress · Source: Work Packages` : "No tonnage entered — add tonnage to work packages"} style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.tonnage > 0 ? "var(--text-secondary)" : "var(--text-muted)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : <span style={{ fontSize: 8 }}>0T</span>}</td>
+                      <td style={{ padding: "6px 6px", textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
+                          {[
+                            { label: "DASH", nav: `/ProjectDashboard?project=${p.id}`, primary: true },
+                            ...(p.openRFIs > 0 ? [{ label: "RFIs", nav: createPageUrl("RFIs"), accent: "var(--status-warning)" }] : []),
+                            ...(p.lateDeliveries > 0 ? [{ label: "DEL", nav: createPageUrl("Deliveries"), accent: "var(--status-error)" }] : []),
+                          ].slice(0, 3).map((btn) => (
+                            <button
+                              key={btn.label}
+                              onClick={(e) => { e.stopPropagation(); navigate(btn.nav); }}
+                              style={{
+                                background: btn.primary ? "var(--accent-muted)" : "var(--bg-surface)",
+                                border: `1px solid ${btn.primary ? "var(--accent-border)" : btn.accent ? `${btn.accent}44` : "var(--border-default)"}`,
+                                borderRadius: 3,
+                                color: btn.primary ? "var(--accent)" : btn.accent || "var(--text-secondary)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 7,
+                                fontWeight: 700,
+                                padding: "3px 6px",
+                                cursor: "pointer",
+                                letterSpacing: "0.04em",
+                                whiteSpace: "nowrap",
+                                transition: "background 0.12s, color 0.12s",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = btn.primary ? "var(--accent)" : (btn.accent || "var(--accent)"); e.currentTarget.style.color = "#fff"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = btn.primary ? "var(--accent-muted)" : "var(--bg-surface)"; e.currentTarget.style.color = btn.primary ? "var(--accent)" : (btn.accent || "var(--text-secondary)"); }}
+                            >
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
                       </td>
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
@@ -1112,14 +1236,20 @@ export default function PortfolioView({
           </div>
         </Card>
         </ErrorBoundary>
-        {/* Budget + Risk */}
-        <ErrorBoundary label="Budget vs Actual">
+        {/* ═══ FINANCIAL CONTROL LAYER ═══ */}
+        <ErrorBoundary label="Financial Control">
         <Card style={{ gridColumn: "span 8" }}>
-          <HeaderBar title="Budget vs Actual — All Projects" />
-          <div style={{ padding: "12px 16px", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(320, budgetChartData.length * 36 + 40) : 320 }}>
-            {budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? (
-              <>
-                <ResponsiveContainer width="100%" height="100%">
+          <HeaderBar title="Financial Control" right={
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }} title="Budget from Cost Codes · Actual from Paid Expenses · COs from Change Orders">
+              SOURCE: COST CODES + EXPENSES + COs
+            </span>
+          } />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+            {/* Left: Budget vs Actual chart */}
+            <div style={{ padding: "12px 16px", borderRight: "1px solid var(--divider)", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(280, budgetChartData.length * 36 + 40) : 280 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Budget vs Actual</div>
+              {budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? (
+                <ResponsiveContainer width="100%" height="90%">
                   <BarChart data={budgetChartData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <YAxis dataKey="name" type="category" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} width={80} />
                     <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
@@ -1132,347 +1262,435 @@ export default function PortfolioView({
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
-                  Amounts shown in USD · Red bars indicate over-budget
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "80%", gap: 10 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--status-warning)", fontWeight: 600 }}>NO FINANCIAL DATA</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", maxWidth: 240, lineHeight: 1.5 }}>
+                    Set up cost codes and enter expenses to enable financial tracking and cost control.
+                  </div>
+                  <button onClick={() => navigate("/Projects")} style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "6px 14px", cursor: "pointer", letterSpacing: "0.06em" }}>
+                    SET UP COST CODES
+                  </button>
                 </div>
-              </>
+              )}
+            </div>
+            {/* Right: CO Pipeline + Financial KPIs */}
+            <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase" }}>Change Order Pipeline</div>
+              {/* CO Status buckets */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {[
+                  { label: "Approved", count: financials.approvedCOs, value: financials.approvedValue, color: "var(--status-success)" },
+                  { label: "Pending", count: financials.pendingCOs, value: financials.pendingValue, color: "var(--status-warning)" },
+                  { label: "Rejected", count: financials.rejectedCOs, value: financials.rejectedValue, color: "var(--status-error)" },
+                ].map((b) => (
+                  <div key={b.label} style={{ background: `${b.color}10`, border: `1px solid ${b.color}30`, borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.10em", color: b.color, textTransform: "uppercase" }}>{b.label}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: b.color }}>{b.count}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatCurrency(b.value).replace(/\.\d+/, "")}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Financial KPIs */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {[
+                  { label: "Total Budget", value: formatCurrency(financials.totalBudget).replace(/\.\d+/, ""), color: "var(--text-primary)", tip: "Sum of all cost code budgets" },
+                  { label: "Total Spend", value: formatCurrency(financials.totalSpend).replace(/\.\d+/, ""), color: financials.totalSpend > financials.totalBudget ? "var(--status-error)" : "var(--text-primary)", tip: "Sum of paid expenses" },
+                  { label: "Remaining", value: formatCurrency(Math.max(0, financials.remaining)).replace(/\.\d+/, ""), color: financials.remaining < 0 ? "var(--status-error)" : "var(--status-success)", tip: "Budget minus spend" },
+                  { label: "CO Exposure (Pending)", value: formatCurrency(financials.pendingValue).replace(/\.\d+/, ""), color: financials.pendingValue > 0 ? "var(--status-warning)" : "var(--text-muted)", tip: "Total value of pending change orders — at risk if rejected" },
+                  { label: "Margin at Risk", value: formatCurrency(financials.marginAtRisk).replace(/\.\d+/, ""), color: financials.marginAtRisk > 0 ? "var(--status-error)" : "var(--status-success)", tip: "Pending CO value + any over-budget amount" },
+                ].map((m) => (
+                  <div key={m.label} title={m.tip} style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", borderBottom: "1px solid var(--divider)" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>{m.label}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: m.color }}>{m.value}</span>
+                  </div>
+                ))}
+              </div>
+              {financials.marginAtRisk > 0 && (
+                <div style={{ borderLeft: "3px solid var(--status-error)", background: "var(--danger-muted)", borderRadius: "0 4px 4px 0", padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 600 }}>
+                  {formatCurrency(financials.pendingValue).replace(/\.\d+/, "")} at risk unless {financials.pendingCOs} pending CO{financials.pendingCOs !== 1 ? "s" : ""} approved
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+        </ErrorBoundary>
+
+        {/* Data Issues Panel */}
+        <ErrorBoundary label="Data Issues">
+        <Card style={{ gridColumn: "span 4" }}>
+          <HeaderBar title="Data Issues" count={dataIssues.length} right={
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: dataIssues.length > 0 ? "var(--status-warning)" : "var(--status-success)", letterSpacing: "0.08em" }}>
+              {dataIssues.length > 0 ? "ACTION NEEDED" : "ALL COMPLETE"}
+            </span>
+          } />
+          <div style={{ padding: "10px 12px", maxHeight: 300, overflowY: "auto" }}>
+            {dataIssues.length === 0 ? (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", fontWeight: 700, padding: 16, textAlign: "center" }}>
+                ALL DATA COMPLETE
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400, marginTop: 4 }}>
+                  Every project has budget, phase, and contract value configured.
+                </div>
+              </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-                <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden style={{ opacity: 0.15 }}>
-                  <rect x="4" y="36" width="8" height="16" rx="2" fill="var(--text-muted)" />
-                  <rect x="16" y="24" width="8" height="28" rx="2" fill="var(--text-muted)" />
-                  <rect x="28" y="16" width="8" height="36" rx="2" fill="var(--text-muted)" />
-                  <rect x="40" y="8" width="8" height="44" rx="2" fill="var(--text-muted)" />
-                </svg>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
-                  WAITING FOR FINANCIAL DATA
-                </span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", maxWidth: 280, textAlign: "center", lineHeight: 1.5 }}>
-                  Budget and actual cost data will appear here once cost codes and expenses are entered for your projects.
-                </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {dataIssues.map((issue, i) => (
+                  <div key={i} style={{ borderLeft: `3px solid ${issue.severity === "high" ? "var(--status-warning)" : "var(--text-muted)"}`, background: issue.severity === "high" ? "var(--warning-muted)" : "transparent", borderRadius: "0 3px 3px 0", padding: "5px 8px", cursor: issue.projectId ? "pointer" : "default" }}
+                    onClick={() => issue.projectId && navigate(`/ProjectDashboard?project=${issue.projectId}`)}>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", fontWeight: 500 }}>{issue.project}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{issue.issue}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--accent)", background: "var(--accent-muted)", borderRadius: 2, padding: "1px 5px", fontWeight: 600 }}>{issue.fix}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </Card>
         </ErrorBoundary>
 
-        <ErrorBoundary label="Risk Matrix">
-        <Card style={{ gridColumn: "span 4" }}>
-          <HeaderBar title="Risk Matrix" />
-          <div style={{ padding: "12px 14px", overflowX: "auto" }}>
+        {/* ═══ PRODUCTION & ERECTION READINESS ═══ */}
+        <ErrorBoundary label="Production & Readiness">
+        <Card style={{ gridColumn: "span 12" }}>
+          <HeaderBar title="Production & Erection Readiness" right={
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }} title="Fab status from Work Packages · Constraints from RFIs + Deliveries + WP status">
+              SOURCE: WORK PACKAGES + RFIs + DELIVERIES
+            </span>
+          } />
+          <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr>
-                  <th
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 7,
-                      color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.12em",
-                      padding: "4px 8px",
-                      textAlign: "left",
-                    }}
-                  >
-                    Project
-                  </th>
-                  {["RFIs", "Cost", "Procurement", "Production"].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 7,
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.10em",
-                        padding: "4px 8px",
-                        textAlign: "center",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                <tr style={{ background: "var(--bg-sidebar)" }}>
+                  {["Project", "WPs", "In Fab", "Complete", "On Hold", "Fab %", "Tonnage", "Erection Ready", "Constraints"].map((h) => (
+                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-sidebar)", zIndex: 1 }}>
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {enrichedMetrics.map((p) => {
-                  const rfiLevel = p.overdueRFIs === 0 ? "green" : p.overdueRFIs <= 2 ? "yellow" : "red";
-                  const budgetPct = p.budget > 0 ? ((Number(p.actual) || 0) / p.budget) * 100 : 0;
-                  const budgetLevel = budgetPct <= 100 ? "green" : budgetPct <= 110 ? "yellow" : "red";
-                  const delLevel = p.lateDeliveries === 0 ? "green" : p.lateDeliveries === 1 ? "yellow" : "red";
-                  const stalledLevel = p.stalledWPs === 0 ? "green" : p.stalledWPs === 1 ? "yellow" : "red";
-                  return (
-                    <tr key={p.id} style={{ borderBottom: "1px solid var(--border-default)" }}>
-                      <td
-                        style={{
-                          padding: "6px 8px",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 9,
-                          color: "var(--text-primary)",
-                          whiteSpace: "nowrap",
-                          maxWidth: 140,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        <span style={{ color: "var(--accent)", marginRight: 4 }}>{p.project_number}</span>
-                      </td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>{riskCell(rfiLevel)}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>{riskCell(budgetLevel)}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>{riskCell(delLevel)}</td>
-                      <td style={{ padding: "6px 8px", textAlign: "center" }}>{riskCell(stalledLevel)}</td>
-                    </tr>
-                  );
-                })}
-                {projectMetrics.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>NO DATA</td>
+                {productionData.map((p) => (
+                  <tr key={p.id} style={{ borderBottom: "1px solid var(--divider)", cursor: "pointer" }}
+                    onClick={() => navigate(`/ProjectDashboard?project=${p.id}`)}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                    <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>
+                      {p.name || p.project_number}
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{p.project_number}</div>
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{p.wpTotal}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--status-warning)" }}>{p.inFabCount}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--status-success)" }}>{p.completeCount}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: p.onHoldCount > 0 ? "var(--status-error)" : "var(--text-muted)" }}>{p.onHoldCount}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
+                        <div style={{ width: 50, height: 6, background: "var(--border-default)", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${p.fabPct}%`, background: p.fabPct >= 80 ? "var(--status-success)" : p.fabPct >= 50 ? "var(--accent)" : "var(--status-warning)", borderRadius: 3, transition: "width 0.3s" }} />
+                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: p.fabPct >= 80 ? "var(--status-success)" : "var(--text-secondary)" }}>{p.fabPct}%</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }} title={`${p.fabTon}T fabricated of ${p.totalTon}T total`}>
+                      {p.totalTon > 0 ? <span>{p.fabTon}T / <span style={{ color: "var(--text-muted)" }}>{p.totalTon}T</span></span> : <span style={{ fontSize: 8, color: "var(--text-muted)" }}>0T</span>}
+                    </td>
+                    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                      {p.erectionReady ? (
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--status-success)", background: "var(--success-muted)", border: "1px solid var(--success-border)", borderRadius: 3, padding: "2px 8px" }}>READY</span>
+                      ) : (
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 8px" }}>BLOCKED</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "6px 8px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", maxWidth: 200 }}>
+                      {p.constraints.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {p.constraints.map((c, ci) => (
+                            <span key={ci} style={{ color: "var(--status-error)", fontSize: 8 }}>{c}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: "var(--status-success)", fontSize: 8 }}>No constraints</span>
+                      )}
+                    </td>
                   </tr>
+                ))}
+                {productionData.length === 0 && (
+                  <tr><td colSpan={9} style={{ textAlign: "center", padding: 24, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>No work packages created — add work packages to track production</td></tr>
                 )}
               </tbody>
             </table>
-            <div style={{ marginTop: 10, display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-              <span>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--status-success)", display: "inline-block", marginRight: 6 }} />
-                On Track
-              </span>
-              <span>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--status-warning)", display: "inline-block", marginRight: 6 }} />
-                Watch
-              </span>
-              <span>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)", display: "inline-block", marginRight: 6 }} />
-                At Risk
-              </span>
-            </div>
           </div>
         </Card>
         </ErrorBoundary>
 
-        {/* Production Snapshot */}
-        <ErrorBoundary label="Production Snapshot">
-        <Card style={{ gridColumn: "span 12" }}>
-          <HeaderBar title="Production Snapshot" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, padding: "16px 18px" }}>
-            {/* Fabrication Pipeline */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Fabrication Pipeline
-              </div>
-              <div style={{ display: "flex", height: 24, border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-                {["Not Started", "In Progress", "Complete", "On Hold"].map((s, idx) => {
-                  const count = pipelineBuckets[s] || 0;
-                  const total = Object.values(pipelineBuckets).reduce((a, b) => a + b, 0) || 1;
-                  const width = `${(count / total) * 100}%`;
-                  return <div key={s} style={{ width, background: stageColors[idx], opacity: 0.35 }} title={`${s}: ${count}`} />;
-                })}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>
-                {["Not Started", "In Progress", "Complete", "On Hold"].map((s, idx) => (
-                  <span key={s} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 10, height: 6, background: stageColors[idx], display: "inline-block", opacity: 0.6 }} />
-                    {s}: {pipelineBuckets[s] || 0}
-                  </span>
-                ))}
-              </div>
-            </div>
+    {/* ═══ PRIORITY COMMAND CENTER ═══ */}
+    <ErrorBoundary label="Priority Command Center">
+    <Card style={{ gridColumn: "span 12" }}>
+      <HeaderBar title="Priority Command Center" count={pccData.priorities.length + pccData.waitingOn.length}
+        right={<span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>DETERMINISTIC · RANKED BY SIGNAL SEVERITY</span>}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 200 }}>
 
-            {/* Tonnage Tracker */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Tonnage Tracker
-              </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 32, color: "var(--accent)" }}>{fabricatedTonnage.toFixed(1)}T</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>TONS FABRICATED</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>of {totalTons.toFixed(1)}T total</div>
-              <ProgressBar value={totalTons > 0 ? Math.round((fabricatedTonnage / totalTons) * 100) : 0} />
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{totalTons > 0 ? Math.round((fabricatedTonnage / totalTons) * 100) : 0}%</div>
+        {/* Column 1: TODAY'S PRIORITIES */}
+        <div style={{ borderRight: "1px solid var(--divider)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--status-error)", borderRadius: 1 }} />
+            Today's Priorities
+          </div>
+          {pccData.priorities.length === 0 ? (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", fontWeight: 700, padding: 12, textAlign: "center" }}>
+              ALL CLEAR — No overdue items
+              {rfiTurnaround && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400, marginTop: 4 }}>Avg RFI turnaround: {rfiTurnaround}d</div>}
             </div>
-
-            {/* Delivery Watch */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Delivery Watch
-              </div>
-              {[
-                { label: "Scheduled", value: deliveriesStats.scheduled, color: "var(--accent)" },
-                { label: "In Transit", value: deliveriesStats.inTransit, color: "var(--status-info)" },
-                { label: "Late", value: deliveriesStats.late, color: deliveriesStats.late > 0 ? "var(--status-error)" : "var(--text-secondary)" },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 11, color: row.color }}>
-                  <span>{row.label.toUpperCase()}</span>
-                  <span>{row.value}</span>
-                </div>
-              ))}
-      {deliveriesStats.lateList.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {deliveriesStats.lateList.map((d) => (
-            <div
-              key={d.id}
-                      style={{
-                        borderLeft: "3px solid var(--status-error)",
-                        background: "var(--danger-muted)",
-                        borderRadius: "0 2px 2px 0",
-                        padding: "6px 8px",
-                        fontFamily: "var(--font-body)",
-                        fontSize: 11,
-                        color: "var(--text-primary)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 8,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {d.delivery_title || d.vendor || "Delivery"}
-                        </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{projectMap[d.project_id] || "—"}</div>
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", flexShrink: 0 }}>{d.daysLate}D</span>
-                    </div>
-                  ))}
-                </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)", fontWeight: 600 }}>
-                ALL DELIVERIES ON TRACK
-              </div>
-              {deliveriesStats.nextDelivery && (
-                <div style={{
-                  borderLeft: "3px solid var(--accent)",
-                  background: "var(--accent-muted)",
-                  borderRadius: "0 2px 2px 0",
-                  padding: "6px 8px",
-                  fontFamily: "var(--font-body)",
-                  fontSize: 10,
-                }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 2 }}>Next Delivery</div>
-                  <div style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: 11 }}>
-                    {deliveriesStats.nextDelivery.delivery_title || deliveriesStats.nextDelivery.vendor || "—"}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
-                    {projectMap[deliveriesStats.nextDelivery.project_id] || "—"} · {new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            pccData.priorities.slice(0, 8).map((item, i) => {
+              const sevColor = item.severity === "critical" ? "var(--status-error)" : item.severity === "high" ? "var(--status-error)" : "var(--status-warning)";
+              return (
+                <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
+                  borderLeft: `3px solid ${sevColor}`,
+                  background: i === 0 ? `${sevColor}12` : "transparent",
+                  borderRadius: "0 4px 4px 0", padding: "8px 10px", cursor: "pointer",
+                  transition: "background 0.12s",
+                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = i === 0 ? `${sevColor}12` : "transparent"}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, color: sevColor }}>#{i + 1}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: sevColor, letterSpacing: "0.06em" }}>{item.type} {item.id}</span>
+                      </div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.title}
+                      </div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{item.project}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: 3, padding: "1px 6px" }}>
+                          {item.action}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
+                          Owner: <span style={{ color: "var(--text-primary)" }}>{item.owner}</span>
+                        </span>
+                      </div>
+                    </div>
+                    {item.days > 0 && (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 6px", flexShrink: 0 }}>
+                        {item.days}D
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
-              {rfiTurnaround && (
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 4 }}>
-                  Avg RFI turnaround: <span style={{ color: "var(--accent)", fontWeight: 700 }}>{rfiTurnaround} days</span>
-                </div>
-              )}
+              );
+            })
+          )}
+        </div>
+
+        {/* Column 2: WAITING ON */}
+        <div style={{ borderRight: "1px solid var(--divider)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-warning)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--status-warning)", borderRadius: 1 }} />
+            Waiting On ({pccData.waitingOn.length})
+          </div>
+          {pccData.waitingOn.length === 0 ? (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", padding: 12, textAlign: "center" }}>
+              Nothing blocked externally
             </div>
+          ) : (
+            pccData.waitingOn.slice(0, 8).map((item, i) => (
+              <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
+                padding: "6px 8px", borderBottom: "1px solid var(--divider)", cursor: "pointer",
+                transition: "background 0.12s",
+              }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--status-warning)" }}>{item.type}</span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{item.title}</span>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>
+                      Waiting on: <span style={{ color: "var(--status-warning)" }}>{item.waitingFor}</span>
+                      {item.amount ? <span> · {formatCurrency(item.amount).replace(/\.\d+/, "")}</span> : null}
+                    </div>
+                  </div>
+                  {item.days > 0 && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: item.days >= 14 ? "var(--status-error)" : "var(--text-muted)", fontWeight: 600, flexShrink: 0 }}>
+                      {item.days}d
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Column 3: RISK WATCHLIST */}
+        <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--text-muted)", borderRadius: 1 }} />
+            Risk Watchlist
+          </div>
+          {pccData.riskWatch.length === 0 ? (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", padding: 12, textAlign: "center", fontWeight: 700 }}>
+              ALL PROJECTS HEALTHY
+            </div>
+          ) : (
+            pccData.riskWatch.map((p, i) => {
+              const color = p.status === "At Risk" ? "var(--status-error)" : "var(--status-warning)";
+              return (
+                <div key={i} onClick={() => navigate(`/ProjectDashboard?project=${p.projectId}`)} style={{
+                  borderLeft: `3px solid ${color}`,
+                  background: `${color}08`, borderRadius: "0 4px 4px 0",
+                  padding: "6px 8px", cursor: "pointer",
+                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = `${color}08`}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{p.project}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color }}>{p.score}</span>
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color, marginTop: 2 }}>
+                    {p.topReason}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
     </Card>
     </ErrorBoundary>
+  </div>
 
-    {/* Urgent Items card */}
-    <ErrorBoundary label="Urgent Items">
-    <Card style={{ gridColumn: "span 12" }}>
-      <HeaderBar title="Urgent Items — All Projects" count={urgentItems.length} />
-      {urgentItems.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ color: "var(--status-success)", fontWeight: 700 }}>ALL CLEAR</span>
-            <span>No urgent items across portfolio</span>
-            {rfiTurnaround && <span>· Avg RFI turnaround: <span style={{ color: "var(--accent)", fontWeight: 700 }}>{rfiTurnaround}d</span></span>}
-            {deliveriesStats.nextDelivery && (
-              <span>· Next delivery: <span style={{ color: "var(--accent)", fontWeight: 700 }}>
-                {new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              </span></span>
-            )}
+      {/* ── Contextual Insights Sidebar ─────────────────────────────────────── */}
+      <div
+        style={{
+          width: 280,
+          flexShrink: 0,
+          background: "var(--bg-sidebar)",
+          borderLeft: "1px solid var(--divider)",
+          overflowY: "auto",
+          padding: "16px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        {/* Portfolio Health Gauge */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "10px 0" }}>
+          {(() => {
+            const avgScore = enrichedMetrics.length > 0
+              ? Math.round(enrichedMetrics.reduce((s, p) => s + (p.healthScore || 0), 0) / enrichedMetrics.length)
+              : 100;
+            const circumference = 2 * Math.PI * 38;
+            const offset = circumference * (1 - avgScore / 100);
+            const color = avgScore >= 80 ? "var(--status-success)" : avgScore >= 60 ? "var(--status-warning)" : "var(--status-error)";
+            const label = avgScore >= 80 ? "HEALTHY" : avgScore >= 60 ? "WATCH" : "AT RISK";
+            return (
+              <>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Portfolio Health
+                </div>
+                <svg width={96} height={96} style={{ transform: "rotate(-90deg)" }}>
+                  <circle cx={48} cy={48} r={38} fill="none" stroke="var(--border-default)" strokeWidth={5} />
+                  <circle cx={48} cy={48} r={38} fill="none" stroke={color} strokeWidth={5}
+                    strokeDasharray={circumference} strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 0.6s ease-out", filter: `drop-shadow(0 0 6px ${color}66)` }}
+                  />
+                  <text x={48} y={48} textAnchor="middle" dy="0.35em"
+                    style={{ fontSize: 28, fontFamily: "var(--font-display)", fontWeight: 800, fill: color, transform: "rotate(90deg)", transformOrigin: "48px 48px" }}
+                  >
+                    {avgScore}
+                  </text>
+                </svg>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                  color, letterSpacing: "0.10em",
+                  background: `${color}18`, border: `1px solid ${color}44`,
+                  borderRadius: 4, padding: "3px 10px",
+                }}>
+                  {label}
+                </span>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Key Metrics */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--accent)", borderRadius: 1 }} />
+            Key Metrics
+          </div>
+          {[
+            { label: "Avg RFI Turnaround", value: rfiTurnaround ? `${rfiTurnaround}d` : "N/A", color: rfiTurnaround && Number(rfiTurnaround) > 14 ? "var(--status-warning)" : "var(--accent)" },
+            { label: "Active Work Packages", value: portfolioKPIs.activeWPs, color: "var(--status-info)" },
+            { label: "Total Tonnage", value: `${totalTons.toFixed(0)}T`, color: "var(--accent)" },
+            { label: "Fab Complete", value: totalTons > 0 ? `${Math.round((fabricatedTonnage / totalTons) * 100)}%` : "0%", color: "var(--status-success)" },
+            { label: "Portfolio Burn", value: portfolioKPIs.totalBudget > 0 ? `${Math.round((portfolioKPIs.totalSpend / portfolioKPIs.totalBudget) * 100)}%` : "—", color: portfolioKPIs.totalSpend > portfolioKPIs.totalBudget ? "var(--status-error)" : "var(--text-secondary)" },
+          ].map((m) => (
+            <div key={m.label} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "6px 8px", borderBottom: "1px solid var(--divider)",
+            }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>{m.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: m.color }}>{m.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Next Delivery */}
+        {deliveriesStats.nextDelivery && (
+          <div style={{ background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-card)", padding: "10px 12px" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.delivery_title || deliveriesStats.nextDelivery.vendor || "—"}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{projectMap[deliveriesStats.nextDelivery.project_id] || "—"}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
+          </div>
+        )}
+
+        {/* Health Score Breakdown — what's driving the numbers */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--status-info)", borderRadius: 1 }} />
+            How Health is Scored
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", lineHeight: 1.5, padding: "6px 8px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4 }}>
+            <div style={{ marginBottom: 4, color: "var(--text-secondary)", fontWeight: 600 }}>Score = weighted average (0–100)</div>
+            {[
+              { label: "RFI Health", weight: "30%", desc: "Overdue ratio, open backlog" },
+              { label: "Budget Health", weight: "25%", desc: "Burn rate vs budget" },
+              { label: "Delivery", weight: "25%", desc: "Late deliveries count" },
+              { label: "Production", weight: "20%", desc: "Stalled WPs, progress" },
+            ].map((f) => (
+              <div key={f.label} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--divider)", padding: "3px 0" }}>
+                <span>{f.label} <span style={{ color: "var(--accent)" }}>({f.weight})</span></span>
+              </div>
+            ))}
+            <div style={{ marginTop: 4, fontSize: 7, color: "var(--text-muted)" }}>
+              75+ = On Track · 50–74 = Watch · 49- = At Risk
+              <br />Missing budget data penalizes score (70/100)
+            </div>
           </div>
         </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 8, padding: 12 }}>
-          {urgentItems.slice(0, 12).map((item, i) => {
-            const isCrit = item.severity === "critical";
-            const borderColor = isCrit ? "var(--status-error)" : item.severity === "warning" ? "var(--status-warning)" : "var(--status-error)";
-            return (
-              <div
-                key={i}
-                onClick={() => navigate(createPageUrl(item.nav))}
-                style={{
-                  borderLeft: `3px solid ${borderColor}`,
-                  background: isCrit ? "var(--danger-muted)" : "var(--hover-bg)",
-                  borderRadius: "0 2px 2px 0",
-                  padding: "8px 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  cursor: "pointer",
-                  gap: 8,
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: borderColor, letterSpacing: "0.10em", fontWeight: 600 }}>
-                    {item.type} · {item.id}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: 11,
-                      color: "var(--text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {item.title}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{item.project}</div>
-                </div>
-                {item.days > 0 && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: "var(--status-error)",
-                      background: "var(--danger-muted)",
-                      border: "1px solid var(--danger-border)",
-                      borderRadius: 2,
-                      padding: "2px 6px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {item.days}d
-                  </span>
-                )}
-              </div>
-            );
-          })}
+
+        {/* Delivery stats */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 3, height: 12, background: "var(--accent)", borderRadius: 1 }} />
+            Delivery Status
+          </div>
+          {[
+            { label: "Scheduled", value: deliveriesStats.scheduled, color: "var(--accent)" },
+            { label: "In Transit", value: deliveriesStats.inTransit, color: "var(--status-info)" },
+            { label: "Late", value: deliveriesStats.late, color: deliveriesStats.late > 0 ? "var(--status-error)" : "var(--text-muted)" },
+          ].map((r) => (
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 8px", fontFamily: "var(--font-mono)", fontSize: 10, borderBottom: "1px solid var(--divider)" }}>
+              <span style={{ color: "var(--text-secondary)" }}>{r.label}</span>
+              <span style={{ fontWeight: 700, color: r.color }}>{r.value}</span>
+            </div>
+          ))}
         </div>
-      )}
-    </Card>
-    </ErrorBoundary>
-  </div>
+      </div>
+      {/* End sidebar */}
+      </div>
+      {/* End flex wrapper */}
 </div>
 );
 }
