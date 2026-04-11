@@ -17,7 +17,7 @@ const PRIORITY_COLORS = {
   Low: "var(--accent)",
 };
 
-export default function ChangeRequestList({ requests }) {
+export default function ChangeRequestList({ requests = [] }) {
   const [expanded, setExpanded] = useState(null);
 
   if (requests.length === 0) {

@@ -8,11 +8,15 @@ export function calculateCriticalPath(tasks) {
   const predecessorMap = {};
   const successorMap = {};
 
+  // Pass 1: Build task map
   tasks.forEach(task => {
     taskMap[task.id] = task;
     predecessorMap[task.id] = [];
     successorMap[task.id] = [];
+  });
 
+  // Pass 2: Build predecessor map (all tasks in taskMap now)
+  tasks.forEach(task => {
     if (task.predecessor_ids) {
       const predIds = task.predecessor_ids.split(',').map(id => id.trim());
       predecessorMap[task.id] = predIds.filter(id => taskMap[id]);

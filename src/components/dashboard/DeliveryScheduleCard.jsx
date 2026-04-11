@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function DeliveryScheduleCard({ deliveries }) {
+export default function DeliveryScheduleCard({ deliveries = [] }) {
   const getStatusColor = (status) => {
     switch (status) {
       case "Delivered":

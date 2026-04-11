@@ -103,8 +103,22 @@ export default function ResourceManagement() {
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
+  const createMut = useMutation({
+    mutationFn: (data) => base44.entities.Resource.create({
+      ...data,
+      project_id: projectId,
+      budget_hours: data.budget_hours ? parseFloat(data.budget_hours) : 0,
+      actual_hours: parseFloat(data.actual_hours) || 0,
+      forecast_hours: data.forecast_hours ? parseFloat(data.forecast_hours) : 0,
+      hourly_rate: data.hourly_rate ? parseFloat(data.hourly_rate) : 0,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource created"); setShowForm(false); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
   const handleSave = (data) => {
     if (editing) updateMut.mutate({ id: editing.id, data });
+    else createMut.mutate(data);
   };
 
   const types = ["Labor", "Equipment", "Subcontractor", "Material"];

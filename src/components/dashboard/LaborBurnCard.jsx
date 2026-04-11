@@ -100,6 +100,7 @@ export default function LaborBurnCard({ wps }) {
           }));
           return (
             <div style={{ marginTop: totalBudget > 0 ? 16 : 0 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>Weekly Breakdown <span style={{ fontStyle: "italic", opacity: 0.7 }}>(Projected)</span></div>
               <ResponsiveContainer width="100%" height={80}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                   <defs>

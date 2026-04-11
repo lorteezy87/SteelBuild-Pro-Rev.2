@@ -41,14 +41,6 @@ const OCR_PROMPTS = {
 };
 
 async function runOCR(file, fileType) {
-  const base64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const mediaType = file.type || 'image/jpeg';
   const prompt = OCR_PROMPTS[fileType] || OCR_PROMPTS.site_photo;
 
   const raw = await base44.integrations.Core.InvokeLLM({

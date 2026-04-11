@@ -1,6 +1,8 @@
 import React from "react";
 
 export default function ProjectCloseoutSummary({ closeout }) {
+  if (!closeout) return null;
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
       {closeout.final_cost !== null && (
@@ -28,7 +30,7 @@ export default function ProjectCloseoutSummary({ closeout }) {
       )}
 
       {closeout.client_signed_by && (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--status-success)60", borderRadius: "12px", padding: "16px", borderLeft: "3px solid var(--status-success)" }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--success-border)", borderRadius: "12px", padding: "16px", borderLeft: "3px solid var(--status-success)" }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>✓ Client Sign-Off</div>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "2px" }}>{closeout.client_signed_by}</div>
           {closeout.client_sign_off_date && (

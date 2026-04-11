@@ -22,7 +22,7 @@ function TonBar({ label, tons, totalTons, color }) {
   );
 }
 
-export default function FabShipmentProgressCard({ wps }) {
+export default function FabShipmentProgressCard({ wps = [] }) {
   const navigate = useNavigate();
 
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
@@ -32,7 +32,7 @@ export default function FabShipmentProgressCard({ wps }) {
   const erectedTons = wps.filter(w => w.phase === "Erection" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
 
   const wpTotal = wps.length;
-  const wpReady = wps.filter(w => w.status === "Complete" || (w.status === "In Progress" && (w.percent_complete || 0) > 75)).length;
+  const wpComplete = wps.filter(w => w.status === "Complete").length;
   const wpInProgress = wps.filter(w => w.status === "In Progress").length;
   const wpOnHold = wps.filter(w => w.status === "On Hold").length;
   const wpNotStarted = wps.filter(w => w.status === "Not Started").length;
@@ -102,7 +102,7 @@ export default function FabShipmentProgressCard({ wps }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {[
               { label: "In Progress", val: wpInProgress, color: "var(--status-warning)" },
-              { label: "Complete", val: wpReady, color: "var(--status-success)" },
+              { label: "Complete", val: wpComplete, color: "var(--status-success)" },
               { label: "On Hold", val: wpOnHold, color: "var(--status-error)" },
               { label: "Not Started", val: wpNotStarted, color: "var(--text-muted)" },
             ].map(({ label, val, color }) => (

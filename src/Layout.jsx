@@ -6,7 +6,6 @@ import { base44 } from "@/api/base44Client";
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import { Toaster } from "sonner";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
-import { ProjectProvider } from "./components/shared/ProjectContext";
 import { useProjectContext } from "./components/shared/useProjectContext";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { AuthContext } from "@/lib/AuthContext";

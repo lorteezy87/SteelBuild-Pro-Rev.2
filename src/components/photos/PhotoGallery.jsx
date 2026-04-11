@@ -9,7 +9,7 @@ const CATEGORY_COLORS = {
   Other: "var(--text-muted)",
 };
 
-export default function PhotoGallery({ photos }) {
+export default function PhotoGallery({ photos = [] }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   if (photos.length === 0) {

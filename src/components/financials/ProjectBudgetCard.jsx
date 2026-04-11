@@ -20,13 +20,17 @@ export default function ProjectBudgetCard({ project, summary }) {
     );
   }
 
+  const safeBudget = Number(summary.budget) || 0;
+  const safeActual = Number(summary.actual) || 0;
+  const safeVariance = Number(summary.variance) || 0;
+
   const budgetHealth =
-    summary.budget > 0
-      ? ((summary.variance / summary.budget) * 100).toFixed(1)
+    safeBudget > 0
+      ? ((safeVariance / safeBudget) * 100).toFixed(1)
       : 0;
 
-  const isOverBudget = summary.variance < 0;
-  const percentUsed = summary.budget > 0 ? ((summary.actual / summary.budget) * 100).toFixed(0) : 0;
+  const isOverBudget = safeVariance < 0;
+  const percentUsed = safeBudget > 0 ? ((safeActual / safeBudget) * 100).toFixed(0) : 0;
 
   return (
     <div
@@ -117,7 +121,7 @@ export default function ProjectBudgetCard({ project, summary }) {
             Contract Value
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
-            ${(project.revised_contract_value / 1000).toFixed(0)}K
+            ${((Number(project.revised_contract_value) || 0) / 1000).toFixed(0)}K
           </span>
         </div>
 
@@ -133,7 +137,7 @@ export default function ProjectBudgetCard({ project, summary }) {
             Total Cost
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent)" }}>
-            ${(summary.actual / 1000).toFixed(0)}K
+            ${(safeActual / 1000).toFixed(0)}K
           </span>
         </div>
 
@@ -163,7 +167,7 @@ export default function ProjectBudgetCard({ project, summary }) {
               color: isOverBudget ? "var(--status-error)" : "var(--status-success)",
             }}
           >
-            {isOverBudget ? "−" : "+"}${Math.abs(summary.variance / 1000).toFixed(0)}K
+            {isOverBudget ? "−" : "+"}${Math.abs(safeVariance / 1000).toFixed(0)}K
           </span>
         </div>
       </div>

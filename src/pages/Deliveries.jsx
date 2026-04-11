@@ -305,7 +305,7 @@ export default function Deliveries() {
     };
     const t = setTimeout(createDeliveryAlerts, 4000);
     return () => clearTimeout(t);
-  }, [deliveries.length]);
+  }, [deliveries.length, projectMap, wpMap]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {

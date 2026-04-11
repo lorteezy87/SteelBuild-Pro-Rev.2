@@ -1,6 +1,8 @@
 import React from "react";
 
 export default function ProjectCloseoutChecklist({ closeout, onUpdate }) {
+  if (!closeout) return null;
+
   const items = [
     { key: "final_inspection_completed", label: "Final Inspection", icon: "✓" },
     { key: "punch_list_cleared", label: "Punchlist Cleared", icon: "☑" },

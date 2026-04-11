@@ -9,7 +9,7 @@ const CATEGORY_COLORS = {
   Erection: "var(--status-success)",
 };
 
-export default function ProductionNoteList({ notes, onEdit, onDelete }) {
+export default function ProductionNoteList({ notes = [], onEdit, onDelete }) {
   if (notes.length === 0) {
     return (
       <div

@@ -144,7 +144,7 @@ export default function Procurement() {
       ? Math.ceil((promised - required) / 86400000)
       : null;
     return { ...item, isLate, isOverdue, daysExposure };
-  }), [items]);
+  }), [items, today]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

@@ -88,6 +88,7 @@ export default function Warranty() {
     const typeMatch = filterType === "all" || w.warranty_type === filterType;
     let statusMatch = true;
     if (filterStatus !== "all") {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
       if (filterStatus === "active") statusMatch = w.is_active && daysUntilExpiry > 0;
@@ -100,15 +101,18 @@ export default function Warranty() {
   const stats = {
     total: warranties.length,
     active: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       return w.is_active && expDate > today;
     }).length,
     expiring: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
       return w.is_active && daysUntilExpiry > 0 && daysUntilExpiry <= 90;
     }).length,
     expired: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       return expDate <= today;
     }).length,

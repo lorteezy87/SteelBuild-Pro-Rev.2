@@ -1,6 +1,8 @@
 import React from "react";
 
 export default function WeeklySummary({ weekLogs, weekStats }) {
+  if (!weekStats) return null;
+
   const kpis = [
     { 
       label: "Crew-Days", 

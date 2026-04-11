@@ -285,7 +285,6 @@ export default function ImportData() {
 
   // ── Preflight ────────────────────────────────────────────────────────────────
   const loadedEntities = new Set(Object.keys(files));
-  const requiredEntities = new Set(IMPORT_ORDER);
   const missingEntities = IMPORT_ORDER.filter((e) => !loadedEntities.has(e));
   const preflightClear = missingEntities.length === 0;
   const importAllowed = preflightClear || overridePreflight;
