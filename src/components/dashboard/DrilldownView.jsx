@@ -995,8 +995,22 @@ export default function DrilldownView({
 
   const openPage = (page) => navigate(createPageUrl(page));
 
+  // Merge attention + my items into a single Active Task Inbox
+  const taskInboxItems = useMemo(() => {
+    const combined = [...derived.attentionItems, ...derived.myItems];
+    // Deduplicate by title
+    const seen = new Set();
+    return combined.filter((item) => {
+      const key = item.title;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [derived.attentionItems, derived.myItems]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* TOP HEADER — Project Name & Status only */}
       <ErrorBoundary label="Project Command Strip">
         <ProjectCommandStrip
           project={project}
@@ -1007,191 +1021,117 @@ export default function DrilldownView({
         />
       </ErrorBoundary>
 
-      <ErrorBoundary label="AI Project Pulse">
-        <ProjectPulse
-          project={project}
-          rfis={rfis}
-          workPackages={wps}
-          drawings={drawings}
-          deliveries={deliveries}
-          changeOrders={cos}
-          actionItems={actionItems}
-        />
-      </ErrorBoundary>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ flex: 1 }}>
+      {/* HERO ROW — AI Pulse (60%) | Financial Health (40%) */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14, alignItems: "stretch" }}>
+        <ErrorBoundary label="AI Project Pulse">
+          <ProjectPulse
+            project={project}
+            rfis={rfis}
+            workPackages={wps}
+            drawings={drawings}
+            deliveries={deliveries}
+            changeOrders={cos}
+            actionItems={actionItems}
+          />
+        </ErrorBoundary>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <ErrorBoundary label="Financial Snapshot">
+            <FinancialSnapshotCard financials={financials} cos={cos} />
+          </ErrorBoundary>
           <ErrorBoundary label="Stats Overview">
             <StatStrip stats={stats} />
           </ErrorBoundary>
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: -6 }}>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-          letterSpacing: "0.06em",
-        }}>
-          Last synced: {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            queryClient.invalidateQueries();
-            setLastSynced(new Date());
-          }}
-          title="Refresh all data"
-          style={{
-            background: "none",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            padding: "3px 8px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            transition: "color 0.15s, border-color 0.15s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
-        >
-          &#x21BB; REFRESH
-        </button>
+
+      {/* Sync + Quick Rail row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <CollapsibleCard id="dashboard-quick-rail" title="Quick Update Rail" tone="accent" style={{ flex: 1 }}>
+          <QuickActionRail actions={quickActions} onNavigate={openPage} />
+        </CollapsibleCard>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, marginLeft: 12 }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
+            letterSpacing: "0.06em",
+          }}>
+            {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              queryClient.invalidateQueries();
+              setLastSynced(new Date());
+            }}
+            title="Refresh all data"
+            style={{
+              background: "none",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              padding: "3px 8px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              transition: "color 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+          >
+            &#x21BB;
+          </button>
+        </div>
       </div>
 
-      <CollapsibleCard id="dashboard-quick-rail" title="Quick Update Rail" tone="accent">
-        <QuickActionRail actions={quickActions} onNavigate={openPage} />
-      </CollapsibleCard>
-
-      {/* NEEDS ATTENTION — hero section, full width, high contrast */}
-      {derived.attentionItems.length > 0 ? (
-        <div style={{
-          background: "var(--danger-muted)",
-          border: "1px solid var(--danger-border)",
-          borderLeft: "4px solid var(--status-error)",
-          borderRadius: "var(--radius-card)",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "14px 16px",
-            borderBottom: "1px solid var(--danger-border)",
-            background: "rgba(255,60,60,0.06)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 4, height: 20, background: "var(--status-error)", borderRadius: 2 }} />
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800,
-                letterSpacing: "0.10em", textTransform: "uppercase",
-                color: "var(--status-error)",
-              }}>
-                Needs Attention Today
-              </span>
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800,
-                color: "#fff", background: "var(--status-error)",
-                borderRadius: 10, padding: "2px 10px",
-              }}>
-                {derived.attentionItems.length}
-              </span>
-            </div>
+      {/* MIDDLE ROW — Active Task Inbox (50%) | Blocked / At Risk (50%) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+        {/* Active Task Inbox — merged from Needs Attention + My Actions */}
+        <CollapsibleCard
+          id="dashboard-task-inbox"
+          title="Active Task Inbox"
+          tone={derived.attentionItems.length > 0 ? "danger" : "accent"}
+          count={taskInboxItems.length}
+          action={
             <button type="button" onClick={() => openPage("AlertsCenter")} style={{
-              background: "none", border: "none", color: "var(--status-error)",
-              cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10,
+              background: "none", border: "none",
+              color: derived.attentionItems.length > 0 ? "var(--status-error)" : "var(--accent)",
+              cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9,
               fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
             }}>
-              All alerts →
+              All alerts \u2192
             </button>
-          </div>
-          <div style={{ padding: 14 }}>
-            <WorkList items={derived.attentionItems} empty="No immediate risk items" onOpen={openPage} />
-          </div>
-        </div>
-      ) : (
-        <div style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderLeft: "4px solid var(--status-success)",
-          borderRadius: "var(--radius-card)",
-          padding: "14px 16px",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-          }}>
-            <span style={{ fontSize: 14 }}>{"\u2705"}</span>
-            <span style={{
-              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
-              color: "var(--text-primary)",
-            }}>
-              All clear — no items need immediate attention
-            </span>
-          </div>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
-          }}>
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              color: "var(--text-muted)", letterSpacing: "0.08em",
-              textTransform: "uppercase", marginRight: 4,
-            }}>
-              Quick actions:
-            </span>
-            {[
-              { label: "Create RFI", page: "RFIs" },
-              { label: "Upload Drawing", page: "Drawings" },
-              { label: "Add Work Package", page: "WorkPackages" },
-            ].map((qa) => (
-              <button
-                key={qa.label}
-                type="button"
-                onClick={() => openPage(qa.page)}
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: "var(--text-secondary)",
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-badge)",
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  transition: "color 0.15s, border-color 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "var(--accent-border)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-secondary)";
-                  e.currentTarget.style.borderColor = "var(--border-default)";
-                }}
-              >
-                {qa.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <CollapsibleCard
-          id="dashboard-my-actions"
-          title="My Next Actions"
-          tone="accent"
-          count={derived.myItems.length}
-          action={
-            <div style={{
-              fontFamily: "var(--font-mono)", fontSize: 9,
-              color: "var(--text-muted)", textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}>
-              {user?.full_name || user?.email || "Project user"}
-            </div>
           }
         >
-          <WorkList items={derived.myItems} empty="No directly assigned actions found" emptyIcon="\u2605" onOpen={openPage} emptyHint="Browse open action items" emptyHintPage="ActionItems" />
+          {taskInboxItems.length > 0 ? (
+            <WorkList items={taskInboxItems} empty="No items" onOpen={openPage} />
+          ) : (
+            <div style={{ padding: 12, textAlign: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 14 }}>{"\u2705"}</span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                  All clear — no items need immediate attention
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+                {[
+                  { label: "Create RFI", page: "RFIs" },
+                  { label: "Upload Drawing", page: "Drawings" },
+                  { label: "Add Work Package", page: "WorkPackages" },
+                ].map((qa) => (
+                  <button key={qa.label} type="button" onClick={() => openPage(qa.page)} style={{
+                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
+                    color: "var(--text-secondary)", background: "var(--bg-surface-low)",
+                    border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)",
+                    padding: "4px 10px", cursor: "pointer",
+                  }}>
+                    {qa.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </CollapsibleCard>
 
         <CollapsibleCard id="dashboard-blocked" title="Blocked / At Risk" tone="warning">
@@ -1253,7 +1193,6 @@ export default function DrilldownView({
                 }}>
                   {item.isClear ? "No overdue items" : item.detail}
                 </div>
-                {/* View link hint */}
                 <div style={{
                   fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
                   color: "var(--text-muted)", letterSpacing: "0.08em",
@@ -1267,31 +1206,27 @@ export default function DrilldownView({
         </CollapsibleCard>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
-        <CollapsibleCard id="dashboard-changes" title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
-          <FeedList items={derived.changeFeed} onNavigate={openPage} />
-        </CollapsibleCard>
-        <CollapsibleCard id="dashboard-execution" title="Execution Snapshot" tone="accent">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
-            <ErrorBoundary label="Steel Execution Status">
-              <SteelExecutionStatusCard wps={wps} drawings={drawings} />
-            </ErrorBoundary>
-            <ErrorBoundary label="Financial Snapshot">
-              <FinancialSnapshotCard financials={financials} cos={cos} />
-            </ErrorBoundary>
-          </div>
-        </CollapsibleCard>
-      </div>
+      {/* BOTTOM ROW — Execution Pipeline (full width) */}
+      <CollapsibleCard id="dashboard-execution" title="Execution Snapshot" tone="accent">
+        <ErrorBoundary label="Steel Execution Status">
+          <SteelExecutionStatusCard wps={wps} drawings={drawings} />
+        </ErrorBoundary>
+      </CollapsibleCard>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "stretch" }}>
+      {/* Deliveries + Drawings + Changes row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, alignItems: "stretch" }}>
         <ErrorBoundary label="Upcoming Deliveries">
           <UpcomingDeliveriesCard deliveries={deliveries} />
         </ErrorBoundary>
         <ErrorBoundary label="Drawing Approval Status">
           <DrawingApprovalStatusCard drawings={drawings} />
         </ErrorBoundary>
+        <CollapsibleCard id="dashboard-changes" title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
+          <FeedList items={derived.changeFeed} onNavigate={openPage} />
+        </CollapsibleCard>
       </div>
 
+      {/* Budget Overview — merged with financial snapshot above */}
       <CollapsibleCard id="dashboard-budget" title="Budget Overview" tone="accent">
         <ErrorBoundary label="Budget Overview Chart">
           <BudgetOverviewChart
