@@ -17,7 +17,7 @@ export default function DonutChart({
   stroke = 5,
   color = "var(--accent)",
   label,
-  trackColor = "rgba(255,255,255,0.07)",
+  trackColor = "var(--bg-surface-high)",
 }) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;

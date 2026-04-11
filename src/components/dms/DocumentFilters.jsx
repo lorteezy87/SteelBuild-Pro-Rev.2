@@ -27,8 +27,8 @@ export default function DocumentFilters({ onFilterChange, activeFilters, onClear
           onClick={() => setOpen(!open)}
           style={{
             padding: "6px 12px",
-            background: open ? "var(--accent-muted)" : "rgba(255,255,255,0.06)",
-            border: `1px solid ${open ? "var(--accent-border)" : "rgba(255,255,255,0.12)"}`,
+            background: open ? "var(--accent-muted)" : "var(--bg-surface-high)",
+            border: `1px solid ${open ? "var(--accent-border)" : "var(--border-default)"}`,
             color: open ? "var(--accent)" : "var(--text-secondary)",
             borderRadius: 8,
             fontFamily: "var(--font-mono)",
@@ -103,7 +103,7 @@ export default function DocumentFilters({ onFilterChange, activeFilters, onClear
         <div
           style={{
             background: "var(--bg-surface-mid)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid var(--bg-surface-high)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 16,

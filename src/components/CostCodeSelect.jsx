@@ -51,7 +51,7 @@ export default function CostCodeSelect({
         style={{
           width: "100%",
           background: "var(--bg-input)",
-          border: `1px solid ${open ? "var(--accent-border)" : "rgba(255,255,255,0.08)"}`,
+          border: `1px solid ${open ? "var(--accent-border)" : "var(--bg-surface-high)"}`,
           borderRadius: 8,
           padding: "7px 32px 7px 12px",
           color: selectedCode ? "var(--text-primary)" : "var(--text-muted)",
@@ -117,7 +117,7 @@ export default function CostCodeSelect({
                 fontFamily: "var(--font-mono)",
                 fontSize: 10,
                 color: "var(--text-muted)",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                borderBottom: "1px solid var(--divider)",
               }}
               onMouseEnter={e => e.currentTarget.style.background = "var(--accent-muted)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -136,8 +136,8 @@ export default function CostCodeSelect({
                 letterSpacing: "0.12em",
                 color: "var(--text-muted)",
                 textTransform: "uppercase",
-                background: "rgba(255,255,255,0.02)",
-                borderTop: gi === 0 ? "none" : "1px solid rgba(255,255,255,0.06)",
+                background: "var(--hover-bg)",
+                borderTop: gi === 0 ? "none" : "1px solid var(--divider)",
                 display: "flex",
                 alignItems: "center",
                 gap: 6,

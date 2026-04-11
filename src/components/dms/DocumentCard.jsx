@@ -54,8 +54,8 @@ function btnStyle(bg, border, color) {
   return {
     flex: 1, padding: "5px 4px",
     background: bg || "transparent",
-    border: "1px solid " + (border || "rgba(255,255,255,0.12)"),
-    color: color || "rgba(220,225,240,0.70)",
+    border: "1px solid " + (border || "var(--border-default)"),
+    color: color || "var(--text-secondary)",
     borderRadius: 4, fontFamily: "var(--font-mono)",
     fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em",
   };
@@ -82,7 +82,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
       onClick={() => onView?.(doc)}
       style={{
         background: "var(--bg-surface-low)",
-        border: "1px solid " + (hovered ? "var(--accent-border)" : "rgba(255,255,255,0.08)"),
+        border: "1px solid " + (hovered ? "var(--accent-border)" : "var(--bg-surface-high)"),
         borderRadius: 8, padding: 16, cursor: "pointer", transition: "all 0.15s",
         boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.5)" : "0 2px 8px rgba(0,0,0,0.3)",
         position: "relative",
@@ -102,7 +102,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>{doc.documentNumber ?? "\u2014"}</div>
-        {doc.revisionNumber != null && <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", background: "rgba(255,255,255,0.04)", padding: "2px 6px", borderRadius: 4 }}>Rev {doc.revisionNumber}</div>}
+        {doc.revisionNumber != null && <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", background: "var(--hover-bg)", padding: "2px 6px", borderRadius: 4 }}>Rev {doc.revisionNumber}</div>}
       </div>
 
       <div style={{ marginBottom: 8 }}>
@@ -137,7 +137,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>{fileSizeMB} \u00B7 {uploadDate}{doc.uploadedBy && <span> \u00B7 {doc.uploadedBy}</span>}</div>
 
       {hovered && !confirmDelete && (
-        <div style={{ display: "flex", gap: 4, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display: "flex", gap: 4, paddingTop: 10, borderTop: "1px solid var(--divider)" }}>
           <button onClick={(e) => { e.stopPropagation(); navigate(createPageUrl("DrawingViewer") + "?docId=" + doc.id); }} style={btnStyle("var(--accent-muted)", "var(--accent-border)", "var(--accent)")}>OPEN</button>
           <button onClick={(e) => { e.stopPropagation(); onDownload?.(doc); }} style={btnStyle()}>DL</button>
           <button onClick={(e) => { e.stopPropagation(); onEdit?.(doc); }} style={btnStyle()}>EDIT</button>
@@ -150,7 +150,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#FF3D3D", marginBottom: 8 }}>DELETE THIS DOCUMENT?</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); onDelete?.(doc); }} style={{ flex: 1, padding: "5px 0", background: "rgba(255,61,61,0.20)", border: "1px solid rgba(255,61,61,0.40)", color: "#FF3D3D", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>CONFIRM</button>
-            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: "5px 0", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>CANCEL</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: "5px 0", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>CANCEL</button>
           </div>
         </div>
       )}

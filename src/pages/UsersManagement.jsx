@@ -80,7 +80,7 @@ function UsersManagementContent() {
               </TableRow>
             ) : (
               users.map((user) => (
-                <TableRow key={user.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "transparent", transition: "background 0.1s" }} onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                <TableRow key={user.id} style={{ borderBottom: "1px solid var(--hover-bg)", background: "transparent", transition: "background 0.1s" }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                   <TableCell style={{ fontFamily: "var(--font-body)", color: "var(--text-primary)", fontSize: 12, fontWeight: 500 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Mail className="w-4 h-4" style={{ opacity: 0.5 }} />

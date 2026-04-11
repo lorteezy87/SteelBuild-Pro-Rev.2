@@ -293,7 +293,7 @@ export default function PortfolioOverview() {
                   <tr
                     key={p.id}
                     onClick={() => navigate(createPageUrl("JobStatusReport"))}
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.1s" }}
+                    style={{ borderBottom: "1px solid var(--hover-bg)", cursor: "pointer", transition: "background 0.1s" }}
                     onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >

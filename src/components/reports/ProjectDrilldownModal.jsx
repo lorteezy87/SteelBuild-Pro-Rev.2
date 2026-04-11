@@ -201,7 +201,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
     s + (Number(wp.actual_labor_cost_to_date) || 0) + (Number(wp.actual_material_cost_to_date) || 0), 0);
   const cpi = ac > 0 ? ev / ac : null;
 
-  const health = HEALTH_CFG[project.health_status] || { color: "var(--text-muted)", bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.08)" };
+  const health = HEALTH_CFG[project.health_status] || { color: "var(--text-muted)", bg: "var(--hover-bg)", border: "var(--bg-surface-high)" };
 
   // ── Team assignments from WPs ──────────────────────────────────────
   const teamMap = {};

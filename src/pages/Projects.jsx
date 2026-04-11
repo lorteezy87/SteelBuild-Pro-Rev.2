@@ -46,7 +46,7 @@ function ProgressRing({ pct, size = 48, color = "#C89B20" }) {
         <circle
           cx={size / 2} cy={size / 2} r={r}
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="var(--bg-surface-high)"
           strokeWidth={4.5}
         />
         <circle
@@ -85,7 +85,7 @@ function ProgressRing({ pct, size = 48, color = "#C89B20" }) {
 function MiniStat({ label, value, valueColor = "var(--text-primary)" }) {
   return (
     <div style={{
-      background: "rgba(255,255,255,0.03)",
+      background: "var(--hover-bg)",
       border: "1px solid var(--border-default)",
       borderRadius: 4,
       padding: "7px 10px",
@@ -610,7 +610,7 @@ export default function Projects() {
         <div style={{
           display: "flex",
           gap: 2,
-          background: "rgba(255,255,255,0.04)",
+          background: "var(--hover-bg)",
           border: "1px solid var(--border-default)",
           borderRadius: 4,
           padding: 3,

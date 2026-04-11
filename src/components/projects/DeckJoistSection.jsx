@@ -38,7 +38,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
           alignItems: 'center',
           gap: 10,
           padding: '16px 0 10px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--divider)',
           marginBottom: 16,
         }}
       >
@@ -74,8 +74,8 @@ export default function DeckJoistSection({ project, onUpdate }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--hover-bg)',
+            border: '1px solid var(--divider)',
             borderRadius: 8,
             marginBottom: 12,
             cursor: 'pointer',
@@ -97,7 +97,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.40)',
+                color: 'var(--text-muted)',
                 marginTop: 2,
               }}
             >
@@ -112,10 +112,10 @@ export default function DeckJoistSection({ project, onUpdate }) {
               borderRadius: 12,
               background: project.hasDeck
                 ? 'var(--accent)'
-                : 'rgba(255,255,255,0.10)',
+                : 'var(--border-default)',
               border: project.hasDeck
                 ? '1px solid var(--accent-border)'
-                : '1px solid rgba(255,255,255,0.15)',
+                : '1px solid var(--border-strong)',
               position: 'relative',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -344,8 +344,8 @@ export default function DeckJoistSection({ project, onUpdate }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--hover-bg)',
+            border: '1px solid var(--divider)',
             borderRadius: 8,
             marginBottom: 12,
             cursor: 'pointer',
@@ -367,7 +367,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.40)',
+                color: 'var(--text-muted)',
                 marginTop: 2,
               }}
             >
@@ -382,10 +382,10 @@ export default function DeckJoistSection({ project, onUpdate }) {
               borderRadius: 12,
               background: project.hasJoist
                 ? 'var(--accent)'
-                : 'rgba(255,255,255,0.10)',
+                : 'var(--border-default)',
               border: project.hasJoist
                 ? '1px solid var(--accent-border)'
-                : '1px solid rgba(255,255,255,0.15)',
+                : '1px solid var(--border-strong)',
               position: 'relative',
               cursor: 'pointer',
               transition: 'all 0.2s',

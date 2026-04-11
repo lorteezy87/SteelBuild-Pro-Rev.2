@@ -291,7 +291,7 @@ export default function Inspections() {
           ))}
         </div>
 
-        <div style={{ width: 1, height: 20, background: "var(--divider, rgba(255,255,255,0.08))" }} />
+        <div style={{ width: 1, height: 20, background: "var(--divider)" }} />
 
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <span

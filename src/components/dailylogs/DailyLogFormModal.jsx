@@ -20,7 +20,7 @@ const ACTIVITY_CHIPS = [
 const nativeSelectStyle = {
   width: "100%",
   background: "var(--bg-sidebar)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid var(--bg-surface-high)",
   borderRadius: 8,
   padding: "10px 12px",
   color: "var(--text-primary)",
@@ -190,7 +190,7 @@ export default function DailyLogFormModal({
         {/* Sticky header */}
         <div style={{
           position: "sticky", top: 0, zIndex: 10,
-          background: "var(--bg-surface-low)", borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)",
           padding: "12px 0 10px", marginBottom: 4,
         }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>

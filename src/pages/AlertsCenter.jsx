@@ -113,7 +113,7 @@ export default function AlertsCenter() {
             {s === "all" ? "ALL" : s.toUpperCase()}
           </button>
         ))}
-        <div style={{ width: 1, background: "rgba(255,255,255,0.08)", margin: "0 4px" }} />
+        <div style={{ width: 1, background: "var(--bg-surface-high)", margin: "0 4px" }} />
         {["all", ...alertTypes].map(t => (
           <button key={t} onClick={() => setTypeFilter(t)} style={typeFilter === t ? btnActive : btnInactive}>
             {t === "all" ? "ALL TYPES" : t}
