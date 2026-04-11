@@ -272,10 +272,11 @@ export default function ModelViewer() {
     const maxDim = Math.max(sz.x, sz.y, sz.z);
     if (maxDim <= 0) return;
 
-    // Use the largest single dimension (not diagonal) for more intuitive framing,
-    // then apply generous padding so the full structure is clearly visible
+    // Use the diagonal extent for full-structure framing,
+    // then apply large padding so the entire building is clearly visible
+    const diagonal = Math.sqrt(sz.x * sz.x + sz.y * sz.y + sz.z * sz.z);
     const fovRad = camera.fov * (Math.PI / 180);
-    const d = (maxDim / Math.tan(fovRad / 2)) * 4.0;
+    const d = (diagonal / Math.tan(fovRad / 2)) * 3.0;
 
     // Update near/far planes for the model's scale
     camera.near = Math.max(0.1, d * 0.001);
