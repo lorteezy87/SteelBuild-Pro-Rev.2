@@ -49,8 +49,11 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (editing && onSave) {
+    if (onSave) {
       onSave(formData);
+    } else if (editing) {
+      // fallback: shouldn't reach here if parent passes onSave
+      mutation.mutate(formData);
     } else {
       mutation.mutate(formData);
     }
