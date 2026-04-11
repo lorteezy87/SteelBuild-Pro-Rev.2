@@ -149,76 +149,140 @@ function StatSparkline({ color = "var(--accent)", width = 52, height = 16 }) {
 function StatStrip({ stats }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-      {stats.map((item) => (
-        <div
-          key={item.label}
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderTop: `2px solid ${item.color}`,
-            borderRadius: "var(--radius-card)",
-            padding: "12px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          {item.chartValue != null && (
-            <DonutChart
-              value={item.chartValue}
-              max={item.chartMax || 100}
-              size={48}
-              stroke={4}
-              color={item.color}
-            />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Hero number — largest visual element for scanning */}
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 28,
-                fontWeight: 900,
-                lineHeight: 1,
-                color: item.color,
-                marginBottom: 2,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {item.value}
-            </div>
-            {/* Label — secondary, smaller */}
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 8,
-                fontWeight: 700,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
-              {item.label}
-            </div>
-            {/* Subtext — tertiary detail */}
-            {item.subtext ? (
+      {stats.map((item) => {
+        const isZero = item.value === 0 || item.value === "0" || item.value === "0%";
+        const isClearStat = isZero && item.zeroTone === "clear";
+        const isEmptyStat = isZero && item.zeroTone === "empty";
+        return (
+          <div
+            key={item.label}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderTop: `2px solid ${isClearStat ? "var(--status-success)" : item.color}`,
+              borderRadius: "var(--radius-card)",
+              padding: "12px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            {item.chartValue != null && (
+              <DonutChart
+                value={item.chartValue}
+                max={item.chartMax || 100}
+                size={48}
+                stroke={4}
+                color={item.color}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Hero number — largest visual element for scanning */}
+              {isClearStat ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 20,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: "var(--status-success)",
+                    marginBottom: 2,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {"\u2713"} Clear
+                </div>
+              ) : isEmptyStat ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color: "var(--text-muted)",
+                    marginBottom: 2,
+                  }}
+                >
+                  {item.zeroLabel || "None yet"}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 28,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    color: item.color,
+                    marginBottom: 2,
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  {item.value}
+                </div>
+              )}
+              {/* Label — secondary, smaller */}
               <div
                 style={{
-                  marginTop: 4,
-                  fontFamily: "var(--font-body)",
-                  fontSize: 10,
-                  color: "var(--text-disabled)",
-                  lineHeight: 1.3,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
                 }}
               >
-                {item.subtext}
+                {item.label}
               </div>
-            ) : null}
-            {/* Mini sparkline trend */}
-            {!item.chartValue && <StatSparkline color={item.color} />}
+              {/* Zero-state hint */}
+              {isClearStat && item.zeroHint ? (
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--status-success)",
+                    lineHeight: 1.3,
+                    opacity: 0.8,
+                  }}
+                >
+                  {item.zeroHint}
+                </div>
+              ) : isEmptyStat && item.zeroAction ? (
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.3,
+                    cursor: "pointer",
+                  }}
+                  onClick={item.zeroAction.onClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") item.zeroAction.onClick(); }}
+                >
+                  {item.zeroAction.label} {"\u2192"}
+                </div>
+              ) : item.subtext ? (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 10,
+                    color: "var(--text-disabled)",
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {item.subtext}
+                </div>
+              ) : null}
+              {/* Mini sparkline trend */}
+              {!item.chartValue && !isClearStat && !isEmptyStat && <StatSparkline color={item.color} />}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -288,7 +352,7 @@ const QUICK_ACTIONS = {
   CONSTRAINT: { label: "ESCALATE", actionColor: "var(--status-error)" },
 };
 
-function WorkList({ items, empty, emptyIcon, onOpen }) {
+function WorkList({ items, empty, emptyIcon, onOpen, emptyHint, emptyHintPage }) {
   if (!items.length) {
     return (
       <div
@@ -313,6 +377,24 @@ function WorkList({ items, empty, emptyIcon, onOpen }) {
         >
           {empty}
         </div>
+        {emptyHint && emptyHintPage && onOpen && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(emptyHintPage)}
+            onKeyDown={(e) => { if (e.key === "Enter") onOpen(emptyHintPage); }}
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              fontStyle: "italic",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              marginTop: 2,
+            }}
+          >
+            {emptyHint} {"\u2192"}
+          </div>
+        )}
       </div>
     );
   }
@@ -473,7 +555,7 @@ function WorkList({ items, empty, emptyIcon, onOpen }) {
   );
 }
 
-function FeedList({ items }) {
+function FeedList({ items, onNavigate }) {
   if (!items.length) {
     return (
       <div
@@ -503,6 +585,24 @@ function FeedList({ items }) {
         }}>
           Activity will appear here as project data is updated.
         </div>
+        {onNavigate && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onNavigate("Activity")}
+            onKeyDown={(e) => { if (e.key === "Enter") onNavigate("Activity"); }}
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              fontStyle: "italic",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              marginTop: 2,
+            }}
+          >
+            View full activity log {"\u2192"}
+          </div>
+        )}
       </div>
     );
   }
@@ -790,6 +890,7 @@ export default function DrilldownView({
         detail: `${upcomingRfis.length} more due in 3 days`,
         color: overdueRfis.length ? "var(--status-error)" : "var(--text-muted)",
         page: "RFIs",
+        isClear: overdueRfis.length === 0,
       },
       {
         label: "Late Drawings",
@@ -797,6 +898,7 @@ export default function DrilldownView({
         detail: `${pendingRevisions.length} active revisions in review`,
         color: lateDrawings.length ? "var(--status-error)" : "var(--accent)",
         page: "Drawings",
+        isClear: lateDrawings.length === 0,
       },
       {
         label: "Blocked WPs",
@@ -804,6 +906,7 @@ export default function DrilldownView({
         detail: `${stalledPackages.length} stalled with 0% progress`,
         color: blockedWps.length ? "var(--status-warning)" : "var(--text-muted)",
         page: "WorkPackages",
+        isClear: blockedWps.length === 0,
       },
       {
         label: "Pending Cost",
@@ -811,6 +914,7 @@ export default function DrilldownView({
         detail: `$${Math.round(financials.pendingCOVal).toLocaleString()} pending CO exposure`,
         color: pendingCosts > 0 ? "var(--accent)" : "var(--text-muted)",
         page: "Financials",
+        isClear: false,
       },
     ];
 
@@ -840,12 +944,16 @@ export default function DrilldownView({
     return { avg, fabPct, totalTons, fabTons };
   }, [wps]);
 
+  const blockedAtRiskCount = derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length;
+
   const stats = [
     {
       label: "Needs Attention",
       value: derived.attentionItems.length,
       subtext: `${derived.overdueRfis.length} overdue RFIs and ${derived.lateDeliveries.length} late deliveries`,
       color: derived.attentionItems.length ? "var(--status-error)" : "var(--status-success)",
+      zeroTone: derived.attentionItems.length === 0 ? "clear" : undefined,
+      zeroHint: "No overdue items",
     },
     {
       label: "WP Progress",
@@ -857,12 +965,11 @@ export default function DrilldownView({
     },
     {
       label: "Blocked / At Risk",
-      value: derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length,
+      value: blockedAtRiskCount,
       subtext: `${derived.overdueConstraints.length} constraints and ${derived.lateDrawings.length} drawing holds`,
-      color:
-        derived.blockedWps.length + derived.lateDrawings.length + derived.overdueConstraints.length
-          ? "var(--status-warning)"
-          : "var(--text-muted)",
+      color: blockedAtRiskCount ? "var(--status-warning)" : "var(--text-muted)",
+      zeroTone: blockedAtRiskCount === 0 ? "clear" : undefined,
+      zeroHint: "No blocked items",
     },
     {
       label: "Fab Progress",
@@ -871,6 +978,9 @@ export default function DrilldownView({
       color: "var(--phase-fab)",
       chartValue: wpProgress.fabPct,
       chartMax: 100,
+      zeroTone: wpProgress.totalTons === 0 ? "empty" : undefined,
+      zeroLabel: "No shipments",
+      zeroAction: wpProgress.totalTons === 0 ? { label: "Track", onClick: () => navigate(createPageUrl("WorkPackages")) } : undefined,
     },
   ];
 
@@ -955,7 +1065,7 @@ export default function DrilldownView({
       </CollapsibleCard>
 
       {/* NEEDS ATTENTION — hero section, full width, high contrast */}
-      {derived.attentionItems.length > 0 && (
+      {derived.attentionItems.length > 0 ? (
         <div style={{
           background: "var(--danger-muted)",
           border: "1px solid var(--danger-border)",
@@ -998,6 +1108,70 @@ export default function DrilldownView({
             <WorkList items={derived.attentionItems} empty="No immediate risk items" onOpen={openPage} />
           </div>
         </div>
+      ) : (
+        <div style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderLeft: "4px solid var(--status-success)",
+          borderRadius: "var(--radius-card)",
+          padding: "14px 16px",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+          }}>
+            <span style={{ fontSize: 14 }}>{"\u2705"}</span>
+            <span style={{
+              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
+              color: "var(--text-primary)",
+            }}>
+              All clear — no items need immediate attention
+            </span>
+          </div>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              color: "var(--text-muted)", letterSpacing: "0.08em",
+              textTransform: "uppercase", marginRight: 4,
+            }}>
+              Quick actions:
+            </span>
+            {[
+              { label: "Create RFI", page: "RFIs" },
+              { label: "Upload Drawing", page: "Drawings" },
+              { label: "Add Work Package", page: "WorkPackages" },
+            ].map((qa) => (
+              <button
+                key={qa.label}
+                type="button"
+                onClick={() => openPage(qa.page)}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  background: "var(--bg-surface-low)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--radius-badge)",
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  transition: "color 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--accent)";
+                  e.currentTarget.style.borderColor = "var(--accent-border)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--text-secondary)";
+                  e.currentTarget.style.borderColor = "var(--border-default)";
+                }}
+              >
+                {qa.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
@@ -1016,7 +1190,7 @@ export default function DrilldownView({
             </div>
           }
         >
-          <WorkList items={derived.myItems} empty="No directly assigned actions found" emptyIcon="\u2605" onOpen={openPage} />
+          <WorkList items={derived.myItems} empty="No directly assigned actions found" emptyIcon="\u2605" onOpen={openPage} emptyHint="Browse open action items" emptyHintPage="ActionItems" />
         </CollapsibleCard>
 
         <CollapsibleCard id="dashboard-blocked" title="Blocked / At Risk" tone="warning">
@@ -1054,19 +1228,29 @@ export default function DrilldownView({
                 }}>
                   {item.label}
                 </div>
-                <div style={{
-                  fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 900,
-                  lineHeight: 1, color: item.color, marginBottom: 4,
-                  letterSpacing: "-0.01em",
-                }}>
-                  {item.value}
-                </div>
+                {item.isClear ? (
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800,
+                    lineHeight: 1, color: "var(--status-success)", marginBottom: 4,
+                  }}>
+                    {"\u2713"} Clear
+                  </div>
+                ) : (
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 900,
+                    lineHeight: 1, color: item.color, marginBottom: 4,
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {item.value}
+                  </div>
+                )}
                 <div style={{
                   fontFamily: "var(--font-body)", fontSize: 10,
-                  color: "var(--text-disabled)",
+                  color: item.isClear ? "var(--status-success)" : "var(--text-disabled)",
                   lineHeight: 1.3,
+                  opacity: item.isClear ? 0.7 : 1,
                 }}>
-                  {item.detail}
+                  {item.isClear ? "No overdue items" : item.detail}
                 </div>
                 {/* View link hint */}
                 <div style={{
@@ -1084,7 +1268,7 @@ export default function DrilldownView({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, alignItems: "start" }}>
         <CollapsibleCard id="dashboard-changes" title="Changed Since Yesterday" tone="accent" count={derived.changeFeed.length}>
-          <FeedList items={derived.changeFeed} />
+          <FeedList items={derived.changeFeed} onNavigate={openPage} />
         </CollapsibleCard>
         <CollapsibleCard id="dashboard-execution" title="Execution Snapshot" tone="accent">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>

@@ -696,6 +696,16 @@ function HamburgerMenu({ open, onToggle }) {
 // ─── Mobile Drawer ────────────────────────────────────────────────
 function MobileDrawer({ open, onClose, onNavigate }) {
   const ref = useRef(null);
+  const [mobileCollapsed, setMobileCollapsed] = useState(loadSidebarState);
+
+  const toggleGroup = (label) => {
+    setMobileCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      saveSidebarState(next);
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (!open) return;
     const h = (e) => {if (ref.current && !ref.current.contains(e.target)) onClose();};
@@ -722,39 +732,75 @@ function MobileDrawer({ open, onClose, onNavigate }) {
             src="/logo.png"
             alt="SteelBuild Pro"
             style={{ height: 32, width: "auto", objectFit: "contain" }} />
-
         </div>
-        <div style={{ padding: "8px 8px" }}>
-          {PRIMARY_TABS.map((tab) =>
-          <button key={tab.label} onClick={() => {onNavigate(TAB_DEFAULT_PAGE[tab.label]);onClose();}} style={{
-            width: "100%", textAlign: "left", padding: "9px 12px",
-            fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.10em",
-            color: "var(--text-secondary)", background: "none", border: "none",
-            borderRadius: 8, cursor: "pointer", display: "block",
-            transition: "background 0.1s, color 0.1s"
-          }}
-          onMouseEnter={(e) => {e.currentTarget.style.background = "var(--hover-bg)";e.currentTarget.style.color = "var(--accent)";}}
-          onMouseLeave={(e) => {e.currentTarget.style.background = "none";e.currentTarget.style.color = "var(--text-muted)";}}>
-            {tab.label}</button>
-          )}
-        </div>
-        <div style={{ height: 1, background: "var(--divider)", margin: "4px 0" }} />
-        <div style={{ padding: "8px 8px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.14em", paddingLeft: 12, paddingBottom: 4 }}>ALL MODULES</div>
-        <div style={{ padding: "0 8px 16px" }}>
-          {ALL_MODULES.map((mod, i) =>
-          <button key={i} onClick={() => {onNavigate(mod.page);onClose();}} style={{
-            width: "100%", textAlign: "left", padding: "7px 12px",
-            display: "flex", alignItems: "center", gap: 8,
-            fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)",
-            background: "none", border: "none", borderRadius: 8, cursor: "pointer", transition: "all 0.1s"
-          }}
-          onMouseEnter={(e) => {e.currentTarget.style.background = "var(--hover-bg)";e.currentTarget.style.color = "var(--accent)";}}
-          onMouseLeave={(e) => {e.currentTarget.style.background = "none";e.currentTarget.style.color = "var(--text-muted)";}}>
-
-             <span style={{ fontSize: 13, width: 16, textAlign: "center" }}>{mod.icon}</span>
-              {mod.name}
-            </button>
-          )}
+        <div style={{ padding: "4px 0 16px" }}>
+          {SIDEBAR_GROUPS.map((group, groupIdx) => {
+            const isCollapsed = group.collapsible && mobileCollapsed[group.label];
+            return (
+              <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : 8 }}>
+                {/* Group header */}
+                <div
+                  onClick={group.collapsible ? () => toggleGroup(group.label) : undefined}
+                  style={{
+                    padding: "8px 16px 4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: group.collapsible ? "pointer" : "default",
+                    userSelect: "none",
+                  }}
+                >
+                  <span style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: "var(--text-muted)",
+                  }}>
+                    {group.label}
+                  </span>
+                  {group.collapsible && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--text-muted)",
+                      lineHeight: 1,
+                    }}>
+                      {isCollapsed ? "\u25B8" : "\u25BE"}
+                    </span>
+                  )}
+                </div>
+                {/* Group items */}
+                <div style={{ display: isCollapsed ? "none" : "block" }}>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.page}
+                      onClick={() => { onNavigate(item.page); onClose(); }}
+                      style={{
+                        width: "100%", textAlign: "left", padding: "7px 16px 7px 24px",
+                        display: "flex", alignItems: "center", gap: 10,
+                        fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)",
+                        background: "none", border: "none", borderRadius: 0, cursor: "pointer",
+                        borderLeft: "2px solid transparent",
+                        transition: "all 0.1s"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--hover-bg)";
+                        e.currentTarget.style.color = "var(--accent)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "none";
+                        e.currentTarget.style.color = "var(--text-secondary)";
+                      }}
+                    >
+                      <span style={{ fontSize: 13, width: 16, textAlign: "center", opacity: 0.55, flexShrink: 0 }}>{item.icon}</span>
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </>);
@@ -798,6 +844,301 @@ function ThemeToggleButton() {
           <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
         </svg>
       )}
+    </button>
+  );
+}
+
+// ─── Sidebar Navigation Groups ──────────────────────────────────
+const SIDEBAR_GROUPS = [
+  {
+    label: "OVERVIEW",
+    collapsible: false,
+    items: [
+      { label: "Dashboard", icon: "◈", page: "Dashboard" },
+      { label: "Portfolio Overview", icon: "✦", page: "AIInsights" },
+    ],
+  },
+  {
+    label: "PROJECT MANAGEMENT",
+    collapsible: true,
+    items: [
+      { label: "Schedule", icon: "▥", page: "Schedule" },
+      { label: "Action Items", icon: "☑", page: "ActionItems" },
+      { label: "RFIs", icon: "⚑", page: "RFIs" },
+      { label: "Change Orders", icon: "$", page: "ChangeOrders" },
+      { label: "Meetings", icon: "👥", page: "Meetings" },
+    ],
+  },
+  {
+    label: "DESIGN & DRAWINGS",
+    collapsible: true,
+    items: [
+      { label: "Drawings", icon: "▦", page: "Drawings" },
+      { label: "Drawing Viewer", icon: "▦", page: "DrawingViewer" },
+      { label: "3D Model Viewer", icon: "△", page: "ModelViewer" },
+    ],
+  },
+  {
+    label: "PRODUCTION",
+    collapsible: true,
+    items: [
+      { label: "Work Packages", icon: "▦", page: "WorkPackages" },
+      { label: "Crew Scheduling", icon: "▨", page: "ResourceScheduling" },
+      { label: "Resource Management", icon: "👥", page: "ResourceManagement" },
+      { label: "Deliveries", icon: "📦", page: "Deliveries" },
+    ],
+  },
+  {
+    label: "FINANCIALS",
+    collapsible: true,
+    items: [
+      { label: "Budget Control", icon: "◎", page: "Financials" },
+      { label: "Schedule of Values", icon: "📊", page: "SOV" },
+      { label: "Expenses", icon: "💰", page: "Expenses" },
+    ],
+  },
+  {
+    label: "DOCUMENTS & REPORTS",
+    collapsible: true,
+    items: [
+      { label: "Documents", icon: "📁", page: "Documents" },
+      { label: "Reports", icon: "📋", page: "JobStatusReport" },
+      { label: "Activity Log", icon: "📊", page: "Activity" },
+    ],
+  },
+  {
+    label: "FIELD",
+    collapsible: true,
+    items: [
+      { label: "Daily Logs", icon: "📋", page: "DailyLogs" },
+      { label: "Inspections", icon: "🔍", page: "Inspections" },
+      { label: "Safety", icon: "⚠", page: "Safety" },
+      { label: "Quality Control", icon: "🧪", page: "QualityControl" },
+    ],
+  },
+  {
+    label: "ADMINISTRATION",
+    collapsible: true,
+    items: [
+      { label: "Contacts", icon: "👤", page: "Contacts" },
+      { label: "Vendors", icon: "🏢", page: "Vendors" },
+      { label: "User Management", icon: "👥", page: "UsersManagement" },
+      { label: "Settings", icon: "⚙", page: "Settings" },
+    ],
+  },
+];
+
+const SIDEBAR_LS_KEY = "sbp-nav-groups";
+
+function loadSidebarState() {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+}
+
+function saveSidebarState(state) {
+  try {
+    localStorage.setItem(SIDEBAR_LS_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+function SidebarNav({ currentPageName, onNavigate, visible }) {
+  const [collapsed, setCollapsed] = useState(loadSidebarState);
+
+  const toggle = (label) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      saveSidebarState(next);
+      return next;
+    });
+  };
+
+  const allCollapsibleGroups = SIDEBAR_GROUPS.filter((g) => g.collapsible);
+  const anyExpanded = allCollapsibleGroups.some((g) => !collapsed[g.label]);
+
+  const toggleAll = () => {
+    const newState = {};
+    const shouldCollapse = anyExpanded;
+    allCollapsibleGroups.forEach((g) => {
+      newState[g.label] = shouldCollapse;
+    });
+    setCollapsed(newState);
+    saveSidebarState(newState);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      width: 220,
+      minWidth: 220,
+      background: "var(--nav-bg)",
+      borderRight: "1px solid var(--border-default)",
+      overflowY: "auto",
+      overflowX: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      flexShrink: 0,
+      height: "100%",
+    }}>
+      {/* Collapse All / Expand All toggle */}
+      <div style={{
+        padding: "10px 16px 2px",
+        display: "flex",
+        justifyContent: "flex-end",
+      }}>
+        <button
+          onClick={toggleAll}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 600,
+            letterSpacing: "0.10em",
+            color: "var(--text-muted)",
+            padding: "2px 4px",
+            borderRadius: 3,
+            transition: "color 0.12s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          {anyExpanded ? "COLLAPSE ALL" : "EXPAND ALL"}
+        </button>
+      </div>
+
+      {/* Navigation groups */}
+      <nav style={{ flex: 1, padding: "0 0 16px" }}>
+        {SIDEBAR_GROUPS.map((group, groupIdx) => {
+          const isCollapsed = group.collapsible && collapsed[group.label];
+          return (
+            <div key={group.label} style={{ marginTop: groupIdx === 0 ? 0 : 8 }}>
+              {/* Group header */}
+              <div
+                onClick={group.collapsible ? () => toggle(group.label) : undefined}
+                style={{
+                  padding: "8px 16px 4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: group.collapsible ? "pointer" : "default",
+                  userSelect: "none",
+                  transition: "color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  if (group.collapsible) {
+                    const label = e.currentTarget.querySelector("[data-group-label]");
+                    if (label) label.style.color = "var(--text-secondary)";
+                    const chev = e.currentTarget.querySelector("[data-group-chevron]");
+                    if (chev) chev.style.color = "var(--text-secondary)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (group.collapsible) {
+                    const label = e.currentTarget.querySelector("[data-group-label]");
+                    if (label) label.style.color = "var(--text-muted)";
+                    const chev = e.currentTarget.querySelector("[data-group-chevron]");
+                    if (chev) chev.style.color = "var(--text-muted)";
+                  }
+                }}
+              >
+                <span
+                  data-group-label=""
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: "var(--text-muted)",
+                    transition: "color 0.12s",
+                  }}
+                >
+                  {group.label}
+                </span>
+                {group.collapsible && (
+                  <span
+                    data-group-chevron=""
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--text-muted)",
+                      transition: "color 0.12s",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {isCollapsed ? "\u25B8" : "\u25BE"}
+                  </span>
+                )}
+              </div>
+
+              {/* Group items */}
+              <div style={{ display: isCollapsed ? "none" : "block" }}>
+                {group.items.map((item) => (
+                  <SidebarLink
+                    key={item.page}
+                    item={item}
+                    active={currentPageName === item.page}
+                    onClick={() => onNavigate(item.page)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+function SidebarLink({ item, active, onClick }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "7px 16px 7px 24px",
+        background: active ? "var(--accent-muted)" : hovered ? "var(--nav-hover-bg)" : "transparent",
+        border: "none",
+        borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
+        cursor: "pointer",
+        transition: "all 0.1s ease",
+        userSelect: "none",
+        textAlign: "left",
+        borderRadius: 0,
+      }}
+    >
+      <span style={{
+        fontSize: 13,
+        width: 16,
+        textAlign: "center",
+        opacity: active ? 0.9 : 0.55,
+        flexShrink: 0,
+      }}>
+        {item.icon}
+      </span>
+      <span style={{
+        fontFamily: "var(--font-body)",
+        fontSize: 12,
+        fontWeight: active ? 600 : 500,
+        color: active ? "var(--accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
+        flex: 1,
+        lineHeight: 1.2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {item.label}
+      </span>
     </button>
   );
 }
@@ -1312,14 +1653,29 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </nav>
 
-        {/* Breadcrumbs */}
-        <Breadcrumbs currentPageName={currentPageName} />
+        {/* Sidebar + Content row */}
+        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {/* Sidebar — hidden on mobile */}
+          {!isMobile && (
+            <SidebarNav
+              currentPageName={currentPageName}
+              onNavigate={handleNavigate}
+              visible={!isMobile}
+            />
+          )}
 
-        {/* CONTENT */}
-        <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
-          <ProjectErrorBanner />
-          {children}
-        </main>
+          {/* Right column: Breadcrumbs + Content */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+            {/* Breadcrumbs */}
+            <Breadcrumbs currentPageName={currentPageName} />
+
+            {/* CONTENT */}
+            <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
+              <ProjectErrorBanner />
+              {children}
+            </main>
+          </div>
+        </div>
 
         {/* Global Search Modal */}
         <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />

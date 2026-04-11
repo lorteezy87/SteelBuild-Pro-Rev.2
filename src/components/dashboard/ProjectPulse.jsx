@@ -94,6 +94,22 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
     0
   );
 
+  // Completed / shipped work packages (by tonnage)
+  const completedTonnage = safeWPs
+    .filter((w) => w.status === "Complete" || w.phase === "Delivery" || w.phase === "Erection")
+    .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
+  const shippedTonnage = safeWPs
+    .filter((w) => w.phase === "Delivery" && w.status === "Complete")
+    .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
+  const completedWPs = safeWPs.filter(
+    (w) => w.status === "Complete" || w.status === "Shipped"
+  ).length;
+
+  // Released drawings count
+  const releasedDrawings = safeDrawings.filter(
+    (d) => d.current_stage === "Released"
+  ).length;
+
   // Drawings
   const lateDrawings = safeDrawings.filter((d) => {
     if (d.current_stage === "Released") return false;
@@ -139,12 +155,49 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
       a.status !== "Cancelled"
   );
 
+  // Data freshness — find the most recent date across all input data
+  const allDates = [];
+  safeRfis.forEach((r) => {
+    const d = toDate(r.updated_at || r.updated_date || r.created_at || r.created_date || r.date_required);
+    if (d) allDates.push(d);
+  });
+  safeWPs.forEach((w) => {
+    const d = toDate(w.updated_at || w.updated_date || w.created_at || w.created_date);
+    if (d) allDates.push(d);
+  });
+  safeDrawings.forEach((dr) => {
+    const d = toDate(dr.updated_at || dr.updated_date || dr.created_at || dr.created_date || dr.due_date);
+    if (d) allDates.push(d);
+  });
+  safeDeliveries.forEach((dl) => {
+    const d = toDate(dl.updated_at || dl.updated_date || dl.scheduled_date || dl.created_at || dl.created_date);
+    if (d) allDates.push(d);
+  });
+  safeCOs.forEach((c) => {
+    const d = toDate(c.updated_at || c.updated_date || c.created_at || c.created_date);
+    if (d) allDates.push(d);
+  });
+  safeActions.forEach((a) => {
+    const d = toDate(a.updated_at || a.updated_date || a.created_at || a.created_date);
+    if (d) allDates.push(d);
+  });
+  const latestDataDate = allDates.length > 0
+    ? new Date(Math.max(...allDates.map((d) => d.getTime())))
+    : null;
+  const daysSinceUpdate = latestDataDate
+    ? Math.floor((today.getTime() - latestDataDate.getTime()) / 86400000)
+    : null;
+
   return {
     openRfis,
     overdueRfis,
     blockedPackages,
     fabricationTonnage,
     totalTonnage,
+    completedTonnage,
+    shippedTonnage,
+    completedWPs,
+    releasedDrawings,
     lateDrawings,
     pendingCOs,
     coExposure,
@@ -158,10 +211,64 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
     totalDeliveries: safeDeliveries.length,
     totalCOs: safeCOs.length,
     totalActions: safeActions.length,
+    latestDataDate,
+    daysSinceUpdate,
   };
 }
 
-function determineHealth(m) {
+function computeTimeline(project, metrics) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Determine start and end dates from project
+  const start = toDate(project?.start_date || project?.contract_start_date);
+  const end = toDate(project?.target_completion_date || project?.end_date);
+
+  let timelineElapsed = null;
+  if (start && end && end > start) {
+    const totalDuration = end.getTime() - start.getTime();
+    const elapsed = today.getTime() - start.getTime();
+    timelineElapsed = Math.max(0, Math.min(100, Math.round((elapsed / totalDuration) * 100)));
+  }
+
+  // Progress based on tonnage completion
+  const m = metrics;
+  let progressPercent = null;
+  if (m.totalTonnage > 0) {
+    progressPercent = Math.round((m.completedTonnage / m.totalTonnage) * 100);
+  } else if (m.totalWPs > 0) {
+    progressPercent = Math.round((m.completedWPs / m.totalWPs) * 100);
+  }
+
+  // Check if all work metrics are zero
+  const allWorkMetricsZero =
+    m.shippedTonnage === 0 &&
+    m.completedWPs === 0 &&
+    m.releasedDrawings === 0 &&
+    m.fabricationTonnage === 0;
+
+  return { timelineElapsed, progressPercent, allWorkMetricsZero };
+}
+
+function determineHealth(m, timeline) {
+  const { timelineElapsed, progressPercent, allWorkMetricsZero } = timeline;
+
+  // Cross-metric: timeline vs progress discrepancy (checked FIRST)
+  if (timelineElapsed != null && progressPercent != null) {
+    if (timelineElapsed > 70 && progressPercent < 20) {
+      return { ...HEALTH.CRITICAL, reason: "timeline_mismatch" };
+    }
+    if (timelineElapsed > 50 && progressPercent < 10) {
+      return { ...HEALTH.CRITICAL, reason: "timeline_mismatch" };
+    }
+  }
+
+  // Zero-data warning: timeline started but no production data recorded
+  if (timelineElapsed != null && timelineElapsed > 40 && allWorkMetricsZero) {
+    return { ...HEALTH.WARNING, reason: "awaiting_data" };
+  }
+
+  // Existing rules
   if (m.overdueRfis.length > 3 || m.blockedPackages.length > 2 || m.lateDrawings.length > 5) {
     return HEALTH.CRITICAL;
   }
@@ -176,12 +283,25 @@ function determineHealth(m) {
   return HEALTH.HEALTHY;
 }
 
-function buildNarrative(project, metrics, health) {
+function buildNarrative(project, metrics, health, timeline) {
   const m = metrics;
   const name = project?.name || "Project";
   const contractVal = project?.contract_value
     ? formatCurrency(project.contract_value)
     : null;
+  const { timelineElapsed, progressPercent } = timeline;
+
+  // Handle cross-metric discrepancy narratives first
+  if (health.reason === "timeline_mismatch" && timelineElapsed != null && progressPercent != null) {
+    const progressLabel = m.totalTonnage > 0
+      ? `${progressPercent}% of steel is fabricated/shipped`
+      : `${progressPercent}% of work packages are complete`;
+    return `**\u26A0 CRITICAL**: ${name} is ${timelineElapsed}% through timeline but only ${progressLabel}. This represents a significant schedule risk \u2014 verify status with the field team or update work package progress.`;
+  }
+
+  if (health.reason === "awaiting_data" && timelineElapsed != null) {
+    return `**\u26A0 DATA GAP**: ${name} shows ${timelineElapsed}% timeline elapsed but no production data has been recorded. Update work package statuses to enable accurate forecasting.`;
+  }
 
   const fabPct = pct(m.fabricationTonnage, m.totalTonnage);
   const resolvedRfis = m.totalRfis - m.openRfis.length;
@@ -318,9 +438,35 @@ function buildBlockedRisk(m) {
   return detail;
 }
 
-function buildPills(metrics) {
+function buildPills(metrics, timeline) {
   const pills = [];
   const m = metrics;
+  const { timelineElapsed, progressPercent } = timeline || {};
+
+  // Timeline-progress mismatch pill
+  if (
+    timelineElapsed != null &&
+    progressPercent != null &&
+    timelineElapsed > 40 &&
+    progressPercent < 20
+  ) {
+    pills.push({
+      label: `TIMELINE ${timelineElapsed}% / PROGRESS ${progressPercent}%`,
+      color: "var(--status-error)",
+    });
+  }
+
+  // Awaiting data pill
+  if (
+    timelineElapsed != null &&
+    timelineElapsed > 40 &&
+    timeline?.allWorkMetricsZero
+  ) {
+    pills.push({
+      label: "AWAITING DATA",
+      color: "var(--status-warning)",
+    });
+  }
 
   if (m.overdueRfis.length > 0) {
     pills.push({
@@ -420,14 +566,19 @@ export default function ProjectPulse({
     [rfis, workPackages, drawings, deliveries, changeOrders, actionItems]
   );
 
-  const health = useMemo(() => determineHealth(metrics), [metrics]);
-
-  const narrative = useMemo(
-    () => buildNarrative(project, metrics, health),
-    [project, metrics, health]
+  const timeline = useMemo(
+    () => computeTimeline(project, metrics),
+    [project, metrics]
   );
 
-  const pills = useMemo(() => buildPills(metrics), [metrics]);
+  const health = useMemo(() => determineHealth(metrics, timeline), [metrics, timeline]);
+
+  const narrative = useMemo(
+    () => buildNarrative(project, metrics, health, timeline),
+    [project, metrics, health, timeline]
+  );
+
+  const pills = useMemo(() => buildPills(metrics, timeline), [metrics, timeline]);
 
   return (
     <>
@@ -550,6 +701,49 @@ export default function ProjectPulse({
                   {pill.label}
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Data freshness indicator */}
+          {metrics.latestDataDate && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                paddingTop: 6,
+                borderTop: "1px solid var(--border-default)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Last updated: {metrics.latestDataDate.toLocaleDateString()}
+              </span>
+              {metrics.daysSinceUpdate != null && metrics.daysSinceUpdate >= 14 && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 7,
+                    fontWeight: 700,
+                    color: "var(--status-warning)",
+                    background: "var(--warning-muted)",
+                    border: "1px solid var(--warning-border)",
+                    borderRadius: 4,
+                    padding: "2px 6px",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  STALE DATA
+                </span>
+              )}
             </div>
           )}
         </div>
