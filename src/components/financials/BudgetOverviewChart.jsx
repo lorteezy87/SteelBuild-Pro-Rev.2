@@ -245,7 +245,7 @@ export default function BudgetOverviewChart({ summary }) {
       >
         <div
           style={{
-            background: "rgba(255,255,255,0.015)",
+            background: "var(--hover-bg)",
             border: "1px solid var(--divider)",
             borderRadius: 10,
             padding: "14px 14px 8px",
@@ -279,7 +279,7 @@ export default function BudgetOverviewChart({ summary }) {
                   fontSize: 9,
                 }}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--hover-bg)" }} />
               {SERIES.map((series) => (
                 <Bar
                   key={series.key}
@@ -295,7 +295,7 @@ export default function BudgetOverviewChart({ summary }) {
 
         <div
           style={{
-            background: "rgba(255,255,255,0.015)",
+            background: "var(--hover-bg)",
             border: "1px solid var(--divider)",
             borderRadius: 10,
             overflow: "hidden",
@@ -359,7 +359,7 @@ export default function BudgetOverviewChart({ summary }) {
                 alignItems: "center",
                 padding: "12px 14px",
                 borderBottom: index === 3 ? "none" : "1px solid var(--divider)",
-                background: index % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
+                background: index % 2 === 0 ? "transparent" : "var(--hover-bg)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

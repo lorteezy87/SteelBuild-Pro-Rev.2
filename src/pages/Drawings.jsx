@@ -759,7 +759,7 @@ export default function Drawings() {
 function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
   const allSelected = selected.size === drawings.length && drawings.length > 0;
   const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
-  const tdStyle = { padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", verticalAlign: "middle" };
+  const tdStyle = { padding: "10px 12px", borderBottom: "1px solid var(--divider)", verticalAlign: "middle" };
 
   return (
     <div style={{ ...surface, overflowX: "auto" }}>
@@ -831,8 +831,8 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                     <span style={{
                       ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
                       color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                      background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                      border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                      background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "var(--bg-surface-high)",
+                      border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "var(--border-default)"}`,
                       textTransform: "uppercase",
                     }}>
                       {d.set_approval_status}
@@ -840,7 +840,7 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                   ) : d.drawing_set_name?.trim() ? (
                     <button onClick={() => onSetApproval(d.drawing_set_name.trim())} style={{
                       ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                      background: "none", border: "1px dashed rgba(255,255,255,0.15)", color: "var(--text-muted)", cursor: "pointer",
+                      background: "none", border: "1px dashed var(--border-strong)", color: "var(--text-muted)", cursor: "pointer",
                     }}>
                       REVIEW
                     </button>
@@ -926,8 +926,8 @@ function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdva
                   <span style={{
                     ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 2,
                     color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                    background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                    border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                    background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "var(--bg-surface-high)",
+                    border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "var(--border-default)"}`,
                     textTransform: "uppercase",
                   }}>{d.set_approval_status}</span>
                 </div>

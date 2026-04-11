@@ -117,6 +117,7 @@
   --hover-bg:                 rgba(255,255,255,0.04);
   --bg-hover:                 rgba(255,255,255,0.04);
   --bg-row-hover:             rgba(255,255,255,0.03);
+  --nav-bg:                   rgba(7,9,14,0.97);
   --nav-hover-bg:             rgba(200,155,32,0.08);
 
   /* ── Radius — rounded, modern ── */
@@ -665,6 +666,7 @@ button { cursor: pointer; outline: none; }
   --hover-bg:                 rgba(0,0,0,0.03);
   --bg-hover:                 rgba(0,0,0,0.03);
   --bg-row-hover:             rgba(0,0,0,0.02);
+  --nav-bg:                   rgba(255,255,255,0.97);
   --nav-hover-bg:             rgba(184,134,11,0.08);
 
   /* ── Glassmorphism — light variant ── */

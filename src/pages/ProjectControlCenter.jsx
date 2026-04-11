@@ -50,7 +50,7 @@ function SignalCard({ label, value, color, sub, onClick, active, previous, inver
         minHeight: 44,
         padding: "14px 18px",
         background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}40` : "rgba(255,255,255,0.06)"}`,
+        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}40` : "var(--divider)"}`,
         borderRadius: "var(--radius-card, 10px)",
         cursor: onClick ? "pointer" : "default",
         boxShadow: hasValue ? `0 0 16px ${color}25` : "var(--shadow-card, none)",
@@ -132,8 +132,8 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
     <div
       style={{
         display: "flex",
-        background: expanded ? "rgba(255,255,255,0.025)" : "var(--bg-card, var(--bg-surface))",
-        border: "1px solid var(--border-default, rgba(255,255,255,0.06))",
+        background: expanded ? "var(--hover-bg)" : "var(--bg-card, var(--bg-surface))",
+        border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-card, 10px)",
         minHeight: 48,
         overflow: "hidden",
@@ -205,14 +205,14 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
               onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
               title="View details"
               style={{
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)",
                 borderRadius: "var(--radius-btn, 8px)", width: 36, height: 36,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "rgba(160,175,210,0.50)", fontSize: 12, flexShrink: 0,
+                cursor: "pointer", color: "var(--text-secondary)", fontSize: 12, flexShrink: 0,
                 transition: "background 0.1s",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.10)"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+              onMouseEnter={(e) => e.currentTarget.style.background = "var(--border-default)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
             >⤢</button>
           </div>
 
@@ -221,7 +221,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
             {/* Timing */}
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 9,
-              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "rgba(160,175,210,0.38)",
+              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-muted)",
               whiteSpace: "nowrap",
             }}>
               {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—")}
@@ -247,7 +247,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
 
         {/* Expanded detail */}
         {expanded && (
-          <div style={{ padding: "10px 14px 14px 46px", display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          <div style={{ padding: "10px 14px 14px 46px", display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--divider)" }}>
             {/* Impact tags */}
             {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -258,7 +258,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
             {/* All reasons */}
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               {item.reasons.map((r, i) => (
-                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 4 }}>
+                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "var(--hover-bg)", border: "1px solid var(--divider)", padding: "2px 8px", borderRadius: 4 }}>
                   {r}
                 </span>
               ))}
@@ -309,12 +309,12 @@ function DetailDrawer({ item, onClose, onNavigate }) {
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 380,
-        background: "var(--bg-surface)", borderLeft: "1px solid rgba(255,255,255,0.08)",
+        background: "var(--bg-surface)", borderLeft: "1px solid var(--bg-surface-high)",
         boxShadow: "-12px 0 40px rgba(0,0,0,0.70)", zIndex: 51,
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
@@ -369,7 +369,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>WHY IT'S RANKED HERE</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {item.reasons.map((r, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
                     <span style={{ color: item.severity.color, fontSize: 10, lineHeight: 1 }}>▸</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{r}</span>
                   </div>
@@ -418,7 +418,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
         </div>
 
         {/* Footer — next action */}
-        <div style={{ padding: "12px 20px", borderTop: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-default)", flexShrink: 0 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 8 }}>RECOMMENDED ACTION</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={{
@@ -432,7 +432,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
               <button
                 onClick={() => { onNavigate(item); onClose(); }}
                 style={{
-                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+                  background: "var(--hover-bg)", border: "1px solid var(--border-default)",
                   borderRadius: 6, padding: "9px 14px", minHeight: 44, color: "var(--text-secondary)",
                   fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
                   letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap",
@@ -442,7 +442,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
               </button>
             )}
             <button onClick={onClose} style={{
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
+              background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)",
               borderRadius: 6, padding: "9px 14px", minHeight: 44, color: "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer",
               letterSpacing: "0.08em", textTransform: "uppercase",
@@ -469,7 +469,7 @@ function MorningScan({ items, onSelect }) {
   }
   return (
     <div style={{ flex: 1, overflowY: "auto" }}>
-      <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--divider)" }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>
           TOP {top.length} ITEMS REQUIRING ATTENTION TODAY
         </div>
@@ -482,10 +482,10 @@ function MorningScan({ items, onSelect }) {
             onClick={() => onSelect(item)}
             style={{
               display: "flex", alignItems: "center", gap: 12,
-              padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+              padding: "12px 20px", borderBottom: "1px solid var(--divider)",
               cursor: "pointer", transition: "background 0.1s",
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
             onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
             {/* Index */}
@@ -533,15 +533,15 @@ function WaitingOnBoard({ board }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 16px" }}>
       {board.map(({ party, items, count }) => (
-        <div key={party} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: "rgba(255,255,255,0.015)" }}>
+        <div key={party} style={{ background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid var(--divider)", background: "var(--hover-bg)" }}>
             <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{party}</span>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FFB400", background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.22)", padding: "1px 7px", borderRadius: 3 }}>
               {count} ITEMS
             </span>
           </div>
           {items.slice(0, 3).map((item) => (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--divider)" }}>
               <SeverityBadge severity={item.severity} />
               <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.title}
@@ -577,8 +577,8 @@ function RiskWatchlist({ items, onSelect }) {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {high.map((item) => (
-        <div key={item.id} onClick={() => onSelect?.(item)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}
-          onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+        <div key={item.id} onClick={() => onSelect?.(item)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid var(--divider)", cursor: "pointer" }}
+          onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
           onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
         >
           <div style={{ width: 3, height: 28, background: item.severity.color, borderRadius: 2, flexShrink: 0 }} />
@@ -679,7 +679,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
       {/* Severity breakdown bar */}
       <div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>SEVERITY BREAKDOWN</div>
-        <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 8, background: "rgba(255,255,255,0.04)" }}>
+        <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 8, background: "var(--hover-bg)" }}>
           {segments.map((seg) => (
             seg.count > 0 && (
               <div key={seg.key} style={{ width: `${(seg.count / (total || 1)) * 100}%`, background: seg.color, transition: "width 0.3s" }} title={`${seg.key}: ${seg.count}`} />
@@ -702,7 +702,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>TOP WAITING ON</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {topWaiting.map(({ party, count }) => (
-              <div key={party} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+              <div key={party} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{party}</span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#FFB400" }}>{count}</span>
               </div>
@@ -713,11 +713,11 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
 
       {/* Key metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+        <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
         </div>
-        <div style={{ padding: "8px 10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6 }}>
+        <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
         </div>
@@ -901,7 +901,7 @@ export default function ProjectControlCenter() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Last refresh */}
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.30)", letterSpacing: "0.08em" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
             SCORED {lastRefresh.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
           </span>
 
@@ -1046,9 +1046,9 @@ export default function ProjectControlCenter() {
                 {tab.count > 0 && (
                   <span style={{
                     fontFamily: "var(--font-mono)", fontSize: 8,
-                    background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "rgba(255,255,255,0.05)",
+                    background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "var(--hover-bg)",
                     color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
-                    border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "var(--bg-surface-high)"}`,
                     padding: "0 5px", borderRadius: 3,
                   }}>
                     {tab.count}
@@ -1064,7 +1064,7 @@ export default function ProjectControlCenter() {
             {/* No project selected */}
             {noProject && (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "rgba(160,175,210,0.10)" }}>⊙</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, color: "var(--text-muted)" }}>⊙</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.12em" }}>SELECT A PROJECT TO LOAD PCC</div>
               </div>
             )}

@@ -69,10 +69,10 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface-low)', overflow: 'hidden' }}>
       {/* Timeline Header */}
-      <div style={{ height: 44, borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'var(--bg-sidebar)', overflow: 'hidden' }}>
+      <div style={{ height: 44, borderBottom: '1px solid var(--border-default)', background: 'var(--bg-sidebar)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', height: '100%' }}>
           {/* Months row */}
-          <div style={{ height: 20, display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.05)', width: timelineWidth }}>
+          <div style={{ height: 20, display: 'flex', borderBottom: '1px solid var(--divider)', width: timelineWidth }}>
             {columns.map((col, i) => {
               const isNewMonth = i === 0 || col.getMonth() !== columns[i - 1].getMonth();
               if (!isNewMonth) return null;
@@ -88,7 +88,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
                     fontFamily: 'var(--font-mono)',
                     fontSize: 8,
                     color: 'var(--text-muted)',
-                    borderRight: '1px solid rgba(255,255,255,0.05)',
+                    borderRight: '1px solid var(--divider)',
                   }}
                 >
                   {col.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
@@ -110,8 +110,8 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRight: '1px solid rgba(255,255,255,0.05)',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    borderRight: '1px solid var(--divider)',
+                    borderBottom: '1px solid var(--divider)',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 8,
                     color: isSunday ? 'var(--warning-muted)' : 'var(--text-muted)',
@@ -192,8 +192,8 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
                 display: 'flex',
                 alignItems: 'center',
                 height: 34,
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
-                background: isSelected ? 'var(--accent-muted)' : idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                borderBottom: '1px solid var(--divider)',
+                background: isSelected ? 'var(--accent-muted)' : idx % 2 === 0 ? 'transparent' : 'var(--hover-bg)',
                 position: 'relative',
               }}
             >
@@ -239,7 +239,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
                       top: 0,
                       height: '100%',
                       width: `${task.percent_complete}%`,
-                      background: 'rgba(255,255,255,0.20)',
+                      background: 'var(--border-strong)',
                       borderRadius: 4,
                     }}
                   />

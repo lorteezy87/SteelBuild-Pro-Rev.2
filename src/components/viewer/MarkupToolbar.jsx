@@ -227,7 +227,7 @@ export default function MarkupToolbar({
                 width: 14,
                 height: 14,
                 borderRadius: "50%",
-                border: width === lineWidth ? "1px solid #fff" : "1px solid rgba(255,255,255,0.12)",
+                border: width === lineWidth ? "1px solid #fff" : "1px solid var(--border-default)",
                 background: "transparent",
                 display: "flex",
                 alignItems: "center",
@@ -299,7 +299,7 @@ export default function MarkupToolbar({
                 height: 24,
                 borderRadius: 6,
                 background: color,
-                border: activeColor === color ? "2px solid #fff" : "1px solid rgba(255,255,255,0.16)",
+                border: activeColor === color ? "2px solid #fff" : "1px solid var(--border-strong)",
                 cursor: "pointer",
                 justifySelf: "center",
               }}
@@ -314,7 +314,7 @@ export default function MarkupToolbar({
               height: 24,
               borderRadius: 6,
               background: activeColor,
-              border: "2px solid rgba(255,255,255,0.28)",
+              border: "2px solid var(--border-strong)",
               boxShadow: `0 0 10px ${activeColor}44`,
             }}
           />
@@ -325,7 +325,7 @@ export default function MarkupToolbar({
               width: 30,
               height: 30,
               borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.14)",
+              border: "1px solid var(--border-strong)",
               background: "var(--bg-surface-high)",
               color: "var(--text-secondary)",
               cursor: "pointer",

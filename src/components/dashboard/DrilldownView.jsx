@@ -12,6 +12,7 @@ import FinancialSnapshotCard from "./FinancialSnapshotCard";
 import UpcomingDeliveriesCard from "./UpcomingDeliveriesCard";
 import DrawingApprovalStatusCard from "./DrawingApprovalStatusCard";
 import BudgetOverviewChart from "../financials/BudgetOverviewChart";
+import ProjectPulse from "./ProjectPulse";
 
 function startOfToday() {
   const date = new Date();
@@ -892,6 +893,18 @@ export default function DrilldownView({
           cos={cos}
           financials={financials}
           onClearProject={onClearProject}
+        />
+      </ErrorBoundary>
+
+      <ErrorBoundary label="AI Project Pulse">
+        <ProjectPulse
+          project={project}
+          rfis={rfis}
+          workPackages={wps}
+          drawings={drawings}
+          deliveries={deliveries}
+          changeOrders={cos}
+          actionItems={actionItems}
         />
       </ErrorBoundary>
 

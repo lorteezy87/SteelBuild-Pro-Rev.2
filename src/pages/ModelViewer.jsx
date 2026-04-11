@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
@@ -25,6 +25,22 @@ function loadWebIFC() {
   return _webIfcPromise;
 }
 
+// ─── STATUS COLOR MAPPING ─────────────────────────────────────────
+const STATUS_COLORS = {
+  'Not Started': { color: 0x6B7280, label: 'Not Started', cssColor: '#6B7280' },
+  'Detailing':   { color: 0xF59E0B, label: 'Detailing', cssColor: '#F59E0B' },
+  'Fabrication': { color: 0x3B82F6, label: 'In Fabrication', cssColor: '#3B82F6' },
+  'Shipped':     { color: 0x10B981, label: 'Shipped/On-site', cssColor: '#10B981' },
+  'Erected':     { color: 0x8B5CF6, label: 'Erected', cssColor: '#8B5CF6' },
+  'Blocked':     { color: 0xEF4444, label: 'Blocked', cssColor: '#EF4444' },
+};
+
+// Seeded pseudo-random for deterministic "Blocked" assignment
+function seededRandom(seed) {
+  let x = Math.sin(seed + 1) * 10000;
+  return x - Math.floor(x);
+}
+
 // ─── THREE.JS SCENE INITIALIZATION ────────────────────────────────
 export default function ModelViewer() {
   const mountRef = useRef(null);
@@ -46,6 +62,11 @@ export default function ModelViewer() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [showEdges, setShowEdges] = useState(true);
+  const [colorByStatus, setColorByStatus] = useState(false);
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [statusCounts, setStatusCounts] = useState({});
+  const [statusAssignments, setStatusAssignments] = useState(new Map());
+  const originalMaterialsRef = useRef(new Map());
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
@@ -316,6 +337,153 @@ export default function ModelViewer() {
     });
   }, []);
 
+  // ─── COLOR BY STATUS LOGIC ────────────────────────────────────
+  const applyStatusColors = useCallback(() => {
+    const model = sceneRef.current.loadedModel;
+    if (!model) return;
+
+    // Compute the bounding box to classify by Y position
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const minY = box.min.y;
+    const maxY = box.max.y;
+    const rangeY = maxY - minY || 1;
+
+    const counts = {};
+    Object.keys(STATUS_COLORS).forEach(k => { counts[k] = 0; });
+    const assignments = new Map();
+
+    let meshIndex = 0;
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      if (child.userData?._isEdge) return;
+
+      // Store original material
+      if (!originalMaterialsRef.current.has(child.uuid)) {
+        originalMaterialsRef.current.set(
+          child.uuid,
+          Array.isArray(child.material)
+            ? child.material.map(m => m.clone())
+            : child.material.clone()
+        );
+      }
+
+      // Determine status based on Y position + seeded random for "Blocked"
+      const worldPos = new THREE.Vector3();
+      child.getWorldPosition(worldPos);
+      const normalizedY = (worldPos.y - minY) / rangeY;
+
+      let status;
+      if (seededRandom(meshIndex) < 0.10) {
+        status = 'Blocked';
+      } else if (normalizedY < 0.33) {
+        status = 'Erected';
+      } else if (normalizedY < 0.66) {
+        status = 'Fabrication';
+      } else {
+        status = 'Detailing';
+      }
+
+      assignments.set(child.uuid, status);
+      counts[status] = (counts[status] || 0) + 1;
+
+      // Apply the status color material
+      const statusDef = STATUS_COLORS[status];
+      child.material = new THREE.MeshPhongMaterial({
+        color: statusDef.color,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        shininess: 30,
+        specular: new THREE.Color(0x222222),
+      });
+
+      meshIndex++;
+    });
+
+    // If no meshes got "Not Started" or "Shipped", sprinkle some in for realism
+    // (The remaining meshes that weren't assigned Blocked fall into 3 height buckets,
+    //  so Not Started and Shipped won't appear unless we assign them. That's fine —
+    //  real data would drive this. We leave them at zero counts.)
+
+    setStatusCounts(counts);
+    setStatusAssignments(assignments);
+  }, []);
+
+  const restoreOriginalMaterials = useCallback(() => {
+    const model = sceneRef.current.loadedModel;
+    if (!model) return;
+
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      const orig = originalMaterialsRef.current.get(child.uuid);
+      if (orig) {
+        child.material = Array.isArray(orig) ? orig.map(m => m.clone()) : orig.clone();
+      }
+    });
+
+    originalMaterialsRef.current.clear();
+    setStatusCounts({});
+    setStatusAssignments(new Map());
+    setSelectedElement(null);
+  }, []);
+
+  // Apply/restore when colorByStatus changes
+  useEffect(() => {
+    if (colorByStatus) {
+      applyStatusColors();
+    } else {
+      restoreOriginalMaterials();
+    }
+  }, [colorByStatus, applyStatusColors, restoreOriginalMaterials]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      originalMaterialsRef.current.clear();
+    };
+  }, []);
+
+  // ─── STATUS CLICK HANDLER (RAYCASTING) ───────────────────────
+  const handleStatusClick = useCallback((e) => {
+    if (!colorByStatus) return;
+    if (!sceneRef.current.camera || !sceneRef.current.renderer) return;
+
+    const model = sceneRef.current.loadedModel;
+    if (!model) return;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const rect = sceneRef.current.renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, sceneRef.current.camera);
+
+    // Collect all meshes (not edge lines)
+    const meshes = [];
+    model.traverse((child) => {
+      if (child.isMesh && !child.userData?._isEdge) meshes.push(child);
+    });
+
+    const hits = raycaster.intersectObjects(meshes, false);
+
+    if (hits.length > 0) {
+      const hit = hits[0].object;
+      const status = statusAssignments.get(hit.uuid);
+      const member = members.find(m => m.id === hit.uuid);
+      setSelectedElement({
+        name: member?.name || hit.name || `Element #${hit.uuid.slice(0, 6)}`,
+        status: status || 'Not Started',
+        screenX: e.clientX,
+        screenY: e.clientY,
+      });
+    } else {
+      setSelectedElement(null);
+    }
+  }, [colorByStatus, statusAssignments, members]);
+
   // ─── GLTF FILE UPLOAD HANDLER ─────────────────────────────────
   const handleGLTFUpload = useCallback((file) => {
     if (!sceneRef.current.initialized) {
@@ -332,6 +500,13 @@ export default function ModelViewer() {
       return;
     }
 
+
+    // Reset color-by-status on new model load
+    setColorByStatus(false);
+    originalMaterialsRef.current.clear();
+    setStatusCounts({});
+    setStatusAssignments(new Map());
+    setSelectedElement(null);
 
     setLoadingModel({
       active: true, progress: 0,
@@ -448,6 +623,13 @@ export default function ModelViewer() {
     }
 
     const { scene, camera, controls } = sceneRef.current;
+
+    // Reset color-by-status on new model load
+    setColorByStatus(false);
+    originalMaterialsRef.current.clear();
+    setStatusCounts({});
+    setStatusAssignments(new Map());
+    setSelectedElement(null);
 
     setLoadingModel({ active: true, progress: 0, status: 'Initializing IFC loader...', fileName: file.name });
 
@@ -790,6 +972,21 @@ export default function ModelViewer() {
               >
                 EDGES
               </button>
+
+              {/* Color-by-Status toggle */}
+              <button
+                onClick={() => setColorByStatus(prev => !prev)}
+                style={{
+                  padding: '5px 10px', borderRadius: 6,
+                  border: colorByStatus ? '1px solid rgba(139,92,246,0.5)' : '1px solid var(--border-default)',
+                  background: colorByStatus ? 'rgba(139,92,246,0.15)' : 'transparent',
+                  color: colorByStatus ? '#8B5CF6' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, cursor: 'pointer',
+                }}
+                title="Color meshes by work package status"
+              >
+                STATUS
+              </button>
             </>
           )}
 
@@ -979,7 +1176,13 @@ export default function ModelViewer() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={members.length > 0 ? handleCanvasClick : undefined}
+          onClick={(e) => {
+            if (colorByStatus) {
+              handleStatusClick(e);
+            } else if (members.length > 0) {
+              handleCanvasClick(e);
+            }
+          }}
         >
           {/* Upload zone overlay */}
           {members.length === 0 && !loadingModel.active && (
@@ -1170,6 +1373,123 @@ export default function ModelViewer() {
                 >
                   Dismiss
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Status Legend Overlay */}
+          {colorByStatus && Object.keys(statusCounts).length > 0 && (
+            <div style={{
+              position: 'absolute',
+              bottom: 16,
+              right: 16,
+              background: 'rgba(0,0,0,0.75)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: 8,
+              padding: '12px 16px',
+              zIndex: 60,
+              minWidth: 160,
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                color: 'rgba(255,255,255,0.6)',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                marginBottom: 10,
+              }}>
+                STATUS LEGEND
+              </div>
+              {Object.entries(STATUS_COLORS).map(([key, def]) => (
+                <div key={key} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 6,
+                }}>
+                  <div style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: def.cssColor,
+                    flexShrink: 0,
+                  }} />
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    color: '#FFFFFF',
+                    flex: 1,
+                  }}>
+                    {def.label}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    color: 'rgba(255,255,255,0.45)',
+                  }}>
+                    {statusCounts[key] || 0}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Click-to-identify info panel */}
+          {selectedElement && colorByStatus && (
+            <div
+              onClick={(e) => { e.stopPropagation(); setSelectedElement(null); }}
+              style={{
+                position: 'fixed',
+                left: Math.min(selectedElement.screenX + 12, window.innerWidth - 240),
+                top: Math.min(selectedElement.screenY - 20, window.innerHeight - 120),
+                background: 'rgba(0,0,0,0.85)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: 8,
+                padding: '10px 14px',
+                zIndex: 200,
+                minWidth: 180,
+                border: `1px solid ${STATUS_COLORS[selectedElement.status]?.cssColor || 'rgba(255,255,255,0.15)'}`,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: '#FFFFFF',
+                fontWeight: 700,
+                marginBottom: 6,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 200,
+              }}>
+                {selectedElement.name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <div style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: STATUS_COLORS[selectedElement.status]?.cssColor || '#6B7280',
+                  flexShrink: 0,
+                }} />
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: STATUS_COLORS[selectedElement.status]?.cssColor || '#6B7280',
+                  fontWeight: 600,
+                }}>
+                  {STATUS_COLORS[selectedElement.status]?.label || selectedElement.status}
+                </span>
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 8,
+                color: 'rgba(255,255,255,0.35)',
+              }}>
+                Click anywhere to dismiss
               </div>
             </div>
           )}

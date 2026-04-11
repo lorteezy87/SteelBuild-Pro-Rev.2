@@ -423,7 +423,7 @@ export default function WorkPackages() {
           </div>
         </div>
         {/* Segmented bar with phase-specific colors and glow */}
-        <div style={{ display: "flex", height: 28, overflow: "hidden", borderRadius: "var(--radius-badge)", marginBottom: 12, background: "rgba(255,255,255,0.03)" }}>
+        <div style={{ display: "flex", height: 28, overflow: "hidden", borderRadius: "var(--radius-badge)", marginBottom: 12, background: "var(--hover-bg)" }}>
           {phaseTons.map((p) => {
             const pct = (p.tons / total) * 100;
             const width = Math.max(pct > 0 ? 8 : 0, pct);
@@ -481,7 +481,7 @@ export default function WorkPackages() {
                   <span style={{ fontSize: 9, fontWeight: 600, color: p.color, marginLeft: 4 }}>({pct}%)</span>
                 </div>
                 {/* Mini progress bar */}
-                <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: 3, background: "var(--bg-surface-high)", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{
                     width: `${pct}%`,
                     height: "100%",

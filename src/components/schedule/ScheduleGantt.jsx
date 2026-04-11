@@ -141,7 +141,7 @@ function TaskBar({ task, leftPx, widthPx }) {
   }
   // Not Started / default
   return (
-    <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1px solid rgba(136,136,136,0.4)", borderRadius: 2, background: "rgba(136,136,136,0.06)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
+    <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1px solid var(--border-strong)", borderRadius: 2, background: "var(--hover-bg)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
       <span style={{ fontSize: 8, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
     </div>
   );
@@ -487,7 +487,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
                     {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "rgba(136,136,136,0.4)", marginTop: 2 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "var(--text-muted)", marginTop: 2 }}>
                     WK {Math.ceil((week - new Date(week.getFullYear(), 0, 1)) / 604800000)}
                   </span>
                 </div>
@@ -531,7 +531,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
             const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -617,7 +617,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
               return (
                 <div key={i} style={{
                   position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
-                  background: isMonthStart ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
+                  background: isMonthStart ? "var(--border-strong)" : "var(--divider)",
                 }} />
               );
             })}
@@ -673,14 +673,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 const { task } = row;
                 const overdue = isOverdue(task);
                 const hovered = hoveredRowId === task.id;
-                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "rgba(255,255,255,0.015)" : "transparent";
+                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "var(--hover-bg)" : "transparent";
                 const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
-                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg }} />;
+                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg }} />;
                 }
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid rgba(255,255,255,0.04)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
                     onClick={() => onTaskClick && onTaskClick(task)}
                     onMouseEnter={e => { setHoveredRowId(task.id); setTooltip({ task, x: e.clientX, y: e.clientY }); }}
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}

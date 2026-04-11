@@ -108,7 +108,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
             width: "100%",
             height: 38,
             background: "var(--bg-sidebar)",
-            border: "1px solid rgba(255,255,255,0.10)",
+            border: "1px solid var(--border-default)",
             borderRadius: 8,
             padding: "0 12px 0 36px",
             color: "var(--text-primary)",
@@ -121,7 +121,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
             e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.08)";
           }}
           onBlur={e => {
-            e.target.style.border = "1px solid rgba(255,255,255,0.10)";
+            e.target.style.border = "1px solid var(--border-default)";
             e.target.style.boxShadow = "none";
           }}
         />
@@ -148,8 +148,8 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
               <div key={getSetIdentity(ds)} onClick={() => setSelected(ds)} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "0 12px", height: 48,
-                background: isSelected ? "var(--warning-muted)" : "rgba(255,255,255,0.03)",
-                border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.06)"}`,
+                background: isSelected ? "var(--warning-muted)" : "var(--hover-bg)",
+                border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "var(--divider)"}`,
                 borderRadius: 8, cursor: "pointer",
                 transition: "all 0.1s"
               }}
@@ -161,8 +161,8 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
               }}
               onMouseLeave={e => {
                 if (!isSelected) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                  e.currentTarget.style.background = "var(--hover-bg)";
+                  e.currentTarget.style.borderColor = "var(--divider)";
                 }
               }}>
                 <div>
@@ -178,15 +178,15 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--divider)", paddingTop: 12 }}>
         <button onClick={onClose} style={{
-          height: 34, padding: "0 16px", background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8,
+          height: 34, padding: "0 16px", background: "var(--hover-bg)",
+          border: "1px solid var(--border-default)", borderRadius: 8,
           color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer"
         }}>Cancel</button>
         <button onClick={() => selected && onSelect(selected)} disabled={!selected || loading} style={{
           height: 34, padding: "0 18px", borderRadius: 8, cursor: selected && !loading ? "pointer" : "not-allowed",
-          background: selected && !loading ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: selected && !loading ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: selected && !loading ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
           display: "flex", alignItems: "center", gap: 6, opacity: selected && !loading ? 1 : 0.4
@@ -206,7 +206,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
   return (
     <div>
       {/* Current state */}
-      <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 16 }}>
+      <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 4 }}>UPDATING</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedSet.set_name}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 2, letterSpacing: "0.06em" }}>
@@ -222,8 +222,8 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
           {suggestions.map(s => (
             <button key={s} onClick={() => set("revisionLabel", s)} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-              background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.10)"}`,
+              background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
               color: revMeta.revisionLabel === s ? "var(--status-warning)" : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.06em"
             }}>{s}</button>
@@ -256,8 +256,8 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
           ].map(opt => (
             <div key={opt.value} onClick={() => set("disposition", opt.value)} style={{
               padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-              background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "rgba(255,255,255,0.02)",
-              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "rgba(255,255,255,0.07)"}`,
+              background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "var(--divider)"}`,
               display: "flex", alignItems: "center", gap: 10
             }}>
               <div style={{
@@ -275,12 +275,12 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onNext} disabled={!revMeta.revisionLabel} style={{
           padding: "7px 16px", borderRadius: 8, cursor: revMeta.revisionLabel ? "pointer" : "not-allowed",
-          background: revMeta.revisionLabel ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: revMeta.revisionLabel ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: revMeta.revisionLabel ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
@@ -314,7 +314,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
 
   return (
     <div>
-      <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+      <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
         <span style={{ color: "var(--status-warning)" }}>{selectedSet.set_name}</span>
         {" · "}Previous: {selectedSet.current_revision || "—"} ({selectedSet.sheet_count || 0} sheets)
         {" → "}
@@ -356,12 +356,12 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onExtract} disabled={!file} style={{
           padding: "7px 16px", borderRadius: 8, cursor: file ? "pointer" : "not-allowed",
-          background: file ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: file ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: file ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
@@ -392,7 +392,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
   return (
     <div>
       {/* Summary bar */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>{totalOld} → {totalNew} sheets</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FFB020", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
@@ -414,9 +414,9 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       )}
 
       {/* Comparison table */}
-      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid rgba(255,255,255,0.07)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
@@ -425,7 +425,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
         {matchedSheets.map((m, i) => {
           const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
           return (
-            <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: cs.bg, gap: 8 }}>
+            <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid var(--divider)", background: cs.bg, gap: 8 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: m.oldSheet ? "var(--text-muted)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetNumber || "—"}
               </span>
@@ -452,7 +452,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onConfirm} style={{
@@ -475,7 +475,7 @@ function StepProcessing({ message, progress }) {
       <div style={{ fontSize: 32, marginBottom: 12 }}>✦</div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Applying Revision Update</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24 }}>{message}</div>
-      <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 360, margin: "0 auto" }}>
+      <div style={{ background: "var(--bg-surface-high)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 360, margin: "0 auto" }}>
         <div style={{ height: "100%", background: "var(--accent)", borderRadius: 20, width: `${progress}%`, transition: "width 0.4s ease" }} />
       </div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 6 }}>{progress}%</div>
@@ -491,7 +491,7 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
         <Check style={{ width: 22, height: 22, color: "#00D68F" }} />
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Revision Applied</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "14px 16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 10, padding: "14px 16px" }}>
         {[
           `✓ "${selectedSet.set_name}" updated ${selectedSet.current_revision || "—"} → ${revMeta.revisionLabel}`,
           `✓ ${stats.updated} drawing records updated`,
@@ -731,7 +731,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               {step !== "processing" && (
                 <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
                   {STEP_ORDER.filter(s => s !== "processing").map((s, i) => (
-                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: STEP_ORDER.indexOf(step) >= i ? "var(--accent)" : "rgba(255,255,255,0.08)" }} />
+                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: STEP_ORDER.indexOf(step) >= i ? "var(--accent)" : "var(--bg-surface-high)" }} />
                   ))}
                 </div>
               )}

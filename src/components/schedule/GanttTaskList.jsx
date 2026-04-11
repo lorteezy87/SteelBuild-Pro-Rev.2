@@ -47,9 +47,9 @@ export default function GanttTaskList({ tasks = [], onSelectTask, selectedTaskId
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-surface-low)', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-surface-low)', borderRight: '1px solid var(--border-default)' }}>
       {/* Header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 86px 86px 44px 44px 80px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'var(--bg-sidebar)', padding: '0 12px', height: 28, alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 86px 86px 44px 44px 80px', borderBottom: '1px solid var(--border-default)', background: 'var(--bg-sidebar)', padding: '0 12px', height: 28, alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>WBS</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Task Name</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Start</div>
@@ -76,8 +76,8 @@ export default function GanttTaskList({ tasks = [], onSelectTask, selectedTaskId
               style={{
                 display: 'grid',
                 gridTemplateColumns: '48px 1fr 86px 86px 44px 44px 80px',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
-                background: isSelected ? 'var(--accent-muted)' : idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                borderBottom: '1px solid var(--divider)',
+                background: isSelected ? 'var(--accent-muted)' : idx % 2 === 0 ? 'transparent' : 'var(--hover-bg)',
                 padding: '0 12px',
                 height: 34,
                 alignItems: 'center',
@@ -85,10 +85,10 @@ export default function GanttTaskList({ tasks = [], onSelectTask, selectedTaskId
                 transition: 'background 0.1s',
               }}
               onMouseEnter={(e) => {
-                if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                if (!isSelected) e.currentTarget.style.background = 'var(--hover-bg)';
               }}
               onMouseLeave={(e) => {
-                if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)';
+                if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'var(--hover-bg)';
               }}
             >
               {/* WBS */}
@@ -164,7 +164,7 @@ export default function GanttTaskList({ tasks = [], onSelectTask, selectedTaskId
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span
                   style={{
-                    background: task.status === 'Complete' ? 'var(--success-muted)' : task.status === 'In Progress' ? 'var(--accent-muted)' : 'rgba(160,175,210,0.2)',
+                    background: task.status === 'Complete' ? 'var(--success-muted)' : task.status === 'In Progress' ? 'var(--accent-muted)' : 'var(--bg-surface-high)',
                     color: task.status === 'Complete' ? 'var(--status-success)' : task.status === 'In Progress' ? 'var(--accent)' : 'var(--text-muted)',
                     borderRadius: 4,
                     padding: '2px 6px',

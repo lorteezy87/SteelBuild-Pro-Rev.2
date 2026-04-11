@@ -24,7 +24,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
     <div style={{
       width: 260,
       background: "var(--bg-sidebar)",
-      borderLeft: "1px solid rgba(255,255,255,0.08)",
+      borderLeft: "1px solid var(--bg-surface-high)",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
@@ -33,7 +33,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
       {/* Header */}
       <div style={{
         padding: "10px 14px",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--bg-surface-high)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <span style={{
@@ -85,7 +85,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
               onClick={() => onSelectMarkup(markup)}
               style={{
                 padding: "10px 14px",
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                borderBottom: "1px solid var(--hover-bg)",
                 cursor: "pointer",
                 transition: "background 0.12s",
               }}
@@ -153,7 +153,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
       {markups.length === 0 && (
         <div style={{
           padding: "8px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
+          borderTop: "1px solid var(--hover-bg)",
           fontFamily: "var(--font-mono)", fontSize: 7,
           color: "var(--text-muted)", textAlign: "center", letterSpacing: "0.10em",
         }}>
