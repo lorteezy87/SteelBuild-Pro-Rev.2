@@ -367,7 +367,7 @@ export default function PortfolioView({
           stalledWPs,
         };
       })
-      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
+      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3) || (a.name || "").localeCompare(b.name || ""));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
 
   // Enrich metrics with weighted health scoring + reason strings
