@@ -4,6 +4,83 @@ import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as WebIFC from "web-ifc";
+
+// ─── IFC → Three.js mesh converter ──────────────────────────────
+async function loadIFCToThree(buffer, onProgress) {
+  const api = new WebIFC.IfcAPI();
+  api.SetWasmPath("/wasm/");
+  await api.Init();
+
+  onProgress?.(20, "Parsing IFC structure...");
+  const modelID = api.OpenModel(new Uint8Array(buffer));
+
+  onProgress?.(40, "Extracting geometry...");
+  const root = new THREE.Group();
+  root.name = "IFC_Model";
+
+  // Get all mesh geometries via FlatMesh API
+  api.StreamAllMeshes(modelID, (flatMesh) => {
+    const placedGeometries = flatMesh.geometries;
+    for (let i = 0; i < placedGeometries.size(); i++) {
+      const placedGeom = placedGeometries.get(i);
+      const geomData = api.GetGeometry(modelID, placedGeom.geometryExpressID);
+
+      const verts = api.GetVertexArray(geomData.GetVertexData(), geomData.GetVertexDataSize());
+      const indices = api.GetIndexArray(geomData.GetIndexData(), geomData.GetIndexDataSize());
+
+      if (verts.length === 0 || indices.length === 0) {
+        geomData.delete();
+        continue;
+      }
+
+      // Build BufferGeometry — vertices have 6 floats per vertex (x,y,z,nx,ny,nz)
+      const positions = new Float32Array(verts.length / 2);
+      const normals = new Float32Array(verts.length / 2);
+      for (let j = 0; j < verts.length; j += 6) {
+        const idx = j / 6;
+        positions[idx * 3] = verts[j];
+        positions[idx * 3 + 1] = verts[j + 1];
+        positions[idx * 3 + 2] = verts[j + 2];
+        normals[idx * 3] = verts[j + 3];
+        normals[idx * 3 + 1] = verts[j + 4];
+        normals[idx * 3 + 2] = verts[j + 5];
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+      geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+
+      const color = new THREE.Color(placedGeom.color.x, placedGeom.color.y, placedGeom.color.z);
+      const opacity = placedGeom.color.w;
+
+      const material = new THREE.MeshPhongMaterial({
+        color,
+        opacity,
+        transparent: opacity < 1,
+        side: THREE.DoubleSide,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Apply placement transform
+      const matrix = new THREE.Matrix4();
+      matrix.fromArray(placedGeom.flatTransformation);
+      mesh.applyMatrix4(matrix);
+
+      mesh.name = `IFC_${flatMesh.expressID}_${i}`;
+      root.add(mesh);
+
+      geomData.delete();
+    }
+  });
+
+  onProgress?.(85, "Finalizing...");
+  api.CloseModel(modelID);
+
+  return root;
+}
 
 // ─── TYPE INFERENCE ───────────────────────────────────────────────
 function inferType(name) {
@@ -230,14 +307,61 @@ export default function ModelViewer() {
     }
   }, [fitCamera]);
 
+  // ─── LOAD IFC ───────────────────────────────────────────────────
+  const handleIFCUpload = useCallback(async (file) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    setLoadingModel({ active: true, progress: 5, status: "Initializing IFC engine...", fileName: file.name });
+    setUploadError(null);
+
+    try {
+      if (loadedModelRef.current) {
+        scene.remove(loadedModelRef.current);
+        loadedModelRef.current = null;
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const model = await loadIFCToThree(arrayBuffer, (pct, status) => {
+        setLoadingModel((prev) => ({ ...prev, progress: pct, status }));
+      });
+
+      scene.add(model);
+
+      const extracted = [];
+      let idx = 0;
+      model.traverse((child) => {
+        if (child.isMesh) {
+          const name = child.name || `Element ${idx + 1}`;
+          const type = inferType(name);
+          extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
+          idx++;
+        }
+      });
+
+      setMembers(extracted);
+      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Fitting view..." }));
+
+      loadedModelRef.current = model;
+      fitCamera(model);
+
+      setModelLoaded({ name: file.name, memberCount: extracted.length, format: "IFC" });
+      setLoadingModel({ active: false, progress: 100, status: "", fileName: "" });
+    } catch (err) {
+      console.error("IFC load error:", err);
+      setUploadError("Failed to load IFC: " + err.message);
+      setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
+    }
+  }, [fitCamera]);
+
   // ─── FILE HANDLING ──────────────────────────────────────────────
   const handleFile = useCallback((file) => {
     if (!file) return;
     const ext = file.name.split(".").pop().toLowerCase();
     if (["gltf", "glb"].includes(ext)) handleGLTFUpload(file);
-    else if (ext === "ifc") setUploadError("IFC support requires the @thatopen/components library. Please use GLTF/GLB format.");
-    else setUploadError("Unsupported format. Use .gltf or .glb");
-  }, [handleGLTFUpload]);
+    else if (ext === "ifc") handleIFCUpload(file);
+    else setUploadError("Unsupported format. Use .gltf, .glb, or .ifc");
+  }, [handleGLTFUpload, handleIFCUpload]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -369,7 +493,7 @@ export default function ModelViewer() {
           )}
 
           {/* Upload */}
-          <input id="model-upload" type="file" accept=".gltf,.glb" style={{ display: "none" }}
+          <input id="model-upload" type="file" accept=".gltf,.glb,.ifc" style={{ display: "none" }}
             onChange={(e) => handleFile(e.target.files?.[0])} />
           <label htmlFor="model-upload" style={{
             padding: "5px 12px", borderRadius: 6, background: "var(--accent)", color: "#fff",
@@ -461,13 +585,13 @@ export default function ModelViewer() {
               }}>
                 <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.6 }}>⬆</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#F2F4F8", marginBottom: 8 }}>
-                  Drop GLTF / GLB here
+                  Drop GLTF / GLB / IFC here
                 </div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
                   or click to browse
                 </div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginBottom: 16 }}>
-                  Supported: .gltf .glb
+                  Supported: .gltf .glb .ifc
                 </div>
                 <label htmlFor="model-upload" style={{
                   padding: "6px 14px", borderRadius: 8, background: "var(--accent)", color: "#fff",
