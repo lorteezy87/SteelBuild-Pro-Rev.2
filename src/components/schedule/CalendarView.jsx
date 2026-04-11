@@ -156,8 +156,8 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
               key={idx}
               onClick={() => onSelectDate(day.date)}
               style={{
-                background: cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'rgba(255,255,255,0.01)' : 'transparent',
-                border: cellIsToday ? '1px solid rgba(245,158,11,0.30)' : '1px solid rgba(255,255,255,0.05)',
+                background: cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'var(--hover-bg)' : 'transparent',
+                border: cellIsToday ? '1px solid rgba(245,158,11,0.30)' : '1px solid var(--hover-bg)',
                 borderRadius: 8,
                 padding: 8,
                 minHeight: 100,
@@ -167,10 +167,10 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!cellIsToday) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                if (!cellIsToday) e.currentTarget.style.background = 'var(--hover-bg)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'rgba(255,255,255,0.01)' : 'transparent';
+                e.currentTarget.style.background = cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'var(--hover-bg)' : 'transparent';
               }}
             >
               {/* Day number */}

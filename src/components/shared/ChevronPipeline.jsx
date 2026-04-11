@@ -25,7 +25,7 @@ export default function ChevronPipeline({
         height,
         borderRadius: "var(--radius-badge)",
         overflow: "hidden",
-        background: "rgba(255,255,255,0.03)",
+        background: "var(--hover-bg)",
       }}
     >
       {stages.map((stage, i) => {
@@ -33,7 +33,7 @@ export default function ChevronPipeline({
         const isCurrent = stage.key === currentStage;
         const isActive = isCompleted || isCurrent;
         const opacity = isActive ? 1 : 0.3;
-        const bg = isActive ? stage.color : "rgba(255,255,255,0.04)";
+        const bg = isActive ? stage.color : "var(--hover-bg)";
         const textColor = isActive ? "#fff" : "var(--text-muted)";
 
         return (

@@ -410,7 +410,7 @@ export default function Meetings() {
                 {count > 0 && (
                   <span
                     style={{
-                      background: isActive ? "rgba(7,9,14,0.25)" : "rgba(255,255,255,0.08)",
+                      background: isActive ? "rgba(7,9,14,0.25)" : "var(--bg-surface-high)",
                       borderRadius: "10px",
                       padding: "1px 5px",
                       fontSize: "8px",
