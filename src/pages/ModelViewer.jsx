@@ -2,24 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
-import * as OBC from "@thatopen/components";
-import * as OBF from "@thatopen/components-front";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
-// ─── STATUS COLOR MAPPING ─────────────────────────────────────────
-const STATUS_COLORS = {
-  "Not Started": { color: 0x6b7280, label: "Not Started", cssColor: "#6B7280" },
-  Detailing: { color: 0xf59e0b, label: "Detailing", cssColor: "#F59E0B" },
-  Fabrication: { color: 0x3b82f6, label: "In Fabrication", cssColor: "#3B82F6" },
-  Shipped: { color: 0x10b981, label: "Shipped/On-site", cssColor: "#10B981" },
-  Erected: { color: 0x8b5cf6, label: "Erected", cssColor: "#8B5CF6" },
-  Blocked: { color: 0xef4444, label: "Blocked", cssColor: "#EF4444" },
-};
-
-function seededRandom(seed) {
-  let x = Math.sin(seed + 1) * 10000;
-  return x - Math.floor(x);
-}
 
 // ─── TYPE INFERENCE ───────────────────────────────────────────────
 function inferType(name) {
@@ -42,9 +26,12 @@ const TYPE_COLORS = {
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
 export default function ModelViewer() {
   const containerRef = useRef(null);
-  const componentsRef = useRef(null);
-  const worldRef = useRef(null);
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const controlsRef = useRef(null);
   const loadedModelRef = useRef(null);
+  const animFrameRef = useRef(null);
 
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -55,82 +42,145 @@ export default function ModelViewer() {
   const [memberSearch, setMemberSearch] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [selectedElement, setSelectedElement] = useState(null);
-  const [navMode, setNavMode] = useState("orbit");
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
   });
 
-  // ─── @thatopen/components INITIALIZATION ────────────────────────
+  // ─── Three.js INITIALIZATION ────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || componentsRef.current) return;
+    if (!container || rendererRef.current) return;
 
-    const components = new OBC.Components();
-    componentsRef.current = components;
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1d24);
+    sceneRef.current = scene;
 
-    async function init() {
-      const worlds = components.get(OBC.Worlds);
-      const world = worlds.create();
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(50, 100, 50);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+    const hemiLight = new THREE.HemisphereLight(0xb1e1ff, 0xb97a20, 0.3);
+    scene.add(hemiLight);
 
-      // Scene
-      world.scene = new OBC.SimpleScene(components);
-      world.scene.setup();
-      world.scene.three.background = new THREE.Color(0xf0f2f5);
+    // Grid
+    const grid = new THREE.GridHelper(200, 40, 0x444444, 0x333333);
+    grid.material.opacity = 0.4;
+    grid.material.transparent = true;
+    scene.add(grid);
 
-      // Renderer
-      world.renderer = new OBC.SimpleRenderer(components, container);
+    // Camera
+    const w = container.clientWidth || 800;
+    const h = container.clientHeight || 600;
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10000);
+    camera.position.set(80, 60, 80);
+    camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
-      // Camera — OrthoPerspectiveCamera with proper orbit
-      world.camera = new OBC.OrthoPerspectiveCamera(components);
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
-      // Start render loop
-      components.init();
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 1;
+    controls.maxDistance = 5000;
+    controls.maxPolarAngle = Math.PI * 0.95;
+    controls.target.set(0, 0, 0);
+    controlsRef.current = controls;
 
-      // Grid
-      const grids = components.get(OBC.Grids);
-      grids.create(world);
-
-      worldRef.current = world;
+    // Render loop
+    function animate() {
+      animFrameRef.current = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
     }
+    animate();
 
-    init().catch((err) => {
-      console.error("Failed to init @thatopen/components:", err);
-      setUploadError("Failed to initialize 3D viewer: " + err.message);
-    });
+    // Resize handler
+    const onResize = () => {
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw === 0 || ch === 0) return;
+      camera.aspect = cw / ch;
+      camera.updateProjectionMatrix();
+      renderer.setSize(cw, ch);
+    };
+    const ro = new ResizeObserver(onResize);
+    ro.observe(container);
 
     return () => {
-      if (componentsRef.current) {
-        componentsRef.current.dispose();
-        componentsRef.current = null;
-        worldRef.current = null;
+      ro.disconnect();
+      cancelAnimationFrame(animFrameRef.current);
+      controls.dispose();
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
       }
+      rendererRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
+      controlsRef.current = null;
     };
   }, []);
 
   // ─── FIT CAMERA ────────────────────────────────────────────────
-  const fitCamera = useCallback(async (target) => {
-    const world = worldRef.current;
-    if (!world?.camera?.controls) return;
-    if (target) {
-      const box = new THREE.Box3().setFromObject(target);
-      const sphere = new THREE.Sphere();
-      box.getBoundingSphere(sphere);
-      world.camera.controls.fitToSphere(sphere, true);
-    }
+  const fitCamera = useCallback((target) => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls || !target) return;
+
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.8;
+
+    // Position camera at isometric angle
+    const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
+    camera.position.copy(center).add(offset);
+    controls.target.copy(center);
+    controls.update();
+
+    // Adjust near/far
+    camera.near = dist * 0.01;
+    camera.far = dist * 20;
+    camera.updateProjectionMatrix();
   }, []);
 
   // ─── LOAD GLTF/GLB ────────────────────────────────────────────
   const handleGLTFUpload = useCallback(async (file) => {
-    const world = worldRef.current;
-    if (!world) return;
+    const scene = sceneRef.current;
+    if (!scene) return;
 
     setLoadingModel({ active: true, progress: 10, status: "Parsing GLTF...", fileName: file.name });
     setUploadError(null);
 
     try {
+      // Remove previous model
+      if (loadedModelRef.current) {
+        scene.remove(loadedModelRef.current);
+        loadedModelRef.current = null;
+      }
+
       const url = URL.createObjectURL(file);
       const loader = new GLTFLoader();
 
@@ -151,7 +201,7 @@ export default function ModelViewer() {
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Processing meshes..." }));
 
       const model = gltf.scene;
-      world.scene.three.add(model);
+      scene.add(model);
 
       // Extract members
       const extracted = [];
@@ -160,13 +210,7 @@ export default function ModelViewer() {
         if (child.isMesh) {
           const name = child.name || `Element ${idx + 1}`;
           const type = inferType(name);
-          extracted.push({
-            id: idx,
-            name,
-            type,
-            color: TYPE_COLORS[type],
-            mesh: child,
-          });
+          extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
           idx++;
         }
       });
@@ -174,9 +218,8 @@ export default function ModelViewer() {
       setMembers(extracted);
       setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Fitting view..." }));
 
-      // Store reference and fit
       loadedModelRef.current = model;
-      await fitCamera(model);
+      fitCamera(model);
 
       setModelLoaded({ name: file.name, memberCount: extracted.length, format: "GLTF" });
       setLoadingModel({ active: false, progress: 100, status: "", fileName: "" });
@@ -187,93 +230,14 @@ export default function ModelViewer() {
     }
   }, [fitCamera]);
 
-  // ─── LOAD IFC ──────────────────────────────────────────────────
-  const handleIFCUpload = useCallback(async (file) => {
-    const components = componentsRef.current;
-    const world = worldRef.current;
-    if (!components || !world) return;
-
-    setLoadingModel({ active: true, progress: 5, status: "Initializing IFC loader...", fileName: file.name });
-    setUploadError(null);
-
-    try {
-      // Get the IFC loader
-      const ifcLoader = components.get(OBC.IfcLoader);
-
-      // Setup WASM — point to the public/wasm folder
-      setLoadingModel((prev) => ({ ...prev, progress: 10, status: "Loading WASM engine..." }));
-      await ifcLoader.setup({
-        autoSetWasm: false,
-        wasm: { path: "/wasm/", absolute: true },
-      });
-
-      // Initialize fragments manager
-      const fragments = components.get(OBC.FragmentsManager);
-      // Set up the worker for fragments
-      try {
-        const workerUrl = "https://thatopen.github.io/engine_fragment/resources/worker.mjs";
-        const resp = await fetch(workerUrl);
-        const blob = await resp.blob();
-        const workerFile = new File([blob], "worker.mjs", { type: "text/javascript" });
-        const objUrl = URL.createObjectURL(workerFile);
-        fragments.init(objUrl);
-      } catch {
-        // Worker init may fail on some setups, continue anyway
-      }
-
-      // Wire model loading to scene
-      fragments.list.onItemSet.add(({ value: model }) => {
-        model.useCamera(world.camera.three);
-        world.scene.three.add(model.object);
-      });
-
-      setLoadingModel((prev) => ({ ...prev, progress: 30, status: "Parsing IFC file..." }));
-
-      // Load IFC
-      const data = await file.arrayBuffer();
-      const buffer = new Uint8Array(data);
-      const ifcModel = await ifcLoader.load(buffer, true, file.name);
-
-      setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Extracting elements..." }));
-
-      // Extract members from the loaded model object
-      const extracted = [];
-      let idx = 0;
-      ifcModel.object.traverse((child) => {
-        if (child.isMesh || child.isGroup) {
-          const name = child.name || `Element ${idx + 1}`;
-          const type = inferType(name);
-          if (child.isMesh) {
-            extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
-            idx++;
-          }
-        }
-      });
-
-      setMembers(extracted);
-      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Fitting view..." }));
-
-      // Fit camera to model
-      loadedModelRef.current = ifcModel.object;
-      await fitCamera(ifcModel.object);
-
-      setModelLoaded({ name: file.name, memberCount: extracted.length, format: "IFC" });
-      setLoadingModel({ active: false, progress: 100, status: "", fileName: "" });
-    } catch (err) {
-      console.error("IFC load error:", err);
-      setUploadError("Failed to load IFC: " + err.message);
-      setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
-    }
-  }, [fitCamera]);
-
   // ─── FILE HANDLING ──────────────────────────────────────────────
   const handleFile = useCallback((file) => {
     if (!file) return;
     const ext = file.name.split(".").pop().toLowerCase();
-    if (ext === "ifc") handleIFCUpload(file);
-    else if (["gltf", "glb"].includes(ext)) handleGLTFUpload(file);
-    else setUploadError("Unsupported format. Use .gltf, .glb, or .ifc");
-  }, [handleIFCUpload, handleGLTFUpload]);
+    if (["gltf", "glb"].includes(ext)) handleGLTFUpload(file);
+    else if (ext === "ifc") setUploadError("IFC support requires the @thatopen/components library. Please use GLTF/GLB format.");
+    else setUploadError("Unsupported format. Use .gltf or .glb");
+  }, [handleGLTFUpload]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -283,15 +247,18 @@ export default function ModelViewer() {
   }, [handleFile]);
 
   // ─── CAMERA PRESETS ────────────────────────────────────────────
-  const setView = useCallback(async (preset) => {
-    const world = worldRef.current;
-    const model = world?._loadedModel;
-    if (!world?.camera?.controls || !model) return;
+  const setView = useCallback((preset) => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const model = loadedModelRef.current;
+    if (!camera || !controls || !model) return;
 
     const box = new THREE.Box3().setFromObject(model);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z) * 2;
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.8;
 
     const dir = new THREE.Vector3();
     switch (preset) {
@@ -300,30 +267,14 @@ export default function ModelViewer() {
       case "top": dir.set(0, 1, 0.001); break;
       case "right": dir.set(1, 0, 0); break;
       case "left": dir.set(-1, 0, 0); break;
-      case "iso": default: dir.set(1, 0.6, 1); break;
+      case "iso": default: dir.set(1, 0.7, 1); break;
     }
     dir.normalize();
-    const pos = center.clone().addScaledVector(dir, maxDim);
-
-    await world.camera.controls.setLookAt(
-      pos.x, pos.y, pos.z,
-      center.x, center.y, center.z,
-      true
-    );
+    const pos = center.clone().addScaledVector(dir, dist);
+    camera.position.copy(pos);
+    controls.target.copy(center);
+    controls.update();
   }, []);
-
-  // ─── NAV MODE ──────────────────────────────────────────────────
-  useEffect(() => {
-    const world = worldRef.current;
-    if (!world?.camera) return;
-    try {
-      if (navMode === "orbit") world.camera.set("Orbit");
-      else if (navMode === "firstperson") world.camera.set("FirstPerson");
-      else if (navMode === "plan") world.camera.set("Plan");
-    } catch {
-      // Camera mode not available yet
-    }
-  }, [navMode]);
 
   // ─── KEYBOARD SHORTCUTS ────────────────────────────────────────
   useEffect(() => {
@@ -334,9 +285,6 @@ export default function ModelViewer() {
         if (model) fitCamera(model);
       }
       if (e.key === "[") setLeftPanelOpen((p) => !p);
-      if (e.key === "1") setNavMode("orbit");
-      if (e.key === "2") setNavMode("firstperson");
-      if (e.key === "3") setNavMode("plan");
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -346,12 +294,19 @@ export default function ModelViewer() {
   const selectMember = useCallback((member) => {
     setSelectedMember(member);
     if (member?.mesh) {
-      const world = worldRef.current;
-      if (world?.camera?.controls) {
+      const camera = cameraRef.current;
+      const controls = controlsRef.current;
+      if (camera && controls) {
         const box = new THREE.Box3().setFromObject(member.mesh);
-        const sphere = new THREE.Sphere();
-        box.getBoundingSphere(sphere);
-        world.camera.controls.fitToSphere(sphere, true);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        const fov = camera.fov * (Math.PI / 180);
+        const dist = (maxDim / 2) / Math.tan(fov / 2) * 2.5;
+        const offset = new THREE.Vector3(1, 0.5, 1).normalize().multiplyScalar(dist);
+        camera.position.copy(center).add(offset);
+        controls.target.copy(center);
+        controls.update();
       }
     }
   }, []);
@@ -381,32 +336,17 @@ export default function ModelViewer() {
           </span>
           {modelLoaded && (
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)", background: "var(--success-muted)", border: "1px solid var(--success-border)", borderRadius: 4, padding: "2px 6px" }}>
-              {modelLoaded.format} \u00B7 {modelLoaded.memberCount} elements
+              {modelLoaded.format} · {modelLoaded.memberCount} elements
             </span>
           )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {/* Nav mode buttons */}
-          {modelLoaded && ["orbit", "firstperson", "plan"].map((mode) => (
-            <button key={mode} onClick={() => setNavMode(mode)} style={{
-              padding: "4px 8px", borderRadius: 4, fontSize: 8, fontWeight: 700, fontFamily: "var(--font-mono)",
-              background: navMode === mode ? "var(--accent)" : "transparent",
-              color: navMode === mode ? "#fff" : "var(--text-muted)",
-              border: navMode === mode ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
-              cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em",
-            }}>
-              {mode === "firstperson" ? "FPS" : mode === "plan" ? "2D" : "ORBIT"}
-            </button>
-          ))}
-
-          {modelLoaded && <div style={{ width: 1, height: 16, background: "var(--divider)" }} />}
-
           {/* View presets */}
           {modelLoaded && (
             <>
               <button onClick={() => fitCamera(loadedModelRef.current)} title="Fit all (F)" style={tbBtn}>
-                \u229E FIT
+                ⊞ FIT
               </button>
               {["Iso", "Front", "Top", "Right"].map((v) => (
                 <button key={v} onClick={() => setView(v.toLowerCase())} style={{ ...tbBtn, fontSize: 8 }}>
@@ -424,18 +364,18 @@ export default function ModelViewer() {
               ...tbBtn, color: leftPanelOpen ? "var(--accent)" : "var(--text-muted)",
               background: leftPanelOpen ? "rgba(200,155,32,0.12)" : "transparent",
             }}>
-              {leftPanelOpen ? "\u25C1 LIST" : "LIST \u25B7"}
+              {leftPanelOpen ? "◁ LIST" : "LIST ▷"}
             </button>
           )}
 
           {/* Upload */}
-          <input id="model-upload" type="file" accept=".gltf,.glb,.ifc" style={{ display: "none" }}
+          <input id="model-upload" type="file" accept=".gltf,.glb" style={{ display: "none" }}
             onChange={(e) => handleFile(e.target.files?.[0])} />
           <label htmlFor="model-upload" style={{
             padding: "5px 12px", borderRadius: 6, background: "var(--accent)", color: "#fff",
             fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4,
           }}>
-            \u2191 Upload Model
+            ↑ Upload Model
           </label>
         </div>
       </div>
@@ -451,7 +391,6 @@ export default function ModelViewer() {
           <span>RMB: Pan</span>
           <span>Scroll: Zoom</span>
           <span>F: Fit All</span>
-          <span>1/2/3: Orbit/FPS/2D</span>
           <span>[: Toggle List</span>
         </div>
       )}
@@ -511,22 +450,24 @@ export default function ModelViewer() {
           {/* Upload zone — shown when no model loaded */}
           {!modelLoaded && !loadingModel.active && (
             <div style={{
-              position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
+              position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10,
+              pointerEvents: "none",
             }}>
               <div style={{
                 background: "rgba(20,20,22,0.85)", border: `2px dashed ${isDragging ? "var(--accent)" : "rgba(245,158,11,0.4)"}`,
                 borderRadius: 16, padding: 40, textAlign: "center", maxWidth: 400,
                 transform: isDragging ? "scale(1.02)" : "scale(1)", transition: "all 0.2s",
+                pointerEvents: "auto",
               }}>
-                <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.6 }}>{"\u2B06"}</div>
+                <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.6 }}>⬆</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#F2F4F8", marginBottom: 8 }}>
-                  Drop GLTF / GLB / IFC here
+                  Drop GLTF / GLB here
                 </div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
                   or click to browse
                 </div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginBottom: 16 }}>
-                  Supported: .gltf .glb .ifc
+                  Supported: .gltf .glb
                 </div>
                 <label htmlFor="model-upload" style={{
                   padding: "6px 14px", borderRadius: 8, background: "var(--accent)", color: "#fff",
