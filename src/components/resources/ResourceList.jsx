@@ -78,7 +78,7 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
         gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto",
         gap: "16px",
         padding: "10px 16px",
-        borderBottom: "1px solid rgba(255,255,255,0.07)",
+        borderBottom: "1px solid var(--bg-surface-high)",
         background: "var(--bg-surface-low)",
       }}>
         {["Resource", "Hours", "Utilization", "Status", ""].map((h) => (
@@ -135,8 +135,8 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
                         fontSize: 8,
                         fontWeight: 600,
                         color: "var(--text-secondary)",
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "var(--hover-bg)",
+                        border: "1px solid var(--bg-surface-high)",
                         borderRadius: 10,
                         padding: "2px 7px",
                         letterSpacing: "0.04em",
@@ -166,7 +166,7 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
             {/* Column 3: Utilization bar */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <div style={{ flex: 1, height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 5, background: "var(--bg-surface-high)", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{
                     height: "100%",
                     background: barColor,

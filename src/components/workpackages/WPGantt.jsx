@@ -249,17 +249,17 @@ export default function WPGantt({ wps, updateMut }) {
   const totalHeight = wps.length * ROW_H;
 
   return (
-    <div style={{ background: "var(--bg-surface-low)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
+    <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
       {/* ── Toolbar ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "var(--info-muted)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid var(--border-default)", background: "var(--info-muted)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Zoom */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div style={{ display: "flex", background: "var(--hover-bg)", borderRadius: 6, border: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
             {ZOOM_LEVELS.map((z, i) => (
               <button
                 key={z.id}
                 onClick={() => setZoomId(z.id)}
-                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "rgba(160,175,210,0.75)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
+                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid var(--bg-surface-high)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "var(--text-secondary)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
               >
                 {z.label.toUpperCase()}
               </button>
@@ -288,9 +288,9 @@ export default function WPGantt({ wps, updateMut }) {
       <div style={{ display: "flex", overflow: "hidden" }}>
 
         {/* LEFT COLUMN — WP info */}
-        <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid var(--border-default)" }}>
           {/* Header spacer */}
-          <div style={{ height: HEADER_H, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", padding: "0 12px" }}>
+          <div style={{ height: HEADER_H, borderBottom: "1px solid var(--border-default)", background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", padding: "0 12px" }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
           </div>
           {/* Rows */}
@@ -301,7 +301,7 @@ export default function WPGantt({ wps, updateMut }) {
               return (
                 <div
                   key={wp.id}
-                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)", borderLeft: isConflict ? "2px solid #FF3D3D" : "2px solid transparent", gap: 8 }}
+                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--hover-bg)", background: i % 2 === 0 ? "transparent" : "var(--hover-bg)", borderLeft: isConflict ? "2px solid #FF3D3D" : "2px solid transparent", gap: 8 }}
                 >
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: "hidden" }}>
@@ -330,12 +330,12 @@ export default function WPGantt({ wps, updateMut }) {
           <div ref={timelineRef} style={{ width: totalWidth, position: "relative" }}>
 
             {/* HEADER — date ticks */}
-            <div style={{ height: HEADER_H, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(0,0,0,0.15)", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ height: HEADER_H, borderBottom: "1px solid var(--border-default)", background: "rgba(0,0,0,0.15)", position: "sticky", top: 0, zIndex: 10 }}>
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
                 return (
                   <div key={i} style={{ position: "absolute", left: x, top: 0, height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ width: 1, height: "100%", background: "rgba(255,255,255,0.05)", position: "absolute", left: 0, top: 0 }} />
+                    <div style={{ width: 1, height: "100%", background: "var(--hover-bg)", position: "absolute", left: 0, top: 0 }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", paddingLeft: 5, whiteSpace: "nowrap" }}>
                       {zoom.fmt(tick)}
                     </span>
@@ -354,13 +354,13 @@ export default function WPGantt({ wps, updateMut }) {
             <div style={{ position: "relative", height: totalHeight }}>
               {/* Weekend bands */}
               {weekendBands.map((b, i) => (
-                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "rgba(255,255,255,0.015)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} />
               ))}
 
               {/* Vertical tick lines */}
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
-                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />;
+                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} />;
               })}
 
               {/* Today line */}
@@ -403,7 +403,7 @@ export default function WPGantt({ wps, updateMut }) {
                       {barW > 60 && (
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 8, gap: 4, overflow: "hidden" }}>
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phColor, fontWeight: 700, whiteSpace: "nowrap" }}>{wp.wp_number}</span>
-                          {barW > 120 && <span style={{ fontFamily: "var(--font-body)", fontSize: 9, color: "rgba(255,255,255,0.70)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wp.name}</span>}
+                          {barW > 120 && <span style={{ fontFamily: "var(--font-body)", fontSize: 9, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wp.name}</span>}
                           {barW > 180 && wp.tonnage > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{Number(wp.tonnage).toLocaleString()}T</span>}
                         </div>
                       )}
@@ -430,12 +430,12 @@ export default function WPGantt({ wps, updateMut }) {
 
               {/* Row separators */}
               {wps.map((_, i) => (
-                <div key={i} style={{ position: "absolute", left: 0, top: (i + 1) * ROW_H, width: "100%", height: 1, background: "rgba(255,255,255,0.035)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: 0, top: (i + 1) * ROW_H, width: "100%", height: 1, background: "var(--hover-bg)", pointerEvents: "none" }} />
               ))}
 
               {/* Row hover bands (even rows) */}
               {wps.map((_, i) => i % 2 === 1 ? (
-                <div key={i} style={{ position: "absolute", left: 0, top: i * ROW_H, width: "100%", height: ROW_H, background: "rgba(255,255,255,0.012)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: 0, top: i * ROW_H, width: "100%", height: ROW_H, background: "var(--hover-bg)", pointerEvents: "none" }} />
               ) : null)}
             </div>
           </div>

@@ -118,7 +118,7 @@ export default function Landing() {
                   { label: "Erection tasks in flight", value: "58", accent: "var(--accent)" },
                   { label: "QA / QC exceptions open", value: "4", accent: "var(--danger)" },
                 ].map(({ label, value, accent }) => (
-                  <div key={label} style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "rgba(255,255,255,0.02)" }}>
+                  <div key={label} style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--hover-bg)" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
                     <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 28, color: accent }}>{value}</div>
                   </div>

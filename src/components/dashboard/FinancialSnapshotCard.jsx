@@ -99,7 +99,7 @@ export default function FinancialSnapshotCard({ financials, cos }) {
                     <Tooltip
                       contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
                       formatter={(v, n) => [`$${v}K`, n.charAt(0).toUpperCase() + n.slice(1)]}
-                      cursor={{ fill: "rgba(255,255,255,0.02)" }}
+                      cursor={{ fill: "var(--hover-bg)" }}
                     />
                     <Bar dataKey="actual" name="actual" fill="var(--accent)" radius={[2, 2, 2, 2]} />
                     <Bar dataKey="committed" name="committed" fill="var(--status-warning)" radius={[2, 2, 2, 2]} />

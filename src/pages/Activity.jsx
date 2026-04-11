@@ -65,10 +65,10 @@ export default function ActivityPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
       <div>
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, color: "#F2F4F8" }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>
           Activity Log
         </h1>
-        <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.44)", marginTop: 4 }}>
+        <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
           Audit trail of all project changes and activity
         </p>
       </div>
@@ -76,7 +76,7 @@ export default function ActivityPage() {
       {/* Filters */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <div>
-          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
             PROJECT
           </label>
           <Select value={filterProject} onValueChange={setFilterProject}>
@@ -95,7 +95,7 @@ export default function ActivityPage() {
         </div>
 
         <div>
-          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
             USER
           </label>
           <Select value={filterUser} onValueChange={setFilterUser}>
@@ -114,7 +114,7 @@ export default function ActivityPage() {
         </div>
 
         <div>
-          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
+          <label style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", display: "block", marginBottom: 4 }}>
             ENTITY TYPE
           </label>
           <Select value={filterEntity} onValueChange={setFilterEntity}>
@@ -169,8 +169,8 @@ export default function ActivityPage() {
           gap: 12
         }}>
 
-        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 12, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.06em" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 12, border: "1px solid var(--divider)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
             Total Activities
           </div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
@@ -178,8 +178,8 @@ export default function ActivityPage() {
           </div>
         </div>
 
-        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 12, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.06em" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 12, border: "1px solid var(--divider)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
             Unique Users
           </div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#00D68F", marginTop: 4 }}>
@@ -187,8 +187,8 @@ export default function ActivityPage() {
           </div>
         </div>
 
-        <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 12, border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.44)", letterSpacing: "0.06em" }}>
+        <div style={{ background: "var(--hover-bg)", borderRadius: 10, padding: 12, border: "1px solid var(--divider)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
             Entity Types
           </div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#00B8D9", marginTop: 4 }}>
@@ -198,7 +198,7 @@ export default function ActivityPage() {
       </div>
 
       {/* Activity Feed */}
-      <div style={{ background: "rgba(255,255,255,0.01)", borderRadius: 12, padding: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{ background: "var(--hover-bg)", borderRadius: 12, padding: 16, border: "1px solid var(--divider)" }}>
         <ActivityFeed activities={filtered} />
       </div>
     </div>);

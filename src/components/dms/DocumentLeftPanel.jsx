@@ -119,7 +119,7 @@ export default function DocumentLeftPanel({ documents = [], filteredCount, activ
         </span>
         <span style={{
           fontFamily: "var(--font-mono)", fontSize: 10,
-          color: active ? "var(--accent)" : hasDocuments ? "var(--text-secondary)" : "rgba(160,175,210,0.50)",
+          color: active ? "var(--accent)" : hasDocuments ? "var(--text-secondary)" : "var(--text-muted)",
           fontWeight: hasDocuments ? 700 : 400,
           minWidth: 18, textAlign: "right",
         }}>
@@ -129,7 +129,7 @@ export default function DocumentLeftPanel({ documents = [], filteredCount, activ
     );
   };
 
-  const divider = <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "12px 0" }} />;
+  const divider = <div style={{ height: 1, background: "var(--hover-bg)", margin: "12px 0" }} />;
 
   return (
     <div style={{ width: 240, overflowY: "auto", paddingRight: 8 }}>
@@ -200,7 +200,7 @@ export default function DocumentLeftPanel({ documents = [], filteredCount, activ
             <div
               key={item.type}
               style={{
-                padding: "6px 10px", background: "rgba(255,255,255,0.02)",
+                padding: "6px 10px", background: "var(--hover-bg)",
                 borderRadius: 4, fontFamily: "var(--font-body)", fontSize: 12,
                 color: "var(--text-secondary)",
                 display: "flex", justifyContent: "space-between", alignItems: "center",

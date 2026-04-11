@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Search, X } from "lucide-react";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
 const ICON_MAP = {
   Project: "▤",
@@ -40,15 +41,25 @@ const QUICK_NAV = [
   { icon: "✨", name: "Portfolio",   page: "AIInsights",              group: "Navigate" },
 ];
 
+const SCOPE_OPTIONS = [
+  { key: "project", label: "This Project" },
+  { key: "all",     label: "All Projects" },
+  { key: "contacts", label: "Contacts" },
+];
+
 export default function GlobalSearchModal({ open, onClose }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [searchScope, setSearchScope] = useState("project");
   const inputRef = useRef(null);
   const listRef = useRef(null);
   const navigate = useNavigate();
+
+  // Get active project for scope filtering
+  const { activeProject } = useProjectContext();
 
   useEffect(() => {
     const stored = localStorage.getItem("__steelbuild_recent_searches");
@@ -61,6 +72,7 @@ export default function GlobalSearchModal({ open, onClose }) {
       setResults([]);
       setSelectedIndex(0);
       setLoading(false);
+      setSearchScope("project");
     } else {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -77,13 +89,13 @@ export default function GlobalSearchModal({ open, onClose }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Debounced search
+  // Debounced search — re-run when scope changes too
   useEffect(() => {
     if (query.length < 2) { setResults([]); setLoading(false); return; }
     setLoading(true);
     const t = setTimeout(() => runSearch(query), 250);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, searchScope]);
 
   // Module quick-nav filtered by query
   const filteredModules = useMemo(() => {
@@ -113,7 +125,34 @@ export default function GlobalSearchModal({ open, onClose }) {
 
   const runSearch = useCallback(async (q) => {
     const ql = q.toLowerCase();
+    const currentProjectId = activeProject?.id;
+
+    // Helper: filter results by project scope
+    const scopeFilter = (items) => {
+      if (searchScope === "project" && currentProjectId) {
+        return items.filter(i => i.project_id === currentProjectId || i.projectId === currentProjectId);
+      }
+      return items; // "all" scope returns everything
+    };
+
     try {
+      // Contacts-only mode: skip other entity fetches
+      if (searchScope === "contacts") {
+        const contacts = await base44.entities.Contact.list();
+        const searchResults = [];
+        contacts
+          .filter(c => c.first_name?.toLowerCase().includes(ql) || c.last_name?.toLowerCase().includes(ql) || c.company?.toLowerCase().includes(ql) || c.email?.toLowerCase().includes(ql))
+          .slice(0, 12)
+          .forEach(c => searchResults.push({
+            type: "Contact", id: c.id,
+            title: `${c.first_name} ${c.last_name}`,
+            subtitle: [c.company, c.role, c.email].filter(Boolean).join(" · ") || "—",
+            status: c.contact_type, projectId: c.project_id, page: "Contacts",
+          }));
+        setResults(searchResults);
+        return;
+      }
+
       const [projects, rfis, drawings, workPackages, changeOrders, contacts] = await Promise.all([
         base44.entities.Project.list(),
         base44.entities.RFI.list(),
@@ -127,27 +166,28 @@ export default function GlobalSearchModal({ open, onClose }) {
 
       projects
         .filter(p => p.name?.toLowerCase().includes(ql) || p.project_number?.toLowerCase().includes(ql))
+        .filter(p => searchScope !== "project" || !currentProjectId || p.id === currentProjectId)
         .forEach(p => searchResults.push({ type: "Project", id: p.id, title: p.name, subtitle: `${p.project_number} · ${p.phase || "—"}`, status: p.health_status, projectId: p.id, page: "Projects" }));
 
-      rfis
+      scopeFilter(rfis)
         .filter(r => r.rfi_number?.toLowerCase().includes(ql) || r.title?.toLowerCase().includes(ql) || r.description?.toLowerCase().includes(ql))
         .slice(0, 5)
-        .forEach(r => searchResults.push({ type: "RFI", id: r.id, title: `${r.rfi_number} · ${r.title}`, subtitle: `${r.project_name} · ${r.status}`, status: r.priority, projectId: r.project_id, page: "RFIs" }));
+        .forEach(r => searchResults.push({ type: "RFI", id: r.id, title: `${r.rfi_number} · ${r.title}`, subtitle: searchScope === "all" ? `${r.project_name || "—"} · ${r.status}` : `${r.project_name} · ${r.status}`, status: r.priority, projectId: r.project_id, page: "RFIs" }));
 
-      drawings
+      scopeFilter(drawings)
         .filter(d => d.sheet_number?.toLowerCase().includes(ql) || d.title?.toLowerCase().includes(ql))
         .slice(0, 5)
-        .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Documents" }));
+        .forEach(d => searchResults.push({ type: "Drawing", id: d.id, title: `${d.sheet_number} · ${d.title}`, subtitle: searchScope === "all" ? `${d.project_name || "—"} · ${d.stage}` : `${d.project_name} · ${d.stage}`, status: d.stage, projectId: d.project_id, page: "Documents" }));
 
-      workPackages
+      scopeFilter(workPackages)
         .filter(w => w.wp_number?.toLowerCase().includes(ql) || w.name?.toLowerCase().includes(ql))
         .slice(0, 5)
-        .forEach(w => searchResults.push({ type: "WorkPackage", id: w.id, title: `${w.wp_number} · ${w.name}`, subtitle: `${w.project_name} · ${w.status}`, status: w.status, projectId: w.project_id, page: "WorkPackages" }));
+        .forEach(w => searchResults.push({ type: "WorkPackage", id: w.id, title: `${w.wp_number} · ${w.name}`, subtitle: searchScope === "all" ? `${w.project_name || "—"} · ${w.status}` : `${w.project_name} · ${w.status}`, status: w.status, projectId: w.project_id, page: "WorkPackages" }));
 
-      changeOrders
+      scopeFilter(changeOrders)
         .filter(c => c.co_number?.toLowerCase().includes(ql) || c.title?.toLowerCase().includes(ql))
         .slice(0, 5)
-        .forEach(c => searchResults.push({ type: "ChangeOrder", id: c.id, title: `${c.co_number} · ${c.title}`, subtitle: `${c.project_name} · ${c.status}`, status: c.status, projectId: c.project_id, page: "ChangeOrders" }));
+        .forEach(c => searchResults.push({ type: "ChangeOrder", id: c.id, title: `${c.co_number} · ${c.title}`, subtitle: searchScope === "all" ? `${c.project_name || "—"} · ${c.status}` : `${c.project_name} · ${c.status}`, status: c.status, projectId: c.project_id, page: "ChangeOrders" }));
 
       contacts
         .filter(c => c.first_name?.toLowerCase().includes(ql) || c.last_name?.toLowerCase().includes(ql) || c.company?.toLowerCase().includes(ql))
@@ -160,7 +200,7 @@ export default function GlobalSearchModal({ open, onClose }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [searchScope, activeProject]);
 
   const handleSearch = useCallback((q) => {
     setQuery(q);
@@ -179,6 +219,17 @@ export default function GlobalSearchModal({ open, onClose }) {
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
       onClose?.();
+    } else if (e.key === "Tab") {
+      // Cycle scope when no result is actively highlighted via arrow keys,
+      // or always allow Tab to cycle scope (since Tab is explicitly for scope switching)
+      e.preventDefault();
+      setSearchScope((prev) => {
+        const idx = SCOPE_OPTIONS.findIndex((s) => s.key === prev);
+        const next = e.shiftKey
+          ? (idx - 1 + SCOPE_OPTIONS.length) % SCOPE_OPTIONS.length
+          : (idx + 1) % SCOPE_OPTIONS.length;
+        return SCOPE_OPTIONS[next].key;
+      });
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((prev) => Math.min(prev + 1, displayItems.length - 1));
@@ -281,8 +332,70 @@ export default function GlobalSearchModal({ open, onClose }) {
           </kbd>
         </div>
 
+        {/* Scope Filter Pills */}
+        <div style={{
+          padding: "8px 18px 4px",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          borderBottom: "1px solid var(--divider)",
+          paddingBottom: 8,
+        }}>
+          {SCOPE_OPTIONS.map((scope) => {
+            const isActive = searchScope === scope.key;
+            return (
+              <button
+                key={scope.key}
+                onClick={() => setSearchScope(scope.key)}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  padding: "3px 10px",
+                  borderRadius: 9999,
+                  border: `1px solid ${isActive ? "var(--accent)" : "var(--border-default)"}`,
+                  background: isActive ? "var(--info-muted)" : "transparent",
+                  color: isActive ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  letterSpacing: "0.04em",
+                  fontWeight: isActive ? 600 : 400,
+                  transition: "all 0.15s ease",
+                  outline: "none",
+                }}
+              >
+                {scope.label}
+              </button>
+            );
+          })}
+          <span style={{
+            marginLeft: "auto",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            color: "var(--text-muted)",
+            opacity: 0.6,
+            letterSpacing: "0.06em",
+          }}>
+            Tab to switch scope
+          </span>
+        </div>
+
+        {/* Scope indicator */}
+        {query.length > 0 && (
+          <div style={{
+            padding: "4px 18px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            opacity: 0.7,
+          }}>
+            Searching: {SCOPE_OPTIONS.find(s => s.key === searchScope)?.label}
+            {searchScope === "project" && activeProject
+              ? ` (${activeProject.project_name || activeProject.name || "—"})`
+              : ""}
+          </div>
+        )}
+
         {/* Results / Quick Nav */}
-        <div ref={listRef} style={{ maxHeight: 420, overflowY: "auto", padding: "4px 0" }}>
+        <div ref={listRef} style={{ maxHeight: 380, overflowY: "auto", padding: "4px 0" }}>
           {/* Recent searches when no query */}
           {query.length === 0 && recentSearches.length > 0 && (
             <>
@@ -432,6 +545,7 @@ export default function GlobalSearchModal({ open, onClose }) {
           <div style={{ display: "flex", gap: 12, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↑↓</kbd> Navigate</span>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>↵</kbd> Open</span>
+            <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>Tab</kbd> Scope</span>
             <span><kbd style={{ background: "var(--bg-surface-high)", borderRadius: 2, padding: "1px 4px", marginRight: 4 }}>esc</kbd> Close</span>
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>

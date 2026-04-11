@@ -20,7 +20,7 @@ export default function ViewerToolbar({
       style={{
         height: 48,
         background: "var(--bg-sidebar)",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--border-default)",
         padding: "0 16px",
         display: "flex",
         alignItems: "center",
@@ -47,7 +47,7 @@ export default function ViewerToolbar({
           <div style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {document.documentNumber} · {document.displayName}
           </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
             Rev {document.revisionNumber}
           </div>
         </div>
@@ -61,7 +61,7 @@ export default function ViewerToolbar({
             display: "flex",
             alignItems: "center",
             gap: 4,
-            background: "rgba(255,255,255,0.06)",
+            background: "var(--bg-surface-high)",
             borderRadius: 6,
             padding: 4
           }}
@@ -72,7 +72,7 @@ export default function ViewerToolbar({
               padding: "4px 8px",
               background: "none",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               fontSize: 12,
               fontWeight: 600
@@ -87,7 +87,7 @@ export default function ViewerToolbar({
               padding: "4px 6px",
               background: "transparent",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
               cursor: "pointer"
@@ -105,7 +105,7 @@ export default function ViewerToolbar({
               padding: "4px 8px",
               background: "none",
               border: "none",
-              color: "rgba(220,225,240,0.70)",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               fontSize: 12,
               fontWeight: 600
@@ -156,7 +156,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: markupMode ? "var(--accent-muted)" : "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
+            border: "1px solid var(--border-default)",
             color: markupMode ? "var(--accent)" : "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",
@@ -196,7 +196,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
+            border: "1px solid var(--border-default)",
             color: "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",
@@ -216,7 +216,7 @@ export default function ViewerToolbar({
           style={{
             padding: "6px 12px",
             background: "transparent",
-            border: "1px solid rgba(255,255,255,0.12)",
+            border: "1px solid var(--border-default)",
             color: "var(--text-secondary)",
             borderRadius: 6,
             fontFamily: "var(--font-mono)",

@@ -11,7 +11,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
       style={{
         width: 220,
         background: "var(--bg-sidebar)",
-        borderRight: "1px solid rgba(255,255,255,0.08)",
+        borderRight: "1px solid var(--border-default)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"
@@ -21,11 +21,11 @@ export default function SheetList({ document, currentPage, onPageChange }) {
       <div
         style={{
           padding: 12,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--border-default)",
           fontFamily: "var(--font-mono)",
           fontSize: 9,
           fontWeight: 600,
-          color: "rgba(160,175,210,0.50)",
+          color: "var(--text-muted)",
           textTransform: "uppercase",
           letterSpacing: "0.08em"
         }}
@@ -92,7 +92,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
                   style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: 9,
-                    color: "rgba(160,175,210,0.50)",
+                    color: "var(--text-muted)",
                     marginBottom: 4
                   }}
                 >

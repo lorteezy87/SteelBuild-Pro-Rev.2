@@ -37,7 +37,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
     <div
       style={{
         background: 'var(--bg-surface-low)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid var(--divider)',
         borderRadius: 14,
         padding: '20px 24px',
         display: project.hasDeck && project.hasJoist ? 'grid' : 'block',
@@ -53,7 +53,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
           justifyContent: 'space-between',
           marginBottom: project.hasDeck && project.hasJoist ? -24 : 16,
           paddingBottom: 16,
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--divider)',
           gridColumn: project.hasDeck && project.hasJoist ? '1 / -1' : undefined,
         }}
       >
@@ -118,7 +118,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 7,
-                color: 'rgba(160,175,210,0.35)',
+                color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 6,
                 textTransform: 'uppercase',
@@ -151,7 +151,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
           <div
             style={{
               paddingTop: 10,
-              borderTop: '1px solid rgba(255,255,255,0.05)',
+              borderTop: '1px solid var(--divider)',
               marginBottom: 12,
             }}
           >
@@ -181,7 +181,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
           <div
             style={{
               paddingTop: 10,
-              borderTop: '1px solid rgba(255,255,255,0.05)',
+              borderTop: '1px solid var(--divider)',
               marginBottom: 12,
             }}
           >
@@ -227,7 +227,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.45)',
+                color: 'var(--text-muted)',
                 marginTop: 8,
               }}
             >
@@ -288,7 +288,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 7,
-                color: 'rgba(160,175,210,0.35)',
+                color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 6,
                 textTransform: 'uppercase',
@@ -321,7 +321,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
           <div
             style={{
               paddingTop: 10,
-              borderTop: '1px solid rgba(255,255,255,0.05)',
+              borderTop: '1px solid var(--divider)',
               marginBottom: 12,
             }}
           >
@@ -367,7 +367,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.45)',
+                color: 'var(--text-muted)',
                 marginTop: 8,
               }}
             >

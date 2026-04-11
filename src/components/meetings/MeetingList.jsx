@@ -96,7 +96,7 @@ function MiniProgress({ complete, total, color }) {
         style={{
           flex: 1,
           height: "3px",
-          background: "rgba(255,255,255,0.07)",
+          background: "var(--bg-surface-high)",
           borderRadius: "2px",
           overflow: "hidden",
           minWidth: "40px",
