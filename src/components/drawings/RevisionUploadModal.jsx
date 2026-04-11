@@ -540,7 +540,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         }
       });
       setDerivedSets(Object.values(byName));
-    }).catch(() => {});
+    }).catch((e) => { console.error("Failed to load drawing sets:", e); });
   }, [open, activeProject?.id, drawingSets]);
   const [step, setStep] = useState("selectSet");
   const [selectedSet, setSelectedSet] = useState(preSelectedSet || null);

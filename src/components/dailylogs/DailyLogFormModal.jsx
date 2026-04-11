@@ -79,7 +79,7 @@ export default function DailyLogFormModal({
       setForm({
         ...log,
         wp_progress: log.wp_progress
-          ? (typeof log.wp_progress === "string" ? JSON.parse(log.wp_progress) : log.wp_progress)
+          ? (typeof log.wp_progress === "string" ? (() => { try { return JSON.parse(log.wp_progress); } catch { return []; } })() : log.wp_progress)
           : [],
       });
     } else {
