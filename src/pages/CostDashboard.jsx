@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { AlertTriangle, ShieldAlert, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -82,14 +83,17 @@ export default function CostDashboard() {
   const createCodeMut = useMutation({
     mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
   const updateCodeMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
   const deleteCodeMut = useMutation({
     mutationFn: (id) => base44.entities.CostCode.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setDeleteCodeTarget(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
 
   const { data: codes = [], isLoading } = useQuery({
@@ -122,12 +126,6 @@ export default function CostDashboard() {
   const { data: sovs = [] } = useQuery({
     queryKey: ['sovs-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : [],
-    enabled: !!activeProject?.id,
-  });
-
-  const { data: cos_all = [] } = useQuery({
-    queryKey: ['cos-cost', activeProject?.id],
-    queryFn: () => activeProject?.id ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
   });
 
@@ -210,12 +208,12 @@ export default function CostDashboard() {
 
   const coAging = useMemo(() => {
     const today = new Date();
-    return cos_all.map(co => {
+    return cos.map(co => {
       const submitted = co.submitted_date ? new Date(co.submitted_date) : null;
       const daysOpen = submitted ? Math.floor((today - submitted) / 86400000) : null;
       return { ...co, daysOpen, isStale: daysOpen !== null && daysOpen > 30 && !['Approved', 'Rejected', 'Void'].includes(co.status) };
     }).sort((a, b) => (b.daysOpen || 0) - (a.daysOpen || 0));
-  }, [cos_all]);
+  }, [cos]);
 
   const billingMetrics = useMemo(() => {
     const totalScheduled = sovs.reduce((s, sv) => s + (Number(sv.scheduled_value) || 0), 0);
@@ -227,15 +225,16 @@ export default function CostDashboard() {
     const billedToDate = sovs.reduce((s, sv) => {
       const scheduled = Number(sv.scheduled_value) || 0;
       const currPct = Number(sv.current_percent_complete) || 0;
-      return s + scheduled * (currPct / 100);
+      const prevPct = Number(sv.previous_percent_complete) || 0;
+      return s + scheduled * ((currPct - prevPct) / 100);
     }, 0);
-    const unbilledEV = earnedValue - totalActual;
+    const unbilledEV = earnedValue - billedToDate;
     const billingLag = earnedValue > 0 ? ((earnedValue - billedToDate) / earnedValue) * 100 : 0;
     return {
       totalScheduled, earnedValue, billedToDate, unbilledEV, billingLag,
       billingEfficiency: earnedValue > 0 ? (billedToDate / earnedValue) * 100 : 0,
     };
-  }, [sovs, totalActual]);
+  }, [sovs]);
 
   const productivity = useMemo(() => {
     const shopWPs = wps.filter(w => w.shop_hours_budget > 0);
@@ -289,13 +288,19 @@ export default function CostDashboard() {
     });
   }, [codes]);
 
+  const consumedContingency = codes.reduce((s, c) => {
+    const v = (Number(c.actual_amount) || Number(c.actual_cost) || 0) - (Number(c.budget_amount) || 0);
+    return s + Math.max(0, v);
+  }, 0);
+  const contingencyRemaining = Math.max(0, contingency - consumedContingency);
+
   const kpis = [
     { label: "Contract Value", value: formatCurrencyShort(contractVal), color: "blue" },
     { label: "Total Budget", value: formatCurrencyShort(totalBudget), color: "slate" },
     { label: "Actual Spend", value: formatCurrencyShort(totalActual), color: totalActual > totalBudget ? "rose" : "green" },
     { label: "Committed", value: formatCurrencyShort(totalCommitted), color: "amber" },
     { label: "EAC", value: formatCurrencyShort(eac), sub: eac > totalBudget ? "Over budget" : "Within budget", color: eac > totalBudget ? "rose" : "green" },
-    { label: "Contingency", value: formatCurrencyShort(contingency), sub: contingency > 0 ? `${formatPercent(contingency > 0 ? (Math.max(0, contingency - Math.max(0, totalVariance)) / contingency) * 100 : 0)} remaining` : "Not set", color: totalVariance > contingency ? "rose" : "purple" },
+    { label: "Contingency", value: formatCurrencyShort(contingency), sub: contingency > 0 ? `${formatPercent(contingency > 0 ? (contingencyRemaining / contingency) * 100 : 0)} remaining` : "Not set", color: consumedContingency > contingency ? "rose" : "purple" },
   ];
 
   const exportCSV = () => {
@@ -358,7 +363,7 @@ export default function CostDashboard() {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="actual" name="Actual" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="actual" name="Actual" fill="#3B82F6" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="committed" name="Committed" fill="#FFB300" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -512,8 +517,8 @@ export default function CostDashboard() {
         <PhoenixPanel title="CO Aging & Recovery" count={coAging.filter(c => c.isStale).length > 0 ? `${coAging.filter(c => c.isStale).length} stale` : coAging.length}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
             {[
-              { label: 'Pending', value: cos_all.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length, color: 'var(--status-warning)' },
-              { label: 'Approved', value: cos_all.filter(c => c.status === 'Approved').length, color: 'var(--status-success)' },
+              { label: 'Pending', value: cos.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length, color: 'var(--status-warning)' },
+              { label: 'Approved', value: cos.filter(c => c.status === 'Approved').length, color: 'var(--status-success)' },
               { label: 'Stale >30d', value: coAging.filter(c => c.isStale).length, color: coAging.filter(c => c.isStale).length > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>

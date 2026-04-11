@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { daysOverdue, isOverdue } from "../shared/formatters";
 
-export default function DrawingApprovalStatusCard({ drawings }) {
+export default function DrawingApprovalStatusCard({ drawings = [] }) {
   const navigate = useNavigate();
 
   const total = drawings.length;

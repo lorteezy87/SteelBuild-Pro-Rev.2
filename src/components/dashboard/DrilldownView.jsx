@@ -22,7 +22,7 @@ function startOfToday() {
 
 function parseDate(value) {
   if (!value) return null;
-  return new Date(`${value}T00:00:00Z`);
+  return new Date(`${value}T00:00:00`);
 }
 
 function daysBetween(dateA, dateB) {
@@ -665,16 +665,16 @@ function FeedList({ items, onNavigate }) {
 
 export default function DrilldownView({
   project,
-  rfis,
-  cos,
-  codes,
-  wps,
-  drawings,
-  tasks,
-  actionItems,
-  deliveries,
-  expenses,
-  recentActivity,
+  rfis = [],
+  cos = [],
+  codes = [],
+  wps = [],
+  drawings = [],
+  tasks = [],
+  actionItems = [],
+  deliveries = [],
+  expenses = [],
+  recentActivity = [],
   onClearProject,
 }) {
   const navigate = useNavigate();
