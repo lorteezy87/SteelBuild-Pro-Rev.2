@@ -6,6 +6,7 @@ import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import StatCard from "@/components/shared/StatCard";
 
 export default function Vendors() {
   const [showForm, setShowForm] = useState(false);
@@ -221,31 +222,3 @@ export default function Vendors() {
   );
 }
 
-function StatCard({ label, value, color, active, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "var(--bg-surface)",
-        border: "none",
-        borderRadius: "var(--radius-card)",
-        padding: "12px",
-        borderTop: `2px solid ${color}`,
-        cursor: "pointer",
-        transition: "box-shadow 0.15s, transform 0.15s",
-        transform: hovered ? "translateY(-1px)" : "none",
-        boxShadow: active
-          ? `0 0 0 1.5px ${color}, 0 2px 8px rgba(0,0,0,0.12)`
-          : hovered
-            ? "0 2px 8px rgba(0,0,0,0.10)"
-            : "none",
-      }}
-    >
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 600, color: color, marginBottom: "4px" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
-    </div>
-  );
-}

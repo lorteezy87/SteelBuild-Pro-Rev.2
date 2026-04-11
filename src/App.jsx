@@ -7,10 +7,10 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import LocalLoginForm from '@/components/LocalLoginForm';
 import { ThemeProvider } from '@/components/shared/ThemeContext';
+import { ProjectProvider } from '@/components/shared/ProjectContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import PageErrorBoundary from '@/components/shared/ErrorBoundary';
 import Landing from './pages/Landing';
-import RFIHub from './pages/RFIHub';
 import Dashboard from './pages/Dashboard';
 
 const { Pages, Layout } = pagesConfig;
@@ -86,7 +86,6 @@ const AuthenticatedApp = () => {
         />
       ))}
       <Route path="/Landing" element={<LayoutWrapper currentPageName="Landing"><PageErrorBoundary label="Landing" key="Landing"><Landing /></PageErrorBoundary></LayoutWrapper>} />
-      <Route path="/RFIHub" element={<LayoutWrapper currentPageName="RFIHub"><PageErrorBoundary label="RFIHub" key="RFIHub"><RFIHub /></PageErrorBoundary></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
@@ -100,7 +99,9 @@ function App() {
         <AuthProvider>
           <QueryClientProvider client={queryClientInstance}>
             <Router>
-              <AuthenticatedApp />
+              <ProjectProvider>
+                <AuthenticatedApp />
+              </ProjectProvider>
             </Router>
             <Toaster />
           </QueryClientProvider>

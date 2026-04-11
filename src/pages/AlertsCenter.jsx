@@ -1,15 +1,11 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
-import { toast } from "sonner";
-import { batchProcess } from "@/utils/batchProcess";
+import { useAlerts } from "@/hooks/useAlerts";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -21,64 +17,20 @@ const SEVERITY_BG = {
 };
 
 export default function AlertsCenter() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
-  const [generating, setGenerating] = useState(false);
+  const {
+    alerts,
+    isLoading,
+    generating,
+    unreadCount,
+    markRead,
+    markAllRead,
+    dismiss,
+    generateAlerts,
+  } = useAlerts();
+
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-
-  const { data: alerts = [], isLoading, refetch } = useQuery({
-    queryKey: ["alerts", projectId],
-    queryFn: () => projectId
-      ? base44.entities.Alert.filter({ project_id: projectId }, "-created_at")
-      : base44.entities.Alert.list("-created_at"),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: id => base44.entities.Alert.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
-  });
-
-  const markRead = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_read: true } });
-  const markAllRead = async () => {
-    const unread = alerts.filter(a => !a.is_read);
-    try {
-      const { succeeded, failed } = await batchProcess(
-        unread,
-        (a) => base44.entities.Alert.update(a.id, { is_read: true }),
-      );
-      qc.invalidateQueries({ queryKey: ["alerts"] });
-      if (failed.length > 0) {
-        toast.warning(`${succeeded.length} marked as read, ${failed.length} failed`);
-      } else {
-        toast.success(`${succeeded.length} alerts marked as read`);
-      }
-    } catch (err) {
-      toast.error("Some alerts failed to update");
-    }
-  };
-  const dismiss = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_dismissed: true } });
-
-  const generateAlerts = async () => {
-    setGenerating(true);
-    try {
-      await base44.functions.invoke("generateAlerts", {});
-      await refetch();
-      toast.success("Alerts refreshed");
-    } catch (err) {
-      toast.error("Failed to generate alerts: " + (err?.message || "Unknown error"));
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   const filtered = alerts.filter(a => {
     if (a.is_dismissed) return false;
@@ -87,8 +39,7 @@ export default function AlertsCenter() {
     return matchSeverity && matchType;
   });
 
-  const unreadCount = alerts.filter(a => !a.is_read && !a.is_dismissed).length;
-  const alertTypes = [...new Set(alerts.map(a => a.alert_type))];
+  const alertTypes = [...new Set(alerts.map(a => a.alert_type).filter(Boolean))];
 
   const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
   const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
@@ -130,7 +81,7 @@ export default function AlertsCenter() {
       </div>
 
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>⟳ LOADING ALERTS...</div>
+        <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>LOADING ALERTS...</div>
       ) : filtered.length === 0 ? (
         <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "60px 24px", textAlign: "center" }}>
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />

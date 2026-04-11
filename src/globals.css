@@ -27,23 +27,23 @@
   --bg-elevated:              #21262D;
   --bg-surface-secondary:     #161B22;
 
-  /* ── NC tokens ── */
+  /* ── NC tokens (legacy — kept for compat, resolve to design system values) ── */
   --nc-bg-primary:            #0A0C10;
   --nc-bg-secondary:          #0E1116;
   --nc-bg-tertiary:           #12151A;
   --nc-bg-panel:              #0C0E13;
-  --nc-accent-cyan:           #C89B20;
-  --nc-accent-orange:         #C89B20;
+  --nc-accent-cyan:           var(--accent);
+  --nc-accent-orange:         var(--accent);
   --nc-accent-blue:           #2B7FFF;
   --nc-accent-green:          #22C55E;
   --nc-accent-red:            #EF4444;
-  --nc-text-primary:          #E8EBF2;
-  --nc-text-muted:            #5A6880;
-  --nc-text-cyan:             #C89B20;
-  --nc-text-orange:           #C89B20;
+  --nc-text-primary:          var(--text-primary);
+  --nc-text-muted:            var(--text-muted);
+  --nc-text-cyan:             var(--accent);
+  --nc-text-orange:           var(--accent);
   --nc-border-default:        rgba(255,255,255,0.07);
-  --nc-border-cyan:           rgba(200,155,32,0.30);
-  --nc-border-orange:         rgba(200,155,32,0.35);
+  --nc-border-cyan:           var(--accent-border);
+  --nc-border-orange:         var(--accent-border);
 
   /* ── Borders — #30363D per spec ── */
   --border-default:           #30363D;
@@ -65,11 +65,11 @@
   --secondary:                #C89B20;
   --secondary-muted:          rgba(200,155,32,0.08);
   --secondary-border:         rgba(200,155,32,0.30);
-  --accent-orange:            #C89B20;
-  --accent-orange-light:      #E0B030;
+  --accent-orange:            var(--accent);
+  --accent-orange-light:      var(--accent-light);
   --accent-orange-hover:      #B08818;
-  --accent-orange-muted:      rgba(200,155,32,0.10);
-  --accent-orange-border:     rgba(200,155,32,0.25);
+  --accent-orange-muted:      var(--accent-muted);
+  --accent-orange-border:     var(--accent-border);
 
   /* ── Text ── */
   --text-primary:             #E8EBF2;
@@ -959,4 +959,53 @@ button { cursor: pointer; outline: none; }
   .kpi-value { font-size: 16px; }
   .sbp-table thead th { font-size: 7px; padding: 6px 8px; }
   .sbp-table tbody td { font-size: 10px; padding: 6px 8px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Tailwind / shadcn-ui HSL variable overrides (merged from index.css)
+   ═══════════════════════════════════════════════════════════════ */
+@layer base {
+  :root {
+    --background: 222 43% 5%;
+    --foreground: 220 20% 91%;
+    --card: 222 35% 7%;
+    --card-foreground: 220 20% 91%;
+    --popover: 222 40% 6%;
+    --popover-foreground: 220 20% 91%;
+    --primary: 43 73% 45%;
+    --primary-foreground: 222 43% 5%;
+    --secondary: 222 30% 10%;
+    --secondary-foreground: 220 20% 91%;
+    --muted: 222 35% 7%;
+    --muted-foreground: 215 17% 44%;
+    --accent: 43 73% 45%;
+    --accent-foreground: 222 43% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 20% 91%;
+    --border: 222 30% 13%;
+    --input: 222 35% 8%;
+    --ring: 43 73% 45%;
+    --radius: 0.25rem;
+    --chart-1: 43 73% 45%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 271 81% 66%;
+    --chart-5: 0 84% 60%;
+    --sidebar-background: 222 43% 5%;
+    --sidebar-foreground: 220 20% 91%;
+    --sidebar-primary: 43 73% 45%;
+    --sidebar-primary-foreground: 222 43% 5%;
+    --sidebar-accent: 43 73% 45% / 0.10;
+    --sidebar-accent-foreground: 43 73% 45%;
+    --sidebar-border: 222 30% 13%;
+    --sidebar-ring: 43 73% 45%;
+  }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    background: var(--bg-page) !important;
+    color: var(--text-primary) !important;
+  }
 }

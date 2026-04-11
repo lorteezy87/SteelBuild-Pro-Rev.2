@@ -7,6 +7,7 @@ import ResourceFormModal from "@/components/resources/ResourceFormModal";
 import ResourceList from "@/components/resources/ResourceList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
+import StatCard from "@/components/shared/StatCard";
 
 // ── Keyframe injection (once) ──
 const STYLE_ID = "resource-mgmt-keyframes";
@@ -416,43 +417,3 @@ export default function ResourceManagement() {
   );
 }
 
-function StatCard({ label, value, color, pulse }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: `1px solid ${pulse ? "rgba(239,68,68,0.35)" : "var(--border-default)"}`,
-        borderRadius: "var(--radius-card)",
-        padding: "14px 16px",
-        borderTop: `2px solid ${color}`,
-        boxShadow: pulse ? undefined : "var(--shadow-card)",
-        animation: pulse ? "overAllocPulse 2s ease-in-out infinite" : undefined,
-        transition: "box-shadow 0.2s, border-color 0.2s",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: "22px",
-          fontWeight: 800,
-          color: color,
-          marginBottom: "4px",
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "9px",
-          color: "var(--text-muted)",
-          letterSpacing: "0.10em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-}
