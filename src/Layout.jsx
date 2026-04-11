@@ -1379,12 +1379,12 @@ export default function Layout({ children, currentPageName }) {
           opacity: 0.6,
         }} />
 
-        {/* TOP NAV */}
+        {/* TOP UTILITY BAR — slim global actions only */}
         <nav className="nav-glass" style={{
-              height: 48,
+              height: 36,
               background: "var(--nav-bg)",
               borderBottom: "1px solid var(--border-default)",
-              padding: "0 16px",
+              padding: "0 12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -1402,61 +1402,15 @@ export default function Layout({ children, currentPageName }) {
               <img
                     src="/logo.png"
                     alt="SteelBuild Pro"
-                    style={{ height: 36, width: "auto", objectFit: "contain" }} />
-
+                    style={{ height: 26, width: "auto", objectFit: "contain" }} />
             </div>
-            {!isMobile && <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 8px" }} />}
+            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
+            {!isMobile && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                {currentPageName?.replace(/([A-Z])/g, ' $1').trim() || "Dashboard"}
+              </span>
+            )}
           </div>
-
-          {/* CENTER — Tabs (hidden on mobile) */}
-          {!isMobile &&
-              <div style={{ display: "flex", alignItems: "center", flex: 1, justifyContent: "center", overflowX: "auto", scrollbarWidth: "none" }}>
-              {PRIMARY_TABS.map((tab) => (
-                <div key={tab.label} style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                  <NavTab
-                    tab={tab}
-                    active={activeTab?.label === tab.label}
-                    onClick={() => handleTabClick(tab)} />
-                  {tab.label === "RFIs" && overdueRFICount > 0 && (
-                    <span style={{
-                      position: "absolute", top: 8, right: 2,
-                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                      background: "var(--status-error)", color: "#fff",
-                      padding: "1px 4px", borderRadius: 2,
-                      minWidth: 14, textAlign: "center", lineHeight: "14px",
-                      pointerEvents: "none",
-                    }}>
-                      {overdueRFICount}
-                    </span>
-                  )}
-                  {tab.label === "DRAWINGS" && overdueDrawingCount > 0 && (
-                    <span style={{
-                      position: "absolute", top: 8, right: 2,
-                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                      background: "var(--status-error)", color: "#fff",
-                      padding: "1px 4px", borderRadius: 2,
-                      minWidth: 14, textAlign: "center", lineHeight: "14px",
-                      pointerEvents: "none",
-                    }}>
-                      {overdueDrawingCount}
-                    </span>
-                  )}
-                  {tab.label === "DELIVERIES" && overdueDeliveryCount > 0 && (
-                    <span style={{
-                      position: "absolute", top: 8, right: 2,
-                      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                      background: "var(--status-error)", color: "#fff",
-                      padding: "1px 4px", borderRadius: 2,
-                      minWidth: 14, textAlign: "center", lineHeight: "14px",
-                      pointerEvents: "none",
-                    }}>
-                      {overdueDeliveryCount}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-              }
 
           {/* RIGHT — Icons */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -1645,11 +1599,8 @@ export default function Layout({ children, currentPageName }) {
             />
           )}
 
-          {/* Right column: Breadcrumbs + Content */}
+          {/* Right column: Content */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-            {/* Breadcrumbs */}
-            <Breadcrumbs currentPageName={currentPageName} />
-
             {/* CONTENT */}
             <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
               <ProjectErrorBanner />

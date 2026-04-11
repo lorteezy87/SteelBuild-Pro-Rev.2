@@ -1,4 +1,6 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { statusIs, statusIn } from "@/components/shared/formatters";
 
 const HEALTH = {
@@ -579,6 +581,29 @@ export default function ProjectPulse({
 
   const pills = useMemo(() => buildPills(metrics, timeline), [metrics, timeline]);
 
+  const navigate = useNavigate();
+
+  // Build action buttons from risk signals
+  const actions = useMemo(() => {
+    const btns = [];
+    if (metrics.overdueRfis.length > 0) {
+      btns.push({ label: "RESOLVE OVERDUE RFIs", page: "RFIs", color: "var(--status-error)" });
+    }
+    if (metrics.blockedPackages.length > 0) {
+      btns.push({ label: "UNBLOCK WORK PACKAGES", page: "WorkPackages", color: "var(--status-warning)" });
+    }
+    if (metrics.lateDrawings.length > 0) {
+      btns.push({ label: "EXPEDITE DRAWINGS", page: "Drawings", color: "var(--accent)" });
+    }
+    if (metrics.pendingCOs.length > 0) {
+      btns.push({ label: "REVIEW CHANGE ORDERS", page: "ChangeOrders", color: "var(--status-info)" });
+    }
+    if (health.reason === "timeline_mismatch" || health.reason === "awaiting_data") {
+      btns.push({ label: "UPDATE WP STATUS", page: "WorkPackages", color: "var(--status-error)" });
+    }
+    return btns.slice(0, 3);
+  }, [metrics, health]);
+
   return (
     <>
       <style>{pulseKeyframes}</style>
@@ -589,6 +614,7 @@ export default function ProjectPulse({
           borderRadius: 12,
           overflow: "hidden",
           position: "relative",
+          height: "100%",
         }}
       >
         {/* Gradient left border */}
@@ -668,6 +694,31 @@ export default function ProjectPulse({
           >
             {renderMarkdownBold(narrative)}
           </div>
+
+          {/* Action buttons */}
+          {actions.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: pills.length > 0 ? 10 : 0 }}>
+              {actions.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  onClick={() => navigate(createPageUrl(a.page))}
+                  style={{
+                    fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                    color: "#fff", background: a.color,
+                    border: "none", borderRadius: 4,
+                    padding: "5px 10px", letterSpacing: "0.08em",
+                    cursor: "pointer", transition: "opacity 0.15s",
+                    textTransform: "uppercase",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
+                >
+                  {a.label} \u2192
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Metric pills */}
           {pills.length > 0 && (
