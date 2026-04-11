@@ -70,7 +70,9 @@ export default function CollapsibleCard({
           padding: "12px 14px",
           borderBottom: collapsed ? "none" : "1px solid var(--divider)",
           background: "var(--bg-sidebar)",
-          border: "none",
+          borderTop: "none",
+          borderLeft: "none",
+          borderRight: "none",
           cursor: "pointer",
           textAlign: "left",
         }}

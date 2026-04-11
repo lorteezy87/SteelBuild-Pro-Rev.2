@@ -226,13 +226,13 @@ const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
 );
 
 export default function PortfolioView({
-  projects,
-  allRFIs,
-  allCOs,
-  allCodes,
-  allWPs,
-  allDeliveries,
-  allActionItems,
+  projects = [],
+  allRFIs = [],
+  allCOs = [],
+  allCodes = [],
+  allWPs = [],
+  allDeliveries = [],
+  allActionItems = [],
   allExpenses = [],
 }) {
   const navigate = useNavigate();
@@ -312,7 +312,14 @@ export default function PortfolioView({
     projectMetrics.map((p) => ({
       ...p,
       autoHealth: computeAutoHealth(p),
-      effectiveHealth: computeAutoHealth(p),  // auto-health overrides manual when worse
+      effectiveHealth: (() => {
+        const auto = computeAutoHealth(p);
+        const manual = p.health_status || "On Track";
+        const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+        const autoSev = SEVERITY[auto] ?? 2;
+        const manualSev = SEVERITY[manual] ?? 2;
+        return autoSev <= manualSev ? auto : manual;
+      })(),
     })),
     [projectMetrics]
   );
@@ -360,11 +367,12 @@ export default function PortfolioView({
     const overdueRFIs = allRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
     const openRFIs = allRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
     const pendingCOs = allCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status)).length;
-    const lateDeliveries = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < new Date() && d.status !== "Delivered").length;
-    const atRisk = projects.filter((p) => p.health_status === "At Risk" || p.health_status === "Watch").length;
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const lateDeliveries = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date + "T00:00:00") < todayStart && d.status !== "Delivered").length;
+    const atRisk = enrichedMetrics.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch").length;
     const activeWPs = allWPs.filter((w) => w.status === "In Progress").length;
     return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs };
-  }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries]);
+  }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics]);
 
   // ── Persist sparkline snapshot once per day ────────────────────────────────
   useEffect(() => {
@@ -514,22 +522,45 @@ export default function PortfolioView({
       finish: 0,
       rts: 0,
     };
+
+    // Map WP phase/status to the pipeline stage it has reached
+    const phaseToStage = {
+      "Detailing": "drawings_approved",
+      "Approval": "drawings_approved",
+      "Fabrication": "in_fab",
+      "Delivery": "released",
+      "Shipping": "released",
+      "Erection": "rts",
+    };
+
     allWPs.forEach((w) => {
       const ton = Number(w.tonnage) || 0;
       const pct = Number(w.percent_complete) || 0;
+
       if (w.status === "Complete") {
+        // Complete WPs count toward all stages
         stages.forEach((s) => (values[s] += ton));
         return;
       }
-      if (pct >= 75) values.finish += ton;
-      if (pct >= 25 || w.status === "In Progress") values.in_fab += ton;
-      if (w.released_date) values.released += ton;
-      if (w.vif_confirmed && w.load_list_complete) values.material_on_hand += ton;
-      values.drawings_approved += ton;
+
+      // Determine the furthest stage this WP has reached
+      let reachedStage = null;
+      if (pct >= 75) reachedStage = "finish";
+      else if (pct >= 25 || w.status === "In Progress") reachedStage = "in_fab";
+      else if (w.released_date) reachedStage = "released";
+      else if (w.vif_confirmed && w.load_list_complete) reachedStage = "material_on_hand";
+      else if (w.phase && phaseToStage[w.phase]) reachedStage = phaseToStage[w.phase];
+      else reachedStage = "drawings_approved";
+
+      // Add tonnage to the reached stage and all preceding stages
+      const reachedIdx = stages.indexOf(reachedStage);
+      if (reachedIdx >= 0) {
+        for (let i = 0; i <= reachedIdx; i++) {
+          values[stages[i]] += ton;
+        }
+      }
     });
-    for (let i = 1; i < stages.length; i++) {
-      values[stages[i]] += values[stages[i - 1]];
-    }
+
     return values;
   }, [allWPs]);
 
