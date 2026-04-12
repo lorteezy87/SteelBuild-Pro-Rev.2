@@ -384,7 +384,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
 }
 
 // ─── Step 4: Review Sheets ────────────────────────────────────────────
-function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) {
+function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate, existingDrawings = [] }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");
@@ -475,10 +475,17 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
                   <input type="checkbox" checked={!!s.selected} onChange={() => toggleOne(i)} style={{ accentColor: "var(--accent)", cursor: "pointer" }} />
                 </td>
                 <td style={{ padding: "6px 10px" }}>
-                  <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
-                    style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
-                    onBlur={e => e.target.style.borderColor = "transparent"} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
+                      style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
+                      onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                      onBlur={e => e.target.style.borderColor = "transparent"} />
+                    {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                        ⚠ EXISTS IN PROJECT
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <input value={s.sheetTitle || ""} onChange={e => updateSheet(i, "sheetTitle", e.target.value)}
@@ -553,7 +560,7 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
 }
 
 // ─── Main Modal ──────────────────────────────────────────────────────
-export default function DrawingSetUploadModal({ open, onClose, onComplete, activeProject, onNewRevision }) {
+export default function DrawingSetUploadModal({ open, onClose, onComplete, activeProject, onNewRevision, existingDrawings = [] }) {
   const qc = useQueryClient();
   const [step, setStep]                   = useState(0);
   const [files, setFiles]                 = useState([]);
@@ -799,7 +806,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           {step === 1 && <StepFiles files={files} setFiles={setFiles} onNext={() => setStep(2)} onClose={handleClose} />}
           {step === 2 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} projectName={activeProject?.name} />}
           {step === 3 && <StepProcessing processingStatus={processingStatus} onCancel={reset} error={processError} />}
-          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} onBack={() => setStep(1)} onCreate={handleCreate} />}
+          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} onBack={() => setStep(1)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
           {step === 5 && <StepSuccess createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>
       </DialogContent>
