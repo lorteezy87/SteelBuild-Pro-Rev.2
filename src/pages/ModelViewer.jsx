@@ -79,6 +79,8 @@ export default function ModelViewer() {
   const worldRef = useRef(null);
   const loadedModelRef = useRef(null);
   const gltfSceneRef = useRef(null); // For GLTF models (non-IFC)
+  const fragmentsManagerRef = useRef(null);
+  const rafHandleRef = useRef(0);
 
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -173,18 +175,46 @@ export default function ModelViewer() {
         // into its scene object, so the model appears empty.
         const fragmentsManager = components.get(OBC.FragmentsManager);
         fragmentsManager.init(FRAGMENTS_WORKER_URL);
+        fragmentsManagerRef.current = fragmentsManager;
 
-        // 7a. Drive tile streaming on every frame. FragmentsModel only
-        // streams tile geometry into its Object3D when fragments.core.update()
-        // is called. Hooking the world's per-frame onAfterUpdate event keeps
-        // the streamed LOD in sync with the camera view.
-        world.onAfterUpdate.add(() => {
+        // 7a. Drive tile streaming continuously via requestAnimationFrame.
+        //
+        // Background: FragmentsModel only adds/keeps BIMMesh tiles when
+        // fragmentsManager.core.update() is called. If it stops being called,
+        // tiles get evicted from the cache and the model visually disappears.
+        //
+        // We originally hooked world.onAfterUpdate which sounds right, but
+        // OBC's SimpleRenderer only ticks onAfterUpdate when the camera is
+        // actually moving (dirty-flag optimisation). Once the user stops
+        // dragging, the event loop goes quiet and tile streaming halts — which
+        // is exactly why the model appeared for ~10s (the polling window) and
+        // then vanished.
+        //
+        // A plain RAF loop guarantees a steady heartbeat regardless of camera
+        // idleness. Also wire camera-controls "control"/"rest" events so any
+        // user interaction forces a sync update — important on first render
+        // before the RAF loop has settled.
+        const tick = () => {
+          rafHandleRef.current = requestAnimationFrame(tick);
           try {
             if (fragmentsManager.initialized) {
               fragmentsManager.core.update();
             }
           } catch { /* swallow per-frame errors */ }
-        });
+        };
+        rafHandleRef.current = requestAnimationFrame(tick);
+
+        const onCtrlChange = () => {
+          try { fragmentsManager.initialized && fragmentsManager.core.update(); } catch { /* ignore */ }
+        };
+        const onCtrlRest = () => {
+          try { fragmentsManager.initialized && fragmentsManager.core.update(true); } catch { /* ignore */ }
+        };
+        try {
+          ctrl.addEventListener("control", onCtrlChange);
+          ctrl.addEventListener("update",  onCtrlChange);
+          ctrl.addEventListener("rest",    onCtrlRest);
+        } catch { /* camera-controls API drift guard */ }
 
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
@@ -212,6 +242,10 @@ export default function ModelViewer() {
 
     return () => {
       disposed = true;
+      if (rafHandleRef.current) {
+        cancelAnimationFrame(rafHandleRef.current);
+        rafHandleRef.current = 0;
+      }
       if (componentsRef.current) {
         try { componentsRef.current.dispose(); } catch { /* ignore cleanup errors */ }
       }
@@ -219,6 +253,7 @@ export default function ModelViewer() {
       worldRef.current = null;
       loadedModelRef.current = null;
       gltfSceneRef.current = null;
+      fragmentsManagerRef.current = null;
     };
   }, []);
 
