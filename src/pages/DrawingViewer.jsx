@@ -12,6 +12,17 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+// If a stored file_url is itself a Supabase signed URL with a JWT token,
+// extract the storage path and re-sign so expired URLs still resolve.
+function extractStoragePathFromSignedUrl(url) {
+  try {
+    const m = url.match(/\/object\/(?:sign|public)\/[^/]+\/(.+?)(?:\?|$)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 const STAGES = {
   "Not Started": { color: "#6B7280" },
   "OFA":         { color: "#3B82F6" },
@@ -42,6 +53,9 @@ export default function DrawingViewer() {
   const [rendering, setRendering] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [resolvedUrl, setResolvedUrl] = useState(null);
+  // "canvas" = pdfjs canvas render, "iframe" = browser-native PDF viewer
+  // Iframe is the safer default — it works even when pdfjs/worker fails.
+  const [renderMode, setRenderMode] = useState("iframe");
 
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -65,7 +79,8 @@ export default function DrawingViewer() {
 
   const activeIndex = filtered.findIndex(d => d.id === activeId);
 
-  // Resolve file_url (storage path) to a signed URL
+  // Resolve file_url (storage path) to a signed URL.
+  // If file_url is a stale Supabase signed URL, extract the path and re-sign.
   useEffect(() => {
     let cancelled = false;
     setResolvedUrl(null);
@@ -77,16 +92,25 @@ export default function DrawingViewer() {
     const rawUrl = activeDrawing?.file_url;
     if (!rawUrl) return;
 
-    resolveFileUrl(rawUrl)
+    const isHttp = rawUrl.startsWith("http://") || rawUrl.startsWith("https://");
+    const storagePath = isHttp ? extractStoragePathFromSignedUrl(rawUrl) : rawUrl;
+    const toResolve = storagePath || rawUrl;
+
+    resolveFileUrl(toResolve)
       .then(url => { if (!cancelled) setResolvedUrl(url); })
-      .catch(err => { if (!cancelled) setPdfError(`Failed to resolve file URL: ${err.message}`); });
+      .catch(err => {
+        if (cancelled) return;
+        // Fall back to raw URL — iframe may still load it
+        if (isHttp) setResolvedUrl(rawUrl);
+        else setPdfError(`Failed to resolve file URL: ${err.message}`);
+      });
 
     return () => { cancelled = true; };
   }, [activeDrawing?.file_url]);
 
-  // Load the PDF once we have a signed URL
+  // Load the PDF once we have a signed URL (only when canvas mode is active)
   useEffect(() => {
-    if (!resolvedUrl) return;
+    if (!resolvedUrl || renderMode !== "canvas") return;
 
     let cancelled = false;
     let loadingTask = null;
@@ -110,7 +134,7 @@ export default function DrawingViewer() {
         loadingTask.destroy?.();
       }
     };
-  }, [resolvedUrl]);
+  }, [resolvedUrl, renderMode]);
 
   // Destroy previous PDF document to prevent memory leaks
   useEffect(() => {
@@ -342,39 +366,67 @@ export default function DrawingViewer() {
 
           <button onClick={() => setZoom(1.0)} style={{ ...toolBtn, ...mono, fontSize: 9 }}>1:1</button>
           <button onClick={handleFitWidth} style={{ ...toolBtn, ...mono, fontSize: 9 }}>FIT</button>
+          <button
+            onClick={() => setRenderMode(m => m === "iframe" ? "canvas" : "iframe")}
+            title={renderMode === "iframe" ? "Switch to canvas (markups)" : "Switch to iframe (browser PDF)"}
+            style={{
+              ...toolBtn, ...mono, fontSize: 9,
+              color: renderMode === "iframe" ? "var(--accent)" : "var(--text-muted)",
+              background: renderMode === "iframe" ? "rgba(200,155,32,0.1)" : "none",
+            }}
+          >
+            {renderMode === "iframe" ? "IFRAME" : "CANVAS"}
+          </button>
           <button onClick={handleDownload} disabled={!activeDrawing?.file_url}
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
           </button>
         </div>
 
-        {/* Canvas area */}
-        <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: 24, background: "#1a1a2e" }}>
+        {/* Viewer area — iframe (browser-native) or pdfjs canvas */}
+        <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "stretch", background: "#1a1a2e" }}>
           {!activeDrawing ? (
-            <div style={{ margin: "auto", textAlign: "center" }}>
+            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
               <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>SELECT A SHEET FROM THE SIDEBAR</p>
               <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 8 }}>← → to navigate · + − to zoom · 0 to reset</p>
             </div>
+          ) : !activeDrawing.file_url ? (
+            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
+              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.15 }}>📄</div>
+              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
+              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
+            </div>
+          ) : renderMode === "iframe" ? (
+            !resolvedUrl ? (
+              <div style={{ margin: "auto", ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>RESOLVING FILE…</div>
+            ) : (
+              <iframe
+                key={resolvedUrl}
+                src={resolvedUrl}
+                title={activeDrawing.title || activeDrawing.sheet_number}
+                style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+              />
+            )
           ) : pdfError ? (
-            <div style={{ margin: "auto", textAlign: "center" }}>
+            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
               <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>⚠</div>
               <p style={{ ...mono, fontSize: 11, color: "var(--status-error)", letterSpacing: "0.1em" }}>{pdfError}</p>
-              {activeDrawing.file_url && (
-                <a href={activeDrawing.file_url} target="_blank" rel="noopener noreferrer"
+              <button
+                onClick={() => setRenderMode("iframe")}
+                style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 12, padding: "6px 14px", background: "rgba(200,155,32,0.12)", border: "1px solid var(--accent)", borderRadius: 2, cursor: "pointer" }}
+              >
+                SWITCH TO IFRAME VIEW
+              </button>
+              {resolvedUrl && (
+                <a href={resolvedUrl} target="_blank" rel="noopener noreferrer"
                   style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block" }}>
                   OPEN IN NEW TAB →
                 </a>
               )}
             </div>
-          ) : !activeDrawing.file_url ? (
-            <div style={{ margin: "auto", textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.15 }}>📄</div>
-              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
-              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
-            </div>
           ) : (
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", padding: 24 }}>
               {rendering && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10, ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>
                   RENDERING…
