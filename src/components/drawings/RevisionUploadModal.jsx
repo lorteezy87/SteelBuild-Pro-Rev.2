@@ -40,6 +40,27 @@ function getRevisionSuggestions(currentRev) {
     return [`IFC Rev ${num + 1}`, `IFC Rev ${num + 1} — Addendum`, "FINAL IFC"];
   }
   if (rev === "BID SET") return ["IFC", "ADDENDUM 1", "ADDENDUM 2"];
+  // Numeric revisions: "1" → "2", "3" → "4"
+  if (/^\d+$/.test(rev)) {
+    const next = parseInt(rev) + 1;
+    return [String(next), `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // Letter revisions: "A" → "B", "C" → "D"
+  if (/^[A-Z]$/.test(rev)) {
+    const next = String.fromCharCode(rev.charCodeAt(0) + 1);
+    return [next, `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // "Rev X" numeric pattern: "Rev 1" → "Rev 2"
+  if (/^REV\s+(\d+)$/i.test(rev)) {
+    const num = parseInt(rev.match(/\d+/)[0]) + 1;
+    return [`Rev ${num}`, `Rev ${num} — Final`, `IFC Rev ${num}`];
+  }
+  // "Rev X" letter pattern: "Rev A" → "Rev B"
+  if (/^REV\s+([A-Z])$/i.test(rev)) {
+    const letter = rev.match(/[A-Z]$/i)[0].toUpperCase();
+    const next = String.fromCharCode(letter.charCodeAt(0) + 1);
+    return [`Rev ${next}`, `IFC`, `Final`];
+  }
   return ["Rev 1", "Rev 2", "IFC", "Final"];
 }
 
@@ -202,6 +223,14 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
 function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
   const suggestions = getRevisionSuggestions(selectedSet.current_revision);
   const set = (k, v) => setRevMeta(p => ({ ...p, [k]: v }));
+  const [autoFilled, setAutoFilled] = useState(false);
+
+  useEffect(() => {
+    if (!revMeta.revisionLabel && suggestions.length > 0) {
+      set("revisionLabel", suggestions[0]);
+      setAutoFilled(true);
+    }
+  }, []); // only on mount
 
   return (
     <div>
@@ -216,11 +245,18 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
 
       {/* Revision label */}
       <div style={{ marginBottom: 14 }}>
-        <label>New Revision Label *</label>
-        <input value={revMeta.revisionLabel} onChange={e => set("revisionLabel", e.target.value)} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <label style={{ margin: 0 }}>New Revision Label *</label>
+          {autoFilled && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
+              AUTO
+            </span>
+          )}
+        </div>
+        <input value={revMeta.revisionLabel} onChange={e => { set("revisionLabel", e.target.value); setAutoFilled(false); }} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {suggestions.map(s => (
-            <button key={s} onClick={() => set("revisionLabel", s)} style={{
+            <button key={s} onClick={() => { set("revisionLabel", s); setAutoFilled(false); }} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
               background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
               border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
