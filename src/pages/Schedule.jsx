@@ -282,8 +282,8 @@ export default function Schedule() {
       const outlineLevel = Number(node.getElementsByTagName("OutlineLevel")[0]?.textContent) || 0;
       const outlineNumber = node.getElementsByTagName("OutlineNumber")[0]?.textContent || "";
       const name = node.getElementsByTagName("Name")[0]?.textContent || "Task";
-      const start = node.getElementsByTagName("Start")[0]?.textContent?.slice(0, 10) || "";
-      const finish = node.getElementsByTagName("Finish")[0]?.textContent?.slice(0, 10) || "";
+      const start = node.getElementsByTagName("Start")[0]?.textContent?.slice(0, 10) || null;
+      const finish = node.getElementsByTagName("Finish")[0]?.textContent?.slice(0, 10) || null;
       const pct = Number(node.getElementsByTagName("PercentComplete")[0]?.textContent) || 0;
       const milestone = node.getElementsByTagName("Milestone")[0]?.textContent === "1";
       const durationStr = node.getElementsByTagName("Duration")[0]?.textContent || "";
@@ -377,8 +377,8 @@ export default function Schedule() {
           task_name: t.name,
           task_type: t.milestone ? "Milestone" : (t.isSummary ? "Task" : "Task"),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
-          start_date: t.start || new Date().toISOString().split("T")[0],
-          end_date: t.finish || t.start || new Date().toISOString().split("T")[0],
+          start_date: t.start ?? new Date().toISOString().split("T")[0],
+          end_date: t.finish ?? t.start ?? new Date().toISOString().split("T")[0],
           status: t.pct >= 100 ? "Complete" : t.pct > 0 ? "In Progress" : "Not Started",
           percent_complete: t.pct,
           priority: "Normal",

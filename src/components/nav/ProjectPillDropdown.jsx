@@ -87,9 +87,10 @@ export default function ProjectPillDropdown() {
     );
   });
 
+  const sortAlpha = (arr) => [...arr].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const grouped = {
-    active: filtered.filter((p) => p.phase !== "Closeout"),
-    closeout: filtered.filter((p) => p.phase === "Closeout"),
+    active: sortAlpha(filtered.filter((p) => p.phase !== "Closeout")),
+    closeout: sortAlpha(filtered.filter((p) => p.phase === "Closeout")),
   };
 
   return (

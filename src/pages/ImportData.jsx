@@ -206,7 +206,8 @@ function cleanRow(row) {
         "spec_section",
       ].includes(k)
     ) {
-      cleaned[k] = Number(v);
+      const num = Number(v);
+      cleaned[k] = Number.isFinite(num) ? num : 0;
     } else {
       cleaned[k] = v;
     }

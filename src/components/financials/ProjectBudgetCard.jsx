@@ -20,9 +20,11 @@ export default function ProjectBudgetCard({ project, summary }) {
     );
   }
 
-  const safeBudget = Number(summary.budget) || 0;
-  const safeActual = Number(summary.actual) || 0;
-  const safeVariance = Number(summary.variance) || 0;
+  // Support both useFinancials summary shape (revisedBudget, exposure, totalRemaining)
+  // and legacy shape (budget, actual, variance).
+  const safeBudget = Number(summary.revisedBudget ?? summary.budget) || 0;
+  const safeExposure = Number(summary.exposure ?? summary.committed ?? summary.actual) || 0;
+  const safeVariance = Number(summary.totalRemaining ?? summary.variance ?? (safeBudget - safeExposure)) || 0;
 
   const budgetHealth =
     safeBudget > 0
@@ -30,7 +32,7 @@ export default function ProjectBudgetCard({ project, summary }) {
       : 0;
 
   const isOverBudget = safeVariance < 0;
-  const percentUsed = safeBudget > 0 ? ((safeActual / safeBudget) * 100).toFixed(0) : 0;
+  const percentUsed = safeBudget > 0 ? ((safeExposure / safeBudget) * 100).toFixed(0) : 0;
 
   return (
     <div
@@ -137,7 +139,7 @@ export default function ProjectBudgetCard({ project, summary }) {
             Total Cost
           </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent)" }}>
-            ${(safeActual / 1000).toFixed(0)}K
+            ${(safeExposure / 1000).toFixed(0)}K
           </span>
         </div>
 

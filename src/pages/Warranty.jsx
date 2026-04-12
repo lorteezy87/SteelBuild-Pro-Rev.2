@@ -84,6 +84,7 @@ export default function Warranty() {
   };
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const filtered = warranties.filter((w) => {
     const typeMatch = filterType === "all" || w.warranty_type === filterType;
     let statusMatch = true;

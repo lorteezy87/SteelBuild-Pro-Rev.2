@@ -339,9 +339,11 @@ export default function PortfolioView({
         const pWPs = allWPs.filter((w) => w.project_id === p.id);
         const pDeliveries = allDeliveries.filter((d) => d.project_id === p.id);
         const pExpenses = allExpenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
-        const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
+        const approvedCOTotal = pCOs.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+        const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0) + approvedCOTotal;
         const hasBudgetData = pCodes.length > 0;
-        const actual = pExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        // Committed (all non-voided expenses) is the true exposure; paid is a subset
+        const actual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
         const hasActualData = pExpenses.length > 0;
         const openRFIs = pRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
         const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
@@ -367,7 +369,7 @@ export default function PortfolioView({
           stalledWPs,
         };
       })
-      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
+      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3) || (a.name || "").localeCompare(b.name || ""));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
 
   // Enrich metrics with weighted health scoring + reason strings

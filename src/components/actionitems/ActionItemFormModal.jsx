@@ -77,13 +77,15 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
   };
 
   // Cmd/Ctrl+Enter to save
+  const handleSubmitRef = useRef(handleSubmit);
+  handleSubmitRef.current = handleSubmit;
   useEffect(() => {
     const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmit();
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmitRef.current();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [formData]);
+  }, []);
 
   const field = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
 

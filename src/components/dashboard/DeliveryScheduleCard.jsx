@@ -65,7 +65,7 @@ export default function DeliveryScheduleCard({ deliveries = [] }) {
                   color: "var(--text-muted)",
                   marginTop: "2px",
                 }}>
-                  {new Date(d.scheduled_date).toLocaleDateString()}
+                  {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString() : "—"}
                 </div>
               </div>
               <div

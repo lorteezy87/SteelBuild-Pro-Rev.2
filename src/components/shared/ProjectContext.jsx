@@ -14,7 +14,8 @@ const PROJECTS_CACHE_KEY = "sbp_projects_cache";
 function readProjectsCache() {
   try {
     const raw = localStorage.getItem(PROJECTS_CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   } catch {
     return [];
   }
@@ -37,7 +38,8 @@ export function ProjectProvider({ children }) {
     let cancelled = false;
 
     const fetchProjects = async (attempt = 1) => {
-      const data = await base44.entities.Project.list("-created_at");
+      const raw = await base44.entities.Project.list("-created_at");
+      const data = [...raw].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       // If empty and we have retries left, wait and try again
       if (data.length === 0 && attempt < 3) {
         await new Promise((r) => setTimeout(r, attempt * 1500));

@@ -22,8 +22,8 @@ const PRIMARY_TABS = [
 { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAheadSchedule"] },
 { label: "DELIVERIES", pages: ["Deliveries"] },
 { label: "SCHEDULE", pages: ["Schedule", "GanttChart"] },
-{ label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes"] },
-{ label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV"] },
+{ label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
+{ label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
 { label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
 { label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
 { label: "QUALITY", pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
@@ -67,6 +67,8 @@ const ALL_MODULES = [
 { icon: "📦", name: "Procurement", group: "Fabrication", page: "Procurement" },
 { icon: "👁", name: "Look-Ahead", group: "Fab", page: "LookAheadSchedule" },
 { icon: "▥", name: "Gantt Chart", group: "Fab", page: "GanttChart" },
+{ icon: "⚙", name: "LEMs", group: "Field", page: "LEMs" },
+{ icon: "📋", name: "Contract Management", group: "Cost", page: "ContractManagement" },
 { icon: "📦", name: "Deliveries", group: "Logistics", page: "Deliveries" },
 { icon: "▥", name: "Schedule", group: "Field", page: "Schedule" },
 { icon: "📋", name: "Daily Logs", group: "Field", page: "DailyLogs" },
@@ -198,6 +200,7 @@ const NAV_GROUPS = [
   label: "FIELD & LOGISTICS",
   items: [
   { label: "Daily Logs", icon: "📋", page: "DailyLogs" },
+  { label: "LEMs", icon: "⚙", page: "LEMs" },
   { label: "Deliveries", icon: "📦", page: "Deliveries" },
   { label: "Photos", icon: "📷", page: "Photos" }]
 
@@ -214,6 +217,7 @@ const NAV_GROUPS = [
   label: "COST CONTROL",
   items: [
   { label: "Budget Control", icon: "◎", page: "Financials" },
+  { label: "Contract Management", icon: "📋", page: "ContractManagement" },
   { label: "Schedule of Values", icon: "📊", page: "SOV" },
   { label: "Change Orders", icon: "$", page: "ChangeOrders", badgeKey: "co" },
   { label: "Expenses", icon: "💰", page: "Expenses" }]

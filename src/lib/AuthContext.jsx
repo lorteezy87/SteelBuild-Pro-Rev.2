@@ -71,7 +71,13 @@ export const AuthProvider = ({ children }) => {
     };
 
     // Get initial session — handles expired/invalid tokens by returning null session
-    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session));
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => handleSession(session))
+      .catch(() => {
+        setIsLoadingAuth(false);
+        setIsAuthenticated(false);
+        setAuthError({ type: 'auth_required', message: 'Unable to reach authentication server.' });
+      });
 
     // Subscribe to future auth changes (token refresh, sign-out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -94,7 +100,14 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
-      const authErr = { type: 'auth_required', message: error.message || 'Login failed' };
+      // Distinguish network/config errors from auth errors
+      let message = error.message || 'Login failed';
+      if (error instanceof TypeError && /fetch/i.test(message)) {
+        message = 'Unable to reach authentication server. Check your network connection or contact your administrator.';
+      } else if (error.status === 400) {
+        message = 'Invalid email or password.';
+      }
+      const authErr = { type: 'auth_required', message };
       setAuthError(authErr);
       return { success: false, error: authErr };
     }

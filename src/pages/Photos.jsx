@@ -43,7 +43,8 @@ export default function Photos() {
       month: 30,
     };
     const days = ranges[filterDate] || 0;
-    const cutoff = new Date(now.setDate(now.getDate() - days));
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - days);
     return photos.filter((p) => new Date(p.taken_date) >= cutoff);
   };
 
