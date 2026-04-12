@@ -197,11 +197,16 @@ const NAV_GROUPS = [
 
 },
 {
-  label: "FIELD & LOGISTICS",
+  label: "DELIVERIES",
+  items: [
+  { label: "Deliveries", icon: "🚛", page: "Deliveries" }]
+
+},
+{
+  label: "FIELD",
   items: [
   { label: "Daily Logs", icon: "📋", page: "DailyLogs" },
   { label: "LEMs", icon: "⚙", page: "LEMs" },
-  { label: "Deliveries", icon: "📦", page: "Deliveries" },
   { label: "Photos", icon: "📷", page: "Photos" }]
 
 },
@@ -235,7 +240,7 @@ const NAV_GROUPS = [
 
 
 const COLUMN_1_GROUPS = ["OVERVIEW", "JOB SETUP", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
-const COLUMN_2_GROUPS = ["FABRICATION", "FIELD & LOGISTICS", "SCHEDULING"];
+const COLUMN_2_GROUPS = ["FABRICATION", "DELIVERIES", "FIELD", "SCHEDULING"];
 const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING"];
 
 const getColumn = (groupLabel) => {

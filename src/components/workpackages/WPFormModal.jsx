@@ -52,6 +52,12 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const validate = () => {
     const e = {};
     if (!form.name?.trim()) e.name = "Required";
+    // Enforce workflow: Fabrication requires at least one approved linked drawing
+    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0) {
+      e.phase = "Cannot advance to Fabrication without linked drawings";
+    } else if (form.phase === "Fabrication" && !hasApprovedLinkedDrawings) {
+      e.phase = "Linked drawings must be approved (Released/IFC) before Fabrication";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -153,7 +159,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         <FormField label="Name *" error={errors.name} span2>
           <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name..." />
         </FormField>
-        <FormField label="Phase">
+        <FormField label="Phase" error={errors.phase}>
           <select style={selectStyle} value={form.phase} onChange={e => set("phase", e.target.value)}>
             {["Detailing", "Fabrication", "Delivery", "Erection"].map(o => <option key={o} value={o}>{o}</option>)}
           </select>

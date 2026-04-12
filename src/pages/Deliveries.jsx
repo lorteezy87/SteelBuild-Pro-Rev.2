@@ -320,13 +320,43 @@ export default function Deliveries() {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     if (bulkUpdateMut.isPending) return;
+    // Guard: cannot bulk-mark "Delivered" if any linked WPs have incomplete fab
+    if (status === "Delivered") {
+      const blocked = ids.filter(id => {
+        const d = deliveries.find(dd => dd.id === id);
+        return d && !isFabComplete(d);
+      });
+      if (blocked.length > 0) {
+        toast.error(`${blocked.length} delivery(ies) blocked — linked work package fabrication not complete`);
+        return;
+      }
+    }
     bulkUpdateMut.mutate({ ids, status });
+  };
+
+  // Check if the linked work package's fabrication is complete
+  const isFabComplete = (delivery) => {
+    if (!delivery.work_package_id) return true; // no WP linked — allow
+    const wp = workPackages.find(w => w.id === delivery.work_package_id);
+    if (!wp) return true; // WP not found (deleted?) — allow
+    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+    const rank = PHASE_RANK[wp.phase] ?? 0;
+    // Fab is done if WP has moved past Fabrication (Delivery/Erection)
+    // OR is in Fabrication with status "Complete"
+    if (rank >= 2) return true;
+    if (rank === 1 && wp.status === "Complete") return true;
+    return false;
   };
 
   const handleAdvanceStatus = (delivery) => {
     if (delivery.status === "Scheduled") {
       transitMut.mutate({ id: delivery.id, data: { status: "In Transit" } });
     } else if (delivery.status === "In Transit") {
+      if (!isFabComplete(delivery)) {
+        const wp = workPackages.find(w => w.id === delivery.work_package_id);
+        toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
+        return;
+      }
       quickCompleteMut.mutate({
         id: delivery.id,
         data: { status: "Delivered", actual_date: new Date().toISOString().split("T")[0] },
