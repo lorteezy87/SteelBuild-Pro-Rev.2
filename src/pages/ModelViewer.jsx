@@ -45,10 +45,6 @@ function normalizeMaterials(root) {
     for (const m of mats) {
       if (!m || seen.has(m)) continue;
       seen.add(m);
-      // If a material has been marked transparent but actually has near-full
-      // opacity, treat it as solid. If it really is meant to be glass
-      // (opacity < 0.4), keep some translucency but bump it up so it's
-      // visible on the white background.
       if (m.transparent || (typeof m.opacity === "number" && m.opacity < 1)) {
         const op = typeof m.opacity === "number" ? m.opacity : 1;
         if (op >= 0.4) {
@@ -57,17 +53,42 @@ function normalizeMaterials(root) {
           m.depthWrite = true;
         } else {
           m.transparent = true;
-          m.opacity = Math.max(op, 0.55); // bump faint glass so it reads
+          m.opacity = Math.max(op, 0.55);
           m.depthWrite = false;
         }
       }
       m.side = THREE.DoubleSide;
-      // Some IFC materials come in with vertexColors disabled but tinted
-      // toward white — force a sensible default if color is near-white.
       if (m.color && m.color.r > 0.97 && m.color.g > 0.97 && m.color.b > 0.97) {
         m.color.setHex(0xc8c8cc);
       }
       m.needsUpdate = true;
+    }
+  });
+}
+
+// Default steel-blue color applied to meshes that have no meaningful color
+const DEFAULT_STEEL_COLOR = new THREE.Color(0.45, 0.52, 0.58); // blue-grey steel
+const GREY_THRESHOLD = 0.08; // how close r/g/b must be to count as "grey"
+
+function isUncoloredMaterial(mat) {
+  if (!mat || !mat.color) return true;
+  const { r, g, b } = mat.color;
+  const avg = (r + g + b) / 3;
+  if (avg < 0.05 || avg > 0.95) return true;
+  const spread = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+  return spread < GREY_THRESHOLD;
+}
+
+function applyDefaultSteelColor(root) {
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      if (isUncoloredMaterial(mat)) {
+        mat.color.copy(DEFAULT_STEEL_COLOR);
+        mat.metalness = mat.metalness ?? 0.4;
+        mat.roughness = mat.roughness ?? 0.6;
+      }
     }
   });
 }
@@ -154,25 +175,21 @@ export default function ModelViewer() {
         threeScene.add(grid);
 
         // 6. Tune camera controls for a tight, direct CAD-viewport feel.
-        // camera-controls defaults (smoothTime 0.25, speeds 1.0) feel mushy
-        // on a building model. Key settings:
-        //   - smoothTime near zero so the camera tracks input with no lag
-        //   - rotate speeds at 1.0 (default) — anything lower feels sticky
-        //   - dolly/truck speeds scaled up so zoom/pan cover real distances
-        //   - dollyToCursor + infinityDolly so wheel zoom targets what the
-        //     mouse points at and never runs out of travel
         const ctrl = world.camera.controls;
         ctrl.smoothTime = 0.05;
         ctrl.draggingSmoothTime = 0.02;
         ctrl.azimuthRotateSpeed = 1.1;
         ctrl.polarRotateSpeed = 1.1;
-        ctrl.dollySpeed = 1.2;
+        ctrl.dollySpeed = 0.35; // slower scroll zoom — deliberate without being sluggish
         ctrl.truckSpeed = 2.5;
         ctrl.dollyToCursor = true;
         try { ctrl.infinityDolly = true; } catch { /* ignore if unsupported */ }
         ctrl.minDistance = 0.1;
         ctrl.maxDistance = 5000;
         ctrl.setLookAt(80, 60, 80, 0, 0, 0);
+
+        // Middle mouse button = pan (truck), not rotate
+        ctrl.mouseButtons.middle = 2; // CameraControls.ACTION.TRUCK
 
         // 7. Initialize FragmentsManager with the worker URL.
         // FragmentsManager.init() REQUIRES a worker URL — without it, the
@@ -377,11 +394,12 @@ export default function ModelViewer() {
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Processing meshes..." }));
 
       const model = gltf.scene;
+      // Normalize first (fix transparency, double-side, near-white), then
+      // apply steel color to whatever remains uncolored.
+      normalizeMaterials(model);
+      applyDefaultSteelColor(model);
       world.scene.three.add(model);
       gltfSceneRef.current = model;
-      // Normalize GLTF materials too — same wash-out story applies if the
-      // exporter set every material as transparent for sketchy reasons.
-      normalizeMaterials(model);
 
       // Extract members
       const extracted = [];
@@ -442,6 +460,8 @@ export default function ModelViewer() {
       // The model.object is the THREE.Object3D for the scene
       const modelObject = model.object;
       if (modelObject) {
+        normalizeMaterials(modelObject);
+        applyDefaultSteelColor(modelObject);
         world.scene.three.add(modelObject);
       }
 
@@ -453,7 +473,10 @@ export default function ModelViewer() {
       // later. onViewUpdated fires once per refreshView cycle.
       try {
         model.onViewUpdated?.add?.(() => {
-          if (modelObject) normalizeMaterials(modelObject);
+          if (modelObject) {
+            normalizeMaterials(modelObject);
+            applyDefaultSteelColor(modelObject);
+          }
         });
       } catch (e) { console.warn("onViewUpdated hook failed", e); }
 
@@ -461,7 +484,10 @@ export default function ModelViewer() {
       // tiles are streamed in immediately rather than waiting for view changes.
       setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
       try { await fragmentsManager.core.update(true); } catch (e) { console.warn("core.update failed", e); }
-      if (modelObject) normalizeMaterials(modelObject);
+      if (modelObject) {
+        normalizeMaterials(modelObject);
+        applyDefaultSteelColor(modelObject);
+      }
 
       // Extract mesh members for the sidebar list
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Extracting elements..." }));
@@ -489,6 +515,7 @@ export default function ModelViewer() {
         const box = new THREE.Box3().setFromObject(modelObject);
         if (box.isEmpty()) return false;
         normalizeMaterials(modelObject);
+        applyDefaultSteelColor(modelObject);
         fitCamera(modelObject);
         // Re-extract members now that real meshes exist
         const fresh = [];
@@ -701,7 +728,7 @@ export default function ModelViewer() {
           fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em",
         }}>
           <span>LMB: Rotate</span>
-          <span>RMB: Pan</span>
+          <span>RMB / MMB: Pan</span>
           <span>Scroll: Zoom</span>
           <span>F: Fit All</span>
           <span>[: Toggle List</span>
