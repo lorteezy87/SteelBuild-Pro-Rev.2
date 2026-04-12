@@ -14,15 +14,29 @@ const STAGES = [
 export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0) || 1;
 
+  // Phase progression order — used for cumulative tonnage
+  const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+  const rank = (w) => PHASE_RANK[w.phase] ?? -1;
+  const tons = (w) => Number(w.tonnage) || 0;
+  const active = (w) => statusIn(w.status, ["In Progress", "Complete"]);
+
   const detailingTons = wps
     .filter(w => statusIs(w.phase, "Detailing"))
-    .reduce((s, w) => s + ((Number(w.tonnage) || 0) * ((Number(w.percent_complete) || 0) / 100)), 0);
+    .reduce((s, w) => s + (tons(w) * ((Number(w.percent_complete) || 0) / 100)), 0);
   const approvedDrawings = drawings.filter(d => statusIn(d.stage, ["OFS","BFS","FFF","Released"])).length;
   const totalDrawings = drawings.length || 1;
-  const releasedTons = wps.filter(w => statusIn(w.phase, ["Fabrication","Delivery","Erection"])).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const fabTons = wps.filter(w => statusIs(w.phase, "Fabrication") && statusIn(w.status, ["In Progress", "Complete"])).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const shippedTons = wps.filter(w => statusIs(w.phase, "Delivery") || statusIs(w.status, "Shipped")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const erectedTons = wps.filter(w => statusIs(w.phase, "Erection") || statusIs(w.status, "Erected")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+
+  // Released = all tonnage that has left Detailing (phase >= Fabrication)
+  const releasedTons = wps.filter(w => rank(w) >= 1).reduce((s, w) => s + tons(w), 0);
+
+  // Cumulative fabricated = tonnage at Fabrication or later AND actively worked (not "Not Started")
+  const fabTons = wps.filter(w => rank(w) >= 1 && active(w)).reduce((s, w) => s + tons(w), 0);
+
+  // Cumulative shipped = tonnage at Delivery or later
+  const shippedTons = wps.filter(w => rank(w) >= 2).reduce((s, w) => s + tons(w), 0);
+
+  // Cumulative erected = tonnage at Erection phase
+  const erectedTons = wps.filter(w => rank(w) >= 3).reduce((s, w) => s + tons(w), 0);
 
   const metrics = [
     { key: "Detailing",   value: detailingTons, total: totalTons, pct: Math.round(detailingTons / totalTons * 100), unit: "T", color: "var(--phase-detailing)" },

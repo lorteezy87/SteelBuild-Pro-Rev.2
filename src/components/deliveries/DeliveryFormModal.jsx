@@ -83,6 +83,18 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
+  // Check if linked WP has completed fabrication
+  const isFabComplete = () => {
+    if (!formData.work_package_id) return true;
+    const wp = workPackages.find(w => w.id === formData.work_package_id);
+    if (!wp) return true;
+    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+    const rank = PHASE_RANK[wp.phase] ?? 0;
+    if (rank >= 2) return true;
+    if (rank === 1 && wp.status === "Complete") return true;
+    return false;
+  };
+
   const handleSubmit = () => {
     if (!formData.delivery_title?.trim()) {
       toast.error("Delivery title is required");
@@ -98,6 +110,12 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     }
     if (!formData.scheduled_date) {
       toast.error("Scheduled date required");
+      return;
+    }
+    // Guard: cannot mark delivered if linked WP fabrication is not complete
+    if (formData.status === "Delivered" && !isFabComplete()) {
+      const wp = workPackages.find(w => w.id === formData.work_package_id);
+      toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
       return;
     }
     if (
@@ -207,13 +225,18 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                 <button
                   key={s}
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    if (s === "Delivered" && !isFabComplete()) {
+                      const wp = workPackages.find(w => w.id === formData.work_package_id);
+                      toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
+                      return;
+                    }
                     mutation.mutate({
                       ...formData,
                       status: s,
                       actual_date: s === "Delivered" ? new Date().toISOString().split("T")[0] : formData.actual_date,
-                    })
-                  }
+                    });
+                  }}
                   style={{
                     padding: "6px 10px",
                     borderRadius: "var(--radius-btn)",
