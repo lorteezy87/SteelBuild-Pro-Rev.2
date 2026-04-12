@@ -26,7 +26,7 @@ const Field = ({ label, span = 1, children }) => (
   </div>
 );
 
-export default function RFIFormModal({ projectId, onClose, rfi = null }) {
+export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null }) {
   const qc = useQueryClient();
 
   const empty = {
@@ -56,7 +56,8 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const mutation = useMutation({
+  // Fallback internal mutation — only used when parent does NOT supply onSave
+  const internalMutation = useMutation({
     mutationFn: async (data) => {
       // Coerce empty-string numeric fields to null so Postgres doesn't reject them
       const clean = {
@@ -91,7 +92,9 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
       });
     },
     onSuccess: () => {
+      // Invalidate both keyed and unkeyed RFI queries so the list refreshes
       qc.invalidateQueries({ queryKey: ["rfis"] });
+      if (projectId) qc.invalidateQueries({ queryKey: ["rfis", projectId] });
       toast.success(rfi ? "RFI updated" : "RFI created");
       onClose();
     },
@@ -103,18 +106,30 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
     mutationFn: (status) => base44.entities.RFI.update(rfi.id, { status }),
     onSuccess: (_, status) => {
       qc.invalidateQueries({ queryKey: ["rfis"] });
+      if (projectId) qc.invalidateQueries({ queryKey: ["rfis", projectId] });
       toast.success(`Status set to ${status}`);
       setFormData((f) => ({ ...f, status }));
     },
     onError: () => toast.error("Status update failed"),
   });
 
+  // Whether save is in progress — prefer parent's flag, fall back to internal
+  const isSaving = saving || internalMutation.isPending;
+
   const set = (k, v) => setFormData((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title?.trim()) return toast.error("Title is required");
-    mutation.mutate(formData);
+
+    // If parent supplied onSave, delegate to it (parent handles persistence + cache)
+    if (typeof onSave === "function") {
+      onSave(formData);
+      return;
+    }
+
+    // Otherwise use our internal mutation as fallback
+    internalMutation.mutate(formData);
   };
 
   const statusBtnStyle = (s) => ({
@@ -273,8 +288,8 @@ export default function RFIFormModal({ projectId, onClose, rfi = null }) {
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>
-          <button type="submit" form="rfi-form" disabled={mutation.isPending} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: mutation.isPending ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.6 : 1 }}>
-            {mutation.isPending ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
+          <button type="submit" form="rfi-form" disabled={isSaving} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: 4, padding: "8px 20px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.6 : 1 }}>
+            {isSaving ? "Saving..." : rfi ? "Update RFI" : "Submit RFI"}
           </button>
         </div>
       </div>
