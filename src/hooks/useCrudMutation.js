@@ -22,8 +22,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { validate } from "@/services/validation";
+import { validateTransition, getWorkflowField } from "@/services/workflowEngine";
 import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
 import { batchProcess } from "@/utils/batchProcess";
+import { logActivity } from "@/services/auditLogger";
 
 // ─── Entity name → base44 entity mapping ────────────────────────────────
 const ENTITY_MAP = {
@@ -61,6 +63,9 @@ function getEntityClient(entityName) {
  * @param {boolean}  options.skipValidation  – bypass validation (use for bulk operations with pre-validated data)
  * @param {string[]} options.alsoInvalidate  – additional entity names to invalidate (e.g. ["schedule_task"])
  * @param {Function} options.sideEffect      – async function called after primary write succeeds (receives record)
+ * @param {string}   options.workflowName    – workflow key from workflowEngine (e.g. "rfi", "change_order"). When set,
+ *                                              updates that change the workflow's status field are validated against legal transitions.
+ * @param {Function} options.getRecord       – async fn(id) returning the current record (needed for workflow validation to know current status)
  */
 export function useCrudMutation(entityName, options = {}) {
   const qc = useQueryClient();
@@ -73,6 +78,8 @@ export function useCrudMutation(entityName, options = {}) {
     skipValidation = false,
     alsoInvalidate = [],
     sideEffect,
+    workflowName,
+    getRecord,
   } = options;
 
   const entityClient = getEntityClient(entityName);
@@ -100,6 +107,9 @@ export function useCrudMutation(entityName, options = {}) {
     onSuccess: async (created) => {
       await invalidateAll();
       toast.success(`${entityLabel} created`);
+
+      // Audit trail — fire-and-forget
+      logActivity(entityName, "created", created, { projectId });
 
       // Side effect (non-blocking, but errors are reported)
       if (sideEffect) {
@@ -132,12 +142,53 @@ export function useCrudMutation(entityName, options = {}) {
           throw new Error(msg);
         }
       }
+
+      // Workflow transition validation (if configured)
+      let prevStatus = null;
+      if (workflowName) {
+        const statusField = getWorkflowField(workflowName);
+        if (statusField && data[statusField] !== undefined) {
+          // We need the current record to know the "from" status
+          let currentRecord = null;
+          if (getRecord) {
+            try { currentRecord = await getRecord(id); } catch {}
+          }
+          if (currentRecord) {
+            prevStatus = currentRecord[statusField];
+            const newStatus = data[statusField];
+            if (prevStatus && prevStatus !== newStatus) {
+              const result = validateTransition(workflowName, prevStatus, newStatus, {
+                record: { ...currentRecord, ...data },
+                fields: data,
+              });
+              if (!result.valid) {
+                throw new Error(result.reason);
+              }
+            }
+          }
+        }
+      }
+
       const updated = await entityClient.update(id, data);
-      return updated;
+      return { updated, changedFields: data, prevStatus };
     },
-    onSuccess: async (updated) => {
+    onSuccess: async ({ updated, changedFields, prevStatus }) => {
       await invalidateAll();
       toast.success(`${entityLabel} updated`);
+
+      // Audit trail — detect status changes for richer logging
+      const statusFields = ["status", "stage", "set_approval_status", "payment_status"];
+      const changedStatus = statusFields.find(f => changedFields[f] !== undefined);
+      if (changedStatus) {
+        const from = prevStatus || "unknown";
+        const to = changedFields[changedStatus];
+        logActivity(entityName, "status_changed", updated, {
+          projectId,
+          description: `${from} → ${to}`,
+        });
+      } else {
+        logActivity(entityName, "updated", updated, { projectId });
+      }
 
       if (sideEffect) {
         try {
@@ -166,6 +217,10 @@ export function useCrudMutation(entityName, options = {}) {
     onSuccess: async (deletedId) => {
       await invalidateAll();
       toast.success(`${entityLabel} deleted`);
+
+      // Audit trail
+      logActivity(entityName, "deleted", { id: deletedId }, { projectId });
+
       onDeleteSuccess?.(deletedId);
       onSuccess?.(deletedId, "delete");
     },

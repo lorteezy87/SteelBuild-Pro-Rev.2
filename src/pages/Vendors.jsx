@@ -1,57 +1,129 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
+import { AlertTriangle, Download, Shield, TrendingDown, Users, DollarSign, Truck, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import StatCard from "@/components/shared/StatCard";
+import PageHeader from "../components/shared/PageHeader";
+import KPIStrip from "../components/shared/KPIStrip";
+import SearchFilter from "../components/shared/SearchFilter";
+import { PhoenixPanel } from "../components/shared/PhoenixPanel";
+import { formatCurrency } from "../components/shared/formatters";
 
 export default function Vendors() {
-  const [showForm, setShowForm] = useState(false);
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterType, setFilterType] = useState("all");
-  const [filterPreferred, setFilterPreferred] = useState(false);
-  const [filterRating, setFilterRating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const qc = useQueryClient();
+  const { activeProject } = useProjectContext();
+  const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
-  const { data: vendors = [], isLoading } = useQuery({
+  // ── Queries ──
+  const { data: vendors = [], isLoading, refetch } = useQuery({
     queryKey: ["vendors"],
     queryFn: () => base44.entities.Vendor.list("-is_preferred"),
     staleTime: 5 * 60 * 1000,
   });
 
-  const filtered = vendors.filter((vendor) => {
-    const statusMatch = filterStatus === "all" || vendor.status === filterStatus;
-    const typeMatch = filterType === "all" || vendor.vendor_type === filterType;
-    const preferredMatch = !filterPreferred || vendor.is_preferred;
-    const ratingMatch = !filterRating || (vendor.performance_rating || 0) >= 4;
-    const term = searchTerm.toLowerCase();
-    const searchMatch = !searchTerm ||
-      vendor.company_name?.toLowerCase().includes(term) ||
-      vendor.contact_person?.toLowerCase().includes(term) ||
-      vendor.vendor_type?.toLowerCase().includes(term) ||
-      vendor.trade?.toLowerCase().includes(term) ||
-      vendor.specialty?.toLowerCase().includes(term);
-    return statusMatch && typeMatch && preferredMatch && ratingMatch && searchMatch;
+  // Project-scoped data for performance tracking
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ["deliveries", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? base44.entities.Delivery.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+    staleTime: 2 * 60 * 1000,
   });
 
-  const stats = {
-    total: vendors.length,
-    active: vendors.filter((v) => v.status === "Active").length,
-    preferred: vendors.filter((v) => v.is_preferred).length,
-    highRating: vendors.filter((v) => (v.performance_rating || 0) >= 4).length,
-  };
+  const { data: changeOrders = [] } = useQuery({
+    queryKey: ["change-orders", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+    staleTime: 2 * 60 * 1000,
+  });
 
+  const { data: expenses = [] } = useQuery({
+    queryKey: ["expenses", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? base44.entities.Expense.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // ── Compute per-vendor stats from project data ──
+  const vendorStats = useMemo(() => {
+    const stats = {};
+    const normalize = (name) => (name || "").trim().toLowerCase();
+
+    // Deliveries by vendor
+    for (const d of deliveries) {
+      const key = normalize(d.vendor);
+      if (!key) continue;
+      if (!stats[key]) stats[key] = { deliveryCount: 0, onTimeCount: 0, lateCount: 0, deliveries: [], coCount: 0, coValue: 0, totalSpend: 0 };
+      stats[key].deliveryCount += 1;
+      stats[key].deliveries.push(d);
+      if (d.status === "Delivered") {
+        const scheduled = d.scheduled_date ? new Date(d.scheduled_date) : null;
+        const actual = d.actual_date ? new Date(d.actual_date) : null;
+        if (scheduled && actual) {
+          if (actual <= scheduled) stats[key].onTimeCount += 1;
+          else stats[key].lateCount += 1;
+        }
+      }
+    }
+
+    // COs by vendor (matching vendor field or description)
+    for (const co of changeOrders) {
+      // Try matching CO to vendor via reason/description or title
+      // COs don't have a direct vendor field, so we check if vendor name appears in title/description
+      for (const vendorName of Object.keys(stats)) {
+        if (normalize(co.title).includes(vendorName) || normalize(co.description).includes(vendorName)) {
+          stats[vendorName].coCount += 1;
+          stats[vendorName].coValue += Number(co.co_amount) || 0;
+        }
+      }
+    }
+
+    // Expenses by vendor
+    for (const exp of expenses) {
+      const key = normalize(exp.vendor);
+      if (!key) continue;
+      if (!stats[key]) stats[key] = { deliveryCount: 0, onTimeCount: 0, lateCount: 0, deliveries: [], coCount: 0, coValue: 0, totalSpend: 0 };
+      stats[key].totalSpend += Number(exp.amount) || 0;
+    }
+
+    // Compute on-time rates
+    for (const key of Object.keys(stats)) {
+      const s = stats[key];
+      const delivered = s.onTimeCount + s.lateCount;
+      s.onTimeRate = delivered > 0 ? Math.round((s.onTimeCount / delivered) * 100) : null;
+    }
+
+    // Map back to company_name (original casing)
+    const result = {};
+    for (const v of vendors) {
+      const key = normalize(v.company_name);
+      if (stats[key]) result[v.company_name] = stats[key];
+    }
+    return result;
+  }, [vendors, deliveries, changeOrders, expenses]);
+
+  // ── Mutations ──
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.Vendor.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendors"] });
       setShowForm(false);
+      setEditing(null);
       toast.success("Vendor created");
     },
     onError: (err) => toast.error(err.message),
@@ -79,146 +151,164 @@ export default function Vendors() {
   });
 
   const handleSave = (data) => {
-    if (editing) {
-      updateMut.mutate({ ...data, id: editing.id });
-    } else {
-      createMut.mutate(data);
-    }
+    if (editing) updateMut.mutate({ ...data, id: editing.id });
+    else createMut.mutate(data);
   };
 
-  const clearAllFilters = () => {
-    setFilterStatus("all");
-    setFilterType("all");
-    setFilterPreferred(false);
-    setFilterRating(false);
-    setSearchTerm("");
+  // ── Filters ──
+  const filtered = useMemo(() => vendors.filter(v => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || v.company_name?.toLowerCase().includes(q) || v.contact_person?.toLowerCase().includes(q) || v.vendor_type?.toLowerCase().includes(q);
+    const matchStatus = statusFilter === "all" || v.status === statusFilter;
+    const matchType = typeFilter === "all" || v.vendor_type === typeFilter;
+    return matchSearch && matchStatus && matchType;
+  }), [vendors, search, statusFilter, typeFilter]);
+
+  // ── Stats ──
+  const activeCount = vendors.filter(v => v.status === "Active").length;
+  const preferredCount = vendors.filter(v => v.is_preferred).length;
+  const totalSpend = Object.values(vendorStats).reduce((s, v) => s + (v.totalSpend || 0), 0);
+  const totalDeliveries = Object.values(vendorStats).reduce((s, v) => s + (v.deliveryCount || 0), 0);
+
+  // Risk flags
+  const riskVendors = useMemo(() => {
+    const now = new Date();
+    return vendors.filter(v => {
+      if (v.status === "Probation" || v.status === "Suspended") return true;
+      if (v.certifications_expiry && new Date(v.certifications_expiry) < now) return true;
+      if (v.insurance_expiry && new Date(v.insurance_expiry) < now) return true;
+      const stats = vendorStats[v.company_name];
+      if (stats && stats.onTimeRate !== null && stats.onTimeRate < 70) return true;
+      return false;
+    });
+  }, [vendors, vendorStats]);
+
+  const kpis = [
+    { label: "Total Vendors", value: vendors.length, color: "slate" },
+    { label: "Active", value: activeCount, color: "green" },
+    { label: "Preferred", value: preferredCount, color: "blue" },
+    { label: "Deliveries", value: totalDeliveries, color: "amber" },
+    { label: "Total Spend", value: formatCurrency(totalSpend), color: totalSpend > 0 ? "purple" : "slate" },
+    { label: "At Risk", value: riskVendors.length, color: riskVendors.length > 0 ? "rose" : "slate" },
+  ];
+
+  const types = [...new Set(vendors.map(v => v.vendor_type).filter(Boolean))].sort();
+
+  const exportCSV = () => {
+    const headers = ["Company", "Type", "Contact", "Phone", "Email", "Status", "Preferred", "Deliveries", "On-Time %", "COs", "Spend"];
+    const rows = filtered.map(v => {
+      const stats = vendorStats[v.company_name] || {};
+      return [
+        v.company_name, v.vendor_type, v.contact_person, v.phone, v.email,
+        v.status, v.is_preferred ? "Yes" : "No",
+        stats.deliveryCount || 0, stats.onTimeRate != null ? `${stats.onTimeRate}%` : "N/A",
+        stats.coCount || 0, stats.totalSpend || 0,
+      ];
+    });
+    const csv = [headers, ...rows].map(r => r.map(cell => `"${cell ?? ""}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "vendors.csv"; a.click(); URL.revokeObjectURL(url);
   };
-
-  const hasActiveFilters = filterStatus !== "all" || filterType !== "all" || filterPreferred || filterRating || searchTerm;
-
-  const types = ["Fabricator", "Supplier", "Subcontractor", "Material Supplier", "Equipment Rental", "Service Provider", "Testing Lab", "Other"];
-
-  // Determine which stat card is "active" (at most one)
-  const isTotalActive = !filterPreferred && !filterRating && filterStatus === "all";
-  const isActiveActive = filterStatus === "Active" && !filterPreferred && !filterRating;
-  const isPreferredActive = filterPreferred;
-  const isHighRatingActive = filterRating;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Vendors & Suppliers</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{filtered.length} Active • {stats.preferred} Preferred</p>
-        </div>
+    <div>
+      <PageHeader
+        title="Vendors & Suppliers"
+        subtitle={`${vendors.length} vendor${vendors.length !== 1 ? "s" : ""} \u00B7 ${activeCount} active`}
+        onAdd={() => { setEditing(null); setShowForm(true); }}
+        onRefresh={refetch}
+        addLabel="New Vendor"
+      />
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ Add Vendor</button>
-      </div>
+      <KPIStrip items={kpis} />
 
-      {/* Stats Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "12px" }}>
-        <StatCard
-          label="Total" value={stats.total} color="var(--accent)"
-          active={isTotalActive}
-          onClick={() => { setFilterStatus("all"); setFilterPreferred(false); setFilterRating(false); }}
-        />
-        <StatCard
-          label="Active" value={stats.active} color="var(--status-success)"
-          active={isActiveActive}
-          onClick={() => { setFilterStatus("Active"); setFilterPreferred(false); setFilterRating(false); }}
-        />
-        <StatCard
-          label="Preferred" value={stats.preferred} color="var(--status-info)"
-          active={isPreferredActive}
-          onClick={() => setFilterPreferred((p) => !p)}
-        />
-        <StatCard
-          label="High Rating" value={stats.highRating} color="var(--status-success)"
-          active={isHighRatingActive}
-          onClick={() => setFilterRating((r) => !r)}
-        />
-      </div>
+      {/* ── Risk Flags Panel ── */}
+      {riskVendors.length > 0 && (
+        <PhoenixPanel
+          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <AlertTriangle size={14} style={{ color: "var(--status-error)" }} />
+            Vendor Risk Flags
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400 }}>
+              {riskVendors.length} vendor{riskVendors.length !== 1 ? "s" : ""}
+            </span>
+          </span>}
+          style={{ marginBottom: 14, border: "1px solid rgba(248,81,73,0.3)" }}
+        >
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+            {riskVendors.slice(0, 5).map(v => {
+              const now = new Date();
+              const reasons = [];
+              if (v.certifications_expiry && new Date(v.certifications_expiry) < now) reasons.push("Cert expired");
+              if (v.insurance_expiry && new Date(v.insurance_expiry) < now) reasons.push("Insurance expired");
+              if (v.status === "Probation") reasons.push("On probation");
+              if (v.status === "Suspended") reasons.push("Suspended");
+              const stats = vendorStats[v.company_name];
+              if (stats?.onTimeRate !== null && stats?.onTimeRate < 70) reasons.push(`${stats.onTimeRate}% on-time`);
 
-      {/* Search & Filters */}
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-        <input type="text" placeholder="Search vendors by name, trade, or specialty..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ flex: 1, minWidth: "200px", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Status:</span>
-          {["all", "Active", "Inactive", "Probation"].map((status) => (
-            <button key={status} onClick={() => setFilterStatus(status)} style={{ background: filterStatus === status ? "var(--accent)" : "var(--bg-surface-low)", color: filterStatus === status ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {status === "all" ? "All" : status}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ fontFamily: "var(--font-body)", fontSize: "9px", fontWeight: 700, color: "var(--text-muted)", alignSelf: "center", letterSpacing: "0.08em", textTransform: "uppercase" }}>Type:</span>
-          {["all", ...types].map((type) => (
-            <button key={type} onClick={() => setFilterType(type)} style={{ background: filterType === type ? "var(--accent)" : "var(--bg-surface-low)", color: filterType === type ? "white" : "var(--text-secondary)", border: "none", borderRadius: "var(--radius-btn)", padding: "5px 12px", fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {type === "all" ? "All" : type}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Form Modal */}
-      {showForm && <VendorFormModal vendor={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
-
-      {/* Vendors List */}
-      {isLoading ? (
-        <LoadingSkeleton variant="table" rows={4} />
-      ) : filtered.length === 0 ? (
-        hasActiveFilters ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)" }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 12, opacity: 0.5 }}>
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: 0, marginBottom: 12 }}>
-              No vendors match your filters
-            </p>
-            <button
-              onClick={clearAllFilters}
-              style={{ background: "transparent", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: "var(--radius-btn)", padding: "6px 16px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.color = "white"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--accent)"; }}
-            >
-              Clear Filters
-            </button>
+              return (
+                <div key={v.id} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px", background: "var(--bg-surface-low)",
+                  borderRadius: "var(--radius-card)", borderLeft: "3px solid var(--status-error)",
+                }}>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", flex: 1 }}>
+                    {v.company_name}
+                  </span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 600 }}>
+                    {reasons.join(" \u00B7 ")}
+                  </span>
+                  <Button variant="ghost" size="sm" style={{ fontFamily: "var(--font-mono)", fontSize: 9, padding: "4px 8px", height: "auto" }}
+                    onClick={() => { setEditing(v); setShowForm(true); }}>
+                    Review
+                  </Button>
+                </div>
+              );
+            })}
+            {riskVendors.length > 5 && (
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
+                +{riskVendors.length - 5} more at-risk vendors
+              </div>
+            )}
           </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "64px 24px", background: "var(--bg-surface)", borderRadius: "var(--radius-card)", border: "1px dashed var(--border-default)" }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 16, opacity: 0.4 }}>
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" y1="8" x2="19" y2="14" />
-              <line x1="22" y1="11" x2="16" y2="11" />
-            </svg>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, marginBottom: 6 }}>
-              No vendors yet
-            </p>
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", margin: 0, marginBottom: 20, textAlign: "center", maxWidth: 340 }}>
-              You haven't added any suppliers yet. Click + Add Vendor to begin building your project team.
-            </p>
-            <button
-              onClick={() => { setEditing(null); setShowForm(true); }}
-              style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 20px", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-            >
-              + Add Vendor
-            </button>
-          </div>
-        )
-      ) : (
-        <VendorList vendors={filtered} onEdit={(vendor) => {setEditing(vendor); setShowForm(true);}} onDelete={setDeleteTarget} />
+        </PhoenixPanel>
       )}
 
-      {/* Delete Dialog */}
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Vendor" description="Delete this record? This cannot be undone." />
+      {/* ── Search & Filters ── */}
+      <div className="filter-bar-responsive" style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div style={{ flex: 1 }}>
+          <SearchFilter search={search} onSearchChange={setSearch} filters={[
+            { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: ["Active", "Inactive", "Probation", "Suspended"] },
+            ...(types.length > 1 ? [{ key: "type", value: typeFilter, onChange: setTypeFilter, placeholder: "Type", options: types }] : []),
+          ]} />
+        </div>
+        <Button variant="outline" size="sm" onClick={exportCSV} style={{ marginBottom: 16 }}>
+          <Download className="w-3.5 h-3.5 mr-1" />Export
+        </Button>
+      </div>
+
+      {/* ── Vendor List ── */}
+      <VendorList
+        vendors={filtered}
+        onEdit={(vendor) => { setEditing(vendor); setShowForm(true); }}
+        onDelete={setDeleteTarget}
+        vendorStats={vendorStats}
+      />
+
+      {/* ── Modals ── */}
+      <VendorFormModal
+        open={showForm}
+        onClose={() => { setShowForm(false); setEditing(null); }}
+        onSave={handleSave}
+        vendor={editing}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Vendor"
+        description={`Delete ${deleteTarget?.company_name}? This cannot be undone.`}
+      />
     </div>
   );
 }
-

@@ -184,6 +184,18 @@ export default function RFIs() {
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
 
+  // Honor ?id= and ?search= query params (e.g. when navigating from a Drawing's RFI badge)
+  const urlRfiId = searchParams.get("id");
+  const urlSearch = searchParams.get("search");
+  useEffect(() => {
+    if (urlSearch) setSearch(urlSearch);
+  }, [urlSearch]);
+  useEffect(() => {
+    if (!urlRfiId || !rfis.length) return;
+    const found = rfis.find((r) => r.id === urlRfiId);
+    if (found) setSelectedRFI(found);
+  }, [urlRfiId, rfis]);
+
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.RFI.create(data),
     onSuccess: async (created) => {

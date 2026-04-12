@@ -29,6 +29,48 @@ function parseDeps(raw) {
   catch { return []; }
 }
 
+// ── Display helpers ──────────────────────────────────────────────────────
+// Tasks marked Complete should always read as 100% in the UI even if the
+// underlying percent_complete field is stale or 0 (common data-entry gap).
+function displayPct(task) {
+  if (!task) return 0;
+  if (task.status === "Complete") return 100;
+  const v = Number(task.percent_complete);
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+}
+
+// Treat any task with zero (or missing) duration as a milestone — that's the
+// standard Gantt convention and it makes the schedule readable instead of
+// having invisible 0-day points.
+function isMilestoneTask(task) {
+  if (!task) return false;
+  if (task.milestone) return true;
+  const d = Number(task.duration);
+  if (Number.isFinite(d) && d === 0) return true;
+  if (task.start_date && task.end_date && task.start_date === task.end_date) return true;
+  return false;
+}
+
+// Resource names sometimes get pasted into the task name field by mistake
+// (e.g. "Stair #2Jagdish"). If the trailing chunk of the task name matches a
+// known resource on the same task, strip it for display.
+function sanitizeTaskName(task) {
+  const raw = (task?.task_name || "").trim();
+  if (!raw) return raw;
+  const resources = (task.resource_names || task.assigned_to || "")
+    .split(/[,/;]/)
+    .map(r => r.trim())
+    .filter(Boolean);
+  let cleaned = raw;
+  for (const r of resources) {
+    if (r.length < 2) continue;
+    // Trailing match with optional whitespace/punctuation
+    const re = new RegExp(`[\\s\\-_/]*${r.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*$`, "i");
+    cleaned = cleaned.replace(re, "").trim();
+  }
+  return cleaned || raw;
+}
+
 // ── Status helpers ────────────────────────────────────────────────────────
 const STATUS_COLOR = {
   "Complete":    "#10B981",
@@ -110,24 +152,25 @@ function MilestoneDiamond({ leftPx, task }) {
 
 // ── Task gantt bar ────────────────────────────────────────────────────────
 function TaskBar({ task, leftPx, widthPx }) {
-  const pct = task.percent_complete || 0;
+  const pct = displayPct(task);
+  const name = sanitizeTaskName(task);
 
-  if (task.milestone) {
+  if (isMilestoneTask(task)) {
     return <MilestoneDiamond leftPx={leftPx} task={task} />;
   }
 
   if (task.status === "Complete") {
     return (
       <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", background: "#10B981", borderRadius: 2, overflow: "hidden", display: "flex", alignItems: "center", padding: "0 8px" }}>
-        <span style={{ fontSize: 8, fontWeight: 700, color: "#003915", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+        <span style={{ fontSize: 8, fontWeight: 700, color: "#003915", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
       </div>
     );
   }
   if (task.status === "In Progress") {
     return (
       <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px solid var(--accent)", borderRadius: 2, overflow: "hidden", background: "rgba(200,155,32,0.08)" }}>
-        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden" }}>
-          <span style={{ fontSize: 8, fontWeight: 700, color: "#000", whiteSpace: "nowrap" }}>{task.task_name}</span>
+        <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden" }}>
+          <span style={{ fontSize: 8, fontWeight: 700, color: "#000", whiteSpace: "nowrap" }}>{name}</span>
         </div>
       </div>
     );
@@ -135,14 +178,14 @@ function TaskBar({ task, leftPx, widthPx }) {
   if (task.status === "Delayed") {
     return (
       <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px dashed #EF4444", borderRadius: 2, background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
-        <span style={{ fontSize: 8, fontWeight: 700, color: "#EF4444", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+        <span style={{ fontSize: 8, fontWeight: 700, color: "#EF4444", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
       </div>
     );
   }
   // Not Started / default
   return (
     <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1px solid var(--border-strong)", borderRadius: 2, background: "var(--hover-bg)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
-      <span style={{ fontSize: 8, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.task_name}</span>
+      <span style={{ fontSize: 8, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
     </div>
   );
 }
@@ -199,12 +242,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
 
   const WEEK_PX = zoom === "month" ? 80 : 240;
 
-  const today = new Date();
-
-  const isOverdue = (task) => {
-    if (!task.end_date || task.status === "Complete") return false;
-    return new Date(task.end_date + "T00:00:00Z") < today;
-  };
+  // Normalize "today" to UTC midnight so all date math (overdue checks, today
+  // line, scroll-to-today) compares apples to apples with task dates that are
+  // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
+  // load drifts every comparison by hours and can flip overdue/upcoming.
+  const today = useMemo(() => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }, []);
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();
@@ -214,7 +259,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       start_date: task.start_date || "",
       end_date: task.end_date || "",
       status: task.status || "Not Started",
-      percent_complete: task.percent_complete ?? 0,
+      // Seed the editor with the same value the UI shows — Complete tasks
+      // round to 100 even if percent_complete is stale, otherwise the user
+      // sees a confusing "100% Complete" row that snaps back to 0 on edit.
+      percent_complete: displayPct(task),
     });
   };
 
@@ -264,11 +312,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       map[ph].push(t);
     });
 
-    // Sort tasks within each group by start_date ascending (earliest first)
+    // Sort tasks within each group by start_date ascending (earliest first).
+    // We sort by raw start_date here because effectiveDates depends on the
+    // grouped output, so we don't have it yet — and a stable raw-date sort is
+    // close enough for ordering rows within a phase. Parse via UTC to avoid
+    // timezone drift on the comparator.
     const sortByStart = (a, b) => {
       if (!a.start_date) return 1;
       if (!b.start_date) return -1;
-      return new Date(a.start_date) - new Date(b.start_date);
+      return new Date(a.start_date + "T00:00:00Z") - new Date(b.start_date + "T00:00:00Z");
     };
 
     // Order by PHASES array, uncategorized last
@@ -285,6 +337,80 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   // ── Date range ─────────────────────────────────────────────────────
   const allTasks = grouped.flatMap(g => g.tasks);
 
+  // ── Effective dates: cascade through dependencies so a late predecessor
+  // automatically shifts its successors forward in the gantt view. The
+  // underlying task.start_date / task.end_date in the DB are NEVER mutated;
+  // this only affects how the bars are positioned visually.
+  const effectiveDates = useMemo(() => {
+    const out = {};
+    const taskById = Object.fromEntries(allTasks.map(t => [t.id, t]));
+
+    const dayMs = 86400000;
+    const addDays = (iso, n) => {
+      if (!iso) return iso;
+      const d = new Date(iso + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const diffDays = (a, b) => {
+      if (!a || !b) return 0;
+      return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / dayMs);
+    };
+
+    const resolve = (taskId, visiting) => {
+      if (out[taskId]) return out[taskId];
+      if (visiting.has(taskId)) return null; // dependency cycle — bail out
+      visiting.add(taskId);
+
+      const task = taskById[taskId];
+      if (!task) { visiting.delete(taskId); return null; }
+      if (!task.start_date || !task.end_date) {
+        out[taskId] = { start: task.start_date, end: task.end_date, shifted: false };
+        visiting.delete(taskId);
+        return out[taskId];
+      }
+
+      // Skip self-references — a task that lists itself as a predecessor
+      // (data-entry bug) would otherwise short-circuit cycle detection on
+      // the first hop and leave its bar undefined.
+      const deps = parseDeps(task.dependencies).filter(depId => depId && depId !== taskId);
+      let earliestStart = task.start_date;
+      let shifted = false;
+      for (const depId of deps) {
+        const depResolved = resolve(depId, visiting);
+        if (depResolved?.end) {
+          const candidate = addDays(depResolved.end, 1);
+          if (candidate > earliestStart) {
+            earliestStart = candidate;
+            shifted = true;
+          }
+        }
+      }
+
+      const dur = Math.max(0, diffDays(task.start_date, task.end_date));
+      const newEnd = dur === 0 ? earliestStart : addDays(earliestStart, dur);
+      out[taskId] = { start: earliestStart, end: newEnd, shifted };
+      visiting.delete(taskId);
+      return out[taskId];
+    };
+
+    for (const t of allTasks) resolve(t.id, new Set());
+    return out;
+  }, [allTasks]);
+
+  const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
+  const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
+
+  // Overdue uses the *effective* finish so a task whose predecessor slipped
+  // is judged against where the bar actually sits in the gantt — not the
+  // stale stored finish. Tasks marked Complete are never overdue.
+  const isOverdue = (task) => {
+    if (!task || task.status === "Complete") return false;
+    const e = effEnd(task);
+    if (!e) return false;
+    return new Date(e + "T00:00:00Z") < today;
+  };
+
   const dateRange = useMemo(() => {
     if (allTasks.length === 0) {
       // Even with no tasks, build a 4-week window around today
@@ -296,10 +422,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
       return { start: s, end: e, weeks };
     }
-    const dates = allTasks.flatMap(t => [
-      t.start_date ? new Date(t.start_date + "T00:00:00Z") : null,
-      t.end_date   ? new Date(t.end_date   + "T00:00:00Z") : null,
-    ]).filter(Boolean);
+    const dates = allTasks.flatMap(t => {
+      const s = effStart(t);
+      const e = effEnd(t);
+      return [
+        s ? new Date(s + "T00:00:00Z") : null,
+        e ? new Date(e + "T00:00:00Z") : null,
+      ];
+    }).filter(Boolean);
     // Always include today in the range so the TODAY line is always visible
     dates.push(today);
     const start = new Date(Math.min(...dates));
@@ -362,14 +492,17 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   const rows = useMemo(() => {
     const list = [];
     grouped.forEach(({ phase, tasks }) => {
-      // Calculate summary % complete (weighted by duration or simple average)
-      const tasksWithPct = tasks.filter(t => t.percent_complete !== undefined && t.percent_complete !== null);
-      const avgPct = tasksWithPct.length > 0
-        ? tasksWithPct.reduce((sum, t) => sum + (Number(t.percent_complete) || 0), 0) / tasksWithPct.length
+      // Phase % uses displayPct so Complete tasks always count as 100% even
+      // when their percent_complete field is stale.
+      const avgPct = tasks.length > 0
+        ? tasks.reduce((sum, t) => sum + displayPct(t), 0) / tasks.length
         : 0;
 
-      const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
-      const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
+      // Phase summary bar spans from the earliest *effective* start to the
+      // latest *effective* end so a delayed predecessor visibly stretches
+      // its parent phase, matching what the task bars actually show.
+      const starts = tasks.map(t => effStart(t)).filter(Boolean).sort();
+      const ends   = tasks.map(t => effEnd(t)).filter(Boolean).sort();
       list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
       if (!collapsed[phase.key]) {
         tasks.forEach(t => list.push({ type: "task", task: t, phase }));
@@ -402,14 +535,16 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       const deps = parseDeps(task.dependencies);
       if (!deps.length) return;
       const toPos = taskPositions[task.id];
-      if (!toPos || !task.start_date) return;
-      const toX = px(task.start_date);
+      const taskEffStart = effStart(task);
+      if (!toPos || !taskEffStart) return;
+      const toX = px(taskEffStart);
       deps.forEach((predId) => {
         const predPos = taskPositions[predId];
         if (!predPos) return; // predecessor not visible (collapsed or filtered)
         const predTask = allTasks.find(t => t.id === predId);
-        if (!predTask || !predTask.end_date) return;
-        const fromX = px(predTask.end_date);
+        const predEnd = predTask ? effEnd(predTask) : null;
+        if (!predTask || !predEnd) return;
+        const fromX = px(predEnd);
         arrows.push({
           key: `${predId}-${task.id}`,
           fromX, fromY: predPos.y,
@@ -526,6 +661,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
               return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
             }).join(", ");
             const overdue = isOverdue(task);
+            // Show *effective* start/finish in the left columns so the date
+            // text matches the bar position. If a task slipped because of a
+            // dependency cascade we mark it with "*" so users know it's
+            // shifted vs the stored value — clicking the row reveals the raw
+            // dates in the detail panel.
+            const dispStart = effStart(task);
+            const dispEnd   = effEnd(task);
+            const isShifted = !!effectiveDates[task.id]?.shifted;
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
             const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
@@ -550,12 +693,12 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   />
                 ) : (
                   <span
-                    title={task.task_name}
+                    title={sanitizeTaskName(task)}
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
                     style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: overdue ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: indent }}
                   >
-                    {task.milestone && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
-                    {task.task_name}
+                    {isMilestoneTask(task) && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
+                    {sanitizeTaskName(task)}
                   </span>
                 )}
                 {/* Duration */}
@@ -566,13 +709,23 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 {isEditing ? (
                   <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
+                  <span
+                    title={isShifted ? `Stored: ${fmtDate(task.start_date)}\nShifted by predecessors` : undefined}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                  >
+                    {fmtDate(dispStart)}{isShifted ? "*" : ""}
+                  </span>
                 )}
                 {/* Finish */}
                 {isEditing ? (
                   <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
+                  <span
+                    title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                  >
+                    {fmtDate(dispEnd)}{isShifted ? "*" : ""}
+                  </span>
                 )}
                 {/* Predecessors */}
                 <span title={depLabels || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{depLabels || "—"}</span>
@@ -593,7 +746,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
                   </div>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{task.percent_complete ?? 0}%</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{displayPct(task)}%</span>
                 )}
               </div>
             );
@@ -660,8 +813,13 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 const rowTop = top;
                 if (row.type === "summary") {
                   top += SUM_H;
-                  const startPx = px(row.start);
-                  const w = spanPx(row.start, row.end);
+                  // Use effective dates for the summary span as well
+                  const phaseEffStarts = row.tasks.map(t => effStart(t)).filter(Boolean).sort();
+                  const phaseEffEnds   = row.tasks.map(t => effEnd(t)).filter(Boolean).sort();
+                  const sumStart = phaseEffStarts[0] || row.start;
+                  const sumEnd   = phaseEffEnds[phaseEffEnds.length - 1] || row.end;
+                  const startPx = px(sumStart);
+                  const w = spanPx(sumStart, sumEnd);
                   return (
                     <div key={`gs-${row.phase.key}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${row.phase.color}08`, borderBottom: `1px solid var(--divider)` }}>
                       <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} pctComplete={row.pctComplete} />
@@ -678,6 +836,8 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 if (!task.start_date || !task.end_date) {
                   return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg }} />;
                 }
+                const taskEffS = effStart(task);
+                const taskEffE = effEnd(task);
                 return (
                   <div key={`gr-${task.id}`}
                     style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
@@ -686,7 +846,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
                     onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
-                    <TaskBar task={task} leftPx={px(task.start_date)} widthPx={spanPx(task.start_date, task.end_date)} />
+                    <TaskBar task={task} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} />
                     {/* Submittal review bars linked to this WP */}
                     {showSubmittals && submittals
                       .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
@@ -710,11 +870,11 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       {/* ── Tooltip ─────────────────────────────────────────────────── */}
       {tooltip && (
         <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{tooltip.task.task_name}</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{sanitizeTaskName(tooltip.task)}</div>
           {tooltip.task.wbs_code && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>WBS: {tooltip.task.wbs_code}</div>}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.06em", marginBottom: 4 }}>{tooltip.task.status || "—"}</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{tooltip.task.percent_complete ?? 0}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
           {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>Resources: {tooltip.task.resource_names || tooltip.task.assigned_to}</div>
           )}
