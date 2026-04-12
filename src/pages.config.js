@@ -96,6 +96,8 @@ import ScopeExclusions from './pages/ScopeExclusions';
 import Settings from './pages/Settings';
 import UsersManagement from './pages/UsersManagement';
 import Vendors from './pages/Vendors';
+import LEMs from './pages/LEMs';
+import ContractManagement from './pages/ContractManagement';
 import Warranty from './pages/Warranty';
 import WorkPackages from './pages/WorkPackages';
 import __Layout from './Layout.jsx';
@@ -153,6 +155,8 @@ export const PAGES = {
     "Settings": Settings,
     
     "UsersManagement": UsersManagement,
+    "LEMs": LEMs,
+    "ContractManagement": ContractManagement,
     "Vendors": Vendors,
     "Warranty": Warranty,
     "WorkPackages": WorkPackages,
