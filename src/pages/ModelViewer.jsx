@@ -23,6 +23,34 @@ const TYPE_COLORS = {
   BRACE: "#E67E22", STAIR: "#F1C40F", WALL: "#95A5A6", MEMBER: "#7F8C8D",
 };
 
+// Default steel-blue color applied to meshes that have no meaningful color
+const DEFAULT_STEEL_COLOR = new THREE.Color(0.45, 0.52, 0.58); // blue-grey steel
+const GREY_THRESHOLD = 0.08; // how close r/g/b must be to count as "grey"
+
+function isUncoloredMaterial(mat) {
+  if (!mat || !mat.color) return true;
+  const { r, g, b } = mat.color;
+  // Treat near-white, near-black, and neutral grey as "no color assigned"
+  const avg = (r + g + b) / 3;
+  if (avg < 0.05 || avg > 0.95) return true; // near-black or near-white
+  const spread = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+  return spread < GREY_THRESHOLD; // neutral grey
+}
+
+function applyDefaultSteelColor(root) {
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      if (isUncoloredMaterial(mat)) {
+        mat.color.copy(DEFAULT_STEEL_COLOR);
+        mat.metalness = mat.metalness ?? 0.4;
+        mat.roughness = mat.roughness ?? 0.6;
+      }
+    }
+  });
+}
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
 export default function ModelViewer() {
   const containerRef = useRef(null);
@@ -87,8 +115,15 @@ export default function ModelViewer() {
         grid.material.transparent = true;
         threeScene.add(grid);
 
-        // 6. Position camera
-        world.camera.controls.setLookAt(80, 60, 80, 0, 0, 0);
+        // 6. Configure camera controls
+        const ctrl = world.camera.controls;
+        ctrl.setLookAt(80, 60, 80, 0, 0, 0);
+
+        // Slower scroll zoom (default is ~1.0; 0.35 feels deliberate without being sluggish)
+        ctrl.dollySpeed = 0.35;
+
+        // Middle mouse button = pan (truck), not rotate
+        ctrl.mouseButtons.middle = 2; // CameraControls.ACTION.TRUCK
 
         // 7. Initialize FragmentsManager (required before IFC loading)
         const fragmentsManager = components.get(OBC.FragmentsManager);
@@ -215,6 +250,7 @@ export default function ModelViewer() {
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Processing meshes..." }));
 
       const model = gltf.scene;
+      applyDefaultSteelColor(model);
       world.scene.three.add(model);
       gltfSceneRef.current = model;
 
@@ -273,6 +309,7 @@ export default function ModelViewer() {
       // The model.object is the THREE.Object3D for the scene
       const modelObject = model.object;
       if (modelObject) {
+        applyDefaultSteelColor(modelObject);
         world.scene.three.add(modelObject);
       }
 
@@ -495,7 +532,7 @@ export default function ModelViewer() {
           fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em",
         }}>
           <span>LMB: Rotate</span>
-          <span>RMB: Pan</span>
+          <span>RMB / MMB: Pan</span>
           <span>Scroll: Zoom</span>
           <span>F: Fit All</span>
           <span>[: Toggle List</span>
