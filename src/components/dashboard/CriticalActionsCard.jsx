@@ -70,13 +70,15 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
     });
   });
 
-  // Open action items overdue
+  // Open action items overdue — surface assignee so you can see who to nudge
   actionItems.filter(a => a.status !== "Complete" && a.status !== "Cancelled" && a.due_date && new Date(a.due_date) < today).forEach(a => {
+    const days = daysOverdue(a.due_date);
+    const assignee = a.assigned_to || a.owner || "Unassigned";
     items.push({
       type: "ACTION", id: "—",
       title: a.title,
-      detail: `Overdue · ${a.priority}`,
-      severity: a.priority === "Critical" ? "critical" : "warning",
+      detail: `${days}d overdue · ${assignee}`,
+      severity: a.priority === "Critical" ? "critical" : days >= 7 ? "high" : "warning",
       nav: "ActionItems",
     });
   });
