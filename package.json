@@ -45,6 +45,10 @@
     "@stripe/stripe-js": "^5.2.0",
     "@supabase/supabase-js": "^2.101.1",
     "@tanstack/react-query": "^5.84.1",
+    "@thatopen/components": "^3.4.0",
+    "@thatopen/components-front": "^3.4.0",
+    "@thatopen/fragments": "^3.4.1",
+    "camera-controls": "^3.1.2",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -74,10 +78,9 @@
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
-    "three": "^0.171.0",
+    "three": "^0.182.0",
     "vaul": "^1.1.2",
-    "web-ifc": "^0.0.39",
-    "web-ifc-three": "^0.0.125",
+    "web-ifc": "^0.0.77",
     "zod": "^3.24.2"
   },
   "devDependencies": {
