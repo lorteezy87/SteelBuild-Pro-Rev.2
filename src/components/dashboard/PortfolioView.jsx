@@ -353,6 +353,15 @@ export default function PortfolioView({
         const lateDeliveries = pDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").length;
         const tonnage = Math.round(pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0));
         const stalledWPs = pWPs.filter((w) => w.status === "On Hold").length;
+
+        // Projected Margin = Contract Value - Estimated Cost at Completion.
+        // Estimated cost takes the worst case of (budget) vs (actual + pending CO exposure)
+        // so the figure tells us "what the project will actually return if pending COs hit".
+        const contractValue = Number(p.original_contract_value) || 0;
+        const estimatedCostAtCompletion = Math.max(budget, actual + pendingCOValue);
+        const projectedMargin = contractValue > 0 ? contractValue - estimatedCostAtCompletion : null;
+        const projectedMarginPct = contractValue > 0 ? (projectedMargin / contractValue) * 100 : null;
+
         return {
           ...p,
           budget,
@@ -367,6 +376,10 @@ export default function PortfolioView({
           lateDeliveries,
           tonnage,
           stalledWPs,
+          contractValue,
+          estimatedCostAtCompletion,
+          projectedMargin,
+          projectedMarginPct,
         };
       })
       .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3) || (a.name || "").localeCompare(b.name || ""));
@@ -444,7 +457,16 @@ export default function PortfolioView({
     const lateDeliveries = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date + "T00:00:00") < todayStart && d.status !== "Delivered").length;
     const atRisk = enrichedMetrics.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch").length;
     const activeWPs = allWPs.filter((w) => w.status === "In Progress").length;
-    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs };
+    // Stale RFIs: open RFIs whose age (created_date) exceeds 30 days. These are
+    // the bottlenecks most likely to cause schedule delay.
+    const thirtyDaysAgo = todayStart.getTime() - 30 * 86400000;
+    const staleRFIs30 = allRFIs.filter((r) => {
+      if (["Answered", "Closed"].includes(r.status)) return false;
+      const opened = r.created_date || r.created_at || r.submitted_date;
+      if (!opened) return false;
+      return new Date(opened).getTime() < thirtyDaysAgo;
+    });
+    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30 };
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics]);
 
   // ── Persist sparkline snapshot once per day ────────────────────────────────
@@ -478,12 +500,26 @@ export default function PortfolioView({
 
   const budgetChartData = useMemo(
     () =>
-      projectMetrics.slice(0, 8).map((p) => ({
-        name: p.project_number || p.name?.slice(0, 8),
-        Budget: p.budget,
-        Actual: p.actual,
-        overBudget: p.actual > p.budget,
-      })),
+      projectMetrics.slice(0, 8).map((p) => {
+        const progress = Number(p.avgProgress) || 0;
+        const hasActual = p.actual > 0;
+        // Distinguishes "haven't started" (0% progress, $0 actual) from
+        // "delayed accounting" (>0% progress, $0 actual) so the chart isn't
+        // misleading when several rows show $0 spend.
+        const accountingDelayed = !hasActual && progress > 5;
+        const notStarted = !hasActual && progress <= 5;
+        const shortName = p.project_number || (p.name || "").slice(0, 10);
+        return {
+          name: `${shortName} · ${progress}%`,
+          rawName: shortName,
+          Budget: p.budget,
+          Actual: p.actual,
+          progress,
+          overBudget: p.actual > p.budget,
+          accountingDelayed,
+          notStarted,
+        };
+      }),
     [projectMetrics]
   );
 
@@ -845,6 +881,33 @@ export default function PortfolioView({
         })}
       </div>
 
+      {/* Stale RFI Bottleneck Alert — open RFIs >30 days old */}
+      {portfolioKPIs.staleRFIs30 && portfolioKPIs.staleRFIs30.length > 0 && (
+        <div
+          onClick={() => navigate(createPageUrl("RFIs"))}
+          style={{
+            background: "rgba(248,81,73,0.10)",
+            borderBottom: "2px solid var(--status-error)",
+            padding: "8px 24px", display: "flex", alignItems: "center", gap: 14, flexShrink: 0, cursor: "pointer",
+          }}
+          title="RFIs that have been open for more than 30 days — these are the highest schedule-risk bottlenecks"
+        >
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.12em", flexShrink: 0, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 8px" }}>
+            BOTTLENECK · 30+ DAYS
+          </span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+            {portfolioKPIs.staleRFIs30.length} RFI{portfolioKPIs.staleRFIs30.length !== 1 ? "s" : ""} open more than 30 days — schedule-impact risk
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>
+            {portfolioKPIs.staleRFIs30.slice(0, 3).map(r => r.rfi_number || r.title?.slice(0, 20)).filter(Boolean).join(" · ")}
+            {portfolioKPIs.staleRFIs30.length > 3 ? ` · +${portfolioKPIs.staleRFIs30.length - 3} more` : ""}
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>
+            REVIEW →
+          </span>
+        </div>
+      )}
+
       {/* PCC Alert Strip — top priority only */}
       {pccData.priorities.length > 0 && (
         <div style={{
@@ -995,7 +1058,7 @@ export default function PortfolioView({
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
-                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
+                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
                       style={{
@@ -1098,6 +1161,29 @@ export default function PortfolioView({
                           </span>
                         )}
                       </td>
+                      {/* Projected Margin = Contract Value − max(budget, actual + pending CO exposure) */}
+                      <td
+                        title={p.projectedMargin === null
+                          ? "No contract value entered — set original_contract_value to see projected margin"
+                          : `Contract: ${formatCurrency(p.contractValue)} · Est. cost at completion: ${formatCurrency(p.estimatedCostAtCompletion)} · Margin: ${(p.projectedMarginPct ?? 0).toFixed(1)}%`}
+                        style={{
+                          padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                          color: p.projectedMargin === null ? "var(--text-muted)" : p.projectedMargin < 0 ? "var(--status-error)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--status-warning)" : "var(--status-success)",
+                        }}
+                      >
+                        {p.projectedMargin === null ? "—" : (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
+                            <span style={{
+                              background: p.projectedMargin < 0 ? "var(--danger-muted)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-muted)" : "var(--success-muted)",
+                              border: `1px solid ${p.projectedMargin < 0 ? "var(--danger-border)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-border)" : "var(--success-border)"}`,
+                              borderRadius: 3, padding: "1px 6px",
+                            }}>
+                              {(p.projectedMargin < 0 ? "−" : "+") + formatCurrency(Math.abs(p.projectedMargin)).replace(/\.\d+/, "")}
+                            </span>
+                            <span style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>{(p.projectedMarginPct ?? 0).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </td>
                       <td
                         title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
                         style={{
@@ -1168,7 +1254,7 @@ export default function PortfolioView({
                       </td>
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
-                      <td colSpan={13} style={{ padding: 0, border: "none" }}>
+                      <td colSpan={14} style={{ padding: 0, border: "none" }}>
                         <div style={{ width: "100%", height: 3, background: "var(--bg-sidebar)" }}>
                           <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
                         </div>
@@ -1179,7 +1265,7 @@ export default function PortfolioView({
                 })}
                 {displayMetrics.length === 0 && (
                   <tr>
-                    <td colSpan={13} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    <td colSpan={14} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
                         {kpiFilter ? (
                           <>
@@ -1258,9 +1344,13 @@ export default function PortfolioView({
                     <Tooltip content={<PhoenixTooltip />} />
                     <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={10} />
                     <Bar dataKey="Actual" name="Actual" barSize={10}>
-                      {budgetChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.overBudget ? "var(--status-error)" : "var(--accent)"} />
-                      ))}
+                      {budgetChartData.map((entry, index) => {
+                        let fill = "var(--accent)";
+                        if (entry.overBudget) fill = "var(--status-error)";
+                        else if (entry.accountingDelayed) fill = "var(--status-warning)"; // work happening but not invoiced
+                        else if (entry.notStarted) fill = "var(--text-muted)"; // not started
+                        return <Cell key={`cell-${index}`} fill={fill} />;
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
