@@ -14,10 +14,10 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg-page)", padding: "0 24px" }}>
       <div style={{ width: "100%", maxWidth: 420, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, padding: 32 }}>
         <div style={{ marginBottom: 28 }}>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.25em", color: "var(--nc-accent-cyan)", marginBottom: 10 }}>LOCAL_DEV_LOGIN</p>
-          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>SIGN_IN TO STEELBUILD_PRO</h1>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.25em", color: "var(--nc-accent-cyan)", marginBottom: 10 }}>STEELBUILD PRO</p>
+          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>SIGN IN</h1>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Localhost sign-in handled directly to avoid the hosted callback flow.
+            Enter your credentials to access the platform.
           </p>
         </div>
 
@@ -55,7 +55,7 @@ export default function LocalLoginForm({ onSubmit, isSubmitting, errorMessage })
             disabled={isSubmitting}
             style={{ width: "100%", padding: "10px 0", background: "var(--nc-accent-orange)", color: "#FFFFFF", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}
           >
-            {isSubmitting ? 'SIGNING_IN...' : 'SIGN_IN →'}
+            {isSubmitting ? 'SIGNING IN...' : 'SIGN IN →'}
           </button>
         </form>
       </div>
