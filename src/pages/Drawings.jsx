@@ -113,6 +113,7 @@ function AlertBanner({ alert, onDismiss, onFilter }) {
 // ─── RFI Link Badge ───────────────────────────────────────────────────────────
 
 function RFILinkBadge({ linkedIds, rfiMap }) {
+  const navigate = useNavigate();
   if (!linkedIds) return null;
   const nums = linkedIds.split(",").map(s => s.trim()).filter(Boolean);
   if (nums.length === 0) return null;
@@ -123,8 +124,16 @@ function RFILinkBadge({ linkedIds, rfiMap }) {
   }).length;
   const closedCount = nums.length - openCount;
 
+  const goToRFI = (e, num) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rfi = rfiMap[num];
+    if (rfi?.id) navigate(`/RFIs?id=${rfi.id}`);
+    else navigate(`/RFIs?search=${encodeURIComponent(num)}`);
+  };
+
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 2 }}>
+    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 2, flexWrap: "wrap" }}>
       <span style={{
         ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.06em",
         padding: "1px 6px", borderRadius: 2,
@@ -134,12 +143,27 @@ function RFILinkBadge({ linkedIds, rfiMap }) {
       }}>
         {openCount > 0 ? `${openCount} OPEN RFI${openCount !== 1 ? "S" : ""}` : `${closedCount} RFI${closedCount !== 1 ? "S" : ""} RESOLVED`}
       </span>
-      {nums.map(n => (
-        <span key={n} style={{
-          ...mono, fontSize: 8, color: rfiMap[n] && rfiMap[n].status !== "Closed" && rfiMap[n].status !== "Answered" ? "var(--status-warning)" : "var(--text-muted)",
-          opacity: 0.8,
-        }}>{n}</span>
-      ))}
+      {nums.map(n => {
+        const rfi = rfiMap[n];
+        const isOpen = rfi && rfi.status !== "Closed" && rfi.status !== "Answered";
+        return (
+          <a
+            key={n}
+            href={rfi?.id ? `/RFIs?id=${rfi.id}` : `/RFIs?search=${encodeURIComponent(n)}`}
+            onClick={(e) => goToRFI(e, n)}
+            style={{
+              ...mono, fontSize: 8, fontWeight: 700,
+              color: isOpen ? "var(--status-warning)" : "var(--text-muted)",
+              textDecoration: "underline",
+              textDecorationStyle: "dotted",
+              cursor: "pointer",
+            }}
+            title={`Open ${n} in RFIs`}
+          >
+            {n}
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -1019,14 +1043,38 @@ function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onD
                 <td style={tdStyle}>
                   <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(d.id)} style={{ cursor: "pointer" }} />
                 </td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap" }}>
+                <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <PriorityDot active={d.priority_flag} />
-                    {d.sheet_number}
+                    <a
+                      href={`/DrawingViewer?id=${d.id}`}
+                      onClick={(e) => { e.preventDefault(); onView(d); }}
+                      style={{
+                        color: "var(--accent)",
+                        textDecoration: "none",
+                        cursor: "pointer",
+                        borderBottom: "1px dotted rgba(200,155,32,0.4)",
+                      }}
+                      title="Open in viewer"
+                    >
+                      {d.sheet_number}
+                    </a>
                   </div>
                 </td>
                 <td style={{ ...tdStyle, maxWidth: 280 }}>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div>
+                  <a
+                    href={`/DrawingViewer?id=${d.id}`}
+                    onClick={(e) => { e.preventDefault(); onView(d); }}
+                    style={{
+                      fontFamily: "var(--font-body)", fontSize: 13,
+                      color: "var(--text-primary)", textDecoration: "none",
+                      overflow: "hidden", textOverflow: "ellipsis",
+                      whiteSpace: "nowrap", display: "block", cursor: "pointer",
+                    }}
+                    title="Open in viewer"
+                  >
+                    {d.title}
+                  </a>
                   <RFILinkBadge linkedIds={d.linked_rfi_ids} rfiMap={rfiMap} />
                   {(d.is_superseded || d.set_approval_status === "superseded") && (
                     <div style={{ marginTop: 3 }}><SupersededBadge /></div>
@@ -1137,24 +1185,35 @@ function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdva
         const isSel = selected.has(d.id);
         const stage = STAGE_MAP[d.stage] || STAGE_MAP["Not Started"];
         return (
-          <div key={d.id} onClick={() => onToggleSelect(d.id)}
-            style={{ background: "var(--bg-surface)", border: `1px solid ${isSel ? "var(--accent)" : "var(--border-default)"}`, borderRadius: 2, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
+          <div key={d.id}
+            style={{ background: "var(--bg-surface)", border: `1px solid ${isSel ? "var(--accent)" : "var(--border-default)"}`, borderRadius: 2, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}
+            onDoubleClick={() => onView(d)}>
             {/* Stage color strip */}
             <div style={{ height: 3, background: stage.color }} />
 
             {/* Priority indicator */}
             {d.priority_flag && <div style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)" }} />}
 
-            <div style={{ padding: "12px 14px" }}>
-              {/* Sheet number */}
-              <div style={{ ...mono, fontSize: 15, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ padding: "12px 14px" }} onClick={() => onToggleSelect(d.id)}>
+              {/* Sheet number — clickable link to viewer */}
+              <a
+                href={`/DrawingViewer?id=${d.id}`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onView(d); }}
+                style={{ ...mono, fontSize: 15, fontWeight: 800, color: "var(--accent)", textDecoration: "none", letterSpacing: "-0.01em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
+                title="Open in viewer"
+              >
                 {d.sheet_number}
-              </div>
+              </a>
 
-              {/* Title */}
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 10, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
+              {/* Title — clickable link to viewer */}
+              <a
+                href={`/DrawingViewer?id=${d.id}`}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onView(d); }}
+                style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", textDecoration: "none", marginBottom: 10, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}
+                title="Open in viewer"
+              >
                 {d.title}
-              </div>
+              </a>
 
               {/* Stage + Rev + Badges */}
               <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
