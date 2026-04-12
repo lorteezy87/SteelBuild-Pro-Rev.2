@@ -7,7 +7,8 @@ const empty = {
   project_id: "", project_name: "", title: "", description: "",
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
   submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: null, co_amount: 0, approved_by: "", notes: "", attachments: "",
+  approved_date: null, co_amount: 0, schedule_impact_days: 0,
+  approved_by: "", notes: "", attachments: "",
   co_number: "",
 };
 
@@ -35,7 +36,7 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = { ...form, co_amount: Number(form.co_amount) || 0 };
+    const data = { ...form, co_amount: Number(form.co_amount) || 0, schedule_impact_days: Number(form.schedule_impact_days) || 0 };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
@@ -87,6 +88,9 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
         </FormField>
         <FormField label="CO Amount ($)" error={errors.co_amount}>
           <input type="number" style={inputStyle} value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
+        </FormField>
+        <FormField label="Schedule Impact (days)">
+          <input type="number" style={inputStyle} value={form.schedule_impact_days || 0} onChange={e => set("schedule_impact_days", e.target.value)} min="0" placeholder="0" />
         </FormField>
         {selectedProject && (
           <FormField label="Original Contract Value">

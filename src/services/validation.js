@@ -170,6 +170,28 @@ const RULES = {
     errors.push(dateNotBefore(data.end_date, data.start_date, "end_date", "End Date", "Start Date"));
     return errors.filter(Boolean);
   },
+
+  project: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_number, "project_number", "Project Number"));
+    errors.push(required(data.name, "name", "Project Name"));
+    errors.push(required(data.client, "client", "Client"));
+    errors.push(maxLength(data.name, 150, "name", "Project Name"));
+    errors.push(maxLength(data.project_number, 50, "project_number", "Project Number"));
+    if (data.original_contract_value !== undefined && data.original_contract_value !== null && data.original_contract_value !== "") {
+      errors.push(nonNegativeNumber(data.original_contract_value, "original_contract_value", "Contract Value"));
+    }
+    if (data.retainage_percent !== undefined && data.retainage_percent !== null && data.retainage_percent !== "") {
+      const ret = Number(data.retainage_percent);
+      if (isNaN(ret) || ret < 0 || ret > 100) {
+        errors.push({ field: "retainage_percent", message: "Retainage must be between 0% and 100%.", rule: "RANGE" });
+      }
+    }
+    errors.push(validDate(data.start_date, "start_date", "Start Date"));
+    errors.push(validDate(data.target_completion_date, "target_completion_date", "Target Completion Date"));
+    errors.push(dateNotBefore(data.target_completion_date, data.start_date, "target_completion_date", "Target Completion", "Start Date"));
+    return errors.filter(Boolean);
+  },
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────
