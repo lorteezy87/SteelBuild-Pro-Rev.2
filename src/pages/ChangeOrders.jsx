@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Download, Check, AlertTriangle, Clock, DollarSign, Plus, CalendarDays } from "lucide-react";
+import { Pencil, Trash2, Download, Check, AlertTriangle, Clock, DollarSign, Plus, CalendarDays, FileText, ArrowRight, Zap, Paperclip, RotateCcw, Send, ChevronRight } from "lucide-react";
 import PageHeader from "../components/shared/PageHeader";
 import SearchFilter from "../components/shared/SearchFilter";
 import DeleteDialog from "../components/shared/DeleteDialog";
@@ -12,6 +12,7 @@ import COFormModal from "../components/changeorders/COFormModal";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
+import ChevronPipeline from "../components/shared/ChevronPipeline";
 import { formatCurrency, formatDate, roundCurrency, parseUTCDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 
@@ -256,6 +257,44 @@ export default function ChangeOrders() {
   });
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
 
+  // RFIs with cost impact — potential untracked COs
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", activeProject?.id],
+    queryFn: () => activeProject?.id
+      ? base44.entities.RFI.filter({ project_id: activeProject.id })
+      : [],
+    enabled: !!activeProject?.id,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Detect RFIs that have cost impact but no linked CO
+  const potentialCOs = useMemo(() => {
+    if (!rfis.length) return [];
+    const coTitlesLower = new Set(cos.map(c => (c.title || "").toLowerCase()));
+    const coRFIRefs = new Set(cos.map(c => c.linked_rfi_id).filter(Boolean));
+    return rfis
+      .filter(r => {
+        // RFI has cost impact flag or cost_impact_amount > 0
+        const hasCost = r.cost_impact || (Number(r.cost_impact_amount) || 0) > 0;
+        if (!hasCost) return false;
+        // Not already linked to a CO
+        if (coRFIRefs.has(r.id)) return false;
+        // Title not already present as a CO title (fuzzy match)
+        const rfiTitle = (r.title || "").toLowerCase();
+        for (const ct of coTitlesLower) {
+          if (ct && rfiTitle && (ct.includes(rfiTitle) || rfiTitle.includes(ct))) return false;
+        }
+        return true;
+      })
+      .map(r => ({
+        id: r.id,
+        rfi_number: r.rfi_number,
+        title: r.title,
+        amount: Number(r.cost_impact_amount) || 0,
+        status: r.status,
+      }));
+  }, [rfis, cos]);
+
   const projectMap = useMemo(() => {
     const map = {};
     for (const p of projects) map[p.id] = p.name || p.project_name || "";
@@ -297,18 +336,63 @@ export default function ChangeOrders() {
 
   const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
 
+  // ── Pipeline breakdown by lifecycle stage ──
+  const pipeline = useMemo(() => {
+    const stages = [
+      { key: "Draft", label: "DRAFT", color: "#6B7280" },
+      { key: "Submitted", label: "SUBMITTED", color: "#E3B341" },
+      { key: "Under Review", label: "REVIEW", color: "#3B82F6" },
+      { key: "Approved", label: "APPROVED", color: "#3FB950" },
+      { key: "Rejected", label: "REJECTED", color: "#F85149" },
+      { key: "Void", label: "VOID", color: "#374151" },
+    ];
+    return stages.map(s => ({
+      ...s,
+      count: cos.filter(c => c.status === s.key).length,
+      value: cos.filter(c => c.status === s.key).reduce((sum, c) => sum + (Number(c.co_amount) || 0), 0),
+    }));
+  }, [cos]);
+
   const approvedVal = roundCurrency(cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
   const pendingVal = roundCurrency(cos.filter(c => c.status === "Submitted" || c.status === "Under Review").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
+  const draftVal = roundCurrency(cos.filter(c => c.status === "Draft").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
+  const atRiskVal = roundCurrency(pendingVal + draftVal); // not yet approved = at risk
   // Scope contract to active project only
   const activeProjectData = activeProject?.id ? projects.filter(p => p.id === activeProject.id) : [];
   const totalContract = roundCurrency(activeProjectData.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0));
   const revisedContract = roundCurrency(totalContract + approvedVal);
 
+  // ── Action items: what needs attention today ──
+  const actionItems = useMemo(() => {
+    const items = [];
+    // Drafts not yet priced (co_amount = 0 or missing)
+    const unpriced = cos.filter(c => c.status === "Draft" && (!c.co_amount || Number(c.co_amount) === 0));
+    if (unpriced.length > 0) items.push({ severity: "critical", label: `${unpriced.length} CO${unpriced.length !== 1 ? "s" : ""} not priced`, detail: unpriced.map(c => c.co_number || c.title).slice(0, 3).join(", "), action: "Price & submit", color: "var(--status-error)" });
+
+    // Drafts with pricing but not submitted (sitting too long)
+    const readyToSubmit = cos.filter(c => c.status === "Draft" && Number(c.co_amount) > 0);
+    if (readyToSubmit.length > 0) items.push({ severity: "high", label: `${readyToSubmit.length} CO${readyToSubmit.length !== 1 ? "s" : ""} ready to submit`, detail: readyToSubmit.map(c => c.co_number || c.title).slice(0, 3).join(", "), action: "Submit to GC/Owner", color: "var(--status-warning)" });
+
+    // Under Review for > 10 days
+    const stale = cos.filter(c => (c.status === "Submitted" || c.status === "Under Review") && calcDaysOpen(c) > 10);
+    if (stale.length > 0) items.push({ severity: "high", label: `${stale.length} CO${stale.length !== 1 ? "s" : ""} aging > 10 days`, detail: stale.map(c => `${c.co_number} (${calcDaysOpen(c)}d)`).slice(0, 3).join(", "), action: "Follow up", color: "var(--status-warning)" });
+
+    // Missing backup/attachments
+    const noBackup = cos.filter(c => c.status !== "Void" && c.status !== "Draft" && (!c.attachments || c.attachments.trim() === ""));
+    if (noBackup.length > 0) items.push({ severity: "medium", label: `${noBackup.length} CO${noBackup.length !== 1 ? "s" : ""} missing backup`, detail: noBackup.map(c => c.co_number).slice(0, 3).join(", "), action: "Attach T&M / quotes", color: "var(--status-info)" });
+
+    // Rejected needing revision
+    const rejected = cos.filter(c => c.status === "Rejected");
+    if (rejected.length > 0) items.push({ severity: "critical", label: `${rejected.length} rejected CO${rejected.length !== 1 ? "s" : ""} need revision`, detail: rejected.map(c => c.co_number).slice(0, 3).join(", "), action: "Revise & resubmit", color: "var(--status-error)" });
+
+    return items;
+  }, [cos]);
+
   const kpis = [
     { label: "Total COs", value: cos.length, color: "slate" },
-    { label: "Approved Value", value: formatCurrency(approvedVal), color: "green" },
-    { label: "Pending Value", value: formatCurrency(pendingVal), color: "amber" },
-    { label: "Original Contract", value: formatCurrency(totalContract), color: "blue" },
+    { label: "Approved", value: formatCurrency(approvedVal), color: "green" },
+    { label: "Pending", value: formatCurrency(pendingVal), color: "amber" },
+    { label: "At Risk", value: formatCurrency(atRiskVal), color: atRiskVal > 0 ? "rose" : "slate" },
     { label: "Revised Contract", value: formatCurrency(revisedContract), color: "purple" },
     { label: "Net Change", value: formatCurrency(approvedVal), color: approvedVal >= 0 ? "green" : "rose" },
   ];
@@ -368,8 +452,37 @@ export default function ChangeOrders() {
   /* ── Empty state: no COs exist ── */
   if (!isLoading && cos.length === 0) return (
     <div>
-      <PageHeader title="Change Orders" subtitle="0 change orders" onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
+      <PageHeader title="Change Orders" subtitle="Revenue Control" onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
       <KPIStrip items={kpis} />
+
+      {/* Potential COs from RFIs even when no COs exist yet */}
+      {potentialCOs.length > 0 && (
+        <PhoenixPanel
+          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <AlertTriangle size={14} style={{ color: "var(--status-warning)" }} />
+            Untracked Scope Changes Detected
+          </span>}
+          style={{ marginTop: 14, marginBottom: 14, border: "1px solid rgba(227,179,65,0.4)" }}
+        >
+          <div style={{ padding: "12px 16px" }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--status-warning)", marginBottom: 10 }}>
+              {potentialCOs.length} RFI{potentialCOs.length !== 1 ? "s" : ""} with cost impact — no change orders created yet. Revenue at risk: {formatCurrency(potentialCOs.reduce((s, r) => s + r.amount, 0))}
+            </div>
+            {potentialCOs.slice(0, 3).map(r => (
+              <div key={r.id} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "6px 10px",
+                background: "var(--bg-surface-low)", borderRadius: "var(--radius-card)", marginBottom: 4,
+                borderLeft: "3px solid var(--status-warning)",
+              }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent-light)", fontWeight: 700 }}>{r.rfi_number}</span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>{r.title}</span>
+                {r.amount > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-warning)", fontWeight: 700 }}>{formatCurrency(r.amount)}</span>}
+              </div>
+            ))}
+          </div>
+        </PhoenixPanel>
+      )}
+
       <div style={{
         textAlign: "center", padding: "80px 24px",
         background: "var(--bg-surface)", borderRadius: "var(--radius-card)",
@@ -377,10 +490,10 @@ export default function ChangeOrders() {
       }}>
         <DollarSign size={48} strokeWidth={1.5} style={{ color: "var(--text-disabled)", marginBottom: 16 }} />
         <div style={{ fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8 }}>
-          No Change Orders
+          No Change Orders Yet
         </div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", maxWidth: 420, margin: "0 auto 24px" }}>
-          Your original contract is clean. Change orders will appear here as scope changes are identified.
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-muted)", maxWidth: 480, margin: "0 auto 24px" }}>
+          Potential scope changes will appear here as they're identified from RFIs, drawings, and field conditions. Track every dollar from draft through approval.
         </div>
         <Button
           onClick={() => { setEditing(null); setModalOpen(true); }}
@@ -397,7 +510,7 @@ export default function ChangeOrders() {
   /* ── Main render ── */
   return (
     <div>
-      <PageHeader title="Change Orders" subtitle={`${cos.length} change orders`} onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
+      <PageHeader title="Change Orders" subtitle={`${cos.length} CO${cos.length !== 1 ? "s" : ""} \u00B7 ${formatCurrency(atRiskVal)} at risk`} onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
 
       {/* ── Over-Contract Alert Banner (pulse animation) ── */}
       {showOverContractAlert && (
@@ -424,6 +537,152 @@ export default function ChangeOrders() {
       )}
 
       <KPIStrip items={kpis} />
+
+      {/* ── CO Pipeline — lifecycle stage visualization ── */}
+      {cos.length > 0 && (
+        <PhoenixPanel title="CO Pipeline" style={{ marginBottom: 14, padding: "14px 16px" }}>
+          <div style={{ padding: "12px 16px" }}>
+            <ChevronPipeline
+              stages={pipeline.map(s => ({
+                key: s.key,
+                label: s.label,
+                color: s.color,
+                count: s.count,
+              }))}
+              currentStage={statusFilter !== "all" ? statusFilter : undefined}
+              completedStages={[]}
+              height={38}
+              onStageClick={(key) => setStatusFilter(prev => prev === key ? "all" : key)}
+            />
+            {/* Value breakdown beneath pipeline */}
+            <div style={{ display: "flex", gap: 0, marginTop: 6 }}>
+              {pipeline.map(s => (
+                <div key={s.key} style={{
+                  flex: 1, textAlign: "center",
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
+                  color: s.count > 0 ? s.color : "var(--text-disabled)",
+                  opacity: s.count > 0 ? 1 : 0.4,
+                  cursor: "pointer",
+                  padding: "4px 2px",
+                }} onClick={() => setStatusFilter(prev => prev === s.key ? "all" : s.key)}>
+                  {s.count > 0 ? formatCurrency(s.value) : "\u2014"}
+                </div>
+              ))}
+            </div>
+          </div>
+        </PhoenixPanel>
+      )}
+
+      {/* ── Action Required Panel — what needs to go out today ── */}
+      {actionItems.length > 0 && (
+        <PhoenixPanel
+          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Zap size={14} style={{ color: "var(--status-warning)" }} />
+            Action Required
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400 }}>
+              {actionItems.length} item{actionItems.length !== 1 ? "s" : ""}
+            </span>
+          </span>}
+          style={{ marginBottom: 14, border: "1px solid rgba(227,179,65,0.3)" }}
+        >
+          <div style={{ padding: "10px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+            {actionItems.map((item, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 14px",
+                background: "var(--bg-surface-low)",
+                borderRadius: "var(--radius-card)",
+                borderLeft: `3px solid ${item.color}`,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700,
+                    color: item.color, marginBottom: 2,
+                  }}>
+                    {item.label}
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400,
+                  }}>
+                    {item.detail}
+                  </div>
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                  color: item.color, letterSpacing: "0.06em", textTransform: "uppercase",
+                  whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  {item.action} <ChevronRight size={10} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </PhoenixPanel>
+      )}
+
+      {/* ── Potential COs from RFIs — untracked work detection ── */}
+      {potentialCOs.length > 0 && (
+        <PhoenixPanel
+          title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <FileText size={14} style={{ color: "var(--status-info)" }} />
+            Potential COs from RFIs
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontWeight: 400 }}>
+              {potentialCOs.length} untracked
+            </span>
+          </span>}
+          style={{ marginBottom: 14, border: "1px solid rgba(59,130,246,0.3)" }}
+        >
+          <div style={{ padding: "10px 16px" }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+              These RFIs have cost impacts but no linked change order. Revenue may be at risk.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {potentialCOs.slice(0, 5).map(r => (
+                <div key={r.id} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px",
+                  background: "var(--bg-surface-low)",
+                  borderRadius: "var(--radius-card)",
+                  borderLeft: "3px solid var(--status-info)",
+                }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent-light)", fontWeight: 700 }}>
+                    {r.rfi_number || "RFI"}
+                  </span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+                    {r.title}
+                  </span>
+                  {r.amount > 0 && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-warning)", fontWeight: 700 }}>
+                      {formatCurrency(r.amount)}
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost" size="sm"
+                    style={{
+                      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                      color: "var(--accent-light)", letterSpacing: "0.06em",
+                      padding: "4px 10px", height: "auto",
+                    }}
+                    onClick={() => {
+                      setEditing(null);
+                      setModalOpen(true);
+                      // Pre-fill will happen via default form — user sees blank form to create CO from RFI context
+                    }}
+                  >
+                    <Plus size={10} style={{ marginRight: 3 }} />CREATE CO
+                  </Button>
+                </div>
+              ))}
+              {potentialCOs.length > 5 && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
+                  +{potentialCOs.length - 5} more RFIs with cost impact
+                </div>
+              )}
+            </div>
+          </div>
+        </PhoenixPanel>
+      )}
 
       {/* ── Enhanced Contract Waterfall ── */}
       {showWaterfall && (

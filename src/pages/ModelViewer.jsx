@@ -5,6 +5,12 @@ import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+// FragmentsManager.init() requires a worker URL. Without it, IFC loads
+// silently produce zero geometry. We serve the worker from /public/thatopen/
+// (a copy of node_modules/@thatopen/fragments/dist/Worker/worker.mjs) to
+// avoid Vite's deep-import restrictions on the package's exports field.
+const FRAGMENTS_WORKER_URL = "/thatopen/fragments-worker.mjs";
+
 // ─── TYPE INFERENCE ───────────────────────────────────────────────
 function inferType(name) {
   const n = (name || "").toUpperCase();
@@ -23,6 +29,49 @@ const TYPE_COLORS = {
   BRACE: "#E67E22", STAIR: "#F1C40F", WALL: "#95A5A6", MEMBER: "#7F8C8D",
 };
 
+// ─── MATERIAL NORMALIZATION ──────────────────────────────────────
+// IFC files frequently bake transparency into glass / cladding materials.
+// On a white background that produces a "ghost" model. We force every
+// material opaque (unless it's intentionally fully transparent — opacity 0),
+// re-enable depth writes, and double-side so back-faces aren't dropped.
+// We also run this on every tile streaming update because @thatopen/fragments
+// builds new BIMMesh tiles asynchronously after load() resolves.
+function normalizeMaterials(root) {
+  if (!root) return;
+  const seen = new WeakSet();
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const m of mats) {
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      // If a material has been marked transparent but actually has near-full
+      // opacity, treat it as solid. If it really is meant to be glass
+      // (opacity < 0.4), keep some translucency but bump it up so it's
+      // visible on the white background.
+      if (m.transparent || (typeof m.opacity === "number" && m.opacity < 1)) {
+        const op = typeof m.opacity === "number" ? m.opacity : 1;
+        if (op >= 0.4) {
+          m.transparent = false;
+          m.opacity = 1;
+          m.depthWrite = true;
+        } else {
+          m.transparent = true;
+          m.opacity = Math.max(op, 0.55); // bump faint glass so it reads
+          m.depthWrite = false;
+        }
+      }
+      m.side = THREE.DoubleSide;
+      // Some IFC materials come in with vertexColors disabled but tinted
+      // toward white — force a sensible default if color is near-white.
+      if (m.color && m.color.r > 0.97 && m.color.g > 0.97 && m.color.b > 0.97) {
+        m.color.setHex(0xc8c8cc);
+      }
+      m.needsUpdate = true;
+    }
+  });
+}
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
 export default function ModelViewer() {
   const containerRef = useRef(null);
@@ -30,6 +79,8 @@ export default function ModelViewer() {
   const worldRef = useRef(null);
   const loadedModelRef = useRef(null);
   const gltfSceneRef = useRef(null); // For GLTF models (non-IFC)
+  const fragmentsManagerRef = useRef(null);
+  const rafHandleRef = useRef(0);
 
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -77,22 +128,98 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Customize scene appearance
+        // 5. Customize scene appearance — white background for visibility
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0x1a1d24);
+        threeScene.background = new THREE.Color(0xffffff);
 
-        // Add grid
-        const grid = new THREE.GridHelper(200, 40, 0x444444, 0x333333);
-        grid.material.opacity = 0.4;
+        // Stronger, balanced lighting so models read clearly on white.
+        // SimpleScene.setup() already adds a default ambient + directional,
+        // but it's tuned for dark backgrounds and washes out on white.
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
+        threeScene.add(hemiLight);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(80, 120, 60);
+        threeScene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        fillLight.position.set(-80, 60, -60);
+        threeScene.add(fillLight);
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.25);
+        rimLight.position.set(0, -40, -100);
+        threeScene.add(rimLight);
+
+        // Add grid (subtle gray on white)
+        const grid = new THREE.GridHelper(200, 40, 0xbbbbbb, 0xdddddd);
+        grid.material.opacity = 0.6;
         grid.material.transparent = true;
         threeScene.add(grid);
 
-        // 6. Position camera
-        world.camera.controls.setLookAt(80, 60, 80, 0, 0, 0);
+        // 6. Tune camera controls for a tight, direct CAD-viewport feel.
+        // camera-controls defaults (smoothTime 0.25, speeds 1.0) feel mushy
+        // on a building model. Key settings:
+        //   - smoothTime near zero so the camera tracks input with no lag
+        //   - rotate speeds at 1.0 (default) — anything lower feels sticky
+        //   - dolly/truck speeds scaled up so zoom/pan cover real distances
+        //   - dollyToCursor + infinityDolly so wheel zoom targets what the
+        //     mouse points at and never runs out of travel
+        const ctrl = world.camera.controls;
+        ctrl.smoothTime = 0.05;
+        ctrl.draggingSmoothTime = 0.02;
+        ctrl.azimuthRotateSpeed = 1.1;
+        ctrl.polarRotateSpeed = 1.1;
+        ctrl.dollySpeed = 1.2;
+        ctrl.truckSpeed = 2.5;
+        ctrl.dollyToCursor = true;
+        try { ctrl.infinityDolly = true; } catch { /* ignore if unsupported */ }
+        ctrl.minDistance = 0.1;
+        ctrl.maxDistance = 5000;
+        ctrl.setLookAt(80, 60, 80, 0, 0, 0);
 
-        // 7. Initialize FragmentsManager (required before IFC loading)
+        // 7. Initialize FragmentsManager with the worker URL.
+        // FragmentsManager.init() REQUIRES a worker URL — without it, the
+        // FragmentsModel produced by IfcLoader.load() has no tiles streamed
+        // into its scene object, so the model appears empty.
         const fragmentsManager = components.get(OBC.FragmentsManager);
-        fragmentsManager.init();
+        fragmentsManager.init(FRAGMENTS_WORKER_URL);
+        fragmentsManagerRef.current = fragmentsManager;
+
+        // 7a. Drive tile streaming continuously via requestAnimationFrame.
+        //
+        // Background: FragmentsModel only adds/keeps BIMMesh tiles when
+        // fragmentsManager.core.update() is called. If it stops being called,
+        // tiles get evicted from the cache and the model visually disappears.
+        //
+        // We originally hooked world.onAfterUpdate which sounds right, but
+        // OBC's SimpleRenderer only ticks onAfterUpdate when the camera is
+        // actually moving (dirty-flag optimisation). Once the user stops
+        // dragging, the event loop goes quiet and tile streaming halts — which
+        // is exactly why the model appeared for ~10s (the polling window) and
+        // then vanished.
+        //
+        // A plain RAF loop guarantees a steady heartbeat regardless of camera
+        // idleness. Also wire camera-controls "control"/"rest" events so any
+        // user interaction forces a sync update — important on first render
+        // before the RAF loop has settled.
+        const tick = () => {
+          rafHandleRef.current = requestAnimationFrame(tick);
+          try {
+            if (fragmentsManager.initialized) {
+              fragmentsManager.core.update();
+            }
+          } catch { /* swallow per-frame errors */ }
+        };
+        rafHandleRef.current = requestAnimationFrame(tick);
+
+        const onCtrlChange = () => {
+          try { fragmentsManager.initialized && fragmentsManager.core.update(); } catch { /* ignore */ }
+        };
+        const onCtrlRest = () => {
+          try { fragmentsManager.initialized && fragmentsManager.core.update(true); } catch { /* ignore */ }
+        };
+        try {
+          ctrl.addEventListener("control", onCtrlChange);
+          ctrl.addEventListener("update",  onCtrlChange);
+          ctrl.addEventListener("rest",    onCtrlRest);
+        } catch { /* camera-controls API drift guard */ }
 
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
@@ -120,6 +247,10 @@ export default function ModelViewer() {
 
     return () => {
       disposed = true;
+      if (rafHandleRef.current) {
+        cancelAnimationFrame(rafHandleRef.current);
+        rafHandleRef.current = 0;
+      }
       if (componentsRef.current) {
         try { componentsRef.current.dispose(); } catch { /* ignore cleanup errors */ }
       }
@@ -127,6 +258,7 @@ export default function ModelViewer() {
       worldRef.current = null;
       loadedModelRef.current = null;
       gltfSceneRef.current = null;
+      fragmentsManagerRef.current = null;
     };
   }, []);
 
@@ -147,15 +279,30 @@ export default function ModelViewer() {
     const fov = (cam.fov || 45) * (Math.PI / 180);
     const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
 
+    // Adapt control bounds + step sizes to model scale so zoom/pan feel
+    // right regardless of whether the model is a 2m bracket or a 200m
+    // building. The previous clamps (min 0.8, cap 8) made big models still
+    // feel molasses — we raise both so pan/dolly cover real distance.
+    const ctrl = world.camera.controls;
+    ctrl.minDistance = Math.max(0.05, diagonal * 0.002);
+    ctrl.maxDistance = Math.max(1000, diagonal * 25);
+    ctrl.truckSpeed  = Math.max(1.5, Math.min(20, diagonal / 12));
+    ctrl.dollySpeed  = Math.max(1.0, Math.min(3.0, diagonal / 60));
+
     // Isometric offset
     const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
     const pos = center.clone().add(offset);
 
-    world.camera.controls.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
+    ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
   }, []);
 
   // ─── CLEAR MODEL ────────────────────────────────────────────────
-  const clearCurrentModel = useCallback(() => {
+  // Async because FragmentsModels.disposeModel() is async — without awaiting
+  // it, the worker still holds a reference to the previous model when the
+  // next IFC starts streaming, causing duplicate tile updates and material
+  // bleed-through (the "first model loads fine, second one is transparent"
+  // bug we were chasing).
+  const clearCurrentModel = useCallback(async () => {
     const world = worldRef.current;
     const components = componentsRef.current;
     if (!world || !components) return;
@@ -163,25 +310,40 @@ export default function ModelViewer() {
     // Remove GLTF model if loaded
     if (gltfSceneRef.current && world.scene?.three) {
       world.scene.three.remove(gltfSceneRef.current);
+      // Free GLTF GPU resources
+      gltfSceneRef.current.traverse((child) => {
+        if (child.isMesh) {
+          child.geometry?.dispose?.();
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => m?.dispose?.());
+        }
+      });
       gltfSceneRef.current = null;
     }
 
-    // Dispose IFC models via FragmentsManager
-    if (loadedModelRef.current) {
-      try {
-        const fragmentsManager = components.get(OBC.FragmentsManager);
-        // Dispose all loaded models
-        const models = fragmentsManager.list;
-        for (const [key, model] of models) {
+    // Dispose every model the FragmentsManager knows about. We can't iterate
+    // and mutate the map at the same time, so snapshot ids first.
+    try {
+      const fragmentsManager = components.get(OBC.FragmentsManager);
+      if (fragmentsManager?.initialized) {
+        const ids = [];
+        for (const [id, model] of fragmentsManager.list) {
+          ids.push(id);
           try {
             if (model.object && world?.scene?.three) {
               world.scene.three.remove(model.object);
             }
-          } catch { /* ignore */ }
+          } catch { /* ignore remove errors */ }
         }
-      } catch { /* ignore */ }
-      loadedModelRef.current = null;
-    }
+        for (const id of ids) {
+          try { await fragmentsManager.core.disposeModel(id); } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+
+    loadedModelRef.current = null;
+    setMembers([]);
+    setSelectedMember(null);
   }, []);
 
   // ─── LOAD GLTF/GLB ────────────────────────────────────────────
@@ -193,7 +355,7 @@ export default function ModelViewer() {
     setUploadError(null);
 
     try {
-      clearCurrentModel();
+      await clearCurrentModel();
 
       const url = URL.createObjectURL(file);
       const loader = new GLTFLoader();
@@ -217,6 +379,9 @@ export default function ModelViewer() {
       const model = gltf.scene;
       world.scene.three.add(model);
       gltfSceneRef.current = model;
+      // Normalize GLTF materials too — same wash-out story applies if the
+      // exporter set every material as transparent for sketchy reasons.
+      normalizeMaterials(model);
 
       // Extract members
       const extracted = [];
@@ -255,7 +420,7 @@ export default function ModelViewer() {
     setUploadError(null);
 
     try {
-      clearCurrentModel();
+      await clearCurrentModel();
 
       setLoadingModel((prev) => ({ ...prev, progress: 15, status: "Reading file..." }));
       const arrayBuffer = await file.arrayBuffer();
@@ -264,11 +429,15 @@ export default function ModelViewer() {
       setLoadingModel((prev) => ({ ...prev, progress: 30, status: "Parsing IFC structure..." }));
 
       const ifcLoader = components.get(OBC.IfcLoader);
+      const fragmentsManager = components.get(OBC.FragmentsManager);
 
       // Load using @thatopen/components IfcLoader
       const model = await ifcLoader.load(uint8Array, true, file.name.replace(/\.ifc$/i, ""));
 
-      setLoadingModel((prev) => ({ ...prev, progress: 75, status: "Processing geometry..." }));
+      setLoadingModel((prev) => ({ ...prev, progress: 70, status: "Wiring camera..." }));
+
+      // Wire the model to the camera so tile streaming knows what to load.
+      try { model.useCamera(world.camera.three); } catch (e) { console.warn("useCamera failed", e); }
 
       // The model.object is the THREE.Object3D for the scene
       const modelObject = model.object;
@@ -277,6 +446,22 @@ export default function ModelViewer() {
       }
 
       loadedModelRef.current = modelObject || model;
+
+      // Re-normalize materials every time the model streams in new tiles.
+      // FragmentsModel builds BIMMesh tiles asynchronously after load(), so
+      // a single normalize pass at load time misses anything that arrives
+      // later. onViewUpdated fires once per refreshView cycle.
+      try {
+        model.onViewUpdated?.add?.(() => {
+          if (modelObject) normalizeMaterials(modelObject);
+        });
+      } catch (e) { console.warn("onViewUpdated hook failed", e); }
+
+      // Force the FragmentsModels system to flush a full update so geometry
+      // tiles are streamed in immediately rather than waiting for view changes.
+      setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
+      try { await fragmentsManager.core.update(true); } catch (e) { console.warn("core.update failed", e); }
+      if (modelObject) normalizeMaterials(modelObject);
 
       // Extract mesh members for the sidebar list
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Extracting elements..." }));
@@ -294,27 +479,48 @@ export default function ModelViewer() {
       });
 
       setMembers(extracted);
-      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Fitting view..." }));
+      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Streaming tiles..." }));
 
-      // Fit camera to the loaded model
-      if (modelObject) {
+      // FragmentsModel streams tile geometry in via the worker AFTER load()
+      // resolves, so the bounding box is empty for the first few view updates.
+      // We listen for onViewUpdated and refit/re-extract until tiles arrive.
+      const tryFit = () => {
+        if (!modelObject) return false;
+        const box = new THREE.Box3().setFromObject(modelObject);
+        if (box.isEmpty()) return false;
+        normalizeMaterials(modelObject);
         fitCamera(modelObject);
-      } else {
-        // Fallback: try the bounding box from FragmentsModel
-        try {
-          const box = model.box;
-          if (box && !box.isEmpty()) {
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
-            const cam = world.camera.three;
-            const fov = (cam.fov || 45) * (Math.PI / 180);
-            const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
-            const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
-            const pos = center.clone().add(offset);
-            world.camera.controls.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
+        // Re-extract members now that real meshes exist
+        const fresh = [];
+        let i = 0;
+        modelObject.traverse((child) => {
+          if (child.isMesh) {
+            const name = child.name || `Element ${i + 1}`;
+            const type = inferType(name);
+            fresh.push({ id: i, name, type, color: TYPE_COLORS[type], mesh: child });
+            i++;
           }
-        } catch { /* ignore */ }
+        });
+        if (fresh.length > 0) setMembers(fresh);
+        return true;
+      };
+
+      if (!tryFit()) {
+        let attempts = 0;
+        const off = model.onViewUpdated?.add?.(() => {
+          attempts++;
+          if (tryFit() || attempts > 30) {
+            try { off?.(); } catch { /* ignore */ }
+          }
+        });
+        // Safety net: poll for ~10s, forcing tile updates each tick in case
+        // the per-frame onAfterUpdate hook hasn't streamed everything yet.
+        let polled = 0;
+        const poll = setInterval(async () => {
+          polled++;
+          try { await fragmentsManager.core.update(true); } catch { /* ignore */ }
+          if (tryFit() || polled > 50) clearInterval(poll);
+        }, 200);
       }
 
       setModelLoaded({ name: file.name, memberCount: extracted.length, format: "IFC" });

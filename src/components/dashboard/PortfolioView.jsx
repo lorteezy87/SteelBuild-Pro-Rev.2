@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { formatCurrency, isOverdue, daysOverdue } from "../shared/formatters";
+import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import StatusBadge from "../shared/StatusBadge";
 import ProgressBar from "../shared/ProgressBar";
@@ -300,7 +300,6 @@ export default function PortfolioView({
   const navigate = useNavigate();
   const [sortMode, setSortMode] = useState("health");
   const [kpiFilter, setKpiFilter] = useState(null);
-  const [phaseFilter, setPhaseFilter] = useState(null);
 
   // ── Sparkline history: store 7-day KPI snapshots in localStorage ──────────
   const [sparkHistory, setSparkHistory] = useState({});
@@ -338,21 +337,36 @@ export default function PortfolioView({
         const pCodes = allCodes.filter((c) => c.project_id === p.id);
         const pWPs = allWPs.filter((w) => w.project_id === p.id);
         const pDeliveries = allDeliveries.filter((d) => d.project_id === p.id);
-        const pExpenses = allExpenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
-        const approvedCOTotal = pCOs.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-        const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0) + approvedCOTotal;
+        const pExpenses = allExpenses.filter((e) => e.project_id === p.id && !statusIn(e.payment_status, ["Voided", "Void"]));
+        const budget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
         const hasBudgetData = pCodes.length > 0;
-        // Committed (all non-voided expenses) is the true exposure; paid is a subset
-        const actual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-        const hasActualData = pExpenses.length > 0;
-        const openRFIs = pRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
+        const paidExpenses = pExpenses.filter((e) => statusIn(e.payment_status, ["Paid"]));
+        const actual = paidExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+        // hasActualData must mirror the slice that produces `actual` — otherwise
+        // a project with only Submitted/Approved (unpaid) expenses shows as
+        // "has data" while actual stays $0, faking a green Variance cell.
+        const hasActualData = paidExpenses.length > 0;
+        const openRFIs = pRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
         const overdueRFIs = pRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
         const avgProgress = pWPs.length > 0 ? Math.round(pWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / pWPs.length) : 0;
-        const pendingCOs = pCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status));
+        const pendingCOs = pCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"]));
         const pendingCOValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-        const lateDeliveries = pDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").length;
+        const lateDeliveries = pDeliveries.filter((d) => {
+          if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+          const sched = parseUTCDate(d.scheduled_date);
+          return sched && sched < today;
+        }).length;
         const tonnage = Math.round(pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0));
-        const stalledWPs = pWPs.filter((w) => w.status === "On Hold").length;
+        const stalledWPs = pWPs.filter((w) => statusIn(w.status, ["On Hold"])).length;
+
+        // Projected Margin = Contract Value - Estimated Cost at Completion.
+        // Estimated cost takes the worst case of (budget) vs (actual + pending CO exposure)
+        // so the figure tells us "what the project will actually return if pending COs hit".
+        const contractValue = Number(p.original_contract_value) || 0;
+        const estimatedCostAtCompletion = Math.max(budget, actual + pendingCOValue);
+        const projectedMargin = contractValue > 0 ? contractValue - estimatedCostAtCompletion : null;
+        const projectedMarginPct = contractValue > 0 ? (projectedMargin / contractValue) * 100 : null;
+
         return {
           ...p,
           budget,
@@ -367,9 +381,13 @@ export default function PortfolioView({
           lateDeliveries,
           tonnage,
           stalledWPs,
+          contractValue,
+          estimatedCostAtCompletion,
+          projectedMargin,
+          projectedMarginPct,
         };
       })
-      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3) || (a.name || "").localeCompare(b.name || ""));
+      .sort((a, b) => (HEALTH_ORDER[a.health_status] ?? 3) - (HEALTH_ORDER[b.health_status] ?? 3));
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allDeliveries, allExpenses]);
 
   // Enrich metrics with weighted health scoring + reason strings
@@ -395,10 +413,6 @@ export default function PortfolioView({
 
   const displayMetrics = useMemo(() => {
     let list = [...enrichedMetrics];
-    // Apply phase filter
-    if (phaseFilter) {
-      list = list.filter((p) => p.phase === phaseFilter);
-    }
     // Apply KPI filter
     if (kpiFilter === "overdueRFIs") {
       list = list.filter((p) => p.overdueRFIs > 0);
@@ -415,36 +429,50 @@ export default function PortfolioView({
     if (sortMode === "rfi") {
       list.sort((a, b) => b.openRFIs - a.openRFIs);
     } else if (sortMode === "deadline") {
-      list.sort((a, b) => {
-        const aDate = allDeliveries.filter((d) => d.project_id === a.id && d.status !== "Delivered").reduce((min, d) => {
-          const dt = d.scheduled_date ? new Date(d.scheduled_date).getTime() : Infinity;
-          return dt < min ? dt : min;
-        }, Infinity);
-        const bDate = allDeliveries.filter((d) => d.project_id === b.id && d.status !== "Delivered").reduce((min, d) => {
-          const dt = d.scheduled_date ? new Date(d.scheduled_date).getTime() : Infinity;
-          return dt < min ? dt : min;
-        }, Infinity);
-        return aDate - bDate;
-      });
+      const earliest = (pid) =>
+        allDeliveries
+          .filter((d) => d.project_id === pid && !statusIn(d.status, ["Delivered"]))
+          .reduce((min, d) => {
+            const sched = parseUTCDate(d.scheduled_date);
+            const dt = sched ? sched.getTime() : Infinity;
+            return dt < min ? dt : min;
+          }, Infinity);
+      list.sort((a, b) => earliest(a.id) - earliest(b.id));
     }
     // default "health" sort is already applied from projectMetrics
     return list;
-  }, [enrichedMetrics, sortMode, kpiFilter, phaseFilter, allDeliveries]);
+  }, [enrichedMetrics, sortMode, kpiFilter, allDeliveries]);
 
   const portfolioKPIs = useMemo(() => {
     const portfolioValue =
       projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0) +
-      allCOs.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+      allCOs.filter((c) => statusIn(c.status, ["Approved"])).reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const totalBudget = allCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-    const totalSpend = allExpenses.filter((e) => e.payment_status === "Paid").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const totalSpend = allExpenses.filter((e) => statusIn(e.payment_status, ["Paid"])).reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const overdueRFIs = allRFIs.filter((r) => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
-    const openRFIs = allRFIs.filter((r) => !["Answered", "Closed"].includes(r.status)).length;
-    const pendingCOs = allCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status)).length;
+    const openRFIs = allRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed"])).length;
+    const pendingCOs = allCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"])).length;
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const lateDeliveries = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date + "T00:00:00") < todayStart && d.status !== "Delivered").length;
+    const lateDeliveries = allDeliveries.filter((d) => {
+      if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+      const sched = parseUTCDate(d.scheduled_date);
+      return sched && sched < todayStart;
+    }).length;
     const atRisk = enrichedMetrics.filter((p) => p.effectiveHealth === "At Risk" || p.effectiveHealth === "Watch").length;
-    const activeWPs = allWPs.filter((w) => w.status === "In Progress").length;
-    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs };
+    const activeWPs = allWPs.filter((w) => statusIn(w.status, ["In Progress"])).length;
+    // Stale RFIs: open RFIs whose age exceeds 30 days. We canonicalize on
+    // submitted_date (when the RFI was actually issued) and fall back to
+    // created_date / created_at only when missing. Parse via parseUTCDate so
+    // ISO date-only strings don't drift in negative-UTC timezones.
+    const thirtyDaysAgo = todayStart.getTime() - 30 * 86400000;
+    const staleRFIs30 = allRFIs.filter((r) => {
+      if (statusIn(r.status, ["Answered", "Closed"])) return false;
+      const opened = r.submitted_date || r.created_date || r.created_at;
+      const d = parseUTCDate(opened);
+      if (!d) return false;
+      return d.getTime() < thirtyDaysAgo;
+    });
+    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30 };
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics]);
 
   // ── Persist sparkline snapshot once per day ────────────────────────────────
@@ -478,12 +506,26 @@ export default function PortfolioView({
 
   const budgetChartData = useMemo(
     () =>
-      projectMetrics.slice(0, 8).map((p) => ({
-        name: p.project_number || p.name?.slice(0, 8),
-        Budget: p.budget,
-        Actual: p.actual,
-        overBudget: p.actual > p.budget,
-      })),
+      projectMetrics.slice(0, 8).map((p) => {
+        const progress = Number(p.avgProgress) || 0;
+        const hasActual = p.actual > 0;
+        // Distinguishes "haven't started" (0% progress, $0 actual) from
+        // "delayed accounting" (>0% progress, $0 actual) so the chart isn't
+        // misleading when several rows show $0 spend.
+        const accountingDelayed = !hasActual && progress > 5;
+        const notStarted = !hasActual && progress <= 5;
+        const shortName = p.project_number || (p.name || "").slice(0, 10);
+        return {
+          name: `${shortName} · ${progress}%`,
+          rawName: shortName,
+          Budget: p.budget,
+          Actual: p.actual,
+          progress,
+          overBudget: p.actual > p.budget,
+          accountingDelayed,
+          notStarted,
+        };
+      }),
     [projectMetrics]
   );
 
@@ -514,10 +556,15 @@ export default function PortfolioView({
 
     // Late deliveries — blocking erection
     const lateDeliveries = allDeliveries
-      .filter((d) => d.status !== "Delivered" && d.scheduled_date && new Date(d.scheduled_date) < now)
-      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+      .filter((d) => {
+        if (statusIn(d.status, ["Delivered"]) || !d.scheduled_date) return false;
+        const sched = parseUTCDate(d.scheduled_date);
+        return sched && sched < now;
+      })
+      .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0));
     lateDeliveries.forEach((d) => {
-      const days = Math.max(0, Math.floor((now - new Date(d.scheduled_date)) / 86400000));
+      const sched = parseUTCDate(d.scheduled_date);
+      const days = sched ? Math.max(0, Math.floor((now - sched) / 86400000)) : 0;
       priorities.push({
         rank: days >= 7 ? 1 : 3,
         type: "DEL", id: d.delivery_id || "—",
@@ -532,10 +579,16 @@ export default function PortfolioView({
 
     // Overdue action items
     const overdueAI = allActionItems
-      .filter((a) => a.status !== "Complete" && a.due_date && new Date(a.due_date) < now)
-      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      .filter((a) => {
+        if (statusIn(a.status, ["Complete", "Cancelled", "Closed", "Done"])) return false;
+        if (!a.due_date) return false;
+        const due = parseUTCDate(a.due_date);
+        return due && due < now;
+      })
+      .sort((a, b) => (parseUTCDate(a.due_date) || 0) - (parseUTCDate(b.due_date) || 0));
     overdueAI.forEach((a) => {
-      const days = Math.max(0, Math.floor((now - new Date(a.due_date)) / 86400000));
+      const due = parseUTCDate(a.due_date);
+      const days = due ? Math.max(0, Math.floor((now - due) / 86400000)) : 0;
       priorities.push({
         rank: 4, type: "ACTION", id: "—",
         title: a.title || "Action Item", project: a.project_name || projectMap[a.project_id] || "",
@@ -548,33 +601,36 @@ export default function PortfolioView({
 
     priorities.sort((a, b) => a.rank - b.rank || b.days - a.days);
 
-    // WAITING ON — items pending external response
+    // WAITING ON — items pending external response.
+    // Use the same "open RFI" definition as the KPI tile (anything NOT
+    // Answered/Closed) so the two views can never disagree about counts.
     const waitingOn = [];
-    // RFIs submitted, waiting for response
-    allRFIs.filter((r) => r.status === "Submitted" || r.status === "Open").forEach((r) => {
+    allRFIs.filter((r) => !statusIn(r.status, ["Answered", "Closed", "Draft"])).forEach((r) => {
+      const sub = parseUTCDate(r.submitted_date);
       waitingOn.push({
         type: "RFI", id: r.rfi_number || "—",
         title: r.title, project: r.project_name || projectMap[r.project_id] || "",
         waitingFor: r.assigned_to || r.ball_in_court || "Architect/Engineer",
         submitted: r.submitted_date,
-        days: r.submitted_date ? Math.max(0, Math.floor((now - new Date(r.submitted_date)) / 86400000)) : 0,
+        days: sub ? Math.max(0, Math.floor((now - sub) / 86400000)) : 0,
         nav: "RFIs",
       });
     });
     // COs under review
-    allCOs.filter((c) => c.status === "Submitted" || c.status === "Under Review").forEach((c) => {
+    allCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"])).forEach((c) => {
+      const sub = parseUTCDate(c.submitted_date);
       waitingOn.push({
         type: "CO", id: c.co_number || "—",
         title: c.title, project: c.project_name || projectMap[c.project_id] || "",
         waitingFor: "Owner/GC",
         submitted: c.submitted_date,
-        days: c.submitted_date ? Math.max(0, Math.floor((now - new Date(c.submitted_date)) / 86400000)) : 0,
+        days: sub ? Math.max(0, Math.floor((now - sub) / 86400000)) : 0,
         amount: Number(c.co_amount) || 0,
         nav: "ChangeOrders",
       });
     });
     // Deliveries in transit
-    allDeliveries.filter((d) => d.status === "In Transit").forEach((d) => {
+    allDeliveries.filter((d) => statusIn(d.status, ["In Transit"])).forEach((d) => {
       waitingOn.push({
         type: "DEL", id: d.delivery_id || "—",
         title: d.delivery_title || d.vendor || "Delivery",
@@ -610,33 +666,46 @@ export default function PortfolioView({
     [allWPs]
   );
   const deliveriesStats = useMemo(() => {
-    const today = new Date();
-    const scheduled = allDeliveries.filter((d) => d.status === "Scheduled").length;
-    const inTransit = allDeliveries.filter((d) => d.status === "In Transit").length;
-    const late = allDeliveries.filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").length;
-    const lateList = allDeliveries
-      .filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered")
-      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date))
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const isLate = (d) => {
+      if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+      const sched = parseUTCDate(d.scheduled_date);
+      return sched && sched < today;
+    };
+    const scheduled = allDeliveries.filter((d) => statusIn(d.status, ["Scheduled"])).length;
+    const inTransit = allDeliveries.filter((d) => statusIn(d.status, ["In Transit"])).length;
+    const lateAll = allDeliveries.filter(isLate);
+    const late = lateAll.length;
+    const lateList = lateAll
+      .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0))
       .slice(0, 3)
-      .map((d) => ({
-        ...d,
-        daysLate: Math.max(0, Math.floor((today - new Date(d.scheduled_date)) / 86400000)),
-      }));
+      .map((d) => {
+        const sched = parseUTCDate(d.scheduled_date);
+        return {
+          ...d,
+          daysLate: sched ? Math.max(0, Math.floor((today - sched) / 86400000)) : 0,
+        };
+      });
     // Next upcoming delivery
     const upcoming = allDeliveries
-      .filter((d) => d.scheduled_date && new Date(d.scheduled_date) >= today && d.status !== "Delivered")
-      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+      .filter((d) => {
+        if (statusIn(d.status, ["Delivered"]) || !d.scheduled_date) return false;
+        const sched = parseUTCDate(d.scheduled_date);
+        return sched && sched >= today;
+      })
+      .sort((a, b) => (parseUTCDate(a.scheduled_date) || 0) - (parseUTCDate(b.scheduled_date) || 0));
     const nextDelivery = upcoming[0] || null;
     return { scheduled, inTransit, late, lateList, nextDelivery };
   }, [allDeliveries]);
 
   // ── RFI turnaround metric ──────────────────────────────────────────────────
   const rfiTurnaround = useMemo(() => {
-    const closed = allRFIs.filter((r) => ["Answered", "Closed"].includes(r.status) && r.submitted_date && r.responded_date);
+    const closed = allRFIs.filter((r) => statusIn(r.status, ["Answered", "Closed"]) && r.submitted_date && r.responded_date);
     if (closed.length === 0) return null;
     const totalDays = closed.reduce((s, r) => {
-      const submitted = new Date(r.submitted_date);
-      const responded = new Date(r.responded_date);
+      const submitted = parseUTCDate(r.submitted_date);
+      const responded = parseUTCDate(r.responded_date);
+      if (!submitted || !responded) return s;
       return s + Math.max(0, Math.floor((responded - submitted) / 86400000));
     }, 0);
     return (totalDays / closed.length).toFixed(1);
@@ -651,19 +720,19 @@ export default function PortfolioView({
       if (!p.phase) issues.push({ project: p.name || p.project_number, projectId: p.id, issue: "No phase assigned", severity: "medium", fix: "Set project phase" });
     });
     // RFIs without due dates
-    const rfisNoDue = allRFIs.filter((r) => !r.due_date && !["Answered", "Closed"].includes(r.status));
+    const rfisNoDue = allRFIs.filter((r) => !r.due_date && !statusIn(r.status, ["Answered", "Closed"]));
     if (rfisNoDue.length > 0) issues.push({ project: `${rfisNoDue.length} RFIs`, projectId: null, issue: "RFIs missing due dates", severity: "high", fix: "Add due dates" });
     // COs without values
-    const cosNoVal = allCOs.filter((c) => !c.co_amount && !["Rejected", "Void"].includes(c.status));
+    const cosNoVal = allCOs.filter((c) => !c.co_amount && !statusIn(c.status, ["Rejected", "Void"]));
     if (cosNoVal.length > 0) issues.push({ project: `${cosNoVal.length} COs`, projectId: null, issue: "COs missing dollar values", severity: "medium", fix: "Add CO amounts" });
     return issues;
   }, [enrichedMetrics, allRFIs, allCOs]);
 
   // ── Financial control layer — CO pipeline + margin at risk ────────────────
   const financials = useMemo(() => {
-    const approvedCOs = allCOs.filter((c) => c.status === "Approved");
-    const pendingCOs = allCOs.filter((c) => ["Submitted", "Under Review"].includes(c.status));
-    const rejectedCOs = allCOs.filter((c) => c.status === "Rejected");
+    const approvedCOs = allCOs.filter((c) => statusIn(c.status, ["Approved"]));
+    const pendingCOs = allCOs.filter((c) => statusIn(c.status, ["Submitted", "Under Review"]));
+    const rejectedCOs = allCOs.filter((c) => statusIn(c.status, ["Rejected"]));
     const approvedValue = approvedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const pendingValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
     const rejectedValue = rejectedCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
@@ -676,12 +745,11 @@ export default function PortfolioView({
 
   // ── Production readiness per project ──────────────────────────────────────
   const productionData = useMemo(() => {
-    const todayMs = new Date().setHours(0, 0, 0, 0);
     return enrichedMetrics.map((p) => {
       const pWPs = allWPs.filter((w) => w.project_id === p.id);
-      const inFab = pWPs.filter((w) => w.status === "In Progress");
-      const complete = pWPs.filter((w) => w.status === "Complete");
-      const onHold = pWPs.filter((w) => w.status === "On Hold");
+      const inFab = pWPs.filter((w) => statusIn(w.status, ["In Progress"]));
+      const complete = pWPs.filter((w) => statusIn(w.status, ["Complete"]));
+      const onHold = pWPs.filter((w) => statusIn(w.status, ["On Hold"]));
       const totalTon = pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
       const fabTon = complete.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
       const fabPct = totalTon > 0 ? Math.round((fabTon / totalTon) * 100) : 0;
@@ -845,6 +913,33 @@ export default function PortfolioView({
         })}
       </div>
 
+      {/* Stale RFI Bottleneck Alert — open RFIs >30 days old */}
+      {portfolioKPIs.staleRFIs30 && portfolioKPIs.staleRFIs30.length > 0 && (
+        <div
+          onClick={() => navigate(createPageUrl("RFIs"))}
+          style={{
+            background: "rgba(248,81,73,0.10)",
+            borderBottom: "2px solid var(--status-error)",
+            padding: "8px 24px", display: "flex", alignItems: "center", gap: 14, flexShrink: 0, cursor: "pointer",
+          }}
+          title="RFIs that have been open for more than 30 days — these are the highest schedule-risk bottlenecks"
+        >
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.12em", flexShrink: 0, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 3, padding: "2px 8px" }}>
+            BOTTLENECK · 30+ DAYS
+          </span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+            {portfolioKPIs.staleRFIs30.length} RFI{portfolioKPIs.staleRFIs30.length !== 1 ? "s" : ""} open more than 30 days — schedule-impact risk
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>
+            {portfolioKPIs.staleRFIs30.slice(0, 3).map(r => r.rfi_number || r.title?.slice(0, 20)).filter(Boolean).join(" · ")}
+            {portfolioKPIs.staleRFIs30.length > 3 ? ` · +${portfolioKPIs.staleRFIs30.length - 3} more` : ""}
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>
+            REVIEW →
+          </span>
+        </div>
+      )}
+
       {/* PCC Alert Strip — top priority only */}
       {pccData.priorities.length > 0 && (
         <div style={{
@@ -923,36 +1018,9 @@ export default function PortfolioView({
                     {opt.label}
                   </button>
                 ))}
-                <span style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 4px" }} />
-                {Object.entries(PHASE_DOT).map(([phase, color]) => (
+                {kpiFilter && (
                   <button
-                    key={phase}
-                    onClick={() => setPhaseFilter(phaseFilter === phase ? null : phase)}
-                    style={{
-                      background: phaseFilter === phase ? `${color}` : "var(--bg-surface)",
-                      color: phaseFilter === phase ? "#fff" : "var(--text-secondary)",
-                      border: phaseFilter === phase ? `1px solid ${color}` : "1px solid var(--border-default)",
-                      borderRadius: 999,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      padding: "5px 12px",
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      transition: "background 0.15s, color 0.15s",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: phaseFilter === phase ? "#fff" : color, flexShrink: 0 }} />
-                    {phase}
-                  </button>
-                ))}
-                {(kpiFilter || phaseFilter) && (
-                  <button
-                    onClick={() => { setKpiFilter(null); setPhaseFilter(null); }}
+                    onClick={() => setKpiFilter(null)}
                     style={{
                       background: "var(--danger-muted)",
                       color: "var(--status-error)",
@@ -995,7 +1063,7 @@ export default function PortfolioView({
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
-                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
+                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
                       style={{
@@ -1098,6 +1166,29 @@ export default function PortfolioView({
                           </span>
                         )}
                       </td>
+                      {/* Projected Margin = Contract Value − max(budget, actual + pending CO exposure) */}
+                      <td
+                        title={p.projectedMargin === null
+                          ? "No contract value entered — set original_contract_value to see projected margin"
+                          : `Contract: ${formatCurrency(p.contractValue)} · Est. cost at completion: ${formatCurrency(p.estimatedCostAtCompletion)} · Margin: ${(p.projectedMarginPct ?? 0).toFixed(1)}%`}
+                        style={{
+                          padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                          color: p.projectedMargin === null ? "var(--text-muted)" : p.projectedMargin < 0 ? "var(--status-error)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--status-warning)" : "var(--status-success)",
+                        }}
+                      >
+                        {p.projectedMargin === null ? "—" : (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
+                            <span style={{
+                              background: p.projectedMargin < 0 ? "var(--danger-muted)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-muted)" : "var(--success-muted)",
+                              border: `1px solid ${p.projectedMargin < 0 ? "var(--danger-border)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--warning-border)" : "var(--success-border)"}`,
+                              borderRadius: 3, padding: "1px 6px",
+                            }}>
+                              {(p.projectedMargin < 0 ? "−" : "+") + formatCurrency(Math.abs(p.projectedMargin)).replace(/\.\d+/, "")}
+                            </span>
+                            <span style={{ fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>{(p.projectedMarginPct ?? 0).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </td>
                       <td
                         title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
                         style={{
@@ -1168,7 +1259,7 @@ export default function PortfolioView({
                       </td>
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
-                      <td colSpan={13} style={{ padding: 0, border: "none" }}>
+                      <td colSpan={14} style={{ padding: 0, border: "none" }}>
                         <div style={{ width: "100%", height: 3, background: "var(--bg-sidebar)" }}>
                           <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
                         </div>
@@ -1179,7 +1270,7 @@ export default function PortfolioView({
                 })}
                 {displayMetrics.length === 0 && (
                   <tr>
-                    <td colSpan={13} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    <td colSpan={14} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
                         {kpiFilter ? (
                           <>
@@ -1258,9 +1349,13 @@ export default function PortfolioView({
                     <Tooltip content={<PhoenixTooltip />} />
                     <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={10} />
                     <Bar dataKey="Actual" name="Actual" barSize={10}>
-                      {budgetChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.overBudget ? "var(--status-error)" : "var(--accent)"} />
-                      ))}
+                      {budgetChartData.map((entry, index) => {
+                        let fill = "var(--accent)";
+                        if (entry.overBudget) fill = "var(--status-error)";
+                        else if (entry.accountingDelayed) fill = "var(--status-warning)"; // work happening but not invoiced
+                        else if (entry.notStarted) fill = "var(--text-muted)"; // not started
+                        return <Cell key={`cell-${index}`} fill={fill} />;
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
