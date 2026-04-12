@@ -5,6 +5,12 @@ import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+// FragmentsManager.init() requires a worker URL. Without it, IFC loads
+// silently produce zero geometry. We serve the worker from /public/thatopen/
+// (a copy of node_modules/@thatopen/fragments/dist/Worker/worker.mjs) to
+// avoid Vite's deep-import restrictions on the package's exports field.
+const FRAGMENTS_WORKER_URL = "/thatopen/fragments-worker.mjs";
+
 // ─── TYPE INFERENCE ───────────────────────────────────────────────
 function inferType(name) {
   const n = (name || "").toUpperCase();
@@ -90,9 +96,12 @@ export default function ModelViewer() {
         // 6. Position camera
         world.camera.controls.setLookAt(80, 60, 80, 0, 0, 0);
 
-        // 7. Initialize FragmentsManager (required before IFC loading)
+        // 7. Initialize FragmentsManager with the worker URL.
+        // FragmentsManager.init() REQUIRES a worker URL — without it, the
+        // FragmentsModel produced by IfcLoader.load() has no tiles streamed
+        // into its scene object, so the model appears empty.
         const fragmentsManager = components.get(OBC.FragmentsManager);
-        fragmentsManager.init();
+        fragmentsManager.init(FRAGMENTS_WORKER_URL);
 
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
@@ -294,27 +303,45 @@ export default function ModelViewer() {
       });
 
       setMembers(extracted);
-      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Fitting view..." }));
+      setLoadingModel((prev) => ({ ...prev, progress: 95, status: "Streaming tiles..." }));
 
-      // Fit camera to the loaded model
-      if (modelObject) {
+      // FragmentsModel streams tile geometry in via the worker AFTER load()
+      // resolves, so the bounding box is empty for the first few view updates.
+      // We listen for onViewUpdated and refit/re-extract until tiles arrive.
+      const tryFit = () => {
+        if (!modelObject) return false;
+        const box = new THREE.Box3().setFromObject(modelObject);
+        if (box.isEmpty()) return false;
         fitCamera(modelObject);
-      } else {
-        // Fallback: try the bounding box from FragmentsModel
-        try {
-          const box = model.box;
-          if (box && !box.isEmpty()) {
-            const center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
-            const cam = world.camera.three;
-            const fov = (cam.fov || 45) * (Math.PI / 180);
-            const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
-            const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
-            const pos = center.clone().add(offset);
-            world.camera.controls.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
+        // Re-extract members now that real meshes exist
+        const fresh = [];
+        let i = 0;
+        modelObject.traverse((child) => {
+          if (child.isMesh) {
+            const name = child.name || `Element ${i + 1}`;
+            const type = inferType(name);
+            fresh.push({ id: i, name, type, color: TYPE_COLORS[type], mesh: child });
+            i++;
           }
-        } catch { /* ignore */ }
+        });
+        if (fresh.length > 0) setMembers(fresh);
+        return true;
+      };
+
+      if (!tryFit()) {
+        let attempts = 0;
+        const off = model.onViewUpdated?.add?.(() => {
+          attempts++;
+          if (tryFit() || attempts > 30) {
+            try { off?.(); } catch { /* ignore */ }
+          }
+        });
+        // Safety net: poll for ~10s in case onViewUpdated isn't firing
+        let polled = 0;
+        const poll = setInterval(() => {
+          polled++;
+          if (tryFit() || polled > 50) clearInterval(poll);
+        }, 200);
       }
 
       setModelLoaded({ name: file.name, memberCount: extracted.length, format: "IFC" });
