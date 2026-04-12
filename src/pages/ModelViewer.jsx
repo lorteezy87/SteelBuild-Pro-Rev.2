@@ -83,13 +83,13 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Customize scene appearance
+        // 5. Customize scene appearance — white background for visibility
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0x1a1d24);
+        threeScene.background = new THREE.Color(0xffffff);
 
-        // Add grid
-        const grid = new THREE.GridHelper(200, 40, 0x444444, 0x333333);
-        grid.material.opacity = 0.4;
+        // Add grid (subtle gray on white)
+        const grid = new THREE.GridHelper(200, 40, 0xbbbbbb, 0xdddddd);
+        grid.material.opacity = 0.6;
         grid.material.transparent = true;
         threeScene.add(grid);
 
@@ -102,6 +102,18 @@ export default function ModelViewer() {
         // into its scene object, so the model appears empty.
         const fragmentsManager = components.get(OBC.FragmentsManager);
         fragmentsManager.init(FRAGMENTS_WORKER_URL);
+
+        // 7a. Drive tile streaming on every frame. FragmentsModel only
+        // streams tile geometry into its Object3D when fragments.core.update()
+        // is called. Hooking the world's per-frame onAfterUpdate event keeps
+        // the streamed LOD in sync with the camera view.
+        world.onAfterUpdate.add(() => {
+          try {
+            if (fragmentsManager.initialized) {
+              fragmentsManager.core.update();
+            }
+          } catch { /* swallow per-frame errors */ }
+        });
 
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
@@ -273,11 +285,15 @@ export default function ModelViewer() {
       setLoadingModel((prev) => ({ ...prev, progress: 30, status: "Parsing IFC structure..." }));
 
       const ifcLoader = components.get(OBC.IfcLoader);
+      const fragmentsManager = components.get(OBC.FragmentsManager);
 
       // Load using @thatopen/components IfcLoader
       const model = await ifcLoader.load(uint8Array, true, file.name.replace(/\.ifc$/i, ""));
 
-      setLoadingModel((prev) => ({ ...prev, progress: 75, status: "Processing geometry..." }));
+      setLoadingModel((prev) => ({ ...prev, progress: 70, status: "Wiring camera..." }));
+
+      // Wire the model to the camera so tile streaming knows what to load.
+      try { model.useCamera(world.camera.three); } catch (e) { console.warn("useCamera failed", e); }
 
       // The model.object is the THREE.Object3D for the scene
       const modelObject = model.object;
@@ -286,6 +302,11 @@ export default function ModelViewer() {
       }
 
       loadedModelRef.current = modelObject || model;
+
+      // Force the FragmentsModels system to flush a full update so geometry
+      // tiles are streamed in immediately rather than waiting for view changes.
+      setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
+      try { await fragmentsManager.core.update(true); } catch (e) { console.warn("core.update failed", e); }
 
       // Extract mesh members for the sidebar list
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Extracting elements..." }));
@@ -336,10 +357,12 @@ export default function ModelViewer() {
             try { off?.(); } catch { /* ignore */ }
           }
         });
-        // Safety net: poll for ~10s in case onViewUpdated isn't firing
+        // Safety net: poll for ~10s, forcing tile updates each tick in case
+        // the per-frame onAfterUpdate hook hasn't streamed everything yet.
         let polled = 0;
-        const poll = setInterval(() => {
+        const poll = setInterval(async () => {
           polled++;
+          try { await fragmentsManager.core.update(true); } catch { /* ignore */ }
           if (tryFit() || polled > 50) clearInterval(poll);
         }, 200);
       }
