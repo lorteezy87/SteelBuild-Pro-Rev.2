@@ -18,7 +18,7 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
     // Generate monthly data points
     const start = new Date(projectStartDate);
     const end = new Date(projectEndDate);
-    const monthCount = Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30));
+    const monthCount = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 30)));
 
     const chartData = [];
     for (let i = 0; i <= monthCount; i++) {

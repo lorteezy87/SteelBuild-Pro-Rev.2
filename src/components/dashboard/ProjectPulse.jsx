@@ -228,8 +228,10 @@ function computeTimeline(project, metrics) {
   let timelineElapsed = null;
   if (start && end && end > start) {
     const totalDuration = end.getTime() - start.getTime();
-    const elapsed = today.getTime() - start.getTime();
-    timelineElapsed = Math.max(0, Math.min(100, Math.round((elapsed / totalDuration) * 100)));
+    if (totalDuration > 0) {
+      const elapsed = today.getTime() - start.getTime();
+      timelineElapsed = Math.max(0, Math.min(100, Math.round((elapsed / totalDuration) * 100)));
+    }
   }
 
   // Progress based on tonnage completion

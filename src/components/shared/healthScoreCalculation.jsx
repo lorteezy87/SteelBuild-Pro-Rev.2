@@ -33,7 +33,13 @@ export async function calculateProjectHealthScore(projectId, base44) {
 
     // ── Factor 2: Budget health (25 points) ──
     const totalBudget = costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-    const totalSpend = costCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0) + (Number(c.committed_cost) || 0), 0);
+    // committed_cost already includes paid (actual) amounts — use whichever
+    // is larger to avoid double-counting while still capturing unpaid commitments.
+    const totalSpend = costCodes.reduce((s, c) => {
+      const committed = Number(c.committed_cost) || 0;
+      const actual = Number(c.actual_cost) || 0;
+      return s + Math.max(committed, actual);
+    }, 0);
     let budgetScore = 100;
     if (totalBudget > 0) {
       const variance = (totalSpend - totalBudget) / totalBudget;

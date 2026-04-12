@@ -14,3 +14,13 @@ export const queryClientInstance = new QueryClient({
 		},
 	},
 });
+
+// ── Global project sorting ────────────────────────────────────────────────────
+// Every query with key ["projects"] gets its results sorted alphabetically
+// by project name, so dropdowns, cards, and tables are consistent app-wide.
+const sortProjectsByName = (data) =>
+	[...(data || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+queryClientInstance.setQueryDefaults(["projects"], {
+	select: sortProjectsByName,
+});

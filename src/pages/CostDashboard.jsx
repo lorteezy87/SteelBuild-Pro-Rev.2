@@ -453,8 +453,10 @@ export default function CostDashboard() {
               const actual = Number(c.actual_cost) || 0;
               const committed = Number(c.committed_cost) || 0;
               const forecast = Number(c.forecast_to_complete) || 0;
-              const variance = actual - budget;
-              const pctUsed = budget > 0 ? (actual / budget) * 100 : 0;
+              // Exposure = committed (includes paid); variance positive = over budget
+              const exposure = Math.max(committed, actual);
+              const variance = exposure - budget;
+              const pctUsed = budget > 0 ? (exposure / budget) * 100 : 0;
               const overContingency = contingency > 0 && variance > contingency;
               return (
                 <PTR key={c.id} warn={pctUsed > 100}>

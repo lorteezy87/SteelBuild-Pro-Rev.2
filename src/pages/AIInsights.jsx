@@ -75,10 +75,11 @@ export default function PortfolioOverview() {
 
     const totalBudget = allCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
     const totalActual = allCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+    // Exposure = max(committed, actual) — committed includes paid amounts
     const overBudgetCodes = allCodes.filter(c => {
       const b = Number(c.budget_amount) || 0;
-      const a = Number(c.actual_cost) || 0;
-      return b > 0 && a > b;
+      const exposure = Math.max(Number(c.committed_cost) || 0, Number(c.actual_cost) || 0);
+      return b > 0 && exposure > b;
     });
 
     const safetyIncidents = allLogs.reduce((s, l) => s + (Number(l.safety_incidents) || 0), 0);

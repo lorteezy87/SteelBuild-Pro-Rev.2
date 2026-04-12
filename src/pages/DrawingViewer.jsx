@@ -106,8 +106,18 @@ export default function DrawingViewer() {
   const [navHistory, setNavHistory] = useState([]); // stack of sheet IDs for back nav
   const [scanningLinks, setScanningLinks] = useState(false);
 
+  // ── Compare Mode State ──────────────────────────────────────────────────────
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareDrawingId, setCompareDrawingId] = useState(null);
+  const [comparePdfDoc, setComparePdfDoc] = useState(null);
+  const [compareRendering, setCompareRendering] = useState(false);
+  const [compareResolvedUrl, setCompareResolvedUrl] = useState(null);
+  const [comparePdfError, setComparePdfError] = useState(null);
+
   const canvasRef = useRef(null);
+  const compareCanvasRef = useRef(null);
   const renderTaskRef = useRef(null);
+  const compareRenderTaskRef = useRef(null);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   const { data: drawings = [] } = useQuery({
@@ -133,6 +143,59 @@ export default function DrawingViewer() {
     });
     return map;
   }, [drawings]);
+
+  // ── Compare revision candidates: other revisions of the same sheet ─────────
+  const compareRevisionCandidates = useMemo(() => {
+    if (!activeDrawing) return [];
+    const sheetNum = activeDrawing.sheet_number?.toUpperCase().trim();
+    if (!sheetNum) return [];
+
+    // Collect sibling revisions from drawings list (different id, same sheet_number)
+    const siblings = drawings.filter(d =>
+      d.id !== activeDrawing.id &&
+      d.sheet_number?.toUpperCase().trim() === sheetNum
+    );
+
+    // Also collect entries from the active drawing's revision_history JSON
+    const historyEntries = [];
+    if (activeDrawing.revision_history) {
+      try {
+        const history = typeof activeDrawing.revision_history === "string"
+          ? JSON.parse(activeDrawing.revision_history)
+          : activeDrawing.revision_history;
+        if (Array.isArray(history)) {
+          history.forEach((entry, idx) => {
+            if (entry.file_url) {
+              historyEntries.push({
+                id: `history-${idx}`,
+                sheet_number: sheetNum,
+                title: activeDrawing.title,
+                revision_number: entry.revision_number ?? entry.rev ?? idx,
+                file_url: entry.file_url,
+                stage: entry.stage || "—",
+                _isHistory: true,
+              });
+            }
+          });
+        }
+      } catch (e) {
+        // ignore malformed revision_history
+      }
+    }
+
+    // Combine and sort by revision number descending
+    return [...siblings, ...historyEntries].sort((a, b) =>
+      (Number(b.revision_number) || 0) - (Number(a.revision_number) || 0)
+    );
+  }, [activeDrawing, drawings]);
+
+  const compareDrawing = useMemo(() => {
+    if (!compareDrawingId) return null;
+    // Check real drawings first, then revision candidates
+    return drawings.find(d => d.id === compareDrawingId) ||
+      compareRevisionCandidates.find(d => d.id === compareDrawingId) ||
+      null;
+  }, [compareDrawingId, drawings, compareRevisionCandidates]);
 
   const filtered = search.trim()
     ? drawings.filter(d =>
@@ -171,6 +234,10 @@ export default function DrawingViewer() {
     setCurrentPage(1);
     setTotalPages(0);
     setCalloutLinks([]);
+    setCompareDrawingId(null);
+    setComparePdfDoc(prev => { if (prev) prev.destroy().catch(() => {}); return null; });
+    setComparePdfError(null);
+    setCompareResolvedUrl(null);
 
     const rawUrl = activeDrawing?.file_url;
     if (!rawUrl) return;
@@ -218,6 +285,61 @@ export default function DrawingViewer() {
       }
     };
   }, [pdfDoc]);
+
+  // ── Resolve compare drawing file URL ────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setCompareResolvedUrl(null);
+    setComparePdfDoc(prev => { if (prev) prev.destroy().catch(() => {}); return null; });
+    setComparePdfError(null);
+
+    const rawUrl = compareDrawing?.file_url;
+    if (!rawUrl || !compareMode) return;
+
+    resolveFileUrl(rawUrl)
+      .then(url => { if (!cancelled) setCompareResolvedUrl(url); })
+      .catch(err => { if (!cancelled) setComparePdfError(`Failed to resolve compare URL: ${err.message}`); });
+
+    return () => { cancelled = true; };
+  }, [compareDrawing?.file_url, compareMode]);
+
+  // ── Load comparison PDF from resolved URL ──────────────────────────────────
+  useEffect(() => {
+    if (!compareResolvedUrl || !compareMode) return;
+
+    let cancelled = false;
+    let loadingTask = null;
+
+    loadingTask = pdfjsLib.getDocument(compareResolvedUrl);
+    loadingTask.promise
+      .then(doc => {
+        if (cancelled) { doc.destroy(); return; }
+        setComparePdfDoc(doc);
+        setComparePdfError(null);
+      })
+      .catch(err => {
+        if (!cancelled) setComparePdfError(`Compare PDF load failed: ${err.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+      if (loadingTask) loadingTask.destroy?.();
+    };
+  }, [compareResolvedUrl, compareMode]);
+
+  // ── Clean up comparePdfDoc on unmount or when compare mode turns off ───────
+  useEffect(() => {
+    if (!compareMode && comparePdfDoc) {
+      comparePdfDoc.destroy().catch(() => {});
+      setComparePdfDoc(null);
+    }
+  }, [compareMode]);
+
+  useEffect(() => {
+    return () => {
+      if (comparePdfDoc) comparePdfDoc.destroy().catch(() => {});
+    };
+  }, [comparePdfDoc]);
 
   // ── Render page when doc, page, or zoom changes ────────────────────────────
   const renderPage = useCallback(async () => {
@@ -268,6 +390,39 @@ export default function DrawingViewer() {
   }, [pdfDoc, currentPage, zoom, linkMode, sheetNumberSet, activeDrawing?.sheet_number]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
+
+  // ── Render comparison canvas ───────────────────────────────────────────────
+  const renderComparePage = useCallback(async () => {
+    if (!comparePdfDoc || !compareCanvasRef.current || !compareMode) return;
+
+    if (compareRenderTaskRef.current) {
+      compareRenderTaskRef.current.cancel();
+      compareRenderTaskRef.current = null;
+    }
+
+    setCompareRendering(true);
+    try {
+      const pageNum = Math.min(currentPage, comparePdfDoc.numPages);
+      const page = await comparePdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: zoom });
+      const canvas = compareCanvasRef.current;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+
+      compareRenderTaskRef.current = page.render({ canvasContext: ctx, viewport });
+      await compareRenderTaskRef.current.promise;
+    } catch (err) {
+      if (err?.name !== "RenderingCancelledException") {
+        console.error("Compare render error:", err);
+      }
+    } finally {
+      setCompareRendering(false);
+      compareRenderTaskRef.current = null;
+    }
+  }, [comparePdfDoc, currentPage, zoom, compareMode]);
+
+  useEffect(() => { renderComparePage(); }, [renderComparePage]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -550,6 +705,32 @@ export default function DrawingViewer() {
             )}
           </button>
 
+          {/* Compare Mode Toggle */}
+          <button
+            onClick={() => {
+              if (compareMode) {
+                setCompareMode(false);
+                setCompareDrawingId(null);
+                if (comparePdfDoc) { comparePdfDoc.destroy().catch(() => {}); setComparePdfDoc(null); }
+              } else {
+                setCompareMode(true);
+              }
+            }}
+            disabled={!activeDrawing}
+            title="Side-by-side revision comparison"
+            style={{
+              ...toolBtn,
+              ...mono,
+              fontSize: 9,
+              color: compareMode ? "#A855F7" : "var(--text-muted)",
+              background: compareMode ? "rgba(168,85,247,0.12)" : "none",
+              border: compareMode ? "1px solid rgba(168,85,247,0.4)" : "1px solid var(--border-default)",
+              opacity: activeDrawing ? 1 : 0.3,
+            }}
+          >
+            ⇔ COMPARE
+          </button>
+
           <button onClick={handleDownload} disabled={!activeDrawing?.file_url}
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
@@ -557,7 +738,7 @@ export default function DrawingViewer() {
         </div>
 
         {/* Canvas area */}
-        <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: 24, background: "#1a1a2e" }}>
+        <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: compareMode ? 12 : 24, background: "#1a1a2e" }}>
           {!activeDrawing ? (
             <div style={{ margin: "auto", textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
@@ -581,7 +762,249 @@ export default function DrawingViewer() {
               <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
               <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
             </div>
+          ) : compareMode ? (
+            /* ── Split Comparison View ─────────────────────────────────────────── */
+            <div style={{ display: "flex", gap: 0, width: "100%", height: "100%", minHeight: 0 }}>
+
+              {/* LEFT PANEL: Current Revision */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+                {/* Left panel header */}
+                <div style={{
+                  padding: "8px 12px",
+                  background: "rgba(16,185,129,0.08)",
+                  borderBottom: "2px solid rgba(16,185,129,0.3)",
+                  borderRadius: "4px 4px 0 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexShrink: 0,
+                }}>
+                  <span style={{
+                    ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.15em",
+                    color: "#10B981", textTransform: "uppercase",
+                  }}>
+                    CURRENT
+                  </span>
+                  <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                    {activeDrawing.sheet_number}
+                  </span>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                    R{activeDrawing.revision_number ?? "0"}
+                  </span>
+                  <span style={{
+                    fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {activeDrawing.title}
+                  </span>
+                </div>
+
+                {/* Left canvas area */}
+                <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: 12 }}>
+                  <div style={{ position: "relative" }}>
+                    {rendering && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10, ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>
+                        RENDERING…
+                      </div>
+                    )}
+                    <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)", maxWidth: "100%" }} />
+
+                    {/* Callout Link Overlay (left panel) */}
+                    {linkMode && calloutLinks.length > 0 && !rendering && (
+                      <div style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: canvasRef.current?.width || 0,
+                        height: canvasRef.current?.height || 0,
+                        pointerEvents: "none",
+                      }}>
+                        {calloutLinks.map((link, i) => {
+                          const isHovered = hoveredLink === i;
+                          const target = sheetToDrawing.get(link.sheetNumber);
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => navigateToSheet(link.sheetNumber)}
+                              onMouseEnter={() => setHoveredLink(i)}
+                              onMouseLeave={() => setHoveredLink(null)}
+                              style={{
+                                position: "absolute",
+                                left: link.x - 4,
+                                top: link.y - 2,
+                                width: link.w,
+                                height: link.h,
+                                border: isHovered
+                                  ? "2px solid #3B82F6"
+                                  : "1.5px solid rgba(59,130,246,0.45)",
+                                borderRadius: 3,
+                                background: isHovered
+                                  ? "rgba(59,130,246,0.18)"
+                                  : "rgba(59,130,246,0.06)",
+                                cursor: "pointer",
+                                pointerEvents: "auto",
+                                transition: "all 0.12s ease",
+                                boxShadow: isHovered ? "0 0 8px rgba(59,130,246,0.4)" : "none",
+                              }}
+                              title={`Go to ${link.sheetNumber}${target ? ` — ${target.title}` : ""}`}
+                            >
+                              {isHovered && (
+                                <div style={{
+                                  position: "absolute",
+                                  bottom: "calc(100% + 6px)",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  background: "rgba(15,17,23,0.95)",
+                                  border: "1px solid rgba(59,130,246,0.4)",
+                                  borderRadius: 6,
+                                  padding: "6px 10px",
+                                  whiteSpace: "nowrap",
+                                  zIndex: 20,
+                                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                                }}>
+                                  <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "#3B82F6", marginBottom: 2 }}>
+                                    → {link.sheetNumber}
+                                  </div>
+                                  {target && (
+                                    <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                                      {target.title}
+                                      {target.stage && ` · ${target.stage === "Released" ? "IFC" : target.stage}`}
+                                    </div>
+                                  )}
+                                  <div style={{ ...mono, fontSize: 8, color: "rgba(59,130,246,0.6)", marginTop: 2 }}>
+                                    Click to navigate
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {scanningLinks && (
+                      <div style={{
+                        position: "absolute", top: 8, right: 8,
+                        ...mono, fontSize: 9, color: "#3B82F6",
+                        background: "rgba(15,17,23,0.85)", padding: "4px 8px",
+                        borderRadius: 4, border: "1px solid rgba(59,130,246,0.3)",
+                        animation: "gentlePulse 1s ease infinite",
+                      }}>
+                        Scanning for links…
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* CENTER DIVIDER */}
+              <div style={{
+                width: 3,
+                background: "linear-gradient(180deg, rgba(168,85,247,0.4) 0%, rgba(168,85,247,0.15) 50%, rgba(168,85,247,0.4) 100%)",
+                flexShrink: 0,
+                position: "relative",
+              }}>
+                <div style={{
+                  position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: "#1a1a2e", border: "2px solid rgba(168,85,247,0.5)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  ...mono, fontSize: 8, color: "#A855F7",
+                }}>
+                  ⇔
+                </div>
+              </div>
+
+              {/* RIGHT PANEL: Comparison Revision */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+                {/* Right panel header with revision selector */}
+                <div style={{
+                  padding: "8px 12px",
+                  background: "rgba(168,85,247,0.08)",
+                  borderBottom: "2px solid rgba(168,85,247,0.3)",
+                  borderRadius: "4px 4px 0 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexShrink: 0,
+                  flexWrap: "wrap",
+                }}>
+                  <span style={{
+                    ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.15em",
+                    color: "#A855F7", textTransform: "uppercase",
+                  }}>
+                    COMPARE
+                  </span>
+
+                  {/* Revision selector dropdown */}
+                  {compareRevisionCandidates.length > 0 ? (
+                    <select
+                      value={compareDrawingId || ""}
+                      onChange={e => setCompareDrawingId(e.target.value || null)}
+                      style={{
+                        ...mono,
+                        fontSize: 10,
+                        background: "rgba(168,85,247,0.1)",
+                        border: "1px solid rgba(168,85,247,0.35)",
+                        borderRadius: 3,
+                        color: "var(--text-primary)",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                        maxWidth: 260,
+                      }}
+                    >
+                      <option value="" style={{ background: "#1a1a2e" }}>Select revision…</option>
+                      {compareRevisionCandidates.map(d => (
+                        <option key={d.id} value={d.id} style={{ background: "#1a1a2e" }}>
+                          R{d.revision_number ?? "?"} — {d.sheet_number}{d.is_superseded ? " (superseded)" : ""}{d._isHistory ? " (history)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", fontStyle: "italic" }}>
+                      No other revisions available
+                    </span>
+                  )}
+
+                  {compareDrawing && (
+                    <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                      R{compareDrawing.revision_number ?? "0"} · {compareDrawing.stage || "—"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Right canvas area */}
+                <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: 12 }}>
+                  {!compareDrawingId ? (
+                    <div style={{ margin: "auto", textAlign: "center" }}>
+                      <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.15 }}>⇔</div>
+                      <p style={{ ...mono, fontSize: 11, color: "rgba(168,85,247,0.5)", letterSpacing: "0.15em" }}>
+                        SELECT A REVISION
+                      </p>
+                      <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>
+                        Choose an older revision above to compare side by side
+                      </p>
+                    </div>
+                  ) : comparePdfError ? (
+                    <div style={{ margin: "auto", textAlign: "center" }}>
+                      <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>⚠</div>
+                      <p style={{ ...mono, fontSize: 11, color: "var(--status-error)", letterSpacing: "0.1em" }}>{comparePdfError}</p>
+                    </div>
+                  ) : (
+                    <div style={{ position: "relative" }}>
+                      {compareRendering && (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10, ...mono, fontSize: 10, color: "#A855F7", letterSpacing: "0.2em" }}>
+                          RENDERING…
+                        </div>
+                      )}
+                      <canvas ref={compareCanvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)", maxWidth: "100%" }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           ) : (
+            /* ── Single Canvas View (original) ────────────────────────────────── */
             <div style={{ position: "relative" }}>
               {rendering && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10, ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>
@@ -702,8 +1125,13 @@ export default function DrawingViewer() {
               <span style={{ color: "var(--text-muted)" }}>{key}</span> {desc}
             </span>
           ))}
+          {compareMode && (
+            <span style={{ ...mono, fontSize: 9, color: "rgba(168,85,247,0.7)", marginLeft: linkMode && calloutLinks.length > 0 ? 0 : "auto" }}>
+              COMPARE MODE
+            </span>
+          )}
           {linkMode && calloutLinks.length > 0 && (
-            <span style={{ ...mono, fontSize: 9, color: "rgba(59,130,246,0.7)", marginLeft: "auto" }}>
+            <span style={{ ...mono, fontSize: 9, color: "rgba(59,130,246,0.7)", marginLeft: compareMode ? 0 : "auto" }}>
               {calloutLinks.length} link{calloutLinks.length !== 1 ? "s" : ""} detected
             </span>
           )}

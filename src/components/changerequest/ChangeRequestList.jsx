@@ -41,7 +41,7 @@ export default function ChangeRequestList({ requests = [] }) {
             </div>
 
             <div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {new Date(request.request_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {request.request_date ? new Date(request.request_date).toLocaleDateString() : "—"}</div>
               {request.estimated_cost_impact !== 0 && (
                 <div style={{ fontSize: "10px", fontWeight: 600, color: request.estimated_cost_impact > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
                   {request.estimated_cost_impact > 0 ? "+" : ""} ${Math.abs(request.estimated_cost_impact || 0).toLocaleString()}
