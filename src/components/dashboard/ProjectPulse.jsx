@@ -88,22 +88,30 @@ function computeMetrics({ rfis, workPackages, drawings, deliveries, changeOrders
   const blockedPackages = safeWPs.filter(
     (w) => statusIn(w.status, ["Blocked", "At Risk"])
   );
+  // Phase rank for cumulative tonnage (matches SteelExecutionStatusCard)
+  const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+  const phaseRank = (w) => PHASE_RANK[w.phase] ?? -1;
+  const wpTons = (w) => Number(w.tonnage) || 0;
+
+  const totalTonnage = safeWPs.reduce((sum, w) => sum + wpTons(w), 0);
+
+  // Cumulative fabrication = tonnage at Fabrication phase or later, actively worked
   const fabricationTonnage = safeWPs.reduce((sum, w) => {
-    if (statusIs(w.phase, "Fabrication")) return sum + (Number(w.tonnage) || 0);
+    if (phaseRank(w) >= 1 && statusIn(w.status, ["In Progress", "Complete"])) {
+      return sum + wpTons(w);
+    }
     return sum;
   }, 0);
-  const totalTonnage = safeWPs.reduce(
-    (sum, w) => sum + (Number(w.tonnage) || 0),
-    0
-  );
 
-  // Completed / shipped work packages (by tonnage)
+  // Completed = tonnage with status Complete OR phase past Fabrication (Delivery/Erection)
   const completedTonnage = safeWPs
-    .filter((w) => statusIs(w.status, "Complete") || statusIs(w.phase, "Delivery") || statusIs(w.phase, "Erection"))
-    .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
+    .filter((w) => statusIs(w.status, "Complete") || phaseRank(w) >= 2)
+    .reduce((sum, w) => sum + wpTons(w), 0);
+
+  // Shipped = cumulative tonnage at Delivery phase or later
   const shippedTonnage = safeWPs
-    .filter((w) => statusIs(w.phase, "Delivery") && statusIs(w.status, "Complete"))
-    .reduce((sum, w) => sum + (Number(w.tonnage) || 0), 0);
+    .filter((w) => phaseRank(w) >= 2)
+    .reduce((sum, w) => sum + wpTons(w), 0);
   const completedWPs = safeWPs.filter(
     (w) => statusIn(w.status, ["Complete", "Shipped"])
   ).length;

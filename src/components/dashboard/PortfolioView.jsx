@@ -605,10 +605,12 @@ export default function PortfolioView({
   }, [allRFIs, allActionItems, allDeliveries, allCOs, projectMap, enrichedMetrics]);
 
   const totalTons = useMemo(() => allWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0), [allWPs]);
-  const fabricatedTonnage = useMemo(
-    () => allWPs.filter((w) => w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-    [allWPs]
-  );
+  const fabricatedTonnage = useMemo(() => {
+    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+    return allWPs
+      .filter((w) => (PHASE_RANK[w.phase] ?? -1) >= 1 && ["In Progress", "Complete"].includes(w.status))
+      .reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  }, [allWPs]);
   const deliveriesStats = useMemo(() => {
     const today = new Date();
     const scheduled = allDeliveries.filter((d) => d.status === "Scheduled").length;
@@ -677,13 +679,17 @@ export default function PortfolioView({
   // ── Production readiness per project ──────────────────────────────────────
   const productionData = useMemo(() => {
     const todayMs = new Date().setHours(0, 0, 0, 0);
+    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
     return enrichedMetrics.map((p) => {
       const pWPs = allWPs.filter((w) => w.project_id === p.id);
       const inFab = pWPs.filter((w) => w.status === "In Progress");
       const complete = pWPs.filter((w) => w.status === "Complete");
       const onHold = pWPs.filter((w) => w.status === "On Hold");
       const totalTon = pWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-      const fabTon = complete.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+      // Cumulative fab tonnage: WPs at Fabrication or later AND actively worked
+      const fabTon = pWPs
+        .filter((w) => (PHASE_RANK[w.phase] ?? -1) >= 1 && ["In Progress", "Complete"].includes(w.status))
+        .reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
       const fabPct = totalTon > 0 ? Math.round((fabTon / totalTon) * 100) : 0;
       // Constraints: WPs on hold, missing drawings, late deliveries
       const constraints = [];
