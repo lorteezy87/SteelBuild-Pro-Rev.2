@@ -28,8 +28,8 @@ export default function FabShipmentProgressCard({ wps = [] }) {
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const releasedTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const fabTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase) && (w.status === "In Progress" || w.status === "Complete")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const shippedTons = wps.filter(w => w.phase === "Delivery" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const erectedTons = wps.filter(w => w.phase === "Erection" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const shippedTons = wps.filter(w => ["Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const erectedTons = wps.filter(w => w.phase === "Erection").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
 
   const wpTotal = wps.length;
   const wpComplete = wps.filter(w => w.status === "Complete").length;
