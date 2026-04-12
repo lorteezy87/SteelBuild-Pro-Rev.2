@@ -29,6 +29,49 @@ const TYPE_COLORS = {
   BRACE: "#E67E22", STAIR: "#F1C40F", WALL: "#95A5A6", MEMBER: "#7F8C8D",
 };
 
+// ─── MATERIAL NORMALIZATION ──────────────────────────────────────
+// IFC files frequently bake transparency into glass / cladding materials.
+// On a white background that produces a "ghost" model. We force every
+// material opaque (unless it's intentionally fully transparent — opacity 0),
+// re-enable depth writes, and double-side so back-faces aren't dropped.
+// We also run this on every tile streaming update because @thatopen/fragments
+// builds new BIMMesh tiles asynchronously after load() resolves.
+function normalizeMaterials(root) {
+  if (!root) return;
+  const seen = new WeakSet();
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const m of mats) {
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      // If a material has been marked transparent but actually has near-full
+      // opacity, treat it as solid. If it really is meant to be glass
+      // (opacity < 0.4), keep some translucency but bump it up so it's
+      // visible on the white background.
+      if (m.transparent || (typeof m.opacity === "number" && m.opacity < 1)) {
+        const op = typeof m.opacity === "number" ? m.opacity : 1;
+        if (op >= 0.4) {
+          m.transparent = false;
+          m.opacity = 1;
+          m.depthWrite = true;
+        } else {
+          m.transparent = true;
+          m.opacity = Math.max(op, 0.55); // bump faint glass so it reads
+          m.depthWrite = false;
+        }
+      }
+      m.side = THREE.DoubleSide;
+      // Some IFC materials come in with vertexColors disabled but tinted
+      // toward white — force a sensible default if color is near-white.
+      if (m.color && m.color.r > 0.97 && m.color.g > 0.97 && m.color.b > 0.97) {
+        m.color.setHex(0xc8c8cc);
+      }
+      m.needsUpdate = true;
+    }
+  });
+}
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
 export default function ModelViewer() {
   const containerRef = useRef(null);
@@ -87,14 +130,42 @@ export default function ModelViewer() {
         const threeScene = world.scene.three;
         threeScene.background = new THREE.Color(0xffffff);
 
+        // Stronger, balanced lighting so models read clearly on white.
+        // SimpleScene.setup() already adds a default ambient + directional,
+        // but it's tuned for dark backgrounds and washes out on white.
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
+        threeScene.add(hemiLight);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(80, 120, 60);
+        threeScene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        fillLight.position.set(-80, 60, -60);
+        threeScene.add(fillLight);
+        const rimLight = new THREE.DirectionalLight(0xffffff, 0.25);
+        rimLight.position.set(0, -40, -100);
+        threeScene.add(rimLight);
+
         // Add grid (subtle gray on white)
         const grid = new THREE.GridHelper(200, 40, 0xbbbbbb, 0xdddddd);
         grid.material.opacity = 0.6;
         grid.material.transparent = true;
         threeScene.add(grid);
 
-        // 6. Position camera
-        world.camera.controls.setLookAt(80, 60, 80, 0, 0, 0);
+        // 6. Tune camera controls for tighter, more predictable feel.
+        // camera-controls defaults are smooth-as-jello (smoothTime 0.25);
+        // we cut that to feel like a CAD viewport. Rotate/dolly speeds
+        // dialed slightly down for precision; dollyToCursor on.
+        const ctrl = world.camera.controls;
+        ctrl.smoothTime = 0.08;
+        ctrl.draggingSmoothTime = 0.04;
+        ctrl.azimuthRotateSpeed = 0.7;
+        ctrl.polarRotateSpeed = 0.7;
+        ctrl.dollySpeed = 0.6;
+        ctrl.truckSpeed = 1.6;
+        ctrl.dollyToCursor = true;
+        ctrl.minDistance = 0.5;
+        ctrl.maxDistance = 5000;
+        ctrl.setLookAt(80, 60, 80, 0, 0, 0);
 
         // 7. Initialize FragmentsManager with the worker URL.
         // FragmentsManager.init() REQUIRES a worker URL — without it, the
@@ -168,15 +239,28 @@ export default function ModelViewer() {
     const fov = (cam.fov || 45) * (Math.PI / 180);
     const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
 
+    // Adapt control bounds + step sizes to model scale so zoom feels right.
+    // A 100m steel building should not have the same dolly speed as a 2m bracket.
+    const ctrl = world.camera.controls;
+    ctrl.minDistance = Math.max(0.05, diagonal * 0.005);
+    ctrl.maxDistance = Math.max(1000, diagonal * 25);
+    // truckSpeed scales with model so panning isn't molasses on big models
+    ctrl.truckSpeed = Math.max(0.8, Math.min(8, diagonal / 30));
+
     // Isometric offset
     const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
     const pos = center.clone().add(offset);
 
-    world.camera.controls.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
+    ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
   }, []);
 
   // ─── CLEAR MODEL ────────────────────────────────────────────────
-  const clearCurrentModel = useCallback(() => {
+  // Async because FragmentsModels.disposeModel() is async — without awaiting
+  // it, the worker still holds a reference to the previous model when the
+  // next IFC starts streaming, causing duplicate tile updates and material
+  // bleed-through (the "first model loads fine, second one is transparent"
+  // bug we were chasing).
+  const clearCurrentModel = useCallback(async () => {
     const world = worldRef.current;
     const components = componentsRef.current;
     if (!world || !components) return;
@@ -184,25 +268,40 @@ export default function ModelViewer() {
     // Remove GLTF model if loaded
     if (gltfSceneRef.current && world.scene?.three) {
       world.scene.three.remove(gltfSceneRef.current);
+      // Free GLTF GPU resources
+      gltfSceneRef.current.traverse((child) => {
+        if (child.isMesh) {
+          child.geometry?.dispose?.();
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => m?.dispose?.());
+        }
+      });
       gltfSceneRef.current = null;
     }
 
-    // Dispose IFC models via FragmentsManager
-    if (loadedModelRef.current) {
-      try {
-        const fragmentsManager = components.get(OBC.FragmentsManager);
-        // Dispose all loaded models
-        const models = fragmentsManager.list;
-        for (const [key, model] of models) {
+    // Dispose every model the FragmentsManager knows about. We can't iterate
+    // and mutate the map at the same time, so snapshot ids first.
+    try {
+      const fragmentsManager = components.get(OBC.FragmentsManager);
+      if (fragmentsManager?.initialized) {
+        const ids = [];
+        for (const [id, model] of fragmentsManager.list) {
+          ids.push(id);
           try {
             if (model.object && world?.scene?.three) {
               world.scene.three.remove(model.object);
             }
-          } catch { /* ignore */ }
+          } catch { /* ignore remove errors */ }
         }
-      } catch { /* ignore */ }
-      loadedModelRef.current = null;
-    }
+        for (const id of ids) {
+          try { await fragmentsManager.core.disposeModel(id); } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+
+    loadedModelRef.current = null;
+    setMembers([]);
+    setSelectedMember(null);
   }, []);
 
   // ─── LOAD GLTF/GLB ────────────────────────────────────────────
@@ -214,7 +313,7 @@ export default function ModelViewer() {
     setUploadError(null);
 
     try {
-      clearCurrentModel();
+      await clearCurrentModel();
 
       const url = URL.createObjectURL(file);
       const loader = new GLTFLoader();
@@ -238,6 +337,9 @@ export default function ModelViewer() {
       const model = gltf.scene;
       world.scene.three.add(model);
       gltfSceneRef.current = model;
+      // Normalize GLTF materials too — same wash-out story applies if the
+      // exporter set every material as transparent for sketchy reasons.
+      normalizeMaterials(model);
 
       // Extract members
       const extracted = [];
@@ -276,7 +378,7 @@ export default function ModelViewer() {
     setUploadError(null);
 
     try {
-      clearCurrentModel();
+      await clearCurrentModel();
 
       setLoadingModel((prev) => ({ ...prev, progress: 15, status: "Reading file..." }));
       const arrayBuffer = await file.arrayBuffer();
@@ -303,10 +405,21 @@ export default function ModelViewer() {
 
       loadedModelRef.current = modelObject || model;
 
+      // Re-normalize materials every time the model streams in new tiles.
+      // FragmentsModel builds BIMMesh tiles asynchronously after load(), so
+      // a single normalize pass at load time misses anything that arrives
+      // later. onViewUpdated fires once per refreshView cycle.
+      try {
+        model.onViewUpdated?.add?.(() => {
+          if (modelObject) normalizeMaterials(modelObject);
+        });
+      } catch (e) { console.warn("onViewUpdated hook failed", e); }
+
       // Force the FragmentsModels system to flush a full update so geometry
       // tiles are streamed in immediately rather than waiting for view changes.
       setLoadingModel((prev) => ({ ...prev, progress: 80, status: "Streaming geometry..." }));
       try { await fragmentsManager.core.update(true); } catch (e) { console.warn("core.update failed", e); }
+      if (modelObject) normalizeMaterials(modelObject);
 
       // Extract mesh members for the sidebar list
       setLoadingModel((prev) => ({ ...prev, progress: 85, status: "Extracting elements..." }));
@@ -333,6 +446,7 @@ export default function ModelViewer() {
         if (!modelObject) return false;
         const box = new THREE.Box3().setFromObject(modelObject);
         if (box.isEmpty()) return false;
+        normalizeMaterials(modelObject);
         fitCamera(modelObject);
         // Re-extract members now that real meshes exist
         const fresh = [];

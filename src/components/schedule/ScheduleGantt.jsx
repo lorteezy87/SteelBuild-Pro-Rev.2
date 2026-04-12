@@ -242,12 +242,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
 
   const WEEK_PX = zoom === "month" ? 80 : 240;
 
-  const today = new Date();
-
-  const isOverdue = (task) => {
-    if (!task.end_date || task.status === "Complete") return false;
-    return new Date(task.end_date + "T00:00:00Z") < today;
-  };
+  // Normalize "today" to UTC midnight so all date math (overdue checks, today
+  // line, scroll-to-today) compares apples to apples with task dates that are
+  // stored as YYYY-MM-DD and parsed at T00:00:00Z. Without this, a 4pm local
+  // load drifts every comparison by hours and can flip overdue/upcoming.
+  const today = useMemo(() => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }, []);
 
   const startInlineEdit = (task, e) => {
     e.stopPropagation();
@@ -257,7 +259,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       start_date: task.start_date || "",
       end_date: task.end_date || "",
       status: task.status || "Not Started",
-      percent_complete: task.percent_complete ?? 0,
+      // Seed the editor with the same value the UI shows — Complete tasks
+      // round to 100 even if percent_complete is stale, otherwise the user
+      // sees a confusing "100% Complete" row that snaps back to 0 on edit.
+      percent_complete: displayPct(task),
     });
   };
 
@@ -307,11 +312,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       map[ph].push(t);
     });
 
-    // Sort tasks within each group by start_date ascending (earliest first)
+    // Sort tasks within each group by start_date ascending (earliest first).
+    // We sort by raw start_date here because effectiveDates depends on the
+    // grouped output, so we don't have it yet — and a stable raw-date sort is
+    // close enough for ordering rows within a phase. Parse via UTC to avoid
+    // timezone drift on the comparator.
     const sortByStart = (a, b) => {
       if (!a.start_date) return 1;
       if (!b.start_date) return -1;
-      return new Date(a.start_date) - new Date(b.start_date);
+      return new Date(a.start_date + "T00:00:00Z") - new Date(b.start_date + "T00:00:00Z");
     };
 
     // Order by PHASES array, uncategorized last
@@ -361,7 +370,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
         return out[taskId];
       }
 
-      const deps = parseDeps(task.dependencies);
+      // Skip self-references — a task that lists itself as a predecessor
+      // (data-entry bug) would otherwise short-circuit cycle detection on
+      // the first hop and leave its bar undefined.
+      const deps = parseDeps(task.dependencies).filter(depId => depId && depId !== taskId);
       let earliestStart = task.start_date;
       let shifted = false;
       for (const depId of deps) {
@@ -388,6 +400,16 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
 
   const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
   const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
+
+  // Overdue uses the *effective* finish so a task whose predecessor slipped
+  // is judged against where the bar actually sits in the gantt — not the
+  // stale stored finish. Tasks marked Complete are never overdue.
+  const isOverdue = (task) => {
+    if (!task || task.status === "Complete") return false;
+    const e = effEnd(task);
+    if (!e) return false;
+    return new Date(e + "T00:00:00Z") < today;
+  };
 
   const dateRange = useMemo(() => {
     if (allTasks.length === 0) {
@@ -476,8 +498,11 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
         ? tasks.reduce((sum, t) => sum + displayPct(t), 0) / tasks.length
         : 0;
 
-      const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
-      const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
+      // Phase summary bar spans from the earliest *effective* start to the
+      // latest *effective* end so a delayed predecessor visibly stretches
+      // its parent phase, matching what the task bars actually show.
+      const starts = tasks.map(t => effStart(t)).filter(Boolean).sort();
+      const ends   = tasks.map(t => effEnd(t)).filter(Boolean).sort();
       list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
       if (!collapsed[phase.key]) {
         tasks.forEach(t => list.push({ type: "task", task: t, phase }));
@@ -636,6 +661,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
               return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
             }).join(", ");
             const overdue = isOverdue(task);
+            // Show *effective* start/finish in the left columns so the date
+            // text matches the bar position. If a task slipped because of a
+            // dependency cascade we mark it with "*" so users know it's
+            // shifted vs the stored value — clicking the row reveals the raw
+            // dates in the detail panel.
+            const dispStart = effStart(task);
+            const dispEnd   = effEnd(task);
+            const isShifted = !!effectiveDates[task.id]?.shifted;
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
             const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
@@ -676,13 +709,23 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 {isEditing ? (
                   <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.start_date)}</span>
+                  <span
+                    title={isShifted ? `Stored: ${fmtDate(task.start_date)}\nShifted by predecessors` : undefined}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                  >
+                    {fmtDate(dispStart)}{isShifted ? "*" : ""}
+                  </span>
                 )}
                 {/* Finish */}
                 {isEditing ? (
                   <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(task.end_date)}</span>
+                  <span
+                    title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                  >
+                    {fmtDate(dispEnd)}{isShifted ? "*" : ""}
+                  </span>
                 )}
                 {/* Predecessors */}
                 <span title={depLabels || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{depLabels || "—"}</span>
