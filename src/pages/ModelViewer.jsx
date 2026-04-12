@@ -153,19 +153,24 @@ export default function ModelViewer() {
         grid.material.transparent = true;
         threeScene.add(grid);
 
-        // 6. Tune camera controls for tighter, more predictable feel.
-        // camera-controls defaults are smooth-as-jello (smoothTime 0.25);
-        // we cut that to feel like a CAD viewport. Rotate/dolly speeds
-        // dialed slightly down for precision; dollyToCursor on.
+        // 6. Tune camera controls for a tight, direct CAD-viewport feel.
+        // camera-controls defaults (smoothTime 0.25, speeds 1.0) feel mushy
+        // on a building model. Key settings:
+        //   - smoothTime near zero so the camera tracks input with no lag
+        //   - rotate speeds at 1.0 (default) — anything lower feels sticky
+        //   - dolly/truck speeds scaled up so zoom/pan cover real distances
+        //   - dollyToCursor + infinityDolly so wheel zoom targets what the
+        //     mouse points at and never runs out of travel
         const ctrl = world.camera.controls;
-        ctrl.smoothTime = 0.08;
-        ctrl.draggingSmoothTime = 0.04;
-        ctrl.azimuthRotateSpeed = 0.7;
-        ctrl.polarRotateSpeed = 0.7;
-        ctrl.dollySpeed = 0.6;
-        ctrl.truckSpeed = 1.6;
+        ctrl.smoothTime = 0.05;
+        ctrl.draggingSmoothTime = 0.02;
+        ctrl.azimuthRotateSpeed = 1.1;
+        ctrl.polarRotateSpeed = 1.1;
+        ctrl.dollySpeed = 1.2;
+        ctrl.truckSpeed = 2.5;
         ctrl.dollyToCursor = true;
-        ctrl.minDistance = 0.5;
+        try { ctrl.infinityDolly = true; } catch { /* ignore if unsupported */ }
+        ctrl.minDistance = 0.1;
         ctrl.maxDistance = 5000;
         ctrl.setLookAt(80, 60, 80, 0, 0, 0);
 
@@ -274,13 +279,15 @@ export default function ModelViewer() {
     const fov = (cam.fov || 45) * (Math.PI / 180);
     const dist = (diagonal / 2) / Math.tan(fov / 2) * 2.8;
 
-    // Adapt control bounds + step sizes to model scale so zoom feels right.
-    // A 100m steel building should not have the same dolly speed as a 2m bracket.
+    // Adapt control bounds + step sizes to model scale so zoom/pan feel
+    // right regardless of whether the model is a 2m bracket or a 200m
+    // building. The previous clamps (min 0.8, cap 8) made big models still
+    // feel molasses — we raise both so pan/dolly cover real distance.
     const ctrl = world.camera.controls;
-    ctrl.minDistance = Math.max(0.05, diagonal * 0.005);
+    ctrl.minDistance = Math.max(0.05, diagonal * 0.002);
     ctrl.maxDistance = Math.max(1000, diagonal * 25);
-    // truckSpeed scales with model so panning isn't molasses on big models
-    ctrl.truckSpeed = Math.max(0.8, Math.min(8, diagonal / 30));
+    ctrl.truckSpeed  = Math.max(1.5, Math.min(20, diagonal / 12));
+    ctrl.dollySpeed  = Math.max(1.0, Math.min(3.0, diagonal / 60));
 
     // Isometric offset
     const offset = new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(dist);
