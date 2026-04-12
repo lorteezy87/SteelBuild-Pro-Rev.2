@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { daysOverdue, isOverdue } from "../shared/formatters";
+import { daysOverdue, isOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 
 const SEV_CONFIG = {
   critical: { color: "var(--status-error)",   bg: "var(--danger-muted)",  border: "var(--danger-border)",  label: "CRITICAL" },
@@ -27,7 +27,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   });
 
   // On-hold WPs
-  wps.filter(w => w.status === "On Hold").forEach(w => {
+  wps.filter(w => statusIn(w.status, ["On Hold"])).forEach(w => {
     items.push({
       type: "WP", id: w.wp_number,
       title: w.name,
@@ -38,7 +38,11 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   });
 
   // Late deliveries
-  deliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").forEach(d => {
+  deliveries.filter(d => {
+    if (!d.scheduled_date || statusIn(d.status, ["Delivered"])) return false;
+    const sched = parseUTCDate(d.scheduled_date);
+    return sched && sched < today;
+  }).forEach(d => {
     items.push({
       type: "DELIVERY", id: d.delivery_id,
       title: d.delivery_title || d.vendor || "Delivery",
@@ -49,7 +53,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   });
 
   // Pending COs
-  cos.filter(c => ["Submitted","Under Review"].includes(c.status)).forEach(c => {
+  cos.filter(c => statusIn(c.status, ["Submitted","Under Review"])).forEach(c => {
     items.push({
       type: "CO", id: c.co_number,
       title: c.title,
@@ -59,8 +63,11 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
     });
   });
 
-  // Drawings stuck at OFA/BFA (waiting approval) for too long
-  drawings.filter(d => ["OFA","BFA"].includes(d.stage) && d.submitted_date && daysOverdue(d.due_date || d.submitted_date) > 14).forEach(d => {
+  // Drawings stuck at OFA/BFA (waiting approval) for too long. We require an
+  // explicit due_date — falling back to submitted_date silently relabels
+  // "this drawing has been out for review for 15 days" as "approval hold",
+  // which it isn't necessarily.
+  drawings.filter(d => statusIn(d.stage, ["OFA","BFA"]) && d.due_date && daysOverdue(d.due_date) > 14).forEach(d => {
     items.push({
       type: "DWG", id: d.sheet_number,
       title: d.title,
@@ -71,7 +78,12 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   });
 
   // Open action items overdue — surface assignee so you can see who to nudge
-  actionItems.filter(a => a.status !== "Complete" && a.status !== "Cancelled" && a.due_date && new Date(a.due_date) < today).forEach(a => {
+  actionItems.filter(a => {
+    if (statusIn(a.status, ["Complete", "Cancelled", "Closed", "Done"])) return false;
+    if (!a.due_date) return false;
+    const due = parseUTCDate(a.due_date);
+    return due && due < today;
+  }).forEach(a => {
     const days = daysOverdue(a.due_date);
     const assignee = a.assigned_to || a.owner || "Unassigned";
     items.push({
