@@ -113,6 +113,7 @@ export default function BudgetOverviewChart({ summary }) {
   const budget = Number(summary?.budget) || 0;
   const actual = Number(summary?.actual) || 0;
   const forecast = Number(summary?.forecast) || 0;
+  // Positive variance = under budget (favorable), negative = over budget
   const variance = budget - actual;
   const burnPct = budget > 0 ? Math.round((actual / budget) * 100) : 0;
 

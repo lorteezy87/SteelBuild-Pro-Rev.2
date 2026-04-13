@@ -418,11 +418,17 @@ export default function DrawingViewer() {
               >
                 SWITCH TO IFRAME VIEW
               </button>
-              {resolvedUrl && (
-                <a href={resolvedUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block" }}>
+              {activeDrawing.file_url && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = await resolveFileUrl(activeDrawing.file_url);
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    } catch { /* silently fail */ }
+                  }}
+                  style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                   OPEN IN NEW TAB →
-                </a>
+                </button>
               )}
             </div>
           ) : (

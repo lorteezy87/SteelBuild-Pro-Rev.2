@@ -26,11 +26,6 @@ export default function ProjectBudgetCard({ project, summary }) {
   const safeExposure = Number(summary.exposure ?? summary.committed ?? summary.actual) || 0;
   const safeVariance = Number(summary.totalRemaining ?? summary.variance ?? (safeBudget - safeExposure)) || 0;
 
-  const budgetHealth =
-    safeBudget > 0
-      ? ((safeVariance / safeBudget) * 100).toFixed(1)
-      : 0;
-
   const isOverBudget = safeVariance < 0;
   const percentUsed = safeBudget > 0 ? ((safeExposure / safeBudget) * 100).toFixed(0) : 0;
 

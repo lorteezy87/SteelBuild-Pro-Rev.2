@@ -21,6 +21,39 @@ function normalizePhase(task) {
 
 const PHASE_BY_KEY = Object.fromEntries(PHASES.map(p => [p.key, p]));
 
+// ── Tree-sorting: parent/child hierarchy within each phase ───────────
+function buildTreeOrder(tasks) {
+  // Build parent→children map
+  const childMap = {};
+  const roots = [];
+  tasks.forEach(t => {
+    const pid = t.parent_task_id;
+    if (pid && tasks.some(p => p.id === pid)) {
+      if (!childMap[pid]) childMap[pid] = [];
+      childMap[pid].push(t);
+    } else {
+      roots.push(t);
+    }
+  });
+  // Sort children by start_date within each parent
+  const sortByStart = (a, b) => {
+    if (!a.start_date) return 1;
+    if (!b.start_date) return -1;
+    return new Date(a.start_date) - new Date(b.start_date);
+  };
+  Object.values(childMap).forEach(arr => arr.sort(sortByStart));
+  roots.sort(sortByStart);
+
+  // DFS flatten
+  const result = [];
+  const walk = (node, depth) => {
+    result.push({ ...node, _depth: depth, _hasChildren: !!(childMap[node.id]?.length) });
+    (childMap[node.id] || []).forEach(child => walk(child, depth + 1));
+  };
+  roots.forEach(r => walk(r, 0));
+  return result;
+}
+
 // ── Dependency parsing ───────────────────────────────────────────────────
 function parseDeps(raw) {
   if (!raw) return [];
@@ -235,6 +268,8 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   const [saving, setSaving] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
+  const [collapsedTasks, setCollapsedTasks] = useState({});
+  const toggleTask = (taskId) => setCollapsedTasks(c => ({ ...c, [taskId]: !c[taskId] }));
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
   const rightBody = useRef(null);
@@ -312,24 +347,13 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       map[ph].push(t);
     });
 
-    // Sort tasks within each group by start_date ascending (earliest first).
-    // We sort by raw start_date here because effectiveDates depends on the
-    // grouped output, so we don't have it yet — and a stable raw-date sort is
-    // close enough for ordering rows within a phase. Parse via UTC to avoid
-    // timezone drift on the comparator.
-    const sortByStart = (a, b) => {
-      if (!a.start_date) return 1;
-      if (!b.start_date) return -1;
-      return new Date(a.start_date + "T00:00:00Z") - new Date(b.start_date + "T00:00:00Z");
-    };
-
-    // Order by PHASES array, uncategorized last
+    // Order by PHASES array, uncategorized last — tree-sort within each phase
     const ordered = [];
     PHASES.forEach(ph => {
-      if (map[ph.key]) ordered.push({ phase: ph, tasks: map[ph.key].sort(sortByStart) });
+      if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key]) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: map["Uncategorized"].sort(sortByStart) });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: buildTreeOrder(map["Uncategorized"]) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
@@ -491,6 +515,19 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
   // Build flat row list for synchronized scroll + row position tracking
   const rows = useMemo(() => {
     const list = [];
+
+    // Check if task should be visible (no collapsed ancestor in task tree)
+    const isTaskVisible = (task, allPhaseTasks) => {
+      let pid = task.parent_task_id;
+      while (pid) {
+        if (collapsedTasks[pid]) return false;
+        const parent = allPhaseTasks.find(t => t.id === pid);
+        if (!parent) break;
+        pid = parent.parent_task_id;
+      }
+      return true;
+    };
+
     grouped.forEach(({ phase, tasks }) => {
       // Phase % uses displayPct so Complete tasks always count as 100% even
       // when their percent_complete field is stale.
@@ -505,11 +542,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       const ends   = tasks.map(t => effEnd(t)).filter(Boolean).sort();
       list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
       if (!collapsed[phase.key]) {
-        tasks.forEach(t => list.push({ type: "task", task: t, phase }));
+        tasks.forEach(t => {
+          if (isTaskVisible(t, tasks)) {
+            list.push({ type: "task", task: t, phase });
+          }
+        });
       }
     });
     return list;
-  }, [grouped, collapsed]);
+  }, [grouped, collapsed, collapsedTasks]);
 
   // Build task ID → row index + Y position map for dependency arrows
   const taskPositions = useMemo(() => {
@@ -671,17 +712,17 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
             const isShifted = !!effectiveDates[task.id]?.shifted;
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
-            const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
+            const parentRowBg = task._hasChildren ? `rgba(200,155,32,0.04)` : "transparent";
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? "rgba(200,155,32,0.07)" : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
               >
                 {/* WBS */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || "—"}</span>
-                {/* Task name — with hierarchy indentation */}
+                {/* Task name — with hierarchy indentation and expand/collapse */}
                 {isEditing ? (
                   <input
                     autoFocus
@@ -695,10 +736,18 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   <span
                     title={sanitizeTaskName(task)}
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
-                    style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: overdue ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: indent }}
+                    style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: (task._depth || 0) * 16, overflow: "hidden" }}
                   >
+                    {task._hasChildren && (
+                      <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 9, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>
+                        {collapsedTasks[task.id] ? "▶" : "▾"}
+                      </button>
+                    )}
+                    {!task._hasChildren && task._depth > 0 && <span style={{ width: 14, flexShrink: 0 }} />}
                     {isMilestoneTask(task) && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
-                    {sanitizeTaskName(task)}
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: task._hasChildren ? 700 : 500, color: overdue ? "#EF4444" : task._hasChildren ? "var(--accent-light, var(--text-primary))" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {sanitizeTaskName(task)}
+                    </span>
                   </span>
                 )}
                 {/* Duration */}
@@ -831,7 +880,8 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                 const { task } = row;
                 const overdue = isOverdue(task);
                 const hovered = hoveredRowId === task.id;
-                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "var(--hover-bg)" : "transparent";
+                const parentBg = task._hasChildren ? "rgba(200,155,32,0.04)" : "transparent";
+                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
                 const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
                   return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg }} />;
@@ -846,7 +896,11 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
                     onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
-                    <TaskBar task={task} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} />
+                    {task._hasChildren ? (
+                      <SummaryBar phase={row.phase} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} pctComplete={task.percent_complete || 0} />
+                    ) : (
+                      <TaskBar task={task} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} />
+                    )}
                     {/* Submittal review bars linked to this WP */}
                     {showSubmittals && submittals
                       .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
