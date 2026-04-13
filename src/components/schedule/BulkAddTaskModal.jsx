@@ -9,14 +9,16 @@ const today = () => new Date().toISOString().split("T")[0];
 
 function emptyRow(id) {
   return {
-    _id:        id,
-    task_name:  "",
-    task_type:  "Task",
-    phase:      "Fabrication",
-    start_date: today(),
-    end_date:   today(),
-    status:     "Not Started",
-    priority:   "Normal",
+    _id:            id,
+    task_name:      "",
+    task_type:      "Task",
+    phase:          "Fabrication",
+    start_date:     today(),
+    end_date:       today(),
+    status:         "Not Started",
+    priority:       "Normal",
+    resource_names: "",
+    parent_task_id: null,
   };
 }
 
@@ -51,7 +53,7 @@ const SELECT_STYLE = {
   outline: "none",
 };
 
-export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving }) {
+export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName, isSaving, existingTasks }) {
   const [rows, setRows] = useState(() => [emptyRow(1), emptyRow(2), emptyRow(3)]);
   const [nextId, setNextId] = useState(4);
   const [errors, setErrors] = useState({});
@@ -102,7 +104,11 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
     const filled = rows.filter((r) => r.task_name.trim());
     if (!filled.length) return;
-    const payload = filled.map(({ _id, ...rest }) => rest);
+    const payload = filled.map(({ _id, ...rest }) => ({
+      ...rest,
+      resource_names: rest.resource_names || null,
+      parent_task_id: rest.parent_task_id || null,
+    }));
     onSubmit(payload);
   };
 
@@ -115,14 +121,14 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
   if (!open) return null;
 
-  const COL_WIDTHS = "32px 1fr 110px 120px 100px 100px 90px 80px 44px";
+  const COL_WIDTHS = "32px 1fr 100px 110px 90px 90px 80px 70px 100px 120px 44px";
 
   return (
     <>
       <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 998 }} />
       <div style={{
         position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-        width: "min(1060px, 96vw)", maxHeight: "88vh",
+        width: "min(1280px, 96vw)", maxHeight: "88vh",
         background: "var(--bg-surface)", border: "1px solid rgba(200,155,32,0.30)",
         borderRadius: 14, boxShadow: "0 24px 64px rgba(0,0,0,0.80)", zIndex: 999,
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -151,7 +157,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
           flexShrink: 0, alignItems: "center",
         }}>
           <div />
-          {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", ""].map((h) => (
+          {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", "RESOURCES", "PARENT TASK", ""].map((h) => (
             <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 6px" }}>
               {h}
             </div>
@@ -236,6 +242,30 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
                   <select value={row.priority} onChange={(e) => updateRow(row._id, "priority", e.target.value)} style={SELECT_STYLE}>
                     {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                {/* Resources */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <input
+                    value={row.resource_names}
+                    onChange={(e) => updateRow(row._id, "resource_names", e.target.value)}
+                    placeholder="e.g. Fab A, John"
+                    style={{ ...INPUT_STYLE, fontSize: 10 }}
+                  />
+                </div>
+
+                {/* Parent Task */}
+                <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
+                  <select
+                    value={row.parent_task_id || ""}
+                    onChange={(e) => updateRow(row._id, "parent_task_id", e.target.value || null)}
+                    style={SELECT_STYLE}
+                  >
+                    <option value="">— None —</option>
+                    {(existingTasks || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ""}{t.task_name}</option>
+                    ))}
                   </select>
                 </div>
 
