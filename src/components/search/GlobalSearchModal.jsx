@@ -303,6 +303,7 @@ export default function GlobalSearchModal({ open, onClose }) {
       {/* Backdrop */}
       <div
         onClick={onClose}
+        aria-hidden="true"
         style={{
           position: "fixed",
           inset: 0,
@@ -316,6 +317,9 @@ export default function GlobalSearchModal({ open, onClose }) {
 
       {/* Command Palette */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Global search"
         style={{
           position: "fixed",
           top: "15%",

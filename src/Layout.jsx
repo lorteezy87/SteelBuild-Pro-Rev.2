@@ -38,6 +38,8 @@ import { AuthContext } from "@/lib/AuthContext";
 
 // Utilities
 import { batchProcess } from "@/utils/batchProcess";
+import useDocumentTitle from "@/hooks/useDocumentTitle";
+import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
 
 // Config
 import { PRIMARY_TABS, TAB_DEFAULT_PAGE } from "@/config/moduleRegistry";
@@ -164,6 +166,17 @@ export default function Layout({ children, currentPageName }) {
     try { /* Base44 internal page tracking */ } catch { /* suppress */ }
   }, [currentPageName]);
 
+  // Keep document.title in sync with the current route so browser tabs,
+  // history entries, and screen readers get an informative label. When the
+  // page is project-scoped we also include the active project name.
+  const activeProjectName = ctxActiveProject?.name || ctxActiveProject?.project_name || null;
+  const pageLabel = routeLabel(currentPageName);
+  const titleSuffix =
+    activeProjectName && PROJECT_SCOPED_PAGES.has(currentPageName)
+      ? `${pageLabel} — ${activeProjectName}`
+      : pageLabel;
+  useDocumentTitle(titleSuffix);
+
   // ── Navigation handlers ──────────────────────────────────────────
   const activeTab = PRIMARY_TABS.find((t) => t.pages.includes(currentPageName));
 
@@ -199,7 +212,7 @@ export default function Layout({ children, currentPageName }) {
         }} />
 
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
-        <nav className="nav-glass" style={{
+        <nav aria-label="Primary" className="nav-glass" style={{
           height: 36,
           background: "var(--nav-bg)", borderBottom: "1px solid var(--border-default)",
           padding: "0 12px",
@@ -378,7 +391,7 @@ export default function Layout({ children, currentPageName }) {
           )}
 
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-            <main style={{
+            <main id="main-content" aria-label="Main content" tabIndex={-1} style={{
               flex: 1, overflowY: "auto", padding: 0,
               background: "var(--bg-base)", color: "var(--text-primary)",
               display: "flex", flexDirection: "column",

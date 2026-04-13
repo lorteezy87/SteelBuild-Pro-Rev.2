@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
 
 // ── Shared button style constants ────────────────────────────────────
@@ -78,13 +78,27 @@ export const labelStyle = {
 };
 
 // ── Phoenix Modal wrapper ────────────────────────────────────────────
-// Renders a properly styled overlay + panel without Shadcn Dialog
+// Renders a properly styled overlay + panel without Shadcn Dialog. Adds
+// `role="dialog"` + `aria-modal` for screen readers, an `aria-labelledby`
+// link to the header, and Escape-to-close so it behaves like a real dialog.
 export default function PhoenixModal({ open, onClose, title, children, footer, maxWidth = 680 }) {
+  const titleId = useId();
+
+  // Close on Escape — only while the modal is open. We attach to window so
+  // it works regardless of where focus currently lives inside the dialog.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <div
       onClick={onClose}
+      aria-hidden="true"
       style={{
         position: "fixed", inset: 0,
         background: "rgba(0,0,0,0.65)",
@@ -98,6 +112,9 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
     >
       <div
         onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--accent-border)",
@@ -118,13 +135,17 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
            borderBottom: "1px solid var(--divider)",
            flexShrink: 0,
          }}>
-           <span style={{
-             fontFamily: "var(--font-display)",
-             fontSize: 18, fontWeight: 700,
-             color: "var(--text-primary)", letterSpacing: "0.04em",
-           }}>{title}</span>
+           <span
+             id={titleId}
+             style={{
+               fontFamily: "var(--font-display)",
+               fontSize: 18, fontWeight: 700,
+               color: "var(--text-primary)", letterSpacing: "0.04em",
+             }}
+           >{title}</span>
            <button
              onClick={onClose}
+             aria-label="Close dialog"
              style={{
                background: "transparent", border: "none",
                color: "var(--text-muted)", cursor: "pointer",
