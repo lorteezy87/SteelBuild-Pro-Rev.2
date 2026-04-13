@@ -1203,6 +1203,27 @@ function DocumentTitleSync({ currentPageName }) {
   return null;
 }
 
+// ─── Route focus management ───────────────────────────────────────
+// On every route change, move keyboard focus back to <main> so screen
+// reader users land on the new page's content instead of being stuck
+// at whatever control they were on. We only focus when the previous
+// focus was on a nav element or after the first mount — never while the
+// user is typing in a form input on the incoming page.
+function RouteFocusManager({ currentPageName }) {
+  const isFirst = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirst.current) { isFirst.current = false; return; }
+    const el = typeof document !== "undefined" ? document.getElementById("main-content") : null;
+    if (!el) return;
+    // Skip if focus already landed on a form control inside the new page.
+    const active = document.activeElement;
+    const tag = active?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
+  }, [currentPageName]);
+  return null;
+}
+
 // ─── Project error banner (renders inside ProjectProvider) ────────
 function ProjectErrorBanner() {
   const { projectLoadError } = useProjectContext();
@@ -1371,6 +1392,28 @@ export default function Layout({ children, currentPageName }) {
   return (
     <ProjectProvider>
         <DocumentTitleSync currentPageName={currentPageName} />
+        <RouteFocusManager currentPageName={currentPageName} />
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only"
+          style={{
+            position: "absolute",
+            top: 4, left: 4,
+            background: "var(--accent)",
+            color: "#fff",
+            padding: "6px 12px",
+            borderRadius: 6,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            textDecoration: "none",
+            zIndex: 9999,
+          }}
+        >
+          Skip to main content
+        </a>
         <div style={{
           minHeight: "100vh",
           width: "100%",

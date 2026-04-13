@@ -4,6 +4,7 @@ import { BrowserRouter as Router } from "react-router-dom";
 import { queryClientInstance } from "@/lib/query-client";
 import { AuthProvider } from "@/lib/AuthContext";
 import { ThemeProvider } from "@/components/shared/ThemeContext";
+import { FeatureFlagProvider } from "@/lib/featureFlags";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -25,16 +26,18 @@ import { Toaster } from "@/components/ui/toaster";
 export default function AppProviders({ children }) {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <QueryClientProvider client={queryClientInstance}>
-            <Router>
-              {children}
-            </Router>
-            <Toaster />
-          </QueryClientProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <FeatureFlagProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClientInstance}>
+              <Router>
+                {children}
+              </Router>
+              <Toaster />
+            </QueryClientProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </FeatureFlagProvider>
     </ErrorBoundary>
   );
 }
