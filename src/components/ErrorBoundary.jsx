@@ -1,4 +1,5 @@
 import React from 'react';
+import { logError } from '@/lib/telemetry';
 
 /**
  * Top-level error boundary. Catches unhandled React render errors and shows
@@ -15,8 +16,9 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    // Log to console so it shows in Supabase Edge Function logs / Sentry if wired up
-    console.error('[ErrorBoundary] Uncaught render error:', error, info.componentStack);
+    // Forward to telemetry so the error survives a manual reload via
+    // window.__sbpErrorLog and any wired log forwarder picks it up.
+    logError(error, { boundary: 'top-level', componentStack: info?.componentStack });
   }
 
   render() {

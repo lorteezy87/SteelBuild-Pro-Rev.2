@@ -1,13 +1,9 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/lib/AuthContext';
 import LocalLoginForm from '@/components/LocalLoginForm';
-import { ThemeProvider } from '@/components/shared/ThemeContext';
-import ErrorBoundary from '@/components/ErrorBoundary';
+import AppProviders from '@/components/AppProviders';
 import PageErrorBoundary from '@/components/shared/ErrorBoundary';
 import Landing from './pages/Landing';
 import RFIHub from './pages/RFIHub';
@@ -95,18 +91,9 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <QueryClientProvider client={queryClientInstance}>
-            <Router>
-              <AuthenticatedApp />
-            </Router>
-            <Toaster />
-          </QueryClientProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <AppProviders>
+      <AuthenticatedApp />
+    </AppProviders>
   )
 }
 
