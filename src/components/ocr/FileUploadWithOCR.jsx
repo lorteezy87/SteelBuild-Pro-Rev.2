@@ -88,13 +88,13 @@ function OCRResultCard({ result, fileType }) {
             ['Truck #', result.truckNumber],
           ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
             <div key={label}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{String(value)}</div>
             </div>
           ))}
           {result.materialDescription && (
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>MATERIAL</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>MATERIAL</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)' }}>{result.materialDescription}</div>
             </div>
           )}
@@ -105,7 +105,7 @@ function OCRResultCard({ result, fileType }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {result.suggestedCaption && (
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 3 }}>SUGGESTED CAPTION</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 3 }}>SUGGESTED CAPTION</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)' }}>{result.suggestedCaption}</div>
             </div>
           )}
@@ -119,14 +119,14 @@ function OCRResultCard({ result, fileType }) {
               ['Progress', result.estimatedPercentComplete != null ? `${result.estimatedPercentComplete}%` : null],
             ].filter(([, v]) => v != null && v !== '').map(([label, value]) => (
               <div key={label}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.12em' }}>{label.toUpperCase()}</div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{String(value)}</div>
               </div>
             ))}
           </div>
           {result.issuesVisible?.length > 0 && (
             <div style={{ background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.2)', borderRadius: 6, padding: '6px 10px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--status-error)', marginBottom: 4 }}>ISSUES DETECTED</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-error)', marginBottom: 4 }}>ISSUES DETECTED</div>
               {result.issuesVisible.map((issue, i) => (
                 <div key={i} style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--status-warning)' }}>• {issue}</div>
               ))}

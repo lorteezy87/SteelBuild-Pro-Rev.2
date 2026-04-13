@@ -1007,7 +1007,7 @@ export default function ResourceScheduling() {
                     { label: "Remaining", value: Math.max(0, capacity.shopRemaining).toLocaleString() + "h", color: capacity.shopRemaining < 0 ? "var(--status-error)" : "var(--status-success)" },
                   ].map(({ label, value, color }, i) => (
                     <div key={label} style={{ padding: "14px 16px", borderRight: i < 2 ? "1px solid var(--divider)" : "none" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                     </div>
                   ))}
@@ -1032,7 +1032,7 @@ export default function ResourceScheduling() {
                     { label: "Remaining", value: Math.max(0, capacity.fieldRemaining).toLocaleString() + "h", color: capacity.fieldRemaining < 0 ? "var(--status-error)" : "var(--status-success)" },
                   ].map(({ label, value, color }, i) => (
                     <div key={label} style={{ padding: "14px 16px", borderRight: i < 2 ? "1px solid var(--divider)" : "none" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                     </div>
                   ))}
@@ -1059,7 +1059,7 @@ export default function ResourceScheduling() {
                   { label: "Erection", count: capacity.byPhase.Erection, color: "var(--phase-erection)" },
                 ].map(({ label, count, color }, i) => (
                   <div key={label} style={{ padding: "16px 20px", borderRight: i < 3 ? "1px solid var(--divider)" : "none", borderTop: `3px solid ${color}` }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 4 }}>{count}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>active packages</div>
                   </div>
@@ -1222,7 +1222,7 @@ export default function ResourceScheduling() {
                 animation: isOverAlloc ? "rsOverAllocPulse 2s ease-in-out infinite" : undefined,
                 transition: "border-color 0.2s",
               }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color }}>{value}</div>
               </div>
             );
@@ -1264,7 +1264,7 @@ export default function ResourceScheduling() {
             return (
               <div key={type}>
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)",
+                  fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
                     letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
                   borderBottom: "1px solid var(--hover-bg)", marginBottom: 6,
                 }}>
@@ -1298,7 +1298,7 @@ export default function ResourceScheduling() {
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 4 }}>
                           {resSkills.map((sk, si) => (
                             <span key={si} style={{
-                              fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
+                              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
                               color: "var(--text-secondary)", background: "var(--hover-bg)",
                               border: "1px solid var(--bg-surface-high)", borderRadius: 8,
                               padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
@@ -1312,11 +1312,11 @@ export default function ResourceScheduling() {
                       <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
                         <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
                         {assignedWPs.length} WPs {"\u00B7"} {assignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
                       </div>
                       {isOverAllocated && (
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
                         {"\u26A0"} OVER-ALLOC ({resBudgetHrs}h / {resBudgetFromEntity}h cap)
                         </div>
                       )}
@@ -1557,7 +1557,7 @@ export default function ResourceScheduling() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
                       {rowSkills.map((sk, si) => (
                         <span key={si} style={{
-                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600,
+                          fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
                           color: "var(--text-secondary)", background: "var(--hover-bg)",
                           border: "1px solid var(--bg-surface-high)", borderRadius: 8,
                           padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
@@ -1573,13 +1573,13 @@ export default function ResourceScheduling() {
                       <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
                         <div style={{ width: `${Math.min(100, rowBurnPct)}%`, height: "100%", borderRadius: 2, background: rowBurnPct > 100 ? "var(--status-error)" : rowBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
                         {rowAssignedWPs.length} WPs {"\u00B7"} {rowAssignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
                       </div>
                     </>
                   )}
                   {isOverAllocated && (
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
                       {"\u26A0"} OVER-ALLOC
                     </div>
                   )}
@@ -1719,7 +1719,7 @@ export default function ResourceScheduling() {
                     left: "50%",
                     transform: "translateX(-50%)",
                     fontFamily: "var(--font-mono)",
-                    fontSize: 7,
+                    fontSize: 9,
                     fontWeight: 700,
                     color: "#07090E",
                     background: "var(--accent)",
@@ -1810,7 +1810,7 @@ export default function ResourceScheduling() {
           <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", borderBottom: "1px solid var(--divider)", marginBottom: 4 }}>
             {contextMenu.wp.wp_number} — {contextMenu.wp.name}
           </div>
-          <div style={{ padding: "2px 12px 4px", fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Reassign to</div>
+          <div style={{ padding: "2px 12px 4px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Reassign to</div>
           {resources.map(res => (
             <button key={res.id} onClick={async () => {
               await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: res.name });

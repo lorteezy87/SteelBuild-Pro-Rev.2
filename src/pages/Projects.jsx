@@ -106,7 +106,7 @@ function MiniStat({ label, value, valueColor = "var(--text-primary)" }) {
       </span>
       <span style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 7,
+        fontSize: 9,
         fontWeight: 600,
         color: "var(--text-muted)",
         textTransform: "uppercase",
@@ -248,7 +248,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         <div>
           <div style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 7,
+            fontSize: 9,
             color: "var(--text-muted)",
             textTransform: "uppercase",
             letterSpacing: "0.12em",
@@ -412,7 +412,7 @@ function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-
     >
       <div style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 7,
+        fontSize: 9,
         fontWeight: 700,
         color: "var(--text-muted)",
         textTransform: "uppercase",

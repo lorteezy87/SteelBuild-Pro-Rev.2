@@ -255,7 +255,7 @@ export default function Layout({ children, currentPageName }) {
 
             {/* Density toggle + Modules grid — desktop only */}
             {!isMobile && (
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
                 <div
                   title="Toggle compact/comfortable density"
                   onClick={() => {
@@ -272,8 +272,12 @@ export default function Layout({ children, currentPageName }) {
                     cursor: "pointer", color: "var(--text-muted)", transition: "all 0.15s",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.color = "var(--text-muted)"; }}
                 >
-                  {"\u2261"}
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <line x1="2" y1="3" x2="12" y2="3" /><line x1="2" y1="7" x2="12" y2="7" /><line x1="2" y1="11" x2="12" y2="11" />
+                  </svg>
                 </div>
 
                 <div

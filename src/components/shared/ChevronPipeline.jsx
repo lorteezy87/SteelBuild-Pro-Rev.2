@@ -308,7 +308,7 @@ export default function ChevronPipeline({
                   left: "50%",
                   transform: "translateX(-50%)",
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: 700,
                   letterSpacing: "0.05em",
                   color: "var(--status-error)",

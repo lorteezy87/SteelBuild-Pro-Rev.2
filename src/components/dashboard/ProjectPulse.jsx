@@ -790,7 +790,7 @@ export default function ProjectPulse({
                 <span
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 7,
+                    fontSize: 9,
                     fontWeight: 700,
                     color: "var(--status-warning)",
                     background: "var(--warning-muted)",

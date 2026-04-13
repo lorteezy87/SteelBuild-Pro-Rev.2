@@ -877,7 +877,7 @@ export default function Deliveries() {
                 transition: "background 0.1s",
               }}
             >
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? "var(--accent)" : "var(--text-muted)", marginBottom: 4 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? "var(--accent)" : "var(--text-muted)", marginBottom: 4 }}>
                 {k.label}
               </div>
               <div style={{

@@ -921,7 +921,7 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
                     {c.title || "Untitled constraint"}
                   </span>
                   {overdue && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "var(--status-error)" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)" }}>
                       ? OVERDUE
                     </span>
                   )}
@@ -955,7 +955,7 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
                     background: `${typeColor}15`,
                     color: typeColor,
                     fontFamily: "var(--font-mono)",
-                    fontSize: 7,
+                    fontSize: 9,
                     fontWeight: 700,
                     padding: "2px 7px",
                     borderRadius: "var(--radius-badge)",
@@ -1265,7 +1265,7 @@ function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete, onLogMitigatio
                           <span
                             style={{
                               fontFamily: "var(--font-mono)",
-                              fontSize: 7,
+                              fontSize: 9,
                               fontWeight: 700,
                               color: typeColor,
                               letterSpacing: "0.08em",

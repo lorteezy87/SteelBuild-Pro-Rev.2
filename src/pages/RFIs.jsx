@@ -156,7 +156,7 @@ export default function RFIs() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterBIC, setFilterBIC] = useState("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [sortField, setSortField] = useState("rfi_number");
   const [sortDir, setSortDir] = useState("asc");
   const [overdueFirst, setOverdueFirst] = useState(false);
@@ -581,8 +581,8 @@ export default function RFIs() {
         onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = "brightness(1.12)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
       >
-        <div style={{ ...mono, fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-        <div style={{ ...mono, fontSize: 20, fontWeight: 800, color }}>{value}</div>
+        <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+        <div style={{ ...mono, fontSize: 22, fontWeight: 800, color }}>{value}</div>
       </div>
     );
   };
@@ -762,26 +762,42 @@ export default function RFIs() {
       </div>
 
       {overdueList.length > 0 && (
-        <div style={{ background: "var(--danger-muted)", borderBottom: "1px solid var(--danger-border)", padding: "8px 16px", display: "flex", gap: 8, overflowX: "auto" }}>
-          {overdueList.map((r) => (
-            <div
-              key={r.id}
-              onClick={() => setSelectedRFI(r)}
-              style={{
-                background: "rgba(255,61,61,0.12)",
-                border: "1px solid rgba(255,61,61,0.25)",
-                borderRadius: 3,
-                padding: "4px 8px",
-                ...mono,
-                fontSize: 9,
-                color: "var(--status-error)",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {r.rfi_number} · {r.title}
-            </div>
-          ))}
+        <div style={{ background: "linear-gradient(90deg, rgba(255,61,61,0.14) 0%, rgba(255,61,61,0.06) 100%)", borderBottom: "2px solid rgba(255,61,61,0.35)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, overflowX: "auto", flexShrink: 0 }}>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.10em", textTransform: "uppercase", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)", animation: "gentlePulse 2s ease-in-out infinite" }} />
+            {kpis.overdue} OVERDUE
+          </div>
+          <div style={{ width: 1, height: 20, background: "rgba(255,61,61,0.3)", flexShrink: 0 }} />
+          {overdueList.map((r) => {
+            const due = r.date_required ? parseUTCDate(r.date_required) : null;
+            const lateDays = due ? Math.abs(Math.ceil((due - new Date()) / 86400000)) : 0;
+            const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
+            return (
+              <div
+                key={r.id}
+                onClick={() => setSelectedRFI(r)}
+                style={{
+                  background: "rgba(255,61,61,0.10)",
+                  border: "1px solid rgba(255,61,61,0.30)",
+                  borderRadius: "var(--radius-badge, 6px)",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.20)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.10)")}
+              >
+                <span style={{ ...mono, fontSize: 10, fontWeight: 800, color: "var(--status-error)" }}>{r.rfi_number}</span>
+                <span style={{ ...mono, fontSize: 9, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>
+                <span style={{ ...mono, fontSize: 8, fontWeight: 700, color: bic.text, background: bic.bg, padding: "1px 5px", borderRadius: 3 }}>{r.ball_in_court || "CTR"}</span>
+                <span style={{ ...mono, fontSize: 9, fontWeight: 800, color: "var(--status-error)" }}>{lateDays}d late</span>
+              </div>
+            );
+          })}
         </div>
       )}
       {/* Filters */}
@@ -1608,7 +1624,7 @@ function Section({ title, children }) {
 function Meta({ label, value, highlight, span2 }) {
   return (
     <div style={{ gridColumn: span2 ? "span 2" : "span 1" }}>
-      <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+      <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: highlight ? "var(--status-error)" : "var(--text-primary)" }}>{value || "—"}</div>
     </div>
   );

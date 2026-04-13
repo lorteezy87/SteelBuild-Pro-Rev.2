@@ -32,7 +32,7 @@ const StatCard = ({ label, value, color, sublabel }) => {
       flex: 1,
       minWidth: 110,
     }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 600, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 34, fontWeight: 700, color: c.text, lineHeight: 1 }}>{value}</div>
       {sublabel && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6 }}>{sublabel}</div>}
     </div>

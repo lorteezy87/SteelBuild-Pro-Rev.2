@@ -80,7 +80,7 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
                     </span>
                   </div>
                   <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.10em",
+                    fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.10em",
                     padding: "2px 7px", borderRadius: 4,
                     background: isCurrent ? "var(--accent-muted)" : "var(--hover-bg)",
                     color: isCurrent ? "var(--accent)" : "var(--text-muted)",

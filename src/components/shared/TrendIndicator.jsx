@@ -37,7 +37,7 @@ export default function TrendIndicator({
       }}
       title={`${isUp ? "+" : ""}${delta}${suffix} vs previous`}
     >
-      <span style={{ fontSize: 7 }}>{arrow}</span>
+      <span style={{ fontSize: 9 }}>{arrow}</span>
       {isUp ? "+" : ""}
       {delta}
       {suffix}

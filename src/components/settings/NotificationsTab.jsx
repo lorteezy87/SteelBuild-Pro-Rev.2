@@ -89,7 +89,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{item.label}</span>
-                  {item.urgent && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--status-error)', background: 'var(--danger-muted)', padding: '1px 5px', borderRadius: 3, letterSpacing: '0.08em' }}>URGENT</span>}
+                  {item.urgent && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-error)', background: 'var(--danger-muted)', padding: '1px 5px', borderRadius: 3, letterSpacing: '0.08em' }}>URGENT</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.desc}</div>
               </div>

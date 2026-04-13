@@ -46,7 +46,7 @@ function KpiStrip({ items }) {
     }}>
       {items.map((k, i) => (
         <div key={i} style={{ padding: '12px 16px', background: 'var(--bg-surface)' }}>
-          <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 5 }}>{k.label}</div>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 5 }}>{k.label}</div>
           <div style={{ ...mono, fontSize: 22, fontWeight: 700, color: k.color || 'var(--text-primary)', lineHeight: 1 }}>{k.value}</div>
           {k.sub && <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>{k.sub}</div>}
         </div>

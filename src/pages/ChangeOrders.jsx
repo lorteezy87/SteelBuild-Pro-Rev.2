@@ -148,7 +148,7 @@ function ReasonDonut({ cos: allCos }) {
           {breakdown.length}
         </text>
         <text x="70" y="82" textAnchor="middle" dominantBaseline="central"
-          style={{ transform: "rotate(90deg)", transformOrigin: "70px 70px", fontFamily: "var(--font-body)", fontSize: 7, fill: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+          style={{ transform: "rotate(90deg)", transformOrigin: "70px 70px", fontFamily: "var(--font-body)", fontSize: 9, fill: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
           reasons
         </text>
       </svg>

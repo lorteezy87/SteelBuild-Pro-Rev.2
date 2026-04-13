@@ -83,7 +83,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
             <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
               {fields.map(([label, value]) => (
                 <div key={label}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>{label} </span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>{label} </span>
                   <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
@@ -94,7 +94,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
         {/* Right: Key financials */}
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Revised Contract</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Revised Contract</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>
               {formatCurrency(financials.revisedValue).replace(/\.\d+/, "")}
             </div>
@@ -104,7 +104,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
           </div>
           {daysToEnd != null && (
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Days Remaining</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Days Remaining</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, lineHeight: 1, color: daysToEnd < 30 ? "var(--status-error)" : daysToEnd < 60 ? "var(--status-warning)" : "var(--status-success)" }}>
                 {daysToEnd < 0 ? `${Math.abs(daysToEnd)}d LATE` : `${daysToEnd}d`}
               </div>
@@ -119,19 +119,19 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           {project.start_date && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Start</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Start</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{formatDate(project.start_date)}</div>
             </div>
           )}
           {project.target_completion_date && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Target Complete</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Target Complete</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{formatDate(project.target_completion_date)}</div>
             </div>
           )}
           {project.forecast_completion_date && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Forecast</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Forecast</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)" }}>{formatDate(project.forecast_completion_date)}</div>
             </div>
           )}
@@ -141,8 +141,8 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
         {timelinePct !== null && (
           <div style={{ flex: 1, minWidth: 160 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Project Timeline</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)" }}>{timelinePct}% elapsed</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Project Timeline</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{timelinePct}% elapsed</span>
             </div>
             <div style={{ height: 6, background: "var(--border-default)", borderRadius: 3, overflow: "hidden", position: "relative" }}>
               <div style={{ height: "100%", width: `${timelinePct}%`, background: timelinePct > 90 ? "var(--status-error)" : timelinePct > 75 ? "var(--status-warning)" : "var(--accent)", borderRadius: 3 }} />
@@ -155,7 +155,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
               }} title={`Overall WP progress: ${avgProgress}%`} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-success)" }}>▲ WP: {avgProgress}%</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success)" }}>▲ WP: {avgProgress}%</span>
             </div>
           </div>
         )}
@@ -168,7 +168,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
             { label: "WP PROGRESS", pct: avgProgress, color: "var(--chart-4)" },
           ].map(({ label, pct, color }) => (
             <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 60, height: 5, background: "var(--border-default)", borderRadius: 3, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3 }} />
@@ -179,7 +179,7 @@ export default function ProjectCommandStrip({ project, wps, cos, financials, onC
           ))}
           {totalTonnage > 0 && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "rgba(160,175,210,0.40)", letterSpacing: "0.12em", textTransform: "uppercase" }}>TOTAL TONS</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.40)", letterSpacing: "0.12em", textTransform: "uppercase" }}>TOTAL TONS</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>{Math.round(totalTonnage).toLocaleString()}</div>
             </div>
           )}

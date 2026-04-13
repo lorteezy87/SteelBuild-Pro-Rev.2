@@ -148,7 +148,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 7,
+                    fontSize: 9,
                     color: 'var(--text-muted)',
                     letterSpacing: '0.12em',
                     marginBottom: 8,
@@ -185,7 +185,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 7,
+                    fontSize: 9,
                     color: 'var(--text-muted)',
                     letterSpacing: '0.12em',
                     marginBottom: 8,
@@ -218,7 +218,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,
@@ -416,7 +416,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,
@@ -453,7 +453,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,

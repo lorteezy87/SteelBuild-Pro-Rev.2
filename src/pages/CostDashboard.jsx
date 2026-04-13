@@ -535,7 +535,7 @@ export default function CostDashboard() {
               { label: 'Stale >30d', value: coAging.filter(c => c.isStale).length, color: coAging.filter(c => c.isStale).length > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
@@ -566,7 +566,7 @@ export default function CostDashboard() {
               { label: 'Billing Efficiency', value: `${billingMetrics.billingEfficiency.toFixed(1)}%`, color: billingMetrics.billingEfficiency < 80 ? 'var(--status-error)' : billingMetrics.billingEfficiency < 95 ? 'var(--status-warning)' : 'var(--status-success)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i % 2 === 0 ? '1px solid var(--divider)' : 'none', borderBottom: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
@@ -601,7 +601,7 @@ export default function CostDashboard() {
                 { label: 'Efficiency', value: `${productivity.shopEfficiency.toFixed(1)}%`, color: productivity.shopEfficiency > 110 ? 'var(--status-error)' : productivity.shopEfficiency > 95 ? 'var(--status-warning)' : 'var(--status-success)' },
               ].map(({ label, value, color }, i) => (
                 <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                 </div>
               ))}
@@ -640,7 +640,7 @@ export default function CostDashboard() {
                 { label: 'Efficiency', value: `${productivity.fieldEfficiency.toFixed(1)}%`, color: productivity.fieldEfficiency > 110 ? 'var(--status-error)' : productivity.fieldEfficiency > 95 ? 'var(--status-warning)' : 'var(--status-success)' },
               ].map(({ label, value, color }, i) => (
                 <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                 </div>
               ))}
@@ -672,7 +672,7 @@ export default function CostDashboard() {
               { label: 'Due 30-60 Days', value: procurementExposure.due60, color: 'var(--text-secondary)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i < 3 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
