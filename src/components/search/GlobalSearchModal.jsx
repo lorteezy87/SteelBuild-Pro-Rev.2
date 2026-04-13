@@ -3,8 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+
+// Stable empty array — prevents infinite re-render loops from useCallback/useEffect
+// dependency chains when queries are disabled and would otherwise return new [] refs.
+const EMPTY = [];
 
 const ICON_MAP = {
   Project: "▤",
@@ -67,42 +71,42 @@ export default function GlobalSearchModal({ open, onClose }) {
   // Cached entity queries — only fetch when modal is open, reuse for 5 minutes
   const SEARCH_STALE_TIME = 5 * 60 * 1000;
 
-  const { data: cachedProjects = [], isLoading: loadingProjects } = useQuery({
+  const { data: cachedProjects = EMPTY, isLoading: loadingProjects } = useQuery({
     queryKey: ["search-projects"],
     queryFn: () => base44.entities.Project.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
-  const { data: cachedRFIs = [], isLoading: loadingRFIs } = useQuery({
+  const { data: cachedRFIs = EMPTY, isLoading: loadingRFIs } = useQuery({
     queryKey: ["search-rfis"],
     queryFn: () => base44.entities.RFI.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
-  const { data: cachedDrawings = [], isLoading: loadingDrawings } = useQuery({
+  const { data: cachedDrawings = EMPTY, isLoading: loadingDrawings } = useQuery({
     queryKey: ["search-drawings"],
     queryFn: () => base44.entities.Drawing.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
-  const { data: cachedWPs = [], isLoading: loadingWPs } = useQuery({
+  const { data: cachedWPs = EMPTY, isLoading: loadingWPs } = useQuery({
     queryKey: ["search-workpackages"],
     queryFn: () => base44.entities.WorkPackage.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
-  const { data: cachedCOs = [], isLoading: loadingCOs } = useQuery({
+  const { data: cachedCOs = EMPTY, isLoading: loadingCOs } = useQuery({
     queryKey: ["search-changeorders"],
     queryFn: () => base44.entities.ChangeOrder.list(),
     enabled: isOpen,
     staleTime: SEARCH_STALE_TIME,
   });
 
-  const { data: cachedContacts = [], isLoading: loadingContacts } = useQuery({
+  const { data: cachedContacts = EMPTY, isLoading: loadingContacts } = useQuery({
     queryKey: ["search-contacts"],
     queryFn: () => base44.entities.Contact.list(),
     enabled: isOpen,
@@ -121,7 +125,7 @@ export default function GlobalSearchModal({ open, onClose }) {
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setResults([]);
+      setResults(EMPTY);
       setSelectedIndex(0);
       setLoading(false);
       setSearchScope("project");
@@ -142,7 +146,7 @@ export default function GlobalSearchModal({ open, onClose }) {
   }, [onClose]);
 
   const runSearch = useCallback((q) => {
-    if (!q || q.length < 2) { setResults([]); setLoading(false); return; }
+    if (!q || q.length < 2) { setResults(EMPTY); setLoading(false); return; }
     setLoading(true);
 
     const ql = q.toLowerCase();
@@ -211,7 +215,11 @@ export default function GlobalSearchModal({ open, onClose }) {
 
   // Debounced search — re-run when scope changes or cached data updates
   useEffect(() => {
-    if (query.length < 2) { setResults([]); setLoading(false); return; }
+    if (query.length < 2) {
+      setResults((prev) => prev.length === 0 ? prev : EMPTY);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const t = setTimeout(() => runSearch(query), 250);
     return () => clearTimeout(t);
