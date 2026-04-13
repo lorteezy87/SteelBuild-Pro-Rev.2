@@ -61,6 +61,10 @@ export default function DrawingViewer() {
   const annotLayerRef = useRef(null);
   const renderTaskRef = useRef(null);
   const [annotations, setAnnotations] = useState([]);
+  // Natural page size at scale 1 (PDF user units). Callouts are stored in
+  // this coordinate space with a top-left origin, so the overlay multiplies
+  // by `zoom` to position itself over the rendered canvas.
+  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
 
   // ── Load all drawings for this project ──────────────────────────────────────
   const { data: drawings = [] } = useQuery({
@@ -160,6 +164,8 @@ export default function DrawingViewer() {
     setRendering(true);
     try {
       const page = await pdfDoc.getPage(currentPage);
+      const baseViewport = page.getViewport({ scale: 1 });
+      setPageSize({ width: baseViewport.width, height: baseViewport.height });
       const viewport = page.getViewport({ scale: zoom });
       const canvas = canvasRef.current;
       canvas.width = viewport.width;
@@ -207,6 +213,27 @@ export default function DrawingViewer() {
   }, [pdfDoc, currentPage, zoom]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
+
+  // When the active drawing changes, jump to its source PDF page so callouts
+  // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
+  // legacy rows without it default to page 1.
+  useEffect(() => {
+    if (!activeDrawing) return;
+    const page = Number(activeDrawing.pdf_page) || 1;
+    setCurrentPage(page);
+  }, [activeDrawing?.id]);
+
+  // Callout → navigation handler. If the targetSheetNumber resolves to a
+  // drawing in the project list, switch to it. The effect above then jumps
+  // to that drawing's pdf_page automatically.
+  const normalizeSN = (s) => String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
+  const onCalloutClick = useCallback((callout) => {
+    if (!callout?.targetSheetNumber) return;
+    const target = drawings.find(d =>
+      normalizeSN(d.sheet_number) === normalizeSN(callout.targetSheetNumber)
+    );
+    if (target) setActiveId(target.id);
+  }, [drawings]);
 
   // ── Handle annotation link click ──────────────────────────────────────────
   const handleAnnotationClick = useCallback(async (annot) => {
@@ -519,34 +546,92 @@ export default function DrawingViewer() {
                   RENDERING…
                 </div>
               )}
-              <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }} />
-              {/* ── Annotation overlay layer ─── clickable link hotspots ──── */}
-              {annotations.length > 0 && (
-                <div ref={annotLayerRef} style={{ position: "absolute", top: 0, left: 0, width: canvasRef.current?.width || 0, height: canvasRef.current?.height || 0, pointerEvents: "none" }}>
-                  {annotations.map(a => (
-                    <div
-                      key={a.id}
-                      onClick={() => handleAnnotationClick(a)}
-                      title={a.title || a.url || "Link"}
-                      style={{
-                        position: "absolute",
-                        left: a.left,
-                        top: a.top,
-                        width: a.width,
-                        height: a.height,
-                        cursor: "pointer",
-                        pointerEvents: "auto",
-                        border: "1px solid transparent",
-                        borderRadius: 2,
-                        transition: "border-color 0.15s, background 0.15s",
-                        background: "transparent",
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(200,155,32,0.12)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
-                    />
-                  ))}
-                </div>
-              )}
+              {/* Canvas + overlay wrapper. The wrapper is sized to the
+                  canvas so absolutely-positioned overlay children line up
+                  with the rendered PDF regardless of zoom or padding. It
+                  hosts two layers: (1) the PDF link-annotation hotspots
+                  harvested by pdfjs and (2) the regex-detected callouts
+                  stored on the drawing record. */}
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }} />
+
+                {/* ── Annotation overlay layer — clickable PDF link hotspots ── */}
+                {annotations.length > 0 && (
+                  <div ref={annotLayerRef} style={{ position: "absolute", top: 0, left: 0, width: canvasRef.current?.width || 0, height: canvasRef.current?.height || 0, pointerEvents: "none" }}>
+                    {annotations.map(a => (
+                      <div
+                        key={a.id}
+                        onClick={() => handleAnnotationClick(a)}
+                        title={a.title || a.url || "Link"}
+                        style={{
+                          position: "absolute",
+                          left: a.left,
+                          top: a.top,
+                          width: a.width,
+                          height: a.height,
+                          cursor: "pointer",
+                          pointerEvents: "auto",
+                          border: "1px solid transparent",
+                          borderRadius: 2,
+                          transition: "border-color 0.15s, background 0.15s",
+                          background: "transparent",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(200,155,32,0.12)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
+                {Array.isArray(activeDrawing?.callouts) && activeDrawing.callouts.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0, left: 0,
+                      width:  pageSize.width  * zoom,
+                      height: pageSize.height * zoom,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {activeDrawing.callouts.map((c, i) => {
+                      if (!c?.coords) return null;
+                      // Render-time resolution against the full project drawing
+                      // list — a callout flagged `resolved: false` at upload
+                      // time may still hit a sibling uploaded later.
+                      const match = drawings.find(d =>
+                        normalizeSN(d.sheet_number) === normalizeSN(c.targetSheetNumber)
+                      );
+                      const resolved = !!match;
+                      return (
+                        <button
+                          key={i}
+                          disabled={!resolved}
+                          onClick={() => resolved && onCalloutClick(c)}
+                          title={resolved
+                            ? `${c.text} → ${match.sheet_number}${match.title ? ` · ${match.title}` : ""}`
+                            : `${c.text} (no sibling sheet found)`
+                          }
+                          style={{
+                            position: "absolute",
+                            left:   Math.max(0, c.coords.x      * zoom - 2),
+                            top:    Math.max(0, c.coords.y      * zoom - 2),
+                            width:  Math.max(12, c.coords.width  * zoom + 4),
+                            height: Math.max(12, c.coords.height * zoom + 4),
+                            background: resolved ? "rgba(200,155,32,0.18)" : "rgba(255,200,0,0.05)",
+                            border: resolved ? "2px solid var(--accent)" : "2px dashed rgba(200,155,32,0.35)",
+                            borderRadius: 2,
+                            cursor: resolved ? "pointer" : "not-allowed",
+                            pointerEvents: "auto",
+                            padding: 0,
+                            zIndex: 5,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
