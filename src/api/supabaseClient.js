@@ -420,11 +420,52 @@ export const integrations = {
      */
     UploadFile: async ({ file }) => {
       if (!file) throw new Error('No file provided');
-      const ext = file.name.split('.').pop();
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
       const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      // Browsers report application/octet-stream for many construction file types.
+      // Map extensions → proper MIME types so Supabase storage accepts them.
+      const MIME_MAP = {
+        pdf: 'application/pdf',
+        ifc: 'application/x-step',
+        dwg: 'application/acad',
+        dxf: 'application/dxf',
+        rvt: 'application/octet-stream',
+        nwd: 'application/octet-stream',
+        nwc: 'application/octet-stream',
+        skp: 'application/octet-stream',
+        '3dm': 'application/octet-stream',
+        glb: 'model/gltf-binary',
+        gltf: 'model/gltf+json',
+        obj: 'model/obj',
+        fbx: 'application/octet-stream',
+        stl: 'model/stl',
+        step: 'application/x-step',
+        stp: 'application/x-step',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        xls: 'application/vnd.ms-excel',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        doc: 'application/msword',
+        csv: 'text/csv',
+        txt: 'text/plain',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
+        webp: 'image/webp',
+        mp4: 'video/mp4',
+        zip: 'application/zip',
+        xml: 'application/xml',
+        json: 'application/json',
+      };
+      const contentType = (file.type && file.type !== 'application/octet-stream')
+        ? file.type
+        : (MIME_MAP[ext] || 'application/octet-stream');
+
       const { data, error } = await supabase.storage
         .from('app-files')
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, file, { contentType, upsert: false });
       if (error) throw error;
       // Store the storage path — call getSignedUrl(path) on demand when displaying
       return { file_url: data.path, file_name: file.name, path: data.path };
