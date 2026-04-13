@@ -51,7 +51,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
       </div>
 
       {/* Navigation groups */}
-      <nav style={{ flex: 1, padding: "0 0 16px" }}>
+      <nav aria-label="Sections" style={{ flex: 1, padding: "0 0 16px" }}>
         {SIDEBAR_GROUPS.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
           return (
@@ -124,6 +124,8 @@ function SidebarLink({ item, active, onClick }) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      aria-label={item.label}
+      aria-current={active ? "page" : undefined}
       style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
         padding: "7px 16px 7px 24px",
