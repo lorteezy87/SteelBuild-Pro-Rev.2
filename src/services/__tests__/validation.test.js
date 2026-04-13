@@ -53,7 +53,7 @@ describe("Drawing validation", () => {
 describe("Delivery validation", () => {
   const validDelivery = {
     project_id: "p1",
-    delivery_title: "Anchor Bolts Phase 1",
+    description: "Anchor Bolts Phase 1",
     vendor: "Fastenal",
     scheduled_date: "2026-05-01",
   };
@@ -62,9 +62,9 @@ describe("Delivery validation", () => {
     expect(validate("delivery", validDelivery)).toEqual([]);
   });
 
-  it("fails without delivery_title", () => {
-    const errors = validate("delivery", { ...validDelivery, delivery_title: "" });
-    expect(errors.some((e) => e.field === "delivery_title")).toBe(true);
+  it("fails without description", () => {
+    const errors = validate("delivery", { ...validDelivery, description: "" });
+    expect(errors.some((e) => e.field === "description")).toBe(true);
   });
 
   it("fails without vendor", () => {
