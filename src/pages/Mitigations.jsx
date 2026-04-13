@@ -48,12 +48,20 @@ export default function Mitigations() {
     }
   }, []);
 
-  const { data: mitigations = [] } = useQuery({
+  const { data: mitigations = [], isError: mitigationsError } = useQuery({
     queryKey: ["mitigations", projectId],
-    queryFn: () =>
-      projectId
-        ? base44.entities.MitigationLog.filter({ project_id: projectId })
-        : base44.entities.MitigationLog.list("-identified_date"),
+    queryFn: async () => {
+      try {
+        return projectId
+          ? await base44.entities.MitigationLog.filter({ project_id: projectId })
+          : await base44.entities.MitigationLog.list("-identified_date");
+      } catch (err) {
+        // Table may not exist yet — return empty gracefully
+        console.warn("[Mitigations] query failed:", err?.message);
+        return [];
+      }
+    },
+    retry: false,
   });
 
   const { data: projects = [] } = useQuery({
@@ -136,6 +144,25 @@ export default function Mitigations() {
   return (
     <ErrorBoundary label="Mitigations">
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Setup banner — shown when table doesn't exist yet */}
+        {mitigationsError && mitigations.length === 0 && (
+          <div style={{
+            padding: "14px 18px", borderRadius: "var(--radius-card)",
+            background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
+            display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <span style={{ fontSize: 18 }}>&#9888;</span>
+            <div>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#F59E0B" }}>
+                Mitigations table not set up yet
+              </span>
+              <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+                Run migration <code style={{ background: "var(--bg-surface)", padding: "1px 5px", borderRadius: 3, fontSize: 10 }}>016_mitigation_tables.sql</code> in your Supabase SQL Editor to enable this feature.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>

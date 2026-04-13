@@ -82,8 +82,15 @@ export default function MitigationDetailPanel({
 
   const { data: actions = [], isLoading: actionsLoading } = useQuery({
     queryKey: ["mitigation-actions", mitigation?.id],
-    queryFn: () => base44.entities.MitigationAction.filter({ mitigation_id: mitigation.id }),
+    queryFn: async () => {
+      try {
+        return await base44.entities.MitigationAction.filter({ mitigation_id: mitigation.id });
+      } catch {
+        return []; // Table may not exist yet
+      }
+    },
     enabled: !!mitigation?.id,
+    retry: false,
   });
 
   const createActionMut = useMutation({
