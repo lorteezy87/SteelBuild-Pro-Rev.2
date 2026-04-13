@@ -4,6 +4,7 @@ import App from '@/App.jsx'
 import { installDateOnlyShim } from '@/lib/dateOnly'
 import { logError } from '@/lib/telemetry'
 import { preloadHeavyAssets } from '@/lib/preload'
+import { prefetchRoutesOnIdle } from '@/lib/routePrefetch'
 import '@/globals.css'
 
 installDateOnlyShim()
@@ -28,3 +29,15 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // is rendered. Runs on requestIdleCallback so it never competes with the
 // initial paint or any user-driven navigation.
 preloadHeavyAssets()
+
+// Warm the most likely "next navigation" route chunks on idle. No-op on
+// the feature branch (where pages.config.js eagerly imports everything),
+// effective on the deploy branch where routes are lazy-loaded. The
+// registry lives in routePrefetch.js; pages register themselves if they
+// opt in.
+prefetchRoutesOnIdle([
+  "ProjectControlCenter",
+  "Drawings",
+  "RFIs",
+  "Schedule",
+])

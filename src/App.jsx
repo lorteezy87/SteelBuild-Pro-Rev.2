@@ -34,17 +34,23 @@ const Landing = lazyRetry(() => import('./pages/Landing'));
 // ── Suspense loading indicator ───────────────────────────────────────
 function PageLoader() {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      minHeight: 200, width: "100%",
-    }}>
-      <div style={{
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading page"
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        minHeight: 200, width: "100%",
+      }}>
+      <div aria-hidden="true" style={{
         width: 24, height: 24,
         border: "2px solid var(--border-default)",
         borderTop: "2px solid var(--accent)",
         borderRadius: "50%",
         animation: "spin 0.7s linear infinite",
       }} />
+      <span className="sr-only">Loading page…</span>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -73,18 +79,28 @@ const AuthenticatedApp = () => {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div style={{
-        position: "fixed", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "var(--bg-page)",
-      }}>
-        <div style={{
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="Loading application"
+        style={{
+          position: "fixed", inset: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "var(--bg-page)",
+        }}>
+        <div aria-hidden="true" style={{
           width: 32, height: 32,
           border: "3px solid var(--border-default)",
           borderTop: "3px solid var(--accent)",
           borderRadius: "50%",
           animation: "spin 0.8s linear infinite",
         }} />
+        <span style={{
+          position: "absolute",
+          width: 1, height: 1, padding: 0, margin: -1,
+          overflow: "hidden", clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap", border: 0,
+        }}>Loading application…</span>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
