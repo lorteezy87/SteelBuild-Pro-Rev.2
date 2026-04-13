@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
@@ -128,6 +128,19 @@ export default function Constraints() {
   const { activeProject } = useProjectContext();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("projectId") || searchParams.get("project") || activeProject?.id || null;
+  const navigate = useNavigate();
+
+  const handleLogMitigation = (c) => {
+    localStorage.setItem("sbp-new-mitigation", JSON.stringify({
+      issue_source: "Constraint",
+      source_entity_ref: c.constraint_number || "Constraint",
+      source_entity_id: c.id,
+      title: c.title,
+      identified_date: new Date().toISOString().split("T")[0],
+      status: "Open",
+    }));
+    navigate("/Mitigations");
+  };
 
   const [view, setView] = useState("list");
   const [showForm, setShowForm] = useState(false);
@@ -469,6 +482,7 @@ export default function Constraints() {
             setShowForm(true);
           }}
           onDelete={(c) => setDeleteTarget(c)}
+          onLogMitigation={handleLogMitigation}
         />
       ) : (
         <BoardView
@@ -480,6 +494,7 @@ export default function Constraints() {
             setShowForm(true);
           }}
           onDelete={(c) => setDeleteTarget(c)}
+          onLogMitigation={handleLogMitigation}
         />
       )}
 
@@ -799,7 +814,7 @@ function EmptyState({ hasOpen }) {
     </div>
   );
 }
-function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit, onDelete }) {
+function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit, onDelete, onLogMitigation }) {
   return (
     <div
       style={{
@@ -1029,6 +1044,29 @@ function ListView({ items, wps, expandedId, setExpandedId, onQuickUpdate, onEdit
                 >
                   ?
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLogMitigation(c);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius-btn)",
+                    padding: "3px 7px",
+                    color: "var(--text-muted)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    letterSpacing: "0.08em",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                >
+                  MIT
+                </button>
               </div>
             </div>
 
@@ -1146,7 +1184,7 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
   );
 }
 
-function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
+function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete, onLogMitigation }) {
   const lanes = ["Critical", "High", "Medium", "Low"];
   const grouped = lanes.map((p) => ({
     priority: p,
@@ -1257,6 +1295,29 @@ function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete }) {
                           }}
                         >
                           EDIT
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onLogMitigation(c);
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid var(--border-default)",
+                            borderRadius: "var(--radius-btn)",
+                            padding: "3px 7px",
+                            color: "var(--text-muted)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 8,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            letterSpacing: "0.08em",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                        >
+                          MIT
                         </button>
                       </div>
 

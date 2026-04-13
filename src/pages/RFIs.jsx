@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -143,6 +143,7 @@ const Pill = ({ label, color, bg }) => (
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { activeProject } = useProjectContext();
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
@@ -1277,6 +1278,38 @@ export default function RFIs() {
                             }}
                           >
                             DEL
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              localStorage.setItem("sbp-new-mitigation", JSON.stringify({
+                                issue_source: "RFI",
+                                source_entity_ref: r.rfi_number,
+                                source_entity_id: r.id,
+                                title: "RFI Overdue: " + r.title,
+                                identified_date: new Date().toISOString().split("T")[0],
+                                status: "Open",
+                              }));
+                              navigate("/Mitigations");
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid var(--border-default)",
+                              borderRadius: 4,
+                              padding: "4px 8px",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 9,
+                              fontWeight: 700,
+                              minHeight: 28,
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              letterSpacing: "0.08em",
+                              textTransform: "uppercase",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                          >
+                            MIT
                           </button>
                         </div>
                       </div>
