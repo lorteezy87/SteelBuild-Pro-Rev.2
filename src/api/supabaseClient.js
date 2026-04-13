@@ -320,6 +320,8 @@ export const entities = {
   PmaAssumption:         createEntityClient('pma_assumptions'),
   PmaAuditLog:           createEntityClient('pma_audit_logs'),
   User:                  createEntityClient('user_profiles'),
+  MitigationLog:         createEntityClient('mitigation_logs'),
+  MitigationAction:      createEntityClient('mitigation_actions'),
 };
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

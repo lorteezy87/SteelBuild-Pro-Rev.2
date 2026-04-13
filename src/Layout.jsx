@@ -25,7 +25,7 @@ const PRIMARY_TABS = [
 { label: "FIELD", pages: ["DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
 { label: "COST", pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
 { label: "RESOURCES", pages: ["ResourceScheduling", "ResourceManagement"] },
-{ label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity"] },
+{ label: "REPORTS", pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity", "Mitigations"] },
 { label: "QUALITY", pages: ["Inspections", "Safety", "Punchlist", "QualityControl"] },
 { label: "CLOSEOUT", pages: ["ProjectCloseout", "Warranty", "ChangeRequests"] }];
 
@@ -234,6 +234,7 @@ const NAV_GROUPS = [
   { label: "Job Status Report", icon: "📋", page: "JobStatusReport" },
   { label: "Decision Log", icon: "📋", page: "DecisionLog" },
   { label: "Portfolio Overview", icon: "✦", page: "AIInsights" },
+  { label: "Mitigations", icon: "⚖", page: "Mitigations" },
   { label: "Activity Log", icon: "📊", page: "Activity" }]
 
 }];
@@ -873,6 +874,7 @@ const SIDEBAR_GROUPS = [
       { label: "Action Items", icon: "☑", page: "ActionItems" },
       { label: "RFIs", icon: "⚑", page: "RFIs" },
       { label: "Change Orders", icon: "$", page: "ChangeOrders" },
+      { label: "Mitigations", icon: "⚖", page: "Mitigations" },
       { label: "Meetings", icon: "👥", page: "Meetings" },
     ],
   },
