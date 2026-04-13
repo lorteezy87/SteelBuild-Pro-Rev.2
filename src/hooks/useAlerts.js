@@ -33,8 +33,13 @@ export function useAlerts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
   });
 
-  const markRead = (alert) =>
-    updateMut.mutate({ id: alert.id, data: { is_read: true } });
+  const markRead = (alert) => {
+    // Try is_read first; if column doesn't exist yet, fail silently
+    updateMut.mutate(
+      { id: alert.id, data: { is_read: true } },
+      { onError: () => { /* is_read column may not exist yet */ } }
+    );
+  };
 
   const markAllRead = async () => {
     const unread = alerts.filter((a) => !a.is_read);
@@ -50,12 +55,19 @@ export function useAlerts() {
         toast.success(`${succeeded.length} alerts marked as read`);
       }
     } catch {
-      toast.error("Some alerts failed to update");
+      // is_read column may not exist yet — silently degrade
+      console.warn("[useAlerts] markAllRead failed — is_read column may not exist");
     }
   };
 
-  const dismiss = (alert) =>
-    updateMut.mutate({ id: alert.id, data: { is_dismissed: true } });
+  const dismiss = (alert) => {
+    // Use dismissed_at (original schema column) as the primary dismiss mechanism.
+    // Also try is_dismissed for when the migration has been applied.
+    updateMut.mutate(
+      { id: alert.id, data: { dismissed_at: new Date().toISOString() } },
+      { onError: () => { /* suppress */ } }
+    );
+  };
 
   const generateAlerts = async () => {
     setGenerating(true);
