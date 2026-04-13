@@ -19,7 +19,7 @@ function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 2,
+        ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: "var(--radius-badge)",
         border: `1px solid ${hovered && !disabled ? baseColor + "60" : danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`,
         background: hovered && !disabled ? hoverBg : "none",
         color: baseColor,
@@ -80,7 +80,7 @@ export default function DrawingsTable({
   };
 
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, overflowX: "auto" }}>
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
@@ -164,7 +164,7 @@ export default function DrawingsTable({
                 <td style={tdStyle}>
                   {d.set_approval_status ? (
                     <span style={{
-                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: "var(--radius-badge)",
                       color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
                       background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "var(--bg-surface-high)",
                       border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "var(--border-default)"}`,
@@ -176,7 +176,7 @@ export default function DrawingsTable({
                     <button
                       onClick={() => onSetApproval(d.drawing_set_name.trim())}
                       style={{
-                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: "var(--radius-badge)",
                         background: "none", border: "1px dashed var(--border-strong)", color: "var(--text-muted)", cursor: "pointer",
                       }}
                     >

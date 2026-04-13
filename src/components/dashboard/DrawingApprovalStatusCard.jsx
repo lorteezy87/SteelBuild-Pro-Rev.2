@@ -57,7 +57,7 @@ export default function DrawingApprovalStatusCard({ drawings = [] }) {
           ].map(({ label, value, color }) => (
             <div key={label} style={{ textAlign: "center", padding: "8px 6px", background: "var(--bg-hover)", borderRadius: 6 }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 3 }}>{value}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{label}</div>
             </div>
           ))}
         </div>
@@ -83,7 +83,7 @@ export default function DrawingApprovalStatusCard({ drawings = [] }) {
         {/* Overdue items */}
         {overdueDrawings.length > 0 && (
           <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 10 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Overdue Returns</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Overdue Returns</div>
             {overdueDrawings.map(d => (
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", borderLeft: "2px solid var(--status-error)", marginBottom: 4, background: "var(--danger-muted)", borderRadius: "0 4px 4px 0" }}>
                 <div style={{ minWidth: 0 }}>

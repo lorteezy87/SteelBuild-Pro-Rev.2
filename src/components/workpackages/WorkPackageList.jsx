@@ -236,7 +236,7 @@ export default function WorkPackageList({
                 )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: "var(--radius-badge)", background: `${phaseColor}15`, color: phaseColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: "var(--radius-badge)", background: `${phaseColor}15`, color: phaseColor, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {wp.phase || "—"}
                 </span>
                 <StatusBadge status={wp.status} variant="pill" />

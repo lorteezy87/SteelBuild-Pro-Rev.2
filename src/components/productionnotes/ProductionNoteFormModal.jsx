@@ -453,7 +453,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
           <div>
             <label style={LABEL_STYLE}>
               Sketch / Handwritten Notes
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginLeft: 8, letterSpacing: "0.08em" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: 8, letterSpacing: "0.08em" }}>
                 OPTIONAL
               </span>
             </label>

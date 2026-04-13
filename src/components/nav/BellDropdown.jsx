@@ -48,7 +48,10 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
         <div style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
-          background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)",
+          background: "var(--glass-bg, var(--bg-surface-secondary))",
+          backdropFilter: "blur(var(--glass-blur, 20px))",
+          WebkitBackdropFilter: "blur(var(--glass-blur, 20px))",
+          border: "1px solid var(--glass-border, var(--border-default))",
           borderTop: "2px solid var(--accent)", borderRadius: 12,
           boxShadow: "var(--shadow-lg)", zIndex: 2000, overflow: "hidden",
         }}>

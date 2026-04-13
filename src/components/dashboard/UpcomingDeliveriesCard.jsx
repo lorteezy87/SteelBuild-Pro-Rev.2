@@ -60,7 +60,7 @@ export default function UpcomingDeliveriesCard({ deliveries = [] }) {
               {/* Date header with daily totals */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: group.items.length > 1 ? 6 : 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {group.isLate && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.12em", fontWeight: 700 }}>LATE</span>}
+                  {group.isLate && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", letterSpacing: "0.12em", fontWeight: 700 }}>LATE</span>}
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: borderColor, fontWeight: 700 }}>{formatDate(group.date)}</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

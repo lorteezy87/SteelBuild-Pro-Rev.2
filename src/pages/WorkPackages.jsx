@@ -398,7 +398,7 @@ export default function WorkPackages() {
             <div
               style={{
                 fontFamily: "var(--font-body)",
-                fontSize: 8,
+                fontSize: 10,
                 fontWeight: 700,
                 color: isActive ? color : "var(--text-muted)",
                 letterSpacing: "0.12em",
@@ -617,7 +617,7 @@ export default function WorkPackages() {
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 7,
+                        fontSize: 9,
                         fontWeight: 700,
                         padding: "2px 7px",
                         borderRadius: "var(--radius-badge)",
@@ -669,8 +669,8 @@ export default function WorkPackages() {
                     <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
                       {hasRFIBlock && (
                         <span style={{
-                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                          padding: "1px 6px", borderRadius: "var(--radius-badge)",
+                          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                          padding: "2px 7px", borderRadius: "var(--radius-badge)",
                           background: "rgba(239,68,68,0.12)", color: "var(--status-error)",
                           border: "1px solid rgba(239,68,68,0.25)",
                           letterSpacing: "0.06em", textTransform: "uppercase",
@@ -680,8 +680,8 @@ export default function WorkPackages() {
                       )}
                       {hasMaterialPending && (
                         <span style={{
-                          fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
-                          padding: "1px 6px", borderRadius: "var(--radius-badge)",
+                          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                          padding: "2px 7px", borderRadius: "var(--radius-badge)",
                           background: "rgba(245,158,11,0.12)", color: "var(--status-warning)",
                           border: "1px solid rgba(245,158,11,0.25)",
                           letterSpacing: "0.06em", textTransform: "uppercase",

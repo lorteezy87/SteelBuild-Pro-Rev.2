@@ -83,7 +83,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
                 <div key={group.label}>
                   <div style={{
                     padding: "8px 14px 3px",
-                    fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700,
+                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                     letterSpacing: "0.20em", color: "var(--accent)",
                     borderTop: groupIdx === 0 ? "none" : "1px solid var(--divider)",
                     marginTop: groupIdx === 0 ? 0 : 4, userSelect: "none",
@@ -152,7 +152,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
             PRO &middot; REV 2
           </span>
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--accent)" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>
           {totalModules} MODULES
         </span>
       </div>

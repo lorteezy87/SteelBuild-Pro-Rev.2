@@ -141,7 +141,7 @@ export default function MarkupToolbar({
                   right: 6,
                   bottom: 3,
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   lineHeight: 1,
                   color: "var(--text-muted)",
                   background: "rgba(0,0,0,0.45)",
@@ -173,7 +173,7 @@ export default function MarkupToolbar({
                 <div
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 7,
+                    fontSize: 9,
                     color: "var(--text-muted)",
                     letterSpacing: "0.14em",
                   }}
@@ -253,7 +253,7 @@ export default function MarkupToolbar({
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 7,
+              fontSize: 9,
               letterSpacing: "0.14em",
               color: "var(--text-muted)",
               textAlign: "center",

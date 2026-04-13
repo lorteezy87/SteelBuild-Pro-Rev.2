@@ -81,7 +81,7 @@ export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
             padding: "8px 10px",
             borderLeft: `3px solid ${m.color}`,
           }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>
               {m.key}
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>

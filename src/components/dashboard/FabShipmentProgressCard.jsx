@@ -52,11 +52,11 @@ export default function FabShipmentProgressCard({ wps = [] }) {
         {/* Total tonnage hero */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--divider)" }}>
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Total Tonnage</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Total Tonnage</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1 }}>{Math.round(totalTons).toLocaleString()}<span style={{ fontSize: 14, color: "var(--text-muted)", marginLeft: 4 }}>T</span></div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Work Packages</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Work Packages</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--chart-4)", lineHeight: 1 }}>{wpTotal}</div>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function FabShipmentProgressCard({ wps = [] }) {
           const chartData = phases.map((p, i) => ({ phase: p, tons: Math.round(vals[i]) }));
           return (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Tonnage Flow</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Tonnage Flow</div>
               <ResponsiveContainer width="100%" height={70}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                   <defs>
@@ -84,7 +84,7 @@ export default function FabShipmentProgressCard({ wps = [] }) {
                       <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="phase" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="phase" tick={{ fontFamily: "var(--font-mono)", fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
                     formatter={v => [`${v.toLocaleString()} T`, "Tonnage"]}
@@ -98,7 +98,7 @@ export default function FabShipmentProgressCard({ wps = [] }) {
 
         {/* WP status breakdown */}
         <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Work Package Status</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Work Package Status</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {[
               { label: "In Progress", val: wpInProgress, color: "var(--status-warning)" },

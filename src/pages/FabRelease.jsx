@@ -233,7 +233,7 @@ export default function FabRelease() {
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 7,
+              fontSize: 9,
               fontWeight: 700,
               color: "var(--status-success)",
               background: "var(--success-muted)",
@@ -248,7 +248,7 @@ export default function FabRelease() {
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 7,
+              fontSize: 9,
               fontWeight: 700,
               color: "var(--status-success)",
               background: "var(--success-muted)",
@@ -263,7 +263,7 @@ export default function FabRelease() {
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 7,
+              fontSize: 9,
               fontWeight: 700,
               color: "var(--status-error)",
               background: "var(--danger-muted)",
@@ -446,7 +446,7 @@ export default function FabRelease() {
           const pct = totalTons > 0 ? (tons / totalTons) * 100 : 0;
           return (
             <div key={stage.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.12em", color: stage.color }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", color: stage.color }}>
                 {stage.short}
               </div>
               <div style={{ height: 6, borderRadius: "var(--radius-card)", background: "var(--bg-surface-high)", overflow: "hidden" }}>

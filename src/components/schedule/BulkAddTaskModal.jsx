@@ -158,7 +158,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
         }}>
           <div />
           {["TASK NAME", "TYPE", "PHASE", "START DATE", "END DATE", "STATUS", "PRIORITY", "RESOURCES", "PARENT TASK", ""].map((h) => (
-            <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 6px" }}>
+            <div key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", padding: "0 6px" }}>
               {h}
             </div>
           ))}

@@ -191,7 +191,7 @@ function BarChartSVG({ data, width = 400, height = 200 }) {
               x={cx}
               y={height - padding.bottom + 14}
               textAnchor="middle"
-              style={{ ...mono, fontSize: 7, fill: "var(--text-muted)" }}
+              style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}
             >
               {d.name?.length > 10 ? d.name.slice(0, 10) + ".." : d.name}
             </text>
@@ -200,9 +200,9 @@ function BarChartSVG({ data, width = 400, height = 200 }) {
       })}
       {/* Legend */}
       <rect x={width - 120} y={4} width={8} height={8} rx={2} fill="var(--bg-surface-highest)" />
-      <text x={width - 108} y={11} style={{ ...mono, fontSize: 7, fill: "var(--text-muted)" }}>Budget</text>
+      <text x={width - 108} y={11} style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}>Budget</text>
       <rect x={width - 60} y={4} width={8} height={8} rx={2} fill="var(--accent)" />
-      <text x={width - 48} y={11} style={{ ...mono, fontSize: 7, fill: "var(--text-muted)" }}>Actual</text>
+      <text x={width - 48} y={11} style={{ ...mono, fontSize: 9, fill: "var(--text-muted)" }}>Actual</text>
     </svg>
   );
 }
@@ -253,7 +253,7 @@ function DonutChartSVG({ segments, size = 180, innerRadius = 50, outerRadius = 7
         <text x={cx} y={cy - 4} textAnchor="middle" style={{ ...mono, fontSize: 16, fontWeight: 700, fill: "var(--text-primary)" }}>
           {total}
         </text>
-        <text x={cx} y={cy + 10} textAnchor="middle" style={{ ...mono, fontSize: 7, fill: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <text x={cx} y={cy + 10} textAnchor="middle" style={{ ...mono, fontSize: 9, fill: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
           Total
         </text>
       </svg>
@@ -457,7 +457,7 @@ function KPICard({ label, value, detail, borderColor, badge, onClick, active }) 
           <span
             style={{
               ...mono,
-              fontSize: 7,
+              fontSize: 9,
               fontWeight: 700,
               color: "#fff",
               background: "var(--status-error)",
@@ -627,7 +627,7 @@ function UrgentCard({ title, subtitle, severity, meta, onClick }) {
         flexShrink: 0,
       }}
     >
-      <div style={{ ...mono, fontSize: 7, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>
+      <div style={{ ...mono, fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>
         {severity?.toUpperCase() || "INFO"}
       </div>
       <div style={{ ...body, fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4, lineHeight: 1.3 }}>

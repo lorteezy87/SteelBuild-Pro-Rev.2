@@ -162,7 +162,7 @@ function ContractOverviewPanel({ project, approvedCOTotal, pendingCOTotal, revis
           { label: "Superintendent", value: project?.superintendent || "N/A" },
         ].map((item) => (
           <div key={item.label} style={{ textAlign: "center", minWidth: 100 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{item.value}</div>
           </div>
         ))}
@@ -481,7 +481,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
                 {item.icon}
               </div>
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>{item.label}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>{item.label}</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{formatDate(item.date)}</div>
               </div>
             </div>
@@ -497,7 +497,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
                   {"\u2705"}
                 </div>
                 <div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>CO-{String(co.co_number).padStart(3, "0")} Approved</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>CO-{String(co.co_number).padStart(3, "0")} Approved</div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--status-success)" }}>{formatDate(co.approval_date)}</div>
                 </div>
               </div>

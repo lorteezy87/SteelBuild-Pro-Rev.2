@@ -8,7 +8,7 @@ export default function WorkflowBadge({ wp, drawings = [], deliveries = [] }) {
     return (
       <span style={{
         fontFamily: 'IBM Plex Mono',
-        fontSize: 7,
+        fontSize: 9,
         color: '#FF3D3D',
         background: 'rgba(255,61,61,0.10)',
         border: '1px solid rgba(255,61,61,0.22)',
@@ -25,7 +25,7 @@ export default function WorkflowBadge({ wp, drawings = [], deliveries = [] }) {
   return (
     <span style={{
       fontFamily: 'IBM Plex Mono',
-      fontSize: 7,
+      fontSize: 9,
       color: '#00D68F',
       background: 'rgba(0,214,143,0.10)',
       border: '1px solid rgba(0,214,143,0.22)',
