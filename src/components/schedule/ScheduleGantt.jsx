@@ -573,7 +573,41 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       return true;
     };
 
+    // Helper: insert delivery entity rows into the list
+    const insertDeliveryRows = () => {
+      if (!showDeliveries || deliveries.length === 0) return;
+      const delStarts = deliveries.map(d => d.scheduled_date).filter(Boolean).sort();
+      const delEnds = deliveries.map(d => d.required_date || d.actual_date || d.scheduled_date).filter(Boolean).sort();
+      const deliveredCount = deliveries.filter(d => d.status === "Delivered").length;
+      const pct = deliveries.length > 0 ? Math.round((deliveredCount / deliveries.length) * 100) : 0;
+      list.push({
+        type: "delivery-summary",
+        deliveryCount: deliveries.length,
+        start: delStarts[0],
+        end: delEnds[delEnds.length - 1],
+        pctComplete: pct,
+      });
+      if (!collapsedDeliveries) {
+        deliveries
+          .slice()
+          .sort((a, b) => (a.scheduled_date || "").localeCompare(b.scheduled_date || ""))
+          .forEach(d => {
+            list.push({ type: "delivery", delivery: d });
+          });
+      }
+    };
+
+    // Insert deliveries in correct phase sequence:
+    // Pre-Construction → Detailing → Procurement → Fabrication → DELIVERIES → Installation → Closeout
+    let deliveriesInserted = false;
+
     grouped.forEach(({ phase, tasks }) => {
+      // Insert delivery section right before Installation (after Fabrication/Delivery task phases)
+      if (!deliveriesInserted && (phase.key === "Installation" || phase.id >= 6)) {
+        deliveriesInserted = true;
+        insertDeliveryRows();
+      }
+
       // Phase % uses displayPct so Complete tasks always count as 100% even
       // when their percent_complete field is stale.
       const avgPct = tasks.length > 0
@@ -595,27 +629,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       }
     });
 
-    // ── Delivery rows — separate section at bottom of Gantt ──────────
-    if (showDeliveries && deliveries.length > 0) {
-      const delStarts = deliveries.map(d => d.scheduled_date).filter(Boolean).sort();
-      const delEnds = deliveries.map(d => d.required_date || d.actual_date || d.scheduled_date).filter(Boolean).sort();
-      const deliveredCount = deliveries.filter(d => d.status === "Delivered").length;
-      const pct = deliveries.length > 0 ? Math.round((deliveredCount / deliveries.length) * 100) : 0;
-      list.push({
-        type: "delivery-summary",
-        deliveryCount: deliveries.length,
-        start: delStarts[0],
-        end: delEnds[delEnds.length - 1],
-        pctComplete: pct,
-      });
-      if (!collapsedDeliveries) {
-        deliveries
-          .slice()
-          .sort((a, b) => (a.scheduled_date || "").localeCompare(b.scheduled_date || ""))
-          .forEach(d => {
-            list.push({ type: "delivery", delivery: d });
-          });
-      }
+    // Fallback: if no Installation phase existed, append deliveries after all phases
+    if (!deliveriesInserted) {
+      insertDeliveryRows();
     }
 
     return list;
