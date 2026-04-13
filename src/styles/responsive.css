@@ -54,6 +54,7 @@
 @media (max-width: 480px) {
   .kpi-grid-responsive { grid-template-columns: 1fr !important; }
   .kpi-value { font-size: 16px; }
-  .sbp-table thead th { font-size: 7px; padding: 6px 8px; }
+  .sbp-table thead th { font-size: 9px; padding: 6px 8px; }
   .sbp-table tbody td { font-size: 10px; padding: 6px 8px; }
+  button, [role="button"], a[href] { min-height: 44px; }
 }
