@@ -120,7 +120,7 @@ const ProgressBar = ({ value, height = 6 }) => {
 // ─── Arrow connector for overview flow ──────────────────────────────────────
 const FlowArrow = () => (
   <div style={{ display: "flex", alignItems: "center", padding: "0 4px", color: "var(--text-muted)", fontSize: 18 }}>
-    {"\u2192"}
+    &rarr;
   </div>
 );
 

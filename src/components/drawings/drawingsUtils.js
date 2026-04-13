@@ -156,7 +156,7 @@ export function buildRevisionAlerts(drawings, rfiMap) {
   if (withOpenRFIs.length > 0) {
     alerts.push({
       type: "info",
-      icon: "\uD83D\uDD17",
+      icon: "!",
       title: `${withOpenRFIs.length} Drawing${withOpenRFIs.length !== 1 ? "s" : ""} Blocked by Open RFIs`,
       detail: `${withOpenRFIs.map(d => d.sheet_number).slice(0, 5).join(", ")}${withOpenRFIs.length > 5 ? ` +${withOpenRFIs.length - 5} more` : ""} — linked RFIs still unresolved`,
       sheets: withOpenRFIs,
@@ -171,7 +171,7 @@ export function buildRevisionAlerts(drawings, rfiMap) {
   if (rejected.length > 0) {
     alerts.push({
       type: "danger",
-      icon: "\u2715",
+      icon: "X",
       title: `${rejected.length} Rejected Drawing${rejected.length !== 1 ? "s" : ""} Need Resubmission`,
       detail: `${rejected.map(d => d.sheet_number).slice(0, 5).join(", ")}${rejected.length > 5 ? ` +${rejected.length - 5} more` : ""}`,
       sheets: rejected,

@@ -142,7 +142,7 @@ export default function DrawingsTable({
                 <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
                 <td style={{ ...tdStyle, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
                 <td style={tdStyle}><StageChip stage={d.stage} /></td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "\u2014"}</td>
+                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
 
                 {/* Due date / days late */}
                 <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
@@ -154,11 +154,11 @@ export default function DrawingsTable({
                       <OverdueBadge />
                     </div>
                   ) : (
-                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.due_date || "\u2014"}</span>
+                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.due_date || "—"}</span>
                   )}
                 </td>
 
-                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "\u2014"}</td>
+                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
 
                 {/* Approval status */}
                 <td style={tdStyle}>
@@ -183,7 +183,7 @@ export default function DrawingsTable({
                       REVIEW
                     </button>
                   ) : (
-                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>\u2014</span>
+                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</span>
                   )}
                 </td>
 
@@ -192,8 +192,8 @@ export default function DrawingsTable({
                   <div style={{ display: "flex", gap: 4 }}>
                     <ActionBtn label="View" onClick={() => onView(d)} />
                     <ActionBtn label="Edit" onClick={() => onEdit(d)} />
-                    <ActionBtn label="\u2192" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-                    <ActionBtn label="\u2715" onClick={() => onDelete(d.id)} danger />
+                    <ActionBtn label="Next" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
+                    <ActionBtn label="Del" onClick={() => onDelete(d.id)} title="Delete" danger />
                   </div>
                 </td>
               </tr>
