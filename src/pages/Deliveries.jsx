@@ -271,7 +271,11 @@ export default function Deliveries() {
     const createDeliveryAlerts = async () => {
       try {
         const existing = await base44.entities.Alert.filter({ alert_type: "Delivery_Overdue" });
-        const existingIds = new Set(existing.map((a) => a.related_record_id));
+        // related_record_id may not exist yet — fall back to title-based dedup
+        const existingIds = new Set(
+          existing.map((a) => a.related_record_id).filter(Boolean)
+        );
+        const existingTitles = new Set(existing.map((a) => a.title));
         const todayZero = new Date();
         todayZero.setHours(0, 0, 0, 0);
         for (const d of deliveries) {
@@ -284,19 +288,17 @@ export default function Deliveries() {
           if (existingIds.has(d.id)) continue;
           const liveProjectName = projectMap[d.project_id] || "";
           const liveDesc = d.description || wpMap[d.work_package_id] || "Delivery";
+          const alertTitle = `Delivery from ${d.vendor} is ${daysLate}d overdue`;
+          if (existingTitles.has(alertTitle)) continue;
           await base44.entities.Alert.create({
             alert_type: "Delivery_Overdue",
             severity: daysLate >= 7 ? "Critical" : daysLate >= 3 ? "High" : "Medium",
-            title: `Delivery from ${d.vendor} is ${daysLate}d overdue`,
-            message: `${liveDesc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${
+            title: alertTitle,
+            description: `${liveDesc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${
               d.scheduled_date
             } · Status: ${d.status} · Project: ${liveProjectName || "—"}`,
-            related_entity: "Delivery",
-            related_record_id: d.id,
             project_id: d.project_id,
             project_name: liveProjectName,
-            is_read: false,
-            is_dismissed: false,
           });
         }
       } catch (e) {

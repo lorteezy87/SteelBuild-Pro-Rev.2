@@ -39,7 +39,14 @@ export default function ExecutiveDashboard() {
 
   const { data: alerts = [] } = useQuery({
     queryKey: ["alerts"],
-    queryFn: () => base44.entities.Alert.filter({ is_dismissed: false }),
+    queryFn: async () => {
+      try {
+        const raw = await base44.entities.Alert.list();
+        return raw.filter((a) => !a.is_dismissed && !a.dismissed_at);
+      } catch {
+        return [];
+      }
+    },
   });
 
   // Calculate KPIs
