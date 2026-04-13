@@ -449,27 +449,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       return true;
     };
 
-    grouped.forEach(({ phase, tasks }) => {
-      // Calculate summary % complete (weighted by duration or simple average)
-      const tasksWithPct = tasks.filter(t => t.percent_complete !== undefined && t.percent_complete !== null);
-      const avgPct = tasksWithPct.length > 0
-        ? tasksWithPct.reduce((sum, t) => sum + (Number(t.percent_complete) || 0), 0) / tasksWithPct.length
-        : 0;
-
-      const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
-      const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
-      list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
-      if (!collapsed[phase.key]) {
-        tasks.forEach(t => {
-          if (isTaskVisible(t, tasks)) {
-            list.push({ type: "task", task: t, phase });
-          }
-        });
-      }
-    });
-
-    // ── Delivery rows — separate section at bottom of Gantt ──────────
-    if (showDeliveries && deliveries.length > 0) {
+    // Helper: insert delivery entity rows into the list
+    const insertDeliveryRows = () => {
+      if (!showDeliveries || deliveries.length === 0) return;
       const delStarts = deliveries.map(d => d.scheduled_date).filter(Boolean).sort();
       const delEnds = deliveries.map(d => d.required_date || d.actual_date || d.scheduled_date).filter(Boolean).sort();
       const deliveredCount = deliveries.filter(d => d.status === "Delivered").length;
@@ -489,6 +471,40 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             list.push({ type: "delivery", delivery: d });
           });
       }
+    };
+
+    // Insert deliveries in correct phase sequence:
+    // Pre-Construction → Detailing → Procurement → Fabrication → DELIVERIES → Installation → Closeout
+    let deliveriesInserted = false;
+
+    grouped.forEach(({ phase, tasks }) => {
+      // Insert delivery section right before Installation (after Fabrication/Delivery task phases)
+      if (!deliveriesInserted && (phase.key === "Installation" || phase.id >= 6)) {
+        deliveriesInserted = true;
+        insertDeliveryRows();
+      }
+
+      // Calculate summary % complete (weighted by duration or simple average)
+      const tasksWithPct = tasks.filter(t => t.percent_complete !== undefined && t.percent_complete !== null);
+      const avgPct = tasksWithPct.length > 0
+        ? tasksWithPct.reduce((sum, t) => sum + (Number(t.percent_complete) || 0), 0) / tasksWithPct.length
+        : 0;
+
+      const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
+      const ends   = tasks.map(t => t.end_date).filter(Boolean).sort();
+      list.push({ type: "summary", phase, tasks, start: starts[0], end: ends[ends.length - 1], pctComplete: avgPct });
+      if (!collapsed[phase.key]) {
+        tasks.forEach(t => {
+          if (isTaskVisible(t, tasks)) {
+            list.push({ type: "task", task: t, phase });
+          }
+        });
+      }
+    });
+
+    // Fallback: if no Installation phase existed, append deliveries after all phases
+    if (!deliveriesInserted) {
+      insertDeliveryRows();
     }
 
     return list;
