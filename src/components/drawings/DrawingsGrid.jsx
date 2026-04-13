@@ -143,8 +143,8 @@ export default function DrawingsGrid({
               {d.drawing_set_name?.trim() && !d.set_approval_status && (
                 <ActionBtn label="Approve" onClick={() => onSetApproval(d.drawing_set_name.trim())} />
               )}
-              <ActionBtn label="\u2192" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-              <ActionBtn label="\u2715" onClick={() => onDelete(d.id)} danger />
+              <ActionBtn label="Next" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
+              <ActionBtn label="Del" onClick={() => onDelete(d.id)} title="Delete" danger />
             </div>
           </div>
         );

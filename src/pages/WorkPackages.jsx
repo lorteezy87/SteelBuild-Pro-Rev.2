@@ -334,9 +334,23 @@ export default function WorkPackages() {
     setWPModalOpen(true);
   };
 
-  const handleWPCreate = () => {
-    const nextNum = getNextNumber(workPackages, "wp_number", "WP-");
-    setEditingWP({ wp_number: nextNum, project_id: projectId });
+  const handleWPCreate = async () => {
+    let wpNumber = "";
+    try {
+      if (projectId) {
+        const nextNum = await getNextNumber(projectId, "wp_number");
+        wpNumber = `WP-${String(nextNum).padStart(3, "0")}`;
+      }
+    } catch (err) {
+      console.warn("[WorkPackages] Failed to allocate WP number:", err?.message);
+      // Fallback: compute from existing work packages
+      const maxNum = workPackages
+        .map(wp => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
+        .filter(n => !isNaN(n))
+        .reduce((max, n) => Math.max(max, n), 0);
+      wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
+    }
+    setEditingWP({ wp_number: wpNumber, project_id: projectId });
     setWPModalOpen(true);
   };
 
@@ -1350,7 +1364,7 @@ export default function WorkPackages() {
           }}
           wp={editingWP}
           projects={projects}
-          nextNumber={getNextNumber(workPackages, "wp_number", "WP-")}
+          nextNumber={editingWP?.wp_number || ""}
           allDrawings={drawings}
         />
       )}
