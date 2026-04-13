@@ -74,7 +74,7 @@ export function useDeliveries(projectId, filters = {}) {
         if (status && status !== "ALL" && d.status !== status) return false;
         const q = (search || "").trim().toLowerCase();
         if (q) {
-          const hay = `${d.delivery_title} ${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
+          const hay = `${d.description} ${d.vendor} ${d.po_number} ${d.project_name} ${d.carrier} ${d.tracking_number}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -136,7 +136,7 @@ export function useDeliveries(projectId, filters = {}) {
       }
       return await base44.entities.Delivery.create({
         ...data,
-        delivery_title: data.delivery_title?.trim(),
+        description: data.description?.trim(),
         pieces: parseInt(data.pieces) || 0,
         weight_tons: parseFloat(data.weight_tons) || 0,
       });

@@ -80,7 +80,7 @@ const RULES = {
   delivery: (data, mode) => {
     const errors = [];
     errors.push(required(data.project_id, "project_id", "Project"));
-    errors.push(required(data.delivery_title, "delivery_title", "Delivery Title"));
+    errors.push(required(data.description, "description", "Delivery Title"));
     errors.push(required(data.vendor, "vendor", "Vendor"));
     errors.push(required(data.scheduled_date, "scheduled_date", "Scheduled Date"));
     errors.push(validDate(data.scheduled_date, "scheduled_date", "Scheduled Date"));

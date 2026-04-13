@@ -479,7 +479,7 @@ export default function ResourceScheduling() {
       const hit = e.clientY >= r.top && e.clientY <= r.bottom;
       const resId = row.getAttribute("data-resource-id");
       const res = resources.find((r) => r.id === resId);
-      const resCapacity = Number(res?.budget_hours || res?.capacity) || 0;
+      const resCapacity = Number(res?.capacity || res?.budget_hours) || 0;
       const resAssigned = scheduledWps
         .filter((wp) => wp.crew === row.getAttribute("data-resource-name"))
         .reduce((s, wp) => s + (Number(wp.shop_hours_budget) || Number(wp.field_hours_budget) || 0), 0);
@@ -562,39 +562,37 @@ export default function ResourceScheduling() {
     cleanupDrag();
 
     // Auto-hour distribution: spread total budget hours evenly across duration
+    // DB schema: work_packages has shop_hours_budget, shop_hours_actual,
+    // field_hours_budget, field_hours_actual — but NOT shop_daily_load,
+    // field_daily_load, estimated_hours, startDate, or endDate.
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
     const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
     const isShop = droppedWp?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
-    const totalEstHrs = Number(droppedWp?.estimated_hours) || Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
-    const dailyLoad = totalEstHrs > 0 ? +(totalEstHrs / durationDays).toFixed(1) : 0;
+    const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
     const autoHours = {};
     if (totalEstHrs > 0) {
       if (isShop) {
         autoHours.shop_hours_budget = totalEstHrs;
-        autoHours.shop_daily_load = dailyLoad;
       } else {
         autoHours.field_hours_budget = totalEstHrs;
-        autoHours.field_daily_load = dailyLoad;
       }
     }
 
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
+      // Optimistic local update (startDate/endDate kept in cache only for UI positioning)
       qc.setQueryData(["work-packages", activeProject?.id], (prev) =>
         prev?.map((wp) => wp.id === d.wpId ? {
           ...wp,
           released_date: newStart.toISOString().split("T")[0],
-          startDate: newStart.toISOString(),
-          endDate: newEnd.toISOString(),
           crew: newResourceName || "",
           ...autoHours,
         } : wp) || []
       );
       try {
+        // Only persist DB-valid columns
         await base44.entities.WorkPackage.update(d.wpId, {
           released_date: newStart.toISOString().split("T")[0],
-          startDate: newStart.toISOString(),
-          endDate: newEnd.toISOString(),
           crew: newResourceName || "",
           ...autoHours,
         });
@@ -615,7 +613,7 @@ export default function ResourceScheduling() {
 
     if (!dateChanged && !resourceChanged) return;
 
-    // Optimistic update (includes auto-hour distribution)
+    // Optimistic update (local cache only)
     qc.setQueryData(
       ["work-packages", activeProject?.id],
       (prev) =>
@@ -623,8 +621,7 @@ export default function ResourceScheduling() {
           wp.id === d.wpId
             ? {
                 ...wp,
-                startDate: newStart.toISOString(),
-                endDate: newEnd.toISOString(),
+                released_date: newStart.toISOString().split("T")[0],
                 ...(resourceChanged && { crew: newResourceName }),
                 ...autoHours,
               }
@@ -640,36 +637,22 @@ export default function ResourceScheduling() {
     setUndoToast({ id: Date.now(), message: toastMsg });
     setTimeout(() => setUndoToast(null), 8000);
 
-    // Persist to DB (includes auto-hour distribution)
+    // Persist to DB — only valid columns
     try {
       const updatePayload = {
-        startDate: newStart.toISOString(),
-        endDate: newEnd.toISOString(),
+        released_date: newStart.toISOString().split("T")[0],
         ...autoHours,
       };
       if (resourceChanged) {
         updatePayload.crew = newResourceName;
       }
 
-      await base44.entities.WorkPackage.update(d.wpId, { ...updatePayload, released_date: newStart.toISOString().split('T')[0] });
+      await base44.entities.WorkPackage.update(d.wpId, updatePayload);
     } catch (err) {
       console.error("WP update failed:", err);
 
-      // Rollback
-      qc.setQueryData(
-        ["work-packages", activeProject?.id],
-        (prev) =>
-          prev?.map((wp) =>
-            wp.id === d.wpId
-              ? {
-                  ...wp,
-                  startDate: d.origStart.toISOString(),
-                  endDate: d.origEnd.toISOString(),
-                  crew: d.fromResourceName,
-                }
-              : wp
-          ) || []
-      );
+      // Rollback — refetch from server
+      qc.invalidateQueries({ queryKey: ["work-packages"] });
 
       setUndoToast({
         id: Date.now(),
@@ -1293,7 +1276,7 @@ export default function ResourceScheduling() {
                   const resActualHrs = assignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
                   const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
                   const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
-                  const resBudgetFromEntity = Number(res.budget_hours) || 0;
+                  const resBudgetFromEntity = Number(res.capacity || res.budget_hours) || 0;
                   const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
                   const resSkills = extractSkillsRS(res);
                   const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
@@ -1531,7 +1514,7 @@ export default function ResourceScheduling() {
             const rowActualHrs = rowAssignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
             const rowBurnPct = rowBudgetHrs > 0 ? Math.round((rowActualHrs / rowBudgetHrs) * 100) : 0;
             const rowIsOverBudget = rowActualHrs > rowBudgetHrs && rowBudgetHrs > 0;
-            const resBudgetFromEntity = Number(resource.budget_hours) || 0;
+            const resBudgetFromEntity = Number(resource.capacity || resource.budget_hours) || 0;
             const isOverAllocated = resBudgetFromEntity > 0 && rowBudgetHrs > resBudgetFromEntity;
             const isEquipment = resource.resource_type === "Equipment";
             const rowHeatBg = getRowCapacityBg(rowBurnPct, isOverAllocated);
@@ -1849,7 +1832,7 @@ export default function ResourceScheduling() {
           ))}
           <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
           <button onClick={async () => {
-            await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: "", released_date: "", startDate: "", endDate: "" });
+            await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: "", released_date: null });
             qc.invalidateQueries({ queryKey: ["work-packages"] });
             qc.invalidateQueries({ queryKey: ["wps-all"] });
             setContextMenu(null);

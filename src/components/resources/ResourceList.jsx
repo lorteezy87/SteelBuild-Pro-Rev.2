@@ -94,11 +94,19 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
       </div>
 
       {resources.map((resource, idx) => {
-        const utilization = resource.budget_hours ? Math.round((resource.actual_hours / resource.budget_hours) * 100) : 0;
-        const capacityBg = getCapacityBg(utilization, resource.availability_status);
-        const capacityBorderColor = getCapacityBorder(utilization, resource.availability_status);
+        // DB column mapping: capacity = budget_hours, cost_rate = hourly_rate,
+        // availability = availability_status, metadata.actual_hours = actual_hours
+        const budgetHours = Number(resource.capacity) || Number(resource.budget_hours) || 0;
+        const meta = typeof resource.metadata === "object" && resource.metadata !== null ? resource.metadata : {};
+        const actualHours = Number(meta.actual_hours) || Number(resource.actual_hours) || 0;
+        const hourlyRate = Number(resource.cost_rate) || Number(resource.hourly_rate) || 0;
+        const status = resource.availability || resource.availability_status || "Available";
+
+        const utilization = budgetHours ? Math.round((actualHours / budgetHours) * 100) : 0;
+        const capacityBg = getCapacityBg(utilization, status);
+        const capacityBorderColor = getCapacityBorder(utilization, status);
         const skills = extractSkills(resource);
-        const durationHint = getDurationHint(resource.budget_hours);
+        const durationHint = getDurationHint(budgetHours);
         const barColor = utilization > 100 ? "var(--status-error)" : utilization > 80 ? "var(--status-warning)" : "var(--accent)";
 
         return (
@@ -153,9 +161,9 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
 
             {/* Column 2: Hours + duration hint */}
             <div>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Budget: <strong style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{resource.budget_hours || 0}h</strong></div>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Actual: <strong style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: utilization > 100 ? "var(--status-error)" : "var(--text-primary)" }}>{resource.actual_hours || 0}h</strong></div>
-              {resource.hourly_rate > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>${resource.hourly_rate}/hr</div>}
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Budget: <strong style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{budgetHours}h</strong></div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Actual: <strong style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: utilization > 100 ? "var(--status-error)" : "var(--text-primary)" }}>{actualHours}h</strong></div>
+              {hourlyRate > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>${hourlyRate}/hr</div>}
               {durationHint && (
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", marginTop: 3, letterSpacing: "0.02em" }}>
                   {durationHint}
@@ -194,8 +202,8 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
                 display: "inline-flex",
                 alignItems: "center",
                 padding: "4px 10px",
-                background: `${STATUS_COLORS[resource.availability_status]}15`,
-                border: `1px solid ${STATUS_COLORS[resource.availability_status]}35`,
+                background: `${STATUS_COLORS[status] || "var(--text-muted)"}15`,
+                border: `1px solid ${STATUS_COLORS[status] || "var(--text-muted)"}35`,
                 borderRadius: "var(--radius-badge)",
                 minHeight: 24,
               }}>
@@ -203,11 +211,11 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
                   fontFamily: "var(--font-mono)",
                   fontSize: 8,
                   fontWeight: 700,
-                  color: STATUS_COLORS[resource.availability_status],
+                  color: STATUS_COLORS[status] || "var(--text-muted)",
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
                 }}>
-                  {resource.availability_status}
+                  {status}
                 </span>
               </div>
               {resource.notes && (

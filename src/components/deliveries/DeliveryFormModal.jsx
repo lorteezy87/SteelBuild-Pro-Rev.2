@@ -12,7 +12,6 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const emptyForm = {
     project_id: projectId || "",
     project_name: "",
-    delivery_title: "",
     work_package_id: "",
     vendor: "",
     po_number: "",
@@ -96,8 +95,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   };
 
   const handleSubmit = () => {
-    if (!formData.delivery_title?.trim()) {
-      toast.error("Delivery title is required");
+    if (!formData.description?.trim()) {
+      toast.error("Delivery title/description is required");
       return;
     }
     if (!formData.project_id) {
@@ -129,9 +128,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     const wp = workPackages.find(w => w.id === formData.work_package_id);
     mutation.mutate({
       ...formData,
-      delivery_title: formData.delivery_title.trim(),
       project_name: proj?.name || proj?.project_name || formData.project_name || "",
-      description: wp ? (wp.name || wp.wp_number || formData.description || "") : formData.description || "",
+      description: formData.description?.trim() || (wp ? (wp.name || wp.wp_number || "") : ""),
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });
@@ -265,8 +263,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               <label style={labelStyle}>Delivery Title *</label>
               <input
                 type="text"
-                value={formData.delivery_title}
-                onChange={(e) => set("delivery_title", e.target.value)}
+                value={formData.description || ""}
+                onChange={(e) => set("description", e.target.value)}
                 style={inputStyle}
                 placeholder="e.g. Anchor Bolts — Phase 1, HSS Columns Load 3"
                 required
