@@ -106,6 +106,10 @@ class SupabaseOperationError extends Error {
     this.code = originalError?.code;
     this.details = originalError?.details;
     this.hint = originalError?.hint;
+    // Propagate HTTP status for smart retry logic (400 = bad column, 404 = missing table)
+    this.status = originalError?.code === 'PGRST204' ? 404
+      : msg.includes('does not exist') ? 400
+      : originalError?.status || null;
   }
 }
 
