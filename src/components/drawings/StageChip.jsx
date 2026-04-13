@@ -12,7 +12,7 @@ export default function StageChip({ stage, size = "sm" }) {
     <span style={{
       ...mono,
       padding: pad,
-      borderRadius: 2,
+      borderRadius: "var(--radius-badge)",
       fontSize: fs,
       fontWeight: 700,
       letterSpacing: "0.1em",

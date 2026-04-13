@@ -367,7 +367,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={costByPhase} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                        <XAxis dataKey="phase" tick={{ fill: "var(--text-muted)", fontSize: 7, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="phase" tick={{ fill: "var(--text-muted)", fontSize: 9, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} />
                         <YAxis tickFormatter={(v) => fmtShort$(v)} tick={{ fill: "var(--text-muted)", fontSize: 8, fontFamily: "'IBM Plex Mono'" }} axisLine={false} tickLine={false} width={44} />
                         <Tooltip content={<CustomTooltipBudget />} />
                         <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3,3,0,0]} opacity={0.6} />
@@ -433,7 +433,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#A78BFA" }}>
                                 {member.packages}
                               </div>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
                                 PKGS
                               </div>
                             </div>
@@ -451,7 +451,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                         border: "none",
                         borderRadius: "var(--radius-card)",
                     }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OPEN RFIs</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OPEN RFIs</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: openRFIs > 0 ? "var(--warning)" : "var(--success)" }}>
                         {openRFIs}
                       </div>
@@ -465,7 +465,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                       padding: "8px 10px", background: "var(--bg-surface-low)",
                       border: "none", borderRadius: "var(--radius-card)",
                     }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>CHANGE ORDERS</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>CHANGE ORDERS</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--accent)" }}>
                         {cos.length}
                       </div>
@@ -555,7 +555,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                   {/* Upcoming deliveries */}
                   {deliveries.filter(d => !["Delivered"].includes(d.status)).length > 0 && (
                     <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>
                         UPCOMING DELIVERIES
                       </div>
                       {deliveries.filter(d => !["Delivered"].includes(d.status)).slice(0, 3).map((d, idx) => (

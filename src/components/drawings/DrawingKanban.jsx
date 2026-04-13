@@ -106,7 +106,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
             <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
               {overallApproval && (
                 <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 7,
+                  fontFamily: "var(--font-mono)", fontSize: 9,
                   background: `${APPROVAL_COLOR[overallApproval]}18`,
                   border: `1px solid ${APPROVAL_COLOR[overallApproval]}40`,
                   color: APPROVAL_COLOR[overallApproval],
@@ -146,7 +146,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               borderRadius: 4, padding: "3px 6px"
             }}>
               <AlertTriangle style={{ width: 8, height: 8, color: "var(--status-error)", flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.04em" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", letterSpacing: "0.04em" }}>
                 PACKAGE REJECTED — ALL SHEETS FAIL
               </span>
             </div>
@@ -159,7 +159,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               style={{
                 display: "flex", alignItems: "center", gap: 3,
                 background: "none", border: "none", cursor: "pointer", padding: 0,
-                fontFamily: "var(--font-mono)", fontSize: 7,
+                fontFamily: "var(--font-mono)", fontSize: 9,
                 color: "var(--text-muted)", letterSpacing: "0.08em"
               }}
             >
@@ -167,11 +167,11 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
               {sheets.length} SHEET{sheets.length !== 1 ? "S" : ""}
             </button>
             {isOverdue && !hasRejected && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", fontWeight: 700 }}>⚠ OVERDUE</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 700 }}>⚠ OVERDUE</span>
             )}
             {/* Stage of bottleneck */}
             <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.06em",
+              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em",
               color: a.color, background: a.bg, border: `1px solid ${a.border}`,
               borderRadius: 3, padding: "1px 5px"
             }}>{effectiveStage.toUpperCase()}</span>
@@ -199,7 +199,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                       }}>{s.title}</span>
                     </div>
                     <span style={{
-                      fontFamily: "var(--font-mono)", fontSize: 7, color: sa.color,
+                      fontFamily: "var(--font-mono)", fontSize: 9, color: sa.color,
                       flexShrink: 0, marginLeft: 4
                     }}>{s.stage}</span>
                   </div>
@@ -217,7 +217,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                   flex: 1, padding: "3px 0",
                   background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
                   borderRadius: 4, color: "var(--accent)",
-                  fontFamily: "var(--font-mono)", fontSize: 7,
+                  fontFamily: "var(--font-mono)", fontSize: 9,
                   letterSpacing: "0.08em", cursor: "pointer"
                 }}
               >EDIT SET</button>
@@ -228,7 +228,7 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                     flex: 1, padding: "3px 0",
                     background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.22)",
                     borderRadius: 4, color: "#A78BFA",
-                    fontFamily: "var(--font-mono)", fontSize: 7,
+                    fontFamily: "var(--font-mono)", fontSize: 9,
                     letterSpacing: "0.08em", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 3
                   }}
@@ -272,7 +272,7 @@ function KanbanColumn({ stage, setGroups, onEdit, onAnnotate }) {
             }}>{setGroups.length} sets</span>
             {totalSheets > 0 && setGroups.length !== totalSheets && (
               <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 7,
+                fontFamily: "var(--font-mono)", fontSize: 9,
                 color: "var(--text-muted)"
               }}>{totalSheets} sheets</span>
             )}

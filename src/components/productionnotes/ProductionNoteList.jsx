@@ -109,7 +109,7 @@ export default function ProductionNoteList({ notes = [], onEdit, onDelete }) {
               {note.is_resolved && (
                 <span style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: 700,
                   color: "var(--status-success)",
                   background: "var(--success-muted)",
@@ -126,7 +126,7 @@ export default function ProductionNoteList({ notes = [], onEdit, onDelete }) {
               {note.is_high_priority && (
                 <span style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   fontWeight: 700,
                   color: "var(--status-error)",
                   background: "var(--danger-muted)",

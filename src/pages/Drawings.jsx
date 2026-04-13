@@ -12,9 +12,9 @@
  *   components/drawings/drawingsUtils.js    — pure helper functions
  */
 
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
@@ -45,11 +45,12 @@ export default function Drawings() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const projectId = activeProject?.id;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [view, setView] = useState("list");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") || searchParams.get("sheet") || "");
   const [discipline, setDiscipline] = useState("ALL");
   const [stageFilter, setStageFilter] = useState("ALL");
   const [selected, setSelected] = useState(new Set());

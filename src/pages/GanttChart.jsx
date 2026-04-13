@@ -87,7 +87,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: phase.solid }}>{task.phase}</span>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginLeft: 4 }}>{task.childCount} items</span>
                   {task.delayed > 0 && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "var(--status-error)", background: "var(--danger-muted)", padding: "1px 5px", borderRadius: 2 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)", background: "var(--danger-muted)", padding: "1px 5px", borderRadius: 2 }}>
                       {task.delayed} DELAYED
                     </span>
                   )}

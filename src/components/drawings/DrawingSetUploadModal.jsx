@@ -481,7 +481,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate, ex
                       onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
                       onBlur={e => e.target.style.borderColor = "transparent"} />
                     {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
                         ⚠ EXISTS IN PROJECT
                       </span>
                     )}

@@ -1163,7 +1163,7 @@ export default function DrilldownView({
                 }}
               >
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
                   color: "var(--text-muted)", letterSpacing: "0.10em",
                   textTransform: "uppercase", marginBottom: 6,
                 }}>
@@ -1194,7 +1194,7 @@ export default function DrilldownView({
                   {item.isClear ? "No overdue items" : item.detail}
                 </div>
                 <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                   color: "var(--text-muted)", letterSpacing: "0.08em",
                   marginTop: 8, textTransform: "uppercase",
                 }}>

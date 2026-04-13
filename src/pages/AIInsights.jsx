@@ -31,7 +31,7 @@ function KPICard({ label, value, sub, color, urgent }) {
       padding: "14px 16px",
       display: "flex", flexDirection: "column", gap: 4
     }}>
-      <div style={{ fontFamily: M.mono, fontSize: 7, letterSpacing: "0.14em", color: M.muted, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontFamily: M.mono, fontSize: 9, letterSpacing: "0.14em", color: M.muted, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontFamily: M.display, fontSize: 28, fontWeight: 800, color: c, lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>{sub}</div>}
     </div>
@@ -282,7 +282,7 @@ export default function PortfolioOverview() {
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border-default)" }}>
                 {["Project", "Phase", "Health", "Contract Value", "Budget", "Actual", "Var", "Open RFIs", "Overdue", "Schedule", "Pending COs"].map(h => (
-                  <th key={h} style={{ fontFamily: M.mono, fontSize: 7, color: M.muted, letterSpacing: "0.10em", textTransform: "uppercase", padding: "6px 10px", textAlign: h === "Project" || h === "Phase" || h === "Health" ? "left" : "right", whiteSpace: "nowrap" }}>{h}</th>
+                  <th key={h} style={{ fontFamily: M.mono, fontSize: 9, color: M.muted, letterSpacing: "0.10em", textTransform: "uppercase", padding: "6px 10px", textAlign: h === "Project" || h === "Phase" || h === "Health" ? "left" : "right", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>

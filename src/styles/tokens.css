@@ -70,8 +70,8 @@
   /* Text */
   --text-primary:             #E8EBF2;
   --text-secondary:           #A8B4C8;
-  --text-muted:               #5A6880;
-  --text-disabled:            rgba(90,104,128,0.50);
+  --text-muted:               #7B8BA2;
+  --text-disabled:            rgba(123,139,162,0.50);
 
   /* Semantic status colors */
   --status-success:           #3FB950;

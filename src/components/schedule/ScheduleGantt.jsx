@@ -116,7 +116,7 @@ function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
       <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: color, borderRadius: "0 2px 2px 0" }} />
       {/* % label */}
       {widthPx > 40 && (
-        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>
+        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>
           {pct}%
         </span>
       )}
@@ -623,7 +623,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
         {/* Left header */}
         <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
           {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "%"].map((h, i) => (
-            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
+            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
           ))}
         </div>
         {/* Right timeline header */}
@@ -712,7 +712,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   {/* Vendor */}
                   <span title={d.vendor || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.vendor || "—"}</span>
                   {/* Status */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: dotColor, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{d.status || "—"}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dotColor, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{d.status || "—"}</span>
                   {/* No % for deliveries */}
                   <span />
                 </div>
@@ -792,7 +792,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
                 )}
                 {/* % or save/cancel */}
                 {isEditing ? (
@@ -815,7 +815,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             {/* Today line */}
             {showToday && (
               <div style={{ position: "absolute", top: 0, bottom: 0, left: todayPx, width: 2, background: "#FF6B00", zIndex: 10 }}>
-                <div style={{ position: "absolute", top: 0, left: -18, background: "#FF6B00", borderRadius: 2, padding: "1px 4px", fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: "#fff", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>TODAY</div>
+                <div style={{ position: "absolute", top: 0, left: -18, background: "#FF6B00", borderRadius: 2, padding: "1px 4px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#fff", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>TODAY</div>
               </div>
             )}
 
@@ -894,7 +894,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                         <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "2px 0 0 2px" }} />
                         <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "0 2px 2px 0" }} />
                         {w2 > 40 && (
-                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
+                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
                         )}
                       </div>
                     </div>

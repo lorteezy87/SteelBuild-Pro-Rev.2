@@ -48,7 +48,7 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
           ].map(({ label, value, color }) => (
             <div key={label} style={{ textAlign: "center", padding: "8px 6px", background: "var(--bg-hover)", borderRadius: 6 }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 3 }}>{value}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</div>
             </div>
           ))}
         </div>
@@ -57,7 +57,7 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
         {totalErection > 0 && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Erection Complete</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Erection Complete</span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-success)", fontWeight: 700 }}>{erectionPct}%</span>
             </div>
             <div style={{ height: 7, background: "var(--border-default)", borderRadius: 4, overflow: "hidden" }}>
@@ -69,7 +69,7 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
         {/* Upcoming deliveries for erection */}
         {upcomingDeliveries.length > 0 && (
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Incoming Material</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Incoming Material</div>
             {upcomingDeliveries.slice(0, 3).map(d => (
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", borderLeft: "2px solid var(--accent)", marginBottom: 4, background: "var(--accent-muted)", borderRadius: "0 4px 4px 0" }}>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{d.description || d.vendor}</span>
@@ -82,7 +82,7 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
         {/* Upcoming erection tasks */}
         {erectionTasks.length > 0 && (
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Scheduled Activities</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Scheduled Activities</div>
             {erectionTasks.map(t => {
               const statusColor = t.status === "Complete" ? "var(--status-success)" : t.status === "Delayed" ? "var(--status-error)" : t.status === "In Progress" ? "var(--status-warning)" : "var(--text-muted)";
               return (
@@ -101,12 +101,12 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
         {/* Blocked WPs */}
         {blocked.length > 0 && (
           <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 10, marginTop: 10 }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Blocked Sequences</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Blocked Sequences</div>
             {blocked.slice(0, 3).map(w => (
               <div key={w.id} style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", borderLeft: "2px solid var(--status-error)", marginBottom: 4, background: "var(--danger-muted)", borderRadius: "0 4px 4px 0" }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 700 }}>{w.wp_number}</span>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, margin: "0 8px" }}>{w.name}</span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-error)", fontWeight: 700 }}>HOLD</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", fontWeight: 700 }}>HOLD</span>
               </div>
             ))}
           </div>

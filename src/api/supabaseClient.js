@@ -137,7 +137,7 @@ const cleanRecord = (record) =>
   Object.fromEntries(
     Object.entries(record)
       .filter(
-        ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
+        ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k) && !k.startsWith('_')
       )
       .map(([k, v]) => [k, v === '' ? null : v])
   );

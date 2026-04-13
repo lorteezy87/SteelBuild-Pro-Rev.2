@@ -41,33 +41,41 @@ const TYPE_CONFIG = {
 function SignalCard({ label, value, color, sub, onClick, active, previous, invertTrend }) {
   const numericValue = typeof value === "number" ? value : parseInt(value, 10);
   const hasValue = !isNaN(numericValue) && numericValue > 0;
+  const isCritical = hasValue && (label === "CRITICAL" || label === "OVERDUE") && numericValue >= 3;
+
+  // Multi-layer glow: subtle ambient + focused edge glow
+  const glowShadow = hasValue
+    ? `0 0 20px ${color}30, 0 0 6px ${color}18, inset 0 1px 0 ${color}12`
+    : "var(--shadow-card, none)";
+
   return (
     <div
       onClick={onClick}
+      className={isCritical ? "signal-card-pulse" : undefined}
       style={{
         flex: 1,
         minWidth: 100,
         minHeight: 44,
         padding: "14px 18px",
         background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}40` : "var(--divider)"}`,
+        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : hasValue ? `${color}45` : "var(--divider)"}`,
         borderRadius: "var(--radius-card, 10px)",
         cursor: onClick ? "pointer" : "default",
-        boxShadow: hasValue ? `0 0 16px ${color}25` : "var(--shadow-card, none)",
-        transition: "box-shadow 0.3s ease, border-color 0.3s ease, background 0.15s ease",
+        boxShadow: glowShadow,
+        transition: "box-shadow 0.4s ease, border-color 0.3s ease, background 0.15s ease, transform 0.15s ease",
       }}
     >
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.14em", marginBottom: 4 }}>
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: color || "var(--text-primary)", lineHeight: 1 }}>
           {value}
         </div>
         <TrendIndicator current={numericValue} previous={previous} invert={!!invertTrend} />
       </div>
       {sub && (
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 3 }}>
           {sub}
         </div>
       )}
@@ -79,10 +87,10 @@ function SignalCard({ label, value, color, sub, onClick, active, previous, inver
 function SeverityBadge({ severity }) {
   return (
     <span style={{
-      fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.10em",
-      padding: "2px 7px", borderRadius: 4,
+      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+      padding: "3px 8px", borderRadius: "var(--radius-badge, 6px)",
       background: severity.bg, color: severity.color, border: `1px solid ${severity.border}`,
-      whiteSpace: "nowrap", flexShrink: 0,
+      whiteSpace: "nowrap", flexShrink: 0, lineHeight: 1.2,
     }}>
       {severity.label}
     </span>
@@ -93,12 +101,13 @@ function SeverityBadge({ severity }) {
 function ActionBadge({ action }) {
   return (
     <span style={{
-      fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.08em",
-      padding: "2px 8px", borderRadius: 4,
+      fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em",
+      padding: "3px 10px", borderRadius: "var(--radius-badge, 6px)",
       background: "rgba(200,155,32,0.10)", color: "var(--accent)",
       border: "1px solid rgba(200,155,32,0.22)", whiteSpace: "nowrap", flexShrink: 0,
+      lineHeight: 1.2,
     }}>
-      → {action}
+      &rarr; {action}
     </span>
   );
 }
@@ -109,10 +118,10 @@ function ImpactTag({ tagKey }) {
   if (!tag) return null;
   return (
     <span style={{
-      fontFamily: "var(--font-mono)", fontSize: 6, letterSpacing: "0.08em",
-      padding: "1px 6px", borderRadius: 3,
+      fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.08em",
+      padding: "2px 7px", borderRadius: 4,
       background: `${tag.color}15`, color: tag.color,
-      border: `1px solid ${tag.color}30`, whiteSpace: "nowrap",
+      border: `1px solid ${tag.color}30`, whiteSpace: "nowrap", lineHeight: 1.2,
     }}>
       {tag.label}
     </span>
@@ -170,9 +179,10 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
 
             {/* Type badge */}
             <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.09em",
+              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.09em",
               color: tc.color, background: `${tc.color}15`, border: `1px solid ${tc.color}30`,
-              padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0,
+              padding: "3px 8px", borderRadius: "var(--radius-badge, 6px)", whiteSpace: "nowrap", flexShrink: 0,
+              lineHeight: 1.2,
             }}>
               {tc.icon} {tc.label}
             </span>
@@ -194,7 +204,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
                 {item.title}
               </span>
               {item.subtitle && (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em", flexShrink: 0 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.06em", flexShrink: 0 }}>
                   {item.subtitle}
                 </span>
               )}
@@ -220,23 +230,23 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
           <div style={{ display: "flex", alignItems: "center", gap: 12, paddingLeft: 32, flexWrap: "wrap" }}>
             {/* Timing */}
             <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 9,
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
               color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-muted)",
               whiteSpace: "nowrap",
             }}>
-              {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "—")}
+              {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "\u2014")}
             </span>
 
             {/* Owner */}
             <span style={{
               fontFamily: "var(--font-body)", fontSize: 11, color: item.assigned_to ? "var(--text-secondary)" : "rgba(255,100,100,0.55)",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140,
             }}>
               {item.assigned_to || "Unassigned"}
             </span>
 
             {/* Reason (top 1) */}
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>
               {item.reasons[0] || ""}
             </span>
 
@@ -247,7 +257,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
 
         {/* Expanded detail */}
         {expanded && (
-          <div style={{ padding: "10px 14px 14px 46px", display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--divider)" }}>
+          <div style={{ padding: "10px 14px 14px 46px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--divider)", animation: "fadeIn 0.2s ease" }}>
             {/* Impact tags */}
             {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -256,9 +266,9 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
             )}
 
             {/* All reasons */}
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {item.reasons.map((r, i) => (
-                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "var(--hover-bg)", border: "1px solid var(--divider)", padding: "2px 8px", borderRadius: 4 }}>
+                <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "var(--hover-bg)", border: "1px solid var(--divider)", padding: "3px 10px", borderRadius: 5 }}>
                   {r}
                 </span>
               ))}
@@ -268,20 +278,20 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
             <div style={{ display: "flex", gap: 24 }}>
               {item.project_name && (
                 <div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>PROJECT</div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>{item.project_name}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 3 }}>PROJECT</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{item.project_name}</div>
                 </div>
               )}
               {item.waiting_on && (
                 <div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>WAITING ON</div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#FFB400" }}>{item.waiting_on}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 3 }}>WAITING ON</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#FFB400" }}>{item.waiting_on}</div>
                 </div>
               )}
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>SCORE BREAKDOWN</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: item.severity.color, fontWeight: 700 }}>
-                  {item.score} pts → {item.severity.label}
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 3 }}>SCORE BREAKDOWN</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: item.severity.color, fontWeight: 700 }}>
+                  {item.score} pts &rarr; {item.severity.label}
                 </div>
               </div>
             </div>
@@ -306,12 +316,15 @@ function DetailDrawer({ item, onClose, onNavigate }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} />
       <div style={{
-        position: "fixed", top: 0, right: 0, bottom: 0, width: 380,
-        background: "var(--bg-surface)", borderLeft: "1px solid var(--bg-surface-high)",
-        boxShadow: "-12px 0 40px rgba(0,0,0,0.70)", zIndex: 51,
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 400,
+        background: "var(--glass-bg, rgba(20,23,28,0.92))",
+        borderLeft: "1px solid var(--glass-border, rgba(255,255,255,0.06))",
+        backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+        boxShadow: "-16px 0 48px rgba(0,0,0,0.60), -4px 0 16px rgba(0,0,0,0.30)", zIndex: 51,
         display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: "slideInRight 0.25s ease-out",
       }}>
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
@@ -319,7 +332,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                 <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.09em",
+                  fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.09em",
                   color: tc.color, background: `${tc.color}15`, border: `1px solid ${tc.color}30`,
                   padding: "2px 7px", borderRadius: 4,
                 }}>
@@ -331,7 +344,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
                 {item.title}
               </div>
               {item.subtitle && (
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 4 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 4 }}>
                   {item.subtitle}
                 </div>
               )}
@@ -345,7 +358,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
 
           {/* Score card */}
           <div style={{ background: `${item.severity.color}0D`, border: `1px solid ${item.severity.color}30`, borderRadius: 8, padding: "12px 14px" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>PRIORITY SCORE</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>PRIORITY SCORE</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 32, fontWeight: 800, color: item.severity.color, lineHeight: 1 }}>{item.score}</span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>pts → {item.severity.label}</span>
@@ -354,7 +367,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
 
           {/* Timing */}
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>TIMING</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>TIMING</div>
             <div style={{
               fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
               color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-secondary)",
@@ -366,7 +379,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
           {/* Reasons */}
           {item.reasons.length > 0 && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>WHY IT'S RANKED HERE</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>WHY IT'S RANKED HERE</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {item.reasons.map((r, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
@@ -381,7 +394,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
           {/* Impact tags */}
           {(Array.isArray(item.tags) ? item.tags : []).length > 0 && (
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>DOWNSTREAM IMPACT</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 8 }}>DOWNSTREAM IMPACT</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {(Array.isArray(item.tags) ? item.tags : []).map((t) => <ImpactTag key={t} tagKey={t} />)}
               </div>
@@ -391,26 +404,26 @@ function DetailDrawer({ item, onClose, onNavigate }) {
           {/* Ownership */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OWNER</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>OWNER</div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: item.assigned_to ? "var(--text-secondary)" : "rgba(255,100,100,0.70)" }}>
                 {item.assigned_to || "Unassigned"}
               </div>
             </div>
             {item.waiting_on && (
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>WAITING ON</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>WAITING ON</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#FFB400" }}>{item.waiting_on}</div>
               </div>
             )}
             {item.project_name && (
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>PROJECT</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>PROJECT</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{item.project_name}</div>
               </div>
             )}
             {item.status && (
               <div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>STATUS</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>STATUS</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>{item.status}</div>
               </div>
             )}
@@ -419,7 +432,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
 
         {/* Footer — next action */}
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-default)", flexShrink: 0 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 8 }}>RECOMMENDED ACTION</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 8 }}>RECOMMENDED ACTION</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={{
               flex: 1, background: "var(--accent)", border: "none", borderRadius: 6,
@@ -496,14 +509,14 @@ function MorningScan({ items, onSelect }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
                 <SeverityBadge severity={item.severity} />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: tc.color }}>{tc.label}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: tc.color }}>{tc.label}</span>
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.title}
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
                 {item.reasons.slice(0, 2).map((r, ri) => (
-                  <span key={ri} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{r}</span>
+                  <span key={ri} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{r}</span>
                 ))}
               </div>
             </div>
@@ -511,7 +524,7 @@ function MorningScan({ items, onSelect }) {
             <div style={{ flexShrink: 0, textAlign: "right" }}>
               <ActionBadge action={item.nextAction} />
               {item.overdueDays > 0 && (
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FF7A7A", marginTop: 4 }}>{item.overdueDays}d overdue</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF7A7A", marginTop: 4 }}>{item.overdueDays}d overdue</div>
               )}
             </div>
           </div>
@@ -536,7 +549,7 @@ function WaitingOnBoard({ board }) {
         <div key={party} style={{ background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid var(--divider)", background: "var(--hover-bg)" }}>
             <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{party}</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FFB400", background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.22)", padding: "1px 7px", borderRadius: 3 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FFB400", background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.22)", padding: "1px 7px", borderRadius: 3 }}>
               {count} ITEMS
             </span>
           </div>
@@ -547,14 +560,14 @@ function WaitingOnBoard({ board }) {
                 {item.title}
               </span>
               {item.overdueDays > 0 && (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FF7A7A", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF7A7A", whiteSpace: "nowrap" }}>
                   {item.overdueDays}d overdue
                 </span>
               )}
             </div>
           ))}
           {count > 3 && (
-            <div style={{ padding: "5px 12px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+            <div style={{ padding: "5px 12px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
               +{count - 3} MORE
             </div>
           )}
@@ -672,13 +685,13 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
         />
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1 }}>{total}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>TOTAL OPEN ITEMS</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>TOTAL OPEN ITEMS</div>
         </div>
       </div>
 
       {/* Severity breakdown bar */}
       <div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>SEVERITY BREAKDOWN</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>SEVERITY BREAKDOWN</div>
         <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 8, background: "var(--hover-bg)" }}>
           {segments.map((seg) => (
             seg.count > 0 && (
@@ -690,7 +703,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
           {segments.map((seg) => (
             <div key={seg.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 6, height: 6, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{seg.key}: {seg.count}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{seg.key}: {seg.count}</span>
             </div>
           ))}
         </div>
@@ -699,7 +712,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
       {/* Top waiting-on parties */}
       {topWaiting.length > 0 && (
         <div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>TOP WAITING ON</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 6 }}>TOP WAITING ON</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {topWaiting.map(({ party, count }) => (
               <div key={party} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
@@ -714,11 +727,11 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
       {/* Key metrics */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
         </div>
         <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
         </div>
       </div>
@@ -901,7 +914,7 @@ export default function ProjectControlCenter() {
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Last refresh */}
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
             SCORED {lastRefresh.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
           </span>
 
@@ -1017,6 +1030,12 @@ export default function ProjectControlCenter() {
       <div className="pcc-split-pane" style={{ flex: 1, overflow: "hidden", display: "grid", gridTemplateColumns: "3fr 2fr", gap: 0 }}>
         <style>{`
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+          @keyframes pccPulse {
+            0%, 100% { box-shadow: 0 0 20px var(--pulse-color, #FF5C5C30), 0 0 6px var(--pulse-color, #FF5C5C18); }
+            50% { box-shadow: 0 0 28px var(--pulse-color, #FF5C5C50), 0 0 10px var(--pulse-color, #FF5C5C30), 0 0 3px var(--pulse-color, #FF5C5C10); }
+          }
+          .signal-card-pulse { animation: pccPulse 2.5s ease-in-out infinite; }
           @media (max-width: 900px) {
             .pcc-split-pane { grid-template-columns: 1fr !important; }
           }
@@ -1025,31 +1044,33 @@ export default function ProjectControlCenter() {
         {/* ─── LEFT COLUMN: Tab bar + Tab content ─── */}
         <div className="pcc-split-left" style={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRight: "1px solid var(--divider)" }}>
 
-          {/* Tab bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 24px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
+          {/* Tab bar — 52px height for touch-friendly targets */}
+          <div style={{ display: "flex", alignItems: "stretch", gap: 0, padding: "0 24px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0, height: 52 }}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
-                  padding: "10px 16px",
+                  fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.10em",
+                  padding: "0 18px",
                   background: "transparent",
                   border: "none",
                   borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
                   color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
                   cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 6,
+                  transition: "color 0.15s ease, border-color 0.2s ease",
                 }}
               >
                 {tab.label}
                 {tab.count > 0 && (
                   <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: 8,
+                    fontFamily: "var(--font-mono)", fontSize: 9,
                     background: activeTab === tab.id ? "rgba(200,155,32,0.15)" : "var(--hover-bg)",
                     color: activeTab === tab.id ? "var(--accent)" : "var(--text-muted)",
                     border: `1px solid ${activeTab === tab.id ? "rgba(200,155,32,0.30)" : "var(--bg-surface-high)"}`,
-                    padding: "0 5px", borderRadius: 3,
+                    padding: "1px 6px", borderRadius: 4,
+                    transition: "background 0.15s, color 0.15s",
                   }}>
                     {tab.count}
                   </span>

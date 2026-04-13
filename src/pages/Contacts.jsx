@@ -200,7 +200,7 @@ export default function Contacts() {
             {filterType !== "all" && (
               <span style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 7,
+                fontSize: 9,
                 fontWeight: 700,
                 color: "var(--accent)",
                 background: "rgba(200,155,32,0.12)",
