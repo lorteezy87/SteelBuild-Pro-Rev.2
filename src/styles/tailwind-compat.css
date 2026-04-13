@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════════
+   TAILWIND COMPATIBILITY — shadcn/ui HSL variables & remaps
+
+   TECH DEBT: The overrides below remap Tailwind utility classes
+   (.bg-white, .text-gray-*) to dark-mode design tokens. This exists
+   because shadcn/ui components ship with light-mode Tailwind classes.
+
+   Long-term fix: Replace with Tailwind's built-in dark: variant
+   or scope shadcn components with a data-theme wrapper.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Dark mode: Tailwind class remaps ── */
+.bg-white { background: var(--bg-surface) !important; }
+.bg-gray-50, .bg-slate-50 { background: var(--bg-surface-low) !important; }
+.bg-gray-100, .bg-slate-100 { background: var(--bg-surface) !important; }
+.text-white { color: var(--text-primary) !important; }
+.text-gray-900, .text-slate-900, .text-black { color: var(--text-primary) !important; }
+.text-gray-600, .text-slate-600 { color: var(--text-secondary) !important; }
+.text-gray-400, .text-slate-400 { color: var(--text-muted) !important; }
+.border-gray-200, .border-slate-200 { border-color: rgba(255,255,255,0.07) !important; }
+.text-slate-50, .text-slate-100 { color: var(--text-primary) !important; }
+.text-slate-300 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-muted) !important; }
+.bg-slate-800 { background: var(--bg-surface) !important; }
+.bg-slate-900, .bg-slate-950 { background: var(--bg-surface-low) !important; }
+.hover\:bg-slate-800:hover { background: var(--bg-surface) !important; }
+.hover\:bg-slate-900:hover { background: var(--bg-surface-low) !important; }
+
+/* ── Light mode: Tailwind class remaps ── */
+[data-theme="light"] .bg-white { background: var(--bg-surface) !important; }
+[data-theme="light"] .bg-gray-50, [data-theme="light"] .bg-slate-50 { background: var(--bg-surface-low) !important; }
+[data-theme="light"] .bg-gray-100, [data-theme="light"] .bg-slate-100 { background: var(--bg-surface) !important; }
+[data-theme="light"] .text-white { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-900, [data-theme="light"] .text-slate-900 { color: var(--text-primary) !important; }
+[data-theme="light"] .text-gray-600, [data-theme="light"] .text-slate-600 { color: var(--text-secondary) !important; }
+[data-theme="light"] .text-gray-400, [data-theme="light"] .text-slate-400 { color: var(--text-muted) !important; }
+[data-theme="light"] .border-gray-200, [data-theme="light"] .border-slate-200 { border-color: var(--border-default) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   shadcn/ui HSL variable bridge
+   Maps Tailwind's hsl() color system to SteelBuild Pro tokens
+   ═══════════════════════════════════════════════════════════════ */
+@layer base {
+  :root {
+    --background: 222 43% 5%;
+    --foreground: 220 20% 91%;
+    --card: 222 35% 7%;
+    --card-foreground: 220 20% 91%;
+    --popover: 222 40% 6%;
+    --popover-foreground: 220 20% 91%;
+    --primary: 43 73% 45%;
+    --primary-foreground: 222 43% 5%;
+    --secondary: 222 30% 10%;
+    --secondary-foreground: 220 20% 91%;
+    --muted: 222 35% 7%;
+    --muted-foreground: 215 17% 44%;
+    --tw-accent: 43 73% 45%;
+    --tw-accent-foreground: 222 43% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 20% 91%;
+    --border: 222 30% 13%;
+    --input: 222 35% 8%;
+    --ring: 43 73% 45%;
+    --radius: 0.25rem;
+    --chart-1: 43 73% 45%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 271 81% 66%;
+    --chart-5: 0 84% 60%;
+    --sidebar-background: 222 43% 5%;
+    --sidebar-foreground: 220 20% 91%;
+    --sidebar-primary: 43 73% 45%;
+    --sidebar-primary-foreground: 222 43% 5%;
+    --sidebar-accent: 43 73% 45% / 0.10;
+    --sidebar-accent-foreground: 43 73% 45%;
+    --sidebar-border: 222 30% 13%;
+    --sidebar-ring: 43 73% 45%;
+  }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    background: var(--bg-page) !important;
+    color: var(--text-primary) !important;
+  }
+}

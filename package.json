@@ -1,7 +1,7 @@
 {
-  "name": "base44-app",
+  "name": "steelbuild-pro",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
