@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
 import { PAGES } from '@/config/routes';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Outlet, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import LocalLoginForm from '@/components/LocalLoginForm';
@@ -15,12 +15,6 @@ import Layout from './Layout';
 // Eagerly loaded pages (critical path — no lazy overhead)
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Landing = lazy(() => import('./pages/Landing'));
-
-const LayoutWrapper = ({ children, currentPageName }) => (
-  <PageErrorBoundary label="Layout" key="layout-boundary">
-    <Layout currentPageName={currentPageName}>{children}</Layout>
-  </PageErrorBoundary>
-);
 
 // ── Suspense loading indicator ───────────────────────────────────────
 function PageLoader() {
@@ -38,6 +32,23 @@ function PageLoader() {
       }} />
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
+  );
+}
+
+// ── Layout Route ─────────────────────────────────────────────────────
+// Layout mounts ONCE and stays mounted across all page navigations.
+// Only the <Outlet> (page content) swaps when the route changes.
+function LayoutRoute() {
+  const location = useLocation();
+  // Derive currentPageName from URL path (e.g. "/Drawings" → "Drawings")
+  const currentPageName = location.pathname.replace(/^\//, '') || 'Dashboard';
+
+  return (
+    <PageErrorBoundary label="Layout" key="layout-boundary">
+      <Layout currentPageName={currentPageName}>
+        <Outlet />
+      </Layout>
+    </PageErrorBoundary>
   );
 }
 
@@ -76,52 +87,49 @@ const AuthenticatedApp = () => {
 
   return (
     <Routes>
-      {/* Home route */}
-      <Route
-        path="/"
-        element={
-          <LayoutWrapper currentPageName="Dashboard">
+      {/* All pages share a single Layout instance via layout route */}
+      <Route element={<LayoutRoute />}>
+        {/* Home route */}
+        <Route
+          index
+          element={
             <Suspense fallback={<PageLoader />}>
               <PageErrorBoundary label="Dashboard" key="Dashboard">
                 <Dashboard />
               </PageErrorBoundary>
             </Suspense>
-          </LayoutWrapper>
-        }
-      />
+          }
+        />
 
-      {/* All registered page routes — lazy loaded */}
-      {Object.entries(PAGES).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
+        {/* All registered page routes — lazy loaded */}
+        {Object.entries(PAGES).map(([path, Page]) => (
+          <Route
+            key={path}
+            path={path}
+            element={
               <Suspense fallback={<PageLoader />}>
                 <PageErrorBoundary label={path} key={path}>
                   <Page />
                 </PageErrorBoundary>
               </Suspense>
-            </LayoutWrapper>
-          }
-        />
-      ))}
+            }
+          />
+        ))}
 
-      {/* Landing page */}
-      <Route
-        path="/Landing"
-        element={
-          <LayoutWrapper currentPageName="Landing">
+        {/* Landing page */}
+        <Route
+          path="Landing"
+          element={
             <Suspense fallback={<PageLoader />}>
               <PageErrorBoundary label="Landing" key="Landing">
                 <Landing />
               </PageErrorBoundary>
             </Suspense>
-          </LayoutWrapper>
-        }
-      />
+          }
+        />
+      </Route>
 
-      {/* 404 */}
+      {/* 404 — outside layout */}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
