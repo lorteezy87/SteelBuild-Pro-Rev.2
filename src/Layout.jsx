@@ -177,6 +177,21 @@ export default function Layout({ children, currentPageName }) {
       : pageLabel;
   useDocumentTitle(titleSuffix);
 
+  // Move keyboard focus back to <main> on every route change so screen
+  // readers and tab users land on the new page's content. We only focus
+  // when the previously-focused element is NOT a form input on the new
+  // page, otherwise typing would get yanked away mid-keystroke.
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    const el = typeof document !== "undefined" ? document.getElementById("main-content") : null;
+    if (!el) return;
+    const active = document.activeElement;
+    const tag = active?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
+  }, [currentPageName]);
+
   // ── Navigation handlers ──────────────────────────────────────────
   const activeTab = PRIMARY_TABS.find((t) => t.pages.includes(currentPageName));
 
@@ -195,6 +210,29 @@ export default function Layout({ children, currentPageName }) {
       padding: 0, background: "var(--bg-base)",
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     }}>
+      {/* Skip-to-main-content link — first focusable element on the page */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only"
+        style={{
+          position: "absolute",
+          top: 4, left: 4,
+          background: "var(--accent)",
+          color: "#fff",
+          padding: "6px 12px",
+          borderRadius: 6,
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          textDecoration: "none",
+          zIndex: 9999,
+        }}
+      >
+        Skip to main content
+      </a>
+
       {/* Mobile Drawer */}
       <MobileDrawer open={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={handleNavigate} />
 
