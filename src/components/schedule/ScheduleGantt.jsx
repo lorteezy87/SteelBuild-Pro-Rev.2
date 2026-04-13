@@ -72,15 +72,13 @@ function displayPct(task) {
   return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
 }
 
-// Treat any task with zero (or missing) duration as a milestone — that's the
-// standard Gantt convention and it makes the schedule readable instead of
-// having invisible 0-day points.
+// Only treat a task as a milestone if the user explicitly flagged it.
+// Auto-detection (duration === 0 or same start/end) was incorrectly marking
+// every newly-created task as a milestone because AddTaskModal defaults both
+// dates to today.
 function isMilestoneTask(task) {
   if (!task) return false;
   if (task.milestone) return true;
-  const d = Number(task.duration);
-  if (Number.isFinite(d) && d === 0) return true;
-  if (task.start_date && task.end_date && task.start_date === task.end_date) return true;
   return false;
 }
 
