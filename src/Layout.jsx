@@ -12,6 +12,8 @@ import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 import { AuthContext } from "@/lib/AuthContext";
 import { useTheme } from "./components/shared/ThemeContext";
 import { batchProcess } from "@/utils/batchProcess";
+import useDocumentTitle from "@/hooks/useDocumentTitle";
+import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
 
 // ─── Tab → page mapping ───────────────────────────────────────────
 const PRIMARY_TABS = [
@@ -1013,7 +1015,7 @@ function SidebarNav({ currentPageName, onNavigate, visible }) {
       </div>
 
       {/* Navigation groups */}
-      <nav style={{ flex: 1, padding: "0 0 16px" }}>
+      <nav aria-label="Sections" style={{ flex: 1, padding: "0 0 16px" }}>
         {SIDEBAR_GROUPS.map((group, groupIdx) => {
           const isCollapsed = group.collapsible && collapsed[group.label];
           return (
@@ -1102,6 +1104,8 @@ function SidebarLink({ item, active, onClick }) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      aria-label={item.label}
+      aria-current={active ? "page" : undefined}
       style={{
         width: "100%",
         display: "flex",
@@ -1145,22 +1149,12 @@ function SidebarLink({ item, active, onClick }) {
 }
 
 // ─── Breadcrumb bar (renders inside ProjectProvider) ─────────────
-const PAGE_LABELS = {};
-ALL_MODULES.forEach((mod) => {
-  PAGE_LABELS[mod.page] = mod.name;
-});
-// Add pages not in ALL_MODULES
-Object.assign(PAGE_LABELS, {
-  Dashboard: "Dashboard",
-  Settings: "Settings",
-  UsersManagement: "User Management",
-  Expenses: "Expenses",
-});
-
+// Page labels live in src/routes.js so the breadcrumb, document title,
+// and any future analytics share the same display name.
 function Breadcrumbs({ currentPageName }) {
   const { activeProject } = useProjectContext();
   const navigate = useNavigate();
-  const label = PAGE_LABELS[currentPageName] || currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Page";
+  const label = routeLabel(currentPageName);
 
   return (
     <div style={{
@@ -1193,6 +1187,20 @@ function Breadcrumbs({ currentPageName }) {
       <span style={{ color: "var(--accent)", fontWeight: 700 }}>{label}</span>
     </div>
   );
+}
+
+// ─── Dynamic document title (renders inside ProjectProvider) ──────
+// Sized so it can subscribe to active-project changes and re-set the
+// browser tab title without re-rendering the whole Layout tree.
+function DocumentTitleSync({ currentPageName }) {
+  const { activeProject } = useProjectContext();
+  const projectName = activeProject?.project_name || activeProject?.name || null;
+  const label = routeLabel(currentPageName);
+  const title = (projectName && PROJECT_SCOPED_PAGES.has(currentPageName))
+    ? `${label} — ${projectName}`
+    : label;
+  useDocumentTitle(title);
+  return null;
 }
 
 // ─── Project error banner (renders inside ProjectProvider) ────────
@@ -1362,6 +1370,7 @@ export default function Layout({ children, currentPageName }) {
   // Noise texture SVG data URI
   return (
     <ProjectProvider>
+        <DocumentTitleSync currentPageName={currentPageName} />
         <div style={{
           minHeight: "100vh",
           width: "100%",
@@ -1397,7 +1406,10 @@ export default function Layout({ children, currentPageName }) {
         }} />
 
         {/* TOP NAV */}
-        <nav className="nav-glass" style={{
+        <nav
+          className="nav-glass"
+          aria-label="Primary"
+          style={{
               height: 48,
               background: "var(--nav-bg)",
               borderBottom: "1px solid var(--border-default)",
@@ -1668,7 +1680,11 @@ export default function Layout({ children, currentPageName }) {
             <Breadcrumbs currentPageName={currentPageName} />
 
             {/* CONTENT */}
-            <main style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
+            <main
+              id="main-content"
+              aria-label="Main content"
+              tabIndex={-1}
+              style={{ flex: 1, overflowY: "auto", padding: 0, background: "var(--bg-base)", color: "var(--text-primary)", display: "flex", flexDirection: "column" }}>
               <ProjectErrorBanner />
               {children}
             </main>
