@@ -58,7 +58,9 @@ export default function DrawingViewer() {
   const [renderMode, setRenderMode] = useState("iframe");
 
   const canvasRef = useRef(null);
+  const annotLayerRef = useRef(null);
   const renderTaskRef = useRef(null);
+  const [annotations, setAnnotations] = useState([]);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   const { data: drawings = [] } = useQuery({
@@ -166,6 +168,34 @@ export default function DrawingViewer() {
 
       renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
       await renderTaskRef.current.promise;
+
+      // ── Extract link annotations for clickable overlays ──────────────
+      try {
+        const annots = await page.getAnnotations({ intent: "display" });
+        const linkAnnots = annots
+          .filter(a => a.subtype === "Link" && a.rect)
+          .map(a => {
+            // Transform PDF rect [x1,y1,x2,y2] to canvas pixel coords
+            const [x1, y1, x2, y2] = a.rect;
+            const p1 = viewport.convertToViewportPoint(x1, y1);
+            const p2 = viewport.convertToViewportPoint(x2, y2);
+            const left = Math.min(p1[0], p2[0]);
+            const top = Math.min(p1[1], p2[1]);
+            const width = Math.abs(p2[0] - p1[0]);
+            const height = Math.abs(p2[1] - p1[1]);
+            return {
+              id: a.id || `${x1}-${y1}`,
+              left, top, width, height,
+              url: a.url || null,
+              dest: a.dest || null,
+              unsafeUrl: a.unsafeUrl || null,
+              title: a.title || "",
+            };
+          });
+        setAnnotations(linkAnnots);
+      } catch {
+        setAnnotations([]);
+      }
     } catch (err) {
       if (err?.name !== "RenderingCancelledException") {
         console.error("Render error:", err);
@@ -177,6 +207,57 @@ export default function DrawingViewer() {
   }, [pdfDoc, currentPage, zoom]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
+
+  // ── Handle annotation link click ──────────────────────────────────────────
+  const handleAnnotationClick = useCallback(async (annot) => {
+    // 1. Internal PDF destination (page ref within the same document)
+    if (annot.dest) {
+      try {
+        let pageNum = null;
+        if (typeof annot.dest === "string") {
+          // Named destination — resolve via the PDF document
+          const dest = await pdfDoc.getDestination(annot.dest);
+          if (dest) {
+            const pageRef = dest[0];
+            pageNum = await pdfDoc.getPageIndex(pageRef) + 1;
+          }
+        } else if (Array.isArray(annot.dest)) {
+          // Explicit destination array [pageRef, ...]
+          const pageRef = annot.dest[0];
+          pageNum = await pdfDoc.getPageIndex(pageRef) + 1;
+        }
+        if (pageNum && pageNum >= 1 && pageNum <= totalPages) {
+          setCurrentPage(pageNum);
+          return;
+        }
+      } catch { /* fall through to cross-sheet lookup */ }
+    }
+
+    // 2. External URL
+    if (annot.url) {
+      window.open(annot.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // 3. Cross-sheet reference — try to match against sheet numbers in this project
+    //    Common patterns: "S-201", "S201", "A/S201", "DETAIL 3/S-201"
+    const refText = annot.title || annot.unsafeUrl || "";
+    if (refText) {
+      const match = refText.match(/([A-Z]{1,2}[-\s]?\d{3,4})/i);
+      if (match) {
+        const sheetRef = match[1].toUpperCase().replace(/\s+/g, "");
+        const target = drawings.find(d => {
+          const sn = (d.sheet_number || "").toUpperCase().replace(/[-\s]/g, "");
+          return sn === sheetRef || sn === sheetRef.replace("-", "");
+        });
+        if (target) {
+          setActiveId(target.id);
+          setCurrentPage(1);
+          return;
+        }
+      }
+    }
+  }, [pdfDoc, totalPages, drawings]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -439,6 +520,33 @@ export default function DrawingViewer() {
                 </div>
               )}
               <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }} />
+              {/* ── Annotation overlay layer ─── clickable link hotspots ──── */}
+              {annotations.length > 0 && (
+                <div ref={annotLayerRef} style={{ position: "absolute", top: 0, left: 0, width: canvasRef.current?.width || 0, height: canvasRef.current?.height || 0, pointerEvents: "none" }}>
+                  {annotations.map(a => (
+                    <div
+                      key={a.id}
+                      onClick={() => handleAnnotationClick(a)}
+                      title={a.title || a.url || "Link"}
+                      style={{
+                        position: "absolute",
+                        left: a.left,
+                        top: a.top,
+                        width: a.width,
+                        height: a.height,
+                        cursor: "pointer",
+                        pointerEvents: "auto",
+                        border: "1px solid transparent",
+                        borderRadius: 2,
+                        transition: "border-color 0.15s, background 0.15s",
+                        background: "transparent",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(200,155,32,0.12)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
