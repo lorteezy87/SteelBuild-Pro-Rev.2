@@ -131,13 +131,18 @@ export default function Schedule() {
         toBackfill.push({ id: t.id, wbs });
       }
     });
-    // Background-persist generated WBS codes to DB (fire-and-forget)
+    // Background-persist generated WBS codes to DB
     if (toBackfill.length > 0) {
       batchProcess(
         toBackfill,
         ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
-      ).then(() => {
+      ).then(({ succeeded, failed }) => {
         qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        if (failed.length > 0) {
+          console.warn(`[Schedule] WBS backfill: ${succeeded.length} ok, ${failed.length} failed`);
+        }
+      }).catch((err) => {
+        console.warn("[Schedule] WBS backfill batch failed:", err?.message);
       });
     }
     return result;
