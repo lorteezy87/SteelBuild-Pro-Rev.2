@@ -285,10 +285,20 @@
 }
 .btn-destructive:hover { background: rgba(239,68,68,0.08); }
 
-/* ── Touch targets ── */
+/* ── Touch targets & cursor ── */
 .touch-target {
   min-height: 44px; min-width: 44px;
   display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Ensure all interactive elements show pointer cursor */
+button, [role="button"], a[href], select, summary,
+input[type="checkbox"], input[type="radio"],
+[onclick], [tabindex="0"] {
+  cursor: pointer;
+}
+button:disabled, [disabled] {
+  cursor: not-allowed;
 }
 
 /* ── Gantt grid ── */

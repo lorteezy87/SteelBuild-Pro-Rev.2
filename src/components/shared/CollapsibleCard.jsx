@@ -58,9 +58,11 @@ export default function CollapsibleCard({
       }}
     >
       {/* Header — always visible */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setCollapsed((c) => !c)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCollapsed((c) => !c); } }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -70,11 +72,9 @@ export default function CollapsibleCard({
           padding: "12px 14px",
           borderBottom: collapsed ? "none" : "1px solid var(--divider)",
           background: "var(--bg-sidebar)",
-          borderTop: "none",
-          borderLeft: "none",
-          borderRight: "none",
           cursor: "pointer",
           textAlign: "left",
+          userSelect: "none",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -127,7 +127,7 @@ export default function CollapsibleCard({
         >
           {action}
         </div>
-      </button>
+      </div>
 
       {/* Body — animated collapse */}
       {!collapsed && (
