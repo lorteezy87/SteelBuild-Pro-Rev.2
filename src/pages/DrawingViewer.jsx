@@ -750,10 +750,16 @@ export default function DrawingViewer() {
               <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>⚠</div>
               <p style={{ ...mono, fontSize: 11, color: "var(--status-error)", letterSpacing: "0.1em" }}>{pdfError}</p>
               {activeDrawing.file_url && (
-                <a href={activeDrawing.file_url} target="_blank" rel="noopener noreferrer"
-                  style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block" }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      const url = await resolveFileUrl(activeDrawing.file_url);
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    } catch { /* silently fail */ }
+                  }}
+                  style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                   OPEN IN NEW TAB →
-                </a>
+                </button>
               )}
             </div>
           ) : !activeDrawing.file_url ? (

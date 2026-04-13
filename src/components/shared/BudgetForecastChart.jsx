@@ -12,8 +12,16 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
 
     const totalBudget = costCodes.reduce((sum, cc) => sum + (cc.budget_amount || 0), 0);
     const totalActual = costCodes.reduce((sum, cc) => sum + (cc.actual_cost || 0), 0);
-    const totalCommitted = costCodes.reduce((sum, cc) => sum + (cc.committed_cost || 0), 0);
     const totalForecast = costCodes.reduce((sum, cc) => sum + (cc.forecast_to_complete || 0), 0);
+
+    // Weighted physical progress: sum(budget_i × pct_complete_i) / totalBudget
+    const weightedEV = costCodes.reduce((sum, cc) => {
+      const bud = cc.budget_amount || 0;
+      const pct = (cc.percent_complete ?? cc.used_pct ?? 0) / 100;
+      return sum + bud * Math.min(1, pct);
+    }, 0);
+    // Current earned fraction (0-1) based on physical completion
+    const earnedFraction = totalBudget > 0 ? weightedEV / totalBudget : 0;
 
     // Generate monthly data points
     const start = new Date(projectStartDate);
@@ -32,10 +40,9 @@ export default function BudgetForecastChart({ costCodes = [], projectStartDate, 
 
       chartData.push({
         month: monthStr,
-        PV: totalBudget * sCurve, // Planned Value (modeled)
-        EV: (totalActual + totalCommitted) * sCurve, // Earned Value (modeled)
-        AC: totalActual * (i / monthCount), // Actual Cost (modeled)
-        EAC: totalBudget + totalForecast, // Estimate at Completion
+        PV: totalBudget * sCurve, // Planned Value (modeled S-curve baseline)
+        EV: totalBudget * earnedFraction * sCurve, // Earned Value = budget × physical progress
+        AC: totalActual * (i / monthCount), // Actual Cost (linear distribution of spend to date)
       });
     }
 

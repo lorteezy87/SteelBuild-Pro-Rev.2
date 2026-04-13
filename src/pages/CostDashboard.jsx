@@ -224,11 +224,12 @@ export default function CostDashboard() {
       const pct = Number(sv.current_percent_complete) || 0;
       return s + scheduled * (pct / 100);
     }, 0);
+    // billedToDate = cumulative billed (current_percent_complete reflects total billed %)
+    // The period draw (currPct - prevPct) is only for the current invoice, not cumulative.
     const billedToDate = sovs.reduce((s, sv) => {
       const scheduled = Number(sv.scheduled_value) || 0;
       const currPct = Number(sv.current_percent_complete) || 0;
-      const prevPct = Number(sv.previous_percent_complete) || 0;
-      return s + scheduled * ((currPct - prevPct) / 100);
+      return s + scheduled * (currPct / 100);
     }, 0);
     const unbilledEV = earnedValue - billedToDate;
     const billingLag = earnedValue > 0 ? ((earnedValue - billedToDate) / earnedValue) * 100 : 0;
@@ -291,7 +292,7 @@ export default function CostDashboard() {
   }, [codes]);
 
   const consumedContingency = codes.reduce((s, c) => {
-    const v = (Number(c.actual_amount) || Number(c.actual_cost) || 0) - (Number(c.budget_amount) || 0);
+    const v = (Number(c.actual_cost) || 0) - (Number(c.budget_amount) || 0);
     return s + Math.max(0, v);
   }, 0);
   const contingencyRemaining = Math.max(0, contingency - consumedContingency);
@@ -453,8 +454,8 @@ export default function CostDashboard() {
               const actual = Number(c.actual_cost) || 0;
               const committed = Number(c.committed_cost) || 0;
               const forecast = Number(c.forecast_to_complete) || 0;
-              // Exposure = committed (includes paid); variance positive = over budget
-              const exposure = Math.max(committed, actual);
+              // Exposure = committed (which already includes paid amounts)
+              const exposure = committed;
               const variance = exposure - budget;
               const pctUsed = budget > 0 ? (exposure / budget) * 100 : 0;
               const overContingency = contingency > 0 && variance > contingency;
