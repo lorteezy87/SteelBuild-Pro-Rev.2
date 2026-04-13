@@ -93,8 +93,18 @@ export default function Layout({ children, currentPageName }) {
 
   const { data: allAlerts = [] } = useQuery({
     queryKey: ["alerts-nav", activeProjectId],
-    queryFn: () => base44.entities.Alert.filter({ is_dismissed: false, project_id: activeProjectId }),
+    queryFn: async () => {
+      try {
+        return await base44.entities.Alert.filter({ is_dismissed: false, project_id: activeProjectId });
+      } catch (err) {
+        // Supabase returns 400 if alerts table is missing expected columns —
+        // fail gracefully so the rest of the app keeps working
+        console.warn("[Layout] alerts query failed:", err?.message || err);
+        return [];
+      }
+    },
     refetchInterval: 120000, staleTime: 60000, enabled: !!activeProjectId,
+    retry: false,
   });
 
   const { data: navRFIs = [] } = useQuery({
