@@ -209,6 +209,45 @@ function SubmittalBar({ submittal, leftPx, widthPx }) {
   );
 }
 
+// ── Delivery bar ─────────────────────────────────────────────────────────
+function DeliveryBar({ delivery, leftPx, widthPx }) {
+  const statusColors = {
+    "Scheduled":   { bg: "rgba(245,158,11,0.15)", border: "#F59E0B", text: "#F59E0B" },
+    "In Transit":  { bg: "rgba(59,130,246,0.15)", border: "#3B82F6", text: "#3B82F6" },
+    "Delivered":   { bg: "rgba(16,185,129,0.15)", border: "#10B981", text: "#10B981" },
+    "Partial":     { bg: "rgba(239,68,68,0.12)",  border: "#EF4444", text: "#EF4444" },
+    "Rejected":    { bg: "rgba(239,68,68,0.15)",  border: "#EF4444", text: "#EF4444" },
+    "Delayed":     { bg: "rgba(168,85,247,0.12)", border: "#A855F7", text: "#A855F7" },
+  };
+  const c = statusColors[delivery.status] || statusColors["Scheduled"];
+  const isLate = delivery.scheduled_date && new Date(delivery.scheduled_date) < new Date() && delivery.status !== "Delivered";
+  const label = delivery.description || delivery.vendor || "Delivery";
+  return (
+    <div style={{
+      position: "absolute", left: leftPx, width: Math.max(widthPx, 20), height: 20,
+      top: "50%", transform: "translateY(-50%)",
+      background: c.bg, border: `1.5px solid ${isLate ? "#EF4444" : c.border}`,
+      borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
+    }}
+    title={`🚛 ${label} · ${delivery.vendor || "—"} · ${delivery.pieces || 0}pc ${delivery.weight_tons || 0}T${isLate ? " — OVERDUE" : ""}`}
+    >
+      <span style={{ fontSize: 9, flexShrink: 0 }}>🚛</span>
+      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? "#EF4444" : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+const DELIVERY_STATUS_DOT = {
+  "Scheduled":  "#F59E0B",
+  "In Transit": "#3B82F6",
+  "Delivered":  "#10B981",
+  "Partial":    "#EF4444",
+  "Rejected":   "#EF4444",
+  "Delayed":    "#A855F7",
+};
+
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
@@ -216,10 +255,12 @@ const LEFT_W  = 680;
 // grid: WBS | TASK NAME | DUR | START | FINISH | PRED | RESOURCES | STATUS | %
 const GRID = "50px 1fr 40px 68px 68px 48px 80px 72px 36px";
 
-export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
+export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
+  const [showDeliveries, setShowDeliveries] = useState(true);
+  const [collapsedDeliveries, setCollapsedDeliveries] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
@@ -328,6 +369,12 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       t.start_date ? new Date(t.start_date + "T00:00:00Z") : null,
       t.end_date   ? new Date(t.end_date   + "T00:00:00Z") : null,
     ]).filter(Boolean);
+    // Include delivery dates so the timeline stretches to cover them
+    deliveries.forEach(d => {
+      if (d.scheduled_date) dates.push(new Date(d.scheduled_date + "T00:00:00Z"));
+      if (d.required_date) dates.push(new Date(d.required_date + "T00:00:00Z"));
+      if (d.actual_date) dates.push(new Date(d.actual_date + "T00:00:00Z"));
+    });
     // Always include today in the range so the TODAY line is always visible
     dates.push(today);
     const start = new Date(Math.min(...dates));
@@ -337,7 +384,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
     const weeks = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
     return { start, end, weeks };
-  }, [allTasks]);
+  }, [allTasks, deliveries]);
 
   const scrollToToday = () => {
     if (rightBody.current) {
@@ -420,19 +467,45 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
         });
       }
     });
+
+    // ── Delivery rows — separate section at bottom of Gantt ──────────
+    if (showDeliveries && deliveries.length > 0) {
+      const delStarts = deliveries.map(d => d.scheduled_date).filter(Boolean).sort();
+      const delEnds = deliveries.map(d => d.required_date || d.actual_date || d.scheduled_date).filter(Boolean).sort();
+      const deliveredCount = deliveries.filter(d => d.status === "Delivered").length;
+      const pct = deliveries.length > 0 ? Math.round((deliveredCount / deliveries.length) * 100) : 0;
+      list.push({
+        type: "delivery-summary",
+        deliveryCount: deliveries.length,
+        start: delStarts[0],
+        end: delEnds[delEnds.length - 1],
+        pctComplete: pct,
+      });
+      if (!collapsedDeliveries) {
+        deliveries
+          .slice()
+          .sort((a, b) => (a.scheduled_date || "").localeCompare(b.scheduled_date || ""))
+          .forEach(d => {
+            list.push({ type: "delivery", delivery: d });
+          });
+      }
+    }
+
     return list;
-  }, [grouped, collapsed, collapsedTasks]);
+  }, [grouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
 
   // Build task ID → row index + Y position map for dependency arrows
   const taskPositions = useMemo(() => {
     const posMap = {};
     let y = 0;
     rows.forEach((row) => {
-      if (row.type === "summary") {
+      if (row.type === "summary" || row.type === "delivery-summary") {
         y += SUM_H;
-      } else {
+      } else if (row.type === "task") {
         posMap[row.task.id] = { y: y + ROW_H / 2 }; // center of the row
         y += ROW_H;
+      } else {
+        y += ROW_H; // delivery rows
       }
     });
     return posMap;
@@ -465,7 +538,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
     return arrows;
   }, [rows, taskPositions, allTasks]);
 
-  const totalHeight = rows.reduce((h, r) => h + (r.type === "summary" ? SUM_H : ROW_H), 0);
+  const totalHeight = rows.reduce((h, r) => h + ((r.type === "summary" || r.type === "delivery-summary") ? SUM_H : ROW_H), 0);
 
   return (
     <div ref={containerRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
@@ -500,6 +573,21 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
             }}
           >
             📂 Submittals ({submittals.filter(s => s.is_submittal && s.linked_wp_id).length})
+          </button>
+        )}
+        {deliveries.length > 0 && (
+          <button
+            onClick={() => setShowDeliveries(v => !v)}
+            style={{
+              padding: "4px 10px", borderRadius: 4,
+              border: showDeliveries ? "1px solid #F59E0B" : "1px solid var(--divider)",
+              background: showDeliveries ? "rgba(245,158,11,0.10)" : "transparent",
+              color: showDeliveries ? "#F59E0B" : "var(--text-muted)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase",
+            }}
+          >
+            🚛 Deliveries ({deliveries.length})
           </button>
         )}
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
@@ -560,6 +648,57 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
                   </div>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
+                </div>
+              );
+            }
+            // ── Delivery summary row ──
+            if (row.type === "delivery-summary") {
+              const isOpen = !collapsedDeliveries;
+              const dColor = "#F59E0B";
+              return (
+                <div key="delivery-summary" onClick={() => setCollapsedDeliveries(v => !v)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: "1px solid var(--divider)", background: `${dColor}12`, cursor: "pointer", userSelect: "none" }}>
+                  <span style={{ color: dColor, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dColor, letterSpacing: "0.10em", background: `${dColor}20`, border: `1px solid ${dColor}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>🚛</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: dColor, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>DELIVERIES</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{row.deliveryCount} items</span>
+                  </div>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: dColor }}>{row.pctComplete}%</span>
+                </div>
+              );
+            }
+            // ── Delivery item row ──
+            if (row.type === "delivery") {
+              const d = row.delivery;
+              const dotColor = DELIVERY_STATUS_DOT[d.status] || "#F59E0B";
+              const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
+              const label = d.description || d.vendor || "Delivery";
+              return (
+                <div key={`del-${d.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: "50px 1fr 40px 68px 68px 48px 80px 72px 36px", alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: "transparent", borderLeft: isLate ? "3px solid #EF4444" : "3px solid transparent" }}
+                  onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
+                  onMouseLeave={() => setHoveredRowId(null)}
+                >
+                  {/* WBS placeholder */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>—</span>
+                  {/* Name + vendor */}
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+                    <span style={{ fontSize: 10, flexShrink: 0 }}>🚛</span>
+                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: isLate ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                  </span>
+                  {/* Tonnage instead of duration */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>{d.weight_tons ? `${d.weight_tons}T` : "—"}</span>
+                  {/* Scheduled date */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isLate ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.scheduled_date)}</span>
+                  {/* Required/actual date */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.required_date || d.actual_date)}</span>
+                  {/* Pieces */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center" }}>{d.pieces ? `${d.pieces}pc` : "—"}</span>
+                  {/* Vendor */}
+                  <span title={d.vendor || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.vendor || "—"}</span>
+                  {/* Status */}
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: dotColor, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{d.status || "—"}</span>
+                  {/* No % for deliveries */}
+                  <span />
                 </div>
               );
             }
@@ -718,6 +857,53 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
                   return (
                     <div key={`gs-${row.phase.key}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${row.phase.color}08`, borderBottom: `1px solid var(--divider)` }}>
                       <SummaryBar phase={row.phase} leftPx={startPx} widthPx={w} pctComplete={row.pctComplete} />
+                    </div>
+                  );
+                }
+                // ── Delivery summary bar ──
+                if (row.type === "delivery-summary") {
+                  top += SUM_H;
+                  const startPx2 = px(row.start);
+                  const w2 = spanPx(row.start, row.end);
+                  const dColor = "#F59E0B";
+                  const pct2 = row.pctComplete || 0;
+                  return (
+                    <div key="gs-deliveries" style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: SUM_H, background: `${dColor}08`, borderBottom: "1px solid var(--divider)" }}>
+                      {/* Summary bar spanning all deliveries */}
+                      <div style={{
+                        position: "absolute", left: startPx2, width: Math.max(w2, 6), height: 14, top: "50%", transform: "translateY(-50%)",
+                        background: `${dColor}40`, borderRadius: 2, overflow: "hidden",
+                      }}>
+                        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(pct2, 100)}%`, background: dColor, borderRadius: 2, transition: "width 0.3s" }} />
+                        <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "2px 0 0 2px" }} />
+                        <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: dColor, borderRadius: "0 2px 2px 0" }} />
+                        {w2 > 40 && (
+                          <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 7, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>{pct2}%</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                // ── Delivery item bar ──
+                if (row.type === "delivery") {
+                  const zebra2 = taskIdx++ % 2 === 1;
+                  top += ROW_H;
+                  const d = row.delivery;
+                  const hovered = hoveredRowId === `del-${d.id}`;
+                  const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
+                  const baseBg2 = isLate ? "rgba(239,68,68,0.04)" : zebra2 ? "var(--hover-bg)" : "transparent";
+                  const startIso = (d.scheduled_date || "").split("T")[0];
+                  const endIso = (d.required_date || d.actual_date || d.scheduled_date || "").split("T")[0];
+                  if (!startIso) {
+                    return <div key={`gd-${d.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2 }} />;
+                  }
+                  return (
+                    <div key={`gd-${d.id}`}
+                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? "rgba(245,158,11,0.07)" : baseBg2, transition: "background 0.08s" }}
+                      onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
+                      onMouseLeave={() => setHoveredRowId(null)}
+                    >
+                      <DeliveryBar delivery={d} leftPx={px(startIso)} widthPx={spanPx(startIso, endIso)} />
                     </div>
                   );
                 }

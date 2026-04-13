@@ -90,6 +90,15 @@ export default function Schedule() {
     select: (docs) => docs.filter(d => d.is_submittal && d.linked_wp_id),
   });
 
+  // Fetch deliveries for Gantt overlay — each delivery with a scheduled_date
+  // gets its own row in a "Deliveries" section at the bottom of the Gantt
+  const { data: ganttDeliveries = [] } = useQuery({
+    queryKey: ["deliveries-gantt", projectId],
+    queryFn: () => projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    select: (dels) => dels.filter(d => d.scheduled_date),
+  });
+
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
   const hasProject = !!(projectId || activeProject?.id);
 
@@ -649,6 +658,7 @@ export default function Schedule() {
             <ScheduleGantt
               tasks={enrichedTasks}
               submittals={submittals}
+              deliveries={ganttDeliveries}
               expandedTask={expandedTask}
               setExpandedTask={setExpandedTask}
               onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
