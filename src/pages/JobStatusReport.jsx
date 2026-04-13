@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
+import { base44, resolveFileUrl } from "@/api/base44Client";
 import {
   FileText, Download, Loader2, CheckCircle2,
   AlertCircle, Building2, Calendar, ChevronRight, RefreshCw, Search, X,
@@ -558,15 +558,18 @@ export default function JobStatusReport() {
                   )}
                 </div>
                 {r.file_url ? (
-                  <a
-                    href={r.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={async () => {
+                      try {
+                        const url = await resolveFileUrl(r.file_url);
+                        if (url) window.open(url, "_blank", "noopener,noreferrer");
+                      } catch { /* silently fail */ }
+                    }}
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
                       fontFamily: "var(--font-mono)", fontSize: 8,
                       color: "var(--status-info)", letterSpacing: "0.06em",
-                      textDecoration: "none",
+                      cursor: "pointer",
                       padding: "5px 10px",
                       background: "var(--info-muted)",
                       border: "1px solid var(--info-border)",
@@ -574,7 +577,7 @@ export default function JobStatusReport() {
                     }}
                   >
                     <Download size={9} /> OPEN PDF
-                  </a>
+                  </button>
                 ) : (
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--text-muted)" }}>No URL</span>
                 )}

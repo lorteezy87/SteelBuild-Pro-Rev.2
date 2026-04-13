@@ -1,6 +1,7 @@
 import React from "react";
 import { X, Upload } from "lucide-react";
 import { formatDate } from "../shared/formatters";
+import { resolveFileUrl } from "@/api/base44Client";
 
 export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewRevision }) {
   if (!drawingSet) return null;
@@ -98,12 +99,20 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
                 {/* Actions */}
                 <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                   {rev.fileUrl && (
-                    <a href={rev.fileUrl} target="_blank" rel="noopener noreferrer" style={{
-                      display: "flex", alignItems: "center", gap: 4,
-                      padding: "4px 9px", borderRadius: 6, textDecoration: "none",
-                      background: "var(--info-muted)", border: "1px solid var(--info-border)",
-                      color: "var(--status-info)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.06em"
-                    }}>↓ DOWNLOAD</a>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const url = await resolveFileUrl(rev.fileUrl);
+                          if (url) window.open(url, "_blank", "noopener,noreferrer");
+                        } catch { /* silently fail */ }
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        padding: "4px 9px", borderRadius: 6, cursor: "pointer",
+                        background: "var(--info-muted)", border: "1px solid var(--info-border)",
+                        color: "var(--status-info)", fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.06em"
+                      }}
+                    >↓ DOWNLOAD</button>
                   )}
                   {rev.sheets?.length > 0 && (
                     <button style={{

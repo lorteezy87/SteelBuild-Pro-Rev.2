@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
 
-export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false }) {
+export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false, existingTasks }) {
   const [formData, setFormData] = useState({
     task_name: '',
     task_type: 'Task',
@@ -11,6 +11,8 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
     end_date: prefilledDate || new Date().toISOString().split('T')[0],
     status: 'Not Started',
     priority: 'Normal',
+    resource_names: '',
+    parent_task_id: null,
   });
 
   useEffect(() => {
@@ -24,6 +26,8 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         end_date: prefilledDate || new Date().toISOString().split('T')[0],
         status: 'Not Started',
         priority: 'Normal',
+        resource_names: '',
+        parent_task_id: null,
       });
     }
   }, [open, prefilledDate]);
@@ -75,6 +79,14 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
             <FormField label="Start Date *" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
             <FormField label="End Date *" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
             <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+            <FormField label="Resources / Assigned To" value={formData.resource_names} onChange={(v) => setFormData({ ...formData, resource_names: v })} />
+            <FormField
+              label="Parent Task"
+              type="select"
+              value={formData.parent_task_id || ""}
+              onChange={(v) => setFormData({ ...formData, parent_task_id: v || null })}
+              options={(existingTasks || []).map(t => ({ value: t.id, label: `${t.wbs_code ? t.wbs_code + " \u2014 " : ""}${t.task_name}` }))}
+            />
           </div>
         </div>
 
@@ -110,9 +122,11 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
             color: '#FFFFFF',
           }}
         >
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
+          <option value="">—</option>
+          {options.map(opt => {
+            const isObj = typeof opt === 'object';
+            return <option key={isObj ? opt.value : opt} value={isObj ? opt.value : opt}>{isObj ? opt.label : opt}</option>;
+          })}
         </select>
       ) : (
         <input

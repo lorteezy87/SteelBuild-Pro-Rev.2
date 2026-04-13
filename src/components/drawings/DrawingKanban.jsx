@@ -4,6 +4,7 @@ import { FileText, Flag, PenLine, ChevronDown, ChevronRight, AlertTriangle } fro
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { batchProcess } from "@/utils/batchProcess";
+import { resolveFileUrl } from "@/api/base44Client";
 
 const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 
@@ -116,20 +117,23 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                 </span>
               )}
               {fileUrl && (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const url = await resolveFileUrl(fileUrl);
+                      if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    } catch { /* silently fail */ }
+                  }}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center",
                     width: 16, height: 16, borderRadius: 3,
                     background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
-                    color: "var(--accent)", textDecoration: "none"
+                    color: "var(--accent)", cursor: "pointer"
                   }}
                 >
                   <FileText style={{ width: 8, height: 8 }} />
-                </a>
+                </button>
               )}
             </div>
           </div>

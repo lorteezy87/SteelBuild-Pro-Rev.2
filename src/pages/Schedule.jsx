@@ -63,6 +63,8 @@ export default function Schedule() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkResource, setShowBulkResource] = useState(false);
+  const [bulkResourceValue, setBulkResourceValue] = useState("");
   const qc = useQueryClient();
 
   const { data: scheduleTasks = [] } = useQuery({
@@ -228,6 +230,31 @@ export default function Schedule() {
     onError: () => toast.error("Bulk delete failed"),
   });
 
+  const bulkResourceMut = useMutation({
+    mutationFn: async ({ ids, resource_names }) => {
+      const results = await batchProcess(
+        ids,
+        (id) => base44.entities.ScheduleTask.update(id, { resource_names, assigned_to: resource_names }),
+      );
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} updates failed.`);
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      setSelectedIds(new Set());
+      setShowBulkResource(false);
+      setBulkResourceValue("");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} assigned, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Resources assigned to ${results.succeeded.length} tasks`);
+      }
+    },
+    onError: () => toast.error("Bulk resource assignment failed"),
+  });
+
   const handleBulkAdd = async (rows) => {
     if (!hasProject) return;
     setBulkSaving(true);
@@ -290,11 +317,15 @@ export default function Schedule() {
       // MS Project duration is like "PT48H0M0S" — extract hours and convert to days
       const durationMatch = durationStr.match(/PT(\d+)H/);
       const durationDays = durationMatch ? Math.round(Number(durationMatch[1]) / 8) : null;
-      const preds = Array.from(node.getElementsByTagName("PredecessorLink")).map((p) =>
-        p.getElementsByTagName("PredecessorUID")[0]?.textContent
-      ).filter(Boolean);
+      const notes = node.getElementsByTagName("Notes")[0]?.textContent || "";
+      const preds = Array.from(node.getElementsByTagName("PredecessorLink")).map((p) => {
+        const predUid = p.getElementsByTagName("PredecessorUID")[0]?.textContent;
+        const linkType = p.getElementsByTagName("Type")[0]?.textContent; // 0=FF, 1=FS, 2=SF, 3=SS
+        const lagDuration = p.getElementsByTagName("LinkLag")[0]?.textContent; // in tenths of minutes
+        return { predUid, linkType: linkType || "1", lagDuration: lagDuration || "0" };
+      }).filter(p => p.predUid);
       const resources = assignmentMap[uid] || [];
-      tasks.push({ uid, name, start, finish, pct, preds, isSummary, outlineLevel, outlineNumber, milestone, durationDays, resources });
+      tasks.push({ uid, name, start, finish, pct, preds, isSummary, outlineLevel, outlineNumber, milestone, durationDays, resources, notes });
     });
     return tasks;
   };
@@ -331,12 +362,33 @@ export default function Schedule() {
     "PROCUREMENT": "Procurement",
   };
 
+  const inferTaskType = (name, isSummary, isMilestone) => {
+    if (isMilestone) return "Milestone";
+    if (isSummary) return "Task";
+    const n = (name || "").toLowerCase();
+    if (/\b(fab|fabricat|weld|cut|fit-up|shop)\b/.test(n)) return "Fabrication";
+    if (/\b(deliver|ship|truck|freight|haul)\b/.test(n)) return "Delivery";
+    if (/\b(erect|install|field|crane|bolt|set|rig)\b/.test(n)) return "Install";
+    if (/\b(submit|drawing|detail|review|approval)\b/.test(n)) return "Submittal";
+    if (/\b(rfi|request for)\b/.test(n)) return "RFI";
+    return "Task";
+  };
+
   const handleImportMPP = async (file) => {
     if (!projectId && !activeProject?.id) {
       toast.error("Select a project before importing");
       return;
     }
     setImporting(true);
+
+    // Reject binary .mpp files — only XML exports are supported
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.mpp') && !fileName.endsWith('.xml')) {
+      toast.error("Binary .mpp files are not supported directly. Please export from MS Project as XML first (File \u2192 Save As \u2192 XML).");
+      setImporting(false);
+      return;
+    }
+
     try {
       const text = await file.text();
       const allParsed = parseMsProjectXml(text);
@@ -375,7 +427,7 @@ export default function Schedule() {
         const record = await base44.entities.ScheduleTask.create({
           project_id: pid,
           task_name: t.name,
-          task_type: t.milestone ? "Milestone" : (t.isSummary ? "Task" : "Task"),
+          task_type: inferTaskType(t.name, t.isSummary, t.milestone),
           phase: PHASES.includes(phase) ? phase : "Fabrication",
           start_date: t.start ?? new Date().toISOString().split("T")[0],
           end_date: t.finish ?? t.start ?? new Date().toISOString().split("T")[0],
@@ -388,6 +440,8 @@ export default function Schedule() {
           duration: t.durationDays,
           resource_names: t.resources.length > 0 ? t.resources.join(", ") : null,
           parent_task_id: parentDbId,
+          notes: t.notes || null,
+          is_summary: t.isSummary || false,
           // Dependencies will be set in a second pass after all tasks exist
         });
         uidToDbId[t.uid] = record.id;
@@ -398,7 +452,7 @@ export default function Schedule() {
       allParsed.forEach((t) => {
         if (t.preds && t.preds.length > 0) {
           const dbId = uidToDbId[t.uid];
-          const predDbIds = t.preds.map(pUid => uidToDbId[pUid]).filter(Boolean);
+          const predDbIds = t.preds.map(p => uidToDbId[p.predUid]).filter(Boolean);
           if (dbId && predDbIds.length > 0) {
             depItems.push({ dbId, predDbIds });
           }
@@ -668,6 +722,7 @@ export default function Schedule() {
         isSaving={createTaskMut.isPending}
         projectName={selectedProject?.name || ""}
         prefilledDate={new Date().toISOString().split("T")[0]}
+        existingTasks={enrichedTasks}
       />
 
       <BulkAddTaskModal
@@ -676,6 +731,7 @@ export default function Schedule() {
         onSubmit={handleBulkAdd}
         projectName={selectedProject?.name || ""}
         isSaving={bulkSaving}
+        existingTasks={enrichedTasks}
       />
 
       <DeleteDialog
@@ -732,6 +788,95 @@ export default function Schedule() {
           <button onClick={bulkDelete} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1 }}>
             Delete
           </button>
+
+          <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />
+
+          {!showBulkResource ? (
+            <button
+              onClick={() => setShowBulkResource(true)}
+              disabled={bulkResourceMut.isPending}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--accent)",
+                background: "rgba(173,198,255,0.10)",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                cursor: bulkResourceMut.isPending ? "not-allowed" : "pointer",
+                opacity: bulkResourceMut.isPending ? 0.6 : 1,
+              }}
+            >
+              Assign Resources
+            </button>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Resource name(s)…"
+                value={bulkResourceValue}
+                onChange={(e) => setBulkResourceValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && bulkResourceValue.trim()) {
+                    bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() });
+                  } else if (e.key === "Escape") {
+                    setShowBulkResource(false);
+                    setBulkResourceValue("");
+                  }
+                }}
+                style={{
+                  padding: "5px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--accent)",
+                  background: "var(--bg-surface-low)",
+                  color: "var(--text-primary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  width: 160,
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (bulkResourceValue.trim()) {
+                    bulkResourceMut.mutate({ ids: Array.from(selectedIds), resource_names: bulkResourceValue.trim() });
+                  }
+                }}
+                disabled={!bulkResourceValue.trim() || bulkResourceMut.isPending}
+                style={{
+                  padding: "5px 10px",
+                  borderRadius: 6,
+                  border: "1px solid var(--status-success)",
+                  background: "var(--success-muted)",
+                  color: "var(--status-success)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: !bulkResourceValue.trim() || bulkResourceMut.isPending ? "not-allowed" : "pointer",
+                  opacity: !bulkResourceValue.trim() || bulkResourceMut.isPending ? 0.5 : 1,
+                }}
+              >
+                {bulkResourceMut.isPending ? "Applying…" : "Apply"}
+              </button>
+              <button
+                onClick={() => { setShowBulkResource(false); setBulkResourceValue(""); }}
+                style={{
+                  padding: "5px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--divider)",
+                  background: "var(--bg-surface)",
+                  color: "var(--text-muted)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <button onClick={() => setSelectedIds(new Set())} style={{ marginLeft: "auto", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--divider)", background: "var(--bg-surface)", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>
             Clear
           </button>
