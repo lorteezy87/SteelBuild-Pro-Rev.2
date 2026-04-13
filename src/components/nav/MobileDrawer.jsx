@@ -53,7 +53,7 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
       {open && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 900 }} />}
       <div ref={ref} style={{
         position: "fixed", top: 0, left: 0, bottom: 0,
-        width: 280,
+        width: "min(280px, 85vw)",
         background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)",
         zIndex: 950,
         transform: open ? "translateX(0)" : "translateX(-100%)",
