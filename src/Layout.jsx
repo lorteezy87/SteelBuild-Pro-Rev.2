@@ -95,10 +95,11 @@ export default function Layout({ children, currentPageName }) {
     queryKey: ["alerts-nav", activeProjectId],
     queryFn: async () => {
       try {
-        return await base44.entities.Alert.filter({ is_dismissed: false, project_id: activeProjectId });
+        // Fetch all alerts for this project, then filter client-side.
+        // This avoids 400 errors if is_dismissed column doesn't exist yet.
+        const raw = await base44.entities.Alert.filter({ project_id: activeProjectId });
+        return raw.filter((a) => !a.is_dismissed && !a.dismissed_at);
       } catch (err) {
-        // Supabase returns 400 if alerts table is missing expected columns —
-        // fail gracefully so the rest of the app keeps working
         console.warn("[Layout] alerts query failed:", err?.message || err);
         return [];
       }
@@ -139,9 +140,17 @@ export default function Layout({ children, currentPageName }) {
   ).length;
 
   const markAllReadMut = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const unread = allAlerts.filter((a) => !a.is_read);
-      return batchProcess(unread, (a) => base44.entities.Alert.update(a.id, { is_read: true }));
+      try {
+        return await batchProcess(unread, (a) =>
+          base44.entities.Alert.update(a.id, { is_read: true })
+        );
+      } catch {
+        // is_read column may not exist yet — silently degrade
+        console.warn("[Layout] markAllRead failed — is_read column may not exist");
+        return { succeeded: [], failed: unread };
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts-nav"] }),
   });

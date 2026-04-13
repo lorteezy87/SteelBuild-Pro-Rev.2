@@ -12,9 +12,24 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import PageErrorBoundary from '@/components/shared/ErrorBoundary';
 import Layout from './Layout';
 
-// Eagerly loaded pages (critical path — no lazy overhead)
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Landing = lazy(() => import('./pages/Landing'));
+// ── Lazy with retry (mirrors lazyWithRetry in routes.js) ────────────
+// Catches stale chunk 404s after Vercel deploys and reloads once.
+const RELOAD_KEY = "__steelbuild_chunk_reload";
+function lazyRetry(importFn) {
+  return lazy(() =>
+    importFn().catch((err) => {
+      if (!sessionStorage.getItem(RELOAD_KEY)) {
+        sessionStorage.setItem(RELOAD_KEY, "1");
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw err;
+    })
+  );
+}
+
+const Dashboard = lazyRetry(() => import('./pages/Dashboard'));
+const Landing = lazyRetry(() => import('./pages/Landing'));
 
 // ── Suspense loading indicator ───────────────────────────────────────
 function PageLoader() {
