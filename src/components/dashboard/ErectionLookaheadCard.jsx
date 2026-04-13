@@ -72,7 +72,7 @@ export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>Incoming Material</div>
             {upcomingDeliveries.slice(0, 3).map(d => (
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", borderLeft: "2px solid var(--accent)", marginBottom: 4, background: "var(--accent-muted)", borderRadius: "0 4px 4px 0" }}>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{d.delivery_title || d.vendor}</span>
+                <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{d.description || d.vendor}</span>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{formatDate(d.scheduled_date)}</span>
               </div>
             ))}

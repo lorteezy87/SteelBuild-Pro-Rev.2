@@ -568,7 +568,7 @@ export default function PortfolioView({
       priorities.push({
         rank: days >= 7 ? 1 : 3,
         type: "DEL", id: d.delivery_id || "—",
-        title: d.delivery_title || d.vendor || "Delivery",
+        title: d.description || d.vendor || "Delivery",
         project: projectMap[d.project_id] || "",
         owner: d.vendor || "Vendor",
         days, severity: days >= 7 ? "high" : "medium",
@@ -633,7 +633,7 @@ export default function PortfolioView({
     allDeliveries.filter((d) => statusIn(d.status, ["In Transit"])).forEach((d) => {
       waitingOn.push({
         type: "DEL", id: d.delivery_id || "—",
-        title: d.delivery_title || d.vendor || "Delivery",
+        title: d.description || d.vendor || "Delivery",
         project: projectMap[d.project_id] || "",
         waitingFor: d.vendor || "Vendor",
         submitted: d.scheduled_date,
@@ -1742,7 +1742,7 @@ export default function PortfolioView({
         {deliveriesStats.nextDelivery && (
           <div style={{ background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-card)", padding: "10px 12px" }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.delivery_title || deliveriesStats.nextDelivery.vendor || "—"}</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.description || deliveriesStats.nextDelivery.vendor || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{projectMap[deliveriesStats.nextDelivery.project_id] || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
           </div>

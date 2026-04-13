@@ -110,7 +110,7 @@ export default function DeliveriesList({ deliveries = [], onEdit }) {
                   color: "var(--text-primary)",
                 }}
               >
-                {delivery.delivery_title || delivery.description || delivery.vendor || "—"}
+                {delivery.description || delivery.vendor || "—"}
               </div>
               <div
                 style={{

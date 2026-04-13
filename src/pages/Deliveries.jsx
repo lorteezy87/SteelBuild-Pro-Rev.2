@@ -40,7 +40,7 @@ function exportToCSV(deliveries, projectMap = {}, wpMap = {}, filename = "delive
   ];
   const rows = deliveries.map((d) => [
     projectMap[d.project_id] || "",
-    d.delivery_title || "",
+    d.description || "",
     wpMap[d.work_package_id] || "",
     d.vendor || "",
     d.po_number || "",
@@ -204,7 +204,7 @@ export default function Deliveries() {
         const q = search.trim().toLowerCase();
         if (q.length) {
           const hay =
-            `${d.delivery_title || ""} ${wpMap[d.work_package_id] || ""} ${d.vendor || ""} ${d.po_number || ""} ${projectMap[d.project_id] || ""} ${d.carrier || ""} ${d.tracking_number || ""}`.toLowerCase();
+            `${d.description || ""} ${wpMap[d.work_package_id] || ""} ${d.vendor || ""} ${d.po_number || ""} ${projectMap[d.project_id] || ""} ${d.carrier || ""} ${d.tracking_number || ""}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -283,7 +283,7 @@ export default function Deliveries() {
           if (daysLate <= 0) continue;
           if (existingIds.has(d.id)) continue;
           const liveProjectName = projectMap[d.project_id] || "";
-          const liveDesc = d.delivery_title || wpMap[d.work_package_id] || "Delivery";
+          const liveDesc = d.description || wpMap[d.work_package_id] || "Delivery";
           await base44.entities.Alert.create({
             alert_type: "Delivery_Overdue",
             severity: daysLate >= 7 ? "Critical" : daysLate >= 3 ? "High" : "Medium",
@@ -428,7 +428,7 @@ export default function Deliveries() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.delivery_title || "—"}
+            {delivery.description || "—"}
             {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
             {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
           </div>
@@ -568,7 +568,7 @@ export default function Deliveries() {
                     return (
                       <div
                         key={d.id}
-                        title={`${d.delivery_title || wpMap[d.work_package_id] || d.vendor} · ${d.vendor}`}
+                        title={`${d.description || wpMap[d.work_package_id] || d.vendor} · ${d.vendor}`}
                         style={{
                           position: "absolute",
                           top: 2 + i2 * 14,
@@ -648,9 +648,9 @@ export default function Deliveries() {
             }}
           >
             {renderStatusPill(detail.status)}
-            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.delivery_title || detail.vendor}</div>
+            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.description || detail.vendor}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{projectMap[detail.project_id] || "—"}</div>
-            {detail.delivery_title && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
+            {detail.description && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
             {detail.work_package_id && wpMap[detail.work_package_id] && (
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>WP: {wpMap[detail.work_package_id]}</div>
             )}
@@ -927,7 +927,7 @@ export default function Deliveries() {
                     cursor: "pointer",
                   }}
                 >
-                  {d.delivery_title || wpMap[d.work_package_id] || "Delivery"} · {d.vendor} · {daysLate}d overdue
+                  {d.description || wpMap[d.work_package_id] || "Delivery"} · {d.vendor} · {daysLate}d overdue
                 </span>
               );
             })}
@@ -1138,7 +1138,7 @@ export default function Deliveries() {
                           {renderStatusPill(d.status)}
                         </div>
                         <div style={{ fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {d.delivery_title || wpMap[d.work_package_id] || "—"}
+                          {d.description || wpMap[d.work_package_id] || "—"}
                         </div>
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
                           {d.pieces || 0} pcs · {d.weight_tons || 0}T · {projectMap[d.project_id] || ""}
@@ -1164,7 +1164,7 @@ export default function Deliveries() {
             .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date))
             .map((d) => (
               <div key={d.id} style={{ padding: "6px 16px", borderBottom: "1px solid var(--divider)", fontSize: 10, color: "var(--text-primary)" }}>
-                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.delivery_title || wpMap[d.work_package_id] || "—"} · {d.weight_tons || 0}T
+                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.description || wpMap[d.work_package_id] || "—"} · {d.weight_tons || 0}T
               </div>
             ))}
         </div>

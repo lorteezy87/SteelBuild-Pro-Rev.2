@@ -340,7 +340,7 @@ export default function PortfolioOverview() {
                 const proj = projects.find(p => p.id === d.project_id);
                 return (
                   <div key={d.id} style={{ padding: "8px 10px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 8 }}>
-                    <div style={{ fontFamily: M.body, fontSize: 11, color: M.text, fontWeight: 600 }}>{d.delivery_title || d.vendor || "Delivery"}</div>
+                    <div style={{ fontFamily: M.body, fontSize: 11, color: M.text, fontWeight: 600 }}>{d.description || d.vendor || "Delivery"}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                       <span style={{ fontFamily: M.mono, fontSize: 8, color: M.muted }}>{proj?.name || "—"}</span>
                       <span style={{ fontFamily: M.mono, fontSize: 8, color: "var(--status-error)", fontWeight: 700 }}>{daysLate}d late</span>

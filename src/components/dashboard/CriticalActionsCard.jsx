@@ -45,7 +45,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
   }).forEach(d => {
     items.push({
       type: "DELIVERY", id: d.delivery_id,
-      title: d.delivery_title || d.vendor || "Delivery",
+      title: d.description || d.vendor || "Delivery",
       detail: `Late · ${d.vendor || ""}`,
       severity: "high",
       nav: "Deliveries",
