@@ -86,7 +86,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Search sheets, titles, reviewers\u2026"
+        placeholder="Search sheets, titles, reviewers..."
         style={{
           flex: 1, minWidth: 200, padding: "7px 12px",
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
@@ -137,7 +137,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
               color: view === v ? "var(--accent)" : "var(--text-muted)",
             }}
           >
-            {v === "list" ? "\u2630 LIST" : "\u229E GRID"}
+            {v === "list" ? "LIST" : "GRID"}
           </button>
         ))}
       </div>
