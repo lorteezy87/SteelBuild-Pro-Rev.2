@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
+// Bundle pdf.js worker with Vite so versions always match the installed
+// pdfjs-dist package. Same pattern as DrawingViewer.jsx. Safe to set the
+// global workerSrc in multiple modules — it's idempotent.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const MAX_PDF_SIZE_MB = 32;
@@ -126,6 +132,182 @@ async function validateAndExtract(file, uploadedFileUrl) {
     return extractSheetsFromFilename(file.name);
   }
   return extractSheetsFromPDF(file, uploadedFileUrl);
+}
+
+// ─── Callout detection ────────────────────────────────────────────────
+//
+// We scan every PDF page's text content for section / detail callouts
+// (e.g. "2/A201", "A/A101") and attach them to the matching sheet record
+// so the viewer can render clickable hyperlinks over the drawing canvas.
+//
+// Pattern matches:
+//   group 1  "2"  | "A"  | "A1"    — detail/section reference
+//   group 2  "A201" | "S101" | "E2" — target sheet number
+// Adjust if your sheet numbering convention needs different prefixes.
+const CALLOUT_RE = /\b(\d+|[A-Z]+\d*)\/([A-Z]+\d+)\b/g;
+
+function parseCalloutsInText(text) {
+  if (!text) return [];
+  const out = [];
+  // Reset lastIndex explicitly — CALLOUT_RE is shared with the /g flag.
+  CALLOUT_RE.lastIndex = 0;
+  let m;
+  while ((m = CALLOUT_RE.exec(text)) !== null) {
+    out.push({
+      text: m[0],
+      targetDetail: m[1],
+      targetSheetNumber: m[2],
+    });
+  }
+  return out;
+}
+
+// Normalise sheet numbers so "A-201", "a201", "A 201" all collide.
+function normalizeSheetNumber(s) {
+  return String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
+}
+
+// Extract callouts from a PDF File via pdfjs text content. Returns one entry
+// per page: { pageNumber, width, height, sheetNumberOnPage, callouts: [...] }.
+//
+// Coordinates are stored in PDF user units (72 DPI) with an **origin at the
+// top-left** of the page, which is what canvas overlays expect. pdfjs gives
+// us text-item positions with a bottom-left origin, so we flip the Y axis
+// here (y_top = pageHeight - baseline - height).
+//
+// Caveat: pdfjs sometimes splits a single visual token across multiple text
+// items (different fonts, spacing). A callout that straddles items will be
+// missed. Good enough for first-pass structural/arch sets.
+async function extractCalloutsFromPdfFile(file) {
+  try {
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    try {
+      const pages = [];
+      for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+        const page = await doc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        const pageWidth  = viewport.width;
+        const pageHeight = viewport.height;
+        const content = await page.getTextContent();
+
+        const calloutsOnPage = [];
+        let sheetNumberOnPage = null;
+        // Standard sheet-number shape in a title block: 1-4 letters, optional
+        // separator, 1-4 digits, optional decimal suffix. We pick the longest
+        // match on the page as the likely own sheet number.
+        const SHEET_TITLE_RE = /^[A-Z]{1,4}[- ]?\d{1,4}(\.\d+)?$/;
+
+        for (const item of content.items) {
+          const str = (item && item.str) || "";
+          if (!str.trim()) continue;
+
+          if (SHEET_TITLE_RE.test(str.trim())) {
+            if (!sheetNumberOnPage || str.trim().length > sheetNumberOnPage.length) {
+              sheetNumberOnPage = str.trim();
+            }
+          }
+
+          const found = parseCalloutsInText(str);
+          if (found.length === 0) continue;
+
+          const tx = item.transform?.[4] ?? 0;
+          const ty = item.transform?.[5] ?? 0;
+          const w  = item.width  || Math.max(8, str.length * 5);
+          const h  = item.height || 12;
+          // Flip to top-left origin.
+          const yTop = Math.max(0, pageHeight - ty - h);
+
+          for (const c of found) {
+            calloutsOnPage.push({
+              text: c.text,
+              coords: {
+                x: Math.round(tx * 100) / 100,
+                y: Math.round(yTop * 100) / 100,
+                width:  Math.round(w * 100) / 100,
+                height: Math.round(h * 100) / 100,
+              },
+              targetSheetNumber: c.targetSheetNumber,
+              targetDetail: c.targetDetail,
+            });
+          }
+        }
+
+        pages.push({
+          pageNumber: pageNum,
+          width: pageWidth,
+          height: pageHeight,
+          sheetNumberOnPage,
+          callouts: calloutsOnPage,
+        });
+      }
+      return pages;
+    } finally {
+      try { await doc.destroy(); } catch { /* ignore */ }
+    }
+  } catch (err) {
+    console.warn("Callout extraction failed:", err);
+    return [];
+  }
+}
+
+// Merge per-page callout lists into sheet records. We try to match each
+// page's sheet number (from its title block) to a sheet from the LLM pass;
+// unmatched pages fall through to sequential assignment.
+function mergeCalloutsIntoSheets(sheets, pages) {
+  if (!Array.isArray(sheets) || sheets.length === 0 || !Array.isArray(pages)) return;
+
+  const sheetByNum = {};
+  for (const s of sheets) {
+    const key = normalizeSheetNumber(s.sheetNumber);
+    if (key) sheetByNum[key] = s;
+  }
+
+  const unmatched = [];
+  for (const p of pages) {
+    const key = normalizeSheetNumber(p.sheetNumberOnPage);
+    const target = key ? sheetByNum[key] : null;
+    if (target && !target.callouts) {
+      target.callouts = p.callouts;
+      target.pdfPage  = p.pageNumber;
+    } else {
+      unmatched.push(p);
+    }
+  }
+
+  // Sequentially assign leftover pages to sheets that still don't have
+  // callouts. This catches the common case where the LLM extracted a sheet
+  // index that doesn't have a matching title-block sheet number in the PDF.
+  const leftover = sheets.filter(s => !Array.isArray(s.callouts));
+  for (let i = 0; i < leftover.length && i < unmatched.length; i++) {
+    leftover[i].callouts = unmatched[i].callouts;
+    leftover[i].pdfPage  = unmatched[i].pageNumber;
+  }
+
+  for (const s of sheets) {
+    if (!Array.isArray(s.callouts)) s.callouts = [];
+    if (!Number.isFinite(s.pdfPage)) s.pdfPage = 1;
+  }
+}
+
+// Resolve each callout's targetSheetNumber against the set of sheets in the
+// upload. We mark resolved/unresolved so the viewer can render hyperlinked vs
+// greyed-out callouts. The viewer will also resolve against the whole project
+// drawing list at render time, but doing it here lets the upload modal show
+// a summary of unresolved cross-references.
+function resolveCalloutTargets(sheets) {
+  if (!Array.isArray(sheets)) return;
+  const known = new Set(
+    sheets
+      .map(s => normalizeSheetNumber(s.sheetNumber))
+      .filter(Boolean)
+  );
+  for (const s of sheets) {
+    if (!Array.isArray(s.callouts)) continue;
+    for (const c of s.callouts) {
+      c.resolved = known.has(normalizeSheetNumber(c.targetSheetNumber));
+    }
+  }
 }
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
@@ -674,12 +856,24 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           message: `Building sheet list for ${file.name}…`,
         });
 
+        // Detect callouts via pdfjs text content — skipped if the PDF is too
+        // large (same threshold as AI extraction, since the pdfjs pass loads
+        // every page into memory too) or if the LLM flagged it as a scanned
+        // image (no embedded text layer to scan).
+        let pageCallouts = [];
+        if (!extractResult.scanned && !extractResult.tooLarge && sizeMB <= MAX_PDF_SIZE_MB) {
+          pageCallouts = await extractCalloutsFromPdfFile(file);
+        }
+        mergeCalloutsIntoSheets(extractResult.sheets, pageCallouts);
+
         const tagged = extractResult.sheets.map(s => ({
           ...s,
           discipline:    s.discipline || meta.discipline,
           sourceFile:    file.name,
           sourceFileUrl: fileUrl,
           selected:      true,
+          callouts:      Array.isArray(s.callouts) ? s.callouts : [],
+          pdfPage:       Number.isFinite(s.pdfPage) ? s.pdfPage : 1,
         }));
 
         allSheets.push(...tagged);
@@ -701,12 +895,20 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
 
       if (cancelledRef.current) return;  // user cancelled — stay at step 0 (reset already called)
 
+      // Cross-sheet callout resolution: now that we know every sheet in this
+      // upload, mark each callout as resolved/unresolved based on whether its
+      // targetSheetNumber matches a sibling. The viewer will also resolve at
+      // render time against the full project drawing list, so unresolved here
+      // doesn't mean permanently broken — it just means "not in this upload."
+      resolveCalloutTargets(allSheets);
+
       // ── Done ──
+      const calloutCount = allSheets.reduce((n, s) => n + (s.callouts?.length || 0), 0);
       setProcessingStatus({
         steps: makeSteps(null, ["upload", "encode", "extract", "parse", "done"]),
         currentStepId: null,
         progress: 100,
-        message: `Found ${allSheets.length} sheets across ${results.filter(r => r.status === "success").length} file(s)`,
+        message: `Found ${allSheets.length} sheets and ${calloutCount} callouts across ${results.filter(r => r.status === "success").length} file(s)`,
       });
 
       setSheets(allSheets);
@@ -749,6 +951,15 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
             file_url:         sheet.sourceFileUrl,
             drawing_set_name: resolvedSetName,
             notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
+            // Detected section/detail callouts — each has text, coords (PDF
+            // user units, top-left origin), targetSheetNumber, targetDetail,
+            // and resolved flag. Empty array if the PDF had no detectable
+            // callouts or was too large / scanned.
+            callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
+            // Which page within the source PDF this sheet's content lives on,
+            // so the viewer can jump straight there and render overlays in
+            // the correct coordinate space.
+            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
           });
           created++;
         } catch (err) {
