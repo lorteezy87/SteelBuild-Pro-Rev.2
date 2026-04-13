@@ -15,108 +15,139 @@
 import { lazy } from "react";
 import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 
+// ── Retry wrapper for lazy imports ──────────────────────────────────
+// After a Vercel deployment, old chunk filenames no longer exist on the
+// CDN.  Browsers that cached the previous index.html will request stale
+// chunk URLs and get 404s, causing "Failed to fetch dynamically imported
+// module" errors.  This wrapper catches those failures and reloads the
+// page once to fetch fresh chunk URLs from the new index.html.
+const SESSION_RELOAD_KEY = "__steelbuild_chunk_reload";
+
+function lazyWithRetry(importFn) {
+  return lazy(() =>
+    importFn().catch((err) => {
+      // Only auto-reload once per session to avoid infinite reload loops
+      const hasReloaded = sessionStorage.getItem(SESSION_RELOAD_KEY);
+      if (!hasReloaded) {
+        sessionStorage.setItem(SESSION_RELOAD_KEY, "1");
+        console.warn("[lazyWithRetry] Chunk load failed, reloading page for fresh assets:", err?.message);
+        window.location.reload();
+        // Return a never-resolving promise so React doesn't render an error
+        // while the page reloads
+        return new Promise(() => {});
+      }
+      // Already reloaded once — throw so the error boundary catches it
+      throw err;
+    })
+  );
+}
+
+// Clear the reload flag on successful page load so future deploys
+// can trigger a fresh reload
+sessionStorage.removeItem(SESSION_RELOAD_KEY);
+
 // ── Domain-grouped lazy page imports ─────────────────────────────────
 const ROUTE_DOMAINS = {
   // ── Overview & Portfolio ──
   overview: {
-    Dashboard:              lazy(() => import("@/pages/Dashboard")),
-    ProjectControlCenter:   lazy(() => import("@/pages/ProjectControlCenter")),
-    ExecutiveView:          lazy(() => import("@/pages/ExecutiveView")),
-    Projects:               lazy(() => import("@/pages/Projects")),
-    ProjectDetail:          lazy(() => import("@/pages/ProjectDetail")),
-    AIInsights:             lazy(() => import("@/pages/AIInsights")),
+    Dashboard:              lazyWithRetry(() => import("@/pages/Dashboard")),
+    ProjectControlCenter:   lazyWithRetry(() => import("@/pages/ProjectControlCenter")),
+    ExecutiveView:          lazyWithRetry(() => import("@/pages/ExecutiveView")),
+    Projects:               lazyWithRetry(() => import("@/pages/Projects")),
+    ProjectDetail:          lazyWithRetry(() => import("@/pages/ProjectDetail")),
+    AIInsights:             lazyWithRetry(() => import("@/pages/AIInsights")),
   },
 
   // ── Communications ──
   communications: {
-    RFIs:             lazy(() => import("@/pages/RFIs")),
-    RFIHub:           lazy(() => import("@/pages/RFIHub")),
-    Meetings:         lazy(() => import("@/pages/Meetings")),
-    ActionItems:      lazy(() => import("@/pages/ActionItems")),
-    ProductionNotes:  lazy(() => import("@/pages/ProductionNotes")),
+    RFIs:             lazyWithRetry(() => import("@/pages/RFIs")),
+    RFIHub:           lazyWithRetry(() => import("@/pages/RFIHub")),
+    Meetings:         lazyWithRetry(() => import("@/pages/Meetings")),
+    ActionItems:      lazyWithRetry(() => import("@/pages/ActionItems")),
+    ProductionNotes:  lazyWithRetry(() => import("@/pages/ProductionNotes")),
   },
 
   // ── Design & Documents ──
   documents: {
-    Drawings:       lazy(() => import("@/pages/Drawings")),
-    DrawingViewer:  lazy(() => import("@/pages/DrawingViewer")),
-    Documents:      lazy(() => import("@/pages/Documents")),
-    ModelViewer:    lazy(() => import("@/pages/ModelViewer")),
+    Drawings:       lazyWithRetry(() => import("@/pages/Drawings")),
+    DrawingViewer:  lazyWithRetry(() => import("@/pages/DrawingViewer")),
+    Documents:      lazyWithRetry(() => import("@/pages/Documents")),
+    ModelViewer:    lazyWithRetry(() => import("@/pages/ModelViewer")),
   },
 
   // ── Fabrication & Production ──
   fabrication: {
-    WorkPackages:       lazy(() => import("@/pages/WorkPackages")),
-    Constraints:        lazy(() => import("@/pages/Constraints")),
-    FabRelease:         lazy(() => import("@/pages/FabRelease")),
-    Procurement:        lazy(() => import("@/pages/Procurement")),
-    LookAheadSchedule:  lazy(() => import("@/pages/LookAheadSchedule")),
+    WorkPackages:       lazyWithRetry(() => import("@/pages/WorkPackages")),
+    Constraints:        lazyWithRetry(() => import("@/pages/Constraints")),
+    FabRelease:         lazyWithRetry(() => import("@/pages/FabRelease")),
+    Procurement:        lazyWithRetry(() => import("@/pages/Procurement")),
+    LookAheadSchedule:  lazyWithRetry(() => import("@/pages/LookAheadSchedule")),
   },
 
   // ── Scheduling & Resources ──
   scheduling: {
-    Schedule:             lazy(() => import("@/pages/Schedule")),
-    GanttChart:           lazy(() => import("@/pages/GanttChart")),
-    ResourceManagement:   lazy(() => import("@/pages/ResourceManagement")),
-    ResourceScheduling:   lazy(() => import("@/pages/ResourceScheduling")),
+    Schedule:             lazyWithRetry(() => import("@/pages/Schedule")),
+    GanttChart:           lazyWithRetry(() => import("@/pages/GanttChart")),
+    ResourceManagement:   lazyWithRetry(() => import("@/pages/ResourceManagement")),
+    ResourceScheduling:   lazyWithRetry(() => import("@/pages/ResourceScheduling")),
   },
 
   // ── Field Operations ──
   field: {
-    DailyLogs:       lazy(() => import("@/pages/DailyLogs")),
-    Photos:          lazy(() => import("@/pages/Photos")),
-    LEMs:            lazy(() => import("@/pages/LEMs")),
-    Inspections:     lazy(() => import("@/pages/Inspections")),
-    Safety:          lazy(() => import("@/pages/Safety")),
-    Punchlist:       lazy(() => import("@/pages/Punchlist")),
-    QualityControl:  lazy(() => import("@/pages/QualityControl")),
+    DailyLogs:       lazyWithRetry(() => import("@/pages/DailyLogs")),
+    Photos:          lazyWithRetry(() => import("@/pages/Photos")),
+    LEMs:            lazyWithRetry(() => import("@/pages/LEMs")),
+    Inspections:     lazyWithRetry(() => import("@/pages/Inspections")),
+    Safety:          lazyWithRetry(() => import("@/pages/Safety")),
+    Punchlist:       lazyWithRetry(() => import("@/pages/Punchlist")),
+    QualityControl:  lazyWithRetry(() => import("@/pages/QualityControl")),
   },
 
   // ── Cost & Finance ──
   cost: {
-    Financials:          lazy(() => import("@/pages/Financials")),
-    CostDashboard:       lazy(() => import("@/pages/CostDashboard")),
-    ChangeOrders:        lazy(() => import("@/pages/ChangeOrders")),
-    SOV:                 lazy(() => import("@/pages/SOV")),
-    Expenses:            lazy(() => import("@/pages/Expenses")),
-    ContractManagement:  lazy(() => import("@/pages/ContractManagement")),
+    Financials:          lazyWithRetry(() => import("@/pages/Financials")),
+    CostDashboard:       lazyWithRetry(() => import("@/pages/CostDashboard")),
+    ChangeOrders:        lazyWithRetry(() => import("@/pages/ChangeOrders")),
+    SOV:                 lazyWithRetry(() => import("@/pages/SOV")),
+    Expenses:            lazyWithRetry(() => import("@/pages/Expenses")),
+    ContractManagement:  lazyWithRetry(() => import("@/pages/ContractManagement")),
   },
 
   // ── Logistics ──
   logistics: {
-    Deliveries: lazy(() => import("@/pages/Deliveries")),
+    Deliveries: lazyWithRetry(() => import("@/pages/Deliveries")),
   },
 
   // ── Risk & Compliance ──
   risk: {
-    Mitigations:     lazy(() => import("@/pages/Mitigations")),
-    ChangeRequests:  lazy(() => import("@/pages/ChangeRequests")),
-    DecisionLog:     lazy(() => import("@/pages/DecisionLog")),
-    Alerts:          lazy(() => import("@/pages/Alerts")),
-    AlertsCenter:    lazy(() => import("@/pages/AlertsCenter")),
+    Mitigations:     lazyWithRetry(() => import("@/pages/Mitigations")),
+    ChangeRequests:  lazyWithRetry(() => import("@/pages/ChangeRequests")),
+    DecisionLog:     lazyWithRetry(() => import("@/pages/DecisionLog")),
+    Alerts:          lazyWithRetry(() => import("@/pages/Alerts")),
+    AlertsCenter:    lazyWithRetry(() => import("@/pages/AlertsCenter")),
   },
 
   // ── Closeout ──
   closeout: {
-    ProjectCloseout: lazy(() => import("@/pages/ProjectCloseout")),
-    Warranty:        lazy(() => import("@/pages/Warranty")),
+    ProjectCloseout: lazyWithRetry(() => import("@/pages/ProjectCloseout")),
+    Warranty:        lazyWithRetry(() => import("@/pages/Warranty")),
   },
 
   // ── Admin & Setup ──
   admin: {
-    ScopeExclusions:  lazy(() => import("@/pages/ScopeExclusions")),
-    Contacts:         lazy(() => import("@/pages/Contacts")),
-    Vendors:          lazy(() => import("@/pages/Vendors")),
-    Settings:         lazy(() => import("@/pages/Settings")),
-    UsersManagement:  lazy(() => import("@/pages/UsersManagement")),
-    AgentMemory:      lazy(() => import("@/pages/AgentMemory")),
+    ScopeExclusions:  lazyWithRetry(() => import("@/pages/ScopeExclusions")),
+    Contacts:         lazyWithRetry(() => import("@/pages/Contacts")),
+    Vendors:          lazyWithRetry(() => import("@/pages/Vendors")),
+    Settings:         lazyWithRetry(() => import("@/pages/Settings")),
+    UsersManagement:  lazyWithRetry(() => import("@/pages/UsersManagement")),
+    AgentMemory:      lazyWithRetry(() => import("@/pages/AgentMemory")),
   },
 
   // ── Reporting ──
   reporting: {
-    JobStatusReport: lazy(() => import("@/pages/JobStatusReport")),
-    Reports:         lazy(() => import("@/pages/Reports")),
-    Activity:        lazy(() => import("@/pages/Activity")),
+    JobStatusReport: lazyWithRetry(() => import("@/pages/JobStatusReport")),
+    Reports:         lazyWithRetry(() => import("@/pages/Reports")),
+    Activity:        lazyWithRetry(() => import("@/pages/Activity")),
   },
 };
 

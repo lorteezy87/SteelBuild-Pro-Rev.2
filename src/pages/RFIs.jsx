@@ -472,7 +472,11 @@ export default function RFIs() {
     const createRFIAlerts = async () => {
       try {
         const existing = await base44.entities.Alert.filter({ alert_type: "RFI_Overdue" });
-        const existingIds = new Set(existing.map((a) => a.related_record_id));
+        // related_record_id may not exist yet — fall back to title-based dedup
+        const existingIds = new Set(
+          existing.map((a) => a.related_record_id).filter(Boolean)
+        );
+        const existingTitles = new Set(existing.map((a) => a.title));
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const in3 = new Date(today.getTime() + 3 * 86400000);
@@ -487,17 +491,15 @@ export default function RFIs() {
           if (existingIds.has(r.id)) continue;
           const daysLate = isOD ? Math.floor((today - due) / 86400000) : 0;
           const liveProjectName = projectMap[r.project_id] || "";
+          const alertTitle = isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in ≤3 days`;
+          if (existingTitles.has(alertTitle)) continue;
           await base44.entities.Alert.create({
             alert_type: "RFI_Overdue",
             severity: r.priority === "Critical" || daysLate >= 7 ? "Critical" : daysLate >= 3 || r.priority === "High" ? "High" : "Medium",
-            title: isOD ? `${r.rfi_number} OVERDUE — ${daysLate}d` : `${r.rfi_number} due in =3 days`,
-            message: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority} · Project: ${liveProjectName || "—"}`,
-            related_entity: "RFI",
-            related_record_id: r.id,
+            title: alertTitle,
+            description: `${r.rfi_number}: "${(r.title || "").slice(0, 60)}" · BIC: ${r.ball_in_court || "Contractor"} · Priority: ${r.priority} · Project: ${liveProjectName || "—"}`,
             project_id: r.project_id,
             project_name: liveProjectName,
-            is_read: false,
-            is_dismissed: false,
           });
           alertsCreatedRef.current.add(r.id);
         }
