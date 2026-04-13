@@ -7,11 +7,15 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 export default [
   {
     files: [
-      "src/components/**/*.{js,mjs,cjs,jsx}",
-      "src/pages/**/*.{js,mjs,cjs,jsx}",
-      "src/Layout.jsx",
+      "src/**/*.{js,mjs,cjs,jsx}",
     ],
-    ignores: ["src/lib/**/*", "src/components/ui/**/*", "src/components/shared/THEME_DEVELOPER_GUIDE.jsx"],
+    ignores: [
+      "src/lib/**/*",
+      "src/api/**/*",
+      "src/components/ui/**/*",
+      "src/components/shared/THEME_DEVELOPER_GUIDE.jsx",
+      "src/vite-plugins/**/*",
+    ],
     ...pluginJs.configs.recommended,
     ...pluginReact.configs.flat.recommended,
     languageOptions: {
