@@ -68,9 +68,12 @@ export default function ResourceManagement() {
     ? projects.find((p) => p.id === projectId)
     : null;
 
+  // DB column is `availability`, not `availability_status`
+  const getStatus = (r) => r.availability || r.availability_status || "Available";
+
   const filtered = resources.filter((r) => {
     const typeMatch = filterType === "all" || r.resource_type === filterType;
-    const statusMatch = filterStatus === "all" || r.availability_status === filterStatus;
+    const statusMatch = filterStatus === "all" || getStatus(r) === filterStatus;
     return typeMatch && statusMatch;
   });
 
@@ -80,19 +83,18 @@ export default function ResourceManagement() {
     equipment: resources.filter((r) => r.resource_type === "Equipment").length,
     subcontractor: resources.filter((r) => r.resource_type === "Subcontractor").length,
     material: resources.filter((r) => r.resource_type === "Material").length,
-    available: resources.filter((r) => r.availability_status === "Available").length,
-    allocated: resources.filter((r) => r.availability_status === "Allocated").length,
-    overAllocated: resources.filter((r) => r.availability_status === "Over-Allocated").length,
+    available: resources.filter((r) => getStatus(r) === "Available").length,
+    allocated: resources.filter((r) => getStatus(r) === "Allocated").length,
+    overAllocated: resources.filter((r) => getStatus(r) === "Over-Allocated").length,
   };
 
+  // ResourceFormModal.toEntity() already maps UI fields → DB columns, so we
+  // pass the payload straight through here.  The DB columns are:
+  //   name, resource_type, role, capacity (=budget hrs), unit, cost_rate (=hourly rate),
+  //   availability (=status), notes, metadata (JSONB with actual_hours, forecast_hours)
+
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Resource.update(id, {
-      ...data,
-      budget_hours: data.budget_hours ? parseFloat(data.budget_hours) : 0,
-      actual_hours: parseFloat(data.actual_hours) || 0,
-      forecast_hours: data.forecast_hours ? parseFloat(data.forecast_hours) : 0,
-      hourly_rate: data.hourly_rate ? parseFloat(data.hourly_rate) : 0,
-    }),
+    mutationFn: ({ id, data }) => base44.entities.Resource.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource updated"); setShowForm(false); setEditing(null); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
@@ -103,22 +105,10 @@ export default function ResourceManagement() {
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
   });
 
-  const createMut = useMutation({
-    mutationFn: (data) => base44.entities.Resource.create({
-      ...data,
-      project_id: projectId,
-      budget_hours: data.budget_hours ? parseFloat(data.budget_hours) : 0,
-      actual_hours: parseFloat(data.actual_hours) || 0,
-      forecast_hours: data.forecast_hours ? parseFloat(data.forecast_hours) : 0,
-      hourly_rate: data.hourly_rate ? parseFloat(data.hourly_rate) : 0,
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["resources"] }); toast.success("Resource created"); setShowForm(false); },
-    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
-  });
-
   const handleSave = (data) => {
+    // data comes from ResourceFormModal.toEntity() — already DB-mapped
     if (editing) updateMut.mutate({ id: editing.id, data });
-    else createMut.mutate(data);
+    else toast.error("Unexpected save path — use form modal");
   };
 
   const types = ["Labor", "Equipment", "Subcontractor", "Material"];

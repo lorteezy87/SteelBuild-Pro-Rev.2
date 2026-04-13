@@ -3,26 +3,61 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+// Map between UI field names and the actual DB columns on the `resources` table.
+// DB schema: name, resource_type, role, capacity, unit, cost_rate, availability, notes, metadata (JSONB)
+// We store budget_hours→capacity, hourly_rate→cost_rate, availability_status→availability,
+// and keep actual_hours / forecast_hours inside metadata.
+
+function fromEntity(e) {
+  const meta = typeof e.metadata === "object" && e.metadata !== null ? e.metadata : {};
+  return {
+    project_id: e.project_id || "",
+    name: e.name || "",
+    resource_type: e.resource_type || "Labor",
+    role: e.role || "",
+    budget_hours: e.capacity ?? "",
+    actual_hours: meta.actual_hours ?? "0",
+    forecast_hours: meta.forecast_hours ?? "",
+    hourly_rate: e.cost_rate ?? "",
+    availability_status: e.availability || "Available",
+    notes: e.notes || "",
+  };
+}
+
+function toEntity(form, projectId) {
+  return {
+    project_id: form.project_id || projectId,
+    name: form.name,
+    resource_type: form.resource_type,
+    role: form.role,
+    capacity: form.budget_hours ? parseFloat(form.budget_hours) : 0,
+    unit: "hours",
+    cost_rate: form.hourly_rate ? parseFloat(form.hourly_rate) : 0,
+    availability: form.availability_status || "Available",
+    notes: form.notes,
+    metadata: {
+      actual_hours: parseFloat(form.actual_hours) || 0,
+      forecast_hours: form.forecast_hours ? parseFloat(form.forecast_hours) : 0,
+    },
+  };
+}
+
 export default function ResourceFormModal({ projectId, editing, onClose, onSave }) {
   const qc = useQueryClient();
-  const [formData, setFormData] = useState(editing ? {
-    ...editing,
-    budget_hours: editing.budget_hours ?? "",
-    actual_hours: editing.actual_hours ?? "0",
-    forecast_hours: editing.forecast_hours ?? "",
-    hourly_rate: editing.hourly_rate ?? "",
-  } : {
-    project_id: projectId,
-    name: "",
-    resource_type: "Labor",
-    role: "",
-    budget_hours: "",
-    actual_hours: "0",
-    forecast_hours: "",
-    hourly_rate: "",
-    availability_status: "Available",
-    notes: "",
-  });
+  const [formData, setFormData] = useState(
+    editing ? fromEntity(editing) : {
+      project_id: projectId,
+      name: "",
+      resource_type: "Labor",
+      role: "",
+      budget_hours: "",
+      actual_hours: "0",
+      forecast_hours: "",
+      hourly_rate: "",
+      availability_status: "Available",
+      notes: "",
+    }
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -32,13 +67,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
   });
 
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.Resource.create({
-      ...data,
-      budget_hours: data.budget_hours ? parseFloat(data.budget_hours) : 0,
-      actual_hours: parseFloat(data.actual_hours) || 0,
-      forecast_hours: data.forecast_hours ? parseFloat(data.forecast_hours) : 0,
-      hourly_rate: data.hourly_rate ? parseFloat(data.hourly_rate) : 0,
-    }),
+    mutationFn: (data) => base44.entities.Resource.create(toEntity(data, projectId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       toast.success("Resource added");
@@ -50,7 +79,8 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (editing && onSave) {
-      onSave(formData);
+      // Pass the DB-mapped payload up so the parent doesn't need to remap
+      onSave(toEntity(formData, projectId));
     } else {
       mutation.mutate(formData);
     }
@@ -83,6 +113,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
                 <option value="Equipment">Equipment</option>
                 <option value="Subcontractor">Subcontractor</option>
                 <option value="Material">Material</option>
+                <option value="Crew">Crew</option>
               </select>
             </div>
             <div>

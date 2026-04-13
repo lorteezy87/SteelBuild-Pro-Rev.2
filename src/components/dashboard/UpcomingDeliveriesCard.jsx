@@ -77,7 +77,7 @@ export default function UpcomingDeliveriesCard({ deliveries = [] }) {
               {/* Individual deliveries within group */}
               {group.items.length === 1 ? (
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {group.items[0].delivery_title || group.items[0].vendor}
+                  {group.items[0].description || group.items[0].vendor}
                   {group.items[0].weight_tons ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: 6 }}>{group.items[0].weight_tons}T</span> : null}
                 </div>
               ) : (
@@ -85,7 +85,7 @@ export default function UpcomingDeliveriesCard({ deliveries = [] }) {
                   {group.items.map(d => (
                     <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                        {d.delivery_title || d.vendor}
+                        {d.description || d.vendor}
                       </span>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0, marginLeft: 8 }}>
                         {d.weight_tons ? `${d.weight_tons}T` : ""}{d.pieces ? ` · ${d.pieces}pcs` : ""}
