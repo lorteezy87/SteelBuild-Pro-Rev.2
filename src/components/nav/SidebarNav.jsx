@@ -28,7 +28,8 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   return (
     <div style={{
       width: 220, minWidth: 220,
-      background: "var(--nav-bg)", borderRight: "1px solid var(--border-default)",
+      background: "var(--glass-bg, var(--nav-bg))", borderRight: "1px solid var(--glass-border, var(--border-default))",
+      backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
       overflowY: "auto", overflowX: "hidden",
       display: "flex", flexDirection: "column", flexShrink: 0, height: "100%",
     }}>

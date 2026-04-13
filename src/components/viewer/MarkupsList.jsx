@@ -120,7 +120,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
                     </span>
                     {markup.status && markup.status !== "none" && (
                       <span style={{
-                        fontFamily: "var(--font-mono)", fontSize: 7,
+                        fontFamily: "var(--font-mono)", fontSize: 9,
                         color: STATUS_COLOR[markup.status] || STATUS_COLOR.none,
                         letterSpacing: "0.06em",
                       }}>
@@ -154,7 +154,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
         <div style={{
           padding: "8px 14px",
           borderTop: "1px solid var(--hover-bg)",
-          fontFamily: "var(--font-mono)", fontSize: 7,
+          fontFamily: "var(--font-mono)", fontSize: 9,
           color: "var(--text-muted)", textAlign: "center", letterSpacing: "0.10em",
         }}>
           CLICK "MARKUP" TO START ANNOTATING

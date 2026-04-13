@@ -241,7 +241,7 @@ export default function Procurement() {
             borderTop: urgent ? '2px solid var(--status-error)' : '2px solid transparent',
           }}>
             <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 7,
+              fontFamily: 'var(--font-mono)', fontSize: 9,
               letterSpacing: '0.12em', color: 'var(--text-muted)',
               textTransform: 'uppercase', marginBottom: 5,
             }}>

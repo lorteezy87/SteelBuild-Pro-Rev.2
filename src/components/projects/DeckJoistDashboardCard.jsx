@@ -117,7 +117,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 7,
+                fontSize: 9,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 6,
@@ -158,7 +158,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 7,
+                fontSize: 9,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 6,
@@ -188,7 +188,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 7,
+                fontSize: 9,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 8,
@@ -287,7 +287,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 7,
+                fontSize: 9,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 6,
@@ -328,7 +328,7 @@ export default function DeckJoistDashboardCard({ project, onEdit }) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 7,
+                fontSize: 9,
                 color: 'var(--text-muted)',
                 letterSpacing: '0.12em',
                 marginBottom: 8,
@@ -405,7 +405,7 @@ function DateDisplay({ label, date, status }) {
       <div
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: 7,
+          fontSize: 9,
           color: 'var(--text-muted)',
           letterSpacing: '0.12em',
           marginBottom: 4,

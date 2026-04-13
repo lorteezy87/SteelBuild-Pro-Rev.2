@@ -36,7 +36,7 @@ function MiniSparkline({ data = [], color = "var(--accent)", width = 56, height 
         <circle cx={coords[coords.length-1].x} cy={coords[coords.length-1].y} r={2} fill={color} />
       </svg>
       {showTrend && trend !== 0 && (
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color, fontWeight: 700, lineHeight: 1 }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color, fontWeight: 700, lineHeight: 1 }}>
           {trendChar}
         </span>
       )}
@@ -265,7 +265,7 @@ const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
     <span
       style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 7,
+        fontSize: 10,
         letterSpacing: "0.14em",
         textTransform: "uppercase",
         color: "var(--text-muted)",
@@ -800,7 +800,7 @@ export default function PortfolioView({
           gap: 4,
           minWidth: 200,
         }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Portfolio Value</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Portfolio Value</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--accent)" }}>
             {formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")}
           </span>
@@ -837,7 +837,7 @@ export default function PortfolioView({
                 minWidth: 100,
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: tile.warn ? tile.color : "var(--text-muted)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: tile.warn ? tile.color : "var(--text-muted)" }}>
                 {tile.label}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1006,7 +1006,7 @@ export default function PortfolioView({
                       key={idx}
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 7,
+                        fontSize: 9,
                         color: "var(--text-muted)",
                         letterSpacing: "0.14em",
                         textTransform: "uppercase",
@@ -1060,7 +1060,7 @@ export default function PortfolioView({
                       <td style={{ padding: "6px 8px", textAlign: "center" }}>
                         <HealthPill status={hStatus} score={p.healthScore} reasons={p.healthReasons} />
                         {p.healthReasons?.length > 0 && hStatus !== "On Track" && (
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", marginTop: 2, maxWidth: 130, lineHeight: 1.3 }}>
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2, maxWidth: 140, lineHeight: 1.3 }}>
                             {p.healthReasons[0]}
                           </div>
                         )}
@@ -1156,9 +1156,9 @@ export default function PortfolioView({
                                 borderRadius: 3,
                                 color: btn.primary ? "var(--accent)" : btn.accent || "var(--text-secondary)",
                                 fontFamily: "var(--font-mono)",
-                                fontSize: 7,
+                                fontSize: 8,
                                 fontWeight: 700,
-                                padding: "3px 6px",
+                                padding: "3px 7px",
                                 cursor: "pointer",
                                 letterSpacing: "0.04em",
                                 whiteSpace: "nowrap",
@@ -1293,7 +1293,7 @@ export default function PortfolioView({
                   { label: "Rejected", count: financials.rejectedCOs, value: financials.rejectedValue, color: "var(--status-error)" },
                 ].map((b) => (
                   <div key={b.label} style={{ background: `${b.color}10`, border: `1px solid ${b.color}30`, borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.10em", color: b.color, textTransform: "uppercase" }}>{b.label}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.10em", color: b.color, textTransform: "uppercase" }}>{b.label}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: b.color }}>{b.count}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatCurrency(b.value).replace(/\.\d+/, "")}</div>
                   </div>
@@ -1348,7 +1348,7 @@ export default function PortfolioView({
                     <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", fontWeight: 500 }}>{issue.project}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{issue.issue}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--accent)", background: "var(--accent-muted)", borderRadius: 2, padding: "1px 5px", fontWeight: 600 }}>{issue.fix}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", background: "var(--accent-muted)", borderRadius: 2, padding: "1px 5px", fontWeight: 600 }}>{issue.fix}</span>
                     </div>
                   </div>
                 ))}
@@ -1371,7 +1371,7 @@ export default function PortfolioView({
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
                   {["Project", "WPs", "In Fab", "Complete", "On Hold", "Fab %", "Tonnage", "Erection Ready", "Constraints"].map((h) => (
-                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-sidebar)", zIndex: 1 }}>
+                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-sidebar)", zIndex: 1 }}>
                       {h}
                     </th>
                   ))}
@@ -1646,7 +1646,7 @@ export default function PortfolioView({
         {/* Next Delivery */}
         {deliveriesStats.nextDelivery && (
           <div style={{ background: "var(--accent-muted)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-card)", padding: "10px 12px" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>Next Delivery</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 2 }}>{deliveriesStats.nextDelivery.description || deliveriesStats.nextDelivery.vendor || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{projectMap[deliveriesStats.nextDelivery.project_id] || "—"}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>{new Date(deliveriesStats.nextDelivery.scheduled_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</div>
@@ -1671,7 +1671,7 @@ export default function PortfolioView({
                 <span>{f.label} <span style={{ color: "var(--accent)" }}>({f.weight})</span></span>
               </div>
             ))}
-            <div style={{ marginTop: 4, fontSize: 7, color: "var(--text-muted)" }}>
+            <div style={{ marginTop: 4, fontSize: 9, color: "var(--text-muted)" }}>
               75+ = On Track · 50–74 = Watch · 49- = At Risk
               <br />Missing budget data penalizes score (70/100)
             </div>

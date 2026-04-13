@@ -62,7 +62,7 @@ export function DisciplineChips({ discipline, setDiscipline, disciplineCounts })
             onClick={() => setDiscipline(d)}
             style={{
               ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", padding: "4px 10px",
-              borderRadius: 2, cursor: "pointer",
+              borderRadius: "var(--radius-badge)", cursor: "pointer",
               border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
               background: active ? "rgba(200,155,32,0.15)" : "none",
               color: active ? "var(--accent)" : "var(--text-muted)",

@@ -31,7 +31,7 @@ export default function ProjectDetailsCard({ project, wps }) {
 
       <div style={{ padding: "8px 16px 14px" }}>
         {/* People */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px", marginBottom: 0 }}>Team</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px", marginBottom: 0 }}>Team</div>
         <DetailRow label="Project Manager" value={project.project_manager} />
         <DetailRow label="Superintendent" value={project.superintendent} />
         <DetailRow label="Client" value={project.client} />
@@ -39,19 +39,19 @@ export default function ProjectDetailsCard({ project, wps }) {
         <DetailRow label="Engineer of Record" value={project.engineer_of_record} />
 
         {/* Contract */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Contract</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Contract</div>
         <DetailRow label="Contract Type" value={project.contract_type} />
         <DetailRow label="Contract Value" value={project.original_contract_value ? formatCurrency(project.original_contract_value).replace(/\.\d+/, "") : null} valueColor="var(--accent)" />
         <DetailRow label="Retainage" value={project.retainage_percent != null ? `${project.retainage_percent}%` : null} />
         <DetailRow label="Contingency" value={project.contingency_amount ? formatCurrency(project.contingency_amount).replace(/\.\d+/, "") : null} />
 
         {/* Steel metrics */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Steel Scope</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Steel Scope</div>
         <DetailRow label="Total Tonnage" value={totalTonnage > 0 ? `${totalTonnage.toLocaleString()} T` : null} valueColor="var(--status-warning)" />
         <DetailRow label="Work Packages" value={wps.length > 0 ? `${wps.length} packages` : null} />
 
         {/* Labor */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Labor</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", padding: "12px 0 4px" }}>Labor</div>
         <DetailRow label="Shop Hrs Budget" value={shopBudget > 0 ? `${shopBudget.toLocaleString()} hrs` : null} />
         <DetailRow label="Shop Hrs Actual" value={shopActual > 0 ? `${shopActual.toLocaleString()} hrs (${shopBurn}%)` : null} valueColor={shopBurn > 100 ? "var(--status-error)" : shopBurn > 85 ? "var(--status-warning)" : "var(--status-success)"} />
         <DetailRow label="Field Hrs Budget" value={fieldBudget > 0 ? `${fieldBudget.toLocaleString()} hrs` : null} />

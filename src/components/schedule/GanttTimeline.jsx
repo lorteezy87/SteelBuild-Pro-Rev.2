@@ -169,7 +169,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
               borderRadius: 3,
               padding: '1px 4px',
               fontFamily: 'var(--font-mono)',
-              fontSize: 7,
+              fontSize: 9,
               color: 'white',
               fontWeight: 700,
               zIndex: 10,

@@ -11,7 +11,7 @@ export default function DeckJoistPill({ hasDeck, deckStatus, hasJoist, joistStat
         key="deck"
         style={{
           fontFamily: 'IBM Plex Mono',
-          fontSize: 7,
+          fontSize: 9,
           fontWeight: isDeckPending ? 700 : 400,
           color: isDeckPending ? '#8B0000' : 'rgba(0,214,143,0.50)',
           background: isDeckPending ? 'rgba(139,0,0,0.12)' : 'rgba(0,214,143,0.06)',
@@ -37,7 +37,7 @@ export default function DeckJoistPill({ hasDeck, deckStatus, hasJoist, joistStat
         key="joist"
         style={{
           fontFamily: 'IBM Plex Mono',
-          fontSize: 7,
+          fontSize: 9,
           fontWeight: isJoistPending ? 700 : 400,
           color: isJoistPending ? '#8B0000' : 'rgba(0,214,143,0.50)',
           background: isJoistPending ? 'rgba(139,0,0,0.12)' : 'rgba(0,214,143,0.06)',

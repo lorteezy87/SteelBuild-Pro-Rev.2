@@ -126,7 +126,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
               onMouseLeave={e => e.currentTarget.style.opacity = "1"}
             >
               <div style={{ flexShrink: 0 }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: cfg.color, letterSpacing: "0.12em", fontWeight: 700, marginBottom: 1 }}>{item.type}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: cfg.color, letterSpacing: "0.12em", fontWeight: 700, marginBottom: 1 }}>{item.type}</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{item.id}</div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -134,7 +134,7 @@ export default function CriticalActionsCard({ rfis, cos, wps, deliveries, drawin
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 1 }}>{item.detail}</div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, color: cfg.color, background: `${cfg.color}18`, border: `1px solid ${cfg.border}`, borderRadius: 3, padding: "2px 5px" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cfg.color, background: `${cfg.color}18`, border: `1px solid ${cfg.border}`, borderRadius: 3, padding: "2px 5px" }}>
                   {cfg.label}
                 </span>
               </div>

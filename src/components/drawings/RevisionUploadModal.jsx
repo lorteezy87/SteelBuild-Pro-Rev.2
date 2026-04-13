@@ -248,7 +248,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <label style={{ margin: 0 }}>New Revision Label *</label>
           {autoFilled && (
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
               AUTO
             </span>
           )}
@@ -453,10 +453,10 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
         </div>
         {matchedSheets.map((m, i) => {
           const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
@@ -468,7 +468,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
               <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetTitle || "—"}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
               <div>
                 {m.newSheet ? (
                   <input

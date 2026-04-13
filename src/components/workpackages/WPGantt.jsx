@@ -291,7 +291,7 @@ export default function WPGantt({ wps, updateMut }) {
         <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid var(--border-default)" }}>
           {/* Header spacer */}
           <div style={{ height: HEADER_H, borderBottom: "1px solid var(--border-default)", background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", padding: "0 12px" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
           </div>
           {/* Rows */}
           <div ref={leftRef} style={{ overflowY: "hidden", maxHeight: Math.min(totalHeight, 500) }}>

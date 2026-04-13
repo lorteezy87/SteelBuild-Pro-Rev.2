@@ -223,7 +223,7 @@ export default function BudgetOverviewChart({ summary }) {
             <span
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 7,
+                fontSize: 9,
                 color: "var(--text-muted)",
                 textTransform: "uppercase",
                 letterSpacing: "0.10em",

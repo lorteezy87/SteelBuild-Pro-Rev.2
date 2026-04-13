@@ -108,7 +108,7 @@ function BudgetDonutChart({ segments, totalCommitted }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {paths}
-        <text x={cx} y={cy - 6} textAnchor="middle" fill="var(--text-muted)" style={{ fontFamily: 'var(--font-mono)', fontSize: 7 }}>COMMITTED</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" fill="var(--text-muted)" style={{ fontFamily: 'var(--font-mono)', fontSize: 9 }}>COMMITTED</text>
         <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--text-primary)" style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700 }}>
           {formatCurrencyShort(totalCommitted)}
         </text>
@@ -218,14 +218,14 @@ function MonthlyTrendChart({ expenses }) {
           <circle key={i} cx={p.x} cy={p.y} r={2.5} fill="var(--accent)" />
         ))}
         {months.map((m, i) => (
-          <text key={m.key} x={pts[i].x} y={h - 2} textAnchor="middle" fill="var(--text-muted)" style={{ fontFamily: 'var(--font-mono)', fontSize: 7 }}>
+          <text key={m.key} x={pts[i].x} y={h - 2} textAnchor="middle" fill="var(--text-muted)" style={{ fontFamily: 'var(--font-mono)', fontSize: 9 }}>
             {m.label}
           </text>
         ))}
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
         {months.map(m => (
-          <span key={m.key} style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', flex: 1, textAlign: 'center' }}>
+          <span key={m.key} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', flex: 1, textAlign: 'center' }}>
             {m.total > 0 ? formatCurrencyShort(m.total) : '--'}
           </span>
         ))}

@@ -63,7 +63,7 @@ export const mono = { fontFamily: "var(--font-mono)" };
 export const surface = {
   background: "var(--bg-surface)",
   border: "1px solid var(--border-default)",
-  borderRadius: 2,
+  borderRadius: "var(--radius-card)",
 };
 
 /** Button base styles */
@@ -79,5 +79,5 @@ export const btnBase = {
   textTransform: "uppercase",
 };
 
-export const btnPrimary = { ...btnBase, background: "var(--accent)", color: "#000" };
-export const btnGhost = { ...btnBase, background: "none", border: "1px solid var(--border-default)", color: "var(--text-muted)" };
+export const btnPrimary = { ...btnBase, background: "var(--accent)", color: "#000", borderRadius: "var(--radius-btn)" };
+export const btnGhost = { ...btnBase, background: "none", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: "var(--radius-btn)" };

@@ -307,7 +307,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           {/* Draft drawings warning */}
           {draftWarning && draftWarning.length > 0 && linkedDrawingIds.length > 0 && (
             <div style={{ marginTop: 8, background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0", padding: "6px 10px" }}>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ DRAWINGS NOT YET IFC</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ DRAWINGS NOT YET IFC</span>
               <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", margin: "3px 0 0" }}>
                 {draftWarning.length} linked drawing(s) are not yet Issued for Construction. Fabrication should not begin until drawings are approved.
               </p>

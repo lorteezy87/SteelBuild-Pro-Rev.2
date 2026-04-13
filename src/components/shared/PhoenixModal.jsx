@@ -69,7 +69,7 @@ export const inputDisabledStyle = {
 export const labelStyle = {
   display: "block",
   fontFamily: "var(--font-mono)",
-  fontSize: 7,
+  fontSize: 9,
   letterSpacing: "0.12em",
   color: "var(--text-muted)",
   marginBottom: 6,
