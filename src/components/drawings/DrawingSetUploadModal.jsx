@@ -16,9 +16,19 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
+const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
 const EXTRACT_TIMEOUT_MS = 150_000;  // 2.5 min
+
+// Generate a random upload batch id (one per wizard session).
+// Each file in the batch carries this id so the UI can later group/aggregate.
+function newUploadBatchId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `batch_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function withTimeout(promise, ms, label = "Operation") {
   return Promise.race([
@@ -402,8 +412,10 @@ function StepChoice({ onNewSet, onNewRevision, onClose }) {
   );
 }
 
-// ─── Step 1: File Queue ───────────────────────────────────────────────
-function StepFiles({ files, setFiles, onNext, onClose }) {
+// ─── Step 2: File Queue ───────────────────────────────────────────────
+// Kicking "Upload & Extract" starts AI processing immediately — no extra
+// click required per the new flow.
+function StepFiles({ files, setFiles, onBack, onUpload, setName }) {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef();
 
@@ -417,6 +429,16 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
 
   return (
     <div>
+      {setName && (
+        <div style={{
+          marginBottom: 12, padding: "8px 12px", borderRadius: 8,
+          background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>DRAWING SET</span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>{setName}</span>
+        </div>
+      )}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -467,60 +489,97 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={onNext} disabled={files.length === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Next: Set Details <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
+        <Button onClick={onUpload} disabled={files.length === 0}
+          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: files.length === 0 ? 0.5 : 1 }}>
+          Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>
     </div>
   );
 }
 
-// ─── Step 2: Metadata ────────────────────────────────────────────────
-function StepMeta({ meta, setMeta, onBack, onUpload, projectName }) {
+// ─── Step 1: Set Name + optional defaults (BEFORE file selection) ─────
+// The only required field is the Drawing Set Name. All other fields are
+// defaults that get applied per-sheet unless the AI extraction finds
+// something better (or the user edits the child rows on the review step).
+function StepMeta({ meta, setMeta, onBack, onNext, projectName, existingSetNames = [] }) {
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
+  const trimmedName = (meta.setName || "").trim();
+  const canContinue = trimmedName.length > 0;
+  const duplicate = canContinue && existingSetNames
+    .map(s => s.toLowerCase())
+    .includes(trimmedName.toLowerCase());
+
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-        <div>
+      <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.5 }}>
+        Name this drawing package. You can adjust individual sheet details after
+        the AI reads your files.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
           <Label>Project</Label>
           <Input value={projectName || "No project selected"} disabled />
         </div>
-        <div>
-          <Label>Drawing Set Name</Label>
-          <Input placeholder="Issued for Construction — Rev 2" value={meta.setName} onChange={e => set("setName", e.target.value)} />
+
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Label>
+            Drawing Set Name <span style={{ color: "var(--status-error)" }}>*</span>
+          </Label>
+          <Input
+            autoFocus
+            placeholder="e.g. 100% CD Set — Rev 2"
+            value={meta.setName}
+            onChange={e => set("setName", e.target.value)}
+            list="existing-set-names"
+          />
+          {existingSetNames.length > 0 && (
+            <datalist id="existing-set-names">
+              {existingSetNames.map(n => <option key={n} value={n} />)}
+            </datalist>
+          )}
+          {duplicate && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 4, letterSpacing: "0.06em" }}>
+              ⚠ A set with this name already exists in this project — new sheets will be added to it.
+            </div>
+          )}
         </div>
+
         <div>
-          <Label>Default Discipline</Label>
+          <Label>Default Discipline (optional)</Label>
           <Select value={meta.discipline} onValueChange={v => set("discipline", v)}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Structural" /></SelectTrigger>
             <SelectContent>{DISCIPLINES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+
         <div>
-          <Label>Revision / Issuance</Label>
+          <Label>Default Stage (optional)</Label>
+          <Select value={meta.defaultStage} onValueChange={v => set("defaultStage", v)}>
+            <SelectTrigger><SelectValue placeholder="Not Started" /></SelectTrigger>
+            <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Revision / Issuance (optional)</Label>
           <Input placeholder="Rev 2 / IFC / IFB" value={meta.revision} onChange={e => set("revision", e.target.value)} />
         </div>
+
         <div>
-          <Label>Issue Date</Label>
+          <Label>Issue Date (optional)</Label>
           <Input type="date" value={meta.issueDate} onChange={e => set("issueDate", e.target.value)} />
         </div>
-        <div>
-          <Label>Issued By (EOR)</Label>
-          <Input placeholder="Smith Engineering" value={meta.issuedBy} onChange={e => set("issuedBy", e.target.value)} />
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Label>Notes</Label>
-          <Textarea rows={2} value={meta.notes} onChange={e => set("notes", e.target.value)} />
-        </div>
       </div>
+
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button onClick={onUpload}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+        <Button onClick={onNext} disabled={!canContinue}
+          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: canContinue ? 1 : 0.5 }}>
+          Next: Add Files <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>
     </div>
@@ -880,12 +939,36 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
 }
 
 // ─── Main Modal ──────────────────────────────────────────────────────
-export default function DrawingSetUploadModal({ open, onClose, onComplete, activeProject, onNewRevision, existingDrawings = [] }) {
+//
+// Wizard flow (new parent/child model):
+//   0: Choice         — new drawing set vs new revision
+//   1: Meta           — set name (required) + optional defaults
+//   2: Files          — drag/drop multi-file picker
+//   3: Processing     — upload + AI extraction (auto-started, no extra click)
+//   4: Review         — verify AI-extracted sheets
+//   5: Success        — report with per-file status
+//
+// On commit (handleCreate) we:
+//   1. Create a single parent `drawing_sets` row via DrawingSet.create(...)
+//   2. Create each child `drawings` row with drawing_set_id FK + upload_batch_id
+//      + upload_status + ai_extraction_status set accurately
+//   3. The DB trigger sync_drawing_set_counts() keeps parent aggregates fresh.
+//
+export default function DrawingSetUploadModal({
+  open,
+  onClose,
+  onComplete,
+  activeProject,
+  onNewRevision,
+  existingDrawings = [],
+  existingSetNames = [],
+}) {
   const qc = useQueryClient();
   const [step, setStep]                   = useState(0);
   const [files, setFiles]                 = useState([]);
   const [meta, setMeta]                   = useState({
-    setName: "", discipline: "Structural", revision: "0",
+    setName: "", discipline: "Structural", defaultStage: "Not Started",
+    revision: "0",
     issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "",
   });
   const [processingStatus, setProcessingStatus] = useState({ steps: [], currentStepId: null, progress: 0, message: "" });
@@ -895,15 +978,16 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   const [processError, setProcessError]   = useState(null);
   const [aiFilledFields, setAiFilledFields] = useState({}); // { setName: true, ... }
   const [detectedSetMeta, setDetectedSetMeta] = useState(null); // raw AI output, for banner
+  const [uploadBatchId, setUploadBatchId] = useState(null); // set once per upload attempt
   const cancelledRef                      = useRef(false);
 
   const makeSteps = (activeId, doneIds = [], warnings = {}) => [
-    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload"),  id: "upload"  },
-    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode"),  id: "encode"  },
-    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"], id: "extract" },
-    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse"),   id: "parse"   },
-    { id: "done",    label: null,                                    done: doneIds.includes("done"),    id: "done"    },
-  ].map(s => ({ ...s, id: s.id }));
+    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },
+    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode")  },
+    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"] },
+    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse")   },
+    { id: "done",    label: null,                                    done: doneIds.includes("done")    },
+  ];
 
   const reset = () => {
     cancelledRef.current = true;  // abort any in-progress operation
@@ -911,8 +995,9 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setProcessError(null);
     setAiFilledFields({});
     setDetectedSetMeta(null);
+    setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
-    setMeta({ setName: "", discipline: "Structural", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
+    setMeta({ setName: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -921,6 +1006,10 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     cancelledRef.current = false;
     setProcessError(null);
     setStep(3);
+    // Generate a fresh batch id for this upload attempt so every child sheet
+    // carries the same id — makes it trivial to group or rollback later.
+    const batchId = newUploadBatchId();
+    setUploadBatchId(batchId);
     const allSheets  = [];
     const results    = [];
     const totalFiles = files.length;
@@ -1117,54 +1206,159 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
     const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
+    const batchId = uploadBatchId || newUploadBatchId();
 
     try {
-      let created = 0;
-      let failed = 0;
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1 — Find or create the parent drawing_sets record.
+      //
+      // We check first so re-uploading into an existing named set just
+      // appends children to the same parent (idempotent across sessions).
+      // ─────────────────────────────────────────────────────────────
+      setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
+
+      let parentSetId = null;
+      try {
+        const existing = await base44.entities.DrawingSet.filter({
+          project_id: activeProject?.id,
+          set_name:   resolvedSetName,
+        });
+        if (Array.isArray(existing) && existing.length > 0) {
+          parentSetId = existing[0].id;
+          // Refresh the parent's upload_batch_id + metadata to reflect this upload
+          try {
+            await base44.entities.DrawingSet.update(parentSetId, {
+              upload_batch_id: batchId,
+              revision:        meta.revision || existing[0].revision || "",
+              issued_date:     meta.issueDate || existing[0].issued_date || null,
+              issued_by:       meta.issuedBy  || existing[0].issued_by  || "",
+              discipline:      meta.discipline || existing[0].discipline || "",
+              notes:           meta.notes || existing[0].notes || "",
+              updated_at:      new Date().toISOString(),
+            });
+          } catch (updErr) {
+            console.warn("Could not refresh existing drawing_set:", updErr);
+          }
+        }
+      } catch (lookupErr) {
+        console.warn("DrawingSet lookup failed, will create new:", lookupErr);
+      }
+
+      if (!parentSetId) {
+        const created = await base44.entities.DrawingSet.create({
+          project_id:      activeProject?.id,
+          project_name:    activeProject?.name,
+          set_name:        resolvedSetName,
+          revision:        meta.revision || "",
+          discipline:      meta.discipline || "",
+          issued_date:     meta.issueDate || null,
+          issued_by:       meta.issuedBy || "",
+          status:          "Active",
+          notes:           meta.notes || "",
+          upload_batch_id: batchId,
+          sheet_count:        0,
+          processed_count:    0,
+          needs_review_count: 0,
+          failed_count:       0,
+        });
+        parentSetId = created?.id;
+        if (!parentSetId) {
+          throw new Error("Drawing set was created but no id returned — cannot attach children.");
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2 — Create every child drawing row with FK + status cols.
+      //
+      // Each child gets ai_extraction_status === 'Processed' because by
+      // the time we reach this step, AI has already run and the user has
+      // reviewed the results. Rows whose AI pass failed upstream get
+      // marked 'NeedsReview' so the UI can flag them.
+      // ─────────────────────────────────────────────────────────────
+      let createdRows = 0;
+      let failedRows  = 0;
       for (const sheet of selectedSheets) {
         if (cancelledRef.current) break;
+
+        // If the file this sheet came from had an extraction failure, mark
+        // it as NeedsReview so the user can address it from the log grid.
+        const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
+        const needsReview =
+          sourceResult?.extractFailed ||
+          sourceResult?.scanned ||
+          sourceResult?.tooLarge ||
+          !!sheet._note;
+
         try {
           await base44.entities.Drawing.create({
-            sheet_number:     sheet.sheetNumber,
-            title:            sheet.sheetTitle,
+            // Identity
+            sheet_number:     sheet.sheetNumber || "",
+            title:            sheet.sheetTitle  || "",
             project_id:       activeProject?.id,
             project_name:     activeProject?.name,
+
+            // NEW: parent/child relationship
+            drawing_set_id:   parentSetId,
+            drawing_set_name: resolvedSetName, // kept for back-compat reads
+
+            // Metadata
             discipline:       sheet.discipline || meta.discipline,
             revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-            stage:            "Not Started",
-            issue_date:       sheet.date || meta.issueDate,
+            stage:            meta.defaultStage || "Not Started",
+            issue_date:       sheet.date || meta.issueDate || null,
             issued_by:        meta.issuedBy,
             file_url:         sheet.sourceFileUrl,
-            drawing_set_name: resolvedSetName,
-            notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
+            // Which page within the source PDF this sheet's content lives on,
+            // so the viewer can jump straight there and render overlays in
+            // the correct coordinate space.
+            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
+            drawing_page:     sheet.drawingPage ?? sheet.page ?? null,
+
             // Detected section/detail callouts — each has text, coords (PDF
             // user units, top-left origin), targetSheetNumber, targetDetail,
             // and resolved flag. Empty array if the PDF had no detectable
             // callouts or was too large / scanned.
             callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
-            // Which page within the source PDF this sheet's content lives on,
-            // so the viewer can jump straight there and render overlays in
-            // the correct coordinate space.
-            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
+
+            // NEW: upload/extraction tracking
+            upload_batch_id:      batchId,
+            upload_status:        "Uploaded",
+            ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
+            ai_extraction_error:  sourceResult?.error || null,
+            extracted_text:       sheet.extractedText || null,
+            hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
+            last_extracted_at:    new Date().toISOString(),
+
+            notes: [
+              meta.notes,
+              sheet.scale ? `Scale: ${sheet.scale}` : "",
+              sheet._note || "",
+            ].filter(Boolean).join(" · "),
           });
-          created++;
+          createdRows++;
         } catch (err) {
           console.error("Failed to create sheet:", sheet.sheetNumber, err);
-          failed++;
+          failedRows++;
+          // One row failure never aborts the batch — see acceptance criteria.
         }
+
         setProcessingStatus(prev => ({
           ...prev,
-          progress: Math.round(((created + failed) / selectedSheets.length) * 100),
-          message: `Creating entries… ${created + failed} of ${selectedSheets.length}`,
+          progress: 10 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 90),
+          message:  `Creating entries… ${createdRows + failedRows} of ${selectedSheets.length}`,
         }));
       }
 
       if (cancelledRef.current) return;
-      setCreatedCount(created);
-      if (failed > 0) {
-        setProcessError(`${failed} sheet(s) failed to upload. ${created} created successfully.`);
+      setCreatedCount(createdRows);
+      if (failedRows > 0) {
+        setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} created successfully.`);
       }
+
+      // The sync_drawing_set_counts() DB trigger auto-updates the parent
+      // aggregate counts, so we just need to refresh the UI caches.
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawing_sets"] });
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
@@ -1193,10 +1387,10 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
 
         <div style={{ paddingTop: 8 }}>
           {step === 0 && <StepChoice onNewSet={() => setStep(1)} onNewRevision={() => { handleClose(); if (onNewRevision) onNewRevision(); }} onClose={handleClose} />}
-          {step === 1 && <StepFiles files={files} setFiles={setFiles} onNext={() => setStep(2)} onClose={handleClose} />}
-          {step === 2 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} projectName={activeProject?.name} />}
+          {step === 1 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(0)} onNext={() => setStep(2)} projectName={activeProject?.name} existingSetNames={existingSetNames} />}
+          {step === 2 && <StepFiles files={files} setFiles={setFiles} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} setName={meta.setName} />}
           {step === 3 && <StepProcessing processingStatus={processingStatus} onCancel={reset} error={processError} />}
-          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(1)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
+          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
           {step === 5 && <StepSuccess createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>
       </DialogContent>
