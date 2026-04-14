@@ -514,44 +514,70 @@ export const integrations = {
      * generic "AI response was not valid JSON" path.
      */
     InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature }) => {
+      // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
           body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
         });
         if (error) {
-          // supabase-js returns FunctionsHttpError / FunctionsFetchError.
-          // Pull the real response body so we can show the underlying
-          // "ANTHROPIC_API_KEY not configured" etc. message to the user.
           let detail = error?.message || String(error);
           try {
             if (error?.context && typeof error.context.text === 'function') {
               const body = await error.context.text();
               if (body) {
-                try {
-                  const parsed = JSON.parse(body);
-                  detail = parsed?.error || parsed?.message || body;
-                } catch {
-                  detail = body;
-                }
+                try { detail = JSON.parse(body)?.error || body; } catch { detail = body; }
               }
             }
-          } catch {
-            /* ignore — keep default detail */
-          }
-          console.error('[llm-proxy] invoke failed:', detail);
-          return { error: detail };
+          } catch { /* ignore */ }
+          console.warn('[llm-proxy] edge function failed, trying direct API:', detail);
+          throw new Error(detail); // fall through to direct API
         }
-        // Server may return { error } in a 200 envelope too.
         if (data && typeof data === 'object' && data.error) {
-          console.error('[llm-proxy] error envelope:', data.error);
-          return { error: data.error };
+          console.warn('[llm-proxy] error envelope, trying direct API:', data.error);
+          throw new Error(data.error);
         }
         return data;
-      } catch (err) {
-        const detail = err?.message || String(err);
-        console.error('[llm-proxy] threw:', detail);
-        return { error: detail };
+      } catch {
+        /* fall through to direct Anthropic API */
       }
+
+      // ── 2. Direct Anthropic API (requires VITE_ANTHROPIC_API_KEY in .env.local) ─
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      if (apiKey) {
+        try {
+          const body = {
+            model: model || 'claude-sonnet-4-5',
+            max_tokens: maxTokens,
+            messages: messages || [{ role: 'user', content: prompt || '' }],
+          };
+          if (system) body.system = system;
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify(body),
+          });
+          if (resp.ok) {
+            const result = await resp.json();
+            const text = result.content?.[0]?.text || '';
+            return { text, content: text };
+          }
+          const errText = await resp.text();
+          console.error('[llm-direct] Anthropic API error:', resp.status, errText);
+        } catch (directErr) {
+          console.error('[llm-direct] threw:', directErr?.message);
+        }
+      }
+
+      // ── 3. No LLM available ───────────────────────────────────────────────
+      const noLlmMsg = apiKey
+        ? 'Anthropic API call failed — check VITE_ANTHROPIC_API_KEY and network access.'
+        : 'AI unavailable. Deploy a Supabase Edge Function named "llm-proxy" or add VITE_ANTHROPIC_API_KEY to .env.local.';
+      console.warn('[InvokeLLM]', noLlmMsg);
+      return { error: noLlmMsg };
     },
   },
 };
