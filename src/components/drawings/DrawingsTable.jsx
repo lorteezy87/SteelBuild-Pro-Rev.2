@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { mono } from "./drawingsConfig";
 import { STAGE_MAP, STAGE_ORDER } from "./drawingsConfig";
 import StageChip from "./StageChip";
@@ -63,7 +63,11 @@ function AIStatusBadge({ status, uploadStatus, error }) {
 function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
   const [hovered, setHovered] = React.useState(false);
   const baseColor = primary ? "var(--accent)" : danger ? "var(--status-error)" : "var(--text-muted)";
-  const hoverBg = primary ? "rgba(200,155,32,0.12)" : danger ? "rgba(239,68,68,0.08)" : "rgba(255,255,255,0.04)";
+  // Danger buttons get a visible tinted background at rest (not just on hover)
+  // so they can never be mistaken for a neutral "Next"/"Edit"/"View" button
+  // sitting next to them. This is the F6 mis-click fix from the audit.
+  const baseBg = danger ? "rgba(239,68,68,0.10)" : "none";
+  const hoverBg = primary ? "rgba(200,155,32,0.18)" : danger ? "rgba(239,68,68,0.22)" : "rgba(255,255,255,0.04)";
   return (
     <button
       onClick={onClick}
@@ -72,13 +76,25 @@ function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: "var(--radius-badge)",
-        border: `1px solid ${hovered && !disabled ? baseColor + "60" : danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`,
-        background: hovered && !disabled ? hoverBg : "none",
+        ...mono,
+        fontSize: 10,
+        fontWeight: 800,
+        letterSpacing: "0.06em",
+        padding: danger ? "4px 10px" : "4px 9px",
+        borderRadius: "var(--radius-badge)",
+        border: `1px solid ${
+          hovered && !disabled
+            ? baseColor + "80"
+            : danger
+              ? "rgba(239,68,68,0.55)"
+              : "var(--border-default)"
+        }`,
+        background: hovered && !disabled ? hoverBg : baseBg,
         color: baseColor,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.3 : 1,
         whiteSpace: "nowrap",
+        minHeight: 26,
         transition: "all 0.15s",
       }}
     >
@@ -115,17 +131,30 @@ const UNGROUPED_LABEL = "UNGROUPED SHEETS";
 const EXPAND_LS_KEY = "sbp-drawings-expanded-sets";
 
 /**
- * Group drawings by `drawing_set_name`. Sheets without a set name end up in
- * the UNGROUPED bucket. Returns an ordered array of groups, each with computed
- * aggregates used by the summary row.
+ * Group drawings into drawing sets. Identity is the FK `drawing_set_id` when
+ * present; legacy rows that only carry the text `drawing_set_name` fall back
+ * to a synthetic `name:<trimmed>` key. Sheets with neither go to UNGROUPED.
+ *
+ * Display names come from `drawingSetMap[id].set_name` when we have the
+ * parent row; otherwise we use the legacy text column. This is the F8 fix
+ * from the audit: source-of-truth is now the parent FK, not the denormalized
+ * string on the child row.
  */
-function groupByDrawingSet(drawings) {
+function groupByDrawingSet(drawings, drawingSetMap = {}) {
   const buckets = new Map();
   drawings.forEach((d) => {
-    const rawName = (d.drawing_set_name || "").trim();
-    const key = rawName || UNGROUPED_KEY;
+    const setId = d.drawing_set_id || null;
+    const legacyName = (d.drawing_set_name || "").trim();
+    const key = setId ? `id:${setId}` : legacyName ? `name:${legacyName}` : UNGROUPED_KEY;
     if (!buckets.has(key)) {
-      buckets.set(key, { key, name: rawName || UNGROUPED_LABEL, sheets: [] });
+      const parent = setId ? drawingSetMap[setId] : null;
+      const displayName = (parent?.set_name || legacyName || "").trim();
+      buckets.set(key, {
+        key,
+        setId,
+        name: displayName || UNGROUPED_LABEL,
+        sheets: [],
+      });
     }
     buckets.get(key).sheets.push(d);
   });
@@ -184,6 +213,7 @@ function groupByDrawingSet(drawings) {
 
     groups.push({
       key: group.key,
+      setId: group.setId,
       name: group.name,
       isUngrouped: group.key === UNGROUPED_KEY,
       sheets,
@@ -282,7 +312,7 @@ function StageBar({ stageCounts, total }) {
 function GroupRow({
   group, expanded, onToggleExpand,
   groupSelected, groupIndeterminate, onToggleGroupSelect,
-  onSetApproval, children,
+  onSetApproval, onDeleteSet, hideOnCompact,
 }) {
   const a = group.aggregates;
   const accent = group.isUngrouped ? "var(--text-muted)" : "var(--accent)";
@@ -402,7 +432,7 @@ function GroupRow({
       </td>
 
       {/* Submitted (earliest) */}
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", ...hideOnCompact }}>
         {a.earliestSubmitted || "—"}
       </td>
 
@@ -412,7 +442,7 @@ function GroupRow({
       </td>
 
       {/* Reviewer — n/a for group */}
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</td>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", ...hideOnCompact }}>—</td>
 
       {/* Approval */}
       <td style={tdBase}>
@@ -444,19 +474,46 @@ function GroupRow({
         )}
       </td>
 
-      {/* Actions cell — blank for summary */}
-      <td style={tdBase}></td>
+      {/* Actions cell — set-level delete (F1). Only offered for named sets;
+          UNGROUPED sheets don't belong to a drawing_sets row so there's
+          nothing to cascade-delete. */}
+      <td style={tdBase}>
+        {!group.isUngrouped && onDeleteSet && (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <ActionBtn
+              label="Delete Set"
+              danger
+              title={`Delete entire set "${group.name}" and all ${a.total} sheet${a.total === 1 ? "" : "s"}`}
+              onClick={() => onDeleteSet(group)}
+            />
+          </div>
+        )}
+      </td>
     </tr>
   );
 }
 
 function SheetRow({
   d, isSel, onToggleSelect, onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, rfiMap, isChild,
+  setContextMenu, onSetApproval, rfiMap, isChild, hideOnCompact,
 }) {
   const overdue = isOverdue(d);
   const late = daysLate(d);
   const urgency = urgencyClass(late);
+
+  // F21: per-row kebab menu. Right-click has been the only way to reach
+  // the context actions (View / Edit / Advance / Set Approval / Delete)
+  // which is unusable on touch and poor for keyboard users. The kebab
+  // button opens the same popover from a keyboard-focusable target.
+  const openKebabMenu = (e) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setContextMenu({
+      x: rect.right - 180, // align menu right-edge under the button
+      y: rect.bottom + 2,
+      drawing: d,
+    });
+  };
 
   return (
     <tr
@@ -495,10 +552,10 @@ function SheetRow({
         )}
       </td>
 
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", ...hideOnCompact }}>{d.discipline}</td>
       <td style={{ ...tdBase, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
       <td style={tdBase}><StageChip stage={d.stage} /></td>
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", ...hideOnCompact }}>{d.submitted_date || "—"}</td>
 
       {/* Due date / days late */}
       <td style={{ ...tdBase, whiteSpace: "nowrap" }}>
@@ -514,7 +571,7 @@ function SheetRow({
         )}
       </td>
 
-      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
+      <td style={{ ...tdBase, ...mono, fontSize: 10, color: "var(--text-muted)", ...hideOnCompact }}>{d.reviewer || "—"}</td>
 
       {/* Approval status (per-sheet) */}
       <td style={tdBase}>
@@ -533,13 +590,50 @@ function SheetRow({
         )}
       </td>
 
-      {/* Row actions */}
+      {/* Row actions. Delete is visually isolated behind a 14px gap + divider
+          so it cannot be mis-clicked next to Next. See F6 in audit. The
+          kebab (F21) opens the same context menu as right-click so touch
+          and keyboard users can reach it without a pointer. */}
       <td style={tdBase}>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
           <ActionBtn label="View" onClick={() => onView(d)} />
           <ActionBtn label="Edit" onClick={() => onEdit(d)} />
           <ActionBtn label="Next" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-          <ActionBtn label="Del" onClick={() => onDelete(d.id)} title="Delete" danger />
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-block",
+              width: 1,
+              height: 18,
+              margin: "0 9px 0 9px",
+              background: "var(--border-default)",
+              opacity: 0.7,
+            }}
+          />
+          <ActionBtn label="Delete" onClick={() => onDelete(d.id)} title="Delete this sheet" danger />
+          <button
+            type="button"
+            onClick={openKebabMenu}
+            title="More actions"
+            aria-label="More actions"
+            style={{
+              ...mono,
+              fontSize: 14,
+              fontWeight: 800,
+              lineHeight: 1,
+              padding: "2px 6px",
+              marginLeft: 4,
+              borderRadius: "var(--radius-badge)",
+              border: "1px solid var(--border-default)",
+              background: "none",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              minHeight: 26,
+              minWidth: 26,
+            }}
+          >
+            ⋮
+          </button>
         </div>
       </td>
     </tr>
@@ -553,35 +647,115 @@ function SheetRow({
  * Each drawing_set_name appears as a collapsible summary row; the individual
  * sheets live underneath as child rows. Sheets without a set go to UNGROUPED.
  */
+// F20: fields the user can click the header to sort on. Keyed by the data
+// field (or a pseudo-field like "overdue") and given a comparator that knows
+// how to handle the type. Keeping this out of the component body so it's a
+// stable reference and doesn't churn the memo on every render.
+const SORTABLE_FIELDS = {
+  sheet_number:    { label: "SET / SHEET #", cmp: (a, b) => String(a.sheet_number || "").localeCompare(String(b.sheet_number || ""), undefined, { numeric: true, sensitivity: "base" }) },
+  title:           { label: "TITLE",        cmp: (a, b) => String(a.title || "").localeCompare(String(b.title || ""), undefined, { sensitivity: "base" }) },
+  discipline:      { label: "DISCIPLINE",   cmp: (a, b) => String(a.discipline || "").localeCompare(String(b.discipline || ""), undefined, { sensitivity: "base" }) },
+  revision_number: { label: "REV",          cmp: (a, b) => (Number(a.revision_number) || 0) - (Number(b.revision_number) || 0) },
+  stage:           { label: "STAGE",        cmp: (a, b) => STAGE_ORDER.indexOf(a.stage || "") - STAGE_ORDER.indexOf(b.stage || "") },
+  submitted_date:  { label: "SUBMITTED",    cmp: (a, b) => String(a.submitted_date || "").localeCompare(String(b.submitted_date || "")) },
+  due_date:        { label: "DUE DATE",     cmp: (a, b) => String(a.due_date || "9999").localeCompare(String(b.due_date || "9999")) },
+  reviewer:        { label: "REVIEWER",     cmp: (a, b) => String(a.reviewer || "").localeCompare(String(b.reviewer || ""), undefined, { sensitivity: "base" }) },
+};
+
+// F23: below this container width (in px) we collapse the less-critical
+// columns so the table still fits on laptops + tablets without a horizontal
+// scrollbar eating the rest of the page.
+const COMPACT_WIDTH_PX = 1200;
+
 export default function DrawingsTable({
   drawings, selected, onToggleSelect, onToggleAll,
   onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, rfiMap,
+  setContextMenu, onSetApproval, onDeleteSet, rfiMap,
+  drawingSetMap = {},
 }) {
-  const groups = useMemo(() => groupByDrawingSet(drawings), [drawings]);
+  // F20: sort state. null means "use the default by-sheet-number order
+  // established inside groupByDrawingSet". Clicking a header toggles
+  // asc → desc → off (null).
+  const [sort, setSort] = useState(null); // { field, dir: 'asc'|'desc' } | null
+
+  // F23: track our own width so we can hide columns on narrow viewports.
+  // ResizeObserver on the outer div is cheaper than a window listener and
+  // catches container-driven resizes (sidebar collapse, split pane drag).
+  const containerRef = useRef(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const w = e.contentRect?.width ?? el.clientWidth;
+        setCompact(w < COMPACT_WIDTH_PX);
+      }
+    });
+    ro.observe(el);
+    // Initial read (ResizeObserver only fires on change after observe)
+    setCompact(el.clientWidth < COMPACT_WIDTH_PX);
+    return () => ro.disconnect();
+  }, []);
+
+  const groups = useMemo(
+    () => groupByDrawingSet(drawings, drawingSetMap),
+    [drawings, drawingSetMap],
+  );
+
+  // Apply the active sort to each group's sheet list. Groups themselves stay
+  // in alphabetical order; sheets within a group reorder. We apply sorting
+  // after grouping (instead of to the flat input) so the group rollups keep
+  // using the full child list.
+  const sortedGroups = useMemo(() => {
+    if (!sort) return groups;
+    const { field, dir } = sort;
+    const cmp = SORTABLE_FIELDS[field]?.cmp;
+    if (!cmp) return groups;
+    const sign = dir === "desc" ? -1 : 1;
+    return groups.map((g) => ({
+      ...g,
+      sheets: [...g.sheets].sort((a, b) => sign * cmp(a, b)),
+    }));
+  }, [groups, sort]);
+
+  const handleSort = (field) => {
+    setSort((prev) => {
+      if (!prev || prev.field !== field) return { field, dir: "asc" };
+      if (prev.dir === "asc") return { field, dir: "desc" };
+      return null;
+    });
+  };
 
   // Initialize expand state — default all named sets expanded on first load
   const [expanded, setExpanded] = useState(() => {
     const persisted = loadExpanded();
     if (persisted) return persisted;
-    const init = new Set(groups.map((g) => g.key));
-    return init;
+    return new Set(groups.map((g) => g.key));
   });
 
-  // Auto-add newly appearing groups to expanded set (but keep user collapses)
+  // Track which group keys we've already seen so we can distinguish "brand
+  // new group the user just uploaded" from "group the user deliberately
+  // collapsed". Seeded with the initial group set from first render.
+  const seenKeysRef = useRef(null);
+  if (seenKeysRef.current === null) {
+    seenKeysRef.current = new Set(groups.map((g) => g.key));
+  }
+
+  // Auto-expand newly-appearing groups so the user's fresh upload is visible
+  // without scrolling+clicking. We only auto-expand keys we've never seen
+  // before — keys the user explicitly collapsed stay collapsed.
   useEffect(() => {
+    const seen = seenKeysRef.current;
+    const brandNew = groups.filter((g) => !seen.has(g.key));
+    if (brandNew.length === 0) return;
     setExpanded((prev) => {
       const next = new Set(prev);
-      let changed = false;
-      groups.forEach((g) => {
-        // If group is brand new and never tracked, auto-expand it
-        if (!next.has(g.key) && !prev.has(g.key)) {
-          // Only auto-expand if there are visible filter matches
-          // (assume caller already filtered)
-        }
-      });
-      return changed ? next : prev;
+      brandNew.forEach((g) => next.add(g.key));
+      saveExpanded(next);
+      return next;
     });
+    brandNew.forEach((g) => seen.add(g.key));
   }, [groups]);
 
   const toggleExpand = (key) => {
@@ -615,28 +789,59 @@ export default function DrawingsTable({
     whiteSpace: "nowrap", background: "var(--bg-surface)",
   };
 
+  // F20: sortable header renderer. Falls through to a plain static TH when
+  // no field is passed (e.g. APPROVAL / ACTIONS columns).
+  const SortableTh = ({ field, label, extraStyle }) => {
+    if (!field) return <th style={{ ...thStyle, ...extraStyle }}>{label}</th>;
+    const isActive = sort?.field === field;
+    const arrow = !isActive ? "" : sort.dir === "asc" ? " ▲" : " ▼";
+    return (
+      <th
+        style={{
+          ...thStyle,
+          ...extraStyle,
+          cursor: "pointer",
+          userSelect: "none",
+          color: isActive ? "var(--accent)" : thStyle.color,
+        }}
+        onClick={() => handleSort(field)}
+        title={`Sort by ${label.toLowerCase()}`}
+      >
+        {label}{arrow}
+      </th>
+    );
+  };
+
+  // F23: style builder for columns that collapse out of view on narrow
+  // screens. Returning display:none keeps the column count stable so we
+  // don't have to juggle colSpan — every row just silently hides the cell.
+  const hideOnCompact = compact ? { display: "none" } : undefined;
+
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)", overflowX: "auto" }}>
+    <div
+      ref={containerRef}
+      style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)", overflowX: "auto" }}
+    >
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             <th style={{ ...thStyle, width: 36 }}>
               <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
             </th>
-            <th style={thStyle}>SET / SHEET #</th>
-            <th style={thStyle}>TITLE</th>
-            <th style={thStyle}>DISCIPLINE</th>
-            <th style={thStyle}>REV</th>
-            <th style={thStyle}>STAGE</th>
-            <th style={thStyle}>SUBMITTED</th>
-            <th style={thStyle}>DUE DATE</th>
-            <th style={thStyle}>REVIEWER</th>
-            <th style={thStyle}>APPROVAL</th>
-            <th style={thStyle}></th>
+            <SortableTh field="sheet_number"    label="SET / SHEET #" />
+            <SortableTh field="title"           label="TITLE" />
+            <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={hideOnCompact} />
+            <SortableTh field="revision_number" label="REV" />
+            <SortableTh field="stage"           label="STAGE" />
+            <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
+            <SortableTh field="due_date"        label="DUE DATE" />
+            <SortableTh field="reviewer"        label="REVIEWER" extraStyle={hideOnCompact} />
+            <SortableTh field={null}            label="APPROVAL" />
+            <SortableTh field={null}            label="" />
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => {
+          {sortedGroups.map((group) => {
             const isExpanded = expanded.has(group.key);
             const ids = group.sheets.map((s) => s.id);
             const selectedInGroup = ids.filter((id) => selected.has(id)).length;
@@ -653,6 +858,8 @@ export default function DrawingsTable({
                   groupIndeterminate={groupIndeterminate}
                   onToggleGroupSelect={() => toggleGroupSelect(group)}
                   onSetApproval={onSetApproval}
+                  onDeleteSet={onDeleteSet}
+                  hideOnCompact={hideOnCompact}
                 />
                 {isExpanded && group.sheets.map((d) => (
                   <SheetRow
@@ -668,6 +875,7 @@ export default function DrawingsTable({
                     onSetApproval={onSetApproval}
                     rfiMap={rfiMap}
                     isChild={!group.isUngrouped}
+                    hideOnCompact={hideOnCompact}
                   />
                 ))}
               </React.Fragment>
