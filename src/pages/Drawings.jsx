@@ -481,7 +481,16 @@ export default function Drawings() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }) => base44.entities.Drawing.update(id, data),
-    onSuccess: () => { invalidate(); toast.success("Sheet updated"); setEditing(null); },
+    // Close the modal AND clear editing on success — leaving the modal
+    // open while editing was cleared caused a second save click to route
+    // into the create path with the edited row's id still in form state,
+    // triggering a drawings_pkey duplicate.
+    onSuccess: () => {
+      invalidate();
+      toast.success("Sheet updated");
+      setEditing(null);
+      setShowModal(false);
+    },
     onError: (e) => toast.error("Failed to update: " + (e?.message || "unknown")),
   });
 
