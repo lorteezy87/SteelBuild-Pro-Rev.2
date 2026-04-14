@@ -478,24 +478,52 @@ export const integrations = {
     },
 
     /**
-     * Invoke the LLM via a Supabase Edge Function (or direct Anthropic API).
-     * Set VITE_ANTHROPIC_API_KEY or deploy a Supabase Edge Function named "llm-proxy".
+     * Invoke the LLM via the "llm-proxy" Supabase Edge Function.
+     *
+     * Returns either { text, content, raw } on success or { error } on
+     * failure. IMPORTANT: callers must inspect `result.error` before using
+     * `result.text` — we never throw, so the upload modal can surface a
+     * clean message on the fallback row instead of falling through to a
+     * generic "AI response was not valid JSON" path.
      */
     InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files }) => {
-      // Try Supabase Edge Function first
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
           body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files },
         });
-        if (error) throw error;
+        if (error) {
+          // supabase-js returns FunctionsHttpError / FunctionsFetchError.
+          // Pull the real response body so we can show the underlying
+          // "ANTHROPIC_API_KEY not configured" etc. message to the user.
+          let detail = error?.message || String(error);
+          try {
+            if (error?.context && typeof error.context.text === 'function') {
+              const body = await error.context.text();
+              if (body) {
+                try {
+                  const parsed = JSON.parse(body);
+                  detail = parsed?.error || parsed?.message || body;
+                } catch {
+                  detail = body;
+                }
+              }
+            }
+          } catch {
+            /* ignore — keep default detail */
+          }
+          console.error('[llm-proxy] invoke failed:', detail);
+          return { error: detail };
+        }
+        // Server may return { error } in a 200 envelope too.
+        if (data && typeof data === 'object' && data.error) {
+          console.error('[llm-proxy] error envelope:', data.error);
+          return { error: data.error };
+        }
         return data;
-      } catch {
-        // Fallback: placeholder response when LLM is not yet configured
-        console.warn('LLM not configured. Deploy a Supabase Edge Function named "llm-proxy".');
-        return {
-          text: 'AI features require a Supabase Edge Function named "llm-proxy" to be deployed.',
-          content: 'AI features require a Supabase Edge Function named "llm-proxy" to be deployed.',
-        };
+      } catch (err) {
+        const detail = err?.message || String(err);
+        console.error('[llm-proxy] threw:', detail);
+        return { error: detail };
       }
     },
   },
