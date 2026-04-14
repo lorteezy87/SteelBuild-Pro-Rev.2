@@ -23,6 +23,15 @@ export const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]));
 /** Ordered stage keys for advancement logic */
 export const STAGE_ORDER = STAGES.map(s => s.key);
 
+/**
+ * Stages considered "in review" — any non-IFC stage that has left
+ * "Not Started". Includes FFF (For Final Approval) because a sheet sitting
+ * in FFF is still under review by the owner and not yet issued for
+ * construction. Single source of truth for both the stat tile and the
+ * "_inReview" filter button so their counts never disagree.
+ */
+export const IN_REVIEW_STAGES = ["OFA", "BFA", "OFS", "BFS", "FFF"];
+
 // ─── Discipline List ────────────────────────────────────────────────────────
 
 export const DISCIPLINES = [

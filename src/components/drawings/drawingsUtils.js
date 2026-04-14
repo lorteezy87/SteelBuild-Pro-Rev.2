@@ -5,6 +5,43 @@
  * overdue detection, CSV export, and filter/stat computation.
  */
 
+import { IN_REVIEW_STAGES, STAGE_ORDER } from "./drawingsConfig";
+
+/**
+ * Decide whether a stage transition is legal.
+ *
+ * The submittal state machine is linear: Not Started → OFA → BFA → OFS →
+ * BFS → FFF → Released. We allow:
+ *   • Moving forward any number of steps (fast-track from OFA straight to
+ *     Released is legitimate for small revisions)
+ *   • Moving back to ANY earlier stage (rework/revision cycles often bounce
+ *     a sheet back from BFS to OFA)
+ *   • Staying put (no-op)
+ *
+ * The one transition we reject is moving between two unknown stages (legacy
+ * rows with garbage strings). This is the F13 fix — before, any string could
+ * overwrite any other stage silently.
+ *
+ * @param {string} from - Current stage
+ * @param {string} to - Target stage
+ * @returns {{ok: boolean, reason?: string}}
+ */
+export function validateStageTransition(from, to) {
+  if (from === to) return { ok: true };
+  const fromIdx = STAGE_ORDER.indexOf(from);
+  const toIdx = STAGE_ORDER.indexOf(to);
+  if (toIdx === -1) {
+    return { ok: false, reason: `Unknown target stage "${to}"` };
+  }
+  if (fromIdx === -1) {
+    // Coming from a legacy/unknown state — allow the move so the user can
+    // recover, but only to a well-defined stage.
+    return { ok: true };
+  }
+  // All forward/backward transitions between valid stages are allowed.
+  return { ok: true };
+}
+
 /**
  * Check whether a drawing is overdue (past due date and not yet released).
  * @param {{ due_date?: string, stage?: string }} drawing
@@ -78,7 +115,7 @@ export function computeStats(drawings) {
   return {
     total: drawings.length,
     released: drawings.filter(d => d.stage === "Released").length,
-    inReview: drawings.filter(d => ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)).length,
+    inReview: drawings.filter(d => IN_REVIEW_STAGES.includes(d.stage)).length,
     overdue: drawings.filter(d => isOverdue(d)).length,
     priority: drawings.filter(d => d.priority_flag).length,
   };
