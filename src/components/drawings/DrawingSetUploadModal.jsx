@@ -48,53 +48,105 @@ function normalizeRevisionNumber(value, fallback = "0") {
 }
 
 // ─── Native Claude PDF extraction via Base44 proxy ───────────────────
+
+const EMPTY_SET_META = {
+  setName:     "",
+  revision:    "",
+  issueDate:   "",
+  issuedBy:    "",
+  discipline:  "",
+  projectName: "",
+};
+
 async function extractSheetsFromPDF(file, uploadedFileUrl) {
   const systemPrompt = `You are a drawing log parser for a structural steel construction management application.
 You will be given a structural drawing set PDF.
-Extract every sheet from the title block or sheet index.
-Return ONLY a valid JSON array. No explanation, no markdown, no preamble. Just the raw JSON array starting with [`;
+Identify two things:
+1. Set-level metadata (what this drawing package is called, its revision/issuance, issue date, and issuing firm — from the cover sheet or title block).
+2. Every individual sheet in the set (sheet number, title, discipline, revision, date — from the sheet index or per-sheet title blocks).
+Return ONLY a valid JSON object. No explanation, no markdown, no preamble.`;
 
-  const userPrompt = `Extract every sheet from this drawing set PDF. Look for:
-- A sheet index or drawing list page
+  const userPrompt = `Read this drawing set PDF and extract BOTH the set-level metadata AND every sheet.
+
+Look for:
+- Cover sheet / title page showing what this package is called (e.g. "100% Construction Documents", "Issued for Construction — Rev 2", "IFB Package", "Addendum 3")
+- Revision / issuance label for the whole package (e.g. "Rev 2", "IFC", "Addendum 3")
+- Issue date on the cover or title block
+- Engineer of record / issuing firm
+- Project name on the cover
+- A sheet index / drawing list page
 - Individual title blocks on each sheet
-- Any table of contents page
 
-For each sheet found return:
+Return this exact JSON structure:
 {
-  "sheetNumber":  "S-001",
-  "sheetTitle":   "Foundation Plan",
-  "discipline":   "Structural|Architectural|Civil|MEP|General|Misc",
-  "sheetType":    "Plan|Elevation|Section|Detail|Schedule|General|Cover",
-  "revision":     "0",
-  "scale":        "",
-  "date":         ""
+  "setMeta": {
+    "setName":     "100% CD Set",
+    "revision":    "Rev 2",
+    "issueDate":   "2025-11-04",
+    "issuedBy":    "Smith Engineering",
+    "discipline":  "Structural",
+    "projectName": ""
+  },
+  "sheets": [
+    {
+      "sheetNumber": "S-001",
+      "sheetTitle":  "Foundation Plan",
+      "discipline":  "Structural|Arch|MEP|Civil|Misc Metals",
+      "sheetType":   "Plan|Elevation|Section|Detail|Schedule|General|Cover",
+      "revision":    "0",
+      "scale":       "",
+      "date":        ""
+    }
+  ]
 }
 
 Rules:
-- Extract real data only — no guessing
-- revision: use "0" if not shown; scale/date: empty string if not shown
-- discipline: infer from sheet number prefix (S=Structural, A=Arch, C=Civil, M/P/E=MEP, G=General)
-- Return [] if no sheets can be identified
+- Extract real data only — no guessing. Use "" for any field you cannot read.
+- Dates: use ISO YYYY-MM-DD format when possible.
+- Sheet revision: if a per-sheet revision is not shown, fall back to the set-level revision; if neither, use "0".
+- Discipline: infer from sheet number prefix (S=Structural, A=Arch, C=Civil, M/P/E=MEP, G=General, Misc=Misc Metals).
+- Return {"setMeta":{...},"sheets":[]} if you cannot read the PDF at all.
+- NEVER invent sheet numbers, titles, or set names.
 
-Return ONLY the JSON array. Nothing else.`;
+Return ONLY the JSON object. Nothing else.`;
 
   const raw = await base44.integrations.Core.InvokeLLM({
     prompt: userPrompt,
     system: systemPrompt,
     file_urls: [uploadedFileUrl],
+    maxTokens: 4000,
   });
 
-  const clean = String(raw || "[]").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  // The edge function may return a string or an object with { text } / { content }
+  const rawText = typeof raw === "string"
+    ? raw
+    : (raw?.text ?? raw?.content ?? JSON.stringify(raw ?? ""));
+
+  const clean = String(rawText || "{}")
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
+    .trim();
 
   try {
-    const sheets = JSON.parse(clean);
-    return { sheets: Array.isArray(sheets) ? sheets : [], scanned: false };
-  } catch (parseErr) {
-    console.error("JSON parse failed:", parseErr, "\nRaw:", raw);
-    const isScanned = String(raw).toLowerCase().includes("scanned") ||
-      String(raw).toLowerCase().includes("cannot read") ||
-      String(raw).toLowerCase().includes("no text");
+    const parsed = JSON.parse(clean);
+    // Tolerate the older flat-array shape in case the model drifts
+    if (Array.isArray(parsed)) {
+      return { setMeta: { ...EMPTY_SET_META }, sheets: parsed, scanned: false };
+    }
     return {
+      setMeta: { ...EMPTY_SET_META, ...(parsed.setMeta || {}) },
+      sheets: Array.isArray(parsed.sheets) ? parsed.sheets : [],
+      scanned: false,
+    };
+  } catch (parseErr) {
+    console.error("JSON parse failed:", parseErr, "\nRaw:", rawText);
+    const rawLower = String(rawText).toLowerCase();
+    const isScanned =
+      rawLower.includes("scanned") ||
+      rawLower.includes("cannot read") ||
+      rawLower.includes("no text");
+    return {
+      setMeta: { ...EMPTY_SET_META },
       sheets: [{
         sheetNumber: "", sheetTitle: `Sheets from ${file.name}`,
         discipline: "Structural", sheetType: "General",
@@ -109,6 +161,7 @@ Return ONLY the JSON array. Nothing else.`;
 function extractSheetsFromFilename(fileName) {
   const name = fileName.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
   return {
+    setMeta: { ...EMPTY_SET_META },
     sheets: [{
       sheetNumber: "",
       sheetTitle:  name,
@@ -566,10 +619,13 @@ function StepProcessing({ processingStatus, onCancel, error }) {
 }
 
 // ─── Step 4: Review Sheets ────────────────────────────────────────────
-function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate, existingDrawings = [] }) {
+function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");
+
+  const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
+  const anyAiFilled = Object.values(aiFilledFields).some(Boolean);
 
   const multiFile = fileResults.length > 1;
 
@@ -594,8 +650,90 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate, ex
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge);
 
+  const aiBadge = (filled) => filled ? (
+    <span title="Auto-filled by AI — edit if wrong" style={{
+      fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.1em",
+      padding: "1px 4px", borderRadius: 3, marginLeft: 6,
+      background: "rgba(132,204,22,0.12)", color: "#84CC16",
+      border: "1px solid rgba(132,204,22,0.3)", verticalAlign: "middle",
+    }}>✦ AI</span>
+  ) : null;
+
+  const metaFieldStyle = {
+    width: "100%",
+    background: "var(--bg-sidebar)",
+    border: "1px solid var(--bg-surface-high)",
+    borderRadius: 6,
+    padding: "5px 8px",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+    boxSizing: "border-box",
+  };
+  const metaLabelStyle = {
+    display: "block",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    letterSpacing: "0.12em",
+    color: "var(--text-muted)",
+    marginBottom: 3,
+    textTransform: "uppercase",
+  };
+
   return (
     <div>
+      {/* AI-detected set metadata — editable */}
+      <div style={{
+        padding: "10px 12px",
+        border: `1px solid ${anyAiFilled ? "rgba(132,204,22,0.30)" : "var(--bg-surface-high)"}`,
+        background: anyAiFilled ? "rgba(132,204,22,0.05)" : "var(--bg-sidebar)",
+        borderRadius: 8,
+        marginBottom: 10,
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, marginBottom: 8,
+          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em",
+          color: anyAiFilled ? "#84CC16" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 700,
+        }}>
+          {anyAiFilled ? "✦ AI-DETECTED SET METADATA" : "SET METADATA"}
+          <span style={{ fontWeight: 400, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "none" }}>
+            — verify before creating
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div style={{ gridColumn: "1 / 3" }}>
+            <label style={metaLabelStyle}>Drawing Set Name{aiBadge(aiFilledFields.setName)}</label>
+            <input style={metaFieldStyle} value={meta.setName}
+              onChange={e => setMetaField("setName", e.target.value)}
+              placeholder="e.g. 100% CD Set — Rev 2" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Revision{aiBadge(aiFilledFields.revision)}</label>
+            <input style={metaFieldStyle} value={meta.revision}
+              onChange={e => setMetaField("revision", e.target.value)}
+              placeholder="Rev 2 / IFC" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Issue Date{aiBadge(aiFilledFields.issueDate)}</label>
+            <input type="date" style={metaFieldStyle} value={meta.issueDate}
+              onChange={e => setMetaField("issueDate", e.target.value)} />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Issued By{aiBadge(aiFilledFields.issuedBy)}</label>
+            <input style={metaFieldStyle} value={meta.issuedBy}
+              onChange={e => setMetaField("issuedBy", e.target.value)}
+              placeholder="Smith Engineering" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Default Discipline{aiBadge(aiFilledFields.discipline)}</label>
+            <select style={metaFieldStyle} value={meta.discipline}
+              onChange={e => setMetaField("discipline", e.target.value)}>
+              {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Warnings */}
       {warnedFiles.map(r => (
         <div key={r.fileName} style={{
@@ -755,6 +893,8 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   const [fileResults, setFileResults]     = useState([]);
   const [createdCount, setCreatedCount]   = useState(0);
   const [processError, setProcessError]   = useState(null);
+  const [aiFilledFields, setAiFilledFields] = useState({}); // { setName: true, ... }
+  const [detectedSetMeta, setDetectedSetMeta] = useState(null); // raw AI output, for banner
   const cancelledRef                      = useRef(false);
 
   const makeSteps = (activeId, doneIds = [], warnings = {}) => [
@@ -769,6 +909,8 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     cancelledRef.current = true;  // abort any in-progress operation
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
     setProcessError(null);
+    setAiFilledFields({});
+    setDetectedSetMeta(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
     setMeta({ setName: "", discipline: "Structural", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
   };
@@ -782,6 +924,8 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     const allSheets  = [];
     const results    = [];
     const totalFiles = files.length;
+    const aggregateSetMeta = { ...EMPTY_SET_META };
+    const aiFilled = {};
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -841,6 +985,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         } catch (err) {
           // On timeout/extract failure, fall back to a single manual-entry row
           extractResult = {
+            setMeta: { ...EMPTY_SET_META },
             sheets: [{
               sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
               discipline: meta.discipline, sheetType: "General",
@@ -872,6 +1017,13 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           pageCallouts = await extractCalloutsFromPdfFile(file);
         }
         mergeCalloutsIntoSheets(extractResult.sheets, pageCallouts);
+
+        // Aggregate set-level metadata across files (first non-empty wins)
+        const extractedSetMeta = extractResult.setMeta || {};
+        for (const key of Object.keys(aggregateSetMeta)) {
+          const v = String(extractedSetMeta[key] ?? "").trim();
+          if (v && !aggregateSetMeta[key]) aggregateSetMeta[key] = v;
+        }
 
         const tagged = extractResult.sheets.map(s => ({
           ...s,
@@ -908,6 +1060,33 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
       // render time against the full project drawing list, so unresolved here
       // doesn't mean permanently broken — it just means "not in this upload."
       resolveCalloutTargets(allSheets);
+
+      // ── Merge AI-detected set metadata into meta state ──
+      // Only fill fields the user left blank; never overwrite user input.
+      const defaultIssueDate = new Date().toISOString().split("T")[0];
+      setMeta(prev => {
+        const merged = { ...prev };
+        const tryFill = (prevKey, aiKey) => {
+          const current = String(prev[prevKey] ?? "").trim();
+          const aiVal = String(aggregateSetMeta[aiKey] ?? "").trim();
+          // Treat today's default issueDate as "blank" so AI can overwrite it
+          const isDefault = prevKey === "issueDate" && current === defaultIssueDate;
+          // Treat "0" revision as "blank" so AI can overwrite it
+          const isDefaultRev = prevKey === "revision" && (current === "0" || current === "");
+          if (aiVal && (!current || isDefault || isDefaultRev)) {
+            merged[prevKey] = aiVal;
+            aiFilled[prevKey] = true;
+          }
+        };
+        tryFill("setName",    "setName");
+        tryFill("revision",   "revision");
+        tryFill("issueDate",  "issueDate");
+        tryFill("issuedBy",   "issuedBy");
+        tryFill("discipline", "discipline");
+        return merged;
+      });
+      setAiFilledFields(aiFilled);
+      setDetectedSetMeta(aggregateSetMeta);
 
       // ── Done ──
       const calloutCount = allSheets.reduce((n, s) => n + (s.callouts?.length || 0), 0);
@@ -1017,7 +1196,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           {step === 1 && <StepFiles files={files} setFiles={setFiles} onNext={() => setStep(2)} onClose={handleClose} />}
           {step === 2 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} projectName={activeProject?.name} />}
           {step === 3 && <StepProcessing processingStatus={processingStatus} onCancel={reset} error={processError} />}
-          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} onBack={() => setStep(1)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
+          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(1)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
           {step === 5 && <StepSuccess createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>
       </DialogContent>
