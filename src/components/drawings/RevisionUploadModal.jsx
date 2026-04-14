@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { extractSheetsFromPdf } from "@/lib/pdfSheetExtractor";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -40,6 +41,27 @@ function getRevisionSuggestions(currentRev) {
     return [`IFC Rev ${num + 1}`, `IFC Rev ${num + 1} — Addendum`, "FINAL IFC"];
   }
   if (rev === "BID SET") return ["IFC", "ADDENDUM 1", "ADDENDUM 2"];
+  // Numeric revisions: "1" → "2", "3" → "4"
+  if (/^\d+$/.test(rev)) {
+    const next = parseInt(rev) + 1;
+    return [String(next), `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // Letter revisions: "A" → "B", "C" → "D"
+  if (/^[A-Z]$/.test(rev)) {
+    const next = String.fromCharCode(rev.charCodeAt(0) + 1);
+    return [next, `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // "Rev X" numeric pattern: "Rev 1" → "Rev 2"
+  if (/^REV\s+(\d+)$/i.test(rev)) {
+    const num = parseInt(rev.match(/\d+/)[0]) + 1;
+    return [`Rev ${num}`, `Rev ${num} — Final`, `IFC Rev ${num}`];
+  }
+  // "Rev X" letter pattern: "Rev A" → "Rev B"
+  if (/^REV\s+([A-Z])$/i.test(rev)) {
+    const letter = rev.match(/[A-Z]$/i)[0].toUpperCase();
+    const next = String.fromCharCode(letter.charCodeAt(0) + 1);
+    return [`Rev ${next}`, `IFC`, `Final`];
+  }
   return ["Rev 1", "Rev 2", "IFC", "Final"];
 }
 
@@ -67,20 +89,20 @@ const CHANGE_STYLE = {
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 
-async function extractSheetsFromPDF(file, fileUrl) {
-  const raw = await base44.integrations.Core.InvokeLLM({
-    prompt: `Extract every sheet from this drawing set PDF. For each sheet return JSON:
-{ "sheetNumber":"S-001", "sheetTitle":"Foundation Plan", "discipline":"Structural", "revision":"0" }
-Return ONLY a JSON array starting with [. Nothing else.`,
-    file_urls: [fileUrl],
-  });
-  const clean = String(raw || "[]").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  try {
-    const sheets = JSON.parse(clean);
-    return Array.isArray(sheets) ? sheets : [];
-  } catch {
-    return [];
+// Extract every sheet from a revision PDF using the shared extractor
+// (columnar pdfjs + Anthropic tool-use + post-processing fixup).
+// Returns a flat `sheets` array so the comparison step can match on
+// sheetNumber; swallow `extractFailed` cases so the caller can show an
+// empty diff rather than crashing.
+async function extractRevisionSheets(file) {
+  const result = await extractSheetsFromPdf(file);
+  if (result?.extractFailed) {
+    // Surface the failure; let the caller decide how to react.
+    const err = new Error(result.error || "AI extraction failed");
+    err.extractFailed = true;
+    throw err;
   }
+  return Array.isArray(result?.sheets) ? result.sheets : [];
 }
 
 // ── Step A: Select existing drawing set ────────────────────────────
@@ -202,6 +224,14 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
 function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
   const suggestions = getRevisionSuggestions(selectedSet.current_revision);
   const set = (k, v) => setRevMeta(p => ({ ...p, [k]: v }));
+  const [autoFilled, setAutoFilled] = useState(false);
+
+  useEffect(() => {
+    if (!revMeta.revisionLabel && suggestions.length > 0) {
+      set("revisionLabel", suggestions[0]);
+      setAutoFilled(true);
+    }
+  }, []); // only on mount
 
   return (
     <div>
@@ -216,11 +246,18 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
 
       {/* Revision label */}
       <div style={{ marginBottom: 14 }}>
-        <label>New Revision Label *</label>
-        <input value={revMeta.revisionLabel} onChange={e => set("revisionLabel", e.target.value)} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <label style={{ margin: 0 }}>New Revision Label *</label>
+          {autoFilled && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
+              AUTO
+            </span>
+          )}
+        </div>
+        <input value={revMeta.revisionLabel} onChange={e => { set("revisionLabel", e.target.value); setAutoFilled(false); }} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {suggestions.map(s => (
-            <button key={s} onClick={() => set("revisionLabel", s)} style={{
+            <button key={s} onClick={() => { set("revisionLabel", s); setAutoFilled(false); }} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
               background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
               border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
@@ -417,10 +454,10 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
         </div>
         {matchedSheets.map((m, i) => {
           const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
@@ -432,7 +469,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
               <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetTitle || "—"}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
               <div>
                 {m.newSheet ? (
                   <input
@@ -540,7 +577,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         }
       });
       setDerivedSets(Object.values(byName));
-    }).catch(() => {});
+    }).catch((e) => { console.error("Failed to load drawing sets:", e); });
   }, [open, activeProject?.id, drawingSets]);
   const [step, setStep] = useState("selectSet");
   const [selectedSet, setSelectedSet] = useState(preSelectedSet || null);
@@ -577,7 +614,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
-      const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
+      const newSheets = await extractRevisionSheets(pdfFile);
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 
@@ -636,7 +673,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         current_file_url: newFileUrl,
         sheet_count: newSheetCount,
         revision_history: JSON.stringify(history),
-        approval_status: "pending",
+        set_approval_status: "pending_review",
         notes: revMeta.notes || selectedSet.notes,
       });
     }

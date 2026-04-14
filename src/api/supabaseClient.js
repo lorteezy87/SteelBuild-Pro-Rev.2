@@ -106,6 +106,10 @@ class SupabaseOperationError extends Error {
     this.code = originalError?.code;
     this.details = originalError?.details;
     this.hint = originalError?.hint;
+    // Propagate HTTP status for smart retry logic (400 = bad column, 404 = missing table)
+    this.status = originalError?.code === 'PGRST204' ? 404
+      : msg.includes('does not exist') ? 400
+      : originalError?.status || null;
   }
 }
 
@@ -117,7 +121,7 @@ class SupabaseOperationError extends Error {
  */
 const SOFT_DELETE_TABLES = new Set([
   'rfis', 'change_orders', 'deliveries', 'work_packages',
-  'documents', 'drawings', 'expenses', 'inspections',
+  'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings',
 ]);
@@ -133,7 +137,7 @@ const cleanRecord = (record) =>
   Object.fromEntries(
     Object.entries(record)
       .filter(
-        ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k)
+        ([k, v]) => v !== undefined && !/[A-Z]/.test(k) && !VIRTUAL_FIELDS.has(k) && !k.startsWith('_')
       )
       .map(([k, v]) => [k, v === '' ? null : v])
   );
@@ -301,7 +305,20 @@ export const entities = {
   },
   RFI:                   createEntityClient('rfis'),
   Drawing:               createEntityClient('drawings'),
-  DrawingSet:            createEntityClient('drawing_sets'),
+  DrawingActivity:       createEntityClient('drawing_activity'),
+  DrawingSet: {
+    ...createEntityClient('drawing_sets'),
+    /**
+     * Soft-delete a set AND cascade-soft-delete every child sheet, in a single
+     * transaction. Returns the number of child sheets that were deleted.
+     * Uses the `delete_drawing_set(p_set_id)` RPC shipped in migration 022.
+     */
+    deleteCascade: async (id) => {
+      const { data, error } = await supabase.rpc('delete_drawing_set', { p_set_id: id });
+      if (error) throw new SupabaseOperationError('drawing_sets', 'deleteCascade', error);
+      return { success: true, deletedChildCount: data ?? 0 };
+    },
+  },
   ChangeOrder:           createEntityClient('change_orders'),
   ChangeRequest:         createEntityClient('change_requests'),
   ScheduleTask:          createEntityClient('schedule_tasks'),
@@ -334,6 +351,8 @@ export const entities = {
   PmaAssumption:         createEntityClient('pma_assumptions'),
   PmaAuditLog:           createEntityClient('pma_audit_logs'),
   User:                  createEntityClient('user_profiles'),
+  MitigationLog:         createEntityClient('mitigation_logs'),
+  MitigationAction:      createEntityClient('mitigation_actions'),
 };
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -361,7 +380,7 @@ export const auth = {
    */
   loginViaEmailPassword: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw { message: error.message, status: error.status };
+    if (error) { const e = new Error(error.message); e.status = error.status; throw e; }
     return data;
   },
 
@@ -434,35 +453,104 @@ export const integrations = {
      */
     UploadFile: async ({ file }) => {
       if (!file) throw new Error('No file provided');
-      const ext = file.name.split('.').pop();
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
       const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      // Browsers report application/octet-stream for many construction file types.
+      // Map extensions → proper MIME types so Supabase storage accepts them.
+      const MIME_MAP = {
+        pdf: 'application/pdf',
+        ifc: 'application/x-step',
+        dwg: 'application/acad',
+        dxf: 'application/dxf',
+        rvt: 'application/octet-stream',
+        nwd: 'application/octet-stream',
+        nwc: 'application/octet-stream',
+        skp: 'application/octet-stream',
+        '3dm': 'application/octet-stream',
+        glb: 'model/gltf-binary',
+        gltf: 'model/gltf+json',
+        obj: 'model/obj',
+        fbx: 'application/octet-stream',
+        stl: 'model/stl',
+        step: 'application/x-step',
+        stp: 'application/x-step',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        xls: 'application/vnd.ms-excel',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        doc: 'application/msword',
+        csv: 'text/csv',
+        txt: 'text/plain',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
+        webp: 'image/webp',
+        mp4: 'video/mp4',
+        zip: 'application/zip',
+        xml: 'application/xml',
+        json: 'application/json',
+      };
+      const contentType = (file.type && file.type !== 'application/octet-stream')
+        ? file.type
+        : (MIME_MAP[ext] || 'application/octet-stream');
+
       const { data, error } = await supabase.storage
         .from('app-files')
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, file, { contentType, upsert: false });
       if (error) throw error;
       // Store the storage path — call getSignedUrl(path) on demand when displaying
       return { file_url: data.path, file_name: file.name, path: data.path };
     },
 
     /**
-     * Invoke the LLM via a Supabase Edge Function (or direct Anthropic API).
-     * Set VITE_ANTHROPIC_API_KEY or deploy a Supabase Edge Function named "llm-proxy".
+     * Invoke the LLM via the "llm-proxy" Supabase Edge Function.
+     *
+     * Returns either { text, content, raw } on success or { error } on
+     * failure. IMPORTANT: callers must inspect `result.error` before using
+     * `result.text` — we never throw, so the upload modal can surface a
+     * clean message on the fallback row instead of falling through to a
+     * generic "AI response was not valid JSON" path.
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model }) => {
-      // Try Supabase Edge Function first
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature }) => {
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
-          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model },
+          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
         });
-        if (error) throw error;
+        if (error) {
+          // supabase-js returns FunctionsHttpError / FunctionsFetchError.
+          // Pull the real response body so we can show the underlying
+          // "ANTHROPIC_API_KEY not configured" etc. message to the user.
+          let detail = error?.message || String(error);
+          try {
+            if (error?.context && typeof error.context.text === 'function') {
+              const body = await error.context.text();
+              if (body) {
+                try {
+                  const parsed = JSON.parse(body);
+                  detail = parsed?.error || parsed?.message || body;
+                } catch {
+                  detail = body;
+                }
+              }
+            }
+          } catch {
+            /* ignore — keep default detail */
+          }
+          console.error('[llm-proxy] invoke failed:', detail);
+          return { error: detail };
+        }
+        // Server may return { error } in a 200 envelope too.
+        if (data && typeof data === 'object' && data.error) {
+          console.error('[llm-proxy] error envelope:', data.error);
+          return { error: data.error };
+        }
         return data;
-      } catch {
-        // Fallback: placeholder response when LLM is not yet configured
-        console.warn('LLM not configured. Deploy a Supabase Edge Function named "llm-proxy".');
-        return {
-          text: 'AI features require a Supabase Edge Function named "llm-proxy" to be deployed.',
-          content: 'AI features require a Supabase Edge Function named "llm-proxy" to be deployed.',
-        };
+      } catch (err) {
+        const detail = err?.message || String(err);
+        console.error('[llm-proxy] threw:', detail);
+        return { error: detail };
       }
     },
   },
