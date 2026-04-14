@@ -274,15 +274,11 @@ ${pdfTextBlock}
 ===== END PDF TEXT =====`;
 
   // 3. Call the LLM.
-  console.log(
-    `[DrawingSetUpload] Sending ${extracted.pageCount} pages / ${extracted.totalChars} chars to llm-proxy for ${file.name}…`
-  );
   const raw = await base44.integrations.Core.InvokeLLM({
     prompt:    userPrompt,
     system:    systemPrompt,
     maxTokens: 4000,
   });
-  console.log(`[DrawingSetUpload] llm-proxy raw response for ${file.name}:`, raw);
 
   // The edge function may return a string or an object with { text } / { content }.
   const rawText = typeof raw === "string"
@@ -374,182 +370,6 @@ async function validateAndExtract(file, uploadedFileUrl) {
     return extractSheetsFromFilename(file.name);
   }
   return extractSheetsFromPDF(file, uploadedFileUrl);
-}
-
-// ─── Callout detection ────────────────────────────────────────────────
-//
-// We scan every PDF page's text content for section / detail callouts
-// (e.g. "2/A201", "A/A101") and attach them to the matching sheet record
-// so the viewer can render clickable hyperlinks over the drawing canvas.
-//
-// Pattern matches:
-//   group 1  "2"  | "A"  | "A1"    — detail/section reference
-//   group 2  "A201" | "S101" | "E2" — target sheet number
-// Adjust if your sheet numbering convention needs different prefixes.
-const CALLOUT_RE = /\b(\d+|[A-Z]+\d*)\/([A-Z]+\d+)\b/g;
-
-function parseCalloutsInText(text) {
-  if (!text) return [];
-  const out = [];
-  // Reset lastIndex explicitly — CALLOUT_RE is shared with the /g flag.
-  CALLOUT_RE.lastIndex = 0;
-  let m;
-  while ((m = CALLOUT_RE.exec(text)) !== null) {
-    out.push({
-      text: m[0],
-      targetDetail: m[1],
-      targetSheetNumber: m[2],
-    });
-  }
-  return out;
-}
-
-// Normalise sheet numbers so "A-201", "a201", "A 201" all collide.
-function normalizeSheetNumber(s) {
-  return String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
-}
-
-// Extract callouts from a PDF File via pdfjs text content. Returns one entry
-// per page: { pageNumber, width, height, sheetNumberOnPage, callouts: [...] }.
-//
-// Coordinates are stored in PDF user units (72 DPI) with an **origin at the
-// top-left** of the page, which is what canvas overlays expect. pdfjs gives
-// us text-item positions with a bottom-left origin, so we flip the Y axis
-// here (y_top = pageHeight - baseline - height).
-//
-// Caveat: pdfjs sometimes splits a single visual token across multiple text
-// items (different fonts, spacing). A callout that straddles items will be
-// missed. Good enough for first-pass structural/arch sets.
-async function extractCalloutsFromPdfFile(file) {
-  try {
-    const buf = await file.arrayBuffer();
-    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
-    try {
-      const pages = [];
-      for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-        const page = await doc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1 });
-        const pageWidth  = viewport.width;
-        const pageHeight = viewport.height;
-        const content = await page.getTextContent();
-
-        const calloutsOnPage = [];
-        let sheetNumberOnPage = null;
-        // Standard sheet-number shape in a title block: 1-4 letters, optional
-        // separator, 1-4 digits, optional decimal suffix. We pick the longest
-        // match on the page as the likely own sheet number.
-        const SHEET_TITLE_RE = /^[A-Z]{1,4}[- ]?\d{1,4}(\.\d+)?$/;
-
-        for (const item of content.items) {
-          const str = (item && item.str) || "";
-          if (!str.trim()) continue;
-
-          if (SHEET_TITLE_RE.test(str.trim())) {
-            if (!sheetNumberOnPage || str.trim().length > sheetNumberOnPage.length) {
-              sheetNumberOnPage = str.trim();
-            }
-          }
-
-          const found = parseCalloutsInText(str);
-          if (found.length === 0) continue;
-
-          const tx = item.transform?.[4] ?? 0;
-          const ty = item.transform?.[5] ?? 0;
-          const w  = item.width  || Math.max(8, str.length * 5);
-          const h  = item.height || 12;
-          // Flip to top-left origin.
-          const yTop = Math.max(0, pageHeight - ty - h);
-
-          for (const c of found) {
-            calloutsOnPage.push({
-              text: c.text,
-              coords: {
-                x: Math.round(tx * 100) / 100,
-                y: Math.round(yTop * 100) / 100,
-                width:  Math.round(w * 100) / 100,
-                height: Math.round(h * 100) / 100,
-              },
-              targetSheetNumber: c.targetSheetNumber,
-              targetDetail: c.targetDetail,
-            });
-          }
-        }
-
-        pages.push({
-          pageNumber: pageNum,
-          width: pageWidth,
-          height: pageHeight,
-          sheetNumberOnPage,
-          callouts: calloutsOnPage,
-        });
-      }
-      return pages;
-    } finally {
-      try { await doc.destroy(); } catch { /* ignore */ }
-    }
-  } catch (err) {
-    console.warn("Callout extraction failed:", err);
-    return [];
-  }
-}
-
-// Merge per-page callout lists into sheet records. We try to match each
-// page's sheet number (from its title block) to a sheet from the LLM pass;
-// unmatched pages fall through to sequential assignment.
-function mergeCalloutsIntoSheets(sheets, pages) {
-  if (!Array.isArray(sheets) || sheets.length === 0 || !Array.isArray(pages)) return;
-
-  const sheetByNum = {};
-  for (const s of sheets) {
-    const key = normalizeSheetNumber(s.sheetNumber);
-    if (key) sheetByNum[key] = s;
-  }
-
-  const unmatched = [];
-  for (const p of pages) {
-    const key = normalizeSheetNumber(p.sheetNumberOnPage);
-    const target = key ? sheetByNum[key] : null;
-    if (target && !target.callouts) {
-      target.callouts = p.callouts;
-      target.pdfPage  = p.pageNumber;
-    } else {
-      unmatched.push(p);
-    }
-  }
-
-  // Sequentially assign leftover pages to sheets that still don't have
-  // callouts. This catches the common case where the LLM extracted a sheet
-  // index that doesn't have a matching title-block sheet number in the PDF.
-  const leftover = sheets.filter(s => !Array.isArray(s.callouts));
-  for (let i = 0; i < leftover.length && i < unmatched.length; i++) {
-    leftover[i].callouts = unmatched[i].callouts;
-    leftover[i].pdfPage  = unmatched[i].pageNumber;
-  }
-
-  for (const s of sheets) {
-    if (!Array.isArray(s.callouts)) s.callouts = [];
-    if (!Number.isFinite(s.pdfPage)) s.pdfPage = 1;
-  }
-}
-
-// Resolve each callout's targetSheetNumber against the set of sheets in the
-// upload. We mark resolved/unresolved so the viewer can render hyperlinked vs
-// greyed-out callouts. The viewer will also resolve against the whole project
-// drawing list at render time, but doing it here lets the upload modal show
-// a summary of unresolved cross-references.
-function resolveCalloutTargets(sheets) {
-  if (!Array.isArray(sheets)) return;
-  const known = new Set(
-    sheets
-      .map(s => normalizeSheetNumber(s.sheetNumber))
-      .filter(Boolean)
-  );
-  for (const s of sheets) {
-    if (!Array.isArray(s.callouts)) continue;
-    for (const c of s.callouts) {
-      c.resolved = known.has(normalizeSheetNumber(c.targetSheetNumber));
-    }
-  }
 }
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
@@ -887,6 +707,8 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
+  const failedFiles = fileResults.filter(r => r.extractFailed);
+  const hasFailedFiles = failedFiles.length > 0;
 
   const aiBadge = (filled) => filled ? (
     <span title="Auto-filled by AI — edit if wrong" style={{
@@ -974,39 +796,29 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
 
       {/* Warnings */}
       {warnedFiles.map(r => {
-        const isError = r.extractFailed;
-        const bg     = isError ? "rgba(239,68,68,0.10)" : "var(--warning-muted)";
-        const border = isError ? "rgba(239,68,68,0.35)" : "var(--warning-border)";
-        const fg     = isError ? "#EF4444" : "var(--status-warning)";
+        const isError = !!r.extractFailed;
         return (
           <div key={r.fileName} style={{
             display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
-            background: bg, border: `1px solid ${border}`,
+            background: isError ? "rgba(239,68,68,0.08)" : "var(--warning-muted)",
+            border: `1px solid ${isError ? "rgba(239,68,68,0.35)" : "var(--warning-border)"}`,
             borderRadius: 8, marginBottom: 10,
           }}>
-            <AlertTriangle style={{ width: 14, height: 14, color: fg, flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-word" }}>
-              {r.scanned ? (
-                <><span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
-              ) : r.tooLarge ? (
-                <><span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
-              ) : (
+            <AlertTriangle style={{ width: 14, height: 14, color: isError ? "var(--status-error)" : "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+              {r.extractFailed ? (
                 <>
-                  <span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span>: AI extraction failed — please fill in sheet details manually.
+                  <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{r.fileName}</span> failed AI extraction and cannot be uploaded. Go back, remove this file, and try again.
                   {r.error && (
-                    <div style={{
-                      marginTop: 4,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      color: "var(--text-muted)",
-                      background: "rgba(0,0,0,0.25)",
-                      borderRadius: 4,
-                      padding: "4px 6px",
-                    }}>
-                      {String(r.error).slice(0, 500)}
+                    <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
+                      {r.error}
                     </div>
                   )}
                 </>
+              ) : r.scanned ? (
+                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
+              ) : (
+                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
               )}
             </div>
           </div>
@@ -1100,12 +912,31 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
         )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button onClick={() => onCreate(sheets.filter(s => s.selected))} disabled={selectedCount === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {hasFailedFiles && (
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em",
+              color: "var(--status-error)", textTransform: "uppercase", fontWeight: 700,
+            }}>
+              ⛔ {failedFiles.length} FILE{failedFiles.length !== 1 ? "S" : ""} FAILED — GO BACK &amp; REMOVE
+            </span>
+          )}
+          <Button
+            onClick={() => onCreate(sheets.filter(s => s.selected))}
+            disabled={selectedCount === 0 || hasFailedFiles}
+            title={hasFailedFiles ? "One or more files failed AI extraction. Go back and remove them before creating drawings." : undefined}
+            style={{
+              background: hasFailedFiles ? "var(--bg-surface-high)" : "var(--accent)",
+              color: hasFailedFiles ? "var(--text-muted)" : "#fff",
+              border: "none",
+              cursor: hasFailedFiles ? "not-allowed" : undefined,
+            }}
+          >
+            Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1299,16 +1130,6 @@ export default function DrawingSetUploadModal({
           message: `Building sheet list for ${file.name}…`,
         });
 
-        // Detect callouts via pdfjs text content — skipped if the PDF is too
-        // large (same threshold as AI extraction, since the pdfjs pass loads
-        // every page into memory too) or if the LLM flagged it as a scanned
-        // image (no embedded text layer to scan).
-        let pageCallouts = [];
-        if (!extractResult.scanned && !extractResult.tooLarge && sizeMB <= MAX_PDF_SIZE_MB) {
-          pageCallouts = await extractCalloutsFromPdfFile(file);
-        }
-        mergeCalloutsIntoSheets(extractResult.sheets, pageCallouts);
-
         // Aggregate set-level metadata across files (first non-empty wins)
         const extractedSetMeta = extractResult.setMeta || {};
         for (const key of Object.keys(aggregateSetMeta)) {
@@ -1322,8 +1143,6 @@ export default function DrawingSetUploadModal({
           sourceFile:    file.name,
           sourceFileUrl: fileUrl,
           selected:      true,
-          callouts:      Array.isArray(s.callouts) ? s.callouts : [],
-          pdfPage:       Number.isFinite(s.pdfPage) ? s.pdfPage : 1,
         }));
 
         allSheets.push(...tagged);
@@ -1335,10 +1154,6 @@ export default function DrawingSetUploadModal({
           scanned:       extractResult.scanned       || false,
           tooLarge:      extractResult.tooLarge      || false,
           extractFailed: extractResult.extractFailed || false,
-          // Propagate the underlying error message (e.g. "ANTHROPIC_API_KEY
-          // not configured") so the Review step can surface it in the
-          // warnings banner instead of silently falling back.
-          error:         extractResult.error || null,
           sizeMB,
         });
 
@@ -1348,13 +1163,6 @@ export default function DrawingSetUploadModal({
       }
 
       if (cancelledRef.current) return;  // user cancelled — stay at step 0 (reset already called)
-
-      // Cross-sheet callout resolution: now that we know every sheet in this
-      // upload, mark each callout as resolved/unresolved based on whether its
-      // targetSheetNumber matches a sibling. The viewer will also resolve at
-      // render time against the full project drawing list, so unresolved here
-      // doesn't mean permanently broken — it just means "not in this upload."
-      resolveCalloutTargets(allSheets);
 
       // ── Merge AI-detected set metadata into meta state ──
       // Only fill fields the user left blank; never overwrite user input.
@@ -1384,12 +1192,11 @@ export default function DrawingSetUploadModal({
       setDetectedSetMeta(aggregateSetMeta);
 
       // ── Done ──
-      const calloutCount = allSheets.reduce((n, s) => n + (s.callouts?.length || 0), 0);
       setProcessingStatus({
         steps: makeSteps(null, ["upload", "encode", "extract", "parse", "done"]),
         currentStepId: null,
         progress: 100,
-        message: `Found ${allSheets.length} sheets and ${calloutCount} callouts across ${results.filter(r => r.status === "success").length} file(s)`,
+        message: `Found ${allSheets.length} sheets across ${results.filter(r => r.status === "success").length} file(s)`,
       });
 
       setSheets(allSheets);
@@ -1480,80 +1287,90 @@ export default function DrawingSetUploadModal({
       // the time we reach this step, AI has already run and the user has
       // reviewed the results. Rows whose AI pass failed upstream get
       // marked 'NeedsReview' so the UI can flag them.
+      //
+      // F16: single bulk insert instead of N serial requests. An N-sheet
+      // set used to mean N round-trips; now one. If the bulk insert fails
+      // we fall back to the per-row loop so a single bad row still lets
+      // the rest land — matching the original "never abort the batch"
+      // acceptance criterion.
       // ─────────────────────────────────────────────────────────────
-      let createdRows = 0;
-      let failedRows  = 0;
-      for (const sheet of selectedSheets) {
-        if (cancelledRef.current) break;
-
-        // If the file this sheet came from had an extraction failure, mark
-        // it as NeedsReview so the user can address it from the log grid.
+      const now = new Date().toISOString();
+      const buildRecord = (sheet) => {
         const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
         const needsReview =
           sourceResult?.extractFailed ||
           sourceResult?.scanned ||
           sourceResult?.tooLarge ||
           !!sheet._note;
+        return {
+          sheet_number:     sheet.sheetNumber || "",
+          title:            sheet.sheetTitle  || "",
+          project_id:       activeProject?.id,
+          project_name:     activeProject?.name,
+          drawing_set_id:   parentSetId,
+          drawing_set_name: resolvedSetName, // kept for back-compat reads
+          discipline:       sheet.discipline || meta.discipline,
+          revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
+          stage:            meta.defaultStage || "Not Started",
+          file_url:         sheet.sourceFileUrl,
+          pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
+          callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
+          upload_batch_id:      batchId,
+          upload_status:        "Uploaded",
+          ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
+          ai_extraction_error:  sourceResult?.error || null,
+          extracted_text:       sheet.extractedText || null,
+          hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
+          last_extracted_at:    now,
+          notes: [
+            meta.notes,
+            sheet.scale ? `Scale: ${sheet.scale}` : "",
+            sheet._note || "",
+          ].filter(Boolean).join(" · "),
+        };
+      };
 
-        try {
-          await base44.entities.Drawing.create({
-            // Identity
-            sheet_number:     sheet.sheetNumber || "",
-            title:            sheet.sheetTitle  || "",
-            project_id:       activeProject?.id,
-            project_name:     activeProject?.name,
+      let createdRows = 0;
+      let failedRows  = 0;
+      const records = selectedSheets.map(buildRecord);
 
-            // NEW: parent/child relationship
-            drawing_set_id:   parentSetId,
-            drawing_set_name: resolvedSetName, // kept for back-compat reads
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 40,
+        message:  `Creating ${records.length} drawing entries…`,
+      }));
 
-            // Metadata.
-            // NOTE: issue_date / issued_by do NOT exist on drawings — they
-            // live on the parent drawing_sets row (written above). Don't
-            // write them here or PostgREST 400s on unknown columns.
-            discipline:       sheet.discipline || meta.discipline,
-            revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-            stage:            meta.defaultStage || "Not Started",
-            file_url:         sheet.sourceFileUrl,
-            // Which page within the source PDF this sheet's content lives on,
-            // so the viewer can jump straight there and render overlays in
-            // the correct coordinate space.
-            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
-            drawing_page:     sheet.drawingPage ?? sheet.page ?? null,
-            // Detected section/detail callouts — each has text, coords (PDF
-            // user units, top-left origin), targetSheetNumber, targetDetail,
-            // and resolved flag. Empty array if the PDF had no detectable
-            // callouts or was too large / scanned.
-            callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
-
-            // NEW: upload/extraction tracking
-            upload_batch_id:      batchId,
-            upload_status:        "Uploaded",
-            ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
-            ai_extraction_error:  sourceResult?.error || null,
-            extracted_text:       sheet.extractedText || null,
-            hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
-            last_extracted_at:    new Date().toISOString(),
-
-            notes: [
-              meta.notes,
-              sheet.scale ? `Scale: ${sheet.scale}` : "",
-              sheet._note || "",
-            ].filter(Boolean).join(" · "),
-          });
-          createdRows++;
-        } catch (err) {
-          console.error("Failed to create sheet:", sheet.sheetNumber, err);
-          failedRows++;
-          // One row failure never aborts the batch — see acceptance criteria.
+      try {
+        const inserted = await base44.entities.Drawing.bulkCreate(records);
+        createdRows = Array.isArray(inserted) ? inserted.length : records.length;
+      } catch (bulkErr) {
+        // Bulk failed — fall back to per-row so one bad sheet doesn't lose
+        // the whole batch. This is the slow path; the common case is the
+        // bulk insert above succeeding.
+        console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
+        for (let i = 0; i < selectedSheets.length; i++) {
+          if (cancelledRef.current) break;
+          const sheet = selectedSheets[i];
+          try {
+            await base44.entities.Drawing.create(records[i]);
+            createdRows++;
+          } catch (err) {
+            console.error("Failed to create sheet:", sheet.sheetNumber, err);
+            failedRows++;
+          }
+          setProcessingStatus(prev => ({
+            ...prev,
+            progress: 40 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 50),
+            message:  `Recovering… ${createdRows + failedRows} of ${selectedSheets.length}`,
+          }));
         }
-
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: 10 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 90),
-          message:  `Creating entries… ${createdRows + failedRows} of ${selectedSheets.length}`,
-        }));
       }
+
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 95,
+        message:  `Created ${createdRows} of ${selectedSheets.length} entries`,
+      }));
 
       if (cancelledRef.current) return;
       setCreatedCount(createdRows);

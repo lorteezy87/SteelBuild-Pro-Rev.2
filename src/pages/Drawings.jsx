@@ -23,11 +23,12 @@ import { batchProcess } from "@/utils/batchProcess";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
-  STAGE_ORDER, DISCIPLINES, EMPTY_FORM,
+  STAGE_ORDER, DISCIPLINES, EMPTY_FORM, IN_REVIEW_STAGES, STAGES,
   mono, surface, btnGhost, btnPrimary,
 } from "@/components/drawings/drawingsConfig";
 import {
   isOverdue, exportTransmittal, computeStats, computeDisciplineCounts, buildRevisionAlerts,
+  validateStageTransition,
 } from "@/components/drawings/drawingsUtils";
 
 // ── Presentation components ─────────────────────────────────────────────────
@@ -39,6 +40,8 @@ import AlertBanner from "@/components/drawings/AlertBanner";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
+import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,6 +66,11 @@ export default function Drawings() {
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  // F18: replace window.confirm() with a styled DeleteDialog. Shape:
+  //   { title, description, run: () => void }
+  // run() is what fires when the user hits "Delete" in the dialog.
+  const [confirmState, setConfirmState] = useState(null);
   const contextRef = useRef(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -89,6 +97,51 @@ export default function Drawings() {
     staleTime: 30000,
   });
 
+  // F15: reconcile stuck "Extracting" rows on page mount.
+  //
+  // If a user closes the tab while the AI extractor is mid-run, the child
+  // sheet rows get left at ai_extraction_status='Extracting' forever — there
+  // is no server-side worker that notices. On mount we find any rows that
+  // have been in Extracting for more than 10 minutes (longer than any real
+  // Claude call) and mark them Failed so the UI stops lying.
+  useEffect(() => {
+    if (!drawings.length) return;
+    const STUCK_MS = 10 * 60 * 1000;
+    const now = Date.now();
+    const stuck = drawings.filter(d => {
+      if (d.ai_extraction_status !== "Extracting") return false;
+      const anchor = d.last_extracted_at || d.updated_at || d.created_at;
+      if (!anchor) return true;
+      return now - new Date(anchor).getTime() > STUCK_MS;
+    });
+    if (stuck.length === 0) return;
+    (async () => {
+      for (const d of stuck) {
+        try {
+          await base44.entities.Drawing.update(d.id, {
+            ai_extraction_status: "Failed",
+            ai_extraction_error: "Extraction interrupted — reconcile on page mount",
+          });
+        } catch (err) {
+          console.warn("[drawings] Failed to reconcile stuck row", d.id, err);
+        }
+      }
+      invalidate();
+      toast.info(`Reconciled ${stuck.length} stuck extraction${stuck.length === 1 ? "" : "s"}`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // H9: keep the search box in sync with ?sheet= / ?search= query params.
+  // Without this, in-app deep links (e.g. PCC → /drawings?sheet=S-001) just
+  // change the URL without remounting the page, so the useState initializer
+  // above would never re-read the new param.
+  useEffect(() => {
+    const next = searchParams.get("search") || searchParams.get("sheet") || "";
+    setSearch(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const rfiMap = useMemo(() => {
     const map = {};
@@ -110,7 +163,7 @@ export default function Drawings() {
     if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
     if (stageFilter !== "ALL") {
       if (stageFilter === "_overdue") list = list.filter(d => isOverdue(d));
-      else if (stageFilter === "_inReview") list = list.filter(d => ["OFA", "BFA", "OFS", "BFS", "FFF"].includes(d.stage));
+      else if (stageFilter === "_inReview") list = list.filter(d => IN_REVIEW_STAGES.includes(d.stage));
       else if (stageFilter === "_priority") list = list.filter(d => d.priority_flag);
       else list = list.filter(d => d.stage === stageFilter);
     }
@@ -143,6 +196,15 @@ export default function Drawings() {
     return [...names].sort();
   }, [drawingSets, drawingSetRecords]);
 
+  // id → parent set record lookup. DrawingsTable groups by drawing_set_id and
+  // pulls display names from this map so the FK is the source of truth for
+  // grouping, not the legacy denormalized drawing_set_name string. (F8)
+  const drawingSetMap = useMemo(() => {
+    const map = {};
+    drawingSetRecords.forEach(ds => { if (ds?.id) map[ds.id] = ds; });
+    return map;
+  }, [drawingSetRecords]);
+
   const selectedSetName = useMemo(() => {
     if (selected.size === 0) return null;
     const names = new Set();
@@ -154,7 +216,15 @@ export default function Drawings() {
   }, [selected, drawings]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+  // Any drawings mutation must also invalidate the parent drawing_sets query,
+  // because a child INSERT/UPDATE/DELETE fires the sync_drawing_set_counts
+  // trigger which updates sheet_count / processed_count / needs_review_count
+  // / failed_count on the parent row. Without invalidating both, the group
+  // summary badge lies for up to staleTime (30s) after every action.
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+    qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+  };
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
@@ -200,10 +270,74 @@ export default function Drawings() {
     onError: (e) => toast.error("Failed to update: " + (e?.message || "unknown")),
   });
 
+  // F19: soft-delete with undo. The id is a single drawing row; we can flip
+  // is_deleted=false to restore it. The sonner toast exposes an "Undo"
+  // action button that does exactly that.
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Drawing.delete(id),
-    onSuccess: () => { invalidate(); toast.success("Sheet deleted"); setSelected(new Set()); },
+    onSuccess: (_data, id) => {
+      invalidate();
+      setSelected(new Set());
+      toast.success("Sheet deleted", {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null });
+              invalidate();
+              toast.success("Sheet restored");
+            } catch (err) {
+              toast.error("Restore failed: " + (err?.message || "unknown"));
+            }
+          },
+        },
+      });
+    },
     onError: (e) => toast.error("Failed to delete: " + (e?.message || "unknown")),
+  });
+
+  // Cascade-delete an entire drawing set (parent + all child sheets) in one
+  // transaction via the delete_drawing_set(p_set_id) RPC shipped in migration
+  // 022. Falls back to a client-side loop if the child sheets reference the
+  // set only by legacy drawing_set_name (no FK yet).
+  const deleteSetMut = useMutation({
+    mutationFn: async ({ setId, sheetIds }) => {
+      if (setId) {
+        const result = await base44.entities.DrawingSet.deleteCascade(setId);
+        return { deleted: result.deletedChildCount ?? sheetIds.length };
+      }
+      // Legacy fallback: no parent row, just sweep the children.
+      const { succeeded } = await batchProcess(sheetIds, (id) => base44.entities.Drawing.delete(id));
+      return { deleted: succeeded.length };
+    },
+    onSuccess: ({ deleted }, { setId, sheetIds, setName }) => {
+      invalidate();
+      setSelected(new Set());
+      // F19: undo for the full cascade. We restore every child sheet id we
+      // had going in, plus the parent drawing_sets row if there was one.
+      // The cascade RPC set is_deleted=true on all of them, and update() by
+      // id still works on soft-deleted rows, so we just flip the bits back.
+      toast.success(`Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (setId) {
+                await base44.entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
+              }
+              await batchProcess(sheetIds, (id) =>
+                base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+              );
+              invalidate();
+              toast.success(`Restored "${setName}"`);
+            } catch (err) {
+              toast.error("Restore failed: " + (err?.message || "unknown"));
+            }
+          },
+        },
+      });
+    },
+    onError: (e) => toast.error("Failed to delete set: " + (e?.message || "unknown")),
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -221,25 +355,68 @@ export default function Drawings() {
   };
 
   const handleDelete = (id) => {
-    if (!confirm("Delete this sheet? This cannot be undone.")) return;
-    deleteMut.mutate(id);
     setContextMenu(null);
+    const d = drawings.find(x => x.id === id);
+    const label = d?.sheet_number ? `"${d.sheet_number}"` : "this sheet";
+    setConfirmState({
+      title: `Delete ${label}?`,
+      description: "The sheet will be removed from the project. You can undo this from the toast that appears after deletion.",
+      run: () => deleteMut.mutate(id),
+    });
+  };
+
+  const handleDeleteSet = (group) => {
+    if (group.isUngrouped) return;
+    const total = group.sheets.length;
+    // Every child sheet created by the new parent/child flow carries
+    // drawing_set_id; legacy hand-entered sheets may only have the text name.
+    const setIdCandidates = group.sheets.map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || null;
+    const sheetIds = group.sheets.map(s => s.id);
+    setConfirmState({
+      title: `Delete drawing set "${group.name}"?`,
+      description: `The set and all ${total} sheet${total === 1 ? "" : "s"} inside it will be removed. You can undo this from the toast that appears after deletion.`,
+      run: () => deleteSetMut.mutate({ setId, sheetIds, setName: group.name }),
+    });
   };
 
   const handleAdvanceStage = (drawing) => {
     const idx = STAGE_ORDER.indexOf(drawing.stage);
-    if (idx < STAGE_ORDER.length - 1) {
-      updateMut.mutate({ id: drawing.id, stage: STAGE_ORDER[idx + 1] });
+    if (idx < 0) {
+      toast.error(`Cannot advance sheet: unknown current stage "${drawing.stage || "∅"}"`);
+      setContextMenu(null);
+      return;
     }
+    if (idx >= STAGE_ORDER.length - 1) {
+      toast.info("Already at final stage (IFC)");
+      setContextMenu(null);
+      return;
+    }
+    const target = STAGE_ORDER[idx + 1];
+    const v = validateStageTransition(drawing.stage, target);
+    if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
+    updateMut.mutate({ id: drawing.id, stage: target });
     setContextMenu(null);
   };
 
   const handleBulkStageApply = async () => {
     if (!bulkStage || selected.size === 0) return;
+    // Guard against typo'd or dropped stages before we touch the DB.
+    if (!STAGE_ORDER.includes(bulkStage)) {
+      toast.error(`Cannot apply unknown stage "${bulkStage}"`);
+      return;
+    }
     const ids = [...selected];
     const { succeeded, failed } = await batchProcess(
       ids,
-      (id) => base44.entities.Drawing.update(id, { stage: bulkStage }),
+      (id) => {
+        const current = drawings.find(d => d.id === id);
+        if (current) {
+          const v = validateStageTransition(current.stage, bulkStage);
+          if (!v.ok) throw new Error(v.reason);
+        }
+        return base44.entities.Drawing.update(id, { stage: bulkStage });
+      },
     );
     invalidate();
     if (failed.length > 0) {
@@ -251,29 +428,75 @@ export default function Drawings() {
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (!confirm(`Delete ${selected.size} sheets? This cannot be undone.`)) return;
-    const ids = [...selected];
-    const { succeeded, failed } = await batchProcess(ids, (id) => base44.entities.Drawing.delete(id));
-    invalidate();
-    if (failed.length > 0) {
-      toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
-    } else {
-      setSelected(new Set());
-      toast.success("Sheets deleted");
-    }
+  const handleBulkDelete = () => {
+    const count = selected.size;
+    if (count === 0) return;
+    setConfirmState({
+      title: `Delete ${count} sheet${count === 1 ? "" : "s"}?`,
+      description: "The selected sheets will be removed from the project. You can undo this from the toast that appears after deletion.",
+      run: async () => {
+        const ids = [...selected];
+        const { succeeded, failed } = await batchProcess(ids, (id) => base44.entities.Drawing.delete(id));
+        invalidate();
+        if (failed.length > 0) {
+          toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
+        } else {
+          setSelected(new Set());
+          // F19: bulk undo. Restore every id we successfully soft-deleted.
+          toast.success(`Deleted ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`, {
+            action: {
+              label: "Undo",
+              onClick: async () => {
+                try {
+                  await batchProcess(succeeded, (id) =>
+                    base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                  );
+                  invalidate();
+                  toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
+                } catch (err) {
+                  toast.error("Restore failed: " + (err?.message || "unknown"));
+                }
+              },
+            },
+          });
+        }
+      },
+    });
   };
 
   const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes }) => {
     if (!approvalSet) return;
     setSavingApproval(true);
     try {
+      const effectiveDate = approvalDate || new Date().toISOString().split("T")[0];
+      // F11: write approval state to the parent drawing_sets row so it's
+      // stored in one canonical place. The per-sheet mirror below stays for
+      // back-compat until migration 026 drops those columns.
+      const parentSetId =
+        approvalSet.setId ||
+        approvalSet.sheets.map(s => s.drawing_set_id).find(Boolean);
+      if (parentSetId) {
+        try {
+          await base44.entities.DrawingSet.update(parentSetId, {
+            set_approval_status: status,
+            set_approved_date:   effectiveDate,
+            set_approved_by:     _approvedBy || null,
+            set_approval_notes:  notes || null,
+            ...(revision ? { revision } : {}),
+          });
+        } catch (parentErr) {
+          // Don't fail the whole operation on a parent-row update glitch —
+          // the per-sheet writes below still record the intent.
+          console.warn("Parent drawing_set approval update failed:", parentErr);
+        }
+      }
+
       const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
       const { succeeded, failed } = await batchProcess(
         sheetsToUpdate,
         (s) => base44.entities.Drawing.update(s.id, {
           set_approval_status: status,
-          set_approved_date: approvalDate || new Date().toISOString().split("T")[0],
+          set_approved_date: effectiveDate,
           ...(revision ? { revision_number: revision } : {}),
           ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
         }),
@@ -295,7 +518,10 @@ export default function Drawings() {
   const openSetApproval = (setName) => {
     const sheets = drawingSets[setName] || [];
     if (!sheets.length) return;
-    setApprovalSet({ setName, sheets });
+    // Prefer the parent FK if any child sheet has one — that's what we'll
+    // write approval state to.
+    const setId = sheets.map(s => s.drawing_set_id).find(Boolean) || null;
+    setApprovalSet({ setName, setId, sheets });
   };
 
   const toggleSelect = (id) => {
@@ -343,6 +569,14 @@ export default function Drawings() {
           <button style={btnGhost} onClick={() => { setEditing(null); setShowModal(true); }}>
             + ADD SHEET
           </button>
+          <button
+            style={btnGhost}
+            onClick={() => setRevisionOpen(true)}
+            disabled={drawingSetRecords.length === 0 && existingSetNames.length === 0}
+            title="Upload a new revision of an existing set"
+          >
+            ⟲ NEW REVISION
+          </button>
           <button style={btnPrimary} onClick={() => setUploadSetOpen(true)}>
             + UPLOAD SET
           </button>
@@ -386,6 +620,19 @@ export default function Drawings() {
       <DisciplineChips discipline={discipline} setDiscipline={setDiscipline} disciplineCounts={disciplineCounts} />
       <FilterBar search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} view={view} setView={setView} />
 
+      {/* F22: explicit pills for every active filter so the user can see at
+          a glance what's narrowing the list, plus one-click clear. Renders
+          nothing when no filters are active to keep visual noise down. */}
+      <ActiveFilterPills
+        search={search}
+        discipline={discipline}
+        stageFilter={stageFilter}
+        onClearSearch={() => setSearch("")}
+        onClearDiscipline={() => setDiscipline("ALL")}
+        onClearStage={() => setStageFilter("ALL")}
+        onClearAll={() => { setSearch(""); setDiscipline("ALL"); setStageFilter("ALL"); }}
+      />
+
       {/* ── Bulk Actions ───────────────────────────────────────────────────── */}
       {selected.size > 0 && (
         <BulkActionsBar
@@ -425,7 +672,9 @@ export default function Drawings() {
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             setContextMenu={setContextMenu}
             onSetApproval={openSetApproval}
+            onDeleteSet={handleDeleteSet}
             rfiMap={rfiMap}
+            drawingSetMap={drawingSetMap}
           />
         ) : (
           <DrawingsGrid
@@ -500,6 +749,120 @@ export default function Drawings() {
         existingDrawings={drawings}
         existingSetNames={existingSetNames}
       />
+
+      {/* New Revision flow — marks prior sheets is_superseded=true and
+          inserts the replacement revision under the same set. F14. */}
+      <RevisionUploadModal
+        open={revisionOpen}
+        onClose={() => setRevisionOpen(false)}
+        onComplete={() => { invalidate(); setRevisionOpen(false); }}
+        activeProject={activeProject}
+        drawingSets={drawingSetRecords}
+      />
+
+      {/* F18: styled confirm replacing window.confirm() for destructive
+          actions. Sits on top of every list/set/bulk delete path. */}
+      <DeleteDialog
+        open={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => {
+          const run = confirmState?.run;
+          setConfirmState(null);
+          if (typeof run === "function") run();
+        }}
+        title={confirmState?.title}
+        description={confirmState?.description}
+      />
+    </div>
+  );
+}
+
+/**
+ * F22: Active-filter pill strip.
+ *
+ * Sits under FilterBar and renders one chip per active filter — search term,
+ * discipline, stage filter — each with a little × to clear that filter. If
+ * more than one filter is active, a final "CLEAR ALL" chip resets everything
+ * at once. When no filters are on, this renders `null` so the row is
+ * completely empty, not just visually blank.
+ */
+function ActiveFilterPills({ search, discipline, stageFilter, onClearSearch, onClearDiscipline, onClearStage, onClearAll }) {
+  const pills = [];
+  if (search?.trim()) {
+    pills.push({ key: "search", label: `SEARCH: "${search.trim()}"`, onClear: onClearSearch });
+  }
+  if (discipline && discipline !== "ALL") {
+    pills.push({ key: "discipline", label: `DISCIPLINE: ${discipline}`, onClear: onClearDiscipline });
+  }
+  if (stageFilter && stageFilter !== "ALL") {
+    // Translate the internal keys (_overdue / _inReview / _priority / stage-key)
+    // into something the user will recognize.
+    let stageLabel = stageFilter;
+    if (stageFilter === "_overdue")  stageLabel = "OVERDUE";
+    else if (stageFilter === "_inReview") stageLabel = "IN REVIEW";
+    else if (stageFilter === "_priority") stageLabel = "PRIORITY";
+    else if (stageFilter === "Released") stageLabel = "IFC ONLY";
+    else {
+      const s = STAGES.find(x => x.key === stageFilter);
+      if (s) stageLabel = s.label;
+    }
+    pills.push({ key: "stage", label: `STAGE: ${stageLabel}`, onClear: onClearStage });
+  }
+  if (pills.length === 0) return null;
+
+  const pillStyle = {
+    ...mono,
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    padding: "4px 6px 4px 10px",
+    borderRadius: "var(--radius-badge)",
+    border: "1px solid rgba(200,155,32,0.35)",
+    background: "rgba(200,155,32,0.10)",
+    color: "var(--accent)",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  };
+  const xStyle = {
+    ...mono,
+    fontSize: 11,
+    fontWeight: 800,
+    lineHeight: 1,
+    padding: "2px 5px",
+    marginLeft: 2,
+    borderRadius: 3,
+    border: "1px solid transparent",
+    background: "transparent",
+    color: "var(--accent)",
+    cursor: "pointer",
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 14 }}>
+      <span style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", marginRight: 2 }}>
+        FILTERING BY
+      </span>
+      {pills.map(p => (
+        <span key={p.key} style={pillStyle}>
+          {p.label}
+          <button type="button" aria-label={`Clear ${p.key} filter`} onClick={p.onClear} style={xStyle}>×</button>
+        </span>
+      ))}
+      {pills.length > 1 && (
+        <button
+          type="button"
+          onClick={onClearAll}
+          style={{
+            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+            padding: "4px 10px", borderRadius: "var(--radius-badge)",
+            border: "1px solid var(--border-default)",
+            background: "none", color: "var(--text-muted)", cursor: "pointer",
+          }}
+        >
+          CLEAR ALL
+        </button>
+      )}
     </div>
   );
 }

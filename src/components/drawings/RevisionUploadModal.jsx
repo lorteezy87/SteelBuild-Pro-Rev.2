@@ -672,7 +672,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         current_file_url: newFileUrl,
         sheet_count: newSheetCount,
         revision_history: JSON.stringify(history),
-        approval_status: "pending",
+        set_approval_status: "pending_review",
         notes: revMeta.notes || selectedSet.notes,
       });
     }
