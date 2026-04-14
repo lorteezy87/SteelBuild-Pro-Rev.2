@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useRef, useState, useMemo, useCallback } from "react";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import {
   Pencil, Trash2, Lock, Check, ChevronDown, ChevronRight,
-  ClipboardList, AlertTriangle, CheckCircle,
+  ClipboardList, AlertTriangle, CheckCircle, Download, Upload,
 } from "lucide-react";
 import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
@@ -120,6 +120,8 @@ export default function SOV() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   /* Requirement 4 — global retainage toggle */
   const [globalRetainage, setGlobalRetainage] = useState("per-row"); // "per-row" | "5" | "10" | "custom"
@@ -227,6 +229,151 @@ export default function SOV() {
     else createMut.mutate(d);
   };
 
+  /* ═══════════════════════════════════════════════════════════════════
+     Import template — downloadable CSV template + CSV import
+     ═══════════════════════════════════════════════════════════════════ */
+  const TEMPLATE_COLUMNS = [
+    "line_item_number",
+    "description",
+    "scheduled_value",
+    "application_number",
+    "period_from",
+    "period_to",
+    "previous_percent_complete",
+    "current_percent_complete",
+    "retainage_percent",
+    "status",
+  ];
+
+  const downloadTemplate = () => {
+    const sampleRows = [
+      ["1", "Mobilization",                     "25000",  "1", "2026-01-01", "2026-01-31", "0", "100", "10", "Draft"],
+      ["2", "Site Preparation",                 "45000",  "1", "2026-01-01", "2026-01-31", "0", "50",  "10", "Draft"],
+      ["3", "Structural Steel - Fabrication",   "180000", "1", "2026-01-01", "2026-01-31", "0", "25",  "10", "Draft"],
+      ["4", "Structural Steel - Erection",      "120000", "1", "2026-01-01", "2026-01-31", "0", "0",   "10", "Draft"],
+    ];
+    const lines = [
+      TEMPLATE_COLUMNS.join(","),
+      ...sampleRows.map(r => r.map(c => `"${c}"`).join(",")),
+    ];
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sov-import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("SOV template downloaded");
+  };
+
+  // Minimal RFC-4180 CSV parser (handles quoted fields, escaped quotes, CRLF).
+  const parseCSV = (text) => {
+    const rows = [];
+    let field = "";
+    let row = [];
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          row.push(field); field = "";
+        } else if (ch === "\n") {
+          row.push(field); rows.push(row); row = []; field = "";
+        } else if (ch === "\r") {
+          // handled by \n
+        } else {
+          field += ch;
+        }
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    if (rows.length === 0) return [];
+    const headers = rows[0].map(h => h.trim());
+    return rows.slice(1)
+      .filter(r => r.some(c => String(c).trim() !== ""))
+      .map(r => {
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = (r[idx] ?? "").trim(); });
+        return obj;
+      });
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so same file can be re-picked
+    if (!file) return;
+    if (!activeProject?.id) {
+      toast.error("Select a project before importing SOV items");
+      return;
+    }
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        toast.error("CSV is empty — nothing to import");
+        return;
+      }
+
+      const first = parsed[0];
+      if (!("description" in first) || !("scheduled_value" in first)) {
+        toast.error("CSV missing required columns (description, scheduled_value). Download the template for the correct format.");
+        return;
+      }
+
+      const existingCount = sovs.length || 0;
+      const baseApp = Number(parsed[0].application_number) || 1;
+      const records = parsed.map((row, idx) => {
+        const lineNum = Number(row.line_item_number) || (existingCount + idx + 1);
+        const sovId = `SOV-${String(existingCount + idx + 1).padStart(3, "0")}`;
+        return {
+          sov_id: sovId,
+          project_id: activeProject.id,
+          project_name: activeProject.name || "",
+          line_item_number: lineNum,
+          description: row.description || "",
+          scheduled_value: Number(row.scheduled_value) || 0,
+          application_number: Number(row.application_number) || baseApp,
+          period_from: row.period_from || null,
+          period_to: row.period_to || null,
+          previous_percent_complete: Number(row.previous_percent_complete) || 0,
+          current_percent_complete: Number(row.current_percent_complete) || 0,
+          retainage_percent: row.retainage_percent === "" || row.retainage_percent == null
+            ? 10
+            : Number(row.retainage_percent),
+          status: row.status || "Draft",
+        };
+      });
+
+      const invalid = records.filter(r => !r.description.trim() || !(r.scheduled_value > 0));
+      if (invalid.length) {
+        toast.error(`${invalid.length} row(s) invalid — description and scheduled_value > 0 required`);
+        return;
+      }
+
+      await base44.entities.SOVItem.bulkCreate(records);
+      await qc.invalidateQueries({ queryKey: ["sov-items"] });
+      toast.success(`Imported ${records.length} SOV line item${records.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      console.error("SOV import failed:", err);
+      toast.error("Import failed: " + (err?.message || "unknown error"));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   /* ── Effective retainage % ── */
   const effectiveRetainage = useMemo(() => {
     if (globalRetainage === "per-row") return null;
@@ -267,11 +414,20 @@ export default function SOV() {
     return counts;
   }, [sovs]);
 
-  const filtered = useMemo(() => sovs.filter(s => {
-    const matchApp = appFilter === "all" || String(s.application_number) === String(appFilter);
-    const matchStatus = statusFilter === "all" || s.status === statusFilter;
-    return matchApp && matchStatus;
-  }), [sovs, appFilter, statusFilter]);
+  const filtered = useMemo(() => sovs
+    .filter(s => {
+      const matchApp = appFilter === "all" || String(s.application_number) === String(appFilter);
+      const matchStatus = statusFilter === "all" || s.status === statusFilter;
+      return matchApp && matchStatus;
+    })
+    .sort((a, b) => {
+      // Keep line items in numerical order by line_item_number; fall back to sov_id.
+      const aNum = Number(a.line_item_number);
+      const bNum = Number(b.line_item_number);
+      if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum !== bNum) return aNum - bNum;
+      return String(a.sov_id || "").localeCompare(String(b.sov_id || ""), undefined, { numeric: true });
+    }),
+  [sovs, appFilter, statusFilter]);
 
   const totals = useMemo(() => filtered.reduce((acc, s) => {
     const c = calc(s);
@@ -591,10 +747,22 @@ export default function SOV() {
             </Button>
             <Button
               variant="outline" size="sm"
-              onClick={() => { setEditing(null); setModalOpen(true); }}
+              onClick={downloadTemplate}
               style={{ fontWeight: 600 }}
+              title="Download blank CSV template"
             >
-              Import from Template
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Download Template
+            </Button>
+            <Button
+              variant="outline" size="sm"
+              onClick={handleImportClick}
+              disabled={importing || !activeProject?.id}
+              style={{ fontWeight: 600 }}
+              title="Upload filled template"
+            >
+              <Upload className="w-3.5 h-3.5 mr-1" />
+              {importing ? "Importing…" : "Import CSV"}
             </Button>
           </div>
         </div>
@@ -719,6 +887,27 @@ export default function SOV() {
             >
               + New Item
             </Button>
+            <Button variant="outline" size="sm" onClick={downloadTemplate} title="Download blank SOV CSV template">
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleImportClick}
+              disabled={importing || !activeProject?.id}
+              title="Import SOV line items from CSV"
+            >
+              <Upload className="w-3.5 h-3.5 mr-1" />
+              {importing ? "Importing…" : "Import CSV"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleImportFile}
+              style={{ display: "none" }}
+            />
             <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
             <Button variant="outline" size="sm" onClick={refetch}>Refresh</Button>
           </div>
