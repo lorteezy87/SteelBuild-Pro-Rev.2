@@ -706,9 +706,11 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
   };
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
+  // Every soft problem (scanned, too large, extraction timed out) shows the
+  // same amber "manual entry required" warning. Uploads are still allowed —
+  // extractFailed PDFs produce a single pre-populated sheet row the user can
+  // edit inline, so blocking the Create button here would dead-end them.
   const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
-  const failedFiles = fileResults.filter(r => r.extractFailed);
-  const hasFailedFiles = failedFiles.length > 0;
 
   const aiBadge = (filled) => filled ? (
     <span title="Auto-filled by AI — edit if wrong" style={{
@@ -794,36 +796,32 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
         </div>
       </div>
 
-      {/* Warnings */}
-      {warnedFiles.map(r => {
-        const isError = !!r.extractFailed;
-        return (
-          <div key={r.fileName} style={{
-            display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
-            background: isError ? "rgba(239,68,68,0.08)" : "var(--warning-muted)",
-            border: `1px solid ${isError ? "rgba(239,68,68,0.35)" : "var(--warning-border)"}`,
-            borderRadius: 8, marginBottom: 10,
-          }}>
-            <AlertTriangle style={{ width: 14, height: 14, color: isError ? "var(--status-error)" : "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
-              {r.extractFailed ? (
-                <>
-                  <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{r.fileName}</span> failed AI extraction and cannot be uploaded. Go back, remove this file, and try again.
-                  {r.error && (
-                    <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
-                      {r.error}
-                    </div>
-                  )}
-                </>
-              ) : r.scanned ? (
-                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
-              ) : (
-                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
-              )}
-            </div>
+      {/* Warnings — all soft failures share the amber "fill in manually" treatment */}
+      {warnedFiles.map(r => (
+        <div key={r.fileName} style={{
+          display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
+          background: "var(--warning-muted)", border: "1px solid var(--warning-border)",
+          borderRadius: 8, marginBottom: 10,
+        }}>
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+            {r.extractFailed ? (
+              <>
+                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> could not be auto-extracted by AI. A blank sheet row has been added below — please fill in the sheet details manually, then click Create.
+                {r.error && (
+                  <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
+                    {r.error}
+                  </div>
+                )}
+              </>
+            ) : r.scanned ? (
+              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
+            ) : (
+              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
+            )}
           </div>
-        );
-      })}
+        </div>
+      ))}
 
       {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -914,29 +912,13 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {hasFailedFiles && (
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em",
-              color: "var(--status-error)", textTransform: "uppercase", fontWeight: 700,
-            }}>
-              ⛔ {failedFiles.length} FILE{failedFiles.length !== 1 ? "S" : ""} FAILED — GO BACK &amp; REMOVE
-            </span>
-          )}
-          <Button
-            onClick={() => onCreate(sheets.filter(s => s.selected))}
-            disabled={selectedCount === 0 || hasFailedFiles}
-            title={hasFailedFiles ? "One or more files failed AI extraction. Go back and remove them before creating drawings." : undefined}
-            style={{
-              background: hasFailedFiles ? "var(--bg-surface-high)" : "var(--accent)",
-              color: hasFailedFiles ? "var(--text-muted)" : "#fff",
-              border: "none",
-              cursor: hasFailedFiles ? "not-allowed" : undefined,
-            }}
-          >
-            Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
-          </Button>
-        </div>
+        <Button
+          onClick={() => onCreate(sheets.filter(s => s.selected))}
+          disabled={selectedCount === 0}
+          style={{ background: "var(--accent)", color: "#fff", border: "none" }}
+        >
+          Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+        </Button>
       </div>
     </div>
   );
