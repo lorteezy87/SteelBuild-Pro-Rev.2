@@ -12,8 +12,8 @@ export const STAGES = [
   { key: "OFA",         label: "OFA",         color: "#3B82F6", bg: "rgba(59,130,246,0.15)" },
   { key: "BFA",         label: "BFA",         color: "#06B6D4", bg: "rgba(6,182,212,0.15)" },
   { key: "OFS",         label: "OFS",         color: "#F59E0B", bg: "rgba(245,158,11,0.15)" },
-  { key: "BFS",         label: "BFS",         color: "#8B5CF6", bg: "rgba(139,92,246,0.15)" },
-  { key: "FFF",         label: "FFF",         color: "#EC4899", bg: "rgba(236,72,153,0.15)" },
+  { key: "BFS",         label: "BFS",         color: "#F97316", bg: "rgba(249,115,22,0.15)" },
+  { key: "FFF",         label: "FFF",         color: "#84CC16", bg: "rgba(132,204,22,0.15)" },
   { key: "Released",    label: "IFC",         color: "#10B981", bg: "rgba(16,185,129,0.15)" },
 ];
 

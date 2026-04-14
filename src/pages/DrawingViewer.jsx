@@ -28,8 +28,8 @@ const STAGES = {
   "OFA":         { color: "#3B82F6" },
   "BFA":         { color: "#06B6D4" },
   "OFS":         { color: "#F59E0B" },
-  "BFS":         { color: "#8B5CF6" },
-  "FFF":         { color: "#EC4899" },
+  "BFS":         { color: "#F97316" },
+  "FFF":         { color: "#84CC16" },
   "Released":    { color: "#10B981" },
 };
 
