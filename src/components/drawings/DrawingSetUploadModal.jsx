@@ -706,7 +706,9 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
   };
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
-  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge);
+  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
+  const failedFiles = fileResults.filter(r => r.extractFailed);
+  const hasFailedFiles = failedFiles.length > 0;
 
   const aiBadge = (filled) => filled ? (
     <span title="Auto-filled by AI — edit if wrong" style={{
@@ -793,22 +795,35 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
       </div>
 
       {/* Warnings */}
-      {warnedFiles.map(r => (
-        <div key={r.fileName} style={{
-          display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
-          background: "var(--warning-muted)", border: "1px solid var(--warning-border)",
-          borderRadius: 8, marginBottom: 10,
-        }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
-          {r.scanned ? (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
-            ) : (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
-            )}
+      {warnedFiles.map(r => {
+        const isError = !!r.extractFailed;
+        return (
+          <div key={r.fileName} style={{
+            display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
+            background: isError ? "rgba(239,68,68,0.08)" : "var(--warning-muted)",
+            border: `1px solid ${isError ? "rgba(239,68,68,0.35)" : "var(--warning-border)"}`,
+            borderRadius: 8, marginBottom: 10,
+          }}>
+            <AlertTriangle style={{ width: 14, height: 14, color: isError ? "var(--status-error)" : "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+              {r.extractFailed ? (
+                <>
+                  <span style={{ color: "var(--status-error)", fontWeight: 600 }}>{r.fileName}</span> failed AI extraction and cannot be uploaded. Go back, remove this file, and try again.
+                  {r.error && (
+                    <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
+                      {r.error}
+                    </div>
+                  )}
+                </>
+              ) : r.scanned ? (
+                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
+              ) : (
+                <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -897,12 +912,31 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
         )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button onClick={() => onCreate(sheets.filter(s => s.selected))} disabled={selectedCount === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
-        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {hasFailedFiles && (
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em",
+              color: "var(--status-error)", textTransform: "uppercase", fontWeight: 700,
+            }}>
+              ⛔ {failedFiles.length} FILE{failedFiles.length !== 1 ? "S" : ""} FAILED — GO BACK &amp; REMOVE
+            </span>
+          )}
+          <Button
+            onClick={() => onCreate(sheets.filter(s => s.selected))}
+            disabled={selectedCount === 0 || hasFailedFiles}
+            title={hasFailedFiles ? "One or more files failed AI extraction. Go back and remove them before creating drawings." : undefined}
+            style={{
+              background: hasFailedFiles ? "var(--bg-surface-high)" : "var(--accent)",
+              color: hasFailedFiles ? "var(--text-muted)" : "#fff",
+              border: "none",
+              cursor: hasFailedFiles ? "not-allowed" : undefined,
+            }}
+          >
+            Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1253,75 +1287,90 @@ export default function DrawingSetUploadModal({
       // the time we reach this step, AI has already run and the user has
       // reviewed the results. Rows whose AI pass failed upstream get
       // marked 'NeedsReview' so the UI can flag them.
+      //
+      // F16: single bulk insert instead of N serial requests. An N-sheet
+      // set used to mean N round-trips; now one. If the bulk insert fails
+      // we fall back to the per-row loop so a single bad row still lets
+      // the rest land — matching the original "never abort the batch"
+      // acceptance criterion.
       // ─────────────────────────────────────────────────────────────
-      let createdRows = 0;
-      let failedRows  = 0;
-      for (const sheet of selectedSheets) {
-        if (cancelledRef.current) break;
-
-        // If the file this sheet came from had an extraction failure, mark
-        // it as NeedsReview so the user can address it from the log grid.
+      const now = new Date().toISOString();
+      const buildRecord = (sheet) => {
         const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
         const needsReview =
           sourceResult?.extractFailed ||
           sourceResult?.scanned ||
           sourceResult?.tooLarge ||
           !!sheet._note;
+        return {
+          sheet_number:     sheet.sheetNumber || "",
+          title:            sheet.sheetTitle  || "",
+          project_id:       activeProject?.id,
+          project_name:     activeProject?.name,
+          drawing_set_id:   parentSetId,
+          drawing_set_name: resolvedSetName, // kept for back-compat reads
+          discipline:       sheet.discipline || meta.discipline,
+          revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
+          stage:            meta.defaultStage || "Not Started",
+          file_url:         sheet.sourceFileUrl,
+          pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
+          callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
+          upload_batch_id:      batchId,
+          upload_status:        "Uploaded",
+          ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
+          ai_extraction_error:  sourceResult?.error || null,
+          extracted_text:       sheet.extractedText || null,
+          hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
+          last_extracted_at:    now,
+          notes: [
+            meta.notes,
+            sheet.scale ? `Scale: ${sheet.scale}` : "",
+            sheet._note || "",
+          ].filter(Boolean).join(" · "),
+        };
+      };
 
-        try {
-          await base44.entities.Drawing.create({
-            // Identity
-            sheet_number:     sheet.sheetNumber || "",
-            title:            sheet.sheetTitle  || "",
-            project_id:       activeProject?.id,
-            project_name:     activeProject?.name,
+      let createdRows = 0;
+      let failedRows  = 0;
+      const records = selectedSheets.map(buildRecord);
 
-            // NEW: parent/child relationship
-            drawing_set_id:   parentSetId,
-            drawing_set_name: resolvedSetName, // kept for back-compat reads
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 40,
+        message:  `Creating ${records.length} drawing entries…`,
+      }));
 
-            // Metadata.
-            // NOTE: issue_date / issued_by do NOT exist on drawings — they
-            // live on the parent drawing_sets row (written above). Don't
-            // write them here or PostgREST 400s on unknown columns.
-            discipline:       sheet.discipline || meta.discipline,
-            revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-            stage:            meta.defaultStage || "Not Started",
-            file_url:         sheet.sourceFileUrl,
-            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
-            drawing_page:     sheet.drawingPage ?? sheet.page ?? null,
-            // Detected section/detail callouts — written as JSONB; empty
-            // array if the PDF had no detectable callouts or was too large.
-            callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
-
-            // NEW: upload/extraction tracking
-            upload_batch_id:      batchId,
-            upload_status:        "Uploaded",
-            ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
-            ai_extraction_error:  sourceResult?.error || null,
-            extracted_text:       sheet.extractedText || null,
-            hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
-            last_extracted_at:    new Date().toISOString(),
-
-            notes: [
-              meta.notes,
-              sheet.scale ? `Scale: ${sheet.scale}` : "",
-              sheet._note || "",
-            ].filter(Boolean).join(" · "),
-          });
-          createdRows++;
-        } catch (err) {
-          console.error("Failed to create sheet:", sheet.sheetNumber, err);
-          failedRows++;
-          // One row failure never aborts the batch — see acceptance criteria.
+      try {
+        const inserted = await base44.entities.Drawing.bulkCreate(records);
+        createdRows = Array.isArray(inserted) ? inserted.length : records.length;
+      } catch (bulkErr) {
+        // Bulk failed — fall back to per-row so one bad sheet doesn't lose
+        // the whole batch. This is the slow path; the common case is the
+        // bulk insert above succeeding.
+        console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
+        for (let i = 0; i < selectedSheets.length; i++) {
+          if (cancelledRef.current) break;
+          const sheet = selectedSheets[i];
+          try {
+            await base44.entities.Drawing.create(records[i]);
+            createdRows++;
+          } catch (err) {
+            console.error("Failed to create sheet:", sheet.sheetNumber, err);
+            failedRows++;
+          }
+          setProcessingStatus(prev => ({
+            ...prev,
+            progress: 40 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 50),
+            message:  `Recovering… ${createdRows + failedRows} of ${selectedSheets.length}`,
+          }));
         }
-
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: 10 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 90),
-          message:  `Creating entries… ${createdRows + failedRows} of ${selectedSheets.length}`,
-        }));
       }
+
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 95,
+        message:  `Created ${createdRows} of ${selectedSheets.length} entries`,
+      }));
 
       if (cancelledRef.current) return;
       setCreatedCount(createdRows);

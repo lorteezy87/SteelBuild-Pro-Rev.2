@@ -121,7 +121,7 @@ class SupabaseOperationError extends Error {
  */
 const SOFT_DELETE_TABLES = new Set([
   'rfis', 'change_orders', 'deliveries', 'work_packages',
-  'documents', 'drawings', 'expenses', 'inspections',
+  'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings',
 ]);
@@ -291,7 +291,20 @@ export const entities = {
   },
   RFI:                   createEntityClient('rfis'),
   Drawing:               createEntityClient('drawings'),
-  DrawingSet:            createEntityClient('drawing_sets'),
+  DrawingActivity:       createEntityClient('drawing_activity'),
+  DrawingSet: {
+    ...createEntityClient('drawing_sets'),
+    /**
+     * Soft-delete a set AND cascade-soft-delete every child sheet, in a single
+     * transaction. Returns the number of child sheets that were deleted.
+     * Uses the `delete_drawing_set(p_set_id)` RPC shipped in migration 022.
+     */
+    deleteCascade: async (id) => {
+      const { data, error } = await supabase.rpc('delete_drawing_set', { p_set_id: id });
+      if (error) throw new SupabaseOperationError('drawing_sets', 'deleteCascade', error);
+      return { success: true, deletedChildCount: data ?? 0 };
+    },
+  },
   ChangeOrder:           createEntityClient('change_orders'),
   ChangeRequest:         createEntityClient('change_requests'),
   ScheduleTask:          createEntityClient('schedule_tasks'),
