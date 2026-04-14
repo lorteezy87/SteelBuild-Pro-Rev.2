@@ -1099,14 +1099,19 @@ export default function DrawingSetUploadModal({
             drawing_set_id:   parentSetId,
             drawing_set_name: resolvedSetName, // kept for back-compat reads
 
-            // Metadata
+            // Metadata.
+            // NOTE: issue_date / issued_by do NOT exist on drawings — they
+            // live on the parent drawing_sets row (written above). Don't
+            // write them here or PostgREST 400s on unknown columns.
             discipline:       sheet.discipline || meta.discipline,
             revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
             stage:            meta.defaultStage || "Not Started",
-            issue_date:       sheet.date || meta.issueDate || null,
-            issued_by:        meta.issuedBy,
             file_url:         sheet.sourceFileUrl,
+            pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
             drawing_page:     sheet.drawingPage ?? sheet.page ?? null,
+            // Detected section/detail callouts — written as JSONB; empty
+            // array if the PDF had no detectable callouts or was too large.
+            callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
 
             // NEW: upload/extraction tracking
             upload_batch_id:      batchId,
