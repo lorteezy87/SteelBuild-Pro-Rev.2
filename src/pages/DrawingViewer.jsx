@@ -53,9 +53,10 @@ export default function DrawingViewer() {
   const [rendering, setRendering] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [resolvedUrl, setResolvedUrl] = useState(null);
-  // "canvas" = pdfjs canvas render, "iframe" = browser-native PDF viewer
-  // Iframe is the safer default — it works even when pdfjs/worker fails.
-  const [renderMode, setRenderMode] = useState("iframe");
+  // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
+  // "iframe" = browser-native PDF viewer (fallback, no annotation layer)
+  // Default to canvas now that the pdfjs worker is bundled via Vite and reliable.
+  const [renderMode, setRenderMode] = useState("canvas");
 
   const canvasRef = useRef(null);
   const annotLayerRef = useRef(null);
