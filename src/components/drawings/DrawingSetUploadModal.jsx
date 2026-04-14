@@ -274,11 +274,15 @@ ${pdfTextBlock}
 ===== END PDF TEXT =====`;
 
   // 3. Call the LLM.
+  console.log(
+    `[DrawingSetUpload] Sending ${extracted.pageCount} pages / ${extracted.totalChars} chars to llm-proxy for ${file.name}…`
+  );
   const raw = await base44.integrations.Core.InvokeLLM({
     prompt:    userPrompt,
     system:    systemPrompt,
     maxTokens: 4000,
   });
+  console.log(`[DrawingSetUpload] llm-proxy raw response for ${file.name}:`, raw);
 
   // The edge function may return a string or an object with { text } / { content }.
   const rawText = typeof raw === "string"
@@ -882,7 +886,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
   };
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
-  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge);
+  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
 
   const aiBadge = (filled) => filled ? (
     <span title="Auto-filled by AI — edit if wrong" style={{
@@ -969,22 +973,45 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
       </div>
 
       {/* Warnings */}
-      {warnedFiles.map(r => (
-        <div key={r.fileName} style={{
-          display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
-          background: "var(--warning-muted)", border: "1px solid var(--warning-border)",
-          borderRadius: 8, marginBottom: 10,
-        }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
-          {r.scanned ? (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
-            ) : (
-              <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
-            )}
+      {warnedFiles.map(r => {
+        const isError = r.extractFailed;
+        const bg     = isError ? "rgba(239,68,68,0.10)" : "var(--warning-muted)";
+        const border = isError ? "rgba(239,68,68,0.35)" : "var(--warning-border)";
+        const fg     = isError ? "#EF4444" : "var(--status-warning)";
+        return (
+          <div key={r.fileName} style={{
+            display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
+            background: bg, border: `1px solid ${border}`,
+            borderRadius: 8, marginBottom: 10,
+          }}>
+            <AlertTriangle style={{ width: 14, height: 14, color: fg, flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-word" }}>
+              {r.scanned ? (
+                <><span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
+              ) : r.tooLarge ? (
+                <><span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
+              ) : (
+                <>
+                  <span style={{ color: fg, fontWeight: 600 }}>{r.fileName}</span>: AI extraction failed — please fill in sheet details manually.
+                  {r.error && (
+                    <div style={{
+                      marginTop: 4,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: "var(--text-muted)",
+                      background: "rgba(0,0,0,0.25)",
+                      borderRadius: 4,
+                      padding: "4px 6px",
+                    }}>
+                      {String(r.error).slice(0, 500)}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -1308,6 +1335,10 @@ export default function DrawingSetUploadModal({
           scanned:       extractResult.scanned       || false,
           tooLarge:      extractResult.tooLarge      || false,
           extractFailed: extractResult.extractFailed || false,
+          // Propagate the underlying error message (e.g. "ANTHROPIC_API_KEY
+          // not configured") so the Review step can surface it in the
+          // warnings banner instead of silently falling back.
+          error:         extractResult.error || null,
           sizeMB,
         });
 
