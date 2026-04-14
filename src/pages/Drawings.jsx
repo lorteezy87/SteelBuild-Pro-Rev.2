@@ -122,6 +122,8 @@ export default function Drawings() {
     return map;
   }, [drawings]);
 
+  const existingSetNames = useMemo(() => Object.keys(drawingSets).sort(), [drawingSets]);
+
   const selectedSetName = useMemo(() => {
     if (selected.size === 0) return null;
     const names = new Set();
@@ -451,6 +453,7 @@ export default function Drawings() {
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditing(null); }}
           saving={saving}
+          existingSetNames={existingSetNames}
         />
       )}
 

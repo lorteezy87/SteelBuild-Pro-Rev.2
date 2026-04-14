@@ -9,7 +9,7 @@ import { STAGES, DISCIPLINES, EMPTY_FORM, mono, surface } from "./drawingsConfig
  *
  * @param {{ initial?: object, onSave: (form: object) => void, onClose: () => void, saving: boolean }} props
  */
-export default function SheetFormModal({ initial, onSave, onClose, saving }) {
+export default function SheetFormModal({ initial, onSave, onClose, saving, existingSetNames = [] }) {
   const [form, setForm] = useState(initial || EMPTY_FORM);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -64,6 +64,22 @@ export default function SheetFormModal({ initial, onSave, onClose, saving }) {
 
         {/* Form grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Drawing Set</label>
+            <input
+              list="drawing-set-options"
+              style={inputStyle}
+              value={form.drawing_set_name || ""}
+              onChange={e => set("drawing_set_name", e.target.value)}
+              placeholder="e.g. 100% CD Set — Foundations"
+            />
+            <datalist id="drawing-set-options">
+              {existingSetNames.map(name => <option key={name} value={name} />)}
+            </datalist>
+            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.08em" }}>
+              Groups this sheet under a parent set. Leave blank for ungrouped.
+            </div>
+          </div>
           <div>
             <label style={labelStyle}>Sheet Number *</label>
             <input style={inputStyle} value={form.sheet_number} onChange={e => set("sheet_number", e.target.value)} placeholder="S1-001" />

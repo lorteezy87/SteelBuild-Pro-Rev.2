@@ -39,6 +39,7 @@ export const DISCIPLINES = [
 // ─── Empty Form Defaults ────────────────────────────────────────────────────
 
 export const EMPTY_FORM = {
+  drawing_set_name: "",
   sheet_number: "",
   title: "",
   discipline: "Structural",
