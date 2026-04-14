@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProjectContext } from '../components/shared/useProjectContext';
-import { Pencil, Trash2, Download, CheckSquare, Square, X } from 'lucide-react';
+import { Pencil, Trash2, Download, Upload, CheckSquare, Square, X } from 'lucide-react';
 import PageHeader from '../components/shared/PageHeader';
 import DeleteDialog from '../components/shared/DeleteDialog';
 import ExpenseFormModal from '../components/expenses/ExpenseFormModal';
+import ExpenseImportModal from '../components/expenses/ExpenseImportModal';
 import { formatCurrency, formatDate, formatCurrencyShort, roundCurrency } from '../components/shared/formatters';
 import { COST_CODES, COST_CODES_GROUPED, CATEGORY_COLORS } from '../components/shared/costCodes';
 import { toast } from 'sonner';
@@ -293,6 +294,7 @@ export default function ExpensesPage() {
   const [hoveredRow, setHoveredRow] = useState(null);
   const [activeKPI, setActiveKPI] = useState(null); // which KPI card is active for filtering
   const [dismissedAlerts, setDismissedAlerts] = useState([]); // dismissed red-flag alert keys
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250);
@@ -972,6 +974,13 @@ export default function ExpensesPage() {
           <option value="last_30">Last 30 Days</option>
           <option value="this_quarter">This Quarter</option>
         </select>
+        <button
+          onClick={() => setImportOpen(true)}
+          style={{ ...selectStyle, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-surface-low)', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '6px 14px' }}
+        >
+          <Upload size={12} />
+          Import CSV
+        </button>
         <button onClick={exportCSV} style={{ ...selectStyle, display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)', padding: '6px 14px' }}>
           <Download size={12} />
           Export CSV
@@ -1204,6 +1213,15 @@ export default function ExpensesPage() {
         costCodes={costCodes}
         nextNumber={`EXP-${String((expenses.length || 0) + 1).padStart(3, '0')}`}
         defaultProjectId={activeProject?.id}
+      />
+
+      {/* ── Import Modal ── */}
+      <ExpenseImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        activeProject={activeProject}
+        workPackages={workPackages}
+        onImported={() => qc.invalidateQueries({ queryKey: ['expenses'] })}
       />
 
       {/* ── Delete Dialog ── */}
