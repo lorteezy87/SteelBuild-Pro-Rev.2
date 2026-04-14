@@ -513,10 +513,10 @@ export const integrations = {
      * clean message on the fallback row instead of falling through to a
      * generic "AI response was not valid JSON" path.
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files }) => {
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature }) => {
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
-          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files },
+          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
         });
         if (error) {
           // supabase-js returns FunctionsHttpError / FunctionsFetchError.

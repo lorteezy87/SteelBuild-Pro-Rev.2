@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { extractSheetsFromPdf } from "@/lib/pdfSheetExtractor";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -88,20 +89,20 @@ const CHANGE_STYLE = {
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 
-async function extractSheetsFromPDF(file, fileUrl) {
-  const raw = await base44.integrations.Core.InvokeLLM({
-    prompt: `Extract every sheet from this drawing set PDF. For each sheet return JSON:
-{ "sheetNumber":"S-001", "sheetTitle":"Foundation Plan", "discipline":"Structural", "revision":"0" }
-Return ONLY a JSON array starting with [. Nothing else.`,
-    file_urls: [fileUrl],
-  });
-  const clean = String(raw || "[]").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  try {
-    const sheets = JSON.parse(clean);
-    return Array.isArray(sheets) ? sheets : [];
-  } catch {
-    return [];
+// Extract every sheet from a revision PDF using the shared extractor
+// (columnar pdfjs + Anthropic tool-use + post-processing fixup).
+// Returns a flat `sheets` array so the comparison step can match on
+// sheetNumber; swallow `extractFailed` cases so the caller can show an
+// empty diff rather than crashing.
+async function extractRevisionSheets(file) {
+  const result = await extractSheetsFromPdf(file);
+  if (result?.extractFailed) {
+    // Surface the failure; let the caller decide how to react.
+    const err = new Error(result.error || "AI extraction failed");
+    err.extractFailed = true;
+    throw err;
   }
+  return Array.isArray(result?.sheets) ? result.sheets : [];
 }
 
 // ── Step A: Select existing drawing set ────────────────────────────
@@ -613,7 +614,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
-      const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
+      const newSheets = await extractRevisionSheets(pdfFile);
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 

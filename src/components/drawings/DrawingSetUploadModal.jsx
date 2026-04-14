@@ -8,24 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import * as pdfjsLib from "pdfjs-dist";
-// Bundle pdf.js worker with Vite so versions always match the installed
-// pdfjs-dist package. Same pattern as DrawingViewer.jsx. Safe to set the
-// global workerSrc in multiple modules — it's idempotent.
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+import { extractSheetsFromPdf, EMPTY_SET_META } from "@/lib/pdfSheetExtractor";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
-const EXTRACT_TIMEOUT_MS = 150_000;  // 2.5 min
-// Per-page text hard-cap so we don't blow past Claude's context window on
-// giant drawing sets. 1800 chars/page ≈ 450 tokens; 60 pages ≈ 27k tokens,
-// well within the 200k context budget even with the prompt overhead.
-const MAX_CHARS_PER_PAGE = 1800;
-// Absolute ceiling on total extracted text fed to the LLM.
-const MAX_TOTAL_TEXT_CHARS = 140_000;
+const EXTRACT_TIMEOUT_MS = 180_000;  // 3 min — tool-use extraction is a bit slower on large sets
 
 // Generate a random upload batch id (one per wizard session).
 // Each file in the batch carries this id so the UI can later group/aggregate.
@@ -63,313 +52,36 @@ function normalizeRevisionNumber(value, fallback = "0") {
   return String(value).trim() || fallback;
 }
 
-// ─── Claude PDF extraction via llm-proxy Supabase Edge Function ──────
+// ─── PDF → sheets extraction ──────────────────────────────────────────
 //
-// Pipeline:
-//   1. Read the File bytes in the browser.
-//   2. Use pdfjs-dist to extract text from every page (client-side, no
-//      Anthropic file-upload API needed).
-//   3. Package the pages into a compact prompt and hand it to the
-//      llm-proxy edge function (text-only — no file_urls).
-//   4. Parse the JSON response into { setMeta, sheets[] }.
-//
-// Why client-side text extraction instead of file_urls? Anthropic's file
-// API requires the model to have a signed URL it can fetch, and the
-// Supabase public storage bucket isn't publicly readable. Extracting text
-// in the browser sidesteps that entirely and is faster on small PDFs.
+// All the heavy lifting (columnar pdfjs text extraction, Anthropic
+// tool-use schema, post-processing fixup, de-dup) lives in the shared
+// `src/lib/pdfSheetExtractor.js` module so this modal and
+// RevisionUploadModal share a single code path.
 
-const EMPTY_SET_META = {
-  setName:     "",
-  revision:    "",
-  issueDate:   "",
-  issuedBy:    "",
-  discipline:  "",
-  projectName: "",
-};
-
-/**
- * Read a browser File into a fresh ArrayBuffer. pdfjs mutates the buffer
- * internally, so every call needs its own copy.
- */
-function readFileAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error("FileReader error"));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-/**
- * Extract plain-text content from every page of a PDF, preserving reading
- * order as best as pdfjs reports it and inserting soft line breaks when
- * the horizontal text position jumps backwards (new line).
- *
- * Returns `{ pages: string[], totalChars: number, scanned: boolean }`.
- * `scanned === true` if we got <50 chars total — likely a scanned PDF
- * with no embedded text.
- */
-async function extractPdfText(file) {
-  const buf = await readFileAsArrayBuffer(file);
-  // pdfjs consumes the ArrayBuffer, so pass a copy.
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-  const pageCount = pdf.numPages;
-  const pages = [];
-  let totalChars = 0;
-
-  for (let p = 1; p <= pageCount; p++) {
-    if (totalChars >= MAX_TOTAL_TEXT_CHARS) break;
-
-    try {
-      const page    = await pdf.getPage(p);
-      const content = await page.getTextContent();
-
-      // Join items into lines. pdfjs gives us items with transform[5] as
-      // the baseline y-coordinate; group by rounded y so characters on
-      // the same visual line stay together.
-      const lineMap = new Map();
-      for (const item of content.items) {
-        if (!item?.str) continue;
-        const y    = Math.round((item.transform?.[5] ?? 0) * 2) / 2;
-        const prev = lineMap.get(y) || "";
-        lineMap.set(y, prev + (prev ? " " : "") + item.str.trim());
-      }
-
-      // Sort lines top-to-bottom (higher y first in PDF coords) and cap.
-      const lines = [...lineMap.entries()]
-        .sort((a, b) => b[0] - a[0])
-        .map(([, line]) => line)
-        .filter(Boolean);
-
-      let pageText = lines.join("\n");
-      if (pageText.length > MAX_CHARS_PER_PAGE) {
-        pageText = pageText.slice(0, MAX_CHARS_PER_PAGE) + " …[truncated]";
-      }
-
-      pages.push(pageText);
-      totalChars += pageText.length;
-
-      // Be nice to the main thread between pages.
-      if (p % 5 === 0) await new Promise(r => setTimeout(r, 0));
-    } catch (pageErr) {
-      console.warn(`pdfjs page ${p} failed:`, pageErr);
-      pages.push("");
-    }
-  }
-
-  // Clean up worker-owned resources.
-  try { await pdf.destroy(); } catch { /* ignore */ }
-
-  return {
-    pages,
-    totalChars,
-    scanned: totalChars < 50,
-    pageCount,
-  };
-}
-
-/**
- * Format extracted page text into a compact prompt body for Claude.
- */
-function buildPdfTextBlock(pages) {
-  return pages
-    .map((txt, i) => `===== PAGE ${i + 1} =====\n${txt.trim() || "[empty / image-only page]"}`)
-    .join("\n\n");
-}
-
-async function extractSheetsFromPDF(file, _uploadedFileUrl) {
-  // 1. Client-side text extraction.
-  let extracted;
-  try {
-    extracted = await extractPdfText(file);
-  } catch (pdfErr) {
-    console.error("pdfjs text extraction failed:", pdfErr);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [{
-        sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
-        discipline: "Structural", sheetType: "General",
-        revision: "0", scale: "", date: "",
-        _note: "PDF text extraction failed — please fill in sheet details manually.",
-      }],
-      scanned: false,
-      extractFailed: true,
-      error: pdfErr?.message || String(pdfErr),
-    };
-  }
-
-  // Scanned PDFs — pdfjs found no embedded text. We still call the LLM
-  // with the filename so it can guess the set name, but flag the result
-  // as NeedsReview so the user knows to double-check.
-  if (extracted.scanned) {
-    return {
-      setMeta: { ...EMPTY_SET_META, setName: file.name.replace(/\.pdf$/i, "") },
-      sheets: [{
-        sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
-        discipline: "Structural", sheetType: "General",
-        revision: "0", scale: "", date: "",
-        _note: "Scanned PDF — no extractable text. Please fill in sheet details manually.",
-      }],
-      scanned: true,
-    };
-  }
-
-  const pdfTextBlock = buildPdfTextBlock(extracted.pages);
-
-  // 2. Build prompt.
-  const systemPrompt = `You are a drawing log parser for a structural steel construction management application.
-You will be given the plain-text extract of a structural drawing set PDF (page by page).
-Identify two things:
-1. Set-level metadata (what this drawing package is called, its revision/issuance, issue date, and issuing firm — from the cover sheet or title block).
-2. Every individual sheet in the set (sheet number, title, discipline, revision, date — from the sheet index or per-sheet title blocks).
-Return ONLY a valid JSON object. No explanation, no markdown, no preamble.`;
-
-  const userPrompt = `Below is the text extracted from a drawing set PDF, one page at a time.
-
-Extract BOTH the set-level metadata AND every individual sheet you can identify.
-
-Look for:
-- Cover sheet / title page showing what this package is called (e.g. "100% Construction Documents", "Issued for Construction — Rev 2", "IFB Package", "Addendum 3")
-- Revision / issuance label for the whole package (e.g. "Rev 2", "IFC", "Addendum 3")
-- Issue date on the cover or title block
-- Engineer of record / issuing firm
-- Project name on the cover
-- A sheet index / drawing list page — each row is typically one sheet
-- Individual title blocks on each sheet
-
-Return this exact JSON structure:
-{
-  "setMeta": {
-    "setName":     "100% CD Set",
-    "revision":    "Rev 2",
-    "issueDate":   "2025-11-04",
-    "issuedBy":    "Smith Engineering",
-    "discipline":  "Structural",
-    "projectName": ""
-  },
-  "sheets": [
-    {
-      "sheetNumber": "S-001",
-      "sheetTitle":  "Foundation Plan",
-      "discipline":  "Structural|Arch|MEP|Civil|Misc Metals",
-      "sheetType":   "Plan|Elevation|Section|Detail|Schedule|General|Cover",
-      "revision":    "0",
-      "scale":       "",
-      "date":        ""
-    }
-  ]
-}
-
-Rules:
-- Extract real data only — no guessing. Use "" for any field you cannot read.
-- Dates: use ISO YYYY-MM-DD format when possible.
-- Sheet revision: if a per-sheet revision is not shown, fall back to the set-level revision; if neither, use "0".
-- Discipline: infer from sheet number prefix (S=Structural, A=Arch, C=Civil, M/P/E=MEP, G=General, Misc=Misc Metals).
-- If the extracted text clearly contains a sheet index / drawing list, enumerate EVERY row in it — one sheet per row.
-- NEVER invent sheet numbers, titles, or set names.
-- Return ONLY the JSON object. Nothing else.
-
-===== BEGIN PDF TEXT (${extracted.pageCount} pages, ${extracted.totalChars} chars) =====
-${pdfTextBlock}
-===== END PDF TEXT =====`;
-
-  // 3. Call the LLM.
-  const raw = await base44.integrations.Core.InvokeLLM({
-    prompt:    userPrompt,
-    system:    systemPrompt,
-    maxTokens: 4000,
-  });
-
-  // The edge function may return a string or an object with { text } / { content }.
-  const rawText = typeof raw === "string"
-    ? raw
-    : (raw?.text ?? raw?.content ?? JSON.stringify(raw ?? ""));
-
-  // Edge function may also surface an { error } envelope — propagate it.
-  if (raw?.error) {
-    console.error("llm-proxy error:", raw.error);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [{
-        sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
-        discipline: "Structural", sheetType: "General",
-        revision: "0", scale: "", date: "",
-        _note: `AI unavailable: ${raw.error}`,
-      }],
-      scanned: false,
-      extractFailed: true,
-      error: raw.error,
-    };
-  }
-
-  // Strip any ```json fences even though we ask for bare JSON.
-  const clean = String(rawText || "{}")
-    .replace(/```json\n?/g, "")
-    .replace(/```\n?/g, "")
-    .trim();
-
-  // Some models prefix / suffix with prose; grab the first {...} block.
-  let toParse = clean;
-  const firstBrace = clean.indexOf("{");
-  const lastBrace  = clean.lastIndexOf("}");
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    toParse = clean.slice(firstBrace, lastBrace + 1);
-  }
-
-  try {
-    const parsed = JSON.parse(toParse);
-    // Tolerate the older flat-array shape in case the model drifts.
-    if (Array.isArray(parsed)) {
-      return { setMeta: { ...EMPTY_SET_META }, sheets: parsed, scanned: false };
-    }
-    return {
-      setMeta: { ...EMPTY_SET_META, ...(parsed.setMeta || {}) },
-      sheets:  Array.isArray(parsed.sheets) ? parsed.sheets : [],
-      scanned: false,
-    };
-  } catch (parseErr) {
-    console.error("JSON parse failed:", parseErr, "\nRaw:", rawText);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [{
-        sheetNumber: "", sheetTitle: `Sheets from ${file.name}`,
-        discipline: "Structural", sheetType: "General",
-        revision: "0", scale: "", date: "", _note: "AI response was not valid JSON — manual entry required",
-      }],
-      scanned: false,
-      extractFailed: true,
-    };
-  }
-}
-
-// ─── Filename fallback for oversized PDFs ─────────────────────────────
-function extractSheetsFromFilename(fileName) {
-  const name = fileName.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
-  return {
-    setMeta: { ...EMPTY_SET_META },
-    sheets: [{
-      sheetNumber: "",
-      sheetTitle:  name,
-      discipline:  "Structural",
-      sheetType:   "General",
-      revision:    "0",
-      scale:       "",
-      date:        "",
-      _note:       "File too large for AI extraction. Please fill in sheet details manually.",
-    }],
-    scanned: false,
-    tooLarge: true,
-  };
-}
-
-// ─── Router: pick extraction method based on size ─────────────────────
-async function validateAndExtract(file, uploadedFileUrl) {
+// Router: short-circuit on oversize files (skip the LLM round-trip);
+// otherwise delegate to the shared extractor.
+async function validateAndExtract(file) {
   const sizeMB = file.size / (1024 * 1024);
   if (sizeMB > MAX_PDF_SIZE_MB) {
     console.warn(`PDF too large (${sizeMB.toFixed(1)}MB). Using filename fallback.`);
-    return extractSheetsFromFilename(file.name);
+    return {
+      setMeta: { ...EMPTY_SET_META },
+      sheets: [{
+        sheetNumber: "",
+        sheetTitle:  file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " "),
+        discipline:  "Structural",
+        sheetType:   "General",
+        revision:    "0",
+        scale:       "",
+        date:        "",
+        _note:       "File too large for AI extraction. Please fill in sheet details manually.",
+      }],
+      scanned:  false,
+      tooLarge: true,
+    };
   }
-  return extractSheetsFromPDF(file, uploadedFileUrl);
+  return extractSheetsFromPdf(file);
 }
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
@@ -1082,7 +794,7 @@ export default function DrawingSetUploadModal({
         let extractResult;
         try {
           extractResult = await withTimeout(
-            validateAndExtract(file, fileUrl),
+            validateAndExtract(file),
             EXTRACT_TIMEOUT_MS,
             "AI extraction"
           );

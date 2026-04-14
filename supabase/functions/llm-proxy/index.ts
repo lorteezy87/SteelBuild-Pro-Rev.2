@@ -11,12 +11,20 @@
 //     messages?:     Array<{role,content}> // full Anthropic messages array
 //     maxTokens?:    number                // default 1000
 //     model?:        string                // default claude-sonnet-4-5
+//     temperature?:  number                // default 1.0 (Anthropic default)
+//     tools?:        Array<ToolDef>        // Anthropic tool-use definitions
+//     tool_choice?:  object                // { type: "tool", name: "..." } to force
 //     file_urls?:    string[]              // ACCEPTED but IGNORED — callers should
 //                                           // inline PDF text into the prompt
 //   }
 //
 // Response body (success):
-//   { text: string, content: string, raw: object }
+//   {
+//     text:     string,       // first text block (or stringified tool input if tools used)
+//     content:  string,       // same as text (legacy alias)
+//     tool_use: object | null,// first tool_use block's { name, input } if present
+//     raw:      object,       // full Anthropic response
+//   }
 //
 // Response body (error):
 //   { error: string }
@@ -77,6 +85,9 @@ Deno.serve(async (req: Request) => {
     messages,
     maxTokens = 1000,
     model = DEFAULT_MODEL,
+    temperature,
+    tools,
+    tool_choice,
   } = body ?? {};
 
   const msgs = Array.isArray(messages) && messages.length > 0
@@ -89,6 +100,20 @@ Deno.serve(async (req: Request) => {
     messages: msgs,
   };
   if (system) payload.system = String(system);
+  if (typeof temperature === "number" && Number.isFinite(temperature)) {
+    payload.temperature = temperature;
+  }
+  if (Array.isArray(tools) && tools.length > 0) {
+    payload.tools = tools;
+    // Default to forcing the first named tool when the caller sends tools
+    // but no explicit choice — most of our callers want structured output,
+    // not a chat response.
+    if (tool_choice) {
+      payload.tool_choice = tool_choice;
+    } else if (tools[0]?.name) {
+      payload.tool_choice = { type: "tool", name: tools[0].name };
+    }
+  }
 
   let resp: Response;
   try {
@@ -123,10 +148,35 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Anthropic returned non-JSON" }, 502);
   }
 
-  const text =
-    (Array.isArray(data?.content) && data.content[0]?.text) ||
-    data?.content ||
-    "";
+  // Anthropic returns content as an array of blocks. Each block is either a
+  // text block ({ type: "text", text }) or a tool_use block ({ type:
+  // "tool_use", name, input }). For structured extraction we prefer tool_use;
+  // for plain chat we fall back to text.
+  let firstText = "";
+  let firstToolUse: { name: string; input: unknown } | null = null;
+  if (Array.isArray(data?.content)) {
+    for (const block of data.content) {
+      if (!block || typeof block !== "object") continue;
+      if (block.type === "tool_use" && !firstToolUse) {
+        firstToolUse = { name: block.name, input: block.input };
+      } else if (block.type === "text" && !firstText && typeof block.text === "string") {
+        firstText = block.text;
+      }
+    }
+  } else if (typeof data?.content === "string") {
+    firstText = data.content;
+  }
 
-  return json({ text, content: text, raw: data });
+  // When a tool was called, surface its JSON-stringified input as `text` so
+  // callers that use the legacy string-return path still work.
+  const textOut = firstToolUse
+    ? JSON.stringify(firstToolUse.input)
+    : firstText;
+
+  return json({
+    text:     textOut,
+    content:  textOut,
+    tool_use: firstToolUse,
+    raw:      data,
+  });
 });
