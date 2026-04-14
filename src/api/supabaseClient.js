@@ -200,9 +200,17 @@ const createEntityClient = (tableName) => ({
 
   /**
    * Create a new record. Returns the created record with its generated id.
+   *
+   * We strip `id`, `created_at`, and `updated_at` before insert so a form
+   * that accidentally reused an existing row's state (e.g. an edit modal
+   * left open and re-submitted as a create) can't trigger a primary-key
+   * collision. The DB assigns id/timestamps via its defaults.
    */
   create: async (record) => {
     const clean = cleanRecord(record);
+    delete clean.id;
+    delete clean.created_at;
+    delete clean.updated_at;
     const { data, error } = await supabase
       .from(tableName)
       .insert(clean)
@@ -253,10 +261,16 @@ const createEntityClient = (tableName) => ({
   },
 
   /**
-   * Bulk create multiple records.
+   * Bulk create multiple records. Same id/timestamp stripping as create().
    */
   bulkCreate: async (records) => {
-    const cleaned = records.map(cleanRecord);
+    const cleaned = records.map((r) => {
+      const c = cleanRecord(r);
+      delete c.id;
+      delete c.created_at;
+      delete c.updated_at;
+      return c;
+    });
     const { data, error } = await supabase
       .from(tableName)
       .insert(cleaned)
