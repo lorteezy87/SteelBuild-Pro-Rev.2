@@ -38,6 +38,7 @@ import StagePipeline from "@/components/drawings/StagePipeline";
 import AlertBanner from "@/components/drawings/AlertBanner";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ export default function Drawings() {
   const [contextMenu, setContextMenu] = useState(null);
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
+  const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const contextRef = useRef(null);
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -76,6 +78,15 @@ export default function Drawings() {
     queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
     enabled: !!projectId,
     staleTime: 60000,
+  });
+
+  // Parent drawing_sets rows — used for aggregate badges (sheet_count,
+  // processed_count, etc.) and to keep set names in sync with the upload modal.
+  const { data: drawingSetRecords = [] } = useQuery({
+    queryKey: ["drawing_sets", projectId],
+    queryFn: () => projectId ? base44.entities.DrawingSet.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 30000,
   });
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -122,7 +133,15 @@ export default function Drawings() {
     return map;
   }, [drawings]);
 
-  const existingSetNames = useMemo(() => Object.keys(drawingSets).sort(), [drawingSets]);
+  // Names from real drawing_sets parent rows + legacy string column on drawings,
+  // deduped. The upload modal uses this for autocomplete + duplicate detection.
+  const existingSetNames = useMemo(() => {
+    const names = new Set(Object.keys(drawingSets));
+    drawingSetRecords.forEach(ds => {
+      if (ds?.set_name?.trim()) names.add(ds.set_name.trim());
+    });
+    return [...names].sort();
+  }, [drawingSets, drawingSetRecords]);
 
   const selectedSetName = useMemo(() => {
     if (selected.size === 0) return null;
@@ -321,8 +340,11 @@ export default function Drawings() {
           <button style={btnGhost} onClick={() => exportTransmittal(filtered, activeProject?.name)}>
             ↓ TRANSMITTAL
           </button>
-          <button style={btnPrimary} onClick={() => { setEditing(null); setShowModal(true); }}>
+          <button style={btnGhost} onClick={() => { setEditing(null); setShowModal(true); }}>
             + ADD SHEET
+          </button>
+          <button style={btnPrimary} onClick={() => setUploadSetOpen(true)}>
+            + UPLOAD SET
           </button>
         </div>
       </div>
@@ -465,6 +487,18 @@ export default function Drawings() {
         existingRevision={approvalSet?.sheets?.[0]?.revision_number || ""}
         onConfirm={handleSetApproval}
         saving={savingApproval}
+      />
+
+      <DrawingSetUploadModal
+        open={uploadSetOpen}
+        onClose={() => setUploadSetOpen(false)}
+        onComplete={() => {
+          invalidate();
+          qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+        }}
+        activeProject={activeProject}
+        existingDrawings={drawings}
+        existingSetNames={existingSetNames}
       />
     </div>
   );
