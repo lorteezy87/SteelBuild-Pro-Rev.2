@@ -440,11 +440,11 @@ export const integrations = {
      * Invoke the LLM via a Supabase Edge Function (or direct Anthropic API).
      * Set VITE_ANTHROPIC_API_KEY or deploy a Supabase Edge Function named "llm-proxy".
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model }) => {
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files }) => {
       // Try Supabase Edge Function first
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
-          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model },
+          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files },
         });
         if (error) throw error;
         return data;
