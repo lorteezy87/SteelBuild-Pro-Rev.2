@@ -6,6 +6,58 @@ import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue, daysLate, urgencyClass } from "./drawingsUtils";
 
+// ─── AI extraction / upload status badge ───────────────────────────────────
+//
+// Shown inline next to the sheet title so the user can see at a glance
+// whether a child row is mid-processing, needs review, or failed to extract.
+// Processed rows render nothing (no chrome) to keep the log clean.
+const AI_STATUS_META = {
+  Pending:     { label: "QUEUED",    color: "#94A3B8", bg: "rgba(148,163,184,0.10)", border: "rgba(148,163,184,0.30)", title: "Queued for AI extraction" },
+  Extracting:  { label: "✦ READING", color: "#F59E0B", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.35)",  title: "Claude is reading this sheet" },
+  NeedsReview: { label: "REVIEW",    color: "#F97316", bg: "rgba(249,115,22,0.12)",  border: "rgba(249,115,22,0.35)",  title: "AI finished but found something to verify" },
+  Failed:      { label: "✗ FAILED",  color: "#EF4444", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.35)",   title: "AI extraction failed — click to retry" },
+};
+
+function AIStatusBadge({ status, uploadStatus, error }) {
+  // Failed upload always wins — it's more severe than any AI state.
+  if (uploadStatus === "Failed") {
+    return (
+      <span title={error || "File upload failed"} style={{
+        ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+        padding: "1px 5px", borderRadius: 4, marginLeft: 6,
+        color: "#EF4444", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)",
+        verticalAlign: "middle",
+      }}>
+        ↑ UPLOAD FAILED
+      </span>
+    );
+  }
+  if (uploadStatus === "Uploading") {
+    return (
+      <span title="Uploading to storage" style={{
+        ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+        padding: "1px 5px", borderRadius: 4, marginLeft: 6,
+        color: "#3B82F6", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)",
+        verticalAlign: "middle",
+      }}>
+        ↑ UPLOADING
+      </span>
+    );
+  }
+  const meta = AI_STATUS_META[status];
+  if (!meta) return null; // Processed / unknown → render nothing
+  return (
+    <span title={error || meta.title} style={{
+      ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+      padding: "1px 5px", borderRadius: 4, marginLeft: 6,
+      color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`,
+      verticalAlign: "middle",
+    }}>
+      {meta.label}
+    </span>
+  );
+}
+
 // ─── Small UI primitives ────────────────────────────────────────────────────
 
 function ActionBtn({ label, onClick, danger, disabled, title, primary }) {
@@ -106,6 +158,14 @@ function groupByDrawingSet(drawings) {
     const overdueCount = sheets.filter((s) => isOverdue(s)).length;
     const maxLate = sheets.reduce((m, s) => Math.max(m, daysLate(s) || 0), 0);
 
+    // AI extraction rollup — used for "X of Y processed" summary badges.
+    // Rows without the new status column are treated as already processed
+    // (legacy rows) so migration doesn't make the UI look broken.
+    const aiProcessed = sheets.filter((s) => !s.ai_extraction_status || s.ai_extraction_status === "Processed").length;
+    const aiNeedsReview = sheets.filter((s) => s.ai_extraction_status === "NeedsReview").length;
+    const aiExtracting = sheets.filter((s) => s.ai_extraction_status === "Extracting" || s.ai_extraction_status === "Pending").length;
+    const aiFailed = sheets.filter((s) => s.ai_extraction_status === "Failed" || s.upload_status === "Failed").length;
+
     // Approval rollup — all sheets in the set should share status if bulk-approved
     const statuses = new Set(sheets.map((s) => s.set_approval_status).filter(Boolean));
     const aggregateStatus = statuses.size === 1 ? [...statuses][0] : null;
@@ -140,6 +200,10 @@ function groupByDrawingSet(drawings) {
         disciplines: [...disciplines],
         hasPriority,
         maxRev,
+        aiProcessed,
+        aiNeedsReview,
+        aiExtracting,
+        aiFailed,
       },
     });
   }
@@ -310,6 +374,18 @@ function GroupRow({
                   </span>
                 </>
               )}
+              {/* AI processing rollup — only shown when there's something to flag */}
+              {(a.aiExtracting > 0 || a.aiNeedsReview > 0 || a.aiFailed > 0) && (
+                <>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                  <span style={{ ...mono, fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>
+                    {a.aiProcessed}/{a.total} PROCESSED
+                    {a.aiNeedsReview > 0 && ` · ${a.aiNeedsReview} REVIEW`}
+                    {a.aiExtracting > 0 && ` · ${a.aiExtracting} RUNNING`}
+                    {a.aiFailed > 0 && ` · ${a.aiFailed} FAILED`}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -411,6 +487,7 @@ function SheetRow({
       <td style={{ ...tdBase, maxWidth: 280 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {d.title}
+          <AIStatusBadge status={d.ai_extraction_status} uploadStatus={d.upload_status} error={d.ai_extraction_error} />
         </div>
         <RFILinkBadge linkedIds={d.linked_rfi_ids} rfiMap={rfiMap} />
         {(d.is_superseded || d.set_approval_status === "superseded") && (
