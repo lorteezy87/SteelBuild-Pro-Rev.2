@@ -398,6 +398,17 @@ export async function extractSheetsFromPdf(file) {
     };
   }
 
+  // Always log the response shape — when extraction silently fails, this is
+  // what tells you whether the proxy returned tool_use, plain text, or an
+  // error envelope. Cheap and decisive in DevTools.
+  console.info("[pdfSheetExtractor] llm response shape:", {
+    hasToolUse:       Boolean(llmResult?.tool_use),
+    hasText:          Boolean(llmResult?.text),
+    hasError:         Boolean(llmResult?.error),
+    protocolVersion:  llmResult?.protocol_version ?? null,
+    textLength:       typeof llmResult?.text === "string" ? llmResult.text.length : 0,
+  });
+
   // Edge function returns { error } on failure.
   if (llmResult?.error) {
     console.error("[pdfSheetExtractor] llm-proxy error:", llmResult.error);
@@ -407,6 +418,30 @@ export async function extractSheetsFromPdf(file) {
       scanned: false,
       extractFailed: true,
       error: llmResult.error,
+      pageCount: extracted.pageCount,
+    };
+  }
+
+  // Stale-deployment detection. We forced tool_choice on the request, so a
+  // healthy edge function MUST come back with a tool_use block. If it doesn't,
+  // and the response also lacks the protocol_version marker we added in v2,
+  // the deployed edge function is older than the codebase and needs to be
+  // redeployed. Surface that EXACT diagnosis instead of a generic JSON-parse
+  // failure — this is the bug that has been silently breaking extraction.
+  if (!llmResult?.tool_use && (Number(llmResult?.protocol_version) || 0) < 2) {
+    const msg =
+      "The deployed Supabase llm-proxy edge function is out of date — it ignored " +
+      "the tool-use request and returned plain text. Run " +
+      "`supabase functions deploy llm-proxy` (or use the Supabase dashboard) to " +
+      "publish the latest version, then retry the upload.";
+    console.error("[pdfSheetExtractor] stale edge function detected. Raw text was:",
+      typeof llmResult?.text === "string" ? llmResult.text.slice(0, 500) : llmResult);
+    return {
+      setMeta: { ...EMPTY_SET_META },
+      sheets: [makeManualEntryRow(file, msg)],
+      scanned: false,
+      extractFailed: true,
+      error: msg,
       pageCount: extracted.pageCount,
     };
   }
