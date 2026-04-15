@@ -42,6 +42,13 @@ const THRESHOLDS = [
   { key: 'co_stale_days', label: 'CO stale after', unit: 'days', default: 30 },
 ];
 
+const QUIET_HOURS_DEFAULTS = {
+  quiet_hours_enabled: false,
+  quiet_hours_start:   '18:00',
+  quiet_hours_end:     '07:00',
+  quiet_hours_urgent_override: true,
+};
+
 const buildDefaults = (preferences) => {
   const defaults = {};
   notifications.forEach(n => {
@@ -49,6 +56,9 @@ const buildDefaults = (preferences) => {
   });
   THRESHOLDS.forEach(t => {
     defaults[t.key] = preferences?.[t.key] ?? t.default;
+  });
+  Object.entries(QUIET_HOURS_DEFAULTS).forEach(([k, v]) => {
+    defaults[k] = preferences?.[k] !== undefined ? preferences[k] : v;
   });
   return defaults;
 };
@@ -115,7 +125,61 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
-      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
+      {/* Quiet Hours */}
+      <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--divider)' }}>
+        <label style={labelStyle}>Quiet Hours</label>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Non-urgent notifications are silenced during these hours. Urgent alerts can still break through.
+        </div>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '11px 0', borderBottom: '1px solid var(--divider)',
+        }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Enable Quiet Hours</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pause non-urgent notifications during a set window.</div>
+          </div>
+          <Toggle checked={!!prefs.quiet_hours_enabled} onChange={() => handleToggle('quiet_hours_enabled')} />
+        </div>
+
+        {prefs.quiet_hours_enabled && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+              <div>
+                <label style={labelStyle}>Start</label>
+                <input
+                  type="time"
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  value={prefs.quiet_hours_start || '18:00'}
+                  onChange={e => handleChange('quiet_hours_start', e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>End</label>
+                <input
+                  type="time"
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  value={prefs.quiet_hours_end || '07:00'}
+                  onChange={e => handleChange('quiet_hours_end', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '14px 0 11px', marginTop: 6,
+            }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Allow urgent alerts</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Let flagged-urgent events still notify you during quiet hours.</div>
+              </div>
+              <Toggle checked={!!prefs.quiet_hours_urgent_override} onChange={() => handleToggle('quiet_hours_urgent_override')} />
+            </div>
+          </>
+        )}
+      </div>
+
+      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
     </div>
   );
 }
