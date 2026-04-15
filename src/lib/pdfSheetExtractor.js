@@ -424,16 +424,17 @@ export async function extractSheetsFromPdf(file) {
 
   // Stale-deployment detection. We forced tool_choice on the request, so a
   // healthy edge function MUST come back with a tool_use block. If it doesn't,
-  // and the response also lacks the protocol_version marker we added in v2,
-  // the deployed edge function is older than the codebase and needs to be
-  // redeployed. Surface that EXACT diagnosis instead of a generic JSON-parse
-  // failure — this is the bug that has been silently breaking extraction.
-  if (!llmResult?.tool_use && (Number(llmResult?.protocol_version) || 0) < 2) {
+  // and the response also lacks the v3+ protocol_version marker, the deployed
+  // edge function is older than the codebase and needs to be redeployed.
+  // v3 is the deploy where verify_jwt was turned off — without that the POST
+  // never even reaches the function code. Surface that EXACT diagnosis
+  // instead of a generic JSON-parse failure.
+  if (!llmResult?.tool_use && (Number(llmResult?.protocol_version) || 0) < 3) {
     const msg =
-      "The deployed Supabase llm-proxy edge function is out of date — it ignored " +
-      "the tool-use request and returned plain text. Run " +
-      "`supabase functions deploy llm-proxy` (or use the Supabase dashboard) to " +
-      "publish the latest version, then retry the upload.";
+      "The deployed Supabase llm-proxy edge function is out of date — it either " +
+      "ignored the tool-use request or is still gated by verify_jwt. Run " +
+      "`supabase functions deploy llm-proxy --no-verify-jwt` (or redeploy via the " +
+      "Supabase dashboard with verify_jwt off), then retry the upload.";
     console.error("[pdfSheetExtractor] stale edge function detected. Raw text was:",
       typeof llmResult?.text === "string" ? llmResult.text.slice(0, 500) : llmResult);
     return {
