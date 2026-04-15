@@ -8,16 +8,34 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
+import DashboardTab from "@/components/settings/DashboardTab.jsx";
 import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 
-const TABS = [
-  { id: 'profile', label: 'Profile', icon: '\u{1F464}', desc: 'Your account information' },
-  { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts and digest settings' },
-  { id: 'display', label: 'Display', icon: '\u{1F3A8}', desc: 'Theme, layout, and format' },
-  { id: 'roles', label: 'Roles', icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
-  { id: 'system', label: 'System', icon: '\u2699', desc: 'Data and app management', adminOnly: true },
+// Settings are grouped into three levels: personal, workspace, admin.
+const TAB_GROUPS = [
+  {
+    id: 'personal',
+    label: 'My Settings',
+    tabs: [
+      { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
+      { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, layout, and format' },
+      { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules and KPI order' },
+      { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
+    ],
+  },
+  {
+    id: 'admin',
+    label: 'Workspace',
+    adminOnly: true,
+    tabs: [
+      { id: 'roles',  label: 'Roles',  icon: '\u{1F451}', desc: 'Permissions and access', adminOnly: true },
+      { id: 'system', label: 'System', icon: '\u2699',    desc: 'Data and app management', adminOnly: true },
+    ],
+  },
 ];
+
+const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
@@ -77,7 +95,14 @@ export default function Settings() {
   // If auth has finished loading but there's still no user, render the page anyway
   // (the user must be authenticated to reach this route; the guard is in the router).
 
-  const visibleTabs = TABS.filter(tab => !tab.adminOnly || user?.role === 'admin');
+  const isAdmin = user?.role === 'admin';
+  const visibleGroups = TAB_GROUPS
+    .filter(group => !group.adminOnly || isAdmin)
+    .map(group => ({
+      ...group,
+      tabs: group.tabs.filter(tab => !tab.adminOnly || isAdmin),
+    }))
+    .filter(group => group.tabs.length > 0);
 
   return (
     <div style={{
@@ -94,87 +119,92 @@ export default function Settings() {
         flexWrap: isMobile ? 'wrap' : 'nowrap',
         gap: 4,
       }}>
-        {!isMobile && (
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            fontWeight: 700,
-            color: 'var(--text-secondary)',
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            padding: '0 12px',
-            marginBottom: 8,
-          }}>
-            Settings
-          </div>
-        )}
-        {visibleTabs.map(tab => {
-          const isActive = activeTab === tab.id;
-          const isHovered = hoveredTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              onMouseEnter={() => setHoveredTab(tab.id)}
-              onMouseLeave={() => setHoveredTab(null)}
-              style={{
-                display: 'flex',
-                flexDirection: isMobile ? 'row' : 'column',
-                alignItems: isMobile ? 'center' : 'flex-start',
-                gap: isMobile ? 8 : 2,
-                padding: '10px 12px',
-                background: isActive
-                  ? 'var(--accent-muted)'
-                  : isHovered
-                    ? 'var(--bg-hover, rgba(255,255,255,0.04))'
-                    : 'transparent',
-                border: `1px solid ${isActive ? 'var(--accent-border)' : 'transparent'}`,
-                borderLeft: !isMobile && isActive ? '3px solid var(--accent)' : !isMobile ? '3px solid transparent' : undefined,
-                borderRadius: 8,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s',
-                flex: isMobile ? '0 0 auto' : undefined,
-                position: 'relative',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14 }}>{tab.icon}</span>
-                <span style={{
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: isActive ? 'var(--accent)' : 'var(--text-primary)',
-                }}>
-                  {tab.label}
-                </span>
-                {isActive && showSaved && (
-                  <span style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 8,
-                    fontWeight: 700,
-                    color: 'var(--status-success, #22c55e)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    animation: 'fadeIn 0.2s ease',
-                  }}>
-                    SAVED
-                  </span>
-                )}
+        {visibleGroups.map((group, groupIdx) => (
+          <React.Fragment key={group.id}>
+            {!isMobile && (
+              <div style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                color: 'var(--text-muted)',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                padding: '0 12px',
+                marginTop: groupIdx === 0 ? 0 : 18,
+                marginBottom: 8,
+              }}>
+                {group.label}
               </div>
-              {!isMobile && (
-                <div style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 9,
-                  color: 'var(--text-muted)',
-                  paddingLeft: 22,
-                }}>
-                  {tab.desc}
-                </div>
-              )}
-            </button>
-          );
-        })}
+            )}
+            {group.tabs.map(tab => {
+              const isActive = activeTab === tab.id;
+              const isHovered = hoveredTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  onMouseEnter={() => setHoveredTab(tab.id)}
+                  onMouseLeave={() => setHoveredTab(null)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: isMobile ? 'row' : 'column',
+                    alignItems: isMobile ? 'center' : 'flex-start',
+                    gap: isMobile ? 8 : 2,
+                    padding: '10px 12px',
+                    background: isActive
+                      ? 'var(--accent-muted)'
+                      : isHovered
+                        ? 'var(--hover-bg)'
+                        : 'transparent',
+                    border: `1px solid ${isActive ? 'var(--accent-border)' : 'transparent'}`,
+                    borderLeft: !isMobile && isActive ? '3px solid var(--accent)' : !isMobile ? '3px solid transparent' : undefined,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s',
+                    flex: isMobile ? '0 0 auto' : undefined,
+                    position: 'relative',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14 }}>{tab.icon}</span>
+                    <span style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                    }}>
+                      {tab.label}
+                    </span>
+                    {isActive && showSaved && (
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 8,
+                        fontWeight: 700,
+                        color: 'var(--success)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        animation: 'fadeIn 0.2s ease',
+                      }}>
+                        SAVED
+                      </span>
+                    )}
+                  </div>
+                  {!isMobile && (
+                    <div style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      color: 'var(--text-muted)',
+                      paddingLeft: 22,
+                    }}>
+                      {tab.desc}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </React.Fragment>
+        ))}
       </div>
 
       {/* Content — key forces remount on tab switch for the fade animation */}
@@ -199,6 +229,7 @@ export default function Settings() {
         )}
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
+        {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'system' && <SystemTab user={user} />}
       </div>

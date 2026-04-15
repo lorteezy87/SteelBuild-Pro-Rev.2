@@ -12,27 +12,27 @@ import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, c
    Phase + Health configs
 ───────────────────────────────────────────── */
 const PHASE_CONFIG = {
-  "Pre-Construction":    { color: "#64748B", bg: "rgba(100,116,139,0.12)", order: 0 },
-  "Detailing":           { color: "#0EA5E9", bg: "rgba(14,165,233,0.10)",  order: 1 },
-  "Procurement":         { color: "#F59E0B", bg: "rgba(245,158,11,0.10)",  order: 2 },
-  "Fabrication":         { color: "#E8650A", bg: "rgba(232,101,10,0.10)",  order: 3 },
-  "Delivery":            { color: "#10B981", bg: "rgba(16,185,129,0.10)",  order: 4 },
-  "Installation":        { color: "#06B6D4", bg: "rgba(6,182,212,0.10)",   order: 5 },
-  "Installation/Erection": { color: "#06B6D4", bg: "rgba(6,182,212,0.10)", order: 5 },
-  "Erection":            { color: "#06B6D4", bg: "rgba(6,182,212,0.10)",   order: 5 },
-  "Closeout":            { color: "#6B7280", bg: "rgba(107,114,128,0.10)", order: 6 },
+  "Pre-Construction":      { color: "var(--text-muted)",      bg: "var(--bg-surface-low)", order: 0 },
+  "Detailing":             { color: "var(--info)",            bg: "var(--info-muted)",     order: 1 },
+  "Procurement":           { color: "var(--warning)",         bg: "var(--warning-muted)",  order: 2 },
+  "Fabrication":           { color: "var(--accent)",          bg: "var(--accent-muted)",   order: 3 },
+  "Delivery":              { color: "var(--phase-delivery)",  bg: "var(--info-muted)",     order: 4 },
+  "Installation":          { color: "var(--phase-erection)",  bg: "var(--success-muted)",  order: 5 },
+  "Installation/Erection": { color: "var(--phase-erection)",  bg: "var(--success-muted)",  order: 5 },
+  "Erection":              { color: "var(--phase-erection)",  bg: "var(--success-muted)",  order: 5 },
+  "Closeout":              { color: "var(--phase-closeout)",  bg: "var(--bg-surface-low)", order: 6 },
 };
 
 const HEALTH_CONFIG = {
-  "On Track": { color: "#22C55E", dot: "#22C55E" },
-  "Watch":    { color: "#F59E0B", dot: "#F59E0B" },
-  "At Risk":  { color: "#EF4444", dot: "#EF4444" },
+  "On Track": { color: "var(--success)", dot: "var(--success)" },
+  "Watch":    { color: "var(--warning)", dot: "var(--warning)" },
+  "At Risk":  { color: "var(--danger)",  dot: "var(--danger)" },
 };
 
 /* ─────────────────────────────────────────────
    ProgressRing — 48px SVG ring
 ───────────────────────────────────────────── */
-function ProgressRing({ pct, size = 48, color = "#C89B20" }) {
+function ProgressRing({ pct, size = 48, color = "var(--accent)" }) {
   const r    = (size - 7) / 2;
   const circ = 2 * Math.PI * r;
   const fill = circ - (circ * Math.min(100, pct || 0)) / 100;
@@ -173,13 +173,13 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       onMouseLeave={() => setHovered(false)}
       style={{
         background: "var(--bg-surface)",
-        border: `1px solid ${hovered ? phase.color + "50" : "var(--border-default)"}`,
+        border: `1px solid ${hovered ? "var(--accent-border)" : "var(--border-default)"}`,
         borderLeft: `4px solid ${phase.color}`,
         borderRadius: 6,
         cursor: "pointer",
         transition: "border-color 0.15s, box-shadow 0.15s, transform 0.12s",
         boxShadow: hovered
-          ? `0 6px 28px rgba(0,0,0,0.30), 0 0 0 1px ${phase.color}25`
+          ? "0 6px 28px rgba(0,0,0,0.30), 0 0 0 1px var(--accent-border)"
           : "var(--shadow-card)",
         transform: hovered ? "translateY(-2px)" : "none",
         overflow: "hidden",
@@ -272,9 +272,9 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
             fontFamily: "var(--font-mono)",
             fontSize: 9,
             fontWeight: 700,
-            color: approvedCOs > 0 ? "#22C55E" : "#EF4444",
-            background: approvedCOs > 0 ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
-            border: `1px solid ${approvedCOs > 0 ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+            color: approvedCOs > 0 ? "var(--success)" : "var(--danger)",
+            background: approvedCOs > 0 ? "var(--success-muted)" : "var(--danger-muted)",
+            border: `1px solid ${approvedCOs > 0 ? "var(--success-border)" : "var(--danger-border)"}`,
             borderRadius: 3,
             padding: "2px 7px",
           }}>
@@ -293,12 +293,12 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         <MiniStat
           label="Open RFIs"
           value={openRFIs}
-          valueColor={openRFIs > 0 ? (overdueRFIs > 0 ? "#EF4444" : "#F59E0B") : "var(--text-muted)"}
+          valueColor={openRFIs > 0 ? (overdueRFIs > 0 ? "var(--danger)" : "var(--warning)") : "var(--text-muted)"}
         />
         <MiniStat
           label="Pend COs"
           value={pendingCOs}
-          valueColor={pendingCOs > 0 ? "#F59E0B" : "var(--text-muted)"}
+          valueColor={pendingCOs > 0 ? "var(--warning)" : "var(--text-muted)"}
         />
         <MiniStat
           label="WPs"
@@ -308,7 +308,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         <MiniStat
           label={totalTons > 0 ? "Tons" : "Labor"}
           value={totalTons > 0 ? `${completeTons}T` : `${laborBurn}%`}
-          valueColor={isOverBudget ? "#EF4444" : "var(--text-secondary)"}
+          valueColor={isOverBudget ? "var(--danger)" : "var(--text-secondary)"}
         />
       </div>
 
@@ -348,7 +348,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
             fontFamily: "var(--font-mono)",
             fontSize: 9,
             fontWeight: daysLeft < 30 ? 700 : 400,
-            color: isOverdue ? "#EF4444" : daysLeft < 30 ? "#F59E0B" : "var(--text-muted)",
+            color: isOverdue ? "var(--danger)" : daysLeft < 30 ? "var(--warning)" : "var(--text-muted)",
           }}>
             {isOverdue ? `${Math.abs(daysLeft)}d OVERDUE` : `${daysLeft}d left`}
           </span>
@@ -357,7 +357,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         {/* Edit button */}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(project); }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "#fff"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--on-accent)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
           style={{
             background: "transparent", border: "1px solid var(--border-strong)", borderRadius: 3,
@@ -371,7 +371,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         {/* Delete button */}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(project); }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(204,74,42,0.60)"; e.currentTarget.style.color = "#FF7A7A"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--danger-border)"; e.currentTarget.style.color = "var(--danger)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
           style={{
             background: "transparent", border: "1px solid var(--border-strong)", borderRadius: 3,
@@ -400,9 +400,9 @@ function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-
       style={{
         flex: 1,
         minWidth: 130,
-        background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(200,155,32,0.35)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
-        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "rgba(200,155,32,0.35)" : "var(--border-default)"}`,
+        background: active ? "var(--accent-muted)" : "var(--bg-surface)",
+        border: `1px solid ${active ? "var(--accent-border)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
+        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
         borderRadius: 4,
         padding: "14px 18px",
         cursor: onClick ? "pointer" : "default",
@@ -455,8 +455,8 @@ function FilterPill({ label, color, active, onClick }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
-        background: active ? (color ? `${color}18` : "rgba(200,155,32,0.12)") : "transparent",
-        border: `1px solid ${active ? (color || "var(--accent)") + "55" : "var(--border-default)"}`,
+        background: active ? "var(--accent-muted)" : "transparent",
+        border: `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
         borderRadius: 3,
         padding: "4px 11px",
         fontFamily: "var(--font-mono)",
@@ -592,8 +592,8 @@ export default function Projects() {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "rgba(200,155,32,0.14)",
-            border: "1px solid rgba(200,155,32,0.30)",
+            background: "var(--accent-muted)",
+            border: "1px solid var(--accent-border)",
             borderRadius: 3,
             padding: "2px 8px",
             fontFamily: "var(--font-mono)",
@@ -624,7 +624,7 @@ export default function Projects() {
                 border: "none",
                 borderRadius: 2,
                 padding: "4px 11px",
-                color: view === v ? "#fff" : "var(--text-muted)",
+                color: view === v ? "var(--on-accent)" : "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 fontSize: 9,
                 fontWeight: 800,
@@ -641,11 +641,11 @@ export default function Projects() {
         {/* New project button */}
         <button
           onClick={() => { setEditing(null); setModalOpen(true); }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#F07020"; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
           style={{
             background: "var(--accent)",
-            color: "#fff",
+            color: "var(--on-accent)",
             border: "none",
             borderRadius: 3,
             padding: "7px 16px",
@@ -907,7 +907,7 @@ export default function Projects() {
               gridTemplateColumns: "2fr 1.2fr 110px 140px 150px 90px 110px 60px",
               gap: 0,
               padding: "9px 16px 9px 20px",
-              background: "rgba(0,0,0,0.25)",
+              background: "var(--bg-surface-low)",
               borderBottom: "1px solid var(--border-default)",
             }}>
               {["Project", "GC / Client", "Phase", "Progress", "Contract", "Health", "Due Date", "RFIs"].map(col => (
@@ -954,7 +954,7 @@ export default function Projects() {
                   key={p.id}
                   onClick={() => setDetailProject(p)}
                   onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-row-hover)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = idx % 2 === 1 ? "#0D0D0D" : "transparent"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = idx % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent"; }}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "2fr 1.2fr 110px 140px 150px 90px 110px 60px",
@@ -966,7 +966,7 @@ export default function Projects() {
                     cursor: "pointer",
                     transition: "background 0.10s",
                     alignItems: "center",
-                    background: idx % 2 === 1 ? "#0D0D0D" : "transparent",
+                    background: idx % 2 === 1 ? "var(--bg-surface-lowest)" : "transparent",
                   }}
                 >
                   {/* Project name + number */}
@@ -1087,7 +1087,7 @@ export default function Projects() {
                     fontFamily: "var(--font-mono)",
                     fontSize: 13,
                     fontWeight: 700,
-                    color: pRFIs > 0 ? "#F59E0B" : "var(--text-muted)",
+                    color: pRFIs > 0 ? "var(--warning)" : "var(--text-muted)",
                     textAlign: "center",
                   }}>
                     {pRFIs}
