@@ -14,10 +14,10 @@ export default function RevisionHistoryPanel({ drawingSet, onClose, onUploadNewR
   // Build full list: history (old) + current (newest)
   const allRevisions = [
     {
-      revisionLabel: drawingSet.current_revision || "Current",
-      issueDate: drawingSet.current_issue_date,
-      issuedBy: drawingSet.current_issued_by,
-      fileUrl: drawingSet.current_file_url,
+      revisionLabel: drawingSet.revision || "Current",
+      issueDate: drawingSet.issued_date,
+      issuedBy: drawingSet.issued_by,
+      fileUrl: drawingSet.file_url,
       sheetCount: drawingSet.sheet_count,
       status: "current",
       notes: "",

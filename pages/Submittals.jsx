@@ -947,10 +947,10 @@ export default function Submittals() {
       setRevisionPreselectedSet({
         id: null,
         set_name: setKey,
-        current_revision: sample?.revision_number != null ? String(sample.revision_number) : "-",
-        current_issue_date: sample?.issue_date || null,
-        current_issued_by: sample?.issued_by || "",
-        current_file_url: sample?.file_url || null,
+        revision: sample?.revision_number != null ? String(sample.revision_number) : "-",
+        issued_date: sample?.issue_date || null,
+        issued_by: sample?.issued_by || "",
+        file_url: sample?.file_url || null,
         sheet_count: sheetsInSet.length,
         revision_history: "[]",
       });

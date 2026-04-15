@@ -190,7 +190,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{ds.set_name}</div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>
-                    {ds.sheet_count || 0} sheets · REV {ds.current_revision || "—"}
+                    {ds.sheet_count || 0} sheets · REV {ds.revision || "—"}
                   </div>
                 </div>
                 {isSelected && <span style={{ color: "var(--accent)", fontSize: 14 }}>✓</span>}
@@ -222,7 +222,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
 
 // ── Step B: Revision Metadata ──────────────────────────────────────
 function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
-  const suggestions = getRevisionSuggestions(selectedSet.current_revision);
+  const suggestions = getRevisionSuggestions(selectedSet.revision);
   const set = (k, v) => setRevMeta(p => ({ ...p, [k]: v }));
   const [autoFilled, setAutoFilled] = useState(false);
 
@@ -240,7 +240,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 4 }}>UPDATING</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedSet.set_name}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 2, letterSpacing: "0.06em" }}>
-          {selectedSet.current_revision || "—"} → <span style={{ color: revMeta.revisionLabel || "var(--text-muted)" }}>{revMeta.revisionLabel || "new revision"}</span>
+          {selectedSet.revision || "—"} → <span style={{ color: revMeta.revisionLabel || "var(--text-muted)" }}>{revMeta.revisionLabel || "new revision"}</span>
         </div>
       </div>
 
@@ -275,7 +275,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
         </div>
         <div>
           <label>Issued By</label>
-          <input value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.current_issued_by || "Smith Engineering"} style={{ width: "100%" }} />
+          <input value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.issued_by || "Smith Engineering"} style={{ width: "100%" }} />
         </div>
       </div>
 
@@ -353,7 +353,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
     <div>
       <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
         <span style={{ color: "var(--status-warning)" }}>{selectedSet.set_name}</span>
-        {" · "}Previous: {selectedSet.current_revision || "—"} ({selectedSet.sheet_count || 0} sheets)
+        {" · "}Previous: {selectedSet.revision || "—"} ({selectedSet.sheet_count || 0} sheets)
         {" → "}
         <span style={{ color: "#00D68F" }}>{revMeta.revisionLabel}</span>
       </div>
@@ -454,7 +454,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.revision || "—"})</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
@@ -530,7 +530,7 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Revision Applied</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 10, padding: "14px 16px" }}>
         {[
-          `✓ "${selectedSet.set_name}" updated ${selectedSet.current_revision || "—"} → ${revMeta.revisionLabel}`,
+          `✓ "${selectedSet.set_name}" updated ${selectedSet.revision || "—"} → ${revMeta.revisionLabel}`,
           `✓ ${stats.updated} drawing records updated`,
           stats.added > 0 && `✓ ${stats.added} new sheet${stats.added > 1 ? "s" : ""} created`,
           stats.removed > 0 && `✓ ${stats.removed} sheet${stats.removed > 1 ? "s" : ""} marked superseded`,
@@ -565,10 +565,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             byName[d.drawing_set_name] = {
               id: null,
               set_name: d.drawing_set_name,
-              current_revision: d.revision_number != null ? String(d.revision_number) : "—",
-              current_issue_date: d.issue_date || null,
-              current_issued_by: d.issued_by || "",
-              current_file_url: d.file_url || null,
+              revision: d.revision_number != null ? String(d.revision_number) : "—",
+              issued_date: d.issue_date || null,
+              issued_by: d.issued_by || "",
+              file_url: d.file_url || null,
               sheet_count: 0,
               revision_history: "[]",
             };
@@ -650,10 +650,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     let history = [];
     try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}
     const snapshot = {
-      revisionLabel: selectedSet.current_revision,
-      issueDate: selectedSet.current_issue_date,
-      issuedBy: selectedSet.current_issued_by,
-      fileUrl: selectedSet.current_file_url,
+      revisionLabel: selectedSet.revision,
+      issueDate: selectedSet.issued_date,
+      issuedBy: selectedSet.issued_by,
+      fileUrl: selectedSet.file_url,
       sheetCount: selectedSet.sheet_count,
       notes: selectedSet.notes || "",
       uploadedAt: new Date().toISOString(),
@@ -662,15 +662,15 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     history.push(snapshot);
 
     const newSheetCount = matchedSheets.filter(m => m.newSheet).length;
-    const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.current_file_url;
+    const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;
 
     // Update DrawingSet (only if a real DrawingSet record exists)
     if (selectedSet.id) {
       await base44.entities.DrawingSet.update(selectedSet.id, {
-        current_revision: revMeta.revisionLabel,
-        current_issue_date: revMeta.issueDate,
-        current_issued_by: revMeta.issuedBy || selectedSet.current_issued_by,
-        current_file_url: newFileUrl,
+        revision: revMeta.revisionLabel,
+        issued_date: revMeta.issueDate,
+        issued_by: revMeta.issuedBy || selectedSet.issued_by,
+        file_url: newFileUrl,
         sheet_count: newSheetCount,
         revision_history: JSON.stringify(history),
         set_approval_status: "pending_review",
@@ -792,7 +792,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             </div>
           )}
           {step === "selectSet" && (
-            <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.current_issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
+            <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
           )}
           {step === "revMeta" && selectedSet && (
             <StepRevMeta selectedSet={selectedSet} revMeta={revMeta} setRevMeta={setRevMeta} onBack={() => preSelectedSet ? handleClose() : setStep("selectSet")} onNext={() => setStep("dropPDF")} />
