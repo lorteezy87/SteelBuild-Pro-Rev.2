@@ -514,6 +514,17 @@ export const integrations = {
      * generic "AI response was not valid JSON" path.
      */
     InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature }) => {
+      // The client expects this protocol version from the edge function. If the
+      // function returns a lower version (or no version field), the deployed
+      // edge function is older than the codebase and needs to be redeployed:
+      //   supabase functions deploy llm-proxy
+      // See supabase/functions/llm-proxy/index.ts (PROTOCOL_VERSION constant).
+      const EXPECTED_PROTOCOL_VERSION = 2;
+
+      // We track the FIRST real failure we see so that if every tier fails we
+      // can surface a precise diagnosis instead of a generic "AI unavailable".
+      let firstFailure = null;
+
       // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
@@ -529,28 +540,65 @@ export const integrations = {
               }
             }
           } catch { /* ignore */ }
-          console.warn('[llm-proxy] edge function failed, trying direct API:', detail);
-          throw new Error(detail); // fall through to direct API
+          firstFailure = `llm-proxy edge function failed: ${detail}`;
+          console.warn('[llm-proxy]', firstFailure);
+        } else if (data && typeof data === 'object' && data.error) {
+          firstFailure = `llm-proxy returned error: ${data.error}`;
+          console.warn('[llm-proxy]', firstFailure);
+        } else if (data && typeof data === 'object') {
+          // Detect a stale edge-function deployment. If the caller wants
+          // structured output (passed `tools`) but the response has no
+          // tool_use AND no protocol_version, the deployed function is
+          // pre-tool-use and must be redeployed.
+          const usedTools = Array.isArray(tools) && tools.length > 0;
+          const gotToolUse = data.tool_use && typeof data.tool_use === 'object';
+          const reportedVersion = Number(data.protocol_version) || 0;
+          if (usedTools && !gotToolUse && reportedVersion < EXPECTED_PROTOCOL_VERSION) {
+            firstFailure =
+              `llm-proxy deployed version is too old (got v${reportedVersion}, need v${EXPECTED_PROTOCOL_VERSION}). ` +
+              `Tool-use extraction will not work until you redeploy the edge function: ` +
+              `\`supabase functions deploy llm-proxy\``;
+            console.warn('[llm-proxy]', firstFailure);
+            // fall through to direct API — it might have tools support
+          } else {
+            return data;
+          }
+        } else {
+          firstFailure = 'llm-proxy returned no data';
+          console.warn('[llm-proxy]', firstFailure);
         }
-        if (data && typeof data === 'object' && data.error) {
-          console.warn('[llm-proxy] error envelope, trying direct API:', data.error);
-          throw new Error(data.error);
-        }
-        return data;
-      } catch {
-        /* fall through to direct Anthropic API */
+      } catch (proxyErr) {
+        firstFailure = `llm-proxy threw: ${proxyErr?.message || String(proxyErr)}`;
+        console.warn('[llm-proxy]', firstFailure);
       }
 
       // ── 2. Direct Anthropic API (requires VITE_ANTHROPIC_API_KEY in .env.local) ─
+      // This path mirrors what the edge function does so it can serve as a
+      // genuine fallback for tool-use callers, not just plain chat.
       const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
       if (apiKey) {
         try {
           const body = {
             model: model || 'claude-sonnet-4-5',
-            max_tokens: maxTokens,
+            max_tokens: Number(maxTokens) || 1000,
             messages: messages || [{ role: 'user', content: prompt || '' }],
           };
           if (system) body.system = system;
+          if (typeof temperature === 'number' && Number.isFinite(temperature)) {
+            body.temperature = temperature;
+          }
+          if (Array.isArray(tools) && tools.length > 0) {
+            body.tools = tools;
+            // Mirror edge-function behaviour: force the first tool when the
+            // caller didn't specify a tool_choice. Most of our tool-use callers
+            // want structured output, not a chat response.
+            if (tool_choice) {
+              body.tool_choice = tool_choice;
+            } else if (tools[0]?.name) {
+              body.tool_choice = { type: 'tool', name: tools[0].name };
+            }
+          }
+
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -562,22 +610,53 @@ export const integrations = {
           });
           if (resp.ok) {
             const result = await resp.json();
-            const text = result.content?.[0]?.text || '';
-            return { text, content: text };
+            // Walk the content blocks for the first text and first tool_use,
+            // matching the edge function's response normalization.
+            let firstText = '';
+            let firstToolUse = null;
+            if (Array.isArray(result?.content)) {
+              for (const block of result.content) {
+                if (!block || typeof block !== 'object') continue;
+                if (block.type === 'tool_use' && !firstToolUse) {
+                  firstToolUse = { name: block.name, input: block.input };
+                } else if (block.type === 'text' && !firstText && typeof block.text === 'string') {
+                  firstText = block.text;
+                }
+              }
+            } else if (typeof result?.content === 'string') {
+              firstText = result.content;
+            }
+            const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
+            return {
+              text: textOut,
+              content: textOut,
+              tool_use: firstToolUse,
+              raw: result,
+              protocol_version: EXPECTED_PROTOCOL_VERSION,
+            };
           }
           const errText = await resp.text();
-          console.error('[llm-direct] Anthropic API error:', resp.status, errText);
+          const directDetail = `Anthropic API ${resp.status}: ${errText}`;
+          console.error('[llm-direct]', directDetail);
+          if (!firstFailure) firstFailure = directDetail;
         } catch (directErr) {
-          console.error('[llm-direct] threw:', directErr?.message);
+          const directDetail = `direct Anthropic call threw: ${directErr?.message || String(directErr)}`;
+          console.error('[llm-direct]', directDetail);
+          if (!firstFailure) firstFailure = directDetail;
         }
       }
 
-      // ── 3. No LLM available ───────────────────────────────────────────────
-      const noLlmMsg = apiKey
-        ? 'Anthropic API call failed — check VITE_ANTHROPIC_API_KEY and network access.'
-        : 'AI unavailable. Deploy a Supabase Edge Function named "llm-proxy" or add VITE_ANTHROPIC_API_KEY to .env.local.';
-      console.warn('[InvokeLLM]', noLlmMsg);
-      return { error: noLlmMsg };
+      // ── 3. No LLM available — surface the REAL reason ─────────────────────
+      // We deliberately do NOT default to a generic "AI unavailable" string
+      // when we know what actually went wrong. The first real failure (proxy
+      // error, schema problem, stale deployment) is far more actionable than
+      // "deploy an edge function" advice.
+      const finalMsg = firstFailure
+        || (apiKey
+            ? 'Anthropic API call failed — check VITE_ANTHROPIC_API_KEY and network access.'
+            : 'AI unavailable. Deploy a Supabase Edge Function named "llm-proxy" or add VITE_ANTHROPIC_API_KEY to .env.local.');
+      console.warn('[InvokeLLM]', finalMsg);
+      return { error: finalMsg };
     },
   },
 };

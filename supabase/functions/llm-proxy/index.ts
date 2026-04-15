@@ -39,6 +39,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 
+// Bump this whenever the edge function's request/response contract changes.
+// Clients use it to detect a stale deployment — if the client expects v2 and
+// the edge function returns v1 (or no version at all), the client knows the
+// function needs to be redeployed via `supabase functions deploy llm-proxy`.
+//   v1 = original text-only proxy
+//   v2 = added tools / tool_choice / temperature pass-through and tool_use
+//        parsing in the response
+const PROTOCOL_VERSION = 2;
+
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -178,5 +187,6 @@ Deno.serve(async (req: Request) => {
     content:  textOut,
     tool_use: firstToolUse,
     raw:      data,
+    protocol_version: PROTOCOL_VERSION,
   });
 });
