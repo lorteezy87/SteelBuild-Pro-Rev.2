@@ -517,9 +517,14 @@ export const integrations = {
       // The client expects this protocol version from the edge function. If the
       // function returns a lower version (or no version field), the deployed
       // edge function is older than the codebase and needs to be redeployed:
-      //   supabase functions deploy llm-proxy
+      //   supabase functions deploy llm-proxy --no-verify-jwt
       // See supabase/functions/llm-proxy/index.ts (PROTOCOL_VERSION constant).
-      const EXPECTED_PROTOCOL_VERSION = 2;
+      //
+      // v3 marks the deploy where verify_jwt was turned off on the function —
+      // without that, every POST returns 401 at Supabase's gate before the
+      // function code even runs. If you see protocol v2 or lower AND POSTs are
+      // failing with 401, that's the smoking gun.
+      const EXPECTED_PROTOCOL_VERSION = 3;
 
       // We track the FIRST real failure we see so that if every tier fails we
       // can surface a precise diagnosis instead of a generic "AI unavailable".

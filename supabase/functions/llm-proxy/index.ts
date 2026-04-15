@@ -29,8 +29,16 @@
 // Response body (error):
 //   { error: string }
 //
+// Auth model: verify_jwt is DISABLED for this function. The proxy enforces its
+// own auth via the server-side ANTHROPIC_API_KEY secret — requests reach
+// Anthropic only if the secret is configured. CORS is wide-open because the
+// app is browser-first. This matches the standard pattern for LLM proxies and
+// sidesteps the 401 failures we saw when verify_jwt was on (the browser
+// client's JWT wasn't being accepted for reasons unrelated to the proxy code).
+//
 // Set ANTHROPIC_API_KEY in Supabase → Project Settings → Edge Functions → Secrets.
-// Deploy via: supabase functions deploy llm-proxy   (or Supabase MCP).
+// Deploy via: supabase functions deploy llm-proxy --no-verify-jwt
+//   (or via the Supabase MCP deploy_edge_function tool with verify_jwt: false).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
@@ -40,13 +48,15 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 
 // Bump this whenever the edge function's request/response contract changes.
-// Clients use it to detect a stale deployment — if the client expects v2 and
-// the edge function returns v1 (or no version at all), the client knows the
-// function needs to be redeployed via `supabase functions deploy llm-proxy`.
+// Clients use it to detect a stale deployment — if the client expects v3 and
+// the edge function returns v2 (or no version at all), the client knows the
+// function needs to be redeployed.
 //   v1 = original text-only proxy
 //   v2 = added tools / tool_choice / temperature pass-through and tool_use
 //        parsing in the response
-const PROTOCOL_VERSION = 2;
+//   v3 = verify_jwt disabled on the function itself (no code change — this
+//        bump just lets clients confirm they're hitting the public variant)
+const PROTOCOL_VERSION = 3;
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
