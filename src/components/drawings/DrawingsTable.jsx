@@ -139,6 +139,12 @@ const EXPAND_LS_KEY = "sbp-drawings-expanded-sets";
  * parent row; otherwise we use the legacy text column. This is the F8 fix
  * from the audit: source-of-truth is now the parent FK, not the denormalized
  * string on the child row.
+ *
+ * Set-level-only rows (drawing_sets records with zero child drawings — e.g.
+ * BFA submittal round-trips imported from Drive at the set level) are seeded
+ * as groups from `drawingSetMap` after the drawings pass, so they appear in
+ * the list with parent-derived aggregates (stage_summary, set_approval_status,
+ * issued_date, set_approved_date, file_url).
  */
 function groupByDrawingSet(drawings, drawingSetMap = {}) {
   const buckets = new Map();
@@ -153,10 +159,29 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
         key,
         setId,
         name: displayName || UNGROUPED_LABEL,
+        parent,
         sheets: [],
       });
     }
     buckets.get(key).sheets.push(d);
+  });
+
+  // Seed empty buckets for any drawing_sets record with no child drawings.
+  // These are the set-level-only rows imported from the Drive BFA folder
+  // walk — they have no per-sheet rows yet (Phase 2 work), but still need
+  // to appear in the list so the user can see submittal round-trip state
+  // (approved / pending / stage_summary) and jump to the Drive folder.
+  Object.values(drawingSetMap).forEach((parent) => {
+    if (!parent?.id) return;
+    const key = `id:${parent.id}`;
+    if (buckets.has(key)) return;
+    buckets.set(key, {
+      key,
+      setId: parent.id,
+      name: (parent.set_name || "").trim() || UNGROUPED_LABEL,
+      parent,
+      sheets: [],
+    });
   });
 
   // Compute aggregates for each group
@@ -167,6 +192,9 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
       const bn = (b.sheet_number || "").toString();
       return an.localeCompare(bn, undefined, { numeric: true, sensitivity: "base" });
     });
+
+    const parent = group.parent || null;
+    const setOnly = sheets.length === 0 && !!parent;
 
     // Stage rollup
     const stageCounts = {};
@@ -180,8 +208,8 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
     // Date rollups
     const submittedDates = sheets.map((s) => s.submitted_date).filter(Boolean).sort();
     const dueDates = sheets.map((s) => s.due_date).filter(Boolean).sort();
-    const earliestSubmitted = submittedDates[0] || null;
-    const earliestDue = dueDates[0] || null;
+    let earliestSubmitted = submittedDates[0] || null;
+    let earliestDue = dueDates[0] || null;
 
     // Overdue rollup
     const overdueCount = sheets.filter((s) => isOverdue(s)).length;
@@ -197,7 +225,7 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
 
     // Approval rollup — all sheets in the set should share status if bulk-approved
     const statuses = new Set(sheets.map((s) => s.set_approval_status).filter(Boolean));
-    const aggregateStatus = statuses.size === 1 ? [...statuses][0] : null;
+    let aggregateStatus = statuses.size === 1 ? [...statuses][0] : null;
 
     // Disciplines present
     const disciplines = new Set(sheets.map((s) => s.discipline).filter(Boolean));
@@ -209,13 +237,33 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
     const revNums = sheets
       .map((s) => Number(String(s.revision_number || "0").replace(/[^\d]/g, "")))
       .filter((n) => !isNaN(n));
-    const maxRev = revNums.length ? Math.max(...revNums) : 0;
+    let maxRev = revNums.length ? Math.max(...revNums) : 0;
+
+    // Parent-derived fallbacks for set-level-only rows (no child sheets).
+    // We pull from the drawing_sets row so the group summary shows something
+    // real instead of a row full of em-dashes.
+    let stageSummary = null;
+    let driveUrl = null;
+    let revisionHistory = null;
+    let eventCount = null;
+    if (setOnly) {
+      aggregateStatus = parent.set_approval_status || null;
+      stageSummary = parent.stage_summary || null;
+      driveUrl = parent.file_url || null;
+      revisionHistory = parent.revision_history || null;
+      eventCount = parent.metadata?.event_count ?? null;
+      if (parent.discipline) disciplines.add(parent.discipline);
+      if (!earliestSubmitted && parent.issued_date) earliestSubmitted = parent.issued_date;
+      if (!earliestDue && parent.set_approved_date) earliestDue = parent.set_approved_date;
+    }
 
     groups.push({
       key: group.key,
       setId: group.setId,
       name: group.name,
       isUngrouped: group.key === UNGROUPED_KEY,
+      setOnly,
+      parent,
       sheets,
       aggregates: {
         total: sheets.length,
@@ -234,6 +282,10 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
         aiNeedsReview,
         aiExtracting,
         aiFailed,
+        stageSummary,
+        driveUrl,
+        revisionHistory,
+        eventCount,
       },
     });
   }
@@ -380,13 +432,69 @@ function GroupRow({
               {group.name}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-                {a.total} SHEET{a.total === 1 ? "" : "S"}
-              </span>
-              <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
-              <span style={{ ...mono, fontSize: 9, color: accent, fontWeight: 700 }}>
-                {a.releasedCount}/{a.total} IFC ({a.percentReleased}%)
-              </span>
+              {group.setOnly ? (
+                <>
+                  <span
+                    title="Set-level record imported from Drive. Per-sheet rows not populated yet."
+                    style={{
+                      ...mono, fontSize: 8, fontWeight: 800, letterSpacing: "0.10em",
+                      padding: "1px 6px", borderRadius: 3,
+                      color: "#60A5FA", background: "rgba(96,165,250,0.12)",
+                      border: "1px solid rgba(96,165,250,0.35)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    SET · FROM DRIVE
+                  </span>
+                  {a.stageSummary && (
+                    <>
+                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                      <span style={{ ...mono, fontSize: 9, color: accent, fontWeight: 700, letterSpacing: "0.08em" }}>
+                        LATEST: {a.stageSummary}
+                      </span>
+                    </>
+                  )}
+                  {a.eventCount != null && (
+                    <>
+                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+                        {a.eventCount} ROUND-TRIP{a.eventCount === 1 ? "" : "S"}
+                      </span>
+                    </>
+                  )}
+                  {a.driveUrl && (
+                    <>
+                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                      <a
+                        href={a.driveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Open Drive BFA folder"
+                        style={{
+                          ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                          color: "var(--accent)", textDecoration: "none",
+                          padding: "1px 6px", borderRadius: 3,
+                          border: "1px solid var(--accent-border, rgba(200,155,32,0.35))",
+                          background: "rgba(200,155,32,0.08)",
+                        }}
+                      >
+                        OPEN DRIVE ↗
+                      </a>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+                    {a.total} SHEET{a.total === 1 ? "" : "S"}
+                  </span>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                  <span style={{ ...mono, fontSize: 9, color: accent, fontWeight: 700 }}>
+                    {a.releasedCount}/{a.total} IFC ({a.percentReleased}%)
+                  </span>
+                </>
+              )}
               {a.disciplines.length > 0 && (
                 <>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
@@ -450,12 +558,28 @@ function GroupRow({
           <span style={{
             ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
             padding: "2px 7px", borderRadius: "var(--radius-badge)",
-            color: a.aggregateStatus === "approved" ? "#10B981" : a.aggregateStatus === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-            background: a.aggregateStatus === "approved" ? "rgba(16,185,129,0.12)" : a.aggregateStatus === "rejected" ? "rgba(239,68,68,0.12)" : "var(--bg-surface-high)",
-            border: `1px solid ${a.aggregateStatus === "approved" ? "rgba(16,185,129,0.25)" : a.aggregateStatus === "rejected" ? "rgba(239,68,68,0.25)" : "var(--border-default)"}`,
+            color:
+              a.aggregateStatus === "approved"       ? "#10B981"
+            : a.aggregateStatus === "rejected"       ? "var(--status-error)"
+            : a.aggregateStatus === "pending_review" ? "#F59E0B"
+            : a.aggregateStatus === "superseded"     ? "#94A3B8"
+            :                                          "var(--text-muted)",
+            background:
+              a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.12)"
+            : a.aggregateStatus === "rejected"       ? "rgba(239,68,68,0.12)"
+            : a.aggregateStatus === "pending_review" ? "rgba(245,158,11,0.14)"
+            : a.aggregateStatus === "superseded"     ? "rgba(148,163,184,0.12)"
+            :                                          "var(--bg-surface-high)",
+            border: `1px solid ${
+              a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.25)"
+            : a.aggregateStatus === "rejected"       ? "rgba(239,68,68,0.25)"
+            : a.aggregateStatus === "pending_review" ? "rgba(245,158,11,0.40)"
+            : a.aggregateStatus === "superseded"     ? "rgba(148,163,184,0.30)"
+            :                                          "var(--border-default)"
+            }`,
             textTransform: "uppercase",
           }}>
-            {a.aggregateStatus}
+            {a.aggregateStatus === "pending_review" ? "PENDING" : a.aggregateStatus}
           </span>
         ) : !group.isUngrouped ? (
           <button
@@ -474,11 +598,13 @@ function GroupRow({
         )}
       </td>
 
-      {/* Actions cell — set-level delete (F1). Only offered for named sets;
-          UNGROUPED sheets don't belong to a drawing_sets row so there's
-          nothing to cascade-delete. */}
+      {/* Actions cell — set-level delete (F1). Only offered for named sets
+          that have real child sheets; UNGROUPED sheets don't belong to a
+          drawing_sets row so there's nothing to cascade-delete, and SET-ONLY
+          imported rows (no children) would break the cascade handler which
+          expects at least one sheet to derive the drawing_set_id from. */}
       <td style={tdBase}>
-        {!group.isUngrouped && onDeleteSet && (
+        {!group.isUngrouped && !group.setOnly && onDeleteSet && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <ActionBtn
               label="Delete Set"
@@ -488,6 +614,94 @@ function GroupRow({
             />
           </div>
         )}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Child row shown when a set-level-only group (one imported from the Drive
+ * BFA walk, with no per-sheet rows yet) is expanded. Renders the revision
+ * history timeline stored on the parent drawing_sets row so the user can
+ * see the round-trip events even though there's no per-sheet detail.
+ */
+function SetOnlyInfoRow({ group }) {
+  const parent = group.parent;
+  if (!parent) return null;
+  const history = parent.revision_history || "";
+  const driveUrl = parent.file_url || null;
+  const meta = parent.metadata || {};
+  const stageCounts = meta.stage_counts || null;
+  return (
+    <tr style={{ background: "rgba(96,165,250,0.03)" }}>
+      <td style={tdBase}></td>
+      <td colSpan={10} style={{ ...tdBase, padding: "14px 18px 14px 44px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{
+            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.14em",
+            color: "var(--text-muted)", textTransform: "uppercase",
+          }}>
+            Round-trip timeline
+          </div>
+          {history ? (
+            <div style={{
+              fontFamily: "var(--font-body)", fontSize: 12,
+              color: "var(--text-primary)", lineHeight: 1.6,
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+            }}>
+              {history}
+            </div>
+          ) : (
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
+              No event history recorded on this set.
+            </div>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 4 }}>
+            {parent.issued_date && (
+              <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                INITIAL OFA: <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{parent.issued_date}</span>
+              </span>
+            )}
+            {parent.set_approved_date && (
+              <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                LATEST EVENT: <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{parent.set_approved_date}</span>
+              </span>
+            )}
+            {stageCounts && Object.keys(stageCounts).length > 0 && (
+              <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                STAGES: <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+                  {Object.entries(stageCounts).map(([k, n]) => `${k}:${n}`).join(" ")}
+                </span>
+              </span>
+            )}
+          </div>
+
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 4,
+            paddingTop: 10, borderTop: "1px dashed var(--border-default)",
+          }}>
+            <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+              PER-SHEET DATA NOT IMPORTED YET (PHASE 2)
+            </span>
+            {driveUrl && (
+              <a
+                href={driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                  color: "var(--accent)", textDecoration: "none",
+                  padding: "3px 9px", borderRadius: 4,
+                  border: "1px solid var(--accent-border, rgba(200,155,32,0.35))",
+                  background: "rgba(200,155,32,0.08)",
+                }}
+              >
+                OPEN DRIVE FOLDER ↗
+              </a>
+            )}
+          </div>
+        </div>
       </td>
     </tr>
   );
@@ -861,7 +1075,10 @@ export default function DrawingsTable({
                   onDeleteSet={onDeleteSet}
                   hideOnCompact={hideOnCompact}
                 />
-                {isExpanded && group.sheets.map((d) => (
+                {isExpanded && group.setOnly && (
+                  <SetOnlyInfoRow group={group} />
+                )}
+                {isExpanded && !group.setOnly && group.sheets.map((d) => (
                   <SheetRow
                     key={d.id}
                     d={d}
