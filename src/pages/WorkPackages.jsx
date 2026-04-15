@@ -8,6 +8,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WorkPackageList from "@/components/workpackages/WorkPackageList";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
+import WPBulkAddModal from "@/components/workpackages/WPBulkAddModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ChevronPipeline from "@/components/shared/ChevronPipeline";
 import { getNextNumber } from "@/components/shared/numberSequencing";
@@ -139,6 +140,7 @@ export default function WorkPackages() {
   const [selectedBoardWP, setSelectedBoardWP] = useState(null);
   const [compact, setCompact] = useState(false);
   const [selectedWPs, setSelectedWPs] = useState(new Set());
+  const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
   const { data: workPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
@@ -210,6 +212,74 @@ export default function WorkPackages() {
       toast.success("Work package deleted");
     },
     onError: () => toast.error("Delete failed"),
+  });
+
+  const bulkCreateMut = useMutation({
+    mutationFn: async (rows) => {
+      if (!rows || rows.length === 0) throw new Error("No rows to add");
+      if (!projectId) throw new Error("Select a project first");
+
+      // Figure out the starting WP number for any row missing one.
+      // We do a single sequence advance for the whole batch rather than
+      // hitting getNextNumber N times, which would thrash the sequence row.
+      const rowsNeedingNumbers = rows.filter((r) => !r.wp_number);
+      let nextStart = null;
+      if (rowsNeedingNumbers.length > 0) {
+        try {
+          nextStart = await getNextNumber(projectId, "wp_number");
+          // Reserve the remaining slots after the one we just consumed by
+          // advancing the local counter; subsequent rows get nextStart+1, +2, ...
+        } catch (err) {
+          console.warn("[WorkPackages] bulk: getNextNumber failed, falling back", err?.message);
+          // Fallback: compute from existing rows
+          const maxNum = workPackages
+            .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
+            .filter((n) => !isNaN(n))
+            .reduce((max, n) => Math.max(max, n), 0);
+          nextStart = maxNum + 1;
+        }
+      }
+
+      let autoCursor = nextStart;
+      const prepared = rows.map((row) => {
+        let wp_number = row.wp_number;
+        if (!wp_number && autoCursor != null) {
+          wp_number = `WP-${String(autoCursor).padStart(3, "0")}`;
+          autoCursor += 1;
+        }
+        return {
+          ...row,
+          wp_number,
+          project_id: projectId,
+          // Strip undefined so Supabase doesn't receive explicit nulls for
+          // columns we don't want to overwrite with defaults
+          project_name: row.project_name || undefined,
+        };
+      });
+
+      const results = await batchProcess(
+        prepared,
+        (data) => base44.entities.WorkPackage.create(data),
+        5
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      qc.invalidateQueries({ queryKey: ["work-packages"] });
+      qc.invalidateQueries({ queryKey: ["wps-all"] });
+      const ok = results.succeeded.length;
+      const fail = results.failed.length;
+      if (fail === 0) {
+        toast.success(`Added ${ok} work package${ok === 1 ? "" : "s"}`);
+        setBulkAddOpen(false);
+      } else if (ok === 0) {
+        toast.error(`All ${fail} failed: ${results.failed[0]?.error || "unknown error"}`);
+      } else {
+        toast.warning(`${ok} added, ${fail} failed`);
+        setBulkAddOpen(false);
+      }
+    },
+    onError: (err) => toast.error(err.message || "Bulk create failed"),
   });
 
   const bulkStatusMut = useMutation({
@@ -1122,6 +1192,27 @@ export default function WorkPackages() {
           </button>
 
           <button
+            onClick={() => setBulkAddOpen(true)}
+            disabled={!projectId}
+            title={projectId ? "Paste tab- or comma-separated rows to add several WPs at once" : "Select a project to enable bulk add"}
+            style={{
+              padding: "7px 12px",
+              borderRadius: "var(--radius-btn)",
+              border: "1px solid var(--accent-border)",
+              background: projectId ? "var(--bg-surface-low)" : "var(--bg-surface)",
+              color: projectId ? "var(--accent)" : "var(--text-muted)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              cursor: projectId ? "pointer" : "not-allowed",
+              textTransform: "uppercase",
+            }}
+          >
+            BULK ADD
+          </button>
+
+          <button
             onClick={handleWPCreate}
             style={{
               background: "var(--accent)",
@@ -1347,6 +1438,16 @@ export default function WorkPackages() {
       {view === "board" && renderBoard()}
 
       {view === "drawings" && renderDrawingTracker()}
+
+      <WPBulkAddModal
+        open={bulkAddOpen}
+        onClose={() => setBulkAddOpen(false)}
+        onCommit={(rows) => bulkCreateMut.mutate(rows)}
+        projectId={projectId}
+        projectName={projects.find((p) => p.id === projectId)?.name}
+        existingWPs={workPackages}
+        isSaving={bulkCreateMut.isPending}
+      />
 
       {(wpModalOpen || editingWP) && (
         <WPFormModal
