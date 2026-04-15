@@ -662,7 +662,11 @@ export default function Drawings() {
           <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>
             LOADING SHEETS…
           </div>
-        ) : filtered.length === 0 ? (
+        ) : (filtered.length === 0 && drawingSetRecords.length === 0) ? (
+          // Empty state only when there's truly nothing to show — no per-sheet
+          // rows AND no set-level drawing_sets rows. Set-level-only records
+          // (e.g. BFA imports from Drive with no child sheets yet) still want
+          // to render through DrawingsTable so the user sees the group headers.
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
             <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
