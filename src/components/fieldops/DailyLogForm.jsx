@@ -53,12 +53,18 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData.project_id) {
+      alert("Select a project before saving a daily log.");
+      return;
+    }
     onSave({
       ...formData,
       headcount: parseInt(formData.headcount) || 0,
       hours_worked: parseFloat(formData.hours_worked) || 0,
-      temperature: parseFloat(formData.temperature) || 0,
-      wind_speed: parseFloat(formData.wind_speed) || 0,
+      // temperature and wind_speed are TEXT in the daily_logs schema — keep them
+      // as strings (or null) so PostgREST doesn't choke on a number→text mismatch.
+      temperature: formData.temperature === "" || formData.temperature == null ? null : String(formData.temperature),
+      wind_speed: formData.wind_speed === "" || formData.wind_speed == null ? null : String(formData.wind_speed),
       delay_hours: parseFloat(formData.delay_hours) || 0,
       safety_incidents: parseInt(formData.safety_incidents) || 0,
     });
