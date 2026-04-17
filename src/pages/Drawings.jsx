@@ -311,6 +311,12 @@ export default function Drawings() {
   // set only by legacy drawing_set_name (no FK yet).
   const deleteSetMut = useMutation({
     mutationFn: async ({ setId, sheetIds }) => {
+      // Set-only (parent row, no child sheets): soft-delete parent directly
+      if (setId && sheetIds.length === 0) {
+        await base44.entities.DrawingSet.delete(setId);
+        return { deleted: 0, parentOnly: true };
+      }
+      // Normal cascade: parent + children in one transaction
       if (setId) {
         const result = await base44.entities.DrawingSet.deleteCascade(setId);
         return { deleted: result.deletedChildCount ?? sheetIds.length };
@@ -319,14 +325,13 @@ export default function Drawings() {
       const { succeeded } = await batchProcess(sheetIds, (id) => base44.entities.Drawing.delete(id));
       return { deleted: succeeded.length };
     },
-    onSuccess: ({ deleted }, { setId, sheetIds, setName }) => {
+    onSuccess: ({ deleted, parentOnly }, { setId, sheetIds, setName }) => {
       invalidate();
       setSelected(new Set());
-      // F19: undo for the full cascade. We restore every child sheet id we
-      // had going in, plus the parent drawing_sets row if there was one.
-      // The cascade RPC set is_deleted=true on all of them, and update() by
-      // id still works on soft-deleted rows, so we just flip the bits back.
-      toast.success(`Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`, {
+      const msg = parentOnly
+        ? `Deleted set "${setName}"`
+        : `Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`;
+      toast.success(msg, {
         action: {
           label: "Undo",
           onClick: async () => {
@@ -334,9 +339,11 @@ export default function Drawings() {
               if (setId) {
                 await base44.entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
               }
-              await batchProcess(sheetIds, (id) =>
-                base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
-              );
+              if (sheetIds.length > 0) {
+                await batchProcess(sheetIds, (id) =>
+                  base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                );
+              }
               invalidate();
               toast.success(`Restored "${setName}"`);
             } catch (err) {
@@ -377,14 +384,18 @@ export default function Drawings() {
   const handleDeleteSet = (group) => {
     if (group.isUngrouped) return;
     const total = group.sheets.length;
-    // Every child sheet created by the new parent/child flow carries
-    // drawing_set_id; legacy hand-entered sheets may only have the text name.
+    // For set-only groups (imported from Drive, no child sheets yet) the
+    // parent id lives on group.setId or group.parent.id directly.
+    // For groups with child sheets, derive from the children's FK.
     const setIdCandidates = group.sheets.map(s => s.drawing_set_id).filter(Boolean);
-    const setId = setIdCandidates[0] || null;
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
     const sheetIds = group.sheets.map(s => s.id);
+    const desc = total > 0
+      ? `The set and all ${total} sheet${total === 1 ? "" : "s"} inside it will be removed. You can undo this from the toast that appears after deletion.`
+      : "This drawing set will be removed. You can undo this from the toast that appears after deletion.";
     setConfirmState({
       title: `Delete drawing set "${group.name}"?`,
-      description: `The set and all ${total} sheet${total === 1 ? "" : "s"} inside it will be removed. You can undo this from the toast that appears after deletion.`,
+      description: desc,
       run: () => deleteSetMut.mutate({ setId, sheetIds, setName: group.name }),
     });
   };
