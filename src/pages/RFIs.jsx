@@ -314,13 +314,9 @@ export default function RFIs() {
 
   const bulkImportMut = useMutation({
     mutationFn: async (rows) => {
-      // Determine the next RFI number based on ALL records (including soft-deleted)
-      // so we never reuse a number from a deleted RFI.  Passing is_deleted explicitly
-      // bypasses the auto-filter in supabaseClient.
-      const allProjectRfis = await base44.entities.RFI.filter(
-        { project_id: projectId, is_deleted: [true, false] }
-      );
-      const existingNumbers = allProjectRfis
+      // Determine the next RFI number based on active records only.
+      // Deleted RFI numbers are reusable (partial unique index excludes them).
+      const existingNumbers = rfis
         .map((r) => extractRfiSequence(r.rfi_number))
         .filter((n) => n != null);
       let nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;

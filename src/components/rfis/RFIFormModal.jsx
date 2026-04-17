@@ -180,12 +180,21 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             {/* Section 2 — Details */}
             <SectionLabel>Details</SectionLabel>
             <Field label="RFI #">
-              <input
-                style={{ ...iStyle, opacity: 0.7, cursor: "not-allowed" }}
-                value={rfi ? (rfi.rfi_number || "—") : "Auto-assigned on save"}
-                disabled
-                readOnly
-              />
+              {rfi ? (
+                <input
+                  style={iStyle}
+                  value={formData.rfi_number || ""}
+                  onChange={(e) => set("rfi_number", e.target.value)}
+                  placeholder="RFI #001"
+                />
+              ) : (
+                <input
+                  style={{ ...iStyle, opacity: 0.7 }}
+                  value={formData.rfi_number || ""}
+                  onChange={(e) => set("rfi_number", e.target.value)}
+                  placeholder="Auto-assigned if blank"
+                />
+              )}
             </Field>
             <Field label="Drawing Reference" span={2}>
               <input style={iStyle} value={formData.drawing_reference} onChange={(e) => set("drawing_reference", e.target.value)} placeholder="e.g. Sheet A-2.3" />

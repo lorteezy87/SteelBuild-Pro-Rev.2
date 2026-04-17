@@ -99,17 +99,8 @@ export const getNextFormattedNumber = async (...rawArgs) => {
 
   // Always scan existing records to find the real max — prevents duplicates
   // when the sequence table is out of sync with actual data.
-  // Include soft-deleted rows so we never reuse a number from a deleted record.
-  // Not all tables have is_deleted, so try with the flag first and fall back.
-  let existing;
-  try {
-    existing = await entities[entityName]?.filter(
-      { project_id: projectId, is_deleted: [true, false] }
-    ) || [];
-  } catch {
-    // Table doesn't have is_deleted column — standard query (no soft-delete)
-    existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
-  }
+  // Only scans active rows — deleted numbers are reusable (partial unique index).
+  const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxFromRecords = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
     return numericValue != null && numericValue > max ? numericValue : max;
@@ -173,14 +164,7 @@ export const previewNextFormattedNumber = async ({
     // Fall through to non-mutating data scan
   }
 
-  let existing;
-  try {
-    existing = await entities[entityName]?.filter(
-      { project_id: projectId, is_deleted: [true, false] }
-    ) || [];
-  } catch {
-    existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
-  }
+  const existing = await entities[entityName]?.filter({ project_id: projectId }) || [];
   const maxNumber = existing.reduce((max, item) => {
     const numericValue = extractNumericSuffix(item?.[fieldName]);
     return numericValue != null && numericValue > max ? numericValue : max;
