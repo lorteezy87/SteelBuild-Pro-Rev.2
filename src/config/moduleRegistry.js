@@ -14,7 +14,7 @@
 
 // ── Tab definitions ──────────────────────────────────────────────────
 export const PRIMARY_TABS = [
-  { label: "DASHBOARD",   pages: ["Dashboard"] },
+  { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PCC",         pages: ["ProjectControlCenter"] },
   { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "RFIHub"] },
@@ -50,6 +50,7 @@ export const TAB_DEFAULT_PAGE = {
 // ── Full module catalog (used for grid dropdown + page label lookup) ─
 export const ALL_MODULES = [
   { icon: "\u25C8", name: "Dashboard",               group: "Overview",      page: "Dashboard" },
+  { icon: "\u2318", name: "Command Center",          group: "Overview",      page: "CommandCenter" },
   { icon: "\u2295", name: "Project Control Center",   group: "Overview",      page: "ProjectControlCenter" },
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
@@ -98,7 +99,8 @@ export const NAV_GROUPS = [
   {
     label: "OVERVIEW",
     items: [
-      { label: "Dashboard",      icon: "\u25C8", page: "Dashboard" },
+      { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
+      { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
       { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
     ],
   },
@@ -207,6 +209,7 @@ export const SIDEBAR_GROUPS = [
     collapsible: false,
     items: [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
+      { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
     ],
   },
@@ -288,6 +291,7 @@ export const PAGE_LABELS = (() => {
   // Add pages not covered by ALL_MODULES
   Object.assign(labels, {
     Dashboard:       "Dashboard",
+    CommandCenter:   "Command Center",
     Settings:        "Settings",
     UsersManagement: "User Management",
     Expenses:        "Expenses",
