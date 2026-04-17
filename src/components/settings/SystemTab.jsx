@@ -100,10 +100,8 @@ export default function SystemTab({ user }) {
       {/* Support */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Support & Legal</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {['Privacy Policy', 'Terms of Service', 'Support Center'].map(link => (
-            <a key={link} href="#" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>{link} →</a>
-          ))}
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          Contact your SteelBuild Pro administrator for privacy, terms, or support inquiries.
         </div>
       </div>
     </div>

@@ -4,7 +4,6 @@ import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import StatusBadge from "../shared/StatusBadge";
 import ProgressBar from "../shared/ProgressBar";
 
 /* ── Enhanced Mini SVG Sparkline with area fill and trend arrow ────────────── */

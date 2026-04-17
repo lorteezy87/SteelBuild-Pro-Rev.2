@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
-import { AlertTriangle, Download, Shield, TrendingDown, Users, DollarSign, Truck, Plus } from "lucide-react";
+import { AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";

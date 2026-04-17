@@ -25,12 +25,12 @@ export function useAlerts() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", projectId] }),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Alert.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", projectId] }),
   });
 
   const markRead = (alert) => {
@@ -48,7 +48,7 @@ export function useAlerts() {
       const { succeeded, failed } = await batchProcess(unread, (a) =>
         base44.entities.Alert.update(a.id, { is_read: true })
       );
-      qc.invalidateQueries({ queryKey: ["alerts"] });
+      qc.invalidateQueries({ queryKey: ["alerts", projectId] });
       if (failed.length > 0) {
         toast.warning(`${succeeded.length} marked as read, ${failed.length} failed`);
       } else {

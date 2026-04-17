@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { validate } from "@/services/validation";
 import { validateTransition, getWorkflowField } from "@/services/workflowEngine";
-import { invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
+import { invalidateEntities } from "@/services/cacheRegistry";
 import { batchProcess } from "@/utils/batchProcess";
 import { logActivity } from "@/services/auditLogger";
 
