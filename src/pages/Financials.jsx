@@ -98,9 +98,24 @@ const HEALTH_COLOR = {
 // ── Executive KPI Card ──────────────────────────────────────────────────
 function KPICard({ title, primary, supporting, health, onClick }) {
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const handleKeyDown = (e) => {
+    // Space/Enter activate the card like a button. preventDefault on Space
+    // stops the page from scrolling.
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${title} — open detail drawer`}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -113,6 +128,8 @@ function KPICard({ title, primary, supporting, health, onClick }) {
         cursor: "pointer",
         transition: "background 0.15s",
         minWidth: 0,
+        outline: focused ? "2px solid var(--accent)" : "none",
+        outlineOffset: focused ? "2px" : 0,
       }}
     >
       <div style={{
@@ -394,7 +411,7 @@ function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selectedProj
               ...mono, fontSize: 9, color: barColor, fontWeight: 600,
               letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2,
             }}>
-              {kpi.health.toUpperCase()} — {kpi.approved.count + kpi.pending.count + kpi.rejected.count} TOTAL COs
+              {kpi.health.toUpperCase()} — {kpi.approved.count} APPROVED, {kpi.pending.count} PENDING
             </div>
           </div>
           <button
@@ -413,7 +430,7 @@ function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selectedProj
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile label="Approved" value={formatCurrency(kpi.approved.totalValue)} sub={`${kpi.approved.count} COs`} accent="var(--status-success)" />
             <DrawerTile label="Pending" value={formatCurrency(kpi.pending.totalValue)} sub={`${kpi.pending.count} COs`} accent="var(--status-warning)" />
             <DrawerTile label="Avg Margin" value={`${kpi.approved.avgMarginPercent.toFixed(1)}%`} sub={formatCurrency(kpi.approved.totalMarginDollars)} accent="var(--accent)" />
@@ -461,7 +478,7 @@ function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selectedProj
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ ...body, fontSize: 12, color: "var(--text-secondary)" }}>Margin impact on contract</span>
-              <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>{kpi.marginImpactOnContract.toFixed(2)}%</span>
+              <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: "var(--accent)" }}>{kpi.marginImpactOnContract.toFixed(1)}%</span>
             </div>
           </div>
 
@@ -748,7 +765,7 @@ function LaborDrawer({ open, onClose, kpi, selectedProject }) {
               ...mono, fontSize: 9, color: barColor, fontWeight: 600,
               letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2,
             }}>
-              {kpi.health.toUpperCase()} — {kpi.utilizationRatio != null ? `RATIO ${kpi.utilizationRatio.toFixed(2)}` : "INSUFFICIENT DATA"}
+              {kpi.health.toUpperCase()} — {kpi.utilizationRatio != null ? `${kpi.utilizationRatio.toFixed(2)} RATIO` : "INSUFFICIENT DATA"}
             </div>
           </div>
           <button
@@ -767,7 +784,7 @@ function LaborDrawer({ open, onClose, kpi, selectedProject }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile label="Labor Budget" value={formatCurrency(kpi.laborBudget)} sub={`${rows.length} code${rows.length === 1 ? "" : "s"}`} accent="var(--accent)" />
             <DrawerTile label="Labor Actual" value={formatCurrency(kpi.laborActual)} sub={`${kpi.percentLaborConsumed.toFixed(1)}% consumed`} accent="var(--status-warning)" />
             <DrawerTile label="% Consumed" value={`${kpi.percentLaborConsumed.toFixed(1)}%`} sub={`of ${formatCurrencyShort(kpi.laborBudget)} budget`} accent="var(--status-info)" />
@@ -887,8 +904,10 @@ function LaborDrawer({ open, onClose, kpi, selectedProject }) {
                     value={draftValue}
                     onChange={(e) => { setDraftValue(e.target.value); setInputError(null); }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") onSave();
-                      if (e.key === "Escape") onCancel();
+                      if (e.key === "Enter") { e.preventDefault(); onSave(); }
+                      // stopPropagation so Escape cancels edit without bubbling
+                      // to the drawer's Escape-closes-drawer handler.
+                      if (e.key === "Escape") { e.stopPropagation(); onCancel(); }
                     }}
                     autoFocus
                     disabled={updateMut.isPending}
@@ -1243,7 +1262,7 @@ function BillingDrawer({ open, onClose, kpi, sovItems }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile
               label="Cumulative Billings"
               value={formatCurrency(kpi.cumulativeBillings)}
@@ -1627,7 +1646,7 @@ function DSODrawer({ open, onClose, kpi, sovItems }) {
           )}
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile
               label="Avg DSO"
               value={kpi.avgDSO != null ? `${Math.round(kpi.avgDSO)}d` : "—"}
