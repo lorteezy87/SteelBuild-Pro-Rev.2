@@ -512,8 +512,8 @@ function GroupRow({
                   </span>
                 </>
               )}
-              {/* AI processing rollup — only shown when there's something to flag */}
-              {(a.aiExtracting > 0 || a.aiNeedsReview > 0 || a.aiFailed > 0) && (
+              {/* AI processing rollup — only shown when there are non-released sheets with flags */}
+              {a.percentReleased < 100 && (a.aiExtracting > 0 || a.aiNeedsReview > 0 || a.aiFailed > 0) && (
                 <>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                   <span style={{ ...mono, fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>
@@ -756,7 +756,11 @@ function SheetRow({
       <td style={{ ...tdBase, maxWidth: 280 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {d.title}
-          <AIStatusBadge status={d.ai_extraction_status} uploadStatus={d.upload_status} error={d.ai_extraction_error} />
+          {/* Hide stale AI extraction badges on completed sheets — they're
+              upload-process artifacts, not approval status indicators. */}
+          {d.stage !== "Released" && d.stage !== "FFF" && (
+            <AIStatusBadge status={d.ai_extraction_status} uploadStatus={d.upload_status} error={d.ai_extraction_error} />
+          )}
         </div>
         <RFILinkBadge linkedIds={d.linked_rfi_ids} rfiMap={rfiMap} />
         {(d.is_superseded || d.set_approval_status === "superseded") && (
