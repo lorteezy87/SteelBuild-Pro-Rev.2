@@ -491,7 +491,7 @@ function GroupRow({
                   </span>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                   <span style={{ ...mono, fontSize: 9, color: accent, fontWeight: 700 }}>
-                    {a.releasedCount}/{a.total} IFC ({a.percentReleased}%)
+                    {a.releasedCount}/{a.total} RELEASED ({a.percentReleased}%)
                   </span>
                 </>
               )}

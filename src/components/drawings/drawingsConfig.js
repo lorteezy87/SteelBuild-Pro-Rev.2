@@ -13,8 +13,8 @@ export const STAGES = [
   { key: "BFA",         label: "BFA",         color: "#06B6D4", bg: "rgba(6,182,212,0.15)" },
   { key: "OFS",         label: "OFS",         color: "#F59E0B", bg: "rgba(245,158,11,0.15)" },
   { key: "BFS",         label: "BFS",         color: "#F97316", bg: "rgba(249,115,22,0.15)" },
-  { key: "FFF",         label: "FFF",         color: "#84CC16", bg: "rgba(132,204,22,0.15)" },
-  { key: "Released",    label: "IFC",         color: "#10B981", bg: "rgba(16,185,129,0.15)" },
+  { key: "FFF",         label: "IFC",         color: "#84CC16", bg: "rgba(132,204,22,0.15)" },
+  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.15)" },
 ];
 
 /** Map stage key → { key, label, color, bg } */
