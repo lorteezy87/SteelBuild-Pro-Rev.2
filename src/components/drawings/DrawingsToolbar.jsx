@@ -151,7 +151,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
 export function BulkActionsBar({
   selectedCount, bulkStage, setBulkStage,
   onApplyStage, selectedSetName, onSetApproval,
-  onBulkDelete, onClear,
+  onBulkEdit, onBulkDelete, onClear,
 }) {
   return (
     <div style={{
@@ -177,6 +177,13 @@ export function BulkActionsBar({
       </select>
 
       <button style={btnPrimary} onClick={onApplyStage} disabled={!bulkStage}>APPLY</button>
+
+      <button
+        style={{ ...btnBase, background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.3)", color: "#60A5FA" }}
+        onClick={onBulkEdit}
+      >
+        BULK EDIT
+      </button>
 
       {selectedSetName && (
         <button
