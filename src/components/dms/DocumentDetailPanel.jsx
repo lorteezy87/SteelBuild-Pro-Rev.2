@@ -29,6 +29,26 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
   const [activeTab, setActiveTab] = useState("details");
   const navigate = useNavigate();
 
+  const docNum = doc ? (doc.documentNumber || doc.document_number) : null;
+  const versionStack = useMemo(() => {
+    if (!docNum || !allDocuments.length) return [];
+    return allDocuments
+      .filter(d => (d.documentNumber || d.document_number) === docNum)
+      .sort((a, b) => {
+        const revA = parseInt(a.revisionNumber || a.revision_number || "0", 10) || 0;
+        const revB = parseInt(b.revisionNumber || b.revision_number || "0", 10) || 0;
+        if (revB !== revA) return revB - revA;
+        return new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0);
+      });
+  }, [docNum, allDocuments]);
+
+  const linkedEntities = useMemo(() => {
+    if (!doc) return [];
+    return Object.entries(ENTITY_LABELS)
+      .filter(([key]) => doc[key])
+      .map(([key, meta]) => ({ key, value: doc[key], ...meta }));
+  }, [doc]);
+
   if (!doc) return null;
 
   const formatDate = (dateStr) => {
@@ -39,29 +59,6 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
   const fileSizeKb = doc.fileSizeKb ?? doc.file_size_kb ?? 0;
   const fileSizeMB = fileSizeKb ? (fileSizeKb / 1024).toFixed(1) : "0.0";
   const statusStyle = STATUS_COLORS[doc.status] || STATUS_COLORS["Draft"];
-
-  /* ── version stacking: find other docs with same document_number ── */
-  const docNum = doc.documentNumber || doc.document_number;
-  const versionStack = useMemo(() => {
-    if (!docNum || !allDocuments.length) return [];
-    return allDocuments
-      .filter(d => (d.documentNumber || d.document_number) === docNum)
-      .sort((a, b) => {
-        // Sort by revision number descending (newest first)
-        const revA = parseInt(a.revisionNumber || a.revision_number || "0", 10) || 0;
-        const revB = parseInt(b.revisionNumber || b.revision_number || "0", 10) || 0;
-        if (revB !== revA) return revB - revA;
-        // Fallback to upload date
-        return new Date(b.uploadedDate || b.created_at || 0) - new Date(a.uploadedDate || a.created_at || 0);
-      });
-  }, [docNum, allDocuments]);
-
-  /* ── linked entity list ──────────────────────────────────────────── */
-  const linkedEntities = useMemo(() => {
-    return Object.entries(ENTITY_LABELS)
-      .filter(([key]) => doc[key])
-      .map(([key, meta]) => ({ key, value: doc[key], ...meta }));
-  }, [doc]);
 
   const handleDownload = async () => {
     try {
