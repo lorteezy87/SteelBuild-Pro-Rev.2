@@ -13,7 +13,7 @@ const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
-const EXTRACT_TIMEOUT_MS = 180_000;  // 3 min — tool-use extraction is a bit slower on large sets
+const EXTRACT_TIMEOUT_MS = 300_000;  // 5 min — includes rate-limit retry backoff time
 
 // Generate a random upload batch id (one per wizard session).
 // Each file in the batch carries this id so the UI can later group/aggregate.
