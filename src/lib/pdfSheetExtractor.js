@@ -35,6 +35,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 // ─── Tunables ────────────────────────────────────────────────────────
 const MAX_CHARS_PER_PAGE   = 2400;
 const MAX_TOTAL_TEXT_CHARS = 160_000;
+// Rate-limit retry: the Anthropic API has a 10K input tokens/min limit.
+// When we hit 429, back off and retry up to MAX_LLM_RETRIES times.
+const MAX_LLM_RETRIES      = 4;
+const LLM_RETRY_BASE_MS    = 15_000;  // 15s base — rate limit is per minute
 // Horizontal gap above which items on the same y-line are considered to
 // be in separate columns. PDF units are 1/72in; 14 ≈ 0.2in which
 // reliably separates columns in drawing-index tables but keeps words of
@@ -392,50 +396,71 @@ export async function extractSheetsFromPdf(file) {
   }
 
   // 2. Call Claude with tool-use for forced structured output.
+  //    Retry on 429 rate-limit errors with exponential backoff.
   let llmResult;
-  try {
-    llmResult = await base44.integrations.Core.InvokeLLM({
-      system:     SYSTEM_PROMPT,
-      prompt:     buildUserPrompt(extracted, file.name),
-      tools:      [REPORT_DRAWING_SET_TOOL],
-      tool_choice:{ type: "tool", name: "report_drawing_set" },
-      maxTokens:  8000,
-      temperature: 0,
+  for (let attempt = 0; ; attempt++) {
+    try {
+      llmResult = await base44.integrations.Core.InvokeLLM({
+        system:     SYSTEM_PROMPT,
+        prompt:     buildUserPrompt(extracted, file.name),
+        tools:      [REPORT_DRAWING_SET_TOOL],
+        tool_choice:{ type: "tool", name: "report_drawing_set" },
+        maxTokens:  8000,
+        temperature: 0,
+      });
+    } catch (err) {
+      const is429 = /429|rate.limit/i.test(err?.message || String(err));
+      if (is429 && attempt < MAX_LLM_RETRIES) {
+        const waitMs = LLM_RETRY_BASE_MS * Math.pow(1.5, attempt);
+        console.warn(`[pdfSheetExtractor] 429 rate-limit (attempt ${attempt + 1}/${MAX_LLM_RETRIES}), retrying in ${(waitMs / 1000).toFixed(0)}s…`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      console.error("[pdfSheetExtractor] InvokeLLM threw:", err);
+      return {
+        setMeta: { ...EMPTY_SET_META },
+        sheets: [makeManualEntryRow(file, `AI extraction failed: ${err?.message || String(err)}`)],
+        scanned: false,
+        extractFailed: true,
+        error: err?.message || String(err),
+        pageCount: extracted.pageCount,
+      };
+    }
+
+    // Always log the response shape — when extraction silently fails, this is
+    // what tells you whether the proxy returned tool_use, plain text, or an
+    // error envelope. Cheap and decisive in DevTools.
+    console.info("[pdfSheetExtractor] llm response shape:", {
+      hasToolUse:       Boolean(llmResult?.tool_use),
+      hasText:          Boolean(llmResult?.text),
+      hasError:         Boolean(llmResult?.error),
+      protocolVersion:  llmResult?.protocol_version ?? null,
+      textLength:       typeof llmResult?.text === "string" ? llmResult.text.length : 0,
     });
-  } catch (err) {
-    console.error("[pdfSheetExtractor] InvokeLLM threw:", err);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [makeManualEntryRow(file, `AI extraction failed: ${err?.message || String(err)}`)],
-      scanned: false,
-      extractFailed: true,
-      error: err?.message || String(err),
-      pageCount: extracted.pageCount,
-    };
-  }
 
-  // Always log the response shape — when extraction silently fails, this is
-  // what tells you whether the proxy returned tool_use, plain text, or an
-  // error envelope. Cheap and decisive in DevTools.
-  console.info("[pdfSheetExtractor] llm response shape:", {
-    hasToolUse:       Boolean(llmResult?.tool_use),
-    hasText:          Boolean(llmResult?.text),
-    hasError:         Boolean(llmResult?.error),
-    protocolVersion:  llmResult?.protocol_version ?? null,
-    textLength:       typeof llmResult?.text === "string" ? llmResult.text.length : 0,
-  });
+    // Edge function returns { error } on failure — check for retryable 429.
+    if (llmResult?.error) {
+      const errStr = String(llmResult.error);
+      const is429 = /429|rate.limit/i.test(errStr);
+      if (is429 && attempt < MAX_LLM_RETRIES) {
+        const waitMs = LLM_RETRY_BASE_MS * Math.pow(1.5, attempt);
+        console.warn(`[pdfSheetExtractor] 429 rate-limit (attempt ${attempt + 1}/${MAX_LLM_RETRIES}), retrying in ${(waitMs / 1000).toFixed(0)}s…`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      console.error("[pdfSheetExtractor] llm-proxy error:", llmResult.error);
+      return {
+        setMeta: { ...EMPTY_SET_META },
+        sheets: [makeManualEntryRow(file, `AI unavailable: ${llmResult.error}`)],
+        scanned: false,
+        extractFailed: true,
+        error: llmResult.error,
+        pageCount: extracted.pageCount,
+      };
+    }
 
-  // Edge function returns { error } on failure.
-  if (llmResult?.error) {
-    console.error("[pdfSheetExtractor] llm-proxy error:", llmResult.error);
-    return {
-      setMeta: { ...EMPTY_SET_META },
-      sheets: [makeManualEntryRow(file, `AI unavailable: ${llmResult.error}`)],
-      scanned: false,
-      extractFailed: true,
-      error: llmResult.error,
-      pageCount: extracted.pageCount,
-    };
+    // Success — break out of the retry loop
+    break;
   }
 
   // Stale-deployment detection. We forced tool_choice on the request, so a
