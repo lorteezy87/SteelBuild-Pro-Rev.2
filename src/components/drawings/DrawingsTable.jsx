@@ -682,7 +682,7 @@ function SetOnlyInfoRow({ group }) {
             paddingTop: 10, borderTop: "1px dashed var(--border-default)",
           }}>
             <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-              PER-SHEET DATA NOT IMPORTED YET (PHASE 2)
+              Individual sheets not yet loaded
             </span>
             {driveUrl && (
               <a
