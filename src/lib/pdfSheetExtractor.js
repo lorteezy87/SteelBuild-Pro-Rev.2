@@ -39,6 +39,12 @@ const MAX_TOTAL_TEXT_CHARS = 160_000;
 // When we hit 429, back off and retry up to MAX_LLM_RETRIES times.
 const MAX_LLM_RETRIES      = 4;
 const LLM_RETRY_BASE_MS    = 15_000;  // 15s base — rate limit is per minute
+// Proactive rate-limit pacer: minimum gap between consecutive LLM calls
+// (module-level singleton — shared across all callers). At 10K input
+// tokens/min and ~3-5K tokens per extraction call, 20s ≈ 3 calls/min
+// stays well under the budget without needing reactive 429 retries.
+const MIN_LLM_INTERVAL_MS  = 20_000;  // 20s between calls
+let _lastLlmCallTs = 0;
 // Horizontal gap above which items on the same y-line are considered to
 // be in separate columns. PDF units are 1/72in; 14 ≈ 0.2in which
 // reliably separates columns in drawing-index tables but keeps words of
@@ -368,7 +374,7 @@ function dedupeSheets(sheets) {
  *   pageCount?:    number,
  * }>}
  */
-export async function extractSheetsFromPdf(file) {
+export async function extractSheetsFromPdf(file, options = {}) {
   // 1. Client-side PDF text extraction.
   let extracted;
   try {
@@ -396,7 +402,23 @@ export async function extractSheetsFromPdf(file) {
   }
 
   // 2. Call Claude with tool-use for forced structured output.
-  //    Retry on 429 rate-limit errors with exponential backoff.
+  //    Proactive pacing prevents 429 in most multi-file batches;
+  //    reactive retry with exponential backoff handles the rest.
+  const { onStatus } = options || {};
+  const _now = Date.now();
+  const _elapsed = _now - _lastLlmCallTs;
+  if (_lastLlmCallTs > 0 && _elapsed < MIN_LLM_INTERVAL_MS) {
+    const waitMs = MIN_LLM_INTERVAL_MS - _elapsed;
+    const totalSec = Math.ceil(waitMs / 1000);
+    console.info(`[pdfSheetExtractor] Rate-limit pacer: waiting ${totalSec}s before next LLM call…`);
+    // Count down second-by-second so the UI can show a live countdown.
+    for (let sec = totalSec; sec > 0; sec--) {
+      if (onStatus) onStatus({ phase: 'rate-limit-wait', remainingSec: sec });
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  if (onStatus) onStatus({ phase: 'llm-calling' });
+
   let llmResult;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -462,6 +484,10 @@ export async function extractSheetsFromPdf(file) {
     // Success — break out of the retry loop
     break;
   }
+
+  // Record call timestamp for the rate-limit pacer so the next extraction
+  // (from a different file) waits an appropriate interval.
+  _lastLlmCallTs = Date.now();
 
   // Stale-deployment detection. We forced tool_choice on the request, so a
   // healthy edge function MUST come back with a tool_use block. If it doesn't,

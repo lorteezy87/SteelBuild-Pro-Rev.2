@@ -60,7 +60,7 @@ function normalizeRevisionNumber(value, fallback = "0") {
 
 // Router: short-circuit on oversize files (skip the LLM round-trip);
 // otherwise delegate to the shared extractor.
-async function validateAndExtract(file) {
+async function validateAndExtract(file, options = {}) {
   const sizeMB = file.size / (1024 * 1024);
   if (sizeMB > MAX_PDF_SIZE_MB) {
     console.warn(`PDF too large (${sizeMB.toFixed(1)}MB). Using filename fallback.`);
@@ -81,7 +81,7 @@ async function validateAndExtract(file) {
       tooLarge: true,
     };
   }
-  return extractSheetsFromPdf(file);
+  return extractSheetsFromPdf(file, options);
 }
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
@@ -794,7 +794,21 @@ export default function DrawingSetUploadModal({
         let extractResult;
         try {
           extractResult = await withTimeout(
-            validateAndExtract(file),
+            validateAndExtract(file, {
+              onStatus: (status) => {
+                if (status.phase === 'rate-limit-wait') {
+                  setProcessingStatus(prev => ({
+                    ...prev,
+                    message: `Rate limit cooldown — ${status.remainingSec}s before reading ${file.name}… (${i + 1} of ${totalFiles})`,
+                  }));
+                } else if (status.phase === 'llm-calling') {
+                  setProcessingStatus(prev => ({
+                    ...prev,
+                    message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
+                  }));
+                }
+              },
+            }),
             EXTRACT_TIMEOUT_MS,
             "AI extraction"
           );
@@ -853,8 +867,9 @@ export default function DrawingSetUploadModal({
           sizeMB,
         });
 
+        // Small UI buffer; main inter-call pacing lives in pdfSheetExtractor
         if (i < files.length - 1) {
-          await new Promise(r => setTimeout(r, 600));
+          await new Promise(r => setTimeout(r, 200));
         }
       }
 
