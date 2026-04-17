@@ -224,17 +224,32 @@ Your job is to call the report_drawing_set tool EXACTLY ONCE with:
 
 CRITICAL RULES — violating any of these is a failure:
 
+SHEET NUMBER IDENTIFICATION:
+- The sheetNumber is the ACTUAL SHEET IDENTIFIER from the title block (usually bottom-right corner of the drawing). It is the number that identifies THIS sheet, e.g. "E106", "S-101", "ABP1".
+- DO NOT use section callouts, detail references, or cross-references as the sheet number. Text like "SEE S401", "DETAIL A/S401", "SECTION 2/S401", "S401" appearing in the drawing body as a reference to ANOTHER sheet is NOT this sheet's number.
+- If the PDF text contains a mix of title-block text and drawing-body text, the title block is typically at the bottom or right edge of the page and contains: sheet number, sheet title, drawn by, checked by, date, revision, scale, project name.
+- If only one page of content exists, the title block sheet number is authoritative. Ignore any other sheet-number-like tokens that appear in section marks, detail bubbles, or grid references.
+- When the filename follows the pattern {digits}{letters}{digits}-R{rev} (e.g. "101E108-R1"), the letter+digit portion (e.g. "E108") is very likely the correct sheet number. Use this as a strong hint.
+
+FIELD SEPARATION:
 - The sheetNumber field contains ONLY the sheet number itself (e.g. "S-101", "A201", "M-2.1"). NEVER put the full "A201 FIRST FLOOR PLAN" string in sheetNumber. NEVER put "A201" or any sheet-number-like token in sheetTitle. They are SEPARATE fields.
 - When a row starts with a sheet-number-shaped token (1-4 letters, optional separator, 1-4 digits, optional .decimal), that token is the sheetNumber. Everything after it on that row is the sheetTitle (or other fields).
+
+REVISIONS AND DATES:
 - The sheet-level "revision" field is the PER-SHEET revision from the sheet's own title block. If a sheet's title block shows a different revision than the cover sheet, use the per-sheet value. Do NOT copy the package revision into every sheet automatically.
 - Dates go in ISO YYYY-MM-DD format (convert from MM/DD/YY if needed).
+
+COMPLETENESS:
 - If a sheet index exists, enumerate every single row — do not skip, summarize, or deduplicate. Prefer the index as the authoritative list.
 - NEVER invent data. Use "" for any field you cannot read.
 - Return EVERY sheet you find. Do not truncate.`;
 
-function buildUserPrompt(extracted) {
+function buildUserPrompt(extracted, fileName) {
+  const filenameHint = fileName
+    ? `\nThe source filename is "${fileName}". If the filename follows a pattern like {jobNumber}{sheetId}-R{rev} (e.g. "101E108-R1.pdf"), the sheetId portion (e.g. "E108") is the expected sheet number. Use this to validate what you find in the text.\n`
+    : "";
   return `Here is the extracted text from a drawing set PDF.
-
+${filenameHint}
 ${buildPdfTextBlock(extracted.pages)}
 
 The PDF has ${extracted.pageCount} pages and ${extracted.totalChars} characters of extracted text.
@@ -380,7 +395,7 @@ export async function extractSheetsFromPdf(file) {
   try {
     llmResult = await base44.integrations.Core.InvokeLLM({
       system:     SYSTEM_PROMPT,
-      prompt:     buildUserPrompt(extracted),
+      prompt:     buildUserPrompt(extracted, file.name),
       tools:      [REPORT_DRAWING_SET_TOOL],
       tool_choice:{ type: "tool", name: "report_drawing_set" },
       maxTokens:  8000,
@@ -494,15 +509,68 @@ function stripExt(name) {
   return String(name || "").replace(/\.pdf$/i, "");
 }
 
+/**
+ * Parse a drawing filename into structured fields.
+ *
+ * Common patterns in steel fabrication:
+ *   101E108-R1.pdf   → { sheetNumber: "E108", revision: "1" }
+ *   24426S201-R2.pdf → { sheetNumber: "S201", revision: "2" }
+ *   S-101.pdf        → { sheetNumber: "S-101", revision: "0" }
+ *   101ABP2-RA.pdf   → { sheetNumber: "ABP2", revision: "A" }
+ *
+ * The leading numeric prefix (job number) is stripped so the sheet
+ * number matches what users expect in the drawings table.
+ */
+export function parseFilename(name) {
+  const stem = stripExt(name);
+  const result = { sheetNumber: "", revision: "0", baseName: stem };
+
+  // Try: {digits}{Letter(s)}{digits/chars}-R{rev}
+  // e.g. 101E108-R1, 24426S201-RA, 101ABP2-R0
+  const m1 = stem.match(/^\d{3,6}([A-Z]{1,4}\d{1,4}[A-Z]?)\s*[-_]\s*R([A-Z0-9]+)$/i);
+  if (m1) {
+    result.sheetNumber = m1[1].toUpperCase();
+    result.revision = m1[2];
+    return result;
+  }
+
+  // Try: {Letter(s)}{sep?}{digits}-R{rev}  (no job prefix)
+  // e.g. S-101-R2, E108-R1
+  const m2 = stem.match(/^([A-Z]{1,4}[-. ]?\d{1,4}(?:\.\d+)?)\s*[-_]\s*R([A-Z0-9]+)$/i);
+  if (m2) {
+    result.sheetNumber = m2[1].toUpperCase();
+    result.revision = m2[2];
+    return result;
+  }
+
+  // Try: {digits}{Letter(s)}{digits} (no revision suffix)
+  // e.g. 101E108
+  const m3 = stem.match(/^\d{3,6}([A-Z]{1,4}\d{1,4}[A-Z]?)$/i);
+  if (m3) {
+    result.sheetNumber = m3[1].toUpperCase();
+    return result;
+  }
+
+  // Try: plain sheet number  e.g. S-101, A201
+  const m4 = stem.match(/^([A-Z]{1,4}[-. ]?\d{1,4}(?:\.\d+)?)$/i);
+  if (m4) {
+    result.sheetNumber = m4[1].toUpperCase();
+    return result;
+  }
+
+  return result;
+}
+
 function makeManualEntryRow(file, note) {
+  const parsed = parseFilename(file.name);
   return {
-    sheetNumber: "",
-    sheetTitle:  stripExt(file.name),
+    sheetNumber: parsed.sheetNumber,
+    sheetTitle:  parsed.sheetNumber ? "" : stripExt(file.name),
     discipline:  "Structural",
     sheetType:   "General",
-    revision:    "0",
+    revision:    parsed.revision || "0",
     scale:       "",
     date:        "",
-    _note:       note,
+    _note:       note + (parsed.sheetNumber ? ` (sheet # "${parsed.sheetNumber}" extracted from filename)` : ""),
   };
 }

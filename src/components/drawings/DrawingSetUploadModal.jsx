@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import { extractSheetsFromPdf, EMPTY_SET_META } from "@/lib/pdfSheetExtractor";
+import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
@@ -64,17 +64,18 @@ async function validateAndExtract(file) {
   const sizeMB = file.size / (1024 * 1024);
   if (sizeMB > MAX_PDF_SIZE_MB) {
     console.warn(`PDF too large (${sizeMB.toFixed(1)}MB). Using filename fallback.`);
+    const parsed = parseFilename(file.name);
     return {
       setMeta: { ...EMPTY_SET_META },
       sheets: [{
-        sheetNumber: "",
-        sheetTitle:  file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " "),
+        sheetNumber: parsed.sheetNumber,
+        sheetTitle:  parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " "),
         discipline:  "Structural",
         sheetType:   "General",
-        revision:    "0",
+        revision:    parsed.revision || "0",
         scale:       "",
         date:        "",
-        _note:       "File too large for AI extraction. Please fill in sheet details manually.",
+        _note:       "File too large for AI extraction." + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in sheet details manually."),
       }],
       scanned:  false,
       tooLarge: true,
@@ -798,14 +799,16 @@ export default function DrawingSetUploadModal({
             "AI extraction"
           );
         } catch (err) {
-          // On timeout/extract failure, fall back to a single manual-entry row
+          // On timeout/extract failure, fall back to filename-parsed row
+          const parsed = parseFilename(file.name);
           extractResult = {
             setMeta: { ...EMPTY_SET_META },
             sheets: [{
-              sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
+              sheetNumber: parsed.sheetNumber,
+              sheetTitle: parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, ""),
               discipline: meta.discipline, sheetType: "General",
-              revision: "0", scale: "", date: "",
-              _note: `Extraction failed: ${err.message}. Please fill in manually.`,
+              revision: parsed.revision || "0", scale: "", date: "",
+              _note: `Extraction failed: ${err.message}.` + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in manually."),
             }],
             scanned: false,
             extractFailed: true,
