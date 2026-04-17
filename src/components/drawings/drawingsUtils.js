@@ -107,17 +107,43 @@ export function exportTransmittal(drawings, projectName) {
 }
 
 /**
- * Compute summary stats from a full drawings array.
- * @param {Array} drawings
- * @returns {{ total: number, released: number, inReview: number, overdue: number, priority: number }}
+ * Compute package-level summary stats for the stats bar.
+ *
+ * Groups drawings by drawing_set_name to count unique packages rather
+ * than individual sheets. Set-only parent rows (imported from Drive
+ * with no child sheets) are also counted.
+ *
+ * @param {Array} drawings           — child sheet rows
+ * @param {Array} [drawingSetRecords] — parent drawing_sets rows (optional)
+ * @returns {{ total: number, released: number, inReview: number, overdue: number, priority: number, sheetCount: number }}
  */
-export function computeStats(drawings) {
+export function computeStats(drawings, drawingSetRecords = []) {
+  // Group drawings by set name
+  const packages = {};
+  drawings.forEach(d => {
+    const name = (d.drawing_set_name || "").trim() || "(ungrouped)";
+    if (!packages[name]) packages[name] = [];
+    packages[name].push(d);
+  });
+
+  // Also count set-only parent rows (from Drive import, no child sheets)
+  const childSetNames = new Set(Object.keys(packages));
+  (drawingSetRecords || []).forEach(ds => {
+    const name = (ds?.set_name || "").trim();
+    if (name && !childSetNames.has(name)) {
+      packages[name] = []; // empty = set-only
+    }
+  });
+
+  const entries = Object.values(packages);
+
   return {
-    total: drawings.length,
-    released: drawings.filter(d => d.stage === "Released").length,
-    inReview: drawings.filter(d => IN_REVIEW_STAGES.includes(d.stage)).length,
-    overdue: drawings.filter(d => isOverdue(d)).length,
-    priority: drawings.filter(d => d.priority_flag).length,
+    total:      entries.length,
+    released:   entries.filter(sheets => sheets.length > 0 && sheets.every(d => d.stage === "Released")).length,
+    inReview:   entries.filter(sheets => sheets.some(d => IN_REVIEW_STAGES.includes(d.stage))).length,
+    overdue:    entries.filter(sheets => sheets.some(d => isOverdue(d))).length,
+    priority:   entries.filter(sheets => sheets.some(d => d.priority_flag)).length,
+    sheetCount: drawings.length,
   };
 }
 

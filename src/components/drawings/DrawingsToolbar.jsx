@@ -5,8 +5,8 @@ import { STAGES, DISCIPLINES, mono, surface, btnBase, btnPrimary, btnGhost } fro
  */
 export function StatsBar({ stats, stageFilter, setStageFilter }) {
   const items = [
-    { label: "TOTAL SHEETS",  value: stats.total,    color: "var(--text-primary)", filterKey: null },
-    { label: "IFC / RELEASED", value: stats.released, color: "#10B981",             filterKey: "Released" },
+    { label: "PACKAGES",       value: stats.total,    color: "var(--text-primary)", filterKey: null },
+    { label: "RELEASED",       value: stats.released, color: "#10B981",             filterKey: "Released" },
     { label: "IN REVIEW",     value: stats.inReview,  color: "#3B82F6",             filterKey: "_inReview" },
     { label: "OVERDUE",       value: stats.overdue,   color: "var(--status-error)",  filterKey: "_overdue" },
     { label: "PRIORITY",      value: stats.priority,  color: "var(--accent)",        filterKey: "_priority" },

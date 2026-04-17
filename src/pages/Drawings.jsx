@@ -172,7 +172,7 @@ export default function Drawings() {
     return list;
   }, [drawings, search, discipline, stageFilter]);
 
-  const stats = useMemo(() => computeStats(drawings), [drawings]);
+  const stats = useMemo(() => computeStats(drawings, drawingSetRecords), [drawings, drawingSetRecords]);
   const disciplineCounts = useMemo(() => computeDisciplineCounts(drawings, DISCIPLINES), [drawings]);
   const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);
 

@@ -229,7 +229,8 @@ SHEET NUMBER IDENTIFICATION:
 - DO NOT use section callouts, detail references, or cross-references as the sheet number. Text like "SEE S401", "DETAIL A/S401", "SECTION 2/S401", "S401" appearing in the drawing body as a reference to ANOTHER sheet is NOT this sheet's number.
 - If the PDF text contains a mix of title-block text and drawing-body text, the title block is typically at the bottom or right edge of the page and contains: sheet number, sheet title, drawn by, checked by, date, revision, scale, project name.
 - If only one page of content exists, the title block sheet number is authoritative. Ignore any other sheet-number-like tokens that appear in section marks, detail bubbles, or grid references.
-- When the filename follows the pattern {digits}{letters}{digits}-R{rev} (e.g. "101E108-R1"), the letter+digit portion (e.g. "E108") is very likely the correct sheet number. Use this as a strong hint.
+- When the filename follows the pattern {digits}{letters}{digits}-R{rev} (e.g. "101E108-R1"), the letter+digit portion (e.g. "E108") is very likely the correct sheet number. Use this as a strong hint. If the PDF has only 1 page, the filename-derived sheet number is almost certainly correct — return exactly ONE sheet, not a list of references found in the body.
+- Single-page PDFs contain EXACTLY ONE sheet. Do NOT return multiple sheets from a single-page PDF — any other sheet numbers visible on the page are cross-references to other drawings, not actual sheets in this file.
 
 FIELD SEPARATION:
 - The sheetNumber field contains ONLY the sheet number itself (e.g. "S-101", "A201", "M-2.1"). NEVER put the full "A201 FIRST FLOOR PLAN" string in sheetNumber. NEVER put "A201" or any sheet-number-like token in sheetTitle. They are SEPARATE fields.
@@ -493,7 +494,53 @@ export async function extractSheetsFromPdf(file) {
   //    produces "sheetNumber: ''" with the title containing "A201 Plan",
   //    fixupSheet puts things right.
   const fixed = rawSheets.map(fixupSheet);
-  const sheets = dedupeSheets(fixed);
+  let sheets = dedupeSheets(fixed);
+
+  // 5. Filename cross-check — when the filename encodes a sheet number
+  //    (e.g. 502E109-R1.pdf → E109), validate the AI result and correct
+  //    common mis-extractions. Single-page PDFs are ONE sheet; if the AI
+  //    returned a whole drawing index from references found on the page,
+  //    keep only the entry matching the filename.
+  const filenameParsed = parseFilename(file.name);
+  if (filenameParsed.sheetNumber) {
+    const fnSn = filenameParsed.sheetNumber.toUpperCase().replace(/[-. ]/g, "");
+
+    if (extracted.pageCount === 1 && sheets.length > 1) {
+      // Single-page PDF but AI returned multiple sheets (read a drawing index
+      // or detail references). Keep only the one matching the filename.
+      const match = sheets.find(s =>
+        (s.sheetNumber || "").toUpperCase().replace(/[-. ]/g, "") === fnSn
+      );
+      if (match) {
+        sheets = [match];
+        console.info(`[pdfSheetExtractor] Single-page PDF returned ${fixed.length} sheets — kept filename match "${filenameParsed.sheetNumber}"`);
+      } else {
+        // No match — override the first entry with the filename sheet number
+        sheets = [{ ...sheets[0], sheetNumber: filenameParsed.sheetNumber }];
+        console.info(`[pdfSheetExtractor] Single-page PDF returned ${fixed.length} sheets — none matched filename, using "${filenameParsed.sheetNumber}"`);
+      }
+    } else if (sheets.length === 1) {
+      // Single sheet returned — if the AI's sheet number doesn't match the
+      // filename, the filename is more trustworthy (AI often picks up detail
+      // section references like "S401" instead of the title-block number).
+      const aiSn = (sheets[0].sheetNumber || "").toUpperCase().replace(/[-. ]/g, "");
+      if (aiSn && aiSn !== fnSn) {
+        console.info(`[pdfSheetExtractor] AI returned "${sheets[0].sheetNumber}" but filename says "${filenameParsed.sheetNumber}" — using filename`);
+        sheets[0] = { ...sheets[0], sheetNumber: filenameParsed.sheetNumber };
+      } else if (!aiSn) {
+        sheets[0] = { ...sheets[0], sheetNumber: filenameParsed.sheetNumber };
+      }
+    }
+
+    // Apply filename-derived revision if AI didn't find one
+    if (filenameParsed.revision && filenameParsed.revision !== "0") {
+      sheets.forEach((s, i) => {
+        if (!s.revision || s.revision === "0") {
+          sheets[i] = { ...s, revision: filenameParsed.revision };
+        }
+      });
+    }
+  }
 
   return {
     setMeta,
