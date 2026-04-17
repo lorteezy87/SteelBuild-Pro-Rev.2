@@ -111,6 +111,13 @@ const RULES = {
       const num = Number(data.co_amount);
       if (isNaN(num)) errors.push({ field: "co_amount", message: "CO Amount must be a number.", rule: "NUMBER" });
     }
+    // Margin % must be 0–100 when provided
+    if (data.margin_percent !== undefined && data.margin_percent !== null && data.margin_percent !== "") {
+      const mp = Number(data.margin_percent);
+      if (isNaN(mp) || mp < 0 || mp > 100) {
+        errors.push({ field: "margin_percent", message: "Margin % must be between 0 and 100.", rule: "RANGE" });
+      }
+    }
     errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
     errors.push(validDate(data.approved_date, "approved_date", "Approved Date"));
     if (data.status === "Approved") {
@@ -158,6 +165,10 @@ const RULES = {
     errors.push(required(data.project_id, "project_id", "Project"));
     errors.push(required(data.description, "description", "Description"));
     errors.push(nonNegativeNumber(data.scheduled_value || 0, "scheduled_value", "Scheduled Value"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Date Submitted"));
+    errors.push(validDate(data.payment_received_date, "payment_received_date", "Date Payment Received"));
+    // Payment can't be received before submission
+    errors.push(dateNotBefore(data.payment_received_date, data.submitted_date, "payment_received_date", "Date Payment Received", "Date Submitted"));
     return errors.filter(Boolean);
   },
 
