@@ -39,6 +39,7 @@ import StagePipeline from "@/components/drawings/StagePipeline";
 import AlertBanner from "@/components/drawings/AlertBanner";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -62,6 +63,7 @@ export default function Drawings() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [bulkStage, setBulkStage] = useState("");
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
@@ -484,6 +486,24 @@ export default function Drawings() {
     });
   };
 
+  const handleBulkEdit = async (payload) => {
+    if (selected.size === 0 || Object.keys(payload).length === 0) return;
+    setBulkEditOpen(false);
+    const ids = [...selected];
+    const fieldCount = Object.keys(payload).length;
+    const { succeeded, failed } = await batchProcess(
+      ids,
+      (id) => base44.entities.Drawing.update(id, payload),
+    );
+    invalidate();
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} updated, ${failed.length} failed (${fieldCount} field${fieldCount === 1 ? "" : "s"})`);
+    } else {
+      setSelected(new Set());
+      toast.success(`Updated ${fieldCount} field${fieldCount === 1 ? "" : "s"} on ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
+    }
+  };
+
   const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes }) => {
     if (!approvalSet) return;
     setSavingApproval(true);
@@ -662,6 +682,7 @@ export default function Drawings() {
           onApplyStage={handleBulkStageApply}
           selectedSetName={selectedSetName}
           onSetApproval={openSetApproval}
+          onBulkEdit={() => setBulkEditOpen(true)}
           onBulkDelete={handleBulkDelete}
           onClear={() => setSelected(new Set())}
         />
@@ -751,6 +772,13 @@ export default function Drawings() {
           existingSetNames={existingSetNames}
         />
       )}
+
+      <BulkEditModal
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        onApply={handleBulkEdit}
+        selectedCount={selected.size}
+      />
 
       <SetApprovalModal
         open={!!approvalSet}
