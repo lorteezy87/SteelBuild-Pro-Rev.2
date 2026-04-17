@@ -598,18 +598,16 @@ function GroupRow({
         )}
       </td>
 
-      {/* Actions cell — set-level delete (F1). Only offered for named sets
-          that have real child sheets; UNGROUPED sheets don't belong to a
-          drawing_sets row so there's nothing to cascade-delete, and SET-ONLY
-          imported rows (no children) would break the cascade handler which
-          expects at least one sheet to derive the drawing_set_id from. */}
+      {/* Actions cell — set-level delete. Offered for all named sets
+          (with or without child sheets). UNGROUPED sheets don't belong to a
+          drawing_sets row so there's nothing to cascade-delete. */}
       <td style={tdBase}>
-        {!group.isUngrouped && !group.setOnly && onDeleteSet && (
+        {!group.isUngrouped && onDeleteSet && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <ActionBtn
               label="Delete Set"
               danger
-              title={`Delete entire set "${group.name}" and all ${a.total} sheet${a.total === 1 ? "" : "s"}`}
+              title={a.total > 0 ? `Delete entire set "${group.name}" and all ${a.total} sheet${a.total === 1 ? "" : "s"}` : `Delete set "${group.name}"`}
               onClick={() => onDeleteSet(group)}
             />
           </div>
