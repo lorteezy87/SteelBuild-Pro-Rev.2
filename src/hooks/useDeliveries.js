@@ -17,9 +17,8 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
-import { getQueryKey, invalidateEntity, invalidateEntities } from "@/services/cacheRegistry";
+import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
-import { validateTransition } from "@/services/workflowEngine";
 
 const STATUS_ORDER = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
 const ADVANCE_MAP = {

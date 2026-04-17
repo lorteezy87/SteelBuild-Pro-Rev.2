@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Download, Check, AlertTriangle, Clock, DollarSign, Plus, CalendarDays, FileText, ArrowRight, Zap, Paperclip, RotateCcw, Send, ChevronRight } from "lucide-react";
+import { Pencil, Trash2, Download, Check, AlertTriangle, Clock, DollarSign, Plus, CalendarDays, FileText, Zap, ChevronRight } from "lucide-react";
 import PageHeader from "../components/shared/PageHeader";
 import SearchFilter from "../components/shared/SearchFilter";
 import DeleteDialog from "../components/shared/DeleteDialog";

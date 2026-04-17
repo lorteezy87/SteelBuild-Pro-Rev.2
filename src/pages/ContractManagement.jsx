@@ -3,7 +3,6 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/useProjectContext";
-import StatusBadge from "@/components/shared/StatusBadge";
 import { formatDate } from "@/components/shared/formatters";
 
 // ─── Currency formatters ────────────────────────────────────────────────────
