@@ -7,7 +7,7 @@ const empty = {
   project_id: "", project_name: "", title: "", description: "",
   reason_code: "Owner Request", status: "Draft", cost_code_id: "",
   submitted_date: new Date().toISOString().split("T")[0],
-  approved_date: null, co_amount: 0, schedule_impact_days: 0,
+  approved_date: null, co_amount: 0, margin_percent: 0, schedule_impact_days: 0,
   approved_by: "", notes: "", attachments: "",
   co_number: "",
 };
@@ -30,13 +30,22 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     if (form.co_amount !== 0 && form.co_amount !== "" && (isNaN(Number(form.co_amount)) || Number(form.co_amount) < 0)) {
       e.co_amount = "Must be a valid non-negative number";
     }
+    const mp = Number(form.margin_percent);
+    if (isNaN(mp) || mp < 0 || mp > 100) {
+      e.margin_percent = "Must be between 0 and 100";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleSave = () => {
     if (!validate()) return;
-    const data = { ...form, co_amount: Number(form.co_amount) || 0, schedule_impact_days: Number(form.schedule_impact_days) || 0 };
+    const data = {
+      ...form,
+      co_amount: Number(form.co_amount) || 0,
+      margin_percent: Number(form.margin_percent) || 0,
+      schedule_impact_days: Number(form.schedule_impact_days) || 0,
+    };
     const proj = projects.find(p => p.id === form.project_id);
     if (proj) data.project_name = proj.name;
     onSave(data);
@@ -88,6 +97,18 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
         </FormField>
         <FormField label="CO Amount ($)" error={errors.co_amount}>
           <input type="number" style={inputStyle} value={form.co_amount} onChange={e => set("co_amount", e.target.value)} />
+        </FormField>
+        <FormField label="Margin %" error={errors.margin_percent}>
+          <input type="number" style={inputStyle} value={form.margin_percent} onChange={e => set("margin_percent", e.target.value)} min="0" max="100" step="0.1" placeholder="0" />
+        </FormField>
+        {/* Live-calculated Margin $ — read-only helper, not persisted */}
+        <FormField label="Margin $">
+          <input
+            style={inputDisabledStyle}
+            value={formatCurrency((Number(form.co_amount) || 0) * (Number(form.margin_percent) || 0) / 100)}
+            disabled
+            readOnly
+          />
         </FormField>
         <FormField label="Schedule Impact (days)">
           <input type="number" style={inputStyle} value={form.schedule_impact_days || 0} onChange={e => set("schedule_impact_days", e.target.value)} min="0" placeholder="0" />
