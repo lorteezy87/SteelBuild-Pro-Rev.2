@@ -51,6 +51,7 @@ const ROUTE_DOMAINS = {
   // ── Overview & Portfolio ──
   overview: {
     Dashboard:              lazyWithRetry(() => import("@/pages/Dashboard")),
+    CommandCenter:          lazyWithRetry(() => import("@/pages/CommandCenter")),
     ProjectControlCenter:   lazyWithRetry(() => import("@/pages/ProjectControlCenter")),
     ExecutiveView:          lazyWithRetry(() => import("@/pages/ExecutiveView")),
     Projects:               lazyWithRetry(() => import("@/pages/Projects")),
