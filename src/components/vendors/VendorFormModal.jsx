@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, FormField } from "@/components/shared/PhoenixModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const TYPES = ["Fabricator", "Supplier", "Subcontractor", "Material Supplier", "Equipment Rental", "Service Provider", "Testing Lab", "Other"];

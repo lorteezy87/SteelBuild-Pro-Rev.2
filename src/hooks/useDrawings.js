@@ -25,7 +25,6 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
-import { validateTransition, buildTransitionAudit } from "@/services/workflowEngine";
 
 // ─── Normalize set name ─────────────────────────────────────────────────
 function normalizeSetName(name) {
