@@ -430,7 +430,7 @@ function COImpactDrawer({ open, onClose, kpi, changeOrders: allCOs, selectedProj
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile label="Approved" value={formatCurrency(kpi.approved.totalValue)} sub={`${kpi.approved.count} COs`} accent="var(--status-success)" />
             <DrawerTile label="Pending" value={formatCurrency(kpi.pending.totalValue)} sub={`${kpi.pending.count} COs`} accent="var(--status-warning)" />
             <DrawerTile label="Avg Margin" value={`${kpi.approved.avgMarginPercent.toFixed(1)}%`} sub={formatCurrency(kpi.approved.totalMarginDollars)} accent="var(--accent)" />
@@ -784,7 +784,7 @@ function LaborDrawer({ open, onClose, kpi, selectedProject }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile label="Labor Budget" value={formatCurrency(kpi.laborBudget)} sub={`${rows.length} code${rows.length === 1 ? "" : "s"}`} accent="var(--accent)" />
             <DrawerTile label="Labor Actual" value={formatCurrency(kpi.laborActual)} sub={`${kpi.percentLaborConsumed.toFixed(1)}% consumed`} accent="var(--status-warning)" />
             <DrawerTile label="% Consumed" value={`${kpi.percentLaborConsumed.toFixed(1)}%`} sub={`of ${formatCurrencyShort(kpi.laborBudget)} budget`} accent="var(--status-info)" />
@@ -1262,7 +1262,7 @@ function BillingDrawer({ open, onClose, kpi, sovItems }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile
               label="Cumulative Billings"
               value={formatCurrency(kpi.cumulativeBillings)}
@@ -1646,7 +1646,7 @@ function DSODrawer({ open, onClose, kpi, sovItems }) {
           )}
 
           {/* Summary tiles — 2×2 */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
             <DrawerTile
               label="Avg DSO"
               value={kpi.avgDSO != null ? `${Math.round(kpi.avgDSO)}d` : "—"}
