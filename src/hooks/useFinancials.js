@@ -382,6 +382,7 @@ export function useFinancials(projectId, project = null) {
     }
 
     return {
+      laborRows, // per-code breakdown for drawer tables
       laborBudget,
       laborActual,
       percentLaborConsumed,
