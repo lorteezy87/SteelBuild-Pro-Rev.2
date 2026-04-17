@@ -925,21 +925,44 @@ export default function DrawingSetUploadModal({
 
       let parentSetId = null;
       try {
+        // First check active (non-deleted) sets
         const existing = await base44.entities.DrawingSet.filter({
           project_id: activeProject?.id,
           set_name:   resolvedSetName,
         });
         if (Array.isArray(existing) && existing.length > 0) {
           parentSetId = existing[0].id;
-          // Refresh the parent's upload_batch_id + metadata to reflect this upload
+        }
+
+        // If none found, check for soft-deleted sets and restore them.
+        // The DB unique index covers ALL rows (including is_deleted=true),
+        // so creating a new row with the same name would violate the constraint.
+        if (!parentSetId) {
+          const deleted = await base44.entities.DrawingSet.filter({
+            project_id: activeProject?.id,
+            set_name:   resolvedSetName,
+            is_deleted:  true,
+          });
+          if (Array.isArray(deleted) && deleted.length > 0) {
+            parentSetId = deleted[0].id;
+            // Restore the soft-deleted row
+            await base44.entities.DrawingSet.update(parentSetId, {
+              is_deleted: false,
+              deleted_at: null,
+            });
+          }
+        }
+
+        // Refresh the parent's metadata to reflect this upload
+        if (parentSetId) {
           try {
             await base44.entities.DrawingSet.update(parentSetId, {
               upload_batch_id: batchId,
-              revision:        meta.revision || existing[0].revision || "",
-              issued_date:     meta.issueDate || existing[0].issued_date || null,
-              issued_by:       meta.issuedBy  || existing[0].issued_by  || "",
-              discipline:      meta.discipline || existing[0].discipline || "",
-              notes:           meta.notes || existing[0].notes || "",
+              revision:        meta.revision || "",
+              issued_date:     meta.issueDate || null,
+              issued_by:       meta.issuedBy  || "",
+              discipline:      meta.discipline || "",
+              notes:           meta.notes || "",
               updated_at:      new Date().toISOString(),
             });
           } catch (updErr) {
