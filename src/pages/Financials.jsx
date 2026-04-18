@@ -19,9 +19,19 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
-
-const mono = { fontFamily: "var(--font-mono)" };
-const body = { fontFamily: "var(--font-body)" };
+import {
+  mono,
+  body,
+  HEALTH_COLOR,
+  FAMILY_RULES,
+  getFamilyMeta,
+  safeNumber,
+  formatSigned,
+  varianceColor,
+  periodDisplay,
+  agingTintBg,
+} from "@/pages/financials/utils";
+import { SummaryCard, KPIStrip } from "@/pages/financials/KPIStrip";
 
 const VIEW_TABS = [
   { key: "summary", label: "Project Summary" },
@@ -29,242 +39,6 @@ const VIEW_TABS = [
   { key: "budget", label: "Budget Control" },
   { key: "unmapped", label: "Unmapped Costs" },
 ];
-
-// SOV family rules aligned with cost code categories (costCodes.jsx)
-// Each rule maps SOV descriptions → the matching cost code category
-const FAMILY_RULES = [
-  { key: "labor",         label: "Labor",         direct: true,  test: (text) => /shop labor|shop|fabrication|fab |field labor|structural|erect|install|shipping|freight|truck/.test(text) },
-  { key: "materials",     label: "Materials",      direct: true,  test: (text) => /anchor bolt|embed|joist|deck\b|raw material|material|fastener|steel|plate|angle|channel/.test(text) },
-  { key: "subcontractor", label: "Subcontractor",  direct: true,  test: (text) => /detail|engineering|deck install|subcontract|sub /.test(text) },
-  { key: "equipment",     label: "Equipment",      direct: true,  test: (text) => /equipment|crane|forklift|rigging|scaffold/.test(text) },
-  { key: "misc",          label: "Misc.",           direct: true,  test: (text) => /coat|galv|paint|special coat|misc|sundry/.test(text) },
-  { key: "overhead",      label: "Overhead",        direct: false, test: (text) => /pm\/admin|admin|overhead|indirect|insurance|bond|travel|hotel|per diem/.test(text) },
-];
-
-function getFamilyMeta(text) {
-  const normalized = String(text || "").toLowerCase();
-  const match = FAMILY_RULES.find((rule) => rule.test(normalized));
-  return match || { key: "misc", label: "Misc.", direct: true };
-}
-
-function safeNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function formatSigned(value) {
-  if (value == null || value === "") return "\u2014";
-  const raw = Number(value);
-  if (!Number.isFinite(raw)) return "\u2014";
-  if (raw === 0) return "$0";
-  return `${raw > 0 ? "+" : ""}${formatCurrency(raw)}`;
-}
-
-function varianceColor(value) {
-  if (value < 0) return "var(--status-error)";
-  if (value > 0) return "var(--status-success)";
-  return "var(--text-muted)";
-}
-
-function SummaryCard({ label, value, detail, tone = "var(--accent)" }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        padding: "14px 16px",
-        borderTop: `2px solid ${tone}`,
-      }}
-    >
-      <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
-        {label}
-      </div>
-      <div style={{ ...mono, fontSize: 18, fontWeight: 700, color: tone, marginBottom: 4 }}>
-        {value}
-      </div>
-      {detail ? <div style={{ ...body, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>{detail}</div> : null}
-    </div>
-  );
-}
-
-// ── Health color mapping ────────────────────────────────────────────────
-const HEALTH_COLOR = {
-  green: "var(--status-success)",
-  amber: "var(--status-warning)",
-  red:   "var(--status-error)",
-};
-
-// ── Executive KPI Card ──────────────────────────────────────────────────
-function KPICard({ title, primary, supporting, health, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const handleKeyDown = (e) => {
-    // Space/Enter activate the card like a button. preventDefault on Space
-    // stops the page from scrolling.
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onClick?.();
-    }
-  };
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${title} — open detail drawer`}
-      onClick={onClick}
-      onKeyDown={handleKeyDown}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        background: hovered ? "var(--bg-surface-low)" : "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderLeft: `4px solid ${HEALTH_COLOR[health] || HEALTH_COLOR.amber}`,
-        borderRadius: "var(--radius-card)",
-        padding: "14px 16px",
-        cursor: "pointer",
-        transition: "background 0.15s",
-        minWidth: 0,
-        outline: focused ? "2px solid var(--accent)" : "none",
-        outlineOffset: focused ? "2px" : 0,
-      }}
-    >
-      <div style={{
-        fontFamily: "'Space Grotesk', var(--font-display)",
-        fontSize: 9,
-        fontWeight: 700,
-        color: "var(--text-muted)",
-        textTransform: "uppercase",
-        letterSpacing: "0.10em",
-        marginBottom: 8,
-      }}>
-        {title}
-      </div>
-      <div style={{
-        ...mono,
-        fontSize: 24,
-        fontWeight: 700,
-        color: HEALTH_COLOR[health] || "var(--text-primary)",
-        lineHeight: 1.1,
-        marginBottom: 6,
-      }}>
-        {primary}
-      </div>
-      <div style={{
-        ...mono,
-        fontSize: 11,
-        color: "var(--text-secondary)",
-        lineHeight: 1.6,
-      }}>
-        {supporting}
-      </div>
-    </div>
-  );
-}
-
-// ── KPI Skeleton (shown while useFinancials is loading) ──────────────
-function KPISkeleton() {
-  return (
-    <div style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--border-default)",
-      borderLeft: "4px solid var(--border-default)",
-      borderRadius: "var(--radius-card)",
-      padding: "14px 16px",
-    }}>
-      <div style={{ width: 80, height: 10, borderRadius: 4, background: "var(--hover-bg)", marginBottom: 10 }} />
-      <div style={{ width: 60, height: 22, borderRadius: 4, background: "var(--hover-bg)", marginBottom: 8 }} />
-      <div style={{ width: "90%", height: 10, borderRadius: 4, background: "var(--hover-bg)" }} />
-    </div>
-  );
-}
-
-// ── KPI Strip — four executive cards ─────────────────────────────────
-function KPIStrip({ kpis, loading, onCardClick }) {
-  if (loading) {
-    return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-        <KPISkeleton /><KPISkeleton /><KPISkeleton /><KPISkeleton />
-      </div>
-    );
-  }
-
-  const { changeOrderImpact: co, laborUtilization: lab, billingVsCost: bvc, daysSalesOutstanding: dso } = kpis;
-
-  // ── Card 1: CO Impact ──
-  const coGrowth = co.contractGrowthPercent != null
-    ? `+${co.contractGrowthPercent.toFixed(1)}%`
-    : "\u2014";
-  const coSupport = co.approved.count > 0 || co.pending.count > 0
-    ? `${co.approved.count} approved \u00b7 ${co.pending.count} pending \u00b7 avg margin ${co.approved.avgMarginPercent.toFixed(1)}%`
-    : "No change orders";
-
-  // ── Card 2: Labor Utilization ──
-  const labPrimary = lab.utilizationRatio != null
-    ? lab.utilizationRatio.toFixed(2)
-    : "\u2014";
-  const overrideBadge = lab.percentScopeCompleteSource === "override"
-    ? " \u00b7 OVERRIDE"
-    : "";
-  const labSupport = lab.utilizationRatio != null
-    ? `${lab.percentLaborConsumed.toFixed(1)}% consumed \u00b7 ${lab.percentScopeComplete.toFixed(1)}% complete${overrideBadge} \u00b7 overrun ${lab.projectedOverrun != null ? formatCurrencyShort(lab.projectedOverrun) : "\u2014"}`
-    : "Insufficient data";
-
-  // ── Card 3: Billing / Cost ──
-  const bvcPrimary = bvc.ratio != null
-    ? bvc.ratio.toFixed(2)
-    : "\u2014";
-  const bvcSupport = bvc.ratio != null
-    ? `${bvc.position} \u00b7 ${bvc.overUnderDollars >= 0 ? "+" : ""}${formatCurrencyShort(bvc.overUnderDollars)}`
-    : "Insufficient data";
-
-  // ── Card 4: DSO ──
-  const dsoPrimary = dso.avgDSO != null
-    ? `${Math.round(dso.avgDSO)}d`
-    : "\u2014";
-  const dsoSupport = dso.outstandingInvoices.length > 0 || dso.avgDSO != null
-    ? `${dso.outstandingInvoices.length} outstanding \u00b7 oldest ${dso.oldestOutstandingDays != null ? `${dso.oldestOutstandingDays}d` : "\u2014"} \u00b7 ${formatCurrencyShort(dso.totalOutstandingValue)}`
-    : "No billing data";
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-      <KPICard title="CO Impact"          primary={coGrowth}   supporting={coSupport}  health={co.health}  onClick={() => onCardClick("co")} />
-      <KPICard title="Labor Utilization"  primary={labPrimary} supporting={
-        <span>
-          {lab.utilizationRatio != null ? (
-            <>
-              {lab.percentLaborConsumed.toFixed(1)}% consumed &middot; {lab.percentScopeComplete.toFixed(1)}% complete
-              {lab.percentScopeCompleteSource === "override" && (
-                <span style={{
-                  display: "inline-block",
-                  marginLeft: 4,
-                  padding: "1px 5px",
-                  borderRadius: 3,
-                  background: "var(--accent-muted)",
-                  border: "1px solid var(--accent-border)",
-                  fontFamily: "'Space Grotesk', var(--font-display)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  color: "var(--accent)",
-                  letterSpacing: "0.08em",
-                  verticalAlign: "middle",
-                }}>OVERRIDE</span>
-              )}
-              <br />overrun {lab.projectedOverrun != null ? formatCurrencyShort(lab.projectedOverrun) : "\u2014"}
-            </>
-          ) : (
-            <em style={{ fontStyle: "italic", color: "var(--text-muted)" }}>Insufficient data</em>
-          )}
-        </span>
-      } health={lab.health} onClick={() => onCardClick("labor")} />
-      <KPICard title="Billing / Cost"    primary={bvcPrimary} supporting={bvcSupport} health={bvc.health} onClick={() => onCardClick("billing")} />
-      <KPICard title="DSO"               primary={dsoPrimary} supporting={dsoSupport} health={dso.health} onClick={() => onCardClick("dso")} />
-    </div>
-  );
-}
 
 // ── Drawer sub-components ───────────────────────────────────────────
 function DrawerTile({ label, value, sub, accent = "var(--accent)" }) {
@@ -1077,18 +851,6 @@ const SOV_STATUS_COLORS = {
   "Paid":      "var(--status-success)",
 };
 
-function periodDisplay(from, to) {
-  const fmt = (d) => {
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return "";
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-  const f = from ? fmt(from) : "";
-  const t = to ? fmt(to) : "";
-  if (f && t) return `${f} – ${t}`;
-  return f || t || "—";
-}
-
 function BillingDrawer({ open, onClose, kpi, sovItems }) {
   const drawerRef = useRef(null);
   const [sortCol, setSortCol] = useState("application_number");
@@ -1445,12 +1207,6 @@ function BillingDrawer({ open, onClose, kpi, sovItems }) {
 // Aging tint colors for outstanding invoice rows. Subtle ~3% opacity so the
 // cue is visible but never garish. Uses color-mix so the tint adapts to
 // whichever theme is active (light/dark) via CSS custom properties.
-function agingTintBg(daysOutstanding) {
-  if (daysOutstanding <= 30) return "color-mix(in srgb, var(--status-success) 3%, transparent)";
-  if (daysOutstanding <= 60) return "color-mix(in srgb, var(--status-warning) 3%, transparent)";
-  return "color-mix(in srgb, var(--status-error) 3%, transparent)";
-}
-
 function DSODrawer({ open, onClose, kpi, sovItems }) {
   const drawerRef = useRef(null);
   const [outSortCol, setOutSortCol] = useState("daysOutstanding");
