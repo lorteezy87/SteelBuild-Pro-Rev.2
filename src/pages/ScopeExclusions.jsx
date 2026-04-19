@@ -55,11 +55,25 @@ export default function ScopeExclusions() {
 
   // Lightweight checkbox toggle — does not open the form modal. Writes the
   // completed flag + timestamp so we have a record of when each item closed.
+  // Completing a row also clears any in-progress flag so the UI stays tidy.
   const toggleCompleteMut = useMutation({
     mutationFn: ({ id, is_completed }) =>
       base44.entities.ScopeItem.update(id, {
         is_completed,
         completed_at: is_completed ? new Date().toISOString() : null,
+        ...(is_completed ? { in_progress: false, in_progress_at: null } : {}),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
+    onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
+  });
+
+  // Toggle the in-progress flag. If the row is complete, this is a no-op at
+  // the UI level (the button is hidden), so we don't guard against it here.
+  const toggleInProgressMut = useMutation({
+    mutationFn: ({ id, in_progress }) =>
+      base44.entities.ScopeItem.update(id, {
+        in_progress,
+        in_progress_at: in_progress ? new Date().toISOString() : null,
       }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["scope-items"] }); },
     onError: (e) => toast.error("Failed: " + (e?.message || "Unknown error")),
@@ -509,7 +523,13 @@ export default function ScopeExclusions() {
             <option value="">—</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button onClick={() => applyBulk({ is_completed: true, completed_at: new Date().toISOString() })} disabled={bulkActionBusy} style={chipBtn}>
+          <button onClick={() => applyBulk({ in_progress: true, in_progress_at: new Date().toISOString() })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark In Progress
+          </button>
+          <button onClick={() => applyBulk({ in_progress: false, in_progress_at: null })} disabled={bulkActionBusy} style={chipBtn}>
+            Clear In Progress
+          </button>
+          <button onClick={() => applyBulk({ is_completed: true, completed_at: new Date().toISOString(), in_progress: false, in_progress_at: null })} disabled={bulkActionBusy} style={chipBtn}>
             Mark Complete
           </button>
           <button onClick={() => applyBulk({ is_completed: false, completed_at: null })} disabled={bulkActionBusy} style={chipBtn}>
@@ -535,6 +555,9 @@ export default function ScopeExclusions() {
         onDelete={setDeleteTarget}
         onToggleComplete={(item) =>
           toggleCompleteMut.mutate({ id: item.id, is_completed: !item.is_completed })
+        }
+        onToggleInProgress={(item) =>
+          toggleInProgressMut.mutate({ id: item.id, in_progress: !item.in_progress })
         }
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}

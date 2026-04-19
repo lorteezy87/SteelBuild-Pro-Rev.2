@@ -1,4 +1,7 @@
 import React from "react";
+import { supabase } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { mono, display, surface, STATUS_COLORS, STAGE_ACCENT, SEVERITY_COLORS, pill } from "./tokens";
 
 /**
@@ -6,6 +9,22 @@ import { mono, display, surface, STATUS_COLORS, STAGE_ACCENT, SEVERITY_COLORS, p
  * breakdown of findings. Click opens AnalysisDetailModal.
  */
 export default function AnalysisCard({ analysis, findings = [], onOpen }) {
+  const qc = useQueryClient();
+
+  const retry = async (e) => {
+    e.stopPropagation();
+    try {
+      const { error } = await supabase
+        .from("drawing_analyses")
+        .update({ analysis_status: "pending", error_message: null })
+        .eq("id", analysis.id);
+      if (error) throw new Error(error.message);
+      toast.message("Retrying analysis…");
+      qc.invalidateQueries({ queryKey: ["drawing_analyses"] });
+    } catch (err) {
+      toast.error(`Retry failed: ${err.message}`);
+    }
+  };
   const statusColor = STATUS_COLORS[analysis.analysis_status] || STATUS_COLORS.pending;
   const stageColor  = STAGE_ACCENT[analysis.drawing_stage]    || "var(--text-muted)";
 
@@ -91,9 +110,28 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
         </div>
       )}
 
-      {analysis.analysis_status === "error" && analysis.error_message && (
-        <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>
-          {analysis.error_message}
+      {analysis.analysis_status === "error" && (
+        <div style={{ marginTop: 4 }}>
+          {analysis.error_message && (
+            <div style={{ ...mono, fontSize: 10, color: "var(--status-error)", marginBottom: 6 }}>
+              {analysis.error_message}
+            </div>
+          )}
+          <button
+            onClick={retry}
+            style={{
+              ...mono, fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.12em", textTransform: "uppercase",
+              padding: "3px 10px",
+              background: "transparent",
+              border: "1px solid var(--status-error)",
+              color: "var(--status-error)",
+              borderRadius: 2,
+              cursor: "pointer",
+            }}
+          >
+            RETRY
+          </button>
         </div>
       )}
     </button>

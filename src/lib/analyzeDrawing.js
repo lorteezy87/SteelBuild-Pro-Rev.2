@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 // useful message instead of a generic 400).
 const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB
 const DEFAULT_MODEL = "claude-sonnet-4-6";
+const STORAGE_BUCKET = "app-files";
 
 const SYSTEM_PROMPT = `You are a senior structural steel project manager analyzing a drawing set.
 Return your analysis through the submit_analysis tool. All fields are required.
@@ -95,18 +96,21 @@ const ANALYSIS_TOOL = {
  * use Claude's native document block format here.
  */
 async function fetchPdfBase64(storagePath, fileUrl) {
-  // Prefer direct storage read when we have the path — avoids a signed-URL
-  // round-trip and works for private buckets.
-  if (storagePath) {
-    const { data, error } = await supabase.storage.from("uploads").download(storagePath);
-    if (error) throw new Error(`Storage download failed: ${error.message}`);
+  // The private `app-files` bucket stores everything under a pathname (e.g.
+  // `uploads/1761-a7b3f9.pdf`). UploadFile() returns that same pathname in
+  // BOTH file_url and path fields, so our primary strategy is always a
+  // direct storage.download() call — no signed URL needed.
+  const pathToTry = storagePath || fileUrl;
+  if (pathToTry && !/^https?:\/\//i.test(pathToTry)) {
+    const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(pathToTry);
+    if (error) throw new Error(`Storage download failed (${STORAGE_BUCKET}/${pathToTry}): ${error.message}`);
     const buf = await data.arrayBuffer();
     if (buf.byteLength > MAX_PDF_BYTES) {
       throw new Error(`PDF is ${(buf.byteLength / 1e6).toFixed(1)} MB, limit is 32 MB.`);
     }
     return arrayBufferToBase64(buf);
   }
-  // Fallback: fetch the signed URL directly.
+  // Fallback: value is an actual http(s) URL — fetch it.
   const resp = await fetch(fileUrl);
   if (!resp.ok) throw new Error(`Could not fetch PDF (${resp.status}).`);
   const buf = await resp.arrayBuffer();
