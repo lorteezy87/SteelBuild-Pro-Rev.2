@@ -15,6 +15,44 @@
 
 import { supabase } from "@/lib/supabase";
 
+// Mirrors the invokeLlmProxy helper in analyzeDrawing.js — retries 429s
+// with jittered exponential backoff and surfaces a useful error message
+// instead of "Edge Function returned a non-2xx status code".
+async function invokeLlmProxy(body, { maxAttempts = 4 } = {}) {
+  let lastErrPayload = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+    if (!error && !data?.error) return { data };
+
+    let status = 0;
+    let detail = error?.message || data?.error || "llm-proxy invocation failed";
+    try {
+      const resp = error?.context;
+      if (resp && typeof resp.text === "function") {
+        status = resp.status || 0;
+        const text = await resp.text();
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.error) detail = parsed.error;
+          } catch { /* keep detail */ }
+        }
+      }
+    } catch { /* ignore */ }
+    lastErrPayload = { status, detail };
+    const isRateLimit = status === 429 || /\b429\b|rate[- ]?limit/i.test(detail);
+    if (isRateLimit && attempt < maxAttempts) {
+      const base = 8000 * Math.pow(2, attempt - 1);
+      const delay = base + Math.floor(Math.random() * 2000);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    const prefix = status ? `Anthropic ${status}` : "Anthropic";
+    throw new Error(`${prefix}: ${detail}`);
+  }
+  throw new Error(`Anthropic ${lastErrPayload?.status || ""}: ${lastErrPayload?.detail || "rate-limit exceeded after retries"}`);
+}
+
 const MAX_PDF_BYTES   = 32 * 1024 * 1024; // 32 MB per document (Anthropic cap)
 const DEFAULT_MODEL   = "claude-sonnet-4-6";
 const STORAGE_BUCKET  = "app-files";
@@ -192,30 +230,25 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
       fetchPdfBase64(toAnalysis),
     ]);
 
-    const { data, error } = await supabase.functions.invoke("llm-proxy", {
-      body: {
-        model,
-        maxTokens: 8000,
-        system: SYSTEM_PROMPT,
-        tools: [COMPARE_TOOL],
-        tool_choice: { type: "tool", name: "submit_revision_diff" },
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: `Document 1 — FROM (prior revision): ${fromAnalysis.file_name}${fromAnalysis.revision ? ` · Rev ${fromAnalysis.revision}` : ""}${fromAnalysis.drawing_stage ? ` · ${fromAnalysis.drawing_stage}` : ""}` },
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: fromB64 } },
-              { type: "text", text: `Document 2 — TO (current revision): ${toAnalysis.file_name}${toAnalysis.revision ? ` · Rev ${toAnalysis.revision}` : ""}${toAnalysis.drawing_stage ? ` · ${toAnalysis.drawing_stage}` : ""}` },
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: toB64 } },
-              { type: "text", text: "Call submit_revision_diff with every materially significant change from FROM → TO." },
-            ],
-          },
-        ],
-      },
+    const { data } = await invokeLlmProxy({
+      model,
+      maxTokens: 8000,
+      system: SYSTEM_PROMPT,
+      tools: [COMPARE_TOOL],
+      tool_choice: { type: "tool", name: "submit_revision_diff" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Document 1 — FROM (prior revision): ${fromAnalysis.file_name}${fromAnalysis.revision ? ` · Rev ${fromAnalysis.revision}` : ""}${fromAnalysis.drawing_stage ? ` · ${fromAnalysis.drawing_stage}` : ""}` },
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: fromB64 } },
+            { type: "text", text: `Document 2 — TO (current revision): ${toAnalysis.file_name}${toAnalysis.revision ? ` · Rev ${toAnalysis.revision}` : ""}${toAnalysis.drawing_stage ? ` · ${toAnalysis.drawing_stage}` : ""}` },
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: toB64 } },
+            { type: "text", text: "Call submit_revision_diff with every materially significant change from FROM → TO." },
+          ],
+        },
+      ],
     });
-
-    if (error) throw new Error(error.message || "llm-proxy invocation failed");
-    if (data?.error) throw new Error(data.error);
 
     const toolInput = data?.tool_use?.input;
     if (!toolInput || typeof toolInput !== "object") {
