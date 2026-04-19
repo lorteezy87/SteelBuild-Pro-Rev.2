@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { mono, SEVERITY_COLORS, FINDING_TYPE_LABEL, pill } from "./tokens";
+import CreateRfiFromFindingDialog from "./CreateRfiFromFindingDialog";
 
 /**
  * Single finding row — severity-coded left border, finding-type pill,
@@ -13,6 +14,7 @@ import { mono, SEVERITY_COLORS, FINDING_TYPE_LABEL, pill } from "./tokens";
  */
 export default function FindingRow({ finding, analysis, onChanged }) {
   const [busy, setBusy] = useState(false);
+  const [rfiDialogOpen, setRfiDialogOpen] = useState(false);
   const color = SEVERITY_COLORS[finding.severity] || SEVERITY_COLORS.info;
 
   const dismiss = async () => {
@@ -32,49 +34,12 @@ export default function FindingRow({ finding, analysis, onChanged }) {
     }
   };
 
-  const createRfi = async () => {
+  const openRfiDialog = () => {
     if (finding.linked_rfi_id) {
       toast.message("Finding is already linked to an RFI");
       return;
     }
-    setBusy(true);
-    try {
-      const title = `[${finding.sheet_number || "Drawing"}] ${finding.description}`.slice(0, 200);
-      const question = [
-        finding.description,
-        finding.recommended_action ? `\n\nRecommended action: ${finding.recommended_action}` : "",
-        `\n\n— Auto-generated from AI drawing analysis of ${analysis?.file_name || "drawing set"}.`,
-      ].join("");
-
-      const { data: rfi, error: rfiErr } = await supabase
-        .from("rfis")
-        .insert({
-          project_id:        analysis?.project_id || null,
-          title,
-          question:          question.slice(0, 4000),
-          drawing_reference: finding.sheet_number || null,
-          status:            "Draft",
-          priority:          finding.severity === "critical" ? "High"
-                             : finding.severity === "high"   ? "High"
-                             : "Medium",
-        })
-        .select()
-        .single();
-      if (rfiErr) throw new Error(rfiErr.message);
-
-      const { error: linkErr } = await supabase
-        .from("drawing_findings")
-        .update({ linked_rfi_id: rfi.id })
-        .eq("id", finding.id);
-      if (linkErr) throw new Error(linkErr.message);
-
-      toast.success("RFI draft created");
-      onChanged?.();
-    } catch (e) {
-      toast.error(`RFI creation failed: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
+    setRfiDialogOpen(true);
   };
 
   return (
@@ -119,7 +84,7 @@ export default function FindingRow({ finding, analysis, onChanged }) {
         <div style={{ display: "flex", gap: 8 }}>
           {!finding.linked_rfi_id && (
             <button
-              onClick={createRfi}
+              onClick={openRfiDialog}
               disabled={busy}
               style={btnGhost}
               onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
@@ -139,6 +104,14 @@ export default function FindingRow({ finding, analysis, onChanged }) {
           </button>
         </div>
       )}
+
+      <CreateRfiFromFindingDialog
+        open={rfiDialogOpen}
+        onClose={() => setRfiDialogOpen(false)}
+        finding={finding}
+        analysis={analysis}
+        onCreated={() => onChanged?.()}
+      />
     </div>
   );
 }
