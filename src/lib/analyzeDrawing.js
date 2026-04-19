@@ -14,6 +14,53 @@
 import { supabase } from "@/lib/supabase";
 import { importAnalyzedDrawings } from "@/lib/importAnalyzedDrawings";
 
+/**
+ * Invoke llm-proxy with automatic retry on Anthropic 429s.
+ *
+ * `supabase.functions.invoke` returns a generic "Edge Function returned a
+ * non-2xx status code" when the upstream is 429, which is unhelpful for
+ * the user. We read the underlying response body to get the real status
+ * and retry with jittered exponential backoff when the status is 429.
+ */
+async function invokeLlmProxy(body, { maxAttempts = 4 } = {}) {
+  let lastErrPayload = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+    if (!error && !data?.error) return { data };
+
+    // Supabase-js exposes the raw Response on error.context when non-2xx.
+    let status = 0;
+    let detail = error?.message || data?.error || "llm-proxy invocation failed";
+    try {
+      const resp = error?.context;
+      if (resp && typeof resp.text === "function") {
+        status = resp.status || 0;
+        const text = await resp.text();
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.error) detail = parsed.error;
+          } catch { /* keep detail as-is */ }
+        }
+      }
+    } catch { /* ignore */ }
+
+    lastErrPayload = { status, detail };
+
+    const isRateLimit = status === 429 || /\b429\b|rate[- ]?limit/i.test(detail);
+    if (isRateLimit && attempt < maxAttempts) {
+      const base = 8000 * Math.pow(2, attempt - 1); // 8s, 16s, 32s
+      const delay = base + Math.floor(Math.random() * 2000);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+
+    const prefix = status ? `Anthropic ${status}` : "Anthropic";
+    throw new Error(`${prefix}: ${detail}`);
+  }
+  throw new Error(`Anthropic ${lastErrPayload?.status || ""}: ${lastErrPayload?.detail || "rate-limit exceeded after retries"}`);
+}
+
 // Hard caps Anthropic enforces on document blocks (so we fail fast with a
 // useful message instead of a generic 400).
 const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB
@@ -209,27 +256,22 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
 
     const pdfBase64 = await fetchPdfBase64(analysis.storage_path, analysis.file_url);
 
-    const { data, error } = await supabase.functions.invoke("llm-proxy", {
-      body: {
-        model,
-        maxTokens: 8000,
-        system: SYSTEM_PROMPT,
-        tools: [ANALYSIS_TOOL],
-        tool_choice: { type: "tool", name: "submit_analysis" },
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
-              { type: "text", text: contextPrompt(analysis) },
-            ],
-          },
-        ],
-      },
+    const { data } = await invokeLlmProxy({
+      model,
+      maxTokens: 8000,
+      system: SYSTEM_PROMPT,
+      tools: [ANALYSIS_TOOL],
+      tool_choice: { type: "tool", name: "submit_analysis" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+            { type: "text", text: contextPrompt(analysis) },
+          ],
+        },
+      ],
     });
-
-    if (error) throw new Error(error.message || "llm-proxy invocation failed");
-    if (data?.error) throw new Error(data.error);
 
     const toolInput = data?.tool_use?.input;
     if (!toolInput || typeof toolInput !== "object") {

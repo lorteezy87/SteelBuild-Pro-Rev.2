@@ -1,4 +1,5 @@
 import React from "react";
+import { Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,6 +26,27 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
       toast.error(`Retry failed: ${err.message}`);
     }
   };
+
+  const del = async (e) => {
+    e.stopPropagation();
+    const msg = analysis.imported_set_id
+      ? `Delete AI analysis of "${analysis.file_name}"?\n\nThe imported drawing set stays on the Drawings page — only this analysis row, its sheet index, and findings are removed. Cannot be undone.`
+      : `Delete AI analysis of "${analysis.file_name}"?\n\nAll extracted sheets and findings will be removed. Cannot be undone.`;
+    if (!window.confirm(msg)) return;
+    try {
+      const { error } = await supabase
+        .from("drawing_analyses")
+        .delete()
+        .eq("id", analysis.id);
+      if (error) throw new Error(error.message);
+      toast.success("Analysis deleted");
+      qc.invalidateQueries({ queryKey: ["drawing_analyses"] });
+      qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
+      qc.invalidateQueries({ queryKey: ["drawing_revision_comparisons"] });
+    } catch (err) {
+      toast.error(`Delete failed: ${err.message}`);
+    }
+  };
   const statusColor = STATUS_COLORS[analysis.analysis_status] || STATUS_COLORS.pending;
   const stageColor  = STAGE_ACCENT[analysis.drawing_stage]    || "var(--text-muted)";
 
@@ -43,6 +65,7 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
       onClick={() => onOpen?.(analysis)}
       style={{
         ...surface,
+        position: "relative",
         display: "block", width: "100%", textAlign: "left",
         padding: "14px 16px",
         borderLeft: `3px solid ${stageColor}`,
@@ -52,6 +75,30 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-secondary)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
     >
+      {/* Corner delete — stopPropagation so the card itself doesn't open */}
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label="Delete analysis"
+        title="Delete this analysis"
+        onClick={del}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") del(e); }}
+        style={{
+          position: "absolute", top: 8, right: 8,
+          width: 22, height: 22,
+          borderRadius: 2,
+          background: "transparent",
+          border: "1px solid transparent",
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          transition: "color 120ms, border-color 120ms",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--status-error)"; e.currentTarget.style.borderColor = "var(--status-error)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "transparent"; }}
+      >
+        <Trash2 size={12} strokeWidth={2} />
+      </span>
       {/* Top row: stage pill + status */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
