@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, X, Info, FileText, Plus, Filter } from "lucide-react";
+import { Check, X, Info, FileText, Plus, Filter, Paperclip } from "lucide-react";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -26,7 +26,10 @@ export default function ScopeItemList({
   onEdit,
   onDelete,
   onToggleComplete,
+  selectedIds,
+  onToggleSelect,
 }) {
+  const selectionMode = !!onToggleSelect;
   if (items.length === 0) {
     // Two empty states: no data at all, vs filters hiding everything
     const isFilteredEmpty = totalCount > 0 && hasActiveFilters;
@@ -182,7 +185,29 @@ export default function ScopeItemList({
                 marginBottom: "8px",
               }}
             >
-              {/* Checkbox */}
+              {/* Bulk-selection checkbox (square, left-most when selection mode is on) */}
+              {selectionMode && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onToggleSelect(item.id); }}
+                  aria-label={selectedIds?.has(item.id) ? "Unselect" : "Select"}
+                  title={selectedIds?.has(item.id) ? "Unselect" : "Select"}
+                  style={{
+                    flexShrink: 0,
+                    width: 18, height: 18,
+                    borderRadius: 2,
+                    border: `2px solid ${selectedIds?.has(item.id) ? "var(--accent)" : "var(--border-default)"}`,
+                    background: selectedIds?.has(item.id) ? "var(--accent)" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", marginTop: 3, padding: 0,
+                    transition: "all 0.12s",
+                  }}
+                >
+                  {selectedIds?.has(item.id) && <Check size={12} strokeWidth={3.5} color="#fff" />}
+                </button>
+              )}
+
+              {/* Complete-state checkbox */}
               {onToggleComplete && (
                 <button
                   type="button"
@@ -292,6 +317,29 @@ export default function ScopeItemList({
                       {item.category}
                     </span>
                   </div>
+                )}
+
+                {/* PDF attachment indicator (links directly to the file) */}
+                {item.file_url && (
+                  <a
+                    href={item.file_url}
+                    target="_blank" rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={item.file_name || "Open attachment"}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "4px 6px",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      borderRadius: 4,
+                      textDecoration: "none",
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                    }}
+                  >
+                    <Paperclip size={10} strokeWidth={2.5} />
+                    PDF
+                  </a>
                 )}
 
                 {/* Action Buttons */}
