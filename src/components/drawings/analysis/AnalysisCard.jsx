@@ -83,6 +83,21 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
         {analysis.sheet_count ? ` · ${analysis.sheet_count} sheet${analysis.sheet_count === 1 ? "" : "s"}` : ""}
       </div>
 
+      {/* Imported-to-Drawings pill — shown only when the analysis has been
+          promoted into drawing_sets / drawings. */}
+      {analysis.imported_set_id && (
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: "2px 6px", marginBottom: 8,
+          border: "1px solid var(--status-success)",
+          color: "var(--status-success)",
+          borderRadius: 2,
+          ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+        }}>
+          ↗ IN DRAWINGS
+        </div>
+      )}
+
       {/* Severity chips */}
       {analysis.analysis_status === "complete" && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

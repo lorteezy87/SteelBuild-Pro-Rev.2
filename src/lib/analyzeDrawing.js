@@ -12,12 +12,59 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { importAnalyzedDrawings } from "@/lib/importAnalyzedDrawings";
 
 // Hard caps Anthropic enforces on document blocks (so we fail fast with a
 // useful message instead of a generic 400).
 const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const STORAGE_BUCKET = "app-files";
+
+// Kept in lockstep with the CHECK constraint on drawing_findings.finding_type
+// + drawing_findings.severity. Any AI output outside these sets is coerced
+// to a safe fallback on the client so the insert never fails the check.
+const VALID_FINDING_TYPES = new Set([
+  "missing_info","coordination_conflict","callout_issue",
+  "revision_delta","dimension_concern","aess_concern",
+]);
+const VALID_SEVERITIES = new Set(["critical","high","medium","low","info"]);
+const VALID_SHEET_CATEGORIES = new Set(["structural","erection","detailing","shop"]);
+
+function normalizeFindingType(raw) {
+  if (!raw) return "missing_info";
+  const norm = String(raw).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (VALID_FINDING_TYPES.has(norm)) return norm;
+  // Near-match heuristics so we keep as much of the signal as possible.
+  if (norm.includes("coord"))       return "coordination_conflict";
+  if (norm.includes("callout"))     return "callout_issue";
+  if (norm.includes("aess"))        return "aess_concern";
+  if (norm.includes("dim"))         return "dimension_concern";
+  if (norm.includes("revision") ||
+      norm.includes("delta"))        return "revision_delta";
+  return "missing_info";
+}
+
+function normalizeSeverity(raw) {
+  if (!raw) return "info";
+  const norm = String(raw).trim().toLowerCase();
+  if (VALID_SEVERITIES.has(norm)) return norm;
+  if (norm.startsWith("crit")) return "critical";
+  if (norm.startsWith("hi"))   return "high";
+  if (norm.startsWith("med"))  return "medium";
+  if (norm.startsWith("lo"))   return "low";
+  return "info";
+}
+
+function normalizeCategory(raw) {
+  if (!raw) return null;
+  const norm = String(raw).trim().toLowerCase();
+  if (VALID_SHEET_CATEGORIES.has(norm)) return norm;
+  if (norm.includes("struct"))   return "structural";
+  if (norm.includes("erect"))    return "erection";
+  if (norm.includes("detail"))   return "detailing";
+  if (norm.includes("shop"))     return "shop";
+  return null; // column is nullable — OK to drop unknown
+}
 
 const SYSTEM_PROMPT = `You are a senior structural steel project manager analyzing a drawing set.
 Return your analysis through the submit_analysis tool. All fields are required.
@@ -154,6 +201,12 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
       .update({ analysis_status: "processing" })
       .eq("id", analysisId);
 
+    // Retry idempotency: if a prior attempt inserted some sheets / findings
+    // before failing on the check constraint, clear them so we don't double
+    // up when this run re-inserts.
+    await supabase.from("drawing_sheets").delete().eq("analysis_id", analysisId);
+    await supabase.from("drawing_findings").delete().eq("analysis_id", analysisId);
+
     const pdfBase64 = await fetchPdfBase64(analysis.storage_path, analysis.file_url);
 
     const { data, error } = await supabase.functions.invoke("llm-proxy", {
@@ -187,31 +240,40 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
     const findings = Array.isArray(toolInput.findings)    ? toolInput.findings    : [];
     const summary  = typeof toolInput.ai_summary === "string" ? toolInput.ai_summary : null;
 
-    // Persist sheet index.
+    // Persist sheet index. Category is coerced to a valid enum or null so
+    // we never break the check constraint on a misspelled AI value.
     if (sheets.length) {
       const sheetRows = sheets.map((s, i) => ({
         analysis_id:    analysisId,
         sheet_number:   String(s.sheet_number || "").trim().slice(0, 64) || `Sheet ${i + 1}`,
         sheet_title:    s.title ? String(s.title).slice(0, 500) : null,
-        sheet_category: s.category ? String(s.category).toLowerCase() : null,
+        sheet_category: normalizeCategory(s.category),
         page_index:     Number.isInteger(s.page_index) ? s.page_index : i,
       }));
       const { error: sheetsErr } = await supabase.from("drawing_sheets").insert(sheetRows);
       if (sheetsErr) throw new Error(`Sheet insert failed: ${sheetsErr.message}`);
     }
 
-    // Persist findings.
+    // Persist findings. Each finding_type / severity passes through a
+    // normalizer so Claude can return a close-enough label (e.g.
+    // "coordination" vs "coordination_conflict") without breaking the
+    // CHECK constraint. Description is required, so drop rows where the
+    // model returned an empty string.
     if (findings.length) {
-      const findingRows = findings.map(f => ({
-        analysis_id:        analysisId,
-        sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
-        finding_type:       f.finding_type || "missing_info",
-        severity:           f.severity || "info",
-        description:        String(f.description || "").slice(0, 2000),
-        recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
-      }));
-      const { error: fErr } = await supabase.from("drawing_findings").insert(findingRows);
-      if (fErr) throw new Error(`Findings insert failed: ${fErr.message}`);
+      const findingRows = findings
+        .filter(f => f && String(f.description || "").trim().length > 0)
+        .map(f => ({
+          analysis_id:        analysisId,
+          sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
+          finding_type:       normalizeFindingType(f.finding_type),
+          severity:           normalizeSeverity(f.severity),
+          description:        String(f.description).slice(0, 2000),
+          recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
+        }));
+      if (findingRows.length) {
+        const { error: fErr } = await supabase.from("drawing_findings").insert(findingRows);
+        if (fErr) throw new Error(`Findings insert failed: ${fErr.message}`);
+      }
     }
 
     await supabase
@@ -225,6 +287,20 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
         error_message:   null,
       })
       .eq("id", analysisId);
+
+    // Auto-import the analyzed sheets into the canonical Drawings workflow
+    // so they participate in KPIs / due-date alerts / stage advancement.
+    // Idempotent via drawing_analyses.imported_set_id — a later re-analysis
+    // won't overwrite manual edits on the target set / sheets.
+    try {
+      const fresh = { ...analysis, analysis_status: "complete", ai_summary: summary };
+      await importAnalyzedDrawings(fresh);
+    } catch (importErr) {
+      // Import is best-effort — the analysis itself succeeded, so we don't
+      // flip the parent row to 'error'. The user can retry via the "Import
+      // to Drawings" button on the detail modal.
+      console.warn("[analyzeDrawing] auto-import failed:", importErr?.message || importErr);
+    }
 
     return { sheets, findings, aiSummary: summary };
   } catch (err) {

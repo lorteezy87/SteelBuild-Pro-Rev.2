@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, ExternalLink } from "lucide-react";
+import { X, ExternalLink, ArrowUpRight } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { importAnalyzedDrawings } from "@/lib/importAnalyzedDrawings";
 import FindingRow from "./FindingRow";
 import { mono, display, AI_ACCENT, STAGE_ACCENT, STATUS_COLORS, pill } from "./tokens";
 
@@ -20,10 +22,31 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
   const ref = useRef(null);
   const qc = useQueryClient();
   const open = !!analysis;
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (open) ref.current?.focus();
   }, [open]);
+
+  const runImport = async () => {
+    if (!analysis) return;
+    setImporting(true);
+    try {
+      const res = await importAnalyzedDrawings(analysis);
+      if (res.skipped) {
+        toast.message("Already imported to Drawings");
+      } else {
+        toast.success(`Imported as "${res.setName}" (${res.drawingCount} sheet${res.drawingCount === 1 ? "" : "s"})`);
+      }
+      qc.invalidateQueries({ queryKey: ["drawing_analyses"] });
+      qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawing_sets"] });
+    } catch (e) {
+      toast.error(`Import failed: ${e?.message || e}`);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const { data: sheets = [] } = useQuery({
     queryKey: ["drawing_sheets", analysis?.id],
@@ -114,6 +137,45 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
             >
               <ExternalLink size={14} /> PDF
             </a>
+          )}
+
+          {/* Import-to-Drawings control. Shown only once the analysis is
+              complete so we don't promote partial data. When already
+              imported, shows a success chip; otherwise offers the import
+              button (auto-import should normally already have run). */}
+          {analysis.analysis_status === "complete" && (
+            analysis.imported_set_id ? (
+              <span style={{
+                ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--status-success)",
+                border: "1px solid var(--status-success)",
+                borderRadius: 2, padding: "3px 8px",
+                display: "inline-flex", alignItems: "center", gap: 4,
+              }}>
+                <ArrowUpRight size={12} strokeWidth={2.5} /> IN DRAWINGS
+              </span>
+            ) : (
+              <button
+                onClick={runImport}
+                disabled={importing}
+                style={{
+                  ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: AI_ACCENT,
+                  background: "transparent",
+                  border: `1px solid ${AI_ACCENT}`,
+                  borderRadius: 2,
+                  padding: "3px 10px",
+                  cursor: importing ? "not-allowed" : "pointer",
+                  opacity: importing ? 0.6 : 1,
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                }}
+              >
+                <ArrowUpRight size={12} strokeWidth={2.5} />
+                {importing ? "IMPORTING…" : "IMPORT TO DRAWINGS"}
+              </button>
+            )
           )}
           <button
             onClick={onClose}
