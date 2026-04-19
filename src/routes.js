@@ -28,6 +28,7 @@ export const PAGE_LABELS = {
   RFIs:                  "RFIs",
   RFIHub:                "RFI Command Center",
   Drawings:              "Drawings",
+  DrawingAnalysis:       "Drawing Analysis",
   DrawingViewer:         "Drawing Viewer",
   Documents:             "Documents",
   ModelViewer:           "3D Model Viewer",
@@ -107,7 +108,7 @@ export const ALL_ROUTE_PATHS = Array.from(new Set([
  * Other pages (Settings, etc.) stay context-free.
  */
 export const PROJECT_SCOPED_PAGES = new Set([
-  "Dashboard", "ProjectControlCenter", "Drawings", "DrawingViewer", "ModelViewer",
+  "Dashboard", "ProjectControlCenter", "Drawings", "DrawingAnalysis", "DrawingViewer", "ModelViewer",
   "Schedule", "GanttChart", "Financials", "CostDashboard", "RFIs", "Deliveries",
   "DailyLogs", "Photos", "Inspections", "Punchlist", "Safety", "QualityControl",
   "WorkPackages", "Constraints", "FabRelease", "Procurement", "JobStatusReport",

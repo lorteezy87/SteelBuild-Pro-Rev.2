@@ -18,7 +18,7 @@ export const PRIMARY_TABS = [
   { label: "PCC",         pages: ["ProjectControlCenter"] },
   { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "RFIHub"] },
-  { label: "DRAWINGS",    pages: ["Drawings", "DrawingViewer", "Documents"] },
+  { label: "DRAWINGS",    pages: ["Drawings", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart"] },
@@ -58,6 +58,7 @@ export const ALL_MODULES = [
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
   { icon: "\u25A6", name: "Drawings & Submittals",    group: "Detailing",     page: "Drawings" },
+  { icon: "\u25C8", name: "Drawing Analysis (AI)",    group: "Detailing",     page: "DrawingAnalysis" },
   { icon: "\u25B3", name: "3D Model Viewer",          group: "Detailing",     page: "ModelViewer" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
@@ -124,6 +125,7 @@ export const NAV_GROUPS = [
     label: "DOCUMENTS & DRAWINGS",
     items: [
       { label: "Drawings & Submittals", icon: "\u25A6", page: "Drawings" },
+      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
       { label: "Document Repository",   icon: "\uD83D\uDCC1", page: "Documents" },
       { label: "3D Model Viewer",       icon: "\u25B3", page: "ModelViewer" },
     ],
@@ -229,9 +231,10 @@ export const SIDEBAR_GROUPS = [
     label: "DESIGN & DRAWINGS",
     collapsible: true,
     items: [
-      { label: "Drawings",         icon: "\u25A6", page: "Drawings" },
-      { label: "Drawing Viewer",   icon: "\u25A6", page: "DrawingViewer" },
-      { label: "3D Model Viewer",  icon: "\u25B3", page: "ModelViewer" },
+      { label: "Drawings",             icon: "\u25A6", page: "Drawings" },
+      { label: "Drawing Analysis (AI)", icon: "\u25C8", page: "DrawingAnalysis" },
+      { label: "Drawing Viewer",       icon: "\u25A6", page: "DrawingViewer" },
+      { label: "3D Model Viewer",      icon: "\u25B3", page: "ModelViewer" },
     ],
   },
   {

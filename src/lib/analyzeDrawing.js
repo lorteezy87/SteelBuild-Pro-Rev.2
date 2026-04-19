@@ -1,0 +1,240 @@
+/**
+ * analyzeDrawing.js
+ *
+ * Runs Anthropic PDF analysis on a drawing PDF via the llm-proxy Supabase
+ * Edge Function. Persists the result to the drawing_analyses /
+ * drawing_sheets / drawing_findings tables.
+ *
+ * Input contract — `analysis` row already inserted with status='pending':
+ *   { id, file_url, storage_path, file_name, project_id, drawing_stage, ... }
+ *
+ * Output: { sheets, findings, aiSummary } — same shape that gets persisted.
+ */
+
+import { supabase } from "@/lib/supabase";
+
+// Hard caps Anthropic enforces on document blocks (so we fail fast with a
+// useful message instead of a generic 400).
+const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB
+const DEFAULT_MODEL = "claude-sonnet-4-6";
+
+const SYSTEM_PROMPT = `You are a senior structural steel project manager analyzing a drawing set.
+Return your analysis through the submit_analysis tool. All fields are required.
+
+Focus on issues a PM/detailer would flag before fab release:
+  - missing bolt callouts (A325/A490, SC/N/X, edge distance)
+  - AESS class omissions (1–4) or conflicting AESS requirements
+  - embed elevation conflicts (top-of-concrete vs. top-of-steel ambiguity)
+  - column splice location clarity (elevation, orientation, field vs shop)
+  - connection type ambiguity (shear tab vs bolted clip vs moment vs seismic)
+  - revision clouds without narrative description in the revision block
+  - grid or column line mismatches between plan and elevation
+  - dimension chain errors (sum ≠ overall, floating dimensions, missing hold)
+
+Sheet categories: 'structural' (S-series), 'erection' (E-series),
+'detailing' (D-series), 'shop' (SH-series). Return the literal lowercase
+string.
+
+Severity guidance:
+  critical = blocks fabrication or creates safety risk
+  high     = blocks release of a sheet or assembly
+  medium   = needs resolution before shop start
+  low      = detailing cleanup, will not block fab
+  info     = observation, no action needed
+
+Be specific: every description must cite a sheet number and a location
+on the sheet (grid line, detail callout, elevation). Generic findings
+are not useful.`;
+
+const ANALYSIS_TOOL = {
+  name: "submit_analysis",
+  description: "Return the structured drawing-set analysis.",
+  input_schema: {
+    type: "object",
+    required: ["sheet_index", "ai_summary", "findings"],
+    properties: {
+      sheet_index: {
+        type: "array",
+        description: "Every sheet extracted from the PDF, in page order.",
+        items: {
+          type: "object",
+          required: ["sheet_number", "title", "category"],
+          properties: {
+            sheet_number: { type: "string" },
+            title:        { type: "string" },
+            category:     { type: "string", enum: ["structural", "erection", "detailing", "shop"] },
+            page_index:   { type: "integer" },
+          },
+        },
+      },
+      ai_summary: {
+        type: "string",
+        description: "2–3 sentence overview of the set and top risks.",
+      },
+      findings: {
+        type: "array",
+        items: {
+          type: "object",
+          required: ["sheet_number", "finding_type", "severity", "description", "recommended_action"],
+          properties: {
+            sheet_number:       { type: "string" },
+            finding_type:       { type: "string", enum: ["missing_info","coordination_conflict","callout_issue","revision_delta","dimension_concern","aess_concern"] },
+            severity:           { type: "string", enum: ["critical","high","medium","low","info"] },
+            description:        { type: "string" },
+            recommended_action: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Download the PDF from storage, base64-encode, and POST to llm-proxy.
+ * The edge function forwards messages untouched to Anthropic, so we can
+ * use Claude's native document block format here.
+ */
+async function fetchPdfBase64(storagePath, fileUrl) {
+  // Prefer direct storage read when we have the path — avoids a signed-URL
+  // round-trip and works for private buckets.
+  if (storagePath) {
+    const { data, error } = await supabase.storage.from("uploads").download(storagePath);
+    if (error) throw new Error(`Storage download failed: ${error.message}`);
+    const buf = await data.arrayBuffer();
+    if (buf.byteLength > MAX_PDF_BYTES) {
+      throw new Error(`PDF is ${(buf.byteLength / 1e6).toFixed(1)} MB, limit is 32 MB.`);
+    }
+    return arrayBufferToBase64(buf);
+  }
+  // Fallback: fetch the signed URL directly.
+  const resp = await fetch(fileUrl);
+  if (!resp.ok) throw new Error(`Could not fetch PDF (${resp.status}).`);
+  const buf = await resp.arrayBuffer();
+  if (buf.byteLength > MAX_PDF_BYTES) {
+    throw new Error(`PDF is ${(buf.byteLength / 1e6).toFixed(1)} MB, limit is 32 MB.`);
+  }
+  return arrayBufferToBase64(buf);
+}
+
+function arrayBufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Runs the full analysis pipeline. Caller is responsible for having
+ * already inserted the drawing_analyses row with status='pending'.
+ *
+ * Updates the row to 'processing' → 'complete' (or 'error') and writes
+ * child rows. Returns the parsed analysis on success; throws on failure
+ * (the caller may surface the error and the row will carry error_message).
+ */
+export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
+  const analysisId = analysis.id;
+
+  const markError = async (message) => {
+    await supabase
+      .from("drawing_analyses")
+      .update({ analysis_status: "error", error_message: String(message).slice(0, 500) })
+      .eq("id", analysisId);
+  };
+
+  try {
+    await supabase
+      .from("drawing_analyses")
+      .update({ analysis_status: "processing" })
+      .eq("id", analysisId);
+
+    const pdfBase64 = await fetchPdfBase64(analysis.storage_path, analysis.file_url);
+
+    const { data, error } = await supabase.functions.invoke("llm-proxy", {
+      body: {
+        model,
+        maxTokens: 8000,
+        system: SYSTEM_PROMPT,
+        tools: [ANALYSIS_TOOL],
+        tool_choice: { type: "tool", name: "submit_analysis" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+              { type: "text", text: contextPrompt(analysis) },
+            ],
+          },
+        ],
+      },
+    });
+
+    if (error) throw new Error(error.message || "llm-proxy invocation failed");
+    if (data?.error) throw new Error(data.error);
+
+    const toolInput = data?.tool_use?.input;
+    if (!toolInput || typeof toolInput !== "object") {
+      throw new Error("AI did not return a tool_use payload. See raw_ai_response.");
+    }
+
+    const sheets   = Array.isArray(toolInput.sheet_index) ? toolInput.sheet_index : [];
+    const findings = Array.isArray(toolInput.findings)    ? toolInput.findings    : [];
+    const summary  = typeof toolInput.ai_summary === "string" ? toolInput.ai_summary : null;
+
+    // Persist sheet index.
+    if (sheets.length) {
+      const sheetRows = sheets.map((s, i) => ({
+        analysis_id:    analysisId,
+        sheet_number:   String(s.sheet_number || "").trim().slice(0, 64) || `Sheet ${i + 1}`,
+        sheet_title:    s.title ? String(s.title).slice(0, 500) : null,
+        sheet_category: s.category ? String(s.category).toLowerCase() : null,
+        page_index:     Number.isInteger(s.page_index) ? s.page_index : i,
+      }));
+      const { error: sheetsErr } = await supabase.from("drawing_sheets").insert(sheetRows);
+      if (sheetsErr) throw new Error(`Sheet insert failed: ${sheetsErr.message}`);
+    }
+
+    // Persist findings.
+    if (findings.length) {
+      const findingRows = findings.map(f => ({
+        analysis_id:        analysisId,
+        sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
+        finding_type:       f.finding_type || "missing_info",
+        severity:           f.severity || "info",
+        description:        String(f.description || "").slice(0, 2000),
+        recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
+      }));
+      const { error: fErr } = await supabase.from("drawing_findings").insert(findingRows);
+      if (fErr) throw new Error(`Findings insert failed: ${fErr.message}`);
+    }
+
+    await supabase
+      .from("drawing_analyses")
+      .update({
+        analysis_status: "complete",
+        sheet_count:     sheets.length,
+        ai_summary:      summary,
+        model,
+        raw_ai_response: data?.raw ?? null,
+        error_message:   null,
+      })
+      .eq("id", analysisId);
+
+    return { sheets, findings, aiSummary: summary };
+  } catch (err) {
+    await markError(err?.message || String(err));
+    throw err;
+  }
+}
+
+function contextPrompt(a) {
+  const bits = [];
+  if (a.drawing_stage) bits.push(`Stage: ${a.drawing_stage}`);
+  if (a.revision)      bits.push(`Revision: ${a.revision}`);
+  if (a.issue_date)    bits.push(`Issue date: ${a.issue_date}`);
+  if (a.file_name)     bits.push(`File: ${a.file_name}`);
+  const ctx = bits.length ? `\n\nContext:\n${bits.join("\n")}` : "";
+  return `Analyze this structural steel drawing set. Call submit_analysis with the sheet index, a short summary, and any findings you can substantiate from the PDF.${ctx}`;
+}
