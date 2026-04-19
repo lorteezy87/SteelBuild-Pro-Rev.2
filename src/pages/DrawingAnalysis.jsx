@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -99,33 +99,44 @@ export default function DrawingAnalysis() {
     })();
   }, [analyses, qc, projectId]);
 
-  // Kick off analyzeDrawing() for any row still in 'pending'. Dedupe by
-  // id + updated_at so a retry (which bumps updated_at via the trigger)
-  // re-fires exactly once even though the id is the same.
+  // Kick off analyzeDrawing() for rows still in 'pending' — SERIALIZED
+  // (one at a time). Multiple PDFs in flight blow past Anthropic's
+  // per-minute token cap and every request 429s. The kicked Set dedupes
+  // by id + updated_at so retries and prior enqueues are tracked. A ref-
+  // tracked active flag enforces the concurrency-of-1: the effect picks
+  // up the next pending row each time the query re-fetches (every 4s
+  // while any row is pending/processing).
   const [kicked, setKicked] = useState(() => new Set());
+  const activeRef = useRef(false);
   useEffect(() => {
-    const toKick = analyses
-      .filter(a => a.analysis_status === "pending")
-      .filter(a => !kicked.has(`${a.id}:${a.updated_at}`));
-    if (toKick.length === 0) return;
+    if (activeRef.current) return;  // one analysis in flight already
+    const next = analyses.find(a =>
+      a.analysis_status === "pending" &&
+      !kicked.has(`${a.id}:${a.updated_at}`)
+    );
+    if (!next) return;
+
+    activeRef.current = true;
     setKicked(prev => {
-      const next = new Set(prev);
-      toKick.forEach(p => next.add(`${p.id}:${p.updated_at}`));
-      return next;
+      const ns = new Set(prev);
+      ns.add(`${next.id}:${next.updated_at}`);
+      return ns;
     });
-    for (const row of toKick) {
-      analyzeDrawing(row)
-        .then(() => {
-          qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
-          qc.invalidateQueries({ queryKey: ["drawing_sheets", row.id] });
-          qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
-          toast.success(`${row.file_name} analyzed`);
-        })
-        .catch((e) => {
-          qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
-          toast.error(`Analysis failed: ${e?.message || e}`);
-        });
-    }
+
+    analyzeDrawing(next)
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
+        qc.invalidateQueries({ queryKey: ["drawing_sheets", next.id] });
+        qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
+        toast.success(`${next.file_name} analyzed`);
+      })
+      .catch((e) => {
+        qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
+        toast.error(`Analysis failed: ${e?.message || e}`);
+      })
+      .finally(() => {
+        activeRef.current = false;
+      });
   }, [analyses, kicked, qc, projectId]);
 
   const findingsByAnalysis = allFindings.reduce((acc, f) => {
