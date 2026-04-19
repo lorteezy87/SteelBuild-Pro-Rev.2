@@ -19,6 +19,44 @@ const MAX_PDF_BYTES   = 32 * 1024 * 1024; // 32 MB per document (Anthropic cap)
 const DEFAULT_MODEL   = "claude-sonnet-4-6";
 const STORAGE_BUCKET  = "app-files";
 
+// In lockstep with CHECK constraints on drawing_revision_deltas. Any AI
+// output outside these sets is coerced to a safe fallback client-side so
+// the insert can't ever fail the check.
+const VALID_DELTA_TYPES = new Set([
+  "sheet_added","sheet_removed",
+  "grid_shift","connection_change","dimension_change",
+  "detail_revised","callout_added","callout_removed",
+  "material_change","elevation_change","other",
+]);
+const VALID_SEVERITIES = new Set(["critical","high","medium","low","info"]);
+
+function normalizeDeltaType(raw) {
+  if (!raw) return "other";
+  const norm = String(raw).trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (VALID_DELTA_TYPES.has(norm)) return norm;
+  if (norm.includes("added") && norm.includes("sheet"))    return "sheet_added";
+  if (norm.includes("removed") && norm.includes("sheet"))  return "sheet_removed";
+  if (norm.includes("grid"))                                return "grid_shift";
+  if (norm.includes("connect"))                             return "connection_change";
+  if (norm.includes("dim"))                                 return "dimension_change";
+  if (norm.includes("detail"))                              return "detail_revised";
+  if (norm.includes("callout") && norm.includes("add"))    return "callout_added";
+  if (norm.includes("callout"))                             return "callout_removed";
+  if (norm.includes("material"))                            return "material_change";
+  if (norm.includes("elev"))                                return "elevation_change";
+  return "other";
+}
+function normalizeSeverity(raw) {
+  if (!raw) return "info";
+  const norm = String(raw).trim().toLowerCase();
+  if (VALID_SEVERITIES.has(norm)) return norm;
+  if (norm.startsWith("crit")) return "critical";
+  if (norm.startsWith("hi"))   return "high";
+  if (norm.startsWith("med"))  return "medium";
+  if (norm.startsWith("lo"))   return "low";
+  return "info";
+}
+
 const SYSTEM_PROMPT = `You are a senior structural steel project manager comparing two revisions
 of a structural steel drawing set. Call submit_revision_diff with the
 changes that matter to a fabrication / field team.
@@ -146,6 +184,9 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
       .update({ compare_status: "processing" })
       .eq("id", cid);
 
+    // Retry idempotency — clear partial delta rows from a prior failed run.
+    await supabase.from("drawing_revision_deltas").delete().eq("comparison_id", cid);
+
     const [fromB64, toB64] = await Promise.all([
       fetchPdfBase64(fromAnalysis),
       fetchPdfBase64(toAnalysis),
@@ -185,16 +226,20 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
     const summary = typeof toolInput.summary === "string" ? toolInput.summary : null;
 
     if (deltas.length) {
-      const rows = deltas.map(d => ({
-        comparison_id:      cid,
-        sheet_number:       d.sheet_number ? String(d.sheet_number).slice(0, 64) : null,
-        delta_type:         d.delta_type || "other",
-        severity:           d.severity || "info",
-        description:        String(d.description || "").slice(0, 2000),
-        recommended_action: d.recommended_action ? String(d.recommended_action).slice(0, 1000) : null,
-      }));
-      const { error: dErr } = await supabase.from("drawing_revision_deltas").insert(rows);
-      if (dErr) throw new Error(`Delta insert failed: ${dErr.message}`);
+      const rows = deltas
+        .filter(d => d && String(d.description || "").trim().length > 0)
+        .map(d => ({
+          comparison_id:      cid,
+          sheet_number:       d.sheet_number ? String(d.sheet_number).slice(0, 64) : null,
+          delta_type:         normalizeDeltaType(d.delta_type),
+          severity:           normalizeSeverity(d.severity),
+          description:        String(d.description).slice(0, 2000),
+          recommended_action: d.recommended_action ? String(d.recommended_action).slice(0, 1000) : null,
+        }));
+      if (rows.length) {
+        const { error: dErr } = await supabase.from("drawing_revision_deltas").insert(rows);
+        if (dErr) throw new Error(`Delta insert failed: ${dErr.message}`);
+      }
     }
 
     await supabase
