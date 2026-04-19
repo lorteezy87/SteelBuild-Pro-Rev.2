@@ -765,6 +765,7 @@ export default function Drawings() {
         ) : (
           <DrawingsGrid
             drawings={filtered}
+            drawingSets={drawingSetRecords}
             selected={selected}
             onToggleSelect={toggleSelect}
             onEdit={d => { setEditing(d); setShowModal(true); }}
@@ -772,6 +773,8 @@ export default function Drawings() {
             onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             onSetApproval={openSetApproval}
+            onRenameSet={openRenameSet}
+            onDeleteSet={handleDeleteSet}
             rfiMap={rfiMap}
           />
         )}
