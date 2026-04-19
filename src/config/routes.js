@@ -70,10 +70,11 @@ const ROUTE_DOMAINS = {
 
   // ── Design & Documents ──
   documents: {
-    Drawings:       lazyWithRetry(() => import("@/pages/Drawings")),
-    DrawingViewer:  lazyWithRetry(() => import("@/pages/DrawingViewer")),
-    Documents:      lazyWithRetry(() => import("@/pages/Documents")),
-    ModelViewer:    lazyWithRetry(() => import("@/pages/ModelViewer")),
+    Drawings:         lazyWithRetry(() => import("@/pages/Drawings")),
+    DrawingAnalysis:  lazyWithRetry(() => import("@/pages/DrawingAnalysis")),
+    DrawingViewer:    lazyWithRetry(() => import("@/pages/DrawingViewer")),
+    Documents:        lazyWithRetry(() => import("@/pages/Documents")),
+    ModelViewer:      lazyWithRetry(() => import("@/pages/ModelViewer")),
   },
 
   // ── Fabrication & Production ──

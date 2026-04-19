@@ -78,6 +78,49 @@ PostgREST picks up the change without a restart.
   auto-builds and publishes. `CLAUDE.md` documents the full auto-deploy
   workflow.
 
+## AI Drawing Analysis
+
+Upload a structural-steel PDF (IFC, shop drawings, revisions, IFA) at
+**Drawings → Drawing Analysis (AI)**. The module:
+
+1. Stores the PDF in Supabase Storage (`uploads/` bucket).
+2. Inserts a `drawing_analyses` row with `status='pending'`.
+3. Calls the `llm-proxy` Edge Function with the PDF as a base64 document
+   block and a structured-output tool (`submit_analysis`).
+4. Persists the sheet index (`drawing_sheets`) and findings
+   (`drawing_findings`), and flips the row to `complete`.
+
+**Limits** — 32 MB and ~100 pages per request (Anthropic document-block
+limits). The upload zone enforces the 32 MB cap client-side.
+
+**Tuning the analyst prompt**. The system prompt and tool schema live in
+[`src/lib/analyzeDrawing.js`](src/lib/analyzeDrawing.js). To tune for a
+different drawing type (cold-formed framing, steel joists, misc metals):
+
+- Expand the focus list in `SYSTEM_PROMPT` with the specific callouts
+  you want flagged (e.g. bridging spacing for joists, gauge callouts for
+  cold-formed, field-bolt vs field-weld notes for misc metals).
+- Add new enum values to `finding_type` in both `ANALYSIS_TOOL.input_schema`
+  and the `drawing_findings.finding_type` CHECK constraint (next
+  migration).
+- Update `FINDING_TYPE_LABEL` in
+  [`src/components/drawings/analysis/tokens.js`](src/components/drawings/analysis/tokens.js)
+  so the new type renders a pill.
+
+**Promote a finding to an RFI**. The detail drawer exposes "Create RFI"
+per finding. This inserts a draft row into `rfis` with the sheet number
+as `drawing_reference`, severity-mapped priority, and a back-link via
+`drawing_findings.linked_rfi_id`.
+
+**Phase roadmap**
+- Phase 1 (shipped): schema, upload, analysis, sheet index, findings,
+  RFI creation link.
+- Phase 2: full RFI dialog (author, assignees, due date) replacing the
+  one-click draft.
+- Phase 3: revision-delta detection — diff two PDFs and surface
+  `revision_delta` findings for changed details / grid shifts / spliced
+  members.
+
 ## Notes on third-party viewers
 
 - `src/pages/ModelViewer.jsx` uses `@thatopen/components` v3.4.0.
