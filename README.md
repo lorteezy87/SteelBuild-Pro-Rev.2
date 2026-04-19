@@ -115,11 +115,20 @@ as `drawing_reference`, severity-mapped priority, and a back-link via
 **Phase roadmap**
 - Phase 1 (shipped): schema, upload, analysis, sheet index, findings,
   RFI creation link.
-- Phase 2: full RFI dialog (author, assignees, due date) replacing the
-  one-click draft.
-- Phase 3: revision-delta detection — diff two PDFs and surface
-  `revision_delta` findings for changed details / grid shifts / spliced
-  members.
+- Phase 2 (shipped): full RFI dialog (author, assignees, due date,
+  ball in court, distribution list) replacing the one-click draft —
+  lives at [CreateRfiFromFindingDialog.jsx](src/components/drawings/analysis/CreateRfiFromFindingDialog.jsx).
+- Phase 3 (shipped): revision-delta detection. Use the "Compare
+  Revisions" button (top-right of the page) to pick a FROM and TO
+  analysis — both PDFs are sent to Claude in a single message via the
+  `submit_revision_diff` tool, and the structured deltas land in
+  `drawing_revision_deltas`. Comparisons are project-scoped; each
+  shows up as its own card in a "Revision Comparisons" section below
+  the uploaded sets. The comparator logic lives at
+  [compareRevisions.js](src/lib/compareRevisions.js) and the allowed
+  delta_type values are the same list in both the Anthropic tool
+  schema and the CHECK constraint on
+  `drawing_revision_deltas.delta_type`.
 
 ## Notes on third-party viewers
 
