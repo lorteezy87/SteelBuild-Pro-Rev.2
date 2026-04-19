@@ -15,42 +15,50 @@
 
 import { supabase } from "@/lib/supabase";
 
-// Mirrors the invokeLlmProxy helper in analyzeDrawing.js — retries 429s
-// with jittered exponential backoff and surfaces a useful error message
-// instead of "Edge Function returned a non-2xx status code".
-async function invokeLlmProxy(body, { maxAttempts = 4 } = {}) {
-  let lastErrPayload = null;
+// Always-retry invokeLlmProxy — see analyzeDrawing.js for the fuller doc.
+// Same backoff schedule (15s, 30s, 60s, 120s + jitter), same onRetry hook
+// so the caller can surface progress on compare_status.error_message.
+async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
+  let lastStatus = 0;
+  let lastDetail = "Anthropic request failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
-    if (!error && !data?.error) return { data };
-
-    let status = 0;
-    let detail = error?.message || data?.error || "llm-proxy invocation failed";
     try {
-      const resp = error?.context;
-      if (resp && typeof resp.text === "function") {
-        status = resp.status || 0;
-        const text = await resp.text();
-        if (text) {
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed?.error) detail = parsed.error;
-          } catch { /* keep detail */ }
+      const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+      if (!error && !data?.error) return { data };
+      let status = 0;
+      let detail = error?.message || data?.error || "llm-proxy invocation failed";
+      try {
+        const resp = error?.context;
+        if (resp) {
+          status = resp.status || 0;
+          if (typeof resp.text === "function") {
+            const text = await resp.text();
+            if (text) {
+              try {
+                const parsed = JSON.parse(text);
+                if (parsed?.error) detail = parsed.error;
+              } catch { /* keep detail */ }
+            }
+          }
         }
+      } catch { /* ignore */ }
+      lastStatus = status;
+      lastDetail = detail;
+    } catch (thrown) {
+      lastDetail = thrown?.message || String(thrown);
+    }
+    if (attempt < maxAttempts) {
+      const base = 15000 * Math.pow(2, attempt - 1);
+      const delay = base + Math.floor(Math.random() * 3000);
+      if (typeof onRetry === "function") {
+        try { await onRetry({ attempt, maxAttempts, delay, status: lastStatus, detail: lastDetail }); } catch { /* best-effort */ }
       }
-    } catch { /* ignore */ }
-    lastErrPayload = { status, detail };
-    const isRateLimit = status === 429 || /\b429\b|rate[- ]?limit/i.test(detail);
-    if (isRateLimit && attempt < maxAttempts) {
-      const base = 8000 * Math.pow(2, attempt - 1);
-      const delay = base + Math.floor(Math.random() * 2000);
       await new Promise(r => setTimeout(r, delay));
       continue;
     }
-    const prefix = status ? `Anthropic ${status}` : "Anthropic";
-    throw new Error(`${prefix}: ${detail}`);
   }
-  throw new Error(`Anthropic ${lastErrPayload?.status || ""}: ${lastErrPayload?.detail || "rate-limit exceeded after retries"}`);
+  const prefix = lastStatus ? `Anthropic ${lastStatus}` : "Anthropic";
+  throw new Error(`${prefix}: ${lastDetail} (gave up after ${maxAttempts} attempts)`);
 }
 
 const MAX_PDF_BYTES   = 32 * 1024 * 1024; // 32 MB per document (Anthropic cap)
@@ -248,6 +256,16 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
           ],
         },
       ],
+    }, {
+      onRetry: async ({ attempt, maxAttempts, delay, status, detail }) => {
+        const secs = Math.round(delay / 1000);
+        const statusBit = status ? ` (Anthropic ${status})` : "";
+        const msg = `Retry ${attempt}/${maxAttempts - 1}${statusBit} — waiting ${secs}s. ${(detail || "").slice(0, 200)}`;
+        await supabase
+          .from("drawing_revision_comparisons")
+          .update({ error_message: msg.slice(0, 500) })
+          .eq("id", cid);
+      },
     });
 
     const toolInput = data?.tool_use?.input;
