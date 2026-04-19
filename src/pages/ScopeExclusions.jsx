@@ -5,9 +5,10 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
+import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { Check, X, Info, Layers, Search, Plus } from "lucide-react";
+import { Check, X, Info, Layers, Search, Plus, Upload } from "lucide-react";
 import StatCard from "@/components/shared/StatCard";
 
 const TYPE_META = {
@@ -22,8 +23,11 @@ export default function ScopeExclusions() {
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkActionBusy, setBulkActionBusy] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -70,6 +74,48 @@ export default function ScopeExclusions() {
   const handleSave = (data) => {
     if (editing) updateMut.mutate({ id: editing.id, data });
     // create is handled by ScopeItemFormModal internally
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const applyBulk = async (patch) => {
+    if (selectedIds.size === 0) return;
+    setBulkActionBusy(true);
+    try {
+      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.update(id, patch)));
+      qc.invalidateQueries({ queryKey: ["scope-items"] });
+      toast.success(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
+      clearSelection();
+    } catch (e) {
+      toast.error("Bulk update failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setBulkActionBusy(false);
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected scope item${selectedIds.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    setBulkActionBusy(true);
+    try {
+      await Promise.all([...selectedIds].map(id => base44.entities.ScopeItem.delete(id)));
+      qc.invalidateQueries({ queryKey: ["scope-items"] });
+      toast.success(`Deleted ${selectedIds.size} item${selectedIds.size === 1 ? "" : "s"}`);
+      clearSelection();
+    } catch (e) {
+      toast.error("Bulk delete failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setBulkActionBusy(false);
+    }
   };
 
   const selectedProject = projectId
@@ -140,30 +186,56 @@ export default function ScopeExclusions() {
           </p>
         </div>
 
-        <button
-          onClick={openCreate}
-          style={{
-            background: "var(--accent)",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 16px",
-            fontFamily: "var(--font-mono)",
-            fontSize: "10px",
-            fontWeight: 700,
-            cursor: "pointer",
-            transition: "background 0.15s",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} strokeWidth={3} /> New Item
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowBulk(true)}
+            disabled={!projectId}
+            title={!projectId ? "Select a project first" : "Bulk import scope items"}
+            style={{
+              background: "transparent",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "8px",
+              padding: "8px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: projectId ? "pointer" : "not-allowed",
+              opacity: projectId ? 1 : 0.5,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Upload size={12} strokeWidth={3} /> Bulk Import
+          </button>
+          <button
+            onClick={openCreate}
+            style={{
+              background: "var(--accent)",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 16px",
+              fontFamily: "var(--font-mono)",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background 0.15s",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            <Plus size={12} strokeWidth={3} /> New Item
+          </button>
+        </div>
       </div>
 
       {/* Stats — clickable filters */}
@@ -390,6 +462,68 @@ export default function ScopeExclusions() {
         <ScopeItemFormModal projectId={projectId} editing={editing} onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
       )}
 
+      {/* Bulk Import Modal */}
+      {showBulk && (
+        <BulkScopeModal
+          projectId={projectId}
+          onClose={() => setShowBulk(false)}
+          onCreated={() => setShowBulk(false)}
+        />
+      )}
+
+      {/* Bulk-edit action bar — appears when any rows are selected */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: "sticky", top: 60, zIndex: 20,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--accent)",
+          borderLeft: "3px solid var(--accent)",
+          borderRadius: 4,
+          padding: "10px 14px",
+          display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {selectedIds.size} SELECTED
+          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Set Type:
+          </span>
+          {types.map(t => (
+            <button key={t} onClick={() => applyBulk({ item_type: t })} disabled={bulkActionBusy} style={chipBtn}>
+              {t}
+            </button>
+          ))}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Set Category:
+          </span>
+          <select
+            disabled={bulkActionBusy}
+            onChange={(e) => { if (e.target.value) applyBulk({ category: e.target.value }); e.target.value = ""; }}
+            style={{
+              background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
+              padding: "4px 8px", color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)", fontSize: 10,
+            }}
+            defaultValue=""
+          >
+            <option value="">—</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={() => applyBulk({ is_completed: true, completed_at: new Date().toISOString() })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark Complete
+          </button>
+          <button onClick={() => applyBulk({ is_completed: false, completed_at: null })} disabled={bulkActionBusy} style={chipBtn}>
+            Mark Incomplete
+          </button>
+          <button onClick={bulkDelete} disabled={bulkActionBusy} style={{ ...chipBtn, color: "var(--status-error)", borderColor: "var(--status-error)" }}>
+            Delete
+          </button>
+          <button onClick={clearSelection} style={{ ...chipBtn, marginLeft: "auto" }}>
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Scope Items List */}
       <ScopeItemList
         items={filtered}
@@ -402,6 +536,8 @@ export default function ScopeExclusions() {
         onToggleComplete={(item) =>
           toggleCompleteMut.mutate({ id: item.id, is_completed: !item.is_completed })
         }
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
       />
 
       {/* Delete Dialog */}
@@ -415,3 +551,17 @@ export default function ScopeExclusions() {
     </div>
   );
 }
+
+const chipBtn = {
+  background: "var(--bg-page)",
+  color: "var(--text-primary)",
+  border: "1px solid var(--border-default)",
+  borderRadius: 2,
+  padding: "4px 10px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
