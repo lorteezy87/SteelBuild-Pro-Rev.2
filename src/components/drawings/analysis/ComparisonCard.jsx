@@ -40,8 +40,11 @@ export default function ComparisonCard({ comparison, fromAnalysis, toAnalysis, d
   };
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen?.(comparison)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen?.(comparison); }}
       style={{
         ...surface,
         display: "block", width: "100%", textAlign: "left",
@@ -126,7 +129,7 @@ export default function ComparisonCard({ comparison, fromAnalysis, toAnalysis, d
           </button>
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
