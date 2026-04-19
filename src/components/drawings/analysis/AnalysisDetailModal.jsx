@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { X, ExternalLink, ArrowUpRight } from "lucide-react";
+import { X, ExternalLink, ArrowUpRight, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
   const qc = useQueryClient();
   const open = !!analysis;
   const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (open) ref.current?.focus();
@@ -45,6 +46,38 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
       toast.error(`Import failed: ${e?.message || e}`);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const runDelete = async () => {
+    if (!analysis) return;
+    // If this analysis was already imported to Drawings, warn that the
+    // target set / sheets stay put — they're the user's data now, not
+    // ours to cascade-delete.
+    const confirmMsg = analysis.imported_set_id
+      ? `Delete AI analysis of "${analysis.file_name}"?\n\nThis analysis has been imported to the Drawings page. The imported set and its sheets will NOT be deleted — only this AI analysis row, its sheet index, and its findings.\n\nThis cannot be undone.`
+      : `Delete AI analysis of "${analysis.file_name}"?\n\nAll extracted sheets and findings will be removed. This cannot be undone.`;
+    if (!window.confirm(confirmMsg)) return;
+    setDeleting(true);
+    try {
+      // drawing_sheets + drawing_findings + drawing_revision_deltas cascade
+      // via their ON DELETE CASCADE FKs. drawing_revision_comparisons also
+      // cascade-delete when either endpoint disappears. Nothing to clean
+      // up by hand.
+      const { error } = await supabase
+        .from("drawing_analyses")
+        .delete()
+        .eq("id", analysis.id);
+      if (error) throw new Error(error.message);
+      toast.success("Analysis deleted");
+      qc.invalidateQueries({ queryKey: ["drawing_analyses"] });
+      qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
+      qc.invalidateQueries({ queryKey: ["drawing_revision_comparisons"] });
+      onClose();
+    } catch (e) {
+      toast.error(`Delete failed: ${e?.message || e}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -177,6 +210,25 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
               </button>
             )
           )}
+          <button
+            onClick={runDelete}
+            disabled={deleting}
+            aria-label="Delete analysis"
+            title="Delete this analysis"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--status-error)",
+              color: "var(--status-error)",
+              borderRadius: 2,
+              padding: "3px 8px",
+              cursor: deleting ? "not-allowed" : "pointer",
+              opacity: deleting ? 0.5 : 1,
+              display: "inline-flex", alignItems: "center", gap: 4,
+              ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+            }}
+          >
+            <Trash2 size={12} strokeWidth={2.5} /> {deleting ? "DELETING…" : "DELETE"}
+          </button>
           <button
             onClick={onClose}
             aria-label="Close"
