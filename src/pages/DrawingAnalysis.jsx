@@ -69,18 +69,21 @@ export default function DrawingAnalysis() {
     enabled: analysisIds.length > 0,
   });
 
-  // Kick off analyzeDrawing() for any row still in 'pending' — only when the
-  // user is here to see the result. Naive debouncer on analysis id via ref.
+  // Kick off analyzeDrawing() for any row still in 'pending'. Dedupe by
+  // id + updated_at so a retry (which bumps updated_at via the trigger)
+  // re-fires exactly once even though the id is the same.
   const [kicked, setKicked] = useState(() => new Set());
   useEffect(() => {
-    const pending = analyses.filter(a => a.analysis_status === "pending" && !kicked.has(a.id));
-    if (pending.length === 0) return;
+    const toKick = analyses
+      .filter(a => a.analysis_status === "pending")
+      .filter(a => !kicked.has(`${a.id}:${a.updated_at}`));
+    if (toKick.length === 0) return;
     setKicked(prev => {
       const next = new Set(prev);
-      pending.forEach(p => next.add(p.id));
+      toKick.forEach(p => next.add(`${p.id}:${p.updated_at}`));
       return next;
     });
-    for (const row of pending) {
+    for (const row of toKick) {
       analyzeDrawing(row)
         .then(() => {
           qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
