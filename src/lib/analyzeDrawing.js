@@ -15,50 +15,68 @@ import { supabase } from "@/lib/supabase";
 import { importAnalyzedDrawings } from "@/lib/importAnalyzedDrawings";
 
 /**
- * Invoke llm-proxy with automatic retry on Anthropic 429s.
+ * Invoke llm-proxy with automatic retry on any transient upstream failure.
  *
  * `supabase.functions.invoke` returns a generic "Edge Function returned a
- * non-2xx status code" when the upstream is 429, which is unhelpful for
- * the user. We read the underlying response body to get the real status
- * and retry with jittered exponential backoff when the status is 429.
+ * non-2xx status code" when the upstream is 429 — too vague to decide
+ * retry on. So we retry ALL errors (not just detected 429s) with
+ * jittered exponential backoff. The long backoff covers Anthropic's
+ * rolling 60-second TPM window; transient Supabase/network errors get a
+ * free retry as a bonus.
+ *
+ * The optional `onRetry` callback is awaited between attempts so the
+ * caller can update row.error_message (e.g. "Retry 2/5 after 429, waiting 24s…")
+ * so the user sees progress on the UI without refreshing.
  */
-async function invokeLlmProxy(body, { maxAttempts = 4 } = {}) {
-  let lastErrPayload = null;
+async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
+  let lastStatus = 0;
+  let lastDetail = "Anthropic request failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
-    if (!error && !data?.error) return { data };
-
-    // Supabase-js exposes the raw Response on error.context when non-2xx.
-    let status = 0;
-    let detail = error?.message || data?.error || "llm-proxy invocation failed";
     try {
-      const resp = error?.context;
-      if (resp && typeof resp.text === "function") {
-        status = resp.status || 0;
-        const text = await resp.text();
-        if (text) {
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed?.error) detail = parsed.error;
-          } catch { /* keep detail as-is */ }
+      const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+      if (!error && !data?.error) return { data };
+
+      // Try to extract the real status + Anthropic error text from the
+      // raw Response on error.context. If any of this throws, we still
+      // retry — we just won't be able to show a precise status.
+      let status = 0;
+      let detail = error?.message || data?.error || "llm-proxy invocation failed";
+      try {
+        const resp = error?.context;
+        if (resp) {
+          status = resp.status || 0;
+          if (typeof resp.text === "function") {
+            const text = await resp.text();
+            if (text) {
+              try {
+                const parsed = JSON.parse(text);
+                if (parsed?.error) detail = parsed.error;
+              } catch { /* keep detail */ }
+            }
+          }
         }
+      } catch { /* ignore — we'll retry anyway */ }
+
+      lastStatus = status;
+      lastDetail = detail;
+    } catch (thrown) {
+      lastDetail = thrown?.message || String(thrown);
+    }
+
+    if (attempt < maxAttempts) {
+      const base = 15000 * Math.pow(2, attempt - 1); // 15s, 30s, 60s, 120s
+      const delay = base + Math.floor(Math.random() * 3000);
+      if (typeof onRetry === "function") {
+        try {
+          await onRetry({ attempt, maxAttempts, delay, status: lastStatus, detail: lastDetail });
+        } catch { /* onRetry is best-effort */ }
       }
-    } catch { /* ignore */ }
-
-    lastErrPayload = { status, detail };
-
-    const isRateLimit = status === 429 || /\b429\b|rate[- ]?limit/i.test(detail);
-    if (isRateLimit && attempt < maxAttempts) {
-      const base = 8000 * Math.pow(2, attempt - 1); // 8s, 16s, 32s
-      const delay = base + Math.floor(Math.random() * 2000);
       await new Promise(r => setTimeout(r, delay));
       continue;
     }
-
-    const prefix = status ? `Anthropic ${status}` : "Anthropic";
-    throw new Error(`${prefix}: ${detail}`);
   }
-  throw new Error(`Anthropic ${lastErrPayload?.status || ""}: ${lastErrPayload?.detail || "rate-limit exceeded after retries"}`);
+  const prefix = lastStatus ? `Anthropic ${lastStatus}` : "Anthropic";
+  throw new Error(`${prefix}: ${lastDetail} (gave up after ${maxAttempts} attempts)`);
 }
 
 // Hard caps Anthropic enforces on document blocks (so we fail fast with a
@@ -271,6 +289,16 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
           ],
         },
       ],
+    }, {
+      onRetry: async ({ attempt, maxAttempts, delay, status, detail }) => {
+        const secs = Math.round(delay / 1000);
+        const statusBit = status ? ` (Anthropic ${status})` : "";
+        const msg = `Retry ${attempt}/${maxAttempts - 1}${statusBit} — waiting ${secs}s before next attempt. ${(detail || "").slice(0, 200)}`;
+        await supabase
+          .from("drawing_analyses")
+          .update({ error_message: msg.slice(0, 500) })
+          .eq("id", analysisId);
+      },
     });
 
     const toolInput = data?.tool_use?.input;
