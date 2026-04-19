@@ -364,7 +364,7 @@ function StageBar({ stageCounts, total }) {
 function GroupRow({
   group, expanded, onToggleExpand,
   groupSelected, groupIndeterminate, onToggleGroupSelect,
-  onSetApproval, onDeleteSet, hideOnCompact,
+  onSetApproval, onDeleteSet, onRenameSet, hideOnCompact,
 }) {
   const a = group.aggregates;
   const accent = group.isUngrouped ? "var(--text-muted)" : "var(--accent)";
@@ -598,18 +598,27 @@ function GroupRow({
         )}
       </td>
 
-      {/* Actions cell — set-level delete. Offered for all named sets
-          (with or without child sheets). UNGROUPED sheets don't belong to a
-          drawing_sets row so there's nothing to cascade-delete. */}
+      {/* Actions cell — set-level rename + delete. Offered for all named
+          sets (with or without child sheets). UNGROUPED sheets don't belong
+          to a drawing_sets row so there's nothing to rename/delete. */}
       <td style={tdBase}>
-        {!group.isUngrouped && onDeleteSet && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <ActionBtn
-              label="Delete Set"
-              danger
-              title={a.total > 0 ? `Delete entire set "${group.name}" and all ${a.total} sheet${a.total === 1 ? "" : "s"}` : `Delete set "${group.name}"`}
-              onClick={() => onDeleteSet(group)}
-            />
+        {!group.isUngrouped && (onRenameSet || onDeleteSet) && (
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+            {onRenameSet && (
+              <ActionBtn
+                label="Rename"
+                title={`Rename set "${group.name}"`}
+                onClick={() => onRenameSet(group)}
+              />
+            )}
+            {onDeleteSet && (
+              <ActionBtn
+                label="Delete Set"
+                danger
+                title={a.total > 0 ? `Delete entire set "${group.name}" and all ${a.total} sheet${a.total === 1 ? "" : "s"}` : `Delete set "${group.name}"`}
+                onClick={() => onDeleteSet(group)}
+              />
+            )}
           </div>
         )}
       </td>
@@ -886,7 +895,7 @@ const COMPACT_WIDTH_PX = 1200;
 export default function DrawingsTable({
   drawings, selected, onToggleSelect, onToggleAll,
   onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, onDeleteSet, rfiMap,
+  setContextMenu, onSetApproval, onDeleteSet, onRenameSet, rfiMap,
   drawingSetMap = {},
 }) {
   // F20: sort state. null means "use the default by-sheet-number order
@@ -1075,6 +1084,7 @@ export default function DrawingsTable({
                   onToggleGroupSelect={() => toggleGroupSelect(group)}
                   onSetApproval={onSetApproval}
                   onDeleteSet={onDeleteSet}
+                  onRenameSet={onRenameSet}
                   hideOnCompact={hideOnCompact}
                 />
                 {isExpanded && group.setOnly && (
