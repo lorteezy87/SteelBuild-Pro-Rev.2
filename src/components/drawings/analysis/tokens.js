@@ -65,3 +65,17 @@ export const FINDING_TYPE_LABEL = {
   dimension_concern:     "DIMENSION",
   aess_concern:          "AESS",
 };
+
+export const DELTA_TYPE_LABEL = {
+  sheet_added:       "SHEET ADDED",
+  sheet_removed:     "SHEET REMOVED",
+  grid_shift:        "GRID SHIFT",
+  connection_change: "CONNECTION",
+  dimension_change:  "DIMENSION",
+  detail_revised:    "DETAIL REV.",
+  callout_added:     "CALLOUT +",
+  callout_removed:   "CALLOUT \u2212",
+  material_change:   "MATERIAL",
+  elevation_change:  "ELEVATION",
+  other:             "OTHER",
+};
