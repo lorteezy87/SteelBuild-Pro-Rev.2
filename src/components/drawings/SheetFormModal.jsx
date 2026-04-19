@@ -129,6 +129,33 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
             <input style={inputStyle} value={form.linked_rfi_ids || ""} onChange={e => set("linked_rfi_ids", e.target.value)} placeholder="RFI #001, RFI #002" />
           </div>
 
+          {/* ── Fabrication & Delivery dates ─────────────────────────── */}
+          <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+            <div style={{
+              ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.15em",
+              textTransform: "uppercase", color: "var(--text-muted)",
+              paddingBottom: 6, borderBottom: "1px solid var(--divider)",
+            }}>
+              Fabrication &amp; Delivery
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Fabrication Start</label>
+            <input type="date" style={inputStyle} value={form.fabrication_start_date || ""} onChange={e => set("fabrication_start_date", e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Fabrication Finish</label>
+            <input type="date" style={inputStyle} value={form.fabrication_finish_date || ""} onChange={e => set("fabrication_finish_date", e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Ready for Install</label>
+            <input type="date" style={inputStyle} value={form.ready_for_install_date || ""} onChange={e => set("ready_for_install_date", e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Final Delivery</label>
+            <input type="date" style={inputStyle} value={form.final_delivery_date || ""} onChange={e => set("final_delivery_date", e.target.value)} />
+          </div>
+
           {/* File attachment */}
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>PDF Attachment</label>
