@@ -61,8 +61,11 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
     : "—";
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen?.(analysis)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen?.(analysis); }}
       style={{
         ...surface,
         position: "relative",
@@ -75,30 +78,31 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-secondary)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
     >
-      {/* Corner delete — stopPropagation so the card itself doesn't open */}
-      <span
-        role="button"
-        tabIndex={0}
+      {/* Corner delete — real <button> now that the outer is a <div>
+          (nested <button> inside <button> was invalid DOM and caused
+          some browsers to drop the click). */}
+      <button
+        type="button"
         aria-label="Delete analysis"
         title="Delete this analysis"
         onClick={del}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") del(e); }}
         style={{
           position: "absolute", top: 8, right: 8,
-          width: 22, height: 22,
+          width: 26, height: 26,
           borderRadius: 2,
           background: "transparent",
-          border: "1px solid transparent",
+          border: "1px solid var(--border-default)",
           color: "var(--text-muted)",
           cursor: "pointer",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          transition: "color 120ms, border-color 120ms",
+          transition: "color 120ms, border-color 120ms, background 120ms",
+          zIndex: 2,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--status-error)"; e.currentTarget.style.borderColor = "var(--status-error)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "transparent"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--status-error)"; e.currentTarget.style.borderColor = "var(--status-error)"; e.currentTarget.style.background = "color-mix(in srgb, var(--status-error) 8%, transparent)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.background = "transparent"; }}
       >
-        <Trash2 size={12} strokeWidth={2} />
-      </span>
+        <Trash2 size={13} strokeWidth={2} />
+      </button>
       {/* Top row: stage pill + status */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -196,6 +200,6 @@ export default function AnalysisCard({ analysis, findings = [], onOpen }) {
           </button>
         </div>
       )}
-    </button>
+    </div>
   );
 }
