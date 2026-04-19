@@ -39,6 +39,7 @@ import StagePipeline from "@/components/drawings/StagePipeline";
 import AlertBanner from "@/components/drawings/AlertBanner";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import RenameSetModal from "@/components/drawings/RenameSetModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
@@ -67,6 +68,8 @@ export default function Drawings() {
   const [contextMenu, setContextMenu] = useState(null);
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
+  const [renameSet, setRenameSet] = useState(null);   // { setId, setName, sheets }
+  const [savingRename, setSavingRename] = useState(false);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
@@ -564,6 +567,43 @@ export default function Drawings() {
     setApprovalSet({ setName, setId, sheets });
   };
 
+  const openRenameSet = (group) => {
+    // Group is what DrawingsTable passes to onDeleteSet — same shape works:
+    //   { name, sheets, setId?, parent? }
+    if (!group || group.isUngrouped) return;
+    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
+    setRenameSet({ setId, setName: group.name, sheets: group.sheets || [] });
+  };
+
+  const handleRenameSet = async (newName) => {
+    if (!renameSet) return;
+    const { setId, setName: oldName, sheets } = renameSet;
+    setSavingRename(true);
+    try {
+      // Update the parent drawing_sets row when one exists.
+      if (setId) {
+        await base44.entities.DrawingSet.update(setId, { set_name: newName });
+      }
+      // Also update every child sheet's denormalized drawing_set_name so the
+      // table grouping follows the rename even for legacy rows that don't
+      // have a parent FK. Uses the same batch helper as bulk stage apply.
+      const sheetIds = (sheets || []).map(s => s.id);
+      if (sheetIds.length > 0) {
+        await batchProcess(sheetIds, (id) =>
+          base44.entities.Drawing.update(id, { drawing_set_name: newName })
+        );
+      }
+      invalidate();
+      toast.success(`Renamed "${oldName}" → "${newName}"`);
+      setRenameSet(null);
+    } catch (err) {
+      toast.error("Rename failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setSavingRename(false);
+    }
+  };
+
   const toggleSelect = (id) => {
     const s = new Set(selected);
     s.has(id) ? s.delete(id) : s.add(id);
@@ -718,6 +758,7 @@ export default function Drawings() {
             setContextMenu={setContextMenu}
             onSetApproval={openSetApproval}
             onDeleteSet={handleDeleteSet}
+            onRenameSet={openRenameSet}
             rfiMap={rfiMap}
             drawingSetMap={drawingSetMap}
           />
@@ -788,6 +829,14 @@ export default function Drawings() {
         existingRevision={approvalSet?.sheets?.[0]?.revision_number || ""}
         onConfirm={handleSetApproval}
         saving={savingApproval}
+      />
+
+      <RenameSetModal
+        open={!!renameSet}
+        initialName={renameSet?.setName || ""}
+        onClose={() => setRenameSet(null)}
+        onSave={handleRenameSet}
+        saving={savingRename}
       />
 
       <DrawingSetUploadModal

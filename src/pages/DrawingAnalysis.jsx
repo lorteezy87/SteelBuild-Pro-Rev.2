@@ -76,6 +76,29 @@ export default function DrawingAnalysis() {
     enabled: analysisIds.length > 0,
   });
 
+  // Self-heal: any row that's been sitting in 'processing' for more than
+  // the stale threshold is almost certainly orphaned (tab closed mid-run,
+  // browser crashed, etc.). Reset it to 'pending' so the kick effect below
+  // can re-fire it. The threshold accounts for long multi-page PDFs.
+  const STUCK_MS = 5 * 60 * 1000;
+  useEffect(() => {
+    const now = Date.now();
+    const stuck = analyses.filter(a =>
+      a.analysis_status === "processing" &&
+      a.updated_at &&
+      (now - new Date(a.updated_at).getTime()) > STUCK_MS
+    );
+    if (stuck.length === 0) return;
+    (async () => {
+      const ids = stuck.map(s => s.id);
+      await supabase
+        .from("drawing_analyses")
+        .update({ analysis_status: "pending", error_message: "Recovered from stuck processing state." })
+        .in("id", ids);
+      qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
+    })();
+  }, [analyses, qc, projectId]);
+
   // Kick off analyzeDrawing() for any row still in 'pending'. Dedupe by
   // id + updated_at so a retry (which bumps updated_at via the trigger)
   // re-fires exactly once even though the id is the same.
