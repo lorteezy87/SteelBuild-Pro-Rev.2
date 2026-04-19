@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, X, Info, FileText, Plus, Filter, Paperclip } from "lucide-react";
+import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -26,6 +26,7 @@ export default function ScopeItemList({
   onEdit,
   onDelete,
   onToggleComplete,
+  onToggleInProgress,
   selectedIds,
   onToggleSelect,
 }) {
@@ -152,13 +153,19 @@ export default function ScopeItemList({
         const TypeIcon = typeMeta.Icon;
         const categoryColor = CATEGORY_COLORS[item.category] || "var(--text-muted)";
         const isComplete = !!item.is_completed;
+        const isInProgress = !isComplete && !!item.in_progress;
+        const accentColor = isComplete
+          ? "var(--status-success)"
+          : isInProgress
+            ? "var(--status-warning)"
+            : typeMeta.color;
         return (
           <div
             key={item.id}
             style={{
               background: isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderLeft: `3px solid ${isComplete ? "var(--status-success)" : typeMeta.color}`,
+              borderLeft: `3px solid ${accentColor}`,
               borderRadius: "12px",
               padding: "14px 16px",
               transition: "all 0.15s",
@@ -166,12 +173,12 @@ export default function ScopeItemList({
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent-border)";
-              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
+              e.currentTarget.style.borderLeftColor = accentColor;
               e.currentTarget.style.background = "var(--hover-bg)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border-default)";
-              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
+              e.currentTarget.style.borderLeftColor = accentColor;
               e.currentTarget.style.background = isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)";
             }}
           >
@@ -262,6 +269,27 @@ export default function ScopeItemList({
                     ✓ Completed {new Date(item.completed_at).toLocaleDateString()}
                   </div>
                 )}
+                {!isComplete && item.in_progress && (
+                  <div
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9, fontWeight: 700,
+                      color: "var(--status-warning)",
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      marginTop: 2,
+                    }}
+                  >
+                    <Clock size={10} strokeWidth={2.5} />
+                    In Progress
+                    {item.in_progress_at && (
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                        · since {new Date(item.in_progress_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
@@ -340,6 +368,29 @@ export default function ScopeItemList({
                     <Paperclip size={10} strokeWidth={2.5} />
                     PDF
                   </a>
+                )}
+
+                {/* In-Progress toggle — active when the flag is set, ghost when not */}
+                {onToggleInProgress && !isComplete && (
+                  <button
+                    onClick={() => onToggleInProgress(item)}
+                    title={isInProgress ? "Clear In Progress" : "Mark In Progress"}
+                    aria-pressed={isInProgress}
+                    style={{
+                      background: isInProgress ? "var(--status-warning)" : "transparent",
+                      color: isInProgress ? "#000" : "var(--status-warning)",
+                      border: "1px solid var(--status-warning)",
+                      borderRadius: 4,
+                      padding: "3px 8px",
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                      cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    <Clock size={10} strokeWidth={2.5} />
+                    {isInProgress ? "IN PROGRESS" : "MARK WIP"}
+                  </button>
                 )}
 
                 {/* Action Buttons */}
