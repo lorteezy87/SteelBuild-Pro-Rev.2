@@ -274,32 +274,51 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
 
     const pdfBase64 = await fetchPdfBase64(analysis.storage_path, analysis.file_url);
 
-    const { data } = await invokeLlmProxy({
-      model,
-      maxTokens: 8000,
-      system: SYSTEM_PROMPT,
-      tools: [ANALYSIS_TOOL],
-      tool_choice: { type: "tool", name: "submit_analysis" },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
-            { type: "text", text: contextPrompt(analysis) },
-          ],
+    // Heartbeat: while the Anthropic call is in flight, bump updated_at
+    // every 45s so the self-heal sweep in DrawingAnalysis.jsx doesn't
+    // falsely reap this row as "stuck". Claude can legitimately take
+    // 2–3 minutes on a large PDF. setInterval returns a handle we clear
+    // in finally{} so we never leak a timer into a next run.
+    const heartbeat = setInterval(() => {
+      supabase
+        .from("drawing_analyses")
+        .update({ analysis_status: "processing" })  // no-op that trips the updated_at trigger
+        .eq("id", analysisId)
+        .then(() => {}, () => {});
+    }, 45_000);
+
+    let data;
+    try {
+      const res = await invokeLlmProxy({
+        model,
+        maxTokens: 8000,
+        system: SYSTEM_PROMPT,
+        tools: [ANALYSIS_TOOL],
+        tool_choice: { type: "tool", name: "submit_analysis" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+              { type: "text", text: contextPrompt(analysis) },
+            ],
+          },
+        ],
+      }, {
+        onRetry: async ({ attempt, maxAttempts, delay, status, detail }) => {
+          const secs = Math.round(delay / 1000);
+          const statusBit = status ? ` (Anthropic ${status})` : "";
+          const msg = `Retry ${attempt}/${maxAttempts - 1}${statusBit} — waiting ${secs}s before next attempt. ${(detail || "").slice(0, 200)}`;
+          await supabase
+            .from("drawing_analyses")
+            .update({ error_message: msg.slice(0, 500) })
+            .eq("id", analysisId);
         },
-      ],
-    }, {
-      onRetry: async ({ attempt, maxAttempts, delay, status, detail }) => {
-        const secs = Math.round(delay / 1000);
-        const statusBit = status ? ` (Anthropic ${status})` : "";
-        const msg = `Retry ${attempt}/${maxAttempts - 1}${statusBit} — waiting ${secs}s before next attempt. ${(detail || "").slice(0, 200)}`;
-        await supabase
-          .from("drawing_analyses")
-          .update({ error_message: msg.slice(0, 500) })
-          .eq("id", analysisId);
-      },
-    });
+      });
+      data = res.data;
+    } finally {
+      clearInterval(heartbeat);
+    }
 
     const toolInput = data?.tool_use?.input;
     if (!toolInput || typeof toolInput !== "object") {
