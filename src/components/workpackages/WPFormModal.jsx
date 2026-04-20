@@ -5,7 +5,8 @@ import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle,
 
 const empty = {
   name: "", project_id: "", project_name: "", phase: "Detailing",
-  released_date: "", status: "Not Started", tonnage: 0,
+  released_date: "", scheduled_start_date: "", scheduled_end_date: "",
+  status: "Not Started", tonnage: 0,
   shop_hours_budget: 0, shop_hours_actual: 0,
   field_hours_budget: 0, field_hours_actual: 0,
   crew: "", linked_drawing_ids: "", linked_rfi_ids: "", notes: "", percent_complete: 0,
@@ -200,6 +201,16 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         </FormField>
         <FormField label="Released Date">
           <input type="date" style={inputStyle} value={form.released_date} onChange={e => set("released_date", e.target.value)} />
+        </FormField>
+
+        {/* Scheduling window — drives placement on the Resource Scheduling
+            board. Can also be set by drag-and-drop from the scheduling
+            page; this form lets a user set them directly. */}
+        <FormField label="Scheduled Start">
+          <input type="date" style={inputStyle} value={form.scheduled_start_date || ""} onChange={e => set("scheduled_start_date", e.target.value)} />
+        </FormField>
+        <FormField label="Scheduled End">
+          <input type="date" style={inputStyle} value={form.scheduled_end_date || ""} onChange={e => set("scheduled_end_date", e.target.value)} />
         </FormField>
 
         {/* ── Section 3: Labor Budget ── */}
