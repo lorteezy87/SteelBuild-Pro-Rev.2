@@ -370,7 +370,8 @@ export default function ChangeOrders() {
     if (unpriced.length > 0) items.push({ severity: "critical", label: `${unpriced.length} CO${unpriced.length !== 1 ? "s" : ""} not priced`, detail: unpriced.map(c => c.co_number || c.title).slice(0, 3).join(", "), action: "Price & submit", color: "var(--status-error)" });
 
     // Drafts with pricing but not submitted (sitting too long)
-    const readyToSubmit = cos.filter(c => c.status === "Draft" && Number(c.co_amount) > 0);
+    // A priced draft is anything with a non-zero amount — negatives count too (deducts / credits).
+    const readyToSubmit = cos.filter(c => c.status === "Draft" && Number(c.co_amount) !== 0);
     if (readyToSubmit.length > 0) items.push({ severity: "high", label: `${readyToSubmit.length} CO${readyToSubmit.length !== 1 ? "s" : ""} ready to submit`, detail: readyToSubmit.map(c => c.co_number || c.title).slice(0, 3).join(", "), action: "Submit to GC/Owner", color: "var(--status-warning)" });
 
     // Under Review for > 10 days
