@@ -27,8 +27,9 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     if (!form.project_id) e.project_id = "Required";
     if (!form.title?.trim()) e.title = "Required";
     if (!form.reason_code) e.reason_code = "Required";
-    if (form.co_amount !== 0 && form.co_amount !== "" && (isNaN(Number(form.co_amount)) || Number(form.co_amount) < 0)) {
-      e.co_amount = "Must be a valid non-negative number";
+    // Negative values are allowed — they represent deducts / credits back to the GC/owner.
+    if (form.co_amount !== 0 && form.co_amount !== "" && isNaN(Number(form.co_amount))) {
+      e.co_amount = "Must be a valid number";
     }
     const mp = Number(form.margin_percent);
     if (isNaN(mp) || mp < 0 || mp > 100) {
