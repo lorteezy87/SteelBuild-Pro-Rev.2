@@ -238,7 +238,19 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
       fetchPdfBase64(toAnalysis),
     ]);
 
-    const { data } = await invokeLlmProxy({
+    // Heartbeat during the Anthropic call so a long diff doesn't get
+    // falsely reaped as "stuck" by the page's self-heal sweep.
+    const heartbeat = setInterval(() => {
+      supabase
+        .from("drawing_revision_comparisons")
+        .update({ compare_status: "processing" })
+        .eq("id", cid)
+        .then(() => {}, () => {});
+    }, 45_000);
+
+    let data;
+    try {
+      const res = await invokeLlmProxy({
       model,
       maxTokens: 8000,
       system: SYSTEM_PROMPT,
@@ -267,6 +279,10 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
           .eq("id", cid);
       },
     });
+      data = res.data;
+    } finally {
+      clearInterval(heartbeat);
+    }
 
     const toolInput = data?.tool_use?.input;
     if (!toolInput || typeof toolInput !== "object") {
