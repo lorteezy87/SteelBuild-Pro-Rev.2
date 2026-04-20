@@ -168,6 +168,7 @@ function anthropicToolChoiceToOpenAI(choice: any, firstToolName?: string): any {
 
 async function callOpenAI(body: any): Promise<Response> {
   if (!OPENAI_API_KEY) {
+    console.error("[llm-proxy] OPENAI_API_KEY missing");
     return json(
       {
         error: "OPENAI_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
@@ -415,8 +416,41 @@ async function handle(req: Request): Promise<Response> {
   }
 
   const provider = String(body?.provider || "anthropic").toLowerCase();
-  if (provider === "openai")    return callOpenAI(body);
-  if (provider === "anthropic") return callAnthropic(body);
+
+  // Log enough about the incoming body to diagnose shape issues without
+  // dumping huge base64 payloads into the logs.
+  try {
+    const msgCount = Array.isArray(body?.messages) ? body.messages.length : 0;
+    const toolCount = Array.isArray(body?.tools) ? body.tools.length : 0;
+    let contentBlocks = 0;
+    let docBytes = 0;
+    const firstMsg = body?.messages?.[0];
+    if (Array.isArray(firstMsg?.content)) {
+      contentBlocks = firstMsg.content.length;
+      for (const b of firstMsg.content) {
+        if (b?.type === "document" && typeof b?.source?.data === "string") {
+          docBytes += b.source.data.length;
+        }
+      }
+    }
+    console.log(`[llm-proxy] provider=${provider} model=${body?.model || "default"} maxTokens=${body?.maxTokens || "default"} msgs=${msgCount} blocks=${contentBlocks} tools=${toolCount} docB64Bytes=${docBytes}`);
+  } catch (e) {
+    console.log("[llm-proxy] pre-dispatch log failed:", (e as Error)?.message);
+  }
+
+  try {
+    if (provider === "openai")    return await callOpenAI(body);
+    if (provider === "anthropic") return await callAnthropic(body);
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "Error";
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error && err.stack ? err.stack.split("\n").slice(0, 5).join(" | ") : null;
+    console.error(`[llm-proxy] ${provider} handler threw: ${name}: ${message}${stack ? " stack: " + stack : ""}`);
+    return json(
+      { error: `${provider} handler: ${name}: ${message}`, protocol_version: PROTOCOL_VERSION },
+      500,
+    );
+  }
   return json(
     { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
     400,

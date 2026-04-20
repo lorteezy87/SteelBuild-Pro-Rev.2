@@ -17,6 +17,38 @@
 import { supabase } from "@/lib/supabase";
 import { base44 } from "@/api/base44Client";
 
+/**
+ * Call llm-proxy with proper error detail extraction. supabase-js returns
+ * a generic "Edge Function returned a non-2xx status code" on any upstream
+ * error — useless for diagnosing what actually broke. We pull the real
+ * status + body from error.context so the UI sees the actual reason
+ * (missing OPENAI_API_KEY, rate limit, payload too large, etc.).
+ */
+async function invokeProxyWithDetail(body) {
+  const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
+  if (!error && !data?.error) return { data };
+
+  let status = 0;
+  let detail = error?.message || data?.error || "llm-proxy invocation failed";
+  try {
+    const resp = error?.context;
+    if (resp) {
+      status = resp.status || 0;
+      if (typeof resp.text === "function") {
+        const text = await resp.text();
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed?.error) detail = parsed.error;
+          } catch { /* keep detail */ }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  const prefix = status ? `Upstream ${status}` : "Upstream";
+  throw new Error(`${prefix}: ${detail}`);
+}
+
 const STORAGE_BUCKET = "app-files";
 const MAX_PDF_BYTES  = 32 * 1024 * 1024;
 const DEFAULT_PROVIDER = "openai";
@@ -138,27 +170,23 @@ export async function extractShippingTicket({
   }
   const pdfBase64 = await arrayBufferToBase64(buf);
 
-  const { data, error } = await supabase.functions.invoke("llm-proxy", {
-    body: {
-      provider,
-      model,
-      maxTokens: 4000,
-      system: SYSTEM_PROMPT,
-      tools: [TICKET_TOOL],
-      tool_choice: { type: "tool", name: "submit_ticket" },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
-            { type: "text", text: "Parse this shipping ticket. Call submit_ticket with the header + every line item." },
-          ],
-        },
-      ],
-    },
+  const { data } = await invokeProxyWithDetail({
+    provider,
+    model,
+    maxTokens: 4000,
+    system: SYSTEM_PROMPT,
+    tools: [TICKET_TOOL],
+    tool_choice: { type: "tool", name: "submit_ticket" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+          { type: "text", text: "Parse this shipping ticket. Call submit_ticket with the header + every line item." },
+        ],
+      },
+    ],
   });
-  if (error) throw new Error(error.message || "llm-proxy invocation failed");
-  if (data?.error) throw new Error(data.error);
 
   const tool = data?.tool_use?.input;
   if (!tool || typeof tool !== "object") {
