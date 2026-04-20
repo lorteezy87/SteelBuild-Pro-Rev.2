@@ -345,12 +345,28 @@ export default function ResourceScheduling() {
     dragRef.current = null;
   }, []);
 
-  // Close context menu on outside click
+  // Close context menu on outside click. A "pointerdown" listener on
+  // the document is the reliable way to detect "click anywhere outside
+  // the menu". Using "click" misses some cases (touch, right-click
+  // release on certain browsers) and adding the listener synchronously
+  // after the right-click can catch stray events in the same tick;
+  // defer the attach to the next microtask to avoid closing the menu
+  // on the same event that opened it.
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
+    const handler = (e) => {
+      // Don't close if the pointerdown is inside the menu itself.
+      const menu = document.getElementById("rs-wp-context-menu");
+      if (menu && menu.contains(e.target)) return;
+      setContextMenu(null);
+    };
+    const t = setTimeout(() => {
+      document.addEventListener("pointerdown", handler);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("pointerdown", handler);
+    };
   }, [contextMenu]);
 
   // Escape key
@@ -1173,6 +1189,11 @@ export default function ResourceScheduling() {
                 <div
                   key={wp.id}
                   onPointerDown={(e) => onUnscheduledPointerDown(e, wp)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({ x: e.clientX, y: e.clientY, wp });
+                  }}
                   style={{
                     background: "var(--hover-bg)",
                     border: "1px dashed rgba(245,158,11,0.3)",
