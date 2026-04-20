@@ -513,7 +513,7 @@ export const integrations = {
      * clean message on the fallback row instead of falling through to a
      * generic "AI response was not valid JSON" path.
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature }) => {
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature, provider = 'openai' }) => {
       // The client expects this protocol version from the edge function. If the
       // function returns a lower version (or no version field), the deployed
       // edge function is older than the codebase and needs to be redeployed:
@@ -533,7 +533,7 @@ export const integrations = {
       // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
-          body: { prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
+          body: { provider, prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
         });
         if (error) {
           let detail = error?.message || String(error);
