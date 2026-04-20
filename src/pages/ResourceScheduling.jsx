@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
+import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
 
 // ──────────────────────────────────────────────────────────────────────
 // KEYFRAMES (injected once)
@@ -741,7 +742,15 @@ export default function ResourceScheduling() {
     boardRef.current?.setPointerCapture(e.pointerId);
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const estDuration = Math.max(3, Math.ceil((Number(wp.tonnage) || 0) / 2));
+    // Derive an initial duration for the dropped WP. Prefer the WP's own
+    // budget hours → workdays. Fall back to tonnage (2T / workday) when
+    // hours aren't set. Converted to calendar days so the bar spans the
+    // correct calendar window (5 workdays = 7 calendar days, not 5).
+    const wpBudgetHrs = wpBudgetHoursForResource(wp);
+    const estWorkdays = wpBudgetHrs > 0
+      ? hoursToWorkdays(wpBudgetHrs)
+      : Math.max(3, Math.ceil((Number(wp.tonnage) || 0) / 2));
+    const estCalendarDays = workdaysToCalendarDays(estWorkdays);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -767,8 +776,8 @@ export default function ResourceScheduling() {
       fromResourceId: null,
       fromResourceName: null,
       origStart: today,
-      origEnd: addDays(today, estDuration),
-      durationMs: estDuration * 86400000,
+      origEnd: addWorkdays(today, estWorkdays),
+      durationMs: estCalendarDays * 86400000,
       barEl: e.currentTarget,
       pointerId: e.pointerId,
       offsetX: 70,
@@ -1475,10 +1484,10 @@ export default function ResourceScheduling() {
                   <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--status-warning)", marginTop: 2 }}>
                     {wp.wp_number} {"\u00B7"} {wp.phase}
                   </div>
-                  {/* Smart duration hint */}
-                  {((Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0)) > 0 && (
+                  {/* Smart duration hint — workday-based, phase-aware */}
+                  {wpBudgetHoursForResource(wp) > 0 && (
                     <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--accent)", marginTop: 2, letterSpacing: "0.02em" }}>
-                      {"\u2248"} {Math.ceil(((Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0)) / 8)} days at 8h/day
+                      {"\u2248"} {hoursToWorkdays(wpBudgetHoursForResource(wp))} workdays
                     </div>
                   )}
                   <div style={{ fontSize: 8, color: "rgba(200,155,32,0.5)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
@@ -1917,7 +1926,7 @@ export default function ResourceScheduling() {
               Total: {hoverTooltip.totalAct}h / {hoverTooltip.totalBud}h ({hoverTooltip.totalBud > 0 ? Math.round((hoverTooltip.totalAct / hoverTooltip.totalBud) * 100) : 0}%)
             </span>
             {hoverTooltip.totalBud > 0 && (
-              <><br/><span style={{ color: "var(--accent)", fontWeight: 600 }}>{"\u2248"} {Math.ceil(hoverTooltip.totalBud / 8)} days at 8h/day</span></>
+              <><br/><span style={{ color: "var(--accent)", fontWeight: 600 }}>{"\u2248"} {hoursToWorkdays(hoverTooltip.totalBud)} workdays</span></>
             )}
           </div>
         </div>
