@@ -1,67 +1,66 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // llm-proxy — Supabase Edge Function
 //
-// Thin server-side proxy that forwards chat-completion-style requests to the
-// Anthropic Messages API. Keeps ANTHROPIC_API_KEY out of the browser.
+// Multi-provider LLM proxy. Accepts Anthropic-style request shape (document
+// blocks, tool definitions, system prompt) and routes to:
+//
+//   provider: "anthropic"  → Anthropic Messages API            (default)
+//   provider: "openai"     → OpenAI Chat Completions API       (cheaper)
+//
+// The response shape is always the Anthropic-compatible envelope, so client
+// code doesn't have to branch on which provider ran the request.
 //
 // Request body:
 //   {
-//     prompt?:       string                // user message (ignored if messages given)
-//     system?:       string                // system prompt
-//     messages?:     Array<{role,content}> // full Anthropic messages array
-//     maxTokens?:    number                // default 1000
-//     model?:        string                // default claude-sonnet-4-5
-//     temperature?:  number                // default 1.0 (Anthropic default)
-//     tools?:        Array<ToolDef>        // Anthropic tool-use definitions
-//     tool_choice?:  object                // { type: "tool", name: "..." } to force
-//     file_urls?:    string[]              // ACCEPTED but IGNORED — callers should
-//                                           // inline PDF text into the prompt
+//     provider?:    "anthropic" | "openai"   // default "anthropic"
+//     prompt?:      string                   // legacy single-message input
+//     system?:      string
+//     messages?:    Array<{role, content}>   // Anthropic-style content blocks
+//     maxTokens?:   number
+//     model?:       string
+//     temperature?: number
+//     tools?:       Anthropic-style tool definitions
+//     tool_choice?: Anthropic-style tool-choice
 //   }
 //
-// Response body (success):
+// Response envelope:
 //   {
-//     text:     string,       // first text block (or stringified tool input if tools used)
-//     content:  string,       // same as text (legacy alias)
-//     tool_use: object | null,// first tool_use block's { name, input } if present
-//     raw:      object,       // full Anthropic response
+//     text:     string,        // first text block, OR stringified tool input
+//     content:  string,        // legacy alias
+//     tool_use: { name, input } | null,
+//     raw:      object,        // raw upstream response
+//     protocol_version: number,
 //   }
 //
-// Response body (error):
-//   { error: string }
+// Secrets required (Supabase → Project Settings → Edge Functions → Secrets):
+//   ANTHROPIC_API_KEY  — for the Anthropic path
+//   OPENAI_API_KEY     — for the OpenAI path
 //
-// Auth model: verify_jwt is DISABLED for this function. The proxy enforces its
-// own auth via the server-side ANTHROPIC_API_KEY secret — requests reach
-// Anthropic only if the secret is configured. CORS is wide-open because the
-// app is browser-first. This matches the standard pattern for LLM proxies and
-// sidesteps the 401 failures we saw when verify_jwt was on (the browser
-// client's JWT wasn't being accepted for reasons unrelated to the proxy code).
-//
-// Set ANTHROPIC_API_KEY in Supabase → Project Settings → Edge Functions → Secrets.
-// Deploy via: supabase functions deploy llm-proxy --no-verify-jwt
-//   (or via the Supabase MCP deploy_edge_function tool with verify_jwt: false).
+// Deploy:
+//   supabase functions deploy llm-proxy --no-verify-jwt
+//   (or via the Supabase MCP deploy_edge_function tool with verify_jwt:false)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-const DEFAULT_MODEL = "claude-sonnet-4-5";
+const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY");
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
+const DEFAULT_OPENAI_MODEL    = "gpt-4o-mini";
 
-// Bump this whenever the edge function's request/response contract changes.
-// Clients use it to detect a stale deployment — if the client expects v3 and
-// the edge function returns v2 (or no version at all), the client knows the
-// function needs to be redeployed.
-//   v1 = original text-only proxy
-//   v2 = added tools / tool_choice / temperature pass-through and tool_use
-//        parsing in the response
-//   v3 = verify_jwt disabled on the function itself (no code change — this
-//        bump just lets clients confirm they're hitting the public variant)
-const PROTOCOL_VERSION = 3;
+// Protocol version bumps when the request/response contract changes.
+//   v3 = verify_jwt disabled
+//   v4 = structured logging + friendlier error surfaces
+//   v5 = pre-v6 deploy baseline
+//   v6 = v5 + protocol_version returned on every error too
+//   v7 = multi-provider: accepts provider:"openai" and transforms to/from the
+//        OpenAI Chat Completions shape.
+const PROTOCOL_VERSION = 7;
 
 const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -72,30 +71,236 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
-  }
+// ─── OpenAI adapters ─────────────────────────────────────────────────────────
 
-  if (req.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
+// OpenAI content blocks accepted by the Chat Completions API when passing
+// a PDF inline:
+//   { type: "file", file: { file_data: "data:application/pdf;base64,...", filename: "..." } }
+// (requires gpt-4o / gpt-4o-mini or newer)
+function anthropicContentToOpenAI(block: any, fallbackFilename = "document.pdf"): any {
+  if (!block || typeof block !== "object") return null;
+  if (block.type === "text") {
+    return { type: "text", text: String(block.text ?? "") };
   }
+  if (block.type === "document") {
+    const src = block.source || {};
+    if (src.type === "base64" && typeof src.data === "string") {
+      const media = src.media_type || "application/pdf";
+      return {
+        type: "file",
+        file: {
+          file_data: `data:${media};base64,${src.data}`,
+          filename:  block.filename || fallbackFilename,
+        },
+      };
+    }
+    return null;
+  }
+  if (block.type === "image") {
+    const src = block.source || {};
+    if (src.type === "base64" && typeof src.data === "string") {
+      const media = src.media_type || "image/png";
+      return {
+        type: "image_url",
+        image_url: { url: `data:${media};base64,${src.data}` },
+      };
+    }
+    if (src.type === "url" && typeof src.url === "string") {
+      return { type: "image_url", image_url: { url: src.url } };
+    }
+    return null;
+  }
+  return null;
+}
 
-  if (!ANTHROPIC_API_KEY) {
+function anthropicMessagesToOpenAI(messages: any[], system?: string): any[] {
+  const out: any[] = [];
+  if (system) out.push({ role: "system", content: String(system) });
+
+  for (const m of messages || []) {
+    if (!m || typeof m !== "object") continue;
+    const role = m.role === "assistant" ? "assistant" : "user";
+
+    if (typeof m.content === "string") {
+      out.push({ role, content: m.content });
+      continue;
+    }
+
+    if (!Array.isArray(m.content)) continue;
+    const blocks: any[] = [];
+    for (const block of m.content) {
+      const converted = anthropicContentToOpenAI(block);
+      if (converted) blocks.push(converted);
+    }
+    if (blocks.length === 1 && blocks[0].type === "text") {
+      out.push({ role, content: blocks[0].text });
+    } else if (blocks.length > 0) {
+      out.push({ role, content: blocks });
+    }
+  }
+  return out;
+}
+
+function anthropicToolsToOpenAI(tools: any[]): any[] {
+  return (tools || []).map((t) => ({
+    type: "function",
+    function: {
+      name:        t.name,
+      description: t.description || "",
+      parameters:  t.input_schema || { type: "object" },
+    },
+  }));
+}
+
+function anthropicToolChoiceToOpenAI(choice: any, firstToolName?: string): any {
+  if (!choice) {
+    return firstToolName
+      ? { type: "function", function: { name: firstToolName } }
+      : undefined;
+  }
+  if (choice.type === "tool" && typeof choice.name === "string") {
+    return { type: "function", function: { name: choice.name } };
+  }
+  if (choice.type === "any")  return "required";
+  if (choice.type === "auto") return "auto";
+  return undefined;
+}
+
+async function callOpenAI(body: any): Promise<Response> {
+  if (!OPENAI_API_KEY) {
     return json(
       {
-        error:
-          "ANTHROPIC_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
+        error: "OPENAI_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
+        protocol_version: PROTOCOL_VERSION,
       },
       500,
     );
   }
 
-  let body: any;
+  const {
+    system,
+    messages,
+    maxTokens = 1000,
+    model = DEFAULT_OPENAI_MODEL,
+    temperature,
+    tools,
+    tool_choice,
+    prompt,
+  } = body ?? {};
+
+  const inputMessages =
+    Array.isArray(messages) && messages.length > 0
+      ? messages
+      : [{ role: "user", content: String(prompt ?? "") }];
+
+  const openaiMessages = anthropicMessagesToOpenAI(inputMessages, system);
+  const openaiTools = Array.isArray(tools) && tools.length > 0
+    ? anthropicToolsToOpenAI(tools)
+    : undefined;
+  const openaiToolChoice = openaiTools
+    ? anthropicToolChoiceToOpenAI(tool_choice, tools?.[0]?.name)
+    : undefined;
+
+  const payload: Record<string, unknown> = {
+    model,
+    messages: openaiMessages,
+    max_tokens: Number(maxTokens) || 1000,
+  };
+  if (typeof temperature === "number" && Number.isFinite(temperature)) {
+    payload.temperature = temperature;
+  }
+  if (openaiTools) {
+    payload.tools = openaiTools;
+    if (openaiToolChoice) payload.tool_choice = openaiToolChoice;
+  }
+
+  let resp: Response;
   try {
-    body = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
+    resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type":  "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    return json(
+      { error: `OpenAI fetch failed: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
+      502,
+    );
+  }
+
+  const rawText = await resp.text();
+  if (!resp.ok) {
+    return json(
+      { error: `OpenAI API ${resp.status}: ${rawText}`, protocol_version: PROTOCOL_VERSION },
+      resp.status,
+    );
+  }
+
+  let data: any;
+  try {
+    data = JSON.parse(rawText);
+  } catch (err) {
+    return json(
+      {
+        error: `OpenAI returned non-JSON: ${err instanceof Error ? err.message : String(err)}. Body head: ${rawText.slice(0, 200)}`,
+        protocol_version: PROTOCOL_VERSION,
+      },
+      502,
+    );
+  }
+
+  // Transform the first choice back into the Anthropic-compatible envelope.
+  const choice = data?.choices?.[0];
+  const messageObj = choice?.message || {};
+  let firstText = "";
+  let firstToolUse: { name: string; input: unknown } | null = null;
+
+  const toolCall = Array.isArray(messageObj.tool_calls) ? messageObj.tool_calls[0] : null;
+  if (toolCall?.function?.name) {
+    let parsedInput: unknown;
+    try {
+      parsedInput = JSON.parse(toolCall.function.arguments || "{}");
+    } catch {
+      parsedInput = toolCall.function.arguments;
+    }
+    firstToolUse = { name: toolCall.function.name, input: parsedInput };
+  }
+  if (typeof messageObj.content === "string" && messageObj.content) {
+    firstText = messageObj.content;
+  } else if (Array.isArray(messageObj.content)) {
+    for (const part of messageObj.content) {
+      if (part?.type === "text" && typeof part.text === "string") {
+        firstText = part.text;
+        break;
+      }
+    }
+  }
+
+  const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
+
+  return json({
+    text:     textOut,
+    content:  textOut,
+    tool_use: firstToolUse,
+    raw:      data,
+    protocol_version: PROTOCOL_VERSION,
+  });
+}
+
+// ─── Anthropic path (unchanged from v5/v6 deploy) ───────────────────────────
+
+async function callAnthropic(body: any): Promise<Response> {
+  if (!ANTHROPIC_API_KEY) {
+    return json(
+      {
+        error: "ANTHROPIC_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
+        protocol_version: PROTOCOL_VERSION,
+      },
+      500,
+    );
   }
 
   const {
@@ -103,7 +308,7 @@ Deno.serve(async (req: Request) => {
     system,
     messages,
     maxTokens = 1000,
-    model = DEFAULT_MODEL,
+    model = DEFAULT_ANTHROPIC_MODEL,
     temperature,
     tools,
     tool_choice,
@@ -124,14 +329,8 @@ Deno.serve(async (req: Request) => {
   }
   if (Array.isArray(tools) && tools.length > 0) {
     payload.tools = tools;
-    // Default to forcing the first named tool when the caller sends tools
-    // but no explicit choice — most of our callers want structured output,
-    // not a chat response.
-    if (tool_choice) {
-      payload.tool_choice = tool_choice;
-    } else if (tools[0]?.name) {
-      payload.tool_choice = { type: "tool", name: tools[0].name };
-    }
+    if (tool_choice) payload.tool_choice = tool_choice;
+    else if (tools[0]?.name) payload.tool_choice = { type: "tool", name: tools[0].name };
   }
 
   let resp: Response;
@@ -139,38 +338,40 @@ Deno.serve(async (req: Request) => {
     resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
+        "Content-Type":     "application/json",
+        "x-api-key":        ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify(payload),
     });
   } catch (err) {
     return json(
-      { error: `Anthropic fetch failed: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `Anthropic fetch failed: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
       502,
     );
   }
 
+  const rawText = await resp.text();
   if (!resp.ok) {
-    const errText = await resp.text();
     return json(
-      { error: `Anthropic API ${resp.status}: ${errText}` },
+      { error: `Anthropic API ${resp.status}: ${rawText}`, protocol_version: PROTOCOL_VERSION },
       resp.status,
     );
   }
 
   let data: any;
   try {
-    data = await resp.json();
-  } catch {
-    return json({ error: "Anthropic returned non-JSON" }, 502);
+    data = JSON.parse(rawText);
+  } catch (err) {
+    return json(
+      {
+        error: `Anthropic returned non-JSON: ${err instanceof Error ? err.message : String(err)}. Body head: ${rawText.slice(0, 200)}`,
+        protocol_version: PROTOCOL_VERSION,
+      },
+      502,
+    );
   }
 
-  // Anthropic returns content as an array of blocks. Each block is either a
-  // text block ({ type: "text", text }) or a tool_use block ({ type:
-  // "tool_use", name, input }). For structured extraction we prefer tool_use;
-  // for plain chat we fall back to text.
   let firstText = "";
   let firstToolUse: { name: string; input: unknown } | null = null;
   if (Array.isArray(data?.content)) {
@@ -186,11 +387,7 @@ Deno.serve(async (req: Request) => {
     firstText = data.content;
   }
 
-  // When a tool was called, surface its JSON-stringified input as `text` so
-  // callers that use the legacy string-return path still work.
-  const textOut = firstToolUse
-    ? JSON.stringify(firstToolUse.input)
-    : firstText;
+  const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
 
   return json({
     text:     textOut,
@@ -199,4 +396,47 @@ Deno.serve(async (req: Request) => {
     raw:      data,
     protocol_version: PROTOCOL_VERSION,
   });
+}
+
+// ─── Dispatcher ──────────────────────────────────────────────────────────────
+
+async function handle(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method !== "POST")    return json({ error: "Method not allowed", protocol_version: PROTOCOL_VERSION }, 405);
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch (err) {
+    return json(
+      { error: `Invalid JSON body: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
+      400,
+    );
+  }
+
+  const provider = String(body?.provider || "anthropic").toLowerCase();
+  if (provider === "openai")    return callOpenAI(body);
+  if (provider === "anthropic") return callAnthropic(body);
+  return json(
+    { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
+    400,
+  );
+}
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  try {
+    return await handle(req);
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "Error";
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error && err.stack ? err.stack : null;
+    return json(
+      {
+        error: `Unhandled ${name}: ${message}`,
+        stack: stack ? stack.split("\n").slice(0, 10).join("\n") : null,
+        protocol_version: PROTOCOL_VERSION,
+      },
+      500,
+    );
+  }
 });
