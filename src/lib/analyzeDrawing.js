@@ -30,7 +30,7 @@ import { importAnalyzedDrawings } from "@/lib/importAnalyzedDrawings";
  */
 async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
   let lastStatus = 0;
-  let lastDetail = "Anthropic request failed";
+  let lastDetail = "Upstream request failed";
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const { data, error } = await supabase.functions.invoke("llm-proxy", { body });
@@ -75,7 +75,7 @@ async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
       continue;
     }
   }
-  const prefix = lastStatus ? `Anthropic ${lastStatus}` : "Anthropic";
+  const prefix = lastStatus ? `Upstream ${lastStatus}` : "Upstream";
   throw new Error(`${prefix}: ${lastDetail} (gave up after ${maxAttempts} attempts)`);
 }
 
@@ -316,7 +316,7 @@ export async function analyzeDrawing(analysis, {
       }, {
         onRetry: async ({ attempt, maxAttempts, delay, status, detail }) => {
           const secs = Math.round(delay / 1000);
-          const statusBit = status ? ` (Anthropic ${status})` : "";
+          const statusBit = status ? ` (Upstream ${status})` : "";
           const msg = `Retry ${attempt}/${maxAttempts - 1}${statusBit} — waiting ${secs}s before next attempt. ${(detail || "").slice(0, 200)}`;
           await supabase
             .from("drawing_analyses")
