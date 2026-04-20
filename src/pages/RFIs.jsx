@@ -8,6 +8,7 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
+import RfiLogImportModal from "@/components/rfis/RfiLogImportModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { parseUTCDate } from "@/components/shared/formatters";
 import {
@@ -150,6 +151,7 @@ export default function RFIs() {
 
   const [view, setView] = useState("LIST");
   const [showForm, setShowForm] = useState(false);
+  const [showLogImport, setShowLogImport] = useState(false);
   const [editingRFI, setEditingRFI] = useState(null);
   const [selectedRFI, setSelectedRFI] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -721,6 +723,21 @@ export default function RFIs() {
             style={{ background: "var(--bg-surface)", color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", whiteSpace: "nowrap" }}
           >
             ↑ Bulk Add
+          </button>
+          <button
+            onClick={() => setShowLogImport(true)}
+            title="Import an RFI log PDF — AI extracts every row and inserts into this project (dedupes by RFI number)"
+            style={{
+              background: "transparent",
+              color: "var(--ai-accent, #22D3EE)",
+              border: "1px solid var(--ai-accent, #22D3EE)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", whiteSpace: "nowrap",
+            }}
+          >
+            ↗ Import Log (PDF)
           </button>
           <button
             onClick={() => {
@@ -1553,6 +1570,14 @@ export default function RFIs() {
           </div>
         </div>
       </div>
+
+      <RfiLogImportModal
+        open={showLogImport}
+        projectId={projectId}
+        projectName={resolveProjectName(projectId)}
+        projects={projects}
+        onClose={() => setShowLogImport(false)}
+      />
 
       {showForm && (
         <RFIFormModal
