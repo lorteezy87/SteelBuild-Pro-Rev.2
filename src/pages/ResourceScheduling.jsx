@@ -13,6 +13,8 @@ import {
   injectKeyframes,
 } from "./resourceScheduling/utils";
 import CapacityView from "./resourceScheduling/CapacityView";
+import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
+import WPContextMenu from "./resourceScheduling/WPContextMenu";
 
 // One-shot keyframe injection — must run at module load, not render.
 injectKeyframes();
@@ -888,99 +890,14 @@ export default function ResourceScheduling() {
       </div>
 
       {/* New Resource Modal */}
-      {showNewResource && (
-        <>
-          <div onClick={() => setShowNewResource(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 100 }} />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-            borderRadius: 12, padding: 28, width: 420, zIndex: 101,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-          }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 20 }}>
-              New Resource
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[
-                { key: "name", label: "Name", type: "text", placeholder: "e.g. Crew Alpha, Bay 3 Crane" },
-                { key: "resource_type", label: "Type", type: "select", options: ["Crew", "Equipment", "Bay", "Subcontractor", "Other"] },
-                { key: "role", label: "Role / Specialty", type: "text", placeholder: "e.g. Ironworkers, Welders" },
-                { key: "parent_resource_id", label: "Parent Crew", type: "parent-select",
-                  help: "Assign to a crew. Crews roll up member capacities." },
-                { key: "capacity", label: "Capacity", type: "number", placeholder: "e.g. 40" },
-                { key: "unit", label: "Unit", type: "select", options: ["hours", "tons", "pieces", "days"] },
-                { key: "cost_rate", label: "Cost Rate ($/hr)", type: "number", placeholder: "0.00" },
-                { key: "availability", label: "Availability", type: "select", options: ["Available", "Partially Available", "Committed", "Unavailable"] },
-                { key: "notes", label: "Notes", type: "textarea", placeholder: "Optional notes..." },
-              ].map(({ key, label, type, placeholder, options, help }) => (
-                <div key={key}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                  {type === "select" ? (
-                    <select value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={{
-                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
-                    }}>
-                      {options.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  ) : type === "parent-select" ? (
-                    <>
-                      <select value={newRes[key] || ""} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={{
-                        width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-                        borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
-                      }}>
-                        <option value="">— None (top-level) —</option>
-                        {topLevelResources.map(r => (
-                          <option key={r.id} value={r.id}>{r.name}{r.resource_type ? ` · ${r.resource_type}` : ""}</option>
-                        ))}
-                      </select>
-                      {help && (
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.06em" }}>{help}</div>
-                      )}
-                    </>
-                  ) : type === "textarea" ? (
-                    <textarea value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} style={{
-                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
-                      minHeight: 50, resize: "vertical", boxSizing: "border-box",
-                    }} />
-                  ) : (
-                    <input type={type} value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} style={{
-                      width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
-                      borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box",
-                    }} />
-                  )}
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowNewResource(false)} style={{
-                padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border-default)",
-                background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)",
-                fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
-              }}>Cancel</button>
-              <button onClick={() => {
-                if (!newRes.name.trim()) { toast.error("Name is required"); return; }
-                createResMut.mutate({
-                  name: newRes.name.trim(),
-                  resource_type: newRes.resource_type,
-                  role: newRes.role,
-                  capacity: newRes.capacity ? Number(newRes.capacity) : null,
-                  unit: newRes.unit,
-                  cost_rate: newRes.cost_rate ? Number(newRes.cost_rate) : null,
-                  availability: newRes.availability,
-                  notes: newRes.notes,
-                  parent_resource_id: newRes.parent_resource_id || null,
-                });
-              }} disabled={createResMut.isPending} style={{
-                padding: "8px 20px", borderRadius: 6, border: "none",
-                background: "var(--accent)", color: "#07090E", fontFamily: "var(--font-mono)",
-                fontSize: 10, fontWeight: 800, cursor: "pointer", textTransform: "uppercase",
-                letterSpacing: "0.08em", opacity: createResMut.isPending ? 0.6 : 1,
-              }}>{createResMut.isPending ? "Saving..." : "Create Resource"}</button>
-            </div>
-          </div>
-        </>
-      )}
+      <NewResourceDialog
+        open={showNewResource}
+        newRes={newRes}
+        setNewRes={setNewRes}
+        topLevelResources={topLevelResources}
+        createResMut={createResMut}
+        onClose={() => setShowNewResource(false)}
+      />
 
       {/* ── CAPACITY VIEW ── */}
       {viewMode === "capacity" && (
@@ -1722,58 +1639,16 @@ export default function ResourceScheduling() {
       )}
 
       {/* Context Menu */}
-      {contextMenu && (
-        <div
-          style={{
-            position: "fixed", left: contextMenu.x, top: contextMenu.y,
-            background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-            borderRadius: 8, padding: "4px 0", zIndex: 10000,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.7)", minWidth: 200,
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div style={{ padding: "6px 12px", fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", borderBottom: "1px solid var(--divider)", marginBottom: 4 }}>
-            {contextMenu.wp.wp_number} — {contextMenu.wp.name}
-          </div>
-          <div style={{ padding: "2px 12px 4px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Reassign to</div>
-          {resources.map(res => (
-            <button key={res.id} onClick={async () => {
-              await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: res.name });
-              qc.invalidateQueries({ queryKey: ["work-packages"] });
-              qc.invalidateQueries({ queryKey: ["wps-all"] });
-              setContextMenu(null);
-              setUndoToast({ id: Date.now(), message: `${contextMenu.wp.wp_number} → ${res.name}` });
-              setTimeout(() => setUndoToast(null), 5000);
-            }} style={{
-              display: "block", width: "100%", padding: "7px 12px", textAlign: "left",
-              background: contextMenu.wp.crew === res.name ? "var(--accent-muted)" : "transparent",
-              border: "none", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 11,
-              cursor: "pointer",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.10)"}
-            onMouseLeave={e => e.currentTarget.style.background = contextMenu.wp.crew === res.name ? "var(--accent-muted)" : "transparent"}>
-              {res.name} <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>({res.role})</span>
-            </button>
-          ))}
-          <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
-          <button onClick={async () => {
-            await base44.entities.WorkPackage.update(contextMenu.wp.id, { crew: "", released_date: null });
-            qc.invalidateQueries({ queryKey: ["work-packages"] });
-            qc.invalidateQueries({ queryKey: ["wps-all"] });
-            setContextMenu(null);
-            setUndoToast({ id: Date.now(), message: `${contextMenu.wp.wp_number} unassigned` });
-            setTimeout(() => setUndoToast(null), 5000);
-          }} style={{
-            display: "block", width: "100%", padding: "7px 12px", textAlign: "left",
-            background: "transparent", border: "none", color: "#FF3D3D",
-            fontFamily: "var(--font-body)", fontSize: 11, cursor: "pointer",
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = "rgba(255,23,68,0.08)"}
-          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            Unassign
-          </button>
-        </div>
-      )}
+      <WPContextMenu
+        contextMenu={contextMenu}
+        resources={resources}
+        qc={qc}
+        onClose={() => setContextMenu(null)}
+        onToast={(msg) => {
+          setUndoToast({ id: Date.now(), message: msg });
+          setTimeout(() => setUndoToast(null), 5000);
+        }}
+      />
 
       {/* Undo Toast */}
       {undoToast && (
