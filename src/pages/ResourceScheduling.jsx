@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
+import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 
 // ──────────────────────────────────────────────────────────────────────
 // KEYFRAMES (injected once)
@@ -1279,8 +1280,11 @@ export default function ResourceScheduling() {
         background: "var(--bg-page)", flexShrink: 0,
       }}>
         {(() => {
-          const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
-          const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
+          // Phase-aware totals: each WP contributes only its phase-relevant
+          // hours bucket, so shop + field WPs don't double-count at the
+          // portfolio stat.
+          const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+          const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
           const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
           const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
           const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
@@ -1289,10 +1293,12 @@ export default function ResourceScheduling() {
           const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
           // Count how many top-level resources are over-allocated. Over-
           // alloc = assigned WP budget > effective capacity (rollup from
-          // crew members when applicable).
+          // crew members when applicable). Uses phase-aware hour bucketing
+          // so a field crew isn't charged for a WP's shop hours and vice
+          // versa.
           const overAllocatedResources = topLevelResources.filter(res => {
             const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
-            const resBudget = resWPs.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
+            const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
             const effCap = effectiveCapacityById[res.id] || 0;
             return effCap > 0 && resBudget > effCap;
           }).length;
@@ -1364,8 +1370,8 @@ export default function ResourceScheduling() {
                 </div>
                 {typeResources.map(res => {
                   const assignedWPs = scheduledWps.filter(wp => wp.crew === res.name);
-                  const resBudgetHrs = assignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
-                  const resActualHrs = assignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
+                  const resBudgetHrs = assignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+                  const resActualHrs = assignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
                   const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
                   const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
                   // Effective capacity = own + sum of direct members' capacities
@@ -1610,8 +1616,8 @@ export default function ResourceScheduling() {
           {displayResources.map((entry, idx) => {
             const resource = entry.resource;
             const rowAssignedWPs = scheduledWps.filter(wp => wp.crew === resource.name);
-            const rowBudgetHrs = rowAssignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
-            const rowActualHrs = rowAssignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
+            const rowBudgetHrs = rowAssignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+            const rowActualHrs = rowAssignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
             const rowBurnPct = rowBudgetHrs > 0 ? Math.round((rowActualHrs / rowBudgetHrs) * 100) : 0;
             const rowIsOverBudget = rowActualHrs > rowBudgetHrs && rowBudgetHrs > 0;
             // Crew rows roll up member capacities; standalone resources
