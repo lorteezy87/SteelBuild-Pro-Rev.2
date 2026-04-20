@@ -65,10 +65,32 @@ function getDurationHint(budgetHours) {
   return `\u2248 ${days} days at 8h/day`;
 }
 
-export default function ResourceList({ resources, onEdit, onDelete }) {
+export default function ResourceList({ resources, workPackages = [], onEdit, onDelete }) {
   if (resources.length === 0) {
     return null; // Empty state handled by parent
   }
+
+  // Pre-group WPs by assigned crew name for O(1) lookup per row.
+  const wpsByCrew = React.useMemo(() => {
+    const map = {};
+    for (const wp of workPackages || []) {
+      const key = (wp.crew || "").trim();
+      if (!key) continue;
+      (map[key] = map[key] || []).push(wp);
+    }
+    return map;
+  }, [workPackages]);
+
+  // Member rollup for crews: crew id → direct members.
+  const membersByParentId = React.useMemo(() => {
+    const map = {};
+    for (const r of resources || []) {
+      if (r.parent_resource_id) {
+        (map[r.parent_resource_id] = map[r.parent_resource_id] || []).push(r);
+      }
+    }
+    return map;
+  }, [resources]);
 
   return (
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
@@ -107,6 +129,22 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
         const capacityBorderColor = getCapacityBorder(utilization, status);
         const skills = extractSkills(resource);
         const durationHint = getDurationHint(budgetHours);
+
+        // Assigned work packages. Crews match on their own name OR any of
+        // their members' names — so a WP assigned to John Smith still
+        // shows up on "Erection Crew B" when John is a member.
+        const members = membersByParentId[resource.id] || [];
+        const memberNames = members.map(m => (m.name || "").trim()).filter(Boolean);
+        const assignedWPs = [
+          ...(wpsByCrew[resource.name] || []),
+          ...memberNames.flatMap(n => wpsByCrew[n] || []),
+        ];
+        const assignedCount = assignedWPs.length;
+        const assignedHours = assignedWPs.reduce(
+          (s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0),
+          0,
+        );
+        const assignedTons = assignedWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
         const barColor = utilization > 100 ? "var(--status-error)" : utilization > 80 ? "var(--status-warning)" : "var(--accent)";
 
         return (
@@ -157,6 +195,53 @@ export default function ResourceList({ resources, onEdit, onDelete }) {
                   ))}
                 </div>
               )}
+
+              {/* Assigned work packages summary. Shown for every resource,
+                  even when nothing is assigned, so the connection to the WP
+                  workflow is always visible. */}
+              <div style={{
+                marginTop: 8, paddingTop: 6, borderTop: "1px dashed var(--divider)",
+                fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.06em",
+              }}>
+                <span style={{ color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase" }}>
+                  WPs ·{" "}
+                </span>
+                {assignedCount > 0 ? (
+                  <>
+                    <span style={{ color: "var(--accent)", fontWeight: 700 }}>{assignedCount}</span>
+                    <span style={{ color: "var(--text-muted)" }}> assigned · </span>
+                    <span style={{ color: "var(--text-primary)" }}>{assignedHours}h</span>
+                    {assignedTons > 0 && (
+                      <span style={{ color: "var(--text-muted)" }}> · {assignedTons}T</span>
+                    )}
+                    {memberNames.length > 0 && (
+                      <span style={{ color: "var(--text-muted)" }}> (incl. members)</span>
+                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                      {assignedWPs.slice(0, 4).map(wp => (
+                        <span key={wp.id} style={{
+                          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 600,
+                          color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)",
+                          border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+                          borderRadius: 3, padding: "2px 6px", letterSpacing: "0.04em",
+                          whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis",
+                        }}>
+                          {wp.wp_number ? `${wp.wp_number} · ` : ""}{wp.name || "WP"}
+                        </span>
+                      ))}
+                      {assignedWPs.length > 4 && (
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
+                          +{assignedWPs.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
+                    None assigned — set a WP's crew to "{resource.name}" on the Work Packages or Crew Scheduling page.
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Column 2: Hours + duration hint */}
