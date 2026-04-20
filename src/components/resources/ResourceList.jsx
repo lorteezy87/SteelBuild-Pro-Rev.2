@@ -1,4 +1,5 @@
 import React from "react";
+import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
 
 const STATUS_COLORS = {
   Available: "var(--status-success)",
@@ -215,8 +216,10 @@ export default function ResourceList({ resources, workPackages = [], onEdit, onD
           ...memberNames.flatMap(n => wpsByCrew[n] || []),
         ];
         const assignedCount = assignedWPs.length;
+        // Phase-aware hour bucketing — a field crew shouldn't bear a WP's
+        // shop hours and a shop crew shouldn't bear its field hours.
         const assignedHours = assignedWPs.reduce(
-          (s, w) => s + (Number(w.shop_hours_budget) || 0) + (Number(w.field_hours_budget) || 0),
+          (s, w) => s + wpBudgetHoursForResource(w),
           0,
         );
         const assignedTons = assignedWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
