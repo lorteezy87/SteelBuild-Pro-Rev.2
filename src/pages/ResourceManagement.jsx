@@ -58,6 +58,16 @@ export default function ResourceManagement() {
         : base44.entities.Resource.list(),
   });
 
+  // Pull in WPs so each resource row can show what's assigned to it.
+  // Matches via work_packages.crew (text) against resource.name.
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () =>
+      projectId
+        ? base44.entities.WorkPackage.filter({ project_id: projectId })
+        : base44.entities.WorkPackage.list(),
+  });
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
@@ -406,7 +416,7 @@ export default function ResourceManagement() {
 
       {/* Resources List (only shown when not empty) */}
       {!isEmpty && (
-        <ResourceList resources={filtered} onEdit={(r) => { setEditing(r); setShowForm(true); }} onDelete={setDeleteTarget} />
+        <ResourceList resources={filtered} workPackages={workPackages} onEdit={(r) => { setEditing(r); setShowForm(true); }} onDelete={setDeleteTarget} />
       )}
 
       {/* Delete Dialog */}
