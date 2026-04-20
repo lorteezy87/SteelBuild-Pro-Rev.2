@@ -5,118 +5,16 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
+import {
+  addDays, subDays, snapToMonday, fmt, isThisWeek,
+  PHASE_COLORS, PX_PER_DAY,
+  GHOST_RESOURCES_SCHED,
+  extractSkillsRS, getRowCapacityBg,
+  injectKeyframes,
+} from "./resourceScheduling/utils";
 
-// ──────────────────────────────────────────────────────────────────────
-// KEYFRAMES (injected once)
-// ──────────────────────────────────────────────────────────────────────
-const RS_STYLE_ID = "resource-sched-keyframes";
-if (typeof document !== "undefined" && !document.getElementById(RS_STYLE_ID)) {
-  const style = document.createElement("style");
-  style.id = RS_STYLE_ID;
-  style.textContent = `
-    @keyframes rsOverAllocPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,0.15); color: #EF4444; }
-      50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); color: #FF6B6B; }
-    }
-    @keyframes rsDropGlow {
-      0%   { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
-      50%  { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.35); }
-      100% { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
-    }
-    @keyframes rsGhostShimmer {
-      0%   { opacity: 0.18; }
-      50%  { opacity: 0.32; }
-      100% { opacity: 0.18; }
-    }
-    @keyframes rsTodayPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(200,155,32,0.3); }
-      50%      { box-shadow: 0 0 14px rgba(200,155,32,0.6); }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// GHOST PLACEHOLDER DATA
-// ──────────────────────────────────────────────────────────────────────
-const GHOST_RESOURCES_SCHED = [
-  { name: "Welding Team A", role: "CWI / Fitter", skills: ["CWI", "Fitter"] },
-  { name: "Bay 3 Crane", role: "Equipment", skills: ["Crane Op"] },
-  { name: "Erection Crew B", role: "Ironworkers", skills: ["Rigger", "Erector"] },
-];
-
-// ── Skill tag extraction (matches ResourceList logic) ──
-const KNOWN_SKILLS_RS = ["CWI", "Fitter", "Rigger", "Welder", "Erector", "Detailer", "PE", "QC", "Foreman", "Crane Op", "Ironworker", "Painter"];
-
-function extractSkillsRS(resource) {
-  const skills = [];
-  const text = `${resource.role || ""} ${resource.notes || ""} ${resource.resource_type || ""}`.toUpperCase();
-  KNOWN_SKILLS_RS.forEach((skill) => {
-    if (text.includes(skill.toUpperCase())) skills.push(skill);
-  });
-  if (resource.role) {
-    resource.role.split(/[,/]+/).forEach((part) => {
-      const trimmed = part.trim();
-      if (trimmed.length > 1 && trimmed.length <= 12 && !skills.find((s) => s.toUpperCase() === trimmed.toUpperCase())) {
-        skills.push(trimmed);
-      }
-    });
-  }
-  return skills.slice(0, 4);
-}
-
-// ── Capacity heatmap for resource rows ──
-function getRowCapacityBg(burnPct, isOverAllocated) {
-  if (isOverAllocated || burnPct > 100) return "rgba(239,68,68,0.04)";
-  if (burnPct > 80) return "rgba(245,158,11,0.03)";
-  if (burnPct > 0) return "rgba(34,197,94,0.02)";
-  return "transparent";
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// HELPERS & UTILITIES
-// ──────────────────────────────────────────────────────────────────────
-
-const addDays = (date, n) => {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-};
-
-const subDays = (date, n) => addDays(date, -n);
-
-const snapToMonday = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
-const fmt = (d) =>
-  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-const isThisWeek = (date) => {
-  const today = new Date();
-  const weekStart = snapToMonday(today);
-  const weekEnd = addDays(weekStart, 6);
-  return date >= weekStart && date <= weekEnd;
-};
-
-const PHASE_COLORS = {
-  Detailing: "linear-gradient(135deg, var(--accent), var(--secondary))",
-  Fabrication: "linear-gradient(135deg, var(--accent), var(--status-warning))",
-  Delivery: "linear-gradient(135deg, #00D68F, #00A86B)",
-  Erection: "linear-gradient(135deg, #00B8D9, #0090B8)",
-  default: "linear-gradient(135deg, #475569, #334155)",
-};
-
-const PX_PER_DAY = {
-  week: 28,
-  month: 10,
-  quarter: 5,
-};
+// One-shot keyframe injection — must run at module load, not render.
+injectKeyframes();
 
 // ──────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
