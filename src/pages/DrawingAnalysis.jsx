@@ -79,8 +79,14 @@ export default function DrawingAnalysis() {
   // Self-heal: any row that's been sitting in 'processing' for more than
   // the stale threshold is almost certainly orphaned (tab closed mid-run,
   // browser crashed, etc.). Reset it to 'pending' so the kick effect below
-  // can re-fire it. The threshold accounts for long multi-page PDFs.
-  const STUCK_MS = 5 * 60 * 1000;
+  // can re-fire it. 3 minutes is a comfortable ceiling — a happy-path
+  // analysis of a 100-page PDF is ~90s including Anthropic round-trip,
+  // so a row still in 'processing' past 3 min is almost certainly an
+  // orphaned session. With the new retry schedule total wait can reach
+  // ~4 min on heavy retries — those rows keep updated_at fresh via the
+  // onRetry callback writing progress to error_message, so they stay
+  // outside the 3 min window until they truly stall.
+  const STUCK_MS = 3 * 60 * 1000;
   useEffect(() => {
     const now = Date.now();
     const stuck = analyses.filter(a =>
