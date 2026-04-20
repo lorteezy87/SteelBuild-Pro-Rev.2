@@ -79,11 +79,16 @@ async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
   throw new Error(`${prefix}: ${lastDetail} (gave up after ${maxAttempts} attempts)`);
 }
 
-// Hard caps Anthropic enforces on document blocks (so we fail fast with a
-// useful message instead of a generic 400).
-const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB
-const DEFAULT_MODEL = "claude-sonnet-4-6";
-const STORAGE_BUCKET = "app-files";
+// Hard caps for document blocks (so we fail fast with a useful message
+// instead of a generic 400).
+const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB (Anthropic), tighter on OpenAI
+// Default to OpenAI GPT-4o-mini — roughly 20× cheaper than Sonnet 4.6
+// for the structured sheet-index + findings extraction we do here. Quality
+// tradeoff is small because output goes through a forced tool_use schema.
+// Override per-call by passing { model, provider } to analyzeDrawing().
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_MODEL    = "gpt-4o-mini";
+const STORAGE_BUCKET   = "app-files";
 
 // Kept in lockstep with the CHECK constraint on drawing_findings.finding_type
 // + drawing_findings.severity. Any AI output outside these sets is coerced
@@ -250,7 +255,10 @@ function arrayBufferToBase64(buf) {
  * child rows. Returns the parsed analysis on success; throws on failure
  * (the caller may surface the error and the row will carry error_message).
  */
-export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
+export async function analyzeDrawing(analysis, {
+  model = DEFAULT_MODEL,
+  provider = DEFAULT_PROVIDER,
+} = {}) {
   const analysisId = analysis.id;
 
   const markError = async (message) => {
@@ -290,8 +298,9 @@ export async function analyzeDrawing(analysis, { model = DEFAULT_MODEL } = {}) {
     let data;
     try {
       const res = await invokeLlmProxy({
+        provider,
         model,
-        maxTokens: 8000,
+        maxTokens: 4000,
         system: SYSTEM_PROMPT,
         tools: [ANALYSIS_TOOL],
         tool_choice: { type: "tool", name: "submit_analysis" },
