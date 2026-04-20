@@ -17,6 +17,7 @@ import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
 import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeader from "./resourceScheduling/TimelineHeader";
 import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
+import ResourceRow from "./resourceScheduling/ResourceRow";
 
 // One-shot keyframe injection — must run at module load, not render.
 injectKeyframes();
@@ -1195,256 +1196,37 @@ export default function ResourceScheduling() {
           />
 
           {/* RESOURCE ROWS */}
-          {displayResources.map((entry, idx) => {
-            const resource = entry.resource;
-            const rowAssignedWPs = scheduledWps.filter(wp => wp.crew === resource.name);
-            const rowBudgetHrs = rowAssignedWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
-            const rowActualHrs = rowAssignedWPs.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
-            const rowBurnPct = rowBudgetHrs > 0 ? Math.round((rowActualHrs / rowBudgetHrs) * 100) : 0;
-            const rowIsOverBudget = rowActualHrs > rowBudgetHrs && rowBudgetHrs > 0;
-            // Crew rows roll up member capacities; standalone resources
-            // use their own. Members (indented children) show their own
-            // individual capacity for reference only — assignments don't
-            // flow to individuals in this model.
-            const resBudgetFromEntity = entry.isMember
-              ? (Number(resource.capacity) || 0)
-              : (effectiveCapacityById[resource.id] || 0);
-            const isOverAllocated = resBudgetFromEntity > 0 && rowBudgetHrs > resBudgetFromEntity;
-            const isEquipment = resource.resource_type === "Equipment";
-            const rowHeatBg = getRowCapacityBg(rowBurnPct, isOverAllocated);
-            const rowSkills = extractSkillsRS(resource);
-            const isCrew = entry.hasMembers;
-            const crewExpanded = isCrew && expandedCrews.has(resource.id);
-            return (
-            <div
-              key={resource.id}
-              data-resource-id={resource.id}
-              data-resource-name={resource.name}
-              style={{
-                display: "flex",
-                background: isOverAllocated ? "rgba(239,68,68,0.04)" : rowHeatBg !== "transparent" ? rowHeatBg : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-sidebar)"),
-                borderBottom: "1px solid var(--hover-bg)",
-                minHeight: 60,
-                transition: "background 0.2s",
+          {displayResources.map((entry, idx) => (
+            <ResourceRow
+              key={entry.resource.id}
+              entry={entry}
+              idx={idx}
+              scheduledWps={scheduledWps}
+              effectiveCapacityById={effectiveCapacityById}
+              expandedCrews={expandedCrews}
+              onToggleCrew={toggleCrew}
+              getBarStyle={getBarStyle}
+              todayOffset={todayOffset}
+              onBarPointerDown={onBarPointerDown}
+              onOpenContextMenu={setContextMenu}
+              onBarHoverEnter={(e, wp) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const shopBud = Number(wp.shop_hours_budget) || 0;
+                const shopAct = Number(wp.shop_hours_actual) || 0;
+                const fieldBud = Number(wp.field_hours_budget) || 0;
+                const fieldAct = Number(wp.field_hours_actual) || 0;
+                setHoverTooltip({
+                  x: rect.left + rect.width / 2,
+                  y: rect.top - 8,
+                  wp,
+                  shopBud, shopAct, fieldBud, fieldAct,
+                  totalBud: shopBud + fieldBud,
+                  totalAct: shopAct + fieldAct,
+                });
               }}
-            >
-              {/* Left label */}
-              <div
-                style={{
-                  width: 220,
-                  padding: "8px 12px",
-                  paddingLeft: entry.isMember ? 28 : 12,   // indent member rows
-                  flexShrink: 0,
-                  background: entry.isMember ? "var(--bg-sidebar)" : "var(--bg-page)",
-                  borderRight: "1px solid var(--border-default)",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ width: "100%" }}>
-                  <div
-                    style={{ fontFamily: "var(--font-body)", fontSize: entry.isMember ? 12 : 13, color: "var(--text-primary)", fontWeight: entry.isMember ? 500 : 600, display: "flex", alignItems: "center", gap: 6, cursor: isCrew ? "pointer" : "default" }}
-                    onClick={isCrew ? () => toggleCrew(resource.id) : undefined}
-                    title={isCrew ? (crewExpanded ? "Collapse crew members" : "Expand crew members") : undefined}
-                  >
-                    {isCrew && (
-                      <span style={{ fontSize: 10, color: "var(--accent)", transition: "transform 150ms", display: "inline-block", transform: crewExpanded ? "rotate(90deg)" : "none" }}>▶</span>
-                    )}
-                    {isEquipment ? "\u2699 " : ""}{resource.name}
-                    {isCrew && (
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", marginLeft: "auto" }}>
-                        {entry.memberCount} MEMBER{entry.memberCount === 1 ? "" : "S"}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                    {resource.role || "\u2014"}
-                  </div>
-                  {/* Skill tag badges in timeline rows */}
-                  {rowSkills.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
-                      {rowSkills.map((sk, si) => (
-                        <span key={si} style={{
-                          fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                          color: "var(--text-secondary)", background: "var(--hover-bg)",
-                          border: "1px solid var(--bg-surface-high)", borderRadius: 8,
-                          padding: "1px 5px", letterSpacing: "0.04em", textTransform: "uppercase",
-                        }}>{sk}</span>
-                      ))}
-                    </div>
-                  )}
-                  {rowBudgetHrs > 0 && (
-                    <>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: rowIsOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
-                        {rowBudgetHrs}h bud {"\u00B7"} {rowActualHrs}h act {"\u00B7"} {rowBurnPct}%
-                      </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
-                        <div style={{ width: `${Math.min(100, rowBurnPct)}%`, height: "100%", borderRadius: 2, background: rowBurnPct > 100 ? "var(--status-error)" : rowBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
-                      </div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
-                        {rowAssignedWPs.length} WPs {"\u00B7"} {rowAssignedWPs.reduce((s, wp) => s + (Number(wp.tonnage) || 0), 0)}T
-                      </div>
-                    </>
-                  )}
-                  {isOverAllocated && (
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 4, padding: "2px 6px", marginTop: 4, letterSpacing: "0.08em" }}>
-                      {"\u26A0"} OVER-ALLOC
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Timeline bars area */}
-              <div
-                style={{
-                  flex: 1,
-                  position: "relative",
-                  display: "flex",
-                  overflow: "hidden",
-                }}
-              >
-                {/* WP bars */}
-                {scheduledWps
-                  .filter(
-                    (wp) => wp.crew === resource.name
-                  )
-                  .map((wp) => {
-                    const pos = getBarStyle(wp);
-                    if (!pos) return null;
-
-                    return (
-                      <div
-                        key={wp.id}
-                        onPointerDown={(e) =>
-                          onBarPointerDown(e, wp, resource.id, resource.name)
-                        }
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setContextMenu({ x: e.clientX, y: e.clientY, wp });
-                        }}
-                        onMouseEnter={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const shopBud = Number(wp.shop_hours_budget) || 0;
-                          const shopAct = Number(wp.shop_hours_actual) || 0;
-                          const fieldBud = Number(wp.field_hours_budget) || 0;
-                          const fieldAct = Number(wp.field_hours_actual) || 0;
-                          setHoverTooltip({ x: rect.left + rect.width / 2, y: rect.top - 8, wp, shopBud, shopAct, fieldBud, fieldAct, totalBud: shopBud + fieldBud, totalAct: shopAct + fieldAct });
-                        }}
-                        onMouseLeave={() => setHoverTooltip(null)}
-                        style={{
-                          position: "absolute",
-                          left: `${pos.left}px`,
-                          width: `${pos.width}px`,
-                          top: 8,
-                          height: 36,
-                          borderRadius: 6,
-                          background:
-                            PHASE_COLORS[wp.phase] || PHASE_COLORS.default,
-                          cursor: "grab",
-                          display: "flex",
-                          alignItems: "center",
-                          padding: "0 8px",
-                          overflow: "hidden",
-                          userSelect: "none",
-                          zIndex: 10,
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                        }}
-                      >
-                        {/* Progress overlay */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            top: 0,
-                            height: "100%",
-                            width: `${wp.percent_complete || 0}%`,
-                            background: "rgba(255,255,255,0.15)",
-                            borderRadius: 6,
-                          }}
-                        />
-
-                        {/* WP Name */}
-                        <span
-                          style={{
-                            fontFamily: "var(--font-body)",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: "white",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            flex: 1,
-                            position: "relative",
-                            zIndex: 1,
-                          }}
-                        >
-                          {wp.name}
-                        </span>
-
-                        {/* WP Number (if wide enough) */}
-                        {pos.width > 120 && (
-                          <span
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              fontSize: 8,
-                              color: "rgba(255,255,255,0.55)",
-                              background: "rgba(0,0,0,0.3)",
-                              borderRadius: 3,
-                              padding: "1px 4px",
-                              marginLeft: 4,
-                              position: "relative",
-                              zIndex: 1,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {wp.wp_number}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                {/* Today line - bright vertical accent line */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${todayOffset}px`,
-                    top: 0,
-                    bottom: 0,
-                    width: 2,
-                    background: "var(--accent)",
-                    boxShadow: "0 0 10px rgba(200,155,32,0.6), 0 0 20px rgba(200,155,32,0.2)",
-                    zIndex: 20,
-                    pointerEvents: "none",
-                    animation: "rsTodayPulse 3s ease-in-out infinite",
-                  }}
-                >
-                  {/* TODAY label at top of line */}
-                  <div style={{
-                    position: "absolute",
-                    top: -1,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: "#07090E",
-                    background: "var(--accent)",
-                    borderRadius: 3,
-                    padding: "1px 5px",
-                    letterSpacing: "0.08em",
-                    whiteSpace: "nowrap",
-                    lineHeight: 1.4,
-                  }}>
-                    TODAY
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-          })}
+              onBarHoverLeave={() => setHoverTooltip(null)}
+            />
+          ))}
         </div>
       </div>
 
