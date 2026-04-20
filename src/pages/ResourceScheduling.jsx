@@ -5,118 +5,17 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
+import {
+  addDays, subDays, snapToMonday, fmt, isThisWeek,
+  PHASE_COLORS, PX_PER_DAY,
+  GHOST_RESOURCES_SCHED,
+  extractSkillsRS, getRowCapacityBg,
+  injectKeyframes,
+} from "./resourceScheduling/utils";
+import CapacityView from "./resourceScheduling/CapacityView";
 
-// ──────────────────────────────────────────────────────────────────────
-// KEYFRAMES (injected once)
-// ──────────────────────────────────────────────────────────────────────
-const RS_STYLE_ID = "resource-sched-keyframes";
-if (typeof document !== "undefined" && !document.getElementById(RS_STYLE_ID)) {
-  const style = document.createElement("style");
-  style.id = RS_STYLE_ID;
-  style.textContent = `
-    @keyframes rsOverAllocPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(239,68,68,0.15); color: #EF4444; }
-      50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); color: #FF6B6B; }
-    }
-    @keyframes rsDropGlow {
-      0%   { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
-      50%  { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.35); }
-      100% { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
-    }
-    @keyframes rsGhostShimmer {
-      0%   { opacity: 0.18; }
-      50%  { opacity: 0.32; }
-      100% { opacity: 0.18; }
-    }
-    @keyframes rsTodayPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(200,155,32,0.3); }
-      50%      { box-shadow: 0 0 14px rgba(200,155,32,0.6); }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// GHOST PLACEHOLDER DATA
-// ──────────────────────────────────────────────────────────────────────
-const GHOST_RESOURCES_SCHED = [
-  { name: "Welding Team A", role: "CWI / Fitter", skills: ["CWI", "Fitter"] },
-  { name: "Bay 3 Crane", role: "Equipment", skills: ["Crane Op"] },
-  { name: "Erection Crew B", role: "Ironworkers", skills: ["Rigger", "Erector"] },
-];
-
-// ── Skill tag extraction (matches ResourceList logic) ──
-const KNOWN_SKILLS_RS = ["CWI", "Fitter", "Rigger", "Welder", "Erector", "Detailer", "PE", "QC", "Foreman", "Crane Op", "Ironworker", "Painter"];
-
-function extractSkillsRS(resource) {
-  const skills = [];
-  const text = `${resource.role || ""} ${resource.notes || ""} ${resource.resource_type || ""}`.toUpperCase();
-  KNOWN_SKILLS_RS.forEach((skill) => {
-    if (text.includes(skill.toUpperCase())) skills.push(skill);
-  });
-  if (resource.role) {
-    resource.role.split(/[,/]+/).forEach((part) => {
-      const trimmed = part.trim();
-      if (trimmed.length > 1 && trimmed.length <= 12 && !skills.find((s) => s.toUpperCase() === trimmed.toUpperCase())) {
-        skills.push(trimmed);
-      }
-    });
-  }
-  return skills.slice(0, 4);
-}
-
-// ── Capacity heatmap for resource rows ──
-function getRowCapacityBg(burnPct, isOverAllocated) {
-  if (isOverAllocated || burnPct > 100) return "rgba(239,68,68,0.04)";
-  if (burnPct > 80) return "rgba(245,158,11,0.03)";
-  if (burnPct > 0) return "rgba(34,197,94,0.02)";
-  return "transparent";
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// HELPERS & UTILITIES
-// ──────────────────────────────────────────────────────────────────────
-
-const addDays = (date, n) => {
-  const d = new Date(date);
-  d.setDate(d.getDate() + n);
-  return d;
-};
-
-const subDays = (date, n) => addDays(date, -n);
-
-const snapToMonday = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
-const fmt = (d) =>
-  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-const isThisWeek = (date) => {
-  const today = new Date();
-  const weekStart = snapToMonday(today);
-  const weekEnd = addDays(weekStart, 6);
-  return date >= weekStart && date <= weekEnd;
-};
-
-const PHASE_COLORS = {
-  Detailing: "linear-gradient(135deg, var(--accent), var(--secondary))",
-  Fabrication: "linear-gradient(135deg, var(--accent), var(--status-warning))",
-  Delivery: "linear-gradient(135deg, #00D68F, #00A86B)",
-  Erection: "linear-gradient(135deg, #00B8D9, #0090B8)",
-  default: "linear-gradient(135deg, #475569, #334155)",
-};
-
-const PX_PER_DAY = {
-  week: 28,
-  month: 10,
-  quarter: 5,
-};
+// One-shot keyframe injection — must run at module load, not render.
+injectKeyframes();
 
 // ──────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
@@ -1085,117 +984,7 @@ export default function ResourceScheduling() {
 
       {/* ── CAPACITY VIEW ── */}
       {viewMode === "capacity" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-            {/* Hours capacity grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-
-              {/* Shop Fab Hours */}
-              <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 3, height: 14, background: "var(--accent)", borderRadius: 2 }} />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Shop Fab Hours</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }}>
-                  {[
-                    { label: "Budget", value: capacity.shopBudget.toLocaleString() + "h", color: "var(--text-primary)" },
-                    { label: "Actual", value: capacity.shopActual.toLocaleString() + "h", color: capacity.shopActual > capacity.shopBudget ? "var(--status-error)" : "var(--text-primary)" },
-                    { label: "Remaining", value: Math.max(0, capacity.shopRemaining).toLocaleString() + "h", color: capacity.shopRemaining < 0 ? "var(--status-error)" : "var(--status-success)" },
-                  ].map(({ label, value, color }, i) => (
-                    <div key={label} style={{ padding: "14px 16px", borderRight: i < 2 ? "1px solid var(--divider)" : "none" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding: "0 16px 14px" }}>
-                  <div style={{ height: 6, background: "var(--bg-surface-high)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, capacity.shopBudget > 0 ? (capacity.shopActual / capacity.shopBudget) * 100 : 0)}%`, background: capacity.shopActual > capacity.shopBudget ? "var(--status-error)" : "var(--accent)", borderRadius: 3, transition: "width 0.4s" }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Field Install Hours */}
-              <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 3, height: 14, background: "var(--phase-erection)", borderRadius: 2 }} />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Field Install Hours</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }}>
-                  {[
-                    { label: "Budget", value: capacity.fieldBudget.toLocaleString() + "h", color: "var(--text-primary)" },
-                    { label: "Actual", value: capacity.fieldActual.toLocaleString() + "h", color: capacity.fieldActual > capacity.fieldBudget ? "var(--status-error)" : "var(--text-primary)" },
-                    { label: "Remaining", value: Math.max(0, capacity.fieldRemaining).toLocaleString() + "h", color: capacity.fieldRemaining < 0 ? "var(--status-error)" : "var(--status-success)" },
-                  ].map(({ label, value, color }, i) => (
-                    <div key={label} style={{ padding: "14px 16px", borderRight: i < 2 ? "1px solid var(--divider)" : "none" }}>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding: "0 16px 14px" }}>
-                  <div style={{ height: 6, background: "var(--bg-surface-high)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, capacity.fieldBudget > 0 ? (capacity.fieldActual / capacity.fieldBudget) * 100 : 0)}%`, background: capacity.fieldActual > capacity.fieldBudget ? "var(--status-error)" : "var(--phase-erection)", borderRadius: 3, transition: "width 0.4s" }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Active WPs by phase */}
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-              <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 3, height: 14, background: "var(--accent)", borderRadius: 2 }} />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Active Workload by Phase</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-                {[
-                  { label: "Detailing", count: capacity.byPhase.Detailing, color: "var(--phase-detailing)" },
-                  { label: "Fabrication", count: capacity.byPhase.Fabrication, color: "var(--phase-fab)" },
-                  { label: "Delivery", count: capacity.byPhase.Delivery, color: "var(--phase-delivery)" },
-                  { label: "Erection", count: capacity.byPhase.Erection, color: "var(--phase-erection)" },
-                ].map(({ label, count, color }, i) => (
-                  <div key={label} style={{ padding: "16px 20px", borderRight: i < 3 ? "1px solid var(--divider)" : "none", borderTop: `3px solid ${color}` }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 4 }}>{count}</div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>active packages</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tonnage in fab */}
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "14px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 3, height: 14, background: "var(--phase-fab)", borderRadius: 2 }} />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Tonnage Scheduled vs Capacity</span>
-                </div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--phase-fab)" }}>
-                  {capacity.inFabTons.toFixed(1)}T
-                  <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 4 }}>in fab now</span>
-                </span>
-              </div>
-              {workPackages.filter(w => w.phase === "Fabrication" && w.status === "In Progress").map(wp => (
-                <div key={wp.id} style={{ display: "grid", gridTemplateColumns: "1fr 60px 80px 80px", padding: "7px 0", borderBottom: "1px solid var(--divider)", gap: 12, alignItems: "center" }}>
-                  <div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", fontWeight: 700, marginRight: 6 }}>{wp.wp_number}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-primary)" }}>{wp.name}</span>
-                  </div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", textAlign: "right" }}>{wp.tonnage ? `${wp.tonnage}T` : "—"}</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", textAlign: "right" }}>{wp.shop_hours_budget || 0}h bdg</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, textAlign: "right", color: (wp.shop_hours_actual || 0) > (wp.shop_hours_budget || 0) ? "var(--status-error)" : "var(--accent)" }}>
-                    {wp.shop_hours_actual || 0}h act
-                  </div>
-                </div>
-              ))}
-              {workPackages.filter(w => w.phase === "Fabrication" && w.status === "In Progress").length === 0 && (
-                <div style={{ textAlign: "center", padding: "16px 0", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>NO ACTIVE FAB PACKAGES</div>
-              )}
-            </div>
-
-          </div>
-        </div>
+        <CapacityView capacity={capacity} workPackages={workPackages} />
       )}
 
       {/* ── BOARD VIEW ── */}
