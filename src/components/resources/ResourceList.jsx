@@ -92,6 +92,71 @@ export default function ResourceList({ resources, workPackages = [], onEdit, onD
     return map;
   }, [resources]);
 
+  // Effective capacity = own + sum of direct children. Drives utilization
+  // on crew rows.
+  const effectiveCapacityById = React.useMemo(() => {
+    const map = {};
+    for (const r of resources || []) map[r.id] = Number(r.capacity) || 0;
+    for (const r of resources || []) {
+      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
+        map[r.parent_resource_id] += Number(r.capacity) || 0;
+      }
+    }
+    return map;
+  }, [resources]);
+
+  // Effective actual hours on a crew = sum of members' actual hours +
+  // own actual hours. Walk metadata.actual_hours || actual_hours per row.
+  const effectiveActualById = React.useMemo(() => {
+    const own = (r) => {
+      const meta = typeof r.metadata === "object" && r.metadata !== null ? r.metadata : {};
+      return Number(meta.actual_hours) || Number(r.actual_hours) || 0;
+    };
+    const map = {};
+    for (const r of resources || []) map[r.id] = own(r);
+    for (const r of resources || []) {
+      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
+        map[r.parent_resource_id] += own(r);
+      }
+    }
+    return map;
+  }, [resources]);
+
+  // Top-level resources = ones with no parent, OR whose parent isn't in
+  // the currently filtered list (so filter=Labor won't leave Ironworker
+  // children orphaned and invisible when their Crew parent is filtered
+  // out).
+  const visibleIds = React.useMemo(() => new Set((resources || []).map(r => r.id)), [resources]);
+  const topLevelResources = React.useMemo(
+    () => (resources || []).filter(r => !r.parent_resource_id || !visibleIds.has(r.parent_resource_id)),
+    [resources, visibleIds],
+  );
+
+  // Expand/collapse state per crew id.
+  const [expandedCrews, setExpandedCrews] = React.useState(() => new Set());
+  const toggleCrew = React.useCallback((id) => {
+    setExpandedCrews(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // Flat display list: each top-level row + optionally its members when
+  // expanded. Members inherit a `isMember` flag for indentation.
+  const displayList = React.useMemo(() => {
+    const out = [];
+    for (const r of topLevelResources) {
+      const children = (membersByParentId[r.id] || []).filter(c => visibleIds.has(c.id));
+      out.push({ resource: r, isMember: false, memberCount: children.length });
+      if (expandedCrews.has(r.id)) {
+        for (const c of children) out.push({ resource: c, isMember: true, memberCount: 0 });
+      }
+    }
+    return out;
+  }, [topLevelResources, membersByParentId, expandedCrews, visibleIds]);
+
   return (
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
       {/* Table header */}
@@ -115,12 +180,22 @@ export default function ResourceList({ resources, workPackages = [], onEdit, onD
         ))}
       </div>
 
-      {resources.map((resource, idx) => {
+      {displayList.map((entry, idx) => {
+        const resource = entry.resource;
+        const isMember = entry.isMember;
+        const memberCount = entry.memberCount;
+        const isCrew = memberCount > 0;
+        const crewExpanded = isCrew && expandedCrews.has(resource.id);
+
         // DB column mapping: capacity = budget_hours, cost_rate = hourly_rate,
-        // availability = availability_status, metadata.actual_hours = actual_hours
-        const budgetHours = Number(resource.capacity) || Number(resource.budget_hours) || 0;
+        // availability = availability_status, metadata.actual_hours = actual_hours.
+        // For crew rows, use the effective rollup (own + members). Member rows
+        // (indented children) show their own individual numbers for reference.
+        const ownBudget = Number(resource.capacity) || Number(resource.budget_hours) || 0;
         const meta = typeof resource.metadata === "object" && resource.metadata !== null ? resource.metadata : {};
-        const actualHours = Number(meta.actual_hours) || Number(resource.actual_hours) || 0;
+        const ownActual = Number(meta.actual_hours) || Number(resource.actual_hours) || 0;
+        const budgetHours = isMember ? ownBudget : (effectiveCapacityById[resource.id] ?? ownBudget);
+        const actualHours = isMember ? ownActual : (effectiveActualById[resource.id] ?? ownActual);
         const hourlyRate = Number(resource.cost_rate) || Number(resource.hourly_rate) || 0;
         const status = resource.availability || resource.availability_status || "Available";
 
@@ -152,21 +227,52 @@ export default function ResourceList({ resources, workPackages = [], onEdit, onD
             key={resource.id}
             style={{
               padding: "14px 16px",
-              borderBottom: idx < resources.length - 1 ? `1px solid ${capacityBorderColor}` : "none",
+              paddingLeft: isMember ? "36px" : "16px",   // indent member rows
+              borderBottom: idx < displayList.length - 1 ? `1px solid ${capacityBorderColor}` : "none",
+              borderLeft: isMember ? "2px solid color-mix(in srgb, var(--accent) 30%, transparent)" : "none",
               display: "grid",
               gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto",
               gap: "16px",
               alignItems: "center",
-              background: capacityBg,
+              background: isMember ? "color-mix(in srgb, var(--bg-surface-low) 60%, var(--bg-surface))" : capacityBg,
               minHeight: "var(--density-row-height)",
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = capacityBg; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = isMember ? "color-mix(in srgb, var(--bg-surface-low) 60%, var(--bg-surface))" : capacityBg; }}
           >
             {/* Column 1: Name + type + skills */}
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", lineHeight: 1.3 }}>{resource.name}</div>
+              <div
+                style={{
+                  fontSize: isMember ? 12 : 13,
+                  fontWeight: isMember ? 500 : 600,
+                  color: "var(--text-primary)",
+                  lineHeight: 1.3,
+                  display: "flex", alignItems: "center", gap: 6,
+                  cursor: isCrew ? "pointer" : "default",
+                }}
+                onClick={isCrew ? () => toggleCrew(resource.id) : undefined}
+                title={isCrew ? (crewExpanded ? "Collapse crew members" : "Expand crew members") : undefined}
+              >
+                {isCrew && (
+                  <span style={{
+                    fontSize: 10, color: "var(--accent)",
+                    display: "inline-block",
+                    transform: crewExpanded ? "rotate(90deg)" : "none",
+                    transition: "transform 150ms",
+                  }}>▶</span>
+                )}
+                {resource.name}
+                {isCrew && (
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                    color: "var(--accent)", letterSpacing: "0.08em", marginLeft: 4,
+                  }}>
+                    · {memberCount} MEMBER{memberCount === 1 ? "" : "S"}
+                  </span>
+                )}
+              </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2, letterSpacing: "0.06em" }}>{resource.resource_type}</div>
               {resource.role && <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 1 }}>{resource.role}</div>}
 
