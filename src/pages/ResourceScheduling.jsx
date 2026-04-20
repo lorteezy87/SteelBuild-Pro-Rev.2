@@ -137,14 +137,15 @@ export default function ResourceScheduling() {
   const [contextMenu, setContextMenu] = useState(null);
   const [hoverTooltip, setHoverTooltip] = useState(null);
   const [showNewResource, setShowNewResource] = useState(false);
-  const [newRes, setNewRes] = useState({ name: "", resource_type: "Crew", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "" });
+  const emptyNewRes = { name: "", resource_type: "Crew", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "", parent_resource_id: "" };
+  const [newRes, setNewRes] = useState(emptyNewRes);
 
   const createResMut = useMutation({
     mutationFn: (data) => base44.entities.Resource.create({ ...data, project_id: activeProject?.id, project_name: activeProject?.name || "" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["resources"] });
       setShowNewResource(false);
-      setNewRes({ name: "", resource_type: "Crew", role: "", capacity: "", unit: "hours", cost_rate: "", availability: "Available", notes: "" });
+      setNewRes(emptyNewRes);
       toast.success("Resource created");
     },
     onError: (err) => toast.error(err.message || "Failed to create resource"),
@@ -170,6 +171,68 @@ export default function ResourceScheduling() {
       });
     },
   });
+
+  // ── Crew hierarchy ──────────────────────────────────────────────────
+  // parent_resource_id (migration 043) lets a crew contain individual
+  // members. The board renders ONE row per top-level resource; a crew's
+  // effective capacity is its own capacity PLUS the sum of its direct
+  // members' capacities. Members can be toggled visible under the crew
+  // row via the expand chevron.
+  const topLevelResources = useMemo(
+    () => resources.filter(r => !r.parent_resource_id),
+    [resources],
+  );
+  const membersByParentId = useMemo(() => {
+    const map = {};
+    for (const r of resources) {
+      if (r.parent_resource_id) {
+        (map[r.parent_resource_id] = map[r.parent_resource_id] || []).push(r);
+      }
+    }
+    return map;
+  }, [resources]);
+
+  // Effective capacity = own + sum of direct children.
+  const effectiveCapacityById = useMemo(() => {
+    const map = {};
+    for (const r of resources) {
+      map[r.id] = Number(r.capacity) || 0;
+    }
+    for (const r of resources) {
+      if (r.parent_resource_id && map[r.parent_resource_id] !== undefined) {
+        map[r.parent_resource_id] += Number(r.capacity) || 0;
+      }
+    }
+    return map;
+  }, [resources]);
+
+  // Expand/collapse state for crew rows. Crew IDs in this set show their
+  // members below the crew row.
+  const [expandedCrews, setExpandedCrews] = useState(() => new Set());
+  const toggleCrew = useCallback((crewId) => {
+    setExpandedCrews(prev => {
+      const next = new Set(prev);
+      if (next.has(crewId)) next.delete(crewId);
+      else next.add(crewId);
+      return next;
+    });
+  }, []);
+
+  // Flat display list for the board: crew rows + (when expanded) their
+  // members indented underneath. Individual resources without a parent
+  // appear as their own row, same as before. Members whose parent is
+  // collapsed are hidden.
+  const displayResources = useMemo(() => {
+    const out = [];
+    for (const r of topLevelResources) {
+      const children = membersByParentId[r.id] || [];
+      out.push({ resource: r, isMember: false, hasMembers: children.length > 0, memberCount: children.length });
+      if (expandedCrews.has(r.id)) {
+        for (const c of children) out.push({ resource: c, isMember: true, hasMembers: false, memberCount: 0 });
+      }
+    }
+    return out;
+  }, [topLevelResources, membersByParentId, expandedCrews]);
 
   // Capacity view data (uses same workPackages query)
   const capacity = useMemo(() => {
@@ -933,12 +996,14 @@ export default function ResourceScheduling() {
                 { key: "name", label: "Name", type: "text", placeholder: "e.g. Crew Alpha, Bay 3 Crane" },
                 { key: "resource_type", label: "Type", type: "select", options: ["Crew", "Equipment", "Bay", "Subcontractor", "Other"] },
                 { key: "role", label: "Role / Specialty", type: "text", placeholder: "e.g. Ironworkers, Welders" },
+                { key: "parent_resource_id", label: "Parent Crew", type: "parent-select",
+                  help: "Assign to a crew. Crews roll up member capacities." },
                 { key: "capacity", label: "Capacity", type: "number", placeholder: "e.g. 40" },
                 { key: "unit", label: "Unit", type: "select", options: ["hours", "tons", "pieces", "days"] },
                 { key: "cost_rate", label: "Cost Rate ($/hr)", type: "number", placeholder: "0.00" },
                 { key: "availability", label: "Availability", type: "select", options: ["Available", "Partially Available", "Committed", "Unavailable"] },
                 { key: "notes", label: "Notes", type: "textarea", placeholder: "Optional notes..." },
-              ].map(({ key, label, type, placeholder, options }) => (
+              ].map(({ key, label, type, placeholder, options, help }) => (
                 <div key={key}>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
                   {type === "select" ? (
@@ -948,6 +1013,21 @@ export default function ResourceScheduling() {
                     }}>
                       {options.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
+                  ) : type === "parent-select" ? (
+                    <>
+                      <select value={newRes[key] || ""} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} style={{
+                        width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+                        borderRadius: 6, fontSize: 12, color: "var(--text-primary)", fontFamily: "var(--font-body)", outline: "none",
+                      }}>
+                        <option value="">— None (top-level) —</option>
+                        {topLevelResources.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}{r.resource_type ? ` · ${r.resource_type}` : ""}</option>
+                        ))}
+                      </select>
+                      {help && (
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.06em" }}>{help}</div>
+                      )}
+                    </>
                   ) : type === "textarea" ? (
                     <textarea value={newRes[key]} onChange={(e) => setNewRes(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} style={{
                       width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)",
@@ -980,6 +1060,7 @@ export default function ResourceScheduling() {
                   cost_rate: newRes.cost_rate ? Number(newRes.cost_rate) : null,
                   availability: newRes.availability,
                   notes: newRes.notes,
+                  parent_resource_id: newRes.parent_resource_id || null,
                 });
               }} disabled={createResMut.isPending} style={{
                 padding: "8px 20px", borderRadius: 6, border: "none",
@@ -1206,11 +1287,14 @@ export default function ResourceScheduling() {
           const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
           const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
           const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
-          const overAllocatedResources = resources.filter(res => {
+          // Count how many top-level resources are over-allocated. Over-
+          // alloc = assigned WP budget > effective capacity (rollup from
+          // crew members when applicable).
+          const overAllocatedResources = topLevelResources.filter(res => {
             const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
             const resBudget = resWPs.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
-            const resActual = resWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
-            return resBudget > 0 && resActual > resBudget;
+            const effCap = effectiveCapacityById[res.id] || 0;
+            return effCap > 0 && resBudget > effCap;
           }).length;
           return [
             { label: "TOTAL ESTIMATED", value: totalBudgetHrs.toLocaleString() + "h", color: "var(--accent)" },
@@ -1264,8 +1348,10 @@ export default function ResourceScheduling() {
             RESOURCES
           </div>
 
-          {["Labor", "Equipment", "Subcontractor", "Material"].map(type => {
-            const typeResources = resources.filter(r => (r.resource_type || "Labor") === type);
+          {["Labor", "Equipment", "Subcontractor", "Material", "Crew"].map(type => {
+            // Only show top-level resources in the capacity stack — members
+            // are rolled up into their crew's effective capacity.
+            const typeResources = topLevelResources.filter(r => (r.resource_type || "Labor") === type);
             if (typeResources.length === 0) return null;
             return (
               <div key={type}>
@@ -1282,9 +1368,11 @@ export default function ResourceScheduling() {
                   const resActualHrs = assignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
                   const resBurnPct = resBudgetHrs > 0 ? Math.round((resActualHrs / resBudgetHrs) * 100) : 0;
                   const isOverBudget = resActualHrs > resBudgetHrs && resBudgetHrs > 0;
-                  const resBudgetFromEntity = Number(res.capacity || res.budget_hours) || 0;
+                  // Effective capacity = own + sum of direct members' capacities
+                  const resBudgetFromEntity = effectiveCapacityById[res.id] || 0;
                   const isOverAllocated = resBudgetFromEntity > 0 && resBudgetHrs > resBudgetFromEntity;
                   const resSkills = extractSkillsRS(res);
+                  const memberCount = (membersByParentId[res.id] || []).length;
                   const heatBg = getRowCapacityBg(resBurnPct, isOverAllocated);
                   return (
                     <div key={res.id} style={{
@@ -1293,8 +1381,13 @@ export default function ResourceScheduling() {
                       borderRadius: 8, padding: 8, marginBottom: 8,
                       transition: "background 0.2s, border-color 0.2s",
                     }}>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2 }}>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
                         {res.name}
+                        {memberCount > 0 && (
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em" }}>
+                            · {memberCount} MEMBER{memberCount === 1 ? "" : "S"}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
                         {res.role || "\u2014"}
@@ -1514,17 +1607,26 @@ export default function ResourceScheduling() {
           </div>
 
           {/* RESOURCE ROWS */}
-          {resources.map((resource, idx) => {
+          {displayResources.map((entry, idx) => {
+            const resource = entry.resource;
             const rowAssignedWPs = scheduledWps.filter(wp => wp.crew === resource.name);
             const rowBudgetHrs = rowAssignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0) + (Number(wp.field_hours_budget) || 0), 0);
             const rowActualHrs = rowAssignedWPs.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0) + (Number(wp.field_hours_actual) || 0), 0);
             const rowBurnPct = rowBudgetHrs > 0 ? Math.round((rowActualHrs / rowBudgetHrs) * 100) : 0;
             const rowIsOverBudget = rowActualHrs > rowBudgetHrs && rowBudgetHrs > 0;
-            const resBudgetFromEntity = Number(resource.capacity || resource.budget_hours) || 0;
+            // Crew rows roll up member capacities; standalone resources
+            // use their own. Members (indented children) show their own
+            // individual capacity for reference only — assignments don't
+            // flow to individuals in this model.
+            const resBudgetFromEntity = entry.isMember
+              ? (Number(resource.capacity) || 0)
+              : (effectiveCapacityById[resource.id] || 0);
             const isOverAllocated = resBudgetFromEntity > 0 && rowBudgetHrs > resBudgetFromEntity;
             const isEquipment = resource.resource_type === "Equipment";
             const rowHeatBg = getRowCapacityBg(rowBurnPct, isOverAllocated);
             const rowSkills = extractSkillsRS(resource);
+            const isCrew = entry.hasMembers;
+            const crewExpanded = isCrew && expandedCrews.has(resource.id);
             return (
             <div
               key={resource.id}
@@ -1543,8 +1645,9 @@ export default function ResourceScheduling() {
                 style={{
                   width: 220,
                   padding: "8px 12px",
+                  paddingLeft: entry.isMember ? 28 : 12,   // indent member rows
                   flexShrink: 0,
-                  background: "var(--bg-page)",
+                  background: entry.isMember ? "var(--bg-sidebar)" : "var(--bg-page)",
                   borderRight: "1px solid var(--border-default)",
                   display: "flex",
                   alignItems: "flex-start",
@@ -1552,8 +1655,20 @@ export default function ResourceScheduling() {
                 }}
               >
                 <div style={{ width: "100%" }}>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>
+                  <div
+                    style={{ fontFamily: "var(--font-body)", fontSize: entry.isMember ? 12 : 13, color: "var(--text-primary)", fontWeight: entry.isMember ? 500 : 600, display: "flex", alignItems: "center", gap: 6, cursor: isCrew ? "pointer" : "default" }}
+                    onClick={isCrew ? () => toggleCrew(resource.id) : undefined}
+                    title={isCrew ? (crewExpanded ? "Collapse crew members" : "Expand crew members") : undefined}
+                  >
+                    {isCrew && (
+                      <span style={{ fontSize: 10, color: "var(--accent)", transition: "transform 150ms", display: "inline-block", transform: crewExpanded ? "rotate(90deg)" : "none" }}>▶</span>
+                    )}
                     {isEquipment ? "\u2699 " : ""}{resource.name}
+                    {isCrew && (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", marginLeft: "auto" }}>
+                        {entry.memberCount} MEMBER{entry.memberCount === 1 ? "" : "S"}
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
                     {resource.role || "\u2014"}

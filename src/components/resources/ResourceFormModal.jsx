@@ -21,6 +21,7 @@ function fromEntity(e) {
     hourly_rate: e.cost_rate ?? "",
     availability_status: e.availability || "Available",
     notes: e.notes || "",
+    parent_resource_id: e.parent_resource_id || "",
   };
 }
 
@@ -35,6 +36,7 @@ function toEntity(form, projectId) {
     cost_rate: form.hourly_rate ? parseFloat(form.hourly_rate) : 0,
     availability: form.availability_status || "Available",
     notes: form.notes,
+    parent_resource_id: form.parent_resource_id || null,
     metadata: {
       actual_hours: parseFloat(form.actual_hours) || 0,
       forecast_hours: form.forecast_hours ? parseFloat(form.forecast_hours) : 0,
@@ -56,6 +58,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
       hourly_rate: "",
       availability_status: "Available",
       notes: "",
+      parent_resource_id: "",
     }
   );
 
@@ -65,6 +68,22 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
     initialData: [],
     staleTime: 5 * 60 * 1000,
   });
+
+  // Load resources in the selected project to populate the Parent Crew
+  // dropdown. Only show resources that could reasonably be a parent
+  // (i.e., have no parent themselves or are of type Crew). Exclude the
+  // resource being edited to prevent a self-parent cycle.
+  const { data: projectResources = [] } = useQuery({
+    queryKey: ["resources", formData.project_id],
+    queryFn: () => formData.project_id
+      ? base44.entities.Resource.filter({ project_id: formData.project_id })
+      : Promise.resolve([]),
+    enabled: !!formData.project_id,
+    staleTime: 30 * 1000,
+  });
+  const parentCandidates = projectResources.filter(r =>
+    r.id !== editing?.id && !r.parent_resource_id
+  );
 
   const mutation = useMutation({
     mutationFn: (data) => base44.entities.Resource.create(toEntity(data, projectId)),
@@ -134,6 +153,25 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
             <div>
               <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Hourly Rate</label>
               <input type="number" value={formData.hourly_rate} onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })} placeholder="0.00" style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Parent Crew</label>
+            <select
+              value={formData.parent_resource_id}
+              onChange={(e) => setFormData({ ...formData, parent_resource_id: e.target.value })}
+              style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+            >
+              <option value="">— None (top-level) —</option>
+              {parentCandidates.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.resource_type ? ` · ${p.resource_type}` : ""}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.06em" }}>
+              Assign this resource to a crew. Crews roll up member capacities on the scheduling board.
             </div>
           </div>
 
