@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
+import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { batchProcess } from "@/utils/batchProcess";
 
@@ -81,6 +82,7 @@ export default function Deliveries() {
   const [sortBy, setSortBy] = useState("DUE");
   const [overdueFirst, setOverdueFirst] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -828,6 +830,23 @@ export default function Deliveries() {
             Export All
           </button>
           <button
+            onClick={() => setShowImport(true)}
+            title="Drop a Tekla / fab-shop shipping ticket PDF — AI extracts load header + every line item"
+            style={{
+              padding: "8px 14px",
+              borderRadius: 8,
+              border: "1px solid var(--ai-accent, #22D3EE)",
+              background: "transparent",
+              color: "var(--ai-accent, #22D3EE)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            ↗ Import Shipping Ticket
+          </button>
+          <button
             onClick={() => {
               setEditing(null);
               setDetail(null);
@@ -1336,6 +1355,13 @@ export default function Deliveries() {
 
       {/* Modals */}
       {showForm && <DeliveryFormModal projectId={projectId} onClose={() => setShowForm(false)} />}
+      <ShippingTicketImportModal
+        open={showImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        projects={projects}
+        onClose={() => setShowImport(false)}
+      />
       {editing && <DeliveryFormModal projectId={editing.project_id || projectId} delivery={editing} onClose={() => setEditing(null)} />}
       <DetailDrawer />
       <DeleteDialog
