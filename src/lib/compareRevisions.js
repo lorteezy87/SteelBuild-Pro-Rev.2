@@ -61,9 +61,13 @@ async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
   throw new Error(`${prefix}: ${lastDetail} (gave up after ${maxAttempts} attempts)`);
 }
 
-const MAX_PDF_BYTES   = 32 * 1024 * 1024; // 32 MB per document (Anthropic cap)
-const DEFAULT_MODEL   = "claude-sonnet-4-6";
-const STORAGE_BUCKET  = "app-files";
+const MAX_PDF_BYTES   = 32 * 1024 * 1024; // 32 MB per document
+// Default to OpenAI gpt-4o-mini for the same cost reasons as the analyzer.
+// Override via options if you ever want to compare via Sonnet's deeper
+// reasoning.
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_MODEL    = "gpt-4o-mini";
+const STORAGE_BUCKET   = "app-files";
 
 // In lockstep with CHECK constraints on drawing_revision_deltas. Any AI
 // output outside these sets is coerced to a safe fallback client-side so
@@ -214,7 +218,10 @@ function arrayBufferToBase64(buf) {
  * to 'processing', runs the Claude call, writes drawing_revision_deltas
  * rows, and lands the parent on 'complete' or 'error'.
  */
-export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { model = DEFAULT_MODEL } = {}) {
+export async function compareRevisions(comparison, fromAnalysis, toAnalysis, {
+  model = DEFAULT_MODEL,
+  provider = DEFAULT_PROVIDER,
+} = {}) {
   const cid = comparison.id;
 
   const markError = async (msg) => {
@@ -251,8 +258,9 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, { m
     let data;
     try {
       const res = await invokeLlmProxy({
+      provider,
       model,
-      maxTokens: 8000,
+      maxTokens: 4000,
       system: SYSTEM_PROMPT,
       tools: [COMPARE_TOOL],
       tool_choice: { type: "tool", name: "submit_revision_diff" },
