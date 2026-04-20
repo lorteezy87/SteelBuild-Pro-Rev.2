@@ -1,5 +1,7 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
+import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
+import { hoursToWorkdays, addWorkdays } from "@/lib/workweek";
 
 /**
  * Right-click context menu for a work-package bar. Lets the PM
@@ -17,9 +19,27 @@ export default function WPContextMenu({
   if (!contextMenu) return null;
 
   const { wp, x, y } = contextMenu;
+  const isUnscheduled = !wp.scheduled_start_date || !wp.scheduled_end_date;
 
   const reassign = async (res) => {
-    await base44.entities.WorkPackage.update(wp.id, { crew: res.name });
+    const patch = { crew: res.name };
+    // If the WP has no scheduling window yet, default it to today → today
+    // + estimated workdays (based on phase-appropriate budget hours, or
+    // tonnage fallback). Keeps the assignment meaningful — the bar
+    // actually lands on the board instead of staying in the Unscheduled
+    // tray.
+    if (isUnscheduled) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const budgetHrs = wpBudgetHoursForResource(wp);
+      const workdays = budgetHrs > 0
+        ? hoursToWorkdays(budgetHrs)
+        : Math.max(3, Math.ceil((Number(wp.tonnage) || 0) / 2));
+      const end = addWorkdays(today, workdays);
+      const iso = (d) => d.toISOString().split("T")[0];
+      patch.scheduled_start_date = iso(today);
+      patch.scheduled_end_date   = iso(end);
+    }
+    await base44.entities.WorkPackage.update(wp.id, patch);
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
     onClose();
@@ -27,7 +47,14 @@ export default function WPContextMenu({
   };
 
   const unassign = async () => {
-    await base44.entities.WorkPackage.update(wp.id, { crew: "", released_date: null });
+    // Clearing crew + scheduling window sends the WP back to the
+    // Unscheduled tray. Leave released_date alone (that's a separate
+    // milestone — date released to shop — not the scheduling window).
+    await base44.entities.WorkPackage.update(wp.id, {
+      crew: "",
+      scheduled_start_date: null,
+      scheduled_end_date: null,
+    });
     qc.invalidateQueries({ queryKey: ["work-packages"] });
     qc.invalidateQueries({ queryKey: ["wps-all"] });
     onClose();
@@ -36,7 +63,9 @@ export default function WPContextMenu({
 
   return (
     <div
+      id="rs-wp-context-menu"
       onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       style={{
         position: "fixed", left: x, top: y,
         background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
@@ -56,7 +85,7 @@ export default function WPContextMenu({
         fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
         letterSpacing: "0.10em", textTransform: "uppercase",
       }}>
-        Reassign to
+        {isUnscheduled ? "Assign to" : "Reassign to"}
       </div>
 
       {resources.map((res) => {
@@ -82,20 +111,23 @@ export default function WPContextMenu({
         );
       })}
 
-      <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
-
-      <button
-        onClick={unassign}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,23,68,0.08)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        style={{
-          display: "block", width: "100%", padding: "7px 12px", textAlign: "left",
-          background: "transparent", border: "none", color: "#FF3D3D",
-          fontFamily: "var(--font-body)", fontSize: 11, cursor: "pointer",
-        }}
-      >
-        Unassign
-      </button>
+      {(wp.crew || !isUnscheduled) && (
+        <>
+          <div style={{ borderTop: "1px solid var(--divider)", margin: "4px 0" }} />
+          <button
+            onClick={unassign}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,23,68,0.08)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            style={{
+              display: "block", width: "100%", padding: "7px 12px", textAlign: "left",
+              background: "transparent", border: "none", color: "#FF3D3D",
+              fontFamily: "var(--font-body)", fontSize: 11, cursor: "pointer",
+            }}
+          >
+            Unassign &amp; unschedule
+          </button>
+        </>
+      )}
     </div>
   );
 }
