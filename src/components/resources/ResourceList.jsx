@@ -1,5 +1,6 @@
 import React from "react";
 import { wpBudgetHoursForResource } from "@/lib/wpHoursForResource";
+import { hoursToWorkdays, WORKDAYS_PER_WEEK, HOURS_PER_WORKDAY } from "@/lib/workweek";
 
 const STATUS_COLORS = {
   Available: "var(--status-success)",
@@ -58,12 +59,19 @@ function extractSkills(resource) {
   return skills.slice(0, 5); // limit to 5
 }
 
-// ── Duration hint: budget hours to approx days ──
+// ── Duration hint: budget hours to approx workdays ──
+// Uses the shared workweek helper so a 40h week reads as "1 week" on a
+// 5-day shop and the math matches the timeline bars.
 function getDurationHint(budgetHours) {
   if (!budgetHours || budgetHours <= 0) return null;
-  const days = Math.ceil(budgetHours / 8);
-  if (days === 1) return "\u2248 1 day at 8h/day";
-  return `\u2248 ${days} days at 8h/day`;
+  const workdays = hoursToWorkdays(budgetHours, HOURS_PER_WORKDAY);
+  if (workdays === 1) return `\u2248 1 workday (${HOURS_PER_WORKDAY}h)`;
+  if (workdays < WORKDAYS_PER_WEEK) {
+    return `\u2248 ${workdays} workdays @ ${HOURS_PER_WORKDAY}h/day`;
+  }
+  const weeks = workdays / WORKDAYS_PER_WEEK;
+  const weeksLabel = Number.isInteger(weeks) ? `${weeks}` : weeks.toFixed(1);
+  return `\u2248 ${workdays} workdays (${weeksLabel} wk @ ${WORKDAYS_PER_WEEK} days/wk)`;
 }
 
 export default function ResourceList({ resources, workPackages = [], onEdit, onDelete }) {
