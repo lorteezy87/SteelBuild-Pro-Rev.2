@@ -15,6 +15,8 @@ import {
 import CapacityView from "./resourceScheduling/CapacityView";
 import NewResourceDialog from "./resourceScheduling/NewResourceDialog";
 import WPContextMenu from "./resourceScheduling/WPContextMenu";
+import TimelineHeader from "./resourceScheduling/TimelineHeader";
+import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 
 // One-shot keyframe injection — must run at module load, not render.
 injectKeyframes();
@@ -1163,67 +1165,11 @@ export default function ResourceScheduling() {
             );
           })}
 
-          {/* Unscheduled WPs */}
-          {unscheduledWps.length > 0 && (
-            <div
-              style={{
-                borderTop: "1px solid var(--bg-surface-high)",
-                padding: "12px 12px 8px 0",
-                marginTop: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 8,
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.14em",
-                  marginBottom: 8,
-                  textTransform: "uppercase",
-                }}
-              >
-                UNSCHEDULED ({unscheduledWps.length})
-              </div>
-
-              {unscheduledWps.map((wp) => (
-                <div
-                  key={wp.id}
-                  onPointerDown={(e) => onUnscheduledPointerDown(e, wp)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setContextMenu({ x: e.clientX, y: e.clientY, wp });
-                  }}
-                  style={{
-                    background: "var(--hover-bg)",
-                    border: "1px dashed rgba(245,158,11,0.3)",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                    marginBottom: 6,
-                    cursor: "grab",
-                    touchAction: "none",
-                    userSelect: "none",
-                  }}
-                >
-                  <div style={{ fontSize: 11, fontFamily: "var(--font-body)", color: "var(--text-secondary)", fontWeight: 600 }}>
-                    {wp.name}
-                  </div>
-                  <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--status-warning)", marginTop: 2 }}>
-                    {wp.wp_number} {"\u00B7"} {wp.phase}
-                  </div>
-                  {/* Smart duration hint — workday-based, phase-aware */}
-                  {wpBudgetHoursForResource(wp) > 0 && (
-                    <div style={{ fontSize: 8, fontFamily: "var(--font-mono)", color: "var(--accent)", marginTop: 2, letterSpacing: "0.02em" }}>
-                      {"\u2248"} {hoursToWorkdays(wpBudgetHoursForResource(wp))} workdays
-                    </div>
-                  )}
-                  <div style={{ fontSize: 8, color: "rgba(200,155,32,0.5)", marginTop: 3, fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
-                    {"\u2195"} drag to assign to resource
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <UnscheduledTray
+            unscheduledWps={unscheduledWps}
+            onPointerDown={onUnscheduledPointerDown}
+            onOpenContextMenu={setContextMenu}
+          />
         </div>
 
         {/* RIGHT PANEL — Timeline Board */}
@@ -1241,112 +1187,12 @@ export default function ResourceScheduling() {
             touchAction: "none",
           }}
         >
-          {/* HEADER ROW 1 (month banners) */}
-          {zoomMode === "month" && (
-            <div
-              style={{
-                position: "sticky",
-                top: 0,
-                background: "var(--bg-surface-low)",
-                borderBottom: "1px solid var(--bg-surface-high)",
-                display: "flex",
-                zIndex: 20,
-                }}
-                >
-                <div
-                style={{
-                  width: 220,
-                  flexShrink: 0,
-                  background: "var(--bg-page)",
-                  borderRight: "1px solid var(--border-default)",
-                }}
-              />
-              <div style={{ display: "flex" }}>
-                {monthBanners.map((banner, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      width: banner.width,
-                      padding: "6px 8px",
-                      textAlign: "center",
-                      borderRight: "1px solid var(--hover-bg)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        color: "var(--text-primary)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {banner.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* HEADER ROW 2 (week/day columns) */}
-          <div
-            style={{
-              position: "sticky",
-              top: zoomMode === "month" ? 32 : 0,
-              background: "var(--bg-surface-low)",
-              borderBottom: "1px solid var(--bg-surface-high)",
-              display: "flex",
-              zIndex: 19,
-            }}
-          >
-            <div
-              style={{
-                width: 220,
-                flexShrink: 0,
-                background: "var(--bg-page)",
-                borderRight: "1px solid var(--border-default)",
-              }}
-            />
-            <div ref={timelineRef} style={{ display: "flex" }}>
-              {headers.map((h, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    width: h.width,
-                    borderRight: "1px solid var(--hover-bg)",
-                    padding: "6px 8px",
-                    textAlign: "center",
-                    background: h.isToday ? "rgba(245,158,11,0.08)" : "transparent",
-                    borderTop: h.isToday ? "2px solid var(--accent)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      color: h.isToday ? "var(--status-warning)" : "var(--text-primary)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {h.label}
-                  </div>
-                  {h.subLabel && (
-                    <div
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 8,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {h.subLabel}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <TimelineHeader
+            ref={timelineRef}
+            zoomMode={zoomMode}
+            monthBanners={monthBanners}
+            headers={headers}
+          />
 
           {/* RESOURCE ROWS */}
           {displayResources.map((entry, idx) => {
