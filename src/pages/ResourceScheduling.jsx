@@ -191,16 +191,19 @@ export default function ResourceScheduling() {
     return { shopBudget, shopActual, shopRemaining, fieldBudget, fieldActual, fieldRemaining, totalTons, inFabTons, byPhase };
   }, [workPackages]);
 
-  // Calculate timeline window from actual WP dates
-  // Note: WP entity uses released_date for start; no end date field — use planned_end from ScheduleTask
+  // Calculate timeline window from actual WP scheduling dates.
+  // scheduled_start_date / scheduled_end_date were added in migration 042.
+  // released_date is kept as a fallback start (the date the package was
+  // released to the shop) so legacy WPs without a scheduling window still
+  // anchor the timeline.
   const { timelineStart, timelineEnd, totalDays } = useMemo(() => {
     const starts = workPackages
-      .filter((wp) => wp.released_date || wp.startDate)
-      .map((wp) => new Date(wp.released_date || wp.startDate).getTime())
+      .filter((wp) => wp.scheduled_start_date || wp.released_date)
+      .map((wp) => new Date(wp.scheduled_start_date || wp.released_date).getTime())
       .filter((t) => !isNaN(t));
     const ends = workPackages
-      .filter((wp) => wp.endDate)
-      .map((wp) => new Date(wp.endDate).getTime())
+      .filter((wp) => wp.scheduled_end_date)
+      .map((wp) => new Date(wp.scheduled_end_date).getTime())
       .filter((t) => !isNaN(t));
 
     const tStart = starts.length > 0
@@ -224,11 +227,12 @@ export default function ResourceScheduling() {
 
   // Calculate bar position
   const getBarStyle = (wp) => {
-    const rawStart = wp.released_date || wp.startDate;
-    if (!rawStart || !wp.endDate) return null;
+    const rawStart = wp.scheduled_start_date || wp.released_date;
+    if (!rawStart || !wp.scheduled_end_date) return null;
 
     const start = new Date(rawStart);
-    const end = new Date(wp.endDate);
+    // wp.scheduled_end_date guaranteed non-null by the guard above.
+    const end = new Date(wp.scheduled_end_date);
     const left = Math.round(
       ((start - timelineStart) / 86400000) * pxPerDay
     );
@@ -342,10 +346,10 @@ export default function ResourceScheduling() {
 
   // Separate scheduled vs unscheduled
   const scheduledWps = filteredWorkPackages.filter(
-    (wp) => (wp.released_date || wp.startDate) && wp.endDate
+    (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
   );
   const unscheduledWps = filteredWorkPackages.filter(
-    (wp) => !(wp.released_date || wp.startDate) || !wp.endDate
+    (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
   );
 
   // Cleanup drag function
@@ -448,15 +452,15 @@ export default function ResourceScheduling() {
     e.currentTarget.style.opacity = "0.25";
     e.currentTarget.style.outline = "2px dashed rgba(245,158,11,0.5)";
 
-    const rawStart = wp.released_date || wp.startDate;
+    const rawStart = wp.scheduled_start_date || wp.released_date;
     dragRef.current = {
       wpId: wp.id,
       wpName: wp.name,
       fromResourceId: resourceId,
       fromResourceName: resourceName,
       origStart: new Date(rawStart),
-      origEnd: new Date(wp.endDate),
-      durationMs: new Date(wp.endDate) - new Date(rawStart),
+      origEnd: new Date(wp.scheduled_end_date),
+      durationMs: new Date(wp.scheduled_end_date) - new Date(rawStart),
       barEl: e.currentTarget,
       pointerId: e.pointerId,
       offsetX: e.clientX - rect.left,
@@ -563,8 +567,8 @@ export default function ResourceScheduling() {
 
     // Auto-hour distribution: spread total budget hours evenly across duration
     // DB schema: work_packages has shop_hours_budget, shop_hours_actual,
-    // field_hours_budget, field_hours_actual — but NOT shop_daily_load,
-    // field_daily_load, estimated_hours, startDate, or endDate.
+    // field_hours_budget, field_hours_actual. Scheduling dates are on
+    // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
     const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
     const isShop = droppedWp?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
@@ -578,21 +582,28 @@ export default function ResourceScheduling() {
       }
     }
 
+    // Compute the new scheduling window. newStart comes from the drop
+    // position above; newEnd was already computed on line ~551 from
+    // newStart + d.durationMs. Reuse both here.
+    const iso = (dt) => dt.toISOString().split("T")[0];
+    const newStartISO = iso(newStart);
+    const newEndISO   = iso(newEnd);
+
     // Handle new assignment from unscheduled pool
     if (d.isNewAssignment) {
-      // Optimistic local update (startDate/endDate kept in cache only for UI positioning)
       qc.setQueryData(["work-packages", activeProject?.id], (prev) =>
         prev?.map((wp) => wp.id === d.wpId ? {
           ...wp,
-          released_date: newStart.toISOString().split("T")[0],
+          scheduled_start_date: newStartISO,
+          scheduled_end_date:   newEndISO,
           crew: newResourceName || "",
           ...autoHours,
         } : wp) || []
       );
       try {
-        // Only persist DB-valid columns
         await base44.entities.WorkPackage.update(d.wpId, {
-          released_date: newStart.toISOString().split("T")[0],
+          scheduled_start_date: newStartISO,
+          scheduled_end_date:   newEndISO,
           crew: newResourceName || "",
           ...autoHours,
         });
@@ -601,7 +612,7 @@ export default function ResourceScheduling() {
         console.error("Assignment failed:", err);
         qc.invalidateQueries({ queryKey: ["work-packages"] });
         qc.invalidateQueries({ queryKey: ["wps-all"] });
-        setUndoToast({ id: Date.now(), message: `Failed to assign ${d.wpName}` });
+        setUndoToast({ id: Date.now(), message: `Failed to assign ${d.wpName}: ${err?.message || "unknown"}` });
       }
       setTimeout(() => setUndoToast(null), 5000);
       return;
@@ -613,7 +624,9 @@ export default function ResourceScheduling() {
 
     if (!dateChanged && !resourceChanged) return;
 
-    // Optimistic update (local cache only)
+    // Optimistic update (local cache only). Writes scheduled_start_date
+    // and scheduled_end_date — the new bar window comes from drop position
+    // plus preserved duration computed above.
     qc.setQueryData(
       ["work-packages", activeProject?.id],
       (prev) =>
@@ -621,7 +634,8 @@ export default function ResourceScheduling() {
           wp.id === d.wpId
             ? {
                 ...wp,
-                released_date: newStart.toISOString().split("T")[0],
+                scheduled_start_date: newStartISO,
+                scheduled_end_date:   newEndISO,
                 ...(resourceChanged && { crew: newResourceName }),
                 ...autoHours,
               }
@@ -629,34 +643,26 @@ export default function ResourceScheduling() {
         ) || []
     );
 
-    // Show toast
     const toastMsg =
       `${d.wpName} → ${fmt(newStart)}` +
       (resourceChanged ? ` · ${newResourceName}` : "");
-
     setUndoToast({ id: Date.now(), message: toastMsg });
     setTimeout(() => setUndoToast(null), 8000);
 
-    // Persist to DB — only valid columns
     try {
       const updatePayload = {
-        released_date: newStart.toISOString().split("T")[0],
+        scheduled_start_date: newStartISO,
+        scheduled_end_date:   newEndISO,
         ...autoHours,
       };
-      if (resourceChanged) {
-        updatePayload.crew = newResourceName;
-      }
-
+      if (resourceChanged) updatePayload.crew = newResourceName;
       await base44.entities.WorkPackage.update(d.wpId, updatePayload);
     } catch (err) {
       console.error("WP update failed:", err);
-
-      // Rollback — refetch from server
       qc.invalidateQueries({ queryKey: ["work-packages"] });
-
       setUndoToast({
         id: Date.now(),
-        message: `Save failed — ${d.wpName} reverted`,
+        message: `Save failed — ${d.wpName} reverted (${err?.message || "unknown"})`,
       });
       setTimeout(() => setUndoToast(null), 5000);
     }
