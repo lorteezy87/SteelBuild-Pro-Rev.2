@@ -559,10 +559,10 @@ function GroupRow({
             ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
             padding: "2px 7px", borderRadius: "var(--radius-badge)",
             color:
-              a.aggregateStatus === "approved"       ? "#10B981"
+              a.aggregateStatus === "approved"       ? "var(--status-success)"
             : a.aggregateStatus === "rejected"       ? "var(--status-error)"
-            : a.aggregateStatus === "pending_review" ? "#F59E0B"
-            : a.aggregateStatus === "superseded"     ? "#94A3B8"
+            : a.aggregateStatus === "pending_review" ? "var(--status-warning)"
+            : a.aggregateStatus === "superseded"     ? "var(--text-muted)"
             :                                          "var(--text-muted)",
             background:
               a.aggregateStatus === "approved"       ? "rgba(16,185,129,0.12)"
