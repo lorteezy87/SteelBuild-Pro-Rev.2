@@ -203,7 +203,7 @@ function SpendChart({ data }) {
               y={h - 4}
               textAnchor="middle"
               fill="var(--text-muted)"
-              fontFamily="IBM Plex Mono, monospace"
+              fontFamily="var(--font-mono)"
               fontSize="8"
               letterSpacing="0.08em"
             >
