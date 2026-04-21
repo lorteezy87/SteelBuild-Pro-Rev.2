@@ -145,6 +145,11 @@ const ROUTE_DOMAINS = {
     AgentMemory:      lazyWithRetry(() => import("@/pages/AgentMemory")),
   },
 
+  // ── Tools ──
+  tools: {
+    FeetInchesCalculator: lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),
+  },
+
   // ── Reporting ──
   reporting: {
     JobStatusReport: lazyWithRetry(() => import("@/pages/JobStatusReport")),
