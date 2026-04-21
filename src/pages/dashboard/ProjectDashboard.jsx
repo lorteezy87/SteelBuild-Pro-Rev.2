@@ -51,6 +51,7 @@ import {
 import FinancialSnapshot from "./FinancialSnapshot";
 import AgingCard from "./AgingCard";
 import QuickUpdateRail from "./QuickUpdateRail";
+import { formatCurrency } from "@/components/shared/formatters";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -238,7 +239,7 @@ export default function ProjectDashboard({
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                ${(contractVal || 0).toLocaleString()}
+                {formatCurrency(contractVal || 0, 0)}
               </div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0, paddingLeft: 8 }}>

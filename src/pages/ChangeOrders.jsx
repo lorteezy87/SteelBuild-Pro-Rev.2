@@ -21,6 +21,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
+import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
 
 import {
@@ -244,13 +245,10 @@ export default function ChangeOrders() {
 
   const projectName = projects.find((p) => p.id === activeProject.id)?.name || "";
 
-  const formatMoney = (n) => {
-    const num = Number(n) || 0;
-    const abs = Math.abs(num);
-    const signed = num < 0 ? `-$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                           : `$${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-    return signed;
-  };
+  // Whole-dollar currency for the financial command bar + KPI tiles.
+  // `formatCurrency(_, 0)` handles negatives natively (deducts/credits
+  // render as `-$12,345`).
+  const formatMoney = (n) => formatCurrency(n, 0);
 
   return (
     <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
