@@ -9,10 +9,12 @@ import * as pdfjsLib from "pdfjs-dist";
 // 4.x only ships `.mjs` workers and the file name was wrong, causing every
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Keyboard } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Keyboard, Film, RotateCw } from "lucide-react";
 import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
+import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
+import ContextPanel from "@/components/drawings/viewer/ContextPanel";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -51,7 +53,10 @@ export default function DrawingViewer() {
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [filmstripOpen, setFilmstripOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
+  const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -170,9 +175,9 @@ export default function DrawingViewer() {
     setRendering(true);
     try {
       const page = await pdfDoc.getPage(currentPage);
-      const baseViewport = page.getViewport({ scale: 1 });
+      const baseViewport = page.getViewport({ scale: 1, rotation });
       setPageSize({ width: baseViewport.width, height: baseViewport.height });
-      const viewport = page.getViewport({ scale: zoom });
+      const viewport = page.getViewport({ scale: zoom, rotation });
       const canvas = canvasRef.current;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -216,7 +221,7 @@ export default function DrawingViewer() {
       setRendering(false);
       renderTaskRef.current = null;
     }
-  }, [pdfDoc, currentPage, zoom]);
+  }, [pdfDoc, currentPage, zoom, rotation]);
 
   useEffect(() => { renderPage(); }, [renderPage]);
 
@@ -316,6 +321,13 @@ export default function DrawingViewer() {
         setCurrentPage(p => Math.max(1, p - 1));
       } else if (e.key === "[" || e.key === "]") {
         setSidebarOpen(o => !o);
+      } else if (e.key === "f" || e.key === "F") {
+        setFilmstripOpen(o => !o);
+      } else if (e.key === "i" || e.key === "I") {
+        setContextOpen(o => !o);
+      } else if (e.key === "r" || e.key === "R") {
+        // r = rotate CW; Shift+R = rotate CCW
+        setRotation(rot => (e.shiftKey ? (rot + 270) % 360 : (rot + 90) % 360));
       } else if (e.key === "?") {
         // `?` — Shift+/ on US keyboards. Only intercept when no modifiers
         // other than Shift are held so Ctrl+?/browser find still works.
@@ -496,6 +508,22 @@ export default function DrawingViewer() {
           <button onClick={() => setZoom(1.0)} style={{ ...toolBtn, ...mono, fontSize: 9 }}>1:1</button>
           <button onClick={handleFitWidth} style={{ ...toolBtn, ...mono, fontSize: 9 }}>FIT</button>
           <button
+            onClick={() => setRotation(r => (r + 90) % 360)}
+            title={`Rotate (R) — currently ${rotation}°`}
+            style={{
+              ...toolBtn,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "5px 8px",
+              color: rotation !== 0 ? "var(--accent)" : "var(--text-muted)",
+              background: rotation !== 0 ? "rgba(200,155,32,0.10)" : "none",
+            }}
+          >
+            <RotateCw size={12} />
+            {rotation !== 0 && <span style={{ ...mono, fontSize: 9, fontWeight: 700 }}>{rotation}°</span>}
+          </button>
+          <button
             onClick={() => setRenderMode(m => m === "iframe" ? "canvas" : "iframe")}
             title={renderMode === "iframe" ? "Switch to canvas (markups)" : "Switch to iframe (browser PDF)"}
             style={{
@@ -509,6 +537,36 @@ export default function DrawingViewer() {
           <button onClick={handleDownload} disabled={!activeDrawing?.file_url}
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
+          </button>
+          <button
+            onClick={() => setFilmstripOpen(o => !o)}
+            title={filmstripOpen ? "Hide thumbnail filmstrip (F)" : "Show thumbnail filmstrip (F)"}
+            style={{
+              ...toolBtn,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "5px 8px",
+              color: filmstripOpen ? "var(--accent)" : "var(--text-muted)",
+              background: filmstripOpen ? "rgba(200,155,32,0.10)" : "none",
+            }}
+          >
+            <Film size={12} />
+          </button>
+          <button
+            onClick={() => setContextOpen(o => !o)}
+            title={contextOpen ? "Hide sheet context panel (I)" : "Show sheet context panel (I)"}
+            style={{
+              ...toolBtn,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "5px 8px",
+              color: contextOpen ? "var(--accent)" : "var(--text-muted)",
+              background: contextOpen ? "rgba(200,155,32,0.10)" : "none",
+            }}
+          >
+            {contextOpen ? <PanelRightClose size={12} /> : <PanelRightOpen size={12} />}
           </button>
           <button
             onClick={() => setShortcutsOpen(o => !o)}
@@ -693,6 +751,17 @@ export default function DrawingViewer() {
           )}
         </div>
 
+        {/* Thumbnail filmstrip */}
+        {filmstripOpen && drawings.length > 0 && (
+          <ThumbnailFilmstrip
+            drawings={filtered.length > 0 ? filtered : drawings}
+            activeId={activeId}
+            onSelect={setActiveId}
+            resolveUrl={resolveFileUrl}
+            extractStoragePath={extractStoragePathFromSignedUrl}
+          />
+        )}
+
         {/* Keyboard shortcuts hint */}
         <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16, alignItems: "center" }}>
           {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
@@ -720,6 +789,16 @@ export default function DrawingViewer() {
           </button>
         </div>
       </div>
+
+      {/* Right-rail context panel — linked RFIs, callouts, sibling sheets */}
+      {contextOpen && activeDrawing && (
+        <ContextPanel
+          activeDrawing={activeDrawing}
+          allDrawings={drawings}
+          onSelect={setActiveId}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
 
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
