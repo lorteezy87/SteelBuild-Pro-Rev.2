@@ -93,8 +93,9 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEE1", name: "Warranty",           group: "Closeout",      page: "Warranty" },
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
-  { icon: "\uD83D\uDCD0", name: "Ft/In Calculator",   group: "Tools",         page: "FeetInchesCalculator" },
-  { icon: "\u2696",       name: "Steel Weight Calculator", group: "Tools",    page: "SteelWeightCalculator" },
+  { icon: "\uD83D\uDCD0", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
+  { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
+  { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
 ];
 
 // ── Modules dropdown nav groups (3-column layout) ────────────────────
@@ -198,6 +199,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "Ft/In Calculator",         icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
       { label: "Steel Weight Calculator",  icon: "\u2696",       page: "SteelWeightCalculator" },
+      { label: "Crane Pick Calculator",    icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
     ],
   },
 ];
@@ -300,6 +302,7 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Ft/In Calculator",         icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
       { label: "Steel Weight Calculator",  icon: "\u2696",       page: "SteelWeightCalculator" },
+      { label: "Crane Pick Calculator",    icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
     ],
   },
 ];
