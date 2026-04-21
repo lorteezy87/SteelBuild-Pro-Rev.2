@@ -3,21 +3,13 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/useProjectContext";
-import { formatDate } from "@/components/shared/formatters";
+import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
 import { CommandBar } from "@/components/design-system";
 
-// ─── Currency formatters ────────────────────────────────────────────────────
-const fmt = (v) => {
-  const n = Number(v) || 0;
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-};
-
-const fmtShort = (v) => {
-  const n = Number(v) || 0;
-  if (Math.abs(n) >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
-  if (Math.abs(n) >= 1e3) return "$" + (n / 1e3).toFixed(0) + "K";
-  return "$" + n.toFixed(0);
-};
+// Local aliases so the ~30 call sites below don't need to change. Both
+// now delegate to the shared design-system formatters.
+const fmt = (v) => formatCurrency(v, 0);
+const fmtShort = (v) => formatCurrencyShort(v);
 
 const pct = (n, d) => {
   const num = Number(n) || 0;

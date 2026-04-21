@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import React, { useState } from "react";
 import { formatCurrency, formatDate } from "@/components/shared/formatters";
 import { mono, body, HEALTH_COLOR, safeNumber, periodDisplay } from "../utils";
-import { DrawerTile, drawerTd, drawerTdRight } from "../DrawerAtoms";
+import { DrawerTile, drawerTd, drawerTdRight, FinancialDrawer } from "../DrawerAtoms";
 
 const SOV_STATUS_COLORS = {
   "Draft":     "var(--text-muted)",
@@ -12,13 +11,8 @@ const SOV_STATUS_COLORS = {
 };
 
 export function BillingDrawer({ open, onClose, kpi, sovItems }) {
-  const drawerRef = useRef(null);
   const [sortCol, setSortCol] = useState("application_number");
   const [sortDir, setSortDir] = useState("desc");
-
-  useEffect(() => {
-    if (open) drawerRef.current?.focus();
-  }, [open]);
 
   if (!open) return null;
 
@@ -129,59 +123,13 @@ export function BillingDrawer({ open, onClose, kpi, sovItems }) {
   const maxBar = Math.max(kpi.cumulativeBillings, kpi.cumulativeCost, 1);
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100 }}
-      />
-
-      {/* Drawer panel */}
-      <div
-        ref={drawerRef}
-        tabIndex={-1}
-        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-        style={{
-          position: "fixed", top: 0, right: 0, width: 480, maxWidth: "90vw",
-          height: "100vh", background: "var(--bg-surface-secondary)",
-          borderLeft: "1px solid var(--border-default)", zIndex: 1101,
-          display: "flex", flexDirection: "column", outline: "none",
-        }}
-      >
-        {/* Fixed header */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "16px 20px", borderBottom: "1px solid var(--divider)", flexShrink: 0,
-        }}>
-          <div style={{ width: 4, height: 28, borderRadius: 2, background: barColor, flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontFamily: "'Space Grotesk', var(--font-display)",
-              fontSize: 14, fontWeight: 700, color: "var(--text-primary)",
-            }}>
-              Billing vs. Cost
-            </div>
-            <div style={{
-              ...mono, fontSize: 9, color: barColor, fontWeight: 600,
-              letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2,
-            }}>
-              {kpi.health.toUpperCase()} — {positionLabel.toUpperCase()}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close drawer"
-            style={{
-              background: "transparent", border: "none", color: "var(--text-muted)",
-              cursor: "pointer", padding: 4, borderRadius: 4, display: "flex", alignItems: "center",
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+    <FinancialDrawer
+      open={open}
+      onClose={onClose}
+      barColor={barColor}
+      title="Billing vs. Cost"
+      subtitle={`${kpi.health.toUpperCase()} — ${positionLabel.toUpperCase()}`}
+    >
 
           {/* Summary tiles — 2×2 */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 }}>
@@ -341,23 +289,6 @@ export function BillingDrawer({ open, onClose, kpi, sovItems }) {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Pinned footer */}
-        <div style={{
-          padding: "12px 20px", borderTop: "1px solid var(--divider)",
-          display: "flex", gap: 8, flexShrink: 0,
-        }}>
-          <button onClick={onClose} style={{
-            flex: 1, background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-            borderRadius: 4, padding: "8px 16px", color: "var(--text-secondary)",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer",
-          }}>
-            Close
-          </button>
-        </div>
-      </div>
-    </>
+    </FinancialDrawer>
   );
 }
