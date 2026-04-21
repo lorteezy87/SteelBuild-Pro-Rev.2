@@ -193,7 +193,7 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
                     onFocus={(e) => e.target.style.background = "rgba(200,155,32,0.05)"}
                     onBlur={(e) => e.target.style.background = "transparent"}
                     placeholder={hasErr ? "Required" : "Task name…"}
-                    style={{ ...INPUT_STYLE, color: hasErr && !row.task_name ? "#FF7A7A" : "var(--text-primary)" }}
+                    style={{ ...INPUT_STYLE, color: hasErr && !row.task_name ? "var(--status-error)" : "var(--text-primary)" }}
                   />
                 </div>
 

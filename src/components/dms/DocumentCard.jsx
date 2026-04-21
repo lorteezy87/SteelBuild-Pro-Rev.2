@@ -142,14 +142,14 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
           <button onClick={(e) => { e.stopPropagation(); onDownload?.(doc); }} style={btnStyle()}>DL</button>
           <button onClick={(e) => { e.stopPropagation(); onEdit?.(doc); }} style={btnStyle()}>EDIT</button>
           <button onClick={(e) => { e.stopPropagation(); onLink?.(doc); }} style={btnStyle()}>LINK</button>
-          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} style={btnStyle("rgba(255,61,61,0.08)", "rgba(255,61,61,0.25)", "#FF3D3D")}>DEL</button>
+          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} style={btnStyle("rgba(255,61,61,0.08)", "rgba(255,61,61,0.25)", "var(--status-error-bright)")}>DEL</button>
         </div>
       )}
       {confirmDelete && (
         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, padding: "10px 12px", background: "rgba(255,61,61,0.10)", border: "1px solid rgba(255,61,61,0.30)", borderRadius: 6 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#FF3D3D", marginBottom: 8 }}>DELETE THIS DOCUMENT?</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-error-bright)", marginBottom: 8 }}>DELETE THIS DOCUMENT?</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); onDelete?.(doc); }} style={{ flex: 1, padding: "5px 0", background: "rgba(255,61,61,0.20)", border: "1px solid rgba(255,61,61,0.40)", color: "#FF3D3D", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>CONFIRM</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); onDelete?.(doc); }} style={{ flex: 1, padding: "5px 0", background: "rgba(255,61,61,0.20)", border: "1px solid rgba(255,61,61,0.40)", color: "var(--status-error-bright)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>CONFIRM</button>
             <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: "5px 0", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}>CANCEL</button>
           </div>
         </div>

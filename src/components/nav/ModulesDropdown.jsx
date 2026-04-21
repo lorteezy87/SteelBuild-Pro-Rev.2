@@ -192,7 +192,7 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
         color: "var(--text-secondary)", flex: 1, lineHeight: 1.2,
       }}>
         {item.label}
-        {isAdminOnly && <span style={{ fontSize: 10, color: "#FF3D3D", marginLeft: 6 }}>{"\uD83D\uDC51"}</span>}
+        {isAdminOnly && <span style={{ fontSize: 10, color: "var(--status-error-bright)", marginLeft: 6 }}>{"\uD83D\uDC51"}</span>}
       </span>
       {item.badgeKey && alertCounts[item.badgeKey] > 0 && (
         <span style={{

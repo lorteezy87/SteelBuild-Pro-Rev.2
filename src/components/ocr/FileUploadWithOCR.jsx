@@ -256,7 +256,7 @@ export default function FileUploadWithOCR({ fileType, linkedEntityId, linkedEnti
       />
 
       {uploadError && (
-        <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.25)', borderRadius: 8, color: '#FF7A7A', fontFamily: 'var(--font-body)', fontSize: 11 }}>
+        <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(255,61,61,0.08)', border: '1px solid rgba(255,61,61,0.25)', borderRadius: 8, color: 'var(--status-error)', fontFamily: 'var(--font-body)', fontSize: 11 }}>
           ⚠ {uploadError}
         </div>
       )}

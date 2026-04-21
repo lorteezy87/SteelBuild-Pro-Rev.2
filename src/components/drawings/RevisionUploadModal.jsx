@@ -83,9 +83,9 @@ function matchSheets(oldSheets, newSheets) {
 }
 
 const CHANGE_STYLE = {
-  revised: { color: "#FFB020", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
-  added:   { color: "#00D68F", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
-  removed: { color: "#FF3D3D", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
+  revised: { color: "var(--status-warning-bright)", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
+  added:   { color: "var(--status-success-bright)", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
+  removed: { color: "var(--status-error-bright)", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 
@@ -355,7 +355,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
         <span style={{ color: "var(--status-warning)" }}>{selectedSet.set_name}</span>
         {" · "}Previous: {selectedSet.revision || "—"} ({selectedSet.sheet_count || 0} sheets)
         {" → "}
-        <span style={{ color: "#00D68F" }}>{revMeta.revisionLabel}</span>
+        <span style={{ color: "var(--status-success-bright)" }}>{revMeta.revisionLabel}</span>
       </div>
 
       <div
@@ -373,7 +373,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
         {file ? (
           <>
             <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#00D68F", fontWeight: 600, marginBottom: 2 }}>{file.name}</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--status-success-bright)", fontWeight: 600, marginBottom: 2 }}>{file.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatBytes(file.size)} · Click to change</div>
           </>
         ) : (
@@ -432,17 +432,17 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>{totalOld} → {totalNew} sheets</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FFB020", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning-bright)", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#00D68F", letterSpacing: "0.06em" }}>{counts.added} added</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success-bright)", letterSpacing: "0.06em" }}>{counts.added} added</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF3D3D", letterSpacing: "0.06em" }}>{counts.removed} removed</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", letterSpacing: "0.06em" }}>{counts.removed} removed</span>
       </div>
 
       {/* Removed warning */}
       {removedSheets.length > 0 && (
         <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)", marginBottom: 12 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "#FF3D3D", flexShrink: 0, marginTop: 1 }} />
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-error-bright)", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
             {removedSheets.length} sheet{removedSheets.length > 1 ? "s" : ""} from the previous revision
             {" "}({removedSheets.map(m => m.sheetNumber).join(", ")}) will be marked superseded.
@@ -525,7 +525,7 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
   return (
     <div style={{ textAlign: "center", padding: "30px 0" }}>
       <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(0,214,143,0.12)", border: "2px solid rgba(0,214,143,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-        <Check style={{ width: 22, height: 22, color: "#00D68F" }} />
+        <Check style={{ width: 22, height: 22, color: "var(--status-success-bright)" }} />
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Revision Applied</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 10, padding: "14px 16px" }}>

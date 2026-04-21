@@ -22,10 +22,10 @@ const ICON_MAP = {
 
 const COLOR_MAP = {
   Project: "var(--accent)",
-  RFI: "#FFB400",
+  RFI: "var(--status-warning-bright)",
   Drawing: "#0EA5E9",
-  WorkPackage: "#E8650A",
-  ChangeOrder: "#FF9F43",
+  WorkPackage: "var(--status-review)",
+  ChangeOrder: "var(--status-review)",
   Contact: "#8B5CF6",
   Module: "var(--accent)",
 };

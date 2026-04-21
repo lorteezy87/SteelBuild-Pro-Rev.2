@@ -7,9 +7,9 @@ export default function WorkflowBadge({ wp, drawings = [], deliveries = [] }) {
   if (status.blocked) {
     return (
       <span style={{
-        fontFamily: 'IBM Plex Mono',
+        fontFamily: 'var(--font-mono)',
         fontSize: 9,
-        color: '#FF3D3D',
+        color: 'var(--status-error-bright)',
         background: 'rgba(255,61,61,0.10)',
         border: '1px solid rgba(255,61,61,0.22)',
         borderRadius: 3,
@@ -24,9 +24,9 @@ export default function WorkflowBadge({ wp, drawings = [], deliveries = [] }) {
 
   return (
     <span style={{
-      fontFamily: 'IBM Plex Mono',
+      fontFamily: 'var(--font-mono)',
       fontSize: 9,
-      color: '#00D68F',
+      color: 'var(--status-success-bright)',
       background: 'rgba(0,214,143,0.10)',
       border: '1px solid rgba(0,214,143,0.22)',
       borderRadius: 3,
