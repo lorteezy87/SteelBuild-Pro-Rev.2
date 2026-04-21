@@ -28,6 +28,21 @@ export const PHASE_COLORS = {
   'Closeout':         'var(--phase-closeout)',
 };
 
+/**
+ * 3-letter abbreviations used in WBS codes and compact column labels.
+ * Schedule.jsx previously inlined this map; centralized here so Gantt,
+ * Lookahead, and any future pages share the same short form.
+ */
+export const PHASE_ABBREV = {
+  'Pre-Construction': 'PC',
+  'Detailing':        'DET',
+  'Procurement':      'PRO',
+  'Fabrication':      'FAB',
+  'Delivery':         'DEL',
+  'Installation':     'INS',
+  'Closeout':         'CLO',
+};
+
 // Derive phase from task fields when not explicitly set
 export function derivePhase(task) {
   if (task.phase) return task.phase;
