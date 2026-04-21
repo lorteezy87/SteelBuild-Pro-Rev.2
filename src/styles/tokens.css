@@ -78,6 +78,9 @@
   --status-warning:           #E3B341;
   --status-error:             #F85149;
   --status-info:              #58A6FF;
+  --status-review:            #F97316;
+  --status-review-muted:      rgba(249,115,22,0.12);
+  --status-review-border:     rgba(249,115,22,0.40);
   --success:                  #3FB950;
   --success-muted:            rgba(63,185,80,0.10);
   --success-border:           rgba(63,185,80,0.30);
@@ -94,7 +97,7 @@
   /* Phase colors */
   --phase-detailing:          #C89B20;
   --phase-fab:                #3B82F6;
-  --phase-delivery:           #8B5CF6;
+  --phase-delivery:           #14B8A6;
   --phase-erection:           #22C55E;
   --phase-closeout:           #6B7280;
 
@@ -206,6 +209,9 @@
   --status-warning:           #CA8A04;
   --status-error:             #DC2626;
   --status-info:              #2563EB;
+  --status-review:            #EA580C;
+  --status-review-muted:      rgba(234,88,12,0.08);
+  --status-review-border:     rgba(234,88,12,0.30);
   --success:                  #16A34A;
   --success-muted:            rgba(22,163,74,0.08);
   --success-border:           rgba(22,163,74,0.25);
