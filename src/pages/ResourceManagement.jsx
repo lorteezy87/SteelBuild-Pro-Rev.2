@@ -7,7 +7,8 @@ import ResourceFormModal from "@/components/resources/ResourceFormModal";
 import ResourceList from "@/components/resources/ResourceList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus, RefreshCw } from "lucide-react";
 
 // ── Keyframe injection (once) ──
 const STYLE_ID = "resource-mgmt-keyframes";
@@ -127,101 +128,52 @@ export default function ResourceManagement() {
   const isEmpty = resources.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 24,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Resource Management
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} {" \u00B7 "} {filtered.length} Resources
-          </p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Resource Management"
+        count={filtered.length}
+        unit=" · RESOURCES"
+        subtitle={`Labor · Equipment · Subcontractors${stats.overAllocated > 0 ? ` · ${stats.overAllocated} over-allocated` : ""}`}
+      >
+        <button
+          onClick={() => toast.info("Company resource sync coming soon")}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+        >
+          <RefreshCw size={12} /> Sync Company
+        </button>
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Add Resource
+        </button>
+      </CommandBar>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {/* Sync Company Resources concept button */}
-          <button
-            onClick={() => toast.info("Company resource sync coming soon")}
-            style={{
-              background: "transparent",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border-strong)",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-display)",
-              fontSize: "12px",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              minHeight: 44,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            Sync Company Resources
-          </button>
-
-          <button
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            style={{
-              background: "var(--accent)",
-              color: "#07090E",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 20px",
-              fontFamily: "var(--font-display)",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background 0.15s, box-shadow 0.15s",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              minHeight: 44,
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; e.currentTarget.style.boxShadow = "0 0 16px rgba(200,155,32,0.25)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.boxShadow = "none"; }}
-          >
-            + Add Resource
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "12px" }}>
-        <StatCard label="Total" value={stats.total} color="var(--accent)" />
-        <StatCard label="Labor" value={stats.labor} color="var(--status-info)" />
-        <StatCard label="Equipment" value={stats.equipment} color="var(--status-warning)" />
-        <StatCard label="Subs" value={stats.subcontractor} color="var(--accent)" />
-        <StatCard label="Available" value={stats.available} color="var(--status-success)" />
-        <StatCard label="Allocated" value={stats.allocated} color="var(--status-info)" />
-        <StatCard label="Over-Allocated" value={stats.overAllocated} color="var(--status-error)" pulse={stats.overAllocated > 0} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"          value={stats.total}           color="var(--accent)"
+                 active={filterType === "all" && filterStatus === "all"}
+                 onClick={() => { setFilterType("all"); setFilterStatus("all"); }} />
+        <KpiTile compact label="Labor"          value={stats.labor}           color="var(--phase-fabrication)"
+                 active={filterType === "Labor"}
+                 onClick={() => setFilterType(filterType === "Labor" ? "all" : "Labor")} />
+        <KpiTile compact label="Equipment"      value={stats.equipment}       color="var(--status-warning)"
+                 active={filterType === "Equipment"}
+                 onClick={() => setFilterType(filterType === "Equipment" ? "all" : "Equipment")} />
+        <KpiTile compact label="Subs"           value={stats.subcontractor}   color="var(--phase-detailing)"
+                 active={filterType === "Subcontractor"}
+                 onClick={() => setFilterType(filterType === "Subcontractor" ? "all" : "Subcontractor")} />
+        <KpiTile compact label="Available"      value={stats.available}       color="var(--status-success)"
+                 active={filterStatus === "Available"}
+                 onClick={() => setFilterStatus(filterStatus === "Available" ? "all" : "Available")} />
+        <KpiTile compact label="Allocated"      value={stats.allocated}       color="var(--phase-delivery)"
+                 active={filterStatus === "Allocated"}
+                 onClick={() => setFilterStatus(filterStatus === "Allocated" ? "all" : "Allocated")} />
+        <KpiTile compact label="Over-Allocated" value={stats.overAllocated}   color="var(--status-error)"
+                 active={filterStatus === "Over-Allocated"}
+                 onClick={() => setFilterStatus(filterStatus === "Over-Allocated" ? "all" : "Over-Allocated")} />
       </div>
 
       {/* Filters */}
