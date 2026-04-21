@@ -20,6 +20,7 @@ import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
+import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
@@ -246,32 +247,18 @@ export default function Drawings() {
       invalidate();
       toast.success("Sheet added");
       setShowModal(false);
-      // Auto-create schedule task
-      if (created && (created.due_date || created.submitted_date)) {
-        try {
-          const startDate = created.submitted_date || created.due_date;
-          const endDate = created.due_date || created.submitted_date;
-          await base44.entities.ScheduleTask.create({
-            project_id: projectId,
-            project_name: activeProject?.name || "",
-            task_name: `${created.sheet_number || "DWG"} — ${created.title || "Drawing Review"}`,
-            task_type: "Submittal",
-            phase: "Detailing",
-            start_date: startDate,
-            end_date: endDate,
-            status: "Not Started",
-            priority: created.priority_flag ? "High" : "Normal",
-            percent_complete: 0,
-            notes: [
-              created.discipline ? `Discipline: ${created.discipline}` : "",
-              created.reviewer ? `Reviewer: ${created.reviewer}` : "",
-              created.spec_section ? `Spec: ${created.spec_section}` : "",
-            ].filter(Boolean).join(" | "),
-          });
+      // Always auto-create the matching Detailing/Submittal schedule task.
+      // Dates are optional — missing dates render as "—" in the schedule.
+      if (created?.id) {
+        const { created: n, failed } = await autoCreateDetailingTasks(
+          [created],
+          { projectName: activeProject?.name }
+        );
+        if (n > 0) {
           qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
           toast.success("Schedule task auto-created");
-        } catch (err) {
-          console.warn("Auto-schedule failed:", err);
+        } else if (failed) {
+          toast.error("Schedule task failed to create");
         }
       }
     },

@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
+import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 
 // ─── Normalize set name ─────────────────────────────────────────────────
 function normalizeSetName(name) {
@@ -95,35 +96,16 @@ export function useDrawings(projectId) {
       await invalidateAll();
       toast.success("Drawing created");
 
-      // Side effect: auto-create schedule task (reported, not silent)
-      if (created && (created.due_date || created.submitted_date)) {
-        try {
-          const startDate = created.submitted_date || created.due_date;
-          const endDate = created.due_date || created.submitted_date;
-          await base44.entities.ScheduleTask.create({
-            project_id: projectId,
-            project_name: created.project_name || "",
-            task_name: `${created.sheet_number || "DWG"} — ${created.title || "Drawing Review"}`,
-            task_type: "Submittal",
-            phase: "Detailing",
-            start_date: startDate,
-            end_date: endDate,
-            status: "Not Started",
-            priority: created.priority_flag ? "High" : "Normal",
-            percent_complete: 0,
-            notes: [
-              created.discipline ? `Discipline: ${created.discipline}` : "",
-              created.reviewer ? `Reviewer: ${created.reviewer}` : "",
-              created.spec_section ? `Spec: ${created.spec_section}` : "",
-            ]
-              .filter(Boolean)
-              .join(" | "),
-          });
-          toast.success("Schedule task auto-created");
-        } catch (err) {
-          console.error("[useDrawings] Schedule task creation failed:", err);
-          toast.error(`Drawing saved, but schedule task failed: ${err.message}`);
-        }
+      // Side effect: auto-create matching Detailing / Submittal schedule task.
+      // Dates are optional — the schedule view tolerates nulls (shows "—").
+      if (created?.id) {
+        const { created: n, skipped, failed } = await autoCreateDetailingTasks(
+          [created],
+          { projectName: created.project_name }
+        );
+        if (n > 0)       toast.success("Schedule task auto-created");
+        else if (failed) toast.error("Schedule task failed to create");
+        // skipped silently — a task already exists for this drawing.
       }
     },
     onError: (err) => {
