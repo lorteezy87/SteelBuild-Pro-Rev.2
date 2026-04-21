@@ -6,6 +6,7 @@ import { AuthContext } from "@/components/shared/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";
+import { CommandBar } from "@/components/design-system";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
 import DashboardTab from "@/components/settings/DashboardTab.jsx";
@@ -104,13 +105,20 @@ export default function Settings() {
     }))
     .filter(group => group.tabs.length > 0);
 
+  const activeTabMeta = ALL_TABS.find(t => t.id === activeTab);
+
   return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <CommandBar
+        eyebrow={isAdmin ? "PERSONAL · WORKSPACE" : "PERSONAL"}
+        title="Settings"
+        subtitle={`${user?.full_name || user?.email || "Signed in"} · ${activeTabMeta?.label || "Profile"}${activeTabMeta?.desc ? ` · ${activeTabMeta.desc}` : ""}`}
+      />
+
     <div style={{
       display: 'grid',
       gridTemplateColumns: isMobile ? '1fr' : '220px 1fr',
       gap: isMobile ? 16 : 24,
-      maxWidth: 1100,
-      margin: '0 auto',
     }}>
       {/* Sidebar */}
       <div style={{
@@ -233,6 +241,7 @@ export default function Settings() {
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'system' && <SystemTab user={user} />}
       </div>
+    </div>
     </div>
   );
 }
