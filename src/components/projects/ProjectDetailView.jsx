@@ -3,13 +3,15 @@ import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { differenceInDays } from 'date-fns';
 import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
-import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign } from 'lucide-react';
+import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck } from 'lucide-react';
 import { formatCurrency } from '@/components/shared/formatters';
+import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffChecklist';
 
 const mono = { fontFamily: 'JetBrains Mono, monospace' };
 
 const TABS = [
   { id: 'overview',   label: 'Overview',    icon: BarChart2 },
+  { id: 'handoff',    label: 'Handoff',     icon: ClipboardCheck },
   { id: 'workpkgs',   label: 'Work Pkgs',   icon: CheckSquare },
   { id: 'schedule',   label: 'Schedule',    icon: Calendar },
   { id: 'drawings',   label: 'Drawings',    icon: FileText },
@@ -592,6 +594,7 @@ export default function ProjectDetailView({ project, onClose }) {
         {/* Tab content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
           {activeTab === 'overview'   && <OverviewTab    project={project} workPackages={workPackages} rfis={rfis} changeOrders={changeOrders} deliveries={deliveries} />}
+          {activeTab === 'handoff'    && <ProjectHandoffChecklist projectId={project.id} />}
           {activeTab === 'workpkgs'   && <WorkPackagesTab workPackages={workPackages} />}
           {activeTab === 'schedule'   && <ScheduleTab    scheduleTasks={scheduleTasks} />}
           {activeTab === 'drawings'   && <DrawingsTab    drawings={drawings} />}

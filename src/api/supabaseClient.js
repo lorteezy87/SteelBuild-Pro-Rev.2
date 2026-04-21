@@ -347,6 +347,7 @@ export const entities = {
   Alert:                 createEntityClient('alerts'),
   CostCode:              createEntityClient('cost_codes'),
   ProjectCloseout:       createEntityClient('project_closeout'),
+  ProjectHandoffItem:    createEntityClient('project_handoff_items'),
   PmaDecision:           createEntityClient('pma_decisions'),
   PmaAssumption:         createEntityClient('pma_assumptions'),
   PmaAuditLog:           createEntityClient('pma_audit_logs'),
