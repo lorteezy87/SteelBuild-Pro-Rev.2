@@ -5,6 +5,7 @@ import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@/components/shared/PhoenixModal';
+import { formatDate } from '@/components/shared/formatters';
 import { toast } from 'sonner';
 import { CommandBar } from '@/components/design-system';
 import { Plus } from 'lucide-react';
@@ -22,9 +23,12 @@ const IMPACT_COLORS = {
 
 const PHASES = ['Preconstruction', 'Procurement', 'Detailing', 'Fabrication', 'Field Execution', 'Closeout', 'General'];
 
+// Local alias so the existing call sites don't need to change. Shared
+// `formatDate` produces the same "Apr 21, 2026" format for a non-null
+// value; returns "-" for null, which we normalize to "—" below.
 const fmtDate = (d) => {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return formatDate(d);
 };
 
 export default function DecisionLog() {
