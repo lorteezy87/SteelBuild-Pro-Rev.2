@@ -1,17 +1,13 @@
 /**
- * WorkPackages — steel fab/erection work-package dashboard.
+ * WorkPackages — steel fab/erection work-package tracker, rebuilt
+ * on the Claude Design industrial-OS system.
  *
- * After the carve-up this file owns:
- *   1. React-Query fetches for `work_packages`, `projects`, `drawings`.
- *   2. All mutations: create / update / delete / quick-complete,
- *      bulk-create from CSV, bulk-set-status.
- *   3. Derived data — filtered list, status/tonnage stats, per-phase
- *      tonnage rollup, drawings-by-stage aggregation, overdue list.
- *   4. Composition of feature-folder components in `./workPackages/`.
+ * Shell owns: React-Query fetches + mutations (create / update /
+ * delete / quick-complete / bulk-create / bulk-status), derived
+ * counts + tonnage, selection state, and composition.
  *
- * Every visual block lives in `./workPackages/*.jsx` — header bar,
- * KPI tiles, tonnage bar, filter bar, bulk-action bar, board view,
- * drawing tracker, plus constants/utils/PhaseIcon.
+ * Every visual block comes from `@/components/design-system` or
+ * `src/pages/workPackages/*`.
  */
 
 import React, { useMemo, useState } from "react";
@@ -21,7 +17,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import WorkPackageList from "@/components/workpackages/WorkPackageList";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
 import WPFormModal from "@/components/workpackages/WPFormModal";
 import WPBulkAddModal from "@/components/workpackages/WPBulkAddModal";
@@ -30,18 +25,18 @@ import { getNextNumber } from "@/components/shared/numberSequencing";
 import { batchProcess } from "@/utils/batchProcess";
 
 import {
-  PHASES,
-  PHASE_COLORS,
-  PHASE_HEX,
-} from "./workPackages/constants";
+  CommandBar,
+  KpiTile,
+  Button,
+  BulkActionBar,
+  EmptyState,
+  Icon,
+  ProgressBar,
+  StatusPill,
+} from "@/components/design-system";
+import { PHASE_COLOR, PHASE_HEX } from "@/components/design-system/tokens";
 import { exportWorkPackagesCSV } from "./workPackages/utils";
-import HeaderBar from "./workPackages/HeaderBar";
-import KpiTile from "./workPackages/KpiTile";
-import TonnageBar from "./workPackages/TonnageBar";
-import FilterBar from "./workPackages/FilterBar";
-import BulkActionBar from "./workPackages/BulkActionBar";
-import BoardView from "./workPackages/BoardView";
-import DrawingTracker from "./workPackages/DrawingTracker";
+import WpRow from "./workPackages/WpRow";
 
 export default function WorkPackages() {
   const [searchParams] = useSearchParams();
@@ -50,26 +45,20 @@ export default function WorkPackages() {
   const qc = useQueryClient();
 
   const [view, setView] = useState("list");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterPhase, setFilterPhase] = useState("all");
+  const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [editingWP, setEditingWP] = useState(null);
   const [wpModalOpen, setWPModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [expandedWP, setExpandedWP] = useState(null);
-  const [drawingStageFilter, setDrawingStageFilter] = useState("all");
   const [selectedBoardWP, setSelectedBoardWP] = useState(null);
-  const [compact, setCompact] = useState(false);
   const [selectedWPs, setSelectedWPs] = useState(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
-  /* ── Queries ── */
+  /* ── Data ── */
   const { data: workPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
-      if (projectId) {
-        return base44.entities.WorkPackage.filter({ project_id: projectId });
-      }
+      if (projectId) return base44.entities.WorkPackage.filter({ project_id: projectId });
       const all = await base44.entities.WorkPackage.list();
       return all.sort((a, b) => (a.project_name || "").localeCompare(b.project_name || ""));
     },
@@ -79,12 +68,6 @@ export default function WorkPackages() {
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: drawings = [] } = useQuery({
-    queryKey: ["drawings", projectId],
-    queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
-    enabled: !!projectId,
   });
 
   /* ── Mutations ── */
@@ -112,20 +95,6 @@ export default function WorkPackages() {
     onError: (err) => toast.error(err.message),
   });
 
-  const quickCompleteMut = useMutation({
-    mutationFn: (id) =>
-      base44.entities.WorkPackage.update(id, {
-        status: "Complete",
-        percent_complete: 100,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["work-packages"] });
-      qc.invalidateQueries({ queryKey: ["wps-all"] });
-      toast.success("Work package marked complete");
-    },
-    onError: () => toast.error("Update failed"),
-  });
-
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.WorkPackage.delete(id),
     onSuccess: () => {
@@ -139,18 +108,15 @@ export default function WorkPackages() {
 
   const bulkCreateMut = useMutation({
     mutationFn: async (rows) => {
-      if (!rows || rows.length === 0) throw new Error("No rows to add");
+      if (!rows?.length) throw new Error("No rows to add");
       if (!projectId) throw new Error("Select a project first");
-
-      // Single sequence-advance for the whole batch rather than hitting
-      // getNextNumber N times (which would thrash the sequence row).
-      const rowsNeedingNumbers = rows.filter((r) => !r.wp_number);
+      const needsNumbers = rows.filter((r) => !r.wp_number);
       let nextStart = null;
-      if (rowsNeedingNumbers.length > 0) {
+      if (needsNumbers.length > 0) {
         try {
           nextStart = await getNextNumber(projectId, "wp_number");
         } catch (err) {
-          console.warn("[WorkPackages] bulk: getNextNumber failed, falling back", err?.message);
+          console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
           const maxNum = workPackages
             .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
             .filter((n) => !isNaN(n))
@@ -158,23 +124,15 @@ export default function WorkPackages() {
           nextStart = maxNum + 1;
         }
       }
-
-      let autoCursor = nextStart;
+      let cursor = nextStart;
       const prepared = rows.map((row) => {
         let wp_number = row.wp_number;
-        if (!wp_number && autoCursor != null) {
-          wp_number = `WP-${String(autoCursor).padStart(3, "0")}`;
-          autoCursor += 1;
+        if (!wp_number && cursor != null) {
+          wp_number = `WP-${String(cursor).padStart(3, "0")}`;
+          cursor += 1;
         }
-        return {
-          ...row,
-          wp_number,
-          project_id: projectId,
-          // Strip undefined project_name so Supabase doesn't overwrite defaults.
-          project_name: row.project_name || undefined,
-        };
+        return { ...row, wp_number, project_id: projectId, project_name: row.project_name || undefined };
       });
-
       return batchProcess(prepared, (data) => base44.entities.WorkPackage.create(data), 5);
     },
     onSuccess: (results) => {
@@ -216,24 +174,52 @@ export default function WorkPackages() {
     onError: () => toast.error("Bulk update failed"),
   });
 
+  /* ── Derived ── */
+  const counts = useMemo(() => ({
+    all:         workPackages.length,
+    detailing:   workPackages.filter((w) => w.phase === "Detailing").length,
+    fabrication: workPackages.filter((w) => w.phase === "Fabrication").length,
+    delivery:    workPackages.filter((w) => w.phase === "Delivery").length,
+    erection:    workPackages.filter((w) => w.phase === "Erection").length,
+    complete:    workPackages.filter((w) => w.status === "Complete").length,
+  }), [workPackages]);
+
+  const totalTons = useMemo(
+    () => workPackages.reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
+    [workPackages]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return workPackages.filter((w) => {
+      if (filter === "complete") {
+        if (w.status !== "Complete") return false;
+      } else if (filter !== "all" && w.phase !== filter) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        (w.wp_number || "").toLowerCase().includes(q) ||
+        (w.name || "").toLowerCase().includes(q) ||
+        (w.crew || "").toLowerCase().includes(q)
+      );
+    });
+  }, [workPackages, filter, search]);
+
+  const filteredTons = useMemo(
+    () => filtered.reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
+    [filtered]
+  );
+
   /* ── Helpers ── */
-  const toggleSelectWP = (id) =>
+  const toggleSelect = (id) =>
     setSelectedWPs((prev) => {
       const n = new Set(prev);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
 
-  const toggleSelectAll = () =>
-    setSelectedWPs(
-      selectedWPs.size === filtered.length ? new Set() : new Set(filtered.map((w) => w.id))
-    );
-
   const handleWPEdit = (wp) => {
-    if (wp?._quickComplete) {
-      quickCompleteMut.mutate(wp.id);
-      return;
-    }
     setEditingWP(wp);
     setWPModalOpen(true);
   };
@@ -242,11 +228,11 @@ export default function WorkPackages() {
     let wpNumber = "";
     try {
       if (projectId) {
-        const nextNum = await getNextNumber(projectId, "wp_number");
-        wpNumber = `WP-${String(nextNum).padStart(3, "0")}`;
+        const n = await getNextNumber(projectId, "wp_number");
+        wpNumber = `WP-${String(n).padStart(3, "0")}`;
       }
     } catch (err) {
-      console.warn("[WorkPackages] Failed to allocate WP number:", err?.message);
+      console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
       const maxNum = workPackages
         .map((wp) => parseInt((wp.wp_number || "").replace(/\D/g, ""), 10))
         .filter((n) => !isNaN(n))
@@ -257,171 +243,170 @@ export default function WorkPackages() {
     setWPModalOpen(true);
   };
 
-  const handleExportCSV = () => {
-    const toExport = selectedWPs.size > 0 ? filtered.filter((w) => selectedWPs.has(w.id)) : filtered;
-    exportWorkPackagesCSV(toExport);
-  };
-
-  const handleClearFilters = () => {
-    setFilterStatus("all");
-    setFilterPhase("all");
-    setSearch("");
-  };
-
-  /* ── Derived ── */
-  const filtered = useMemo(() => {
-    return workPackages.filter((wp) => {
-      const statusMatch = filterStatus === "all" || wp.status === filterStatus;
-      const phaseMatch = filterPhase === "all" || wp.phase === filterPhase;
-      const q = search.toLowerCase();
-      const searchMatch =
-        !q ||
-        (wp.name || "").toLowerCase().includes(q) ||
-        (wp.wp_number || "").toLowerCase().includes(q) ||
-        (wp.crew || "").toLowerCase().includes(q) ||
-        (wp.area || "").toLowerCase().includes(q) ||
-        (wp.sequence || "").toLowerCase().includes(q) ||
-        (wp.linked_drawing_ids || "").toLowerCase().includes(q);
-      return statusMatch && phaseMatch && searchMatch;
-    });
-  }, [workPackages, filterStatus, filterPhase, search]);
-
-  const stats = useMemo(() => {
-    const totalTons = workPackages.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-    return {
-      total: workPackages.length,
-      notStarted: workPackages.filter((w) => w.status === "Not Started").length,
-      inProgress: workPackages.filter((w) => w.status === "In Progress").length,
-      complete: workPackages.filter((w) => w.status === "Complete").length,
-      onHold: workPackages.filter((w) => w.status === "On Hold").length,
-      totalTons,
-      fabTons: workPackages
-        .filter((w) => w.phase === "Fabrication")
-        .reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-      erectedTons: workPackages
-        .filter((w) => w.phase === "Erection" && w.status === "Complete")
-        .reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-      avgProgress:
-        workPackages.length > 0
-          ? Math.round(
-              workPackages.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / workPackages.length
-            )
-          : 0,
-    };
-  }, [workPackages]);
-
-  const phaseTons = useMemo(
-    () =>
-      PHASES.map((phase) => ({
-        phase,
-        tons: workPackages.filter((w) => w.phase === phase).reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-        completeTons: workPackages
-          .filter((w) => w.phase === phase && w.status === "Complete")
-          .reduce((s, w) => s + (Number(w.tonnage) || 0), 0),
-        color: PHASE_COLORS[phase],
-        hex: PHASE_HEX[phase],
-      })),
-    [workPackages]
-  );
-
-  const activeFilterCount = (filterStatus !== "all" ? 1 : 0) + (filterPhase !== "all" ? 1 : 0);
-  const projectName = projects.find((p) => p.id === projectId)?.name;
-
+  /* ── Loading ── */
   if (wpLoading) {
     return (
-      <div style={{ padding: 24, height: "calc(100vh - 92px)" }}>
+      <div style={{ padding: 24 }}>
         <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
   }
 
-  const toggleKpiStatusFilter = (statusKey) =>
-    setFilterStatus(filterStatus === statusKey ? "all" : statusKey);
+  const projectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "calc(100vh - 92px)", overflow: "auto" }}>
-      <HeaderBar
-        projectId={projectId}
-        projectName={projectName}
-        workPackageCount={workPackages.length}
-        totalTons={stats.totalTons}
-        view={view}
-        onViewChange={setView}
-        compact={compact}
-        onToggleCompact={() => setCompact((v) => !v)}
-        onExportCSV={handleExportCSV}
-        onBulkAdd={() => setBulkAddOpen(true)}
-        onCreate={handleWPCreate}
-      />
+    <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+      <CommandBar
+        eyebrow={`PRODUCTION · ${projectName.toUpperCase()}`}
+        title="Work Packages"
+        count={counts.all}
+        unit={` · ${totalTons.toFixed(1)}T`}
+        subtitle="Phase pipeline tracking · detailing → fab → ship → erect"
+      >
+        <div style={{ display: "flex", gap: 4 }}>
+          {["list", "board"].map((v) => (
+            <Button
+              key={v}
+              variant={view === v ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setView(v)}
+            >
+              {v}
+            </Button>
+          ))}
+        </div>
+        <Button variant="secondary" icon="download" onClick={() => exportWorkPackagesCSV(filtered)}>
+          CSV
+        </Button>
+        <Button
+          variant="outline"
+          icon="upload"
+          onClick={() => setBulkAddOpen(true)}
+          disabled={!projectId}
+        >
+          BULK ADD
+        </Button>
+        <Button variant="primary" icon="plus" onClick={handleWPCreate}>
+          NEW WP
+        </Button>
+      </CommandBar>
 
-      {/* KPI strip — status-filter tiles + tonnage/progress summary */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-        <KpiTile label="TOTAL WPS"     value={stats.total}      color="var(--accent)"          statusKey={null}          filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="NOT STARTED"   value={stats.notStarted} color="var(--text-muted)"       statusKey="Not Started"   filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="IN PROGRESS"   value={stats.inProgress} color="var(--status-warning)"   statusKey="In Progress"   filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="COMPLETE"      value={stats.complete}   color="var(--status-success)"   statusKey="Complete"      filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="ON HOLD"       value={stats.onHold}     color="var(--status-error)"     statusKey="On Hold"       filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="TOTAL TONNAGE" value={`${stats.totalTons.toFixed(1)}T`} color="var(--status-info)" statusKey={null} filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
-        <KpiTile label="AVG PROGRESS"  value={`${stats.avgProgress}%`}          color="var(--accent)"       statusKey={null} filterStatus={filterStatus} onToggle={toggleKpiStatusFilter} />
+      {/* KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+        <KpiTile compact label="ALL"         value={counts.all}         color="var(--text-secondary)" active={filter === "all"}         onClick={() => setFilter("all")} />
+        <KpiTile compact label="DETAILING"   value={counts.detailing}   color={PHASE_HEX.Detailing}   active={filter === "Detailing"}   onClick={() => setFilter("Detailing")} />
+        <KpiTile compact label="FABRICATION" value={counts.fabrication} color={PHASE_HEX.Fabrication} active={filter === "Fabrication"} onClick={() => setFilter("Fabrication")} />
+        <KpiTile compact label="DELIVERY"    value={counts.delivery}    color={PHASE_HEX.Delivery}    active={filter === "Delivery"}    onClick={() => setFilter("Delivery")} />
+        <KpiTile compact label="ERECTION"    value={counts.erection}    color={PHASE_HEX.Erection}    active={filter === "Erection"}    onClick={() => setFilter("Erection")} />
+        <KpiTile compact label="COMPLETE"    value={counts.complete}    color="var(--status-success)" active={filter === "complete"}    onClick={() => setFilter("complete")} />
       </div>
 
-      <TonnageBar phaseTons={phaseTons} />
+      {/* Search bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 12px",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+        }}
+      >
+        <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
+          <div
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }}
+          >
+            <Icon name="search" size={12} />
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search WP # or name…"
+            style={{
+              width: "100%",
+              height: 30,
+              padding: "0 12px 0 30px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-input)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+        </div>
+        <div style={{ flex: 1 }} />
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.10em",
+          }}
+        >
+          {filtered.length} of {workPackages.length} · {filteredTons.toFixed(1)}T
+        </span>
+      </div>
 
-      <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        filterPhase={filterPhase}
-        onPhaseChange={setFilterPhase}
-        filterStatus={filterStatus}
-        onStatusChange={setFilterStatus}
-        activeFilterCount={activeFilterCount}
-        onClear={handleClearFilters}
-      />
+      {/* View content */}
+      {view === "list" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {filtered.length > 0 ? (
+            filtered.map((w) => (
+              <WpRow
+                key={w.id}
+                wp={w}
+                selected={selectedWPs.has(w.id)}
+                onToggle={() => toggleSelect(w.id)}
+                onEdit={handleWPEdit}
+                onOpen={() => setSelectedBoardWP(w)}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon="wp"
+              title={workPackages.length === 0 ? "No work packages yet" : "No WPs match the current filter"}
+              body={
+                workPackages.length === 0
+                  ? "Create your first work package to start tracking fabrication and erection progress."
+                  : "Try clearing filters or adjusting the search."
+              }
+            />
+          )}
+        </div>
+      ) : (
+        <BoardView wps={filtered} onSelect={setSelectedBoardWP} />
+      )}
 
       <BulkActionBar
         count={selectedWPs.size}
-        isUpdating={bulkStatusMut.isPending}
-        onSetStatus={(status) => bulkStatusMut.mutate({ ids: [...selectedWPs], status })}
-        onExport={handleExportCSV}
         onClear={() => setSelectedWPs(new Set())}
+        actions={[
+          {
+            label: "SET COMPLETE",
+            icon: "check",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "Complete" }),
+          },
+          {
+            label: "SET IN PROGRESS",
+            icon: "arrow",
+            onClick: () => bulkStatusMut.mutate({ ids: [...selectedWPs], status: "In Progress" }),
+          },
+          {
+            label: "EXPORT",
+            icon: "download",
+            onClick: () => exportWorkPackagesCSV(filtered.filter((w) => selectedWPs.has(w.id))),
+          },
+        ]}
       />
-
-      {/* View switch */}
-      {view === "list" && (
-        <WorkPackageList
-          workPackages={filtered}
-          drawings={drawings}
-          expandedWP={expandedWP}
-          onExpand={(wp) => setExpandedWP(expandedWP?.id === wp.id ? null : wp)}
-          onEdit={handleWPEdit}
-          onDelete={setDeleteTarget}
-          showProject={!projectId}
-          compact={compact}
-          selected={selectedWPs}
-          onToggleSelect={toggleSelectWP}
-          onSelectAll={toggleSelectAll}
-          onCreateWP={handleWPCreate}
-        />
-      )}
-
-      {view === "board" && (
-        <BoardView
-          filtered={filtered}
-          onSelect={setSelectedBoardWP}
-          onEdit={handleWPEdit}
-          onDelete={setDeleteTarget}
-        />
-      )}
-
-      {view === "drawings" && (
-        <DrawingTracker
-          projectId={projectId}
-          drawings={drawings}
-          workPackages={workPackages}
-          stageFilter={drawingStageFilter}
-          onStageFilterChange={setDrawingStageFilter}
-        />
-      )}
 
       {/* Modals */}
       <WPBulkAddModal
@@ -437,33 +422,22 @@ export default function WorkPackages() {
       {(wpModalOpen || editingWP) && (
         <WPFormModal
           open={wpModalOpen || !!editingWP}
-          onClose={() => {
-            setWPModalOpen(false);
-            setEditingWP(null);
-          }}
+          onClose={() => { setWPModalOpen(false); setEditingWP(null); }}
           onSave={(data) => {
-            if (editingWP?.id) {
-              updateWPMut.mutate({ id: editingWP.id, data });
-            } else {
-              createWPMut.mutate(data);
-            }
+            if (editingWP?.id) updateWPMut.mutate({ id: editingWP.id, data });
+            else createWPMut.mutate(data);
           }}
           wp={editingWP}
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
-          allDrawings={drawings}
         />
       )}
 
       {selectedBoardWP && (
         <WorkPackageDetailModal
           wp={selectedBoardWP}
-          drawings={drawings}
           onClose={() => setSelectedBoardWP(null)}
-          onEdit={(wp) => {
-            setSelectedBoardWP(null);
-            handleWPEdit(wp);
-          }}
+          onEdit={(wp) => { setSelectedBoardWP(null); handleWPEdit(wp); }}
         />
       )}
 
@@ -474,6 +448,111 @@ export default function WorkPackages() {
         title="Delete Work Package"
         description={`Delete "${deleteTarget?.name}" (${deleteTarget?.wp_number})? This cannot be undone.`}
       />
+    </div>
+  );
+}
+
+/* ── Board View (Kanban by phase) ──────────────────────────── */
+
+function BoardView({ wps, onSelect }) {
+  const phases = ["Detailing", "Fabrication", "Delivery", "Erection"];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+      {phases.map((phase) => {
+        const items = wps.filter((w) => w.phase === phase);
+        const tons = items.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+        return (
+          <div
+            key={phase}
+            style={{
+              background: "var(--bg-surface-low)",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border-default)",
+              borderTop: `2px solid ${PHASE_COLOR[phase]}`,
+              padding: 10,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: PHASE_COLOR[phase],
+                  letterSpacing: "0.14em",
+                }}
+              >
+                {phase.toUpperCase()}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                {items.length} · {tons.toFixed(1)}T
+              </span>
+            </div>
+            {items.map((w) => (
+              <div
+                key={w.id}
+                onClick={() => onSelect(w)}
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 6,
+                  padding: "8px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
+                    {w.wp_number}
+                  </span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                    {Number(w.tonnage || 0).toFixed(1)}T
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-body)",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "var(--text-primary)",
+                    marginTop: 4,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {w.name}
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <ProgressBar
+                    value={Number(w.percent_complete) || 0}
+                    color={PHASE_COLOR[phase]}
+                    height={3}
+                    sub={`${Number(w.percent_complete) || 0}% · ${w.scheduled_end_date || w.due_date || "—"}`}
+                  />
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  <StatusPill label={w.status || "Not Started"} />
+                </div>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "16px 0",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.12em",
+                }}
+              >
+                — EMPTY —
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
