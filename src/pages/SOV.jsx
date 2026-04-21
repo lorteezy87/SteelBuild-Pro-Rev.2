@@ -12,6 +12,7 @@ import {
 import KPIStrip from "../components/shared/KPIStrip";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import SOVFormModal from "../components/sov/SOVFormModal";
+import { CommandBar } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent } from "../components/shared/formatters";
@@ -822,96 +823,124 @@ export default function SOV() {
       <div style={{ position: "sticky", top: 0, zIndex: 30, background: "var(--bg-page)", paddingBottom: 4 }}>
 
         {/* Page heading + toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ marginBottom: 12 }}>
-          <div>
-            <h1 style={{
-              fontFamily: "var(--font-body)", fontSize: 22, fontWeight: 800,
-              color: "var(--text-primary)", margin: 0,
-              textTransform: "uppercase", letterSpacing: "0.04em",
-            }}>
-              Schedule of Values
-            </h1>
-            <p style={{
-              fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700,
-              color: "var(--text-muted)", marginTop: 4,
-              letterSpacing: "0.12em", textTransform: "uppercase",
-            }}>
-              {sovs.length} line items
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Status filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {["Draft", "Submitted", "Certified", "Paid"].map(s =>
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-
-            {/* Requirement 6 — Group by Phase toggle */}
-            <Button
-              variant={groupByPhase ? "default" : "outline"} size="sm"
-              onClick={() => setGroupByPhase(v => !v)}
-              style={groupByPhase ? { background: "var(--accent)", color: "#fff", border: "none" } : {}}
-            >
-              Group by Phase
-            </Button>
-
-            {/* Requirement 4 — Global Retainage toggle */}
-            <Select value={globalRetainage} onValueChange={setGlobalRetainage}>
-              <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Retainage" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="per-row">Per-Row Retainage</SelectItem>
-                <SelectItem value="5">Global 5%</SelectItem>
-                <SelectItem value="10">Global 10%</SelectItem>
-                <SelectItem value="custom">Custom %</SelectItem>
-              </SelectContent>
-            </Select>
-            {globalRetainage === "custom" && (
-              <Input
-                type="number" placeholder="%"
-                value={customRetainage}
-                onChange={e => setCustomRetainage(e.target.value)}
-                style={{ width: 64, height: 36, fontFamily: "var(--font-mono)", fontSize: 12 }}
-              />
-            )}
-
-            <Button
-              size="sm"
-              onClick={() => { setEditing(null); setModalOpen(true); }}
-              style={{ background: "var(--accent)", color: "#fff", border: "none" }}
-            >
-              + New Item
-            </Button>
-            <Button variant="outline" size="sm" onClick={downloadTemplate} title="Download blank SOV CSV template">
-              <Download className="w-3.5 h-3.5 mr-1" />
-              Template
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleImportClick}
-              disabled={importing || !activeProject?.id}
-              title="Import SOV line items from CSV"
-            >
-              <Upload className="w-3.5 h-3.5 mr-1" />
-              {importing ? "Importing…" : "Import CSV"}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleImportFile}
-              style={{ display: "none" }}
+        <CommandBar
+          eyebrow={activeProject?.name || "BILLING"}
+          title="Schedule of Values"
+          count={sovs.length}
+          unit=" · LINE ITEMS"
+          subtitle={`${formatCurrency(totalScheduledValue || 0)} scheduled value · pay app billing control`}
+        >
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              {["Draft", "Submitted", "Certified", "Paid"].map(s =>
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          <button
+            onClick={() => setGroupByPhase(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: groupByPhase ? "var(--accent-muted)" : "var(--bg-surface)",
+              border: groupByPhase ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+              color: groupByPhase ? "var(--accent)" : "var(--text-secondary)",
+              borderRadius: "var(--radius-btn)", padding: "8px 12px",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            Group by Phase
+          </button>
+          <Select value={globalRetainage} onValueChange={setGlobalRetainage}>
+            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Retainage" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="per-row">Per-Row Retainage</SelectItem>
+              <SelectItem value="5">Global 5%</SelectItem>
+              <SelectItem value="10">Global 10%</SelectItem>
+              <SelectItem value="custom">Custom %</SelectItem>
+            </SelectContent>
+          </Select>
+          {globalRetainage === "custom" && (
+            <Input
+              type="number" placeholder="%"
+              value={customRetainage}
+              onChange={e => setCustomRetainage(e.target.value)}
+              style={{ width: 64, height: 32, fontFamily: "var(--font-mono)", fontSize: 11 }}
             />
-            <Button variant="outline" size="sm" onClick={exportCSV}>Export CSV</Button>
-            <Button variant="outline" size="sm" onClick={refetch}>Refresh</Button>
-          </div>
-        </div>
+          )}
+          <button
+            onClick={downloadTemplate}
+            title="Download blank SOV CSV template"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            <Download size={12} /> Template
+          </button>
+          <button
+            onClick={handleImportClick}
+            disabled={importing || !activeProject?.id}
+            title="Import SOV line items from CSV"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: importing ? "not-allowed" : "pointer",
+              textTransform: "uppercase", opacity: importing ? 0.5 : 1,
+            }}
+          >
+            <Upload size={12} /> {importing ? "Importing…" : "Import"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImportFile}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={exportCSV}
+            style={{
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            Export
+          </button>
+          <button
+            onClick={refetch}
+            style={{
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-muted)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => { setEditing(null); setModalOpen(true); }}
+            style={{
+              background: "var(--accent)", color: "var(--bg-base)", border: "none",
+              borderRadius: "var(--radius-btn)", padding: "8px 14px",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            + New Item
+          </button>
+        </CommandBar>
 
         {/* Requirement 9 — Application View Tabs */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>

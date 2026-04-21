@@ -9,6 +9,7 @@ import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
 import { buildFeed, computeSummary } from "@/lib/commandCenter/feedAggregator";
 import { defaultFeedSort } from "@/lib/commandCenter/sortLogic";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { CommandBar } from "@/components/design-system";
 
 /**
  * CommandCenter — personal action-triage cockpit.
@@ -251,78 +252,38 @@ export default function CommandCenter() {
 
   return (
     <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 10,
-        }}
+      <CommandBar
+        eyebrow="PORTFOLIO TRIAGE"
+        title="Command Center"
+        count={rawFeed.length}
+        unit={` · ${projects.length} PROJECTS`}
+        subtitle="Personal action cockpit · J/K navigate · Enter opens · Esc closes · E resolves note"
       >
-        <div>
-          <h1
-            style={{
-              fontFamily: "'Space Grotesk', var(--font-display)",
-              fontSize: 20,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              letterSpacing: "0.04em",
-            }}
-          >
-            COMMAND CENTER
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 11,
-              color: "var(--text-muted)",
-              margin: "2px 0 0",
-            }}
-          >
-            {rawFeed.length} open item{rawFeed.length !== 1 ? "s" : ""} across{" "}
-            {projects.length} project{projects.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => setForwardLookOpen(true)}
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "7px 14px",
-              borderRadius: 4,
-              border: "1px solid var(--accent-border)",
-              background: "var(--bg-surface-low)",
-              color: "var(--accent)",
-              cursor: "pointer",
-              textTransform: "uppercase",
-              transition: "border-color 0.15s",
-            }}
-          >
-            14-Day Forward Look
-          </button>
-
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-              padding: "4px 8px",
-              background: "var(--bg-surface)",
-              borderRadius: 2,
-            }}
-            title="Keyboard: J/K navigate, Enter opens detail, Esc closes, E resolves notes"
-          >
-            J/K/Enter/Esc
-          </span>
-        </div>
-      </div>
+        <button
+          onClick={() => setForwardLookOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            padding: "8px 14px",
+            borderRadius: "var(--radius-btn)",
+            border: "1px solid var(--accent-border)",
+            background: "var(--accent-muted)",
+            color: "var(--accent)",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 16%, transparent)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; }}
+        >
+          14-Day Forward Look →
+        </button>
+      </CommandBar>
 
       {/* Zone A — Urgency Strip */}
       <UrgencyStrip

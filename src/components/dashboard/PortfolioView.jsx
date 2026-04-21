@@ -895,16 +895,37 @@ export default function PortfolioView({
               style={{
                 padding: "10px 18px",
                 borderRight: idx < 4 ? "1px solid var(--divider)" : "none",
-                borderTop: isActive ? "3px solid var(--accent)" : tile.warn ? `3px solid ${tile.color}` : "3px solid transparent",
-                background: isActive ? "rgba(59,130,246,0.08)" : tile.warn ? `${tile.color}10` : "transparent",
+                borderTop: `3px solid ${isActive || tile.warn ? tile.color : "transparent"}`,
+                background: isActive
+                  ? `color-mix(in srgb, ${tile.color} 14%, transparent)`
+                  : tile.warn
+                  ? `color-mix(in srgb, ${tile.color} 8%, transparent)`
+                  : "transparent",
                 display: "flex", flexDirection: "column", gap: 3,
                 cursor: "pointer",
-                boxShadow: isActive ? "0 0 12px rgba(59,130,246,0.25)" : "none",
+                boxShadow: isActive
+                  ? `0 0 18px color-mix(in srgb, ${tile.color} 20%, transparent), 0 0 36px color-mix(in srgb, ${tile.color} 8%, transparent)`
+                  : "none",
                 transition: "box-shadow 0.2s, border-top 0.2s, background 0.2s",
                 minWidth: 100,
+                position: "relative",
               }}
             >
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: tile.warn ? tile.color : "var(--text-muted)" }}>
+              {isActive && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 10,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    background: tile.color,
+                    boxShadow: `0 0 6px ${tile.color}`,
+                  }}
+                />
+              )}
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? tile.color : tile.warn ? tile.color : "var(--text-muted)" }}>
                 {tile.label}
               </span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

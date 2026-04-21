@@ -11,10 +11,18 @@ import React from "react";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
 import { MiniProgressRing, BurndownSparkline } from "./charts";
 
-const kpiGlow = (active) =>
+const kpiGlow = (active, borderColor = "var(--accent)") =>
   active
-    ? { boxShadow: "0 0 0 2px rgba(173,198,255,0.3), 0 0 16px rgba(173,198,255,0.15)", cursor: "pointer" }
-    : { cursor: "pointer" };
+    ? {
+        cursor: "pointer",
+        border: `1px solid ${borderColor}`,
+        boxShadow: `0 0 18px color-mix(in srgb, ${borderColor} 20%, transparent), 0 0 36px color-mix(in srgb, ${borderColor} 8%, transparent)`,
+      }
+    : {
+        cursor: "pointer",
+        border: "1px solid var(--border-default)",
+        boxShadow: "var(--shadow-card)",
+      };
 
 export default function KpiStrip({
   activeKPI,
@@ -123,12 +131,27 @@ function Tile({ onClick, active, borderColor, children }) {
       style={{
         background: "var(--bg-surface)",
         borderRadius: "var(--radius-card)",
-        padding: "16px 20px",
+        padding: "14px 16px 12px",
         borderTop: `2px solid ${borderColor}`,
-        transition: "box-shadow 0.2s",
-        ...kpiGlow(active),
+        transition: "all 0.15s",
+        position: "relative",
+        ...kpiGlow(active, borderColor),
       }}
     >
+      {active && (
+        <div
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            background: borderColor,
+            boxShadow: `0 0 6px ${borderColor}`,
+          }}
+        />
+      )}
       {children}
     </div>
   );
