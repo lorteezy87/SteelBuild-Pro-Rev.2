@@ -15,9 +15,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Line, ReferenceLine, Area, AreaChart
 } from "recharts";
-import { AlertTriangle, ShieldAlert, Download } from "lucide-react";
+import { AlertTriangle, ShieldAlert, Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { CommandBar } from "@/components/design-system";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -337,16 +338,28 @@ export default function CostDashboard() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cost Dashboard</h1>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>{codes.length} cost codes • {project?.name || ""}</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button size="sm" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }} style={{ background: "var(--accent)", color: "var(--accent-text)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>+ Add Cost Code</Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
-        </div>
-      </div>
+      <CommandBar
+        eyebrow={project?.name || "COST"}
+        title="Cost Dashboard"
+        count={codes.length}
+        unit=" · COST CODES"
+        subtitle="Budget vs actual vs committed · variance monitoring"
+      >
+        <button
+          onClick={exportCSV}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+        >
+          <Download size={12} /> Export
+        </button>
+        <button
+          onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Add Cost Code
+        </button>
+      </CommandBar>
 
       <KPIStrip items={kpis} />
 

@@ -6,8 +6,9 @@ import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useFinancials } from "@/hooks/useFinancials";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import PageHeader from "@/components/shared/PageHeader";
+import { CommandBar } from "@/components/design-system";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
+import { Plus, RefreshCw } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent, formatDate } from "@/components/shared/formatters";
 import { X } from "lucide-react";
@@ -331,21 +332,34 @@ export default function Financials() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageHeader
+      <CommandBar
+        eyebrow={selectedProject?.name || "FINANCIALS"}
         title="Budget Control"
-        subtitle={`${selectedProject?.name || "Project"} • workbook-style financial control`}
-        onAdd={() => {
-          setEditingCostCode(null);
-          setModalOpen(true);
-        }}
-        onRefresh={() => {
-          invalidateCrudQueries(qc, costCodeQueryKeys);
-          qc.invalidateQueries({ queryKey: ["expenses", projectId] });
-          qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
-          qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
-        }}
-        addLabel="New Cost Code"
-      />
+        count={costCodes.length}
+        unit=" · COST CODES"
+        subtitle={`Workbook-style financial control · ${formatCurrencyShort(summary.revisedBudget)} revised budget`}
+      >
+        <button
+          onClick={() => {
+            invalidateCrudQueries(qc, costCodeQueryKeys);
+            qc.invalidateQueries({ queryKey: ["expenses", projectId] });
+            qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
+            qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
+          }}
+          title="Refresh"
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+        <button
+          onClick={() => { setEditingCostCode(null); setModalOpen(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Cost Code
+        </button>
+      </CommandBar>
 
       {/* ── Executive KPI Strip (Phase 4) ── */}
       <KPIStrip

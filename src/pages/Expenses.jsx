@@ -19,8 +19,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
-import PageHeader from "../components/shared/PageHeader";
+import { CommandBar } from "@/components/design-system";
 import DeleteDialog from "../components/shared/DeleteDialog";
+import { Plus, RefreshCw } from "lucide-react";
 import ExpenseFormModal from "../components/expenses/ExpenseFormModal";
 import ExpenseImportModal from "../components/expenses/ExpenseImportModal";
 import { formatCurrencyShort, roundCurrency } from "../components/shared/formatters";
@@ -377,13 +378,29 @@ export default function ExpensesPage() {
 
   return (
     <div style={{ paddingBottom: selected.length > 0 ? 72 : 0 }}>
-      <PageHeader
+      <CommandBar
+        eyebrow={activeProject?.name || "COST"}
         title="Expenses"
-        subtitle={`${expenses.length} entries · ${activeProject?.name}`}
-        onAdd={() => { setEditing(null); setModalOpen(true); }}
-        onRefresh={refetch}
-        addLabel="+ New Expense"
-      />
+        count={expenses.length}
+        unit=" · ENTRIES"
+        subtitle={`${formatCurrencyShort(totalCommitted)} committed · ${formatCurrencyShort(totalPaid)} paid`}
+      >
+        <button
+          onClick={refetch}
+          title="Refresh"
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+        <button
+          onClick={() => { setEditing(null); setModalOpen(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Expense
+        </button>
+      </CommandBar>
 
       <KpiStrip
         activeKPI={activeKPI}
