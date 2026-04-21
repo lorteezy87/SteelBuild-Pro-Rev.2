@@ -82,12 +82,21 @@ async function invokeLlmProxy(body, { maxAttempts = 5, onRetry } = {}) {
 // Hard caps for document blocks (so we fail fast with a useful message
 // instead of a generic 400).
 const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB (Anthropic), tighter on OpenAI
-// Default to OpenAI GPT-4o-mini — roughly 20× cheaper than Sonnet 4.6
-// for the structured sheet-index + findings extraction we do here. Quality
-// tradeoff is small because output goes through a forced tool_use schema.
-// Override per-call by passing { model, provider } to analyzeDrawing().
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_MODEL    = "gpt-4o-mini";
+// Default to Anthropic Claude Sonnet 4.5. We briefly defaulted to
+// gpt-4o-mini for cost reasons, but the model was visibly weaker on
+// the visual reasoning that structural-drawing analysis requires
+// (sheet enumeration missed pages; findings were vague or
+// hallucinated). The tool_use schema constrains the OUTPUT format —
+// it can't make the model see the PDF any better. The retry/heartbeat
+// machinery below handles Anthropic TPM rate limits gracefully
+// (jittered backoff up to 5 attempts over ~4 min), so Sonnet is the
+// pragmatic default.
+//
+// Override per-call by passing { model, provider } to analyzeDrawing()
+// — e.g. bulk-reprocessing cold storage could still use gpt-4o-mini
+// if the quality hit is acceptable for that use case.
+const DEFAULT_PROVIDER = "anthropic";
+const DEFAULT_MODEL    = "claude-sonnet-4-5";
 const STORAGE_BUCKET   = "app-files";
 
 // Kept in lockstep with the CHECK constraint on drawing_findings.finding_type
@@ -139,6 +148,19 @@ function normalizeCategory(raw) {
 const SYSTEM_PROMPT = `You are a senior structural steel project manager analyzing a drawing set.
 Return your analysis through the submit_analysis tool. All fields are required.
 
+SHEET INDEX — highest priority.
+List EVERY sheet in the PDF, in page order, even if the sheet is a
+cover page, index, notes page, or general-notes sheet. Don't skip
+any. sheet_number is the printed sheet ID (e.g. "S-101", "E-2.3",
+"D-415", "SH-12"). title is the title-block title verbatim — do not
+paraphrase. page_index is the zero-based page number in the PDF.
+
+Sheet categories: 'structural' (S-series), 'erection' (E-series),
+'detailing' (D-series), 'shop' (SH-series). If a sheet's series is
+ambiguous, use the closest fit; don't guess wildly. Return the
+literal lowercase string.
+
+FINDINGS — only what you can substantiate.
 Focus on issues a PM/detailer would flag before fab release:
   - missing bolt callouts (A325/A490, SC/N/X, edge distance)
   - AESS class omissions (1–4) or conflicting AESS requirements
@@ -149,10 +171,6 @@ Focus on issues a PM/detailer would flag before fab release:
   - grid or column line mismatches between plan and elevation
   - dimension chain errors (sum ≠ overall, floating dimensions, missing hold)
 
-Sheet categories: 'structural' (S-series), 'erection' (E-series),
-'detailing' (D-series), 'shop' (SH-series). Return the literal lowercase
-string.
-
 Severity guidance:
   critical = blocks fabrication or creates safety risk
   high     = blocks release of a sheet or assembly
@@ -160,9 +178,11 @@ Severity guidance:
   low      = detailing cleanup, will not block fab
   info     = observation, no action needed
 
-Be specific: every description must cite a sheet number and a location
-on the sheet (grid line, detail callout, elevation). Generic findings
-are not useful.`;
+Be specific: every finding description must cite the sheet number AND
+a location on the sheet (grid line, detail callout, elevation,
+revision mark). Generic findings ("needs more detail", "unclear") are
+not useful — omit them. It is better to return zero findings than to
+invent any. If the set is clean, ai_summary should say so.`;
 
 const ANALYSIS_TOOL = {
   name: "submit_analysis",
@@ -300,7 +320,10 @@ export async function analyzeDrawing(analysis, {
       const res = await invokeLlmProxy({
         provider,
         model,
-        maxTokens: 4000,
+        // 8000 leaves headroom for a sheet_index of 40+ sheets plus a
+        // dozen-or-so findings. 4000 was tight enough that tool_use
+        // JSON sometimes got truncated on larger sets.
+        maxTokens: 8000,
         system: SYSTEM_PROMPT,
         tools: [ANALYSIS_TOOL],
         tool_choice: { type: "tool", name: "submit_analysis" },
