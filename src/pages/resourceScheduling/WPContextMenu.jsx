@@ -120,7 +120,7 @@ export default function WPContextMenu({
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             style={{
               display: "block", width: "100%", padding: "7px 12px", textAlign: "left",
-              background: "transparent", border: "none", color: "#FF3D3D",
+              background: "transparent", border: "none", color: "var(--status-error-bright)",
               fontFamily: "var(--font-body)", fontSize: 11, cursor: "pointer",
             }}
           >

@@ -5,7 +5,7 @@ const PHASE_COLOR = {
   Detailing:   "#8B5CF6",
   Fabrication: "var(--accent)",
   Delivery:    "#00B8D9",
-  Erection:    "#00D68F",
+  Erection:    "var(--status-success-bright)",
 };
 
 const LEFT_COL = 340;
@@ -279,7 +279,7 @@ export default function WPGantt({ wps, updateMut }) {
         {conflictList.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,23,68,0.10)", border: "1px solid rgba(255,23,68,0.30)", borderRadius: 6, padding: "4px 10px" }}>
             <span style={{ fontSize: 11 }}>⚠</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF3D3D", fontWeight: 700 }}>{conflictList.length} CONFLICT{conflictList.length > 1 ? "S" : ""}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", fontWeight: 700 }}>{conflictList.length} CONFLICT{conflictList.length > 1 ? "S" : ""}</span>
           </div>
         )}
       </div>
@@ -301,7 +301,7 @@ export default function WPGantt({ wps, updateMut }) {
               return (
                 <div
                   key={wp.id}
-                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--hover-bg)", background: i % 2 === 0 ? "transparent" : "var(--hover-bg)", borderLeft: isConflict ? "2px solid #FF3D3D" : "2px solid transparent", gap: 8 }}
+                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--hover-bg)", background: i % 2 === 0 ? "transparent" : "var(--hover-bg)", borderLeft: isConflict ? "2px solid var(--status-error-bright)" : "2px solid transparent", gap: 8 }}
                 >
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: "hidden" }}>
@@ -390,7 +390,7 @@ export default function WPGantt({ wps, updateMut }) {
                       borderRadius: 5,
                       background: `${phColor}30`,
                       border: isConflict
-                        ? "1.5px dashed #FF3D3D"
+                        ? "1.5px dashed var(--status-error-bright)"
                         : isDragging
                           ? `1.5px solid ${phColor}`
                           : `1px solid ${phColor}60`,
@@ -445,7 +445,7 @@ export default function WPGantt({ wps, updateMut }) {
       {/* Conflicts list */}
       {conflictList.length > 0 && (
         <div style={{ borderTop: "1px solid rgba(255,23,68,0.20)", padding: "8px 14px", background: "rgba(255,23,68,0.05)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FF3D3D", letterSpacing: "0.12em", marginBottom: 6 }}>SCHEDULING CONFLICTS</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error-bright)", letterSpacing: "0.12em", marginBottom: 6 }}>SCHEDULING CONFLICTS</div>
           {conflictList.map((c, i) => (
             <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,100,100,0.85)", marginBottom: 3 }}>
               ⚠ <strong>{c.type}</strong> — {c.wp1.name} (Delivery) vs {c.wp2.name} (Erection)

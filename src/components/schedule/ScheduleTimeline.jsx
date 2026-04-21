@@ -120,7 +120,7 @@ export default function ScheduleTimeline({
             width: 16,
             height: 16,
             top: 14,
-            background: isCritical ? "#FF3D3D" : "var(--text-primary)",
+            background: isCritical ? "var(--status-error-bright)" : "var(--text-primary)",
             transform: "rotate(45deg)",
             cursor: "pointer",
             boxShadow: isCritical
@@ -149,7 +149,7 @@ export default function ScheduleTimeline({
       height: 26,
       top: 9,
       background: isDelayed
-        ? "linear-gradient(135deg, #FF3D3D, #FF6B2B)"
+        ? "linear-gradient(135deg, var(--status-error-bright), #FF6B2B)"
         : gradientColor,
       borderRadius: 4,
       cursor: "grab",
@@ -157,7 +157,7 @@ export default function ScheduleTimeline({
       boxShadow: isSelected
         ? `0 0 0 2px var(--accent), 0 0 12px var(--warning-muted)`
         : isCritical && showCriticalPath
-          ? `0 0 0 2px #FF3D3D, 0 0 12px rgba(255,61,61,0.4)`
+          ? `0 0 0 2px var(--status-error-bright), 0 0 12px rgba(255,61,61,0.4)`
           : "0 2px 8px rgba(0,0,0,0.3)",
       border: isDelayed ? "1px dashed rgba(255,61,61,0.6)" : "none",
       overflow: "hidden",
@@ -229,7 +229,7 @@ export default function ScheduleTimeline({
             refY="3"
             orient="auto"
           >
-            <polygon points="0 0, 10 3, 0 6" fill="#FF3D3D" />
+            <polygon points="0 0, 10 3, 0 6" fill="var(--status-error-bright)" />
           </marker>
         </defs>
         {tasks.map((task) => {
@@ -255,7 +255,7 @@ export default function ScheduleTimeline({
               <path
                 key={`${depId}-${task.id}`}
                 d={`M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`}
-                stroke={isCritical ? "#FF3D3D" : "var(--border-strong)"}
+                stroke={isCritical ? "var(--status-error-bright)" : "var(--border-strong)"}
                 strokeWidth="1.5"
                 fill="none"
                 markerEnd={

@@ -5,24 +5,28 @@
 
 // ─── Severity bands ───────────────────────────────────────────────────────────
 export const SEVERITY = {
-  CRITICAL: { label: "CRITICAL", value: 4, color: "#FF3B3B", bg: "rgba(255,59,59,0.10)", border: "rgba(255,59,59,0.25)" },
-  HIGH:     { label: "HIGH",     value: 3, color: "#FFB400", bg: "rgba(255,180,0,0.10)",  border: "rgba(255,180,0,0.25)" },
-  MEDIUM:   { label: "MEDIUM",   value: 2, color: "#F59E0B", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.18)" },
-  LOW:      { label: "LOW",      value: 1, color: "#8898A8", bg: "rgba(136,152,168,0.07)", border: "rgba(136,152,168,0.15)" },
+  CRITICAL: { label: "CRITICAL", value: 4, color: "var(--status-error-bright)",   bg: "rgba(255,59,59,0.10)",   border: "rgba(255,59,59,0.25)"   },
+  HIGH:     { label: "HIGH",     value: 3, color: "var(--status-warning-bright)", bg: "rgba(255,180,0,0.10)",   border: "rgba(255,180,0,0.25)"   },
+  MEDIUM:   { label: "MEDIUM",   value: 2, color: "var(--status-warning)",        bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.18)"  },
+  LOW:      { label: "LOW",      value: 1, color: "var(--text-muted)",            bg: "rgba(136,152,168,0.07)", border: "rgba(136,152,168,0.15)" },
 };
 
 // ─── Impact tags ──────────────────────────────────────────────────────────────
+// Colors below use `var(--…)` tokens except where a specific cyan hue
+// (BLOCKS_DETAILING / BLOCKS_ERECTION) has no semantic equivalent in the
+// status palette — keeping the literal hex for those makes the domain
+// meaning obvious.
 export const IMPACT_TAGS = {
   BLOCKS_DETAILING:  { label: "BLOCKS DETAILING",  color: "#0EA5E9" },
-  BLOCKS_FAB:        { label: "BLOCKS FAB",         color: "#E8650A" },
-  BLOCKS_DELIVERY:   { label: "BLOCKS DELIVERY",    color: "#10B981" },
+  BLOCKS_FAB:        { label: "BLOCKS FAB",         color: "var(--status-review)" },
+  BLOCKS_DELIVERY:   { label: "BLOCKS DELIVERY",    color: "var(--status-success)" },
   BLOCKS_ERECTION:   { label: "BLOCKS ERECTION",    color: "#06B6D4" },
-  COST_EXPOSURE:     { label: "COST EXPOSURE",       color: "#FFB400" },
-  REVISION_CONFLICT: { label: "REVISION CONFLICT",  color: "#FF7A7A" },
-  EXTERNAL_WAIT:     { label: "EXTERNAL WAIT",       color: "#8B8B8B" },
-  LONG_LEAD:         { label: "LONG LEAD",           color: "#F59E0B" },
-  FIELD_COORD:       { label: "FIELD COORD",         color: "#00D68F" },
-  SCHEDULE_RISK:     { label: "SCHEDULE RISK",       color: "#FF9F43" },
+  COST_EXPOSURE:     { label: "COST EXPOSURE",       color: "var(--status-warning-bright)" },
+  REVISION_CONFLICT: { label: "REVISION CONFLICT",  color: "var(--status-error)" },
+  EXTERNAL_WAIT:     { label: "EXTERNAL WAIT",       color: "var(--text-muted)" },
+  LONG_LEAD:         { label: "LONG LEAD",           color: "var(--status-warning)" },
+  FIELD_COORD:       { label: "FIELD COORD",         color: "var(--status-success-bright)" },
+  SCHEDULE_RISK:     { label: "SCHEDULE RISK",       color: "var(--status-review)" },
 };
 
 // ─── Recommended next actions by record type / state ─────────────────────────

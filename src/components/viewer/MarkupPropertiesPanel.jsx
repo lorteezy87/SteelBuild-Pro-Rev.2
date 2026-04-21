@@ -42,7 +42,7 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
           title="Delete markup"
           style={{
             background: "rgba(255,61,61,0.10)", border: "1px solid rgba(255,61,61,0.20)",
-            borderRadius: 5, color: "#FF3D3D", cursor: "pointer",
+            borderRadius: 5, color: "var(--status-error-bright)", cursor: "pointer",
             width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >

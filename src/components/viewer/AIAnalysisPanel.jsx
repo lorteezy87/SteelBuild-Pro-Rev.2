@@ -7,9 +7,9 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
 
   const getSeverityColor = (severity) => {
     const colors = {
-      critical: "#FF3D3D",
+      critical: "var(--status-error-bright)",
       high: "var(--status-warning)",
-      medium: "#FFB020",
+      medium: "var(--status-warning-bright)",
       low: "#00B8D9",
       info: "var(--text-muted)"
     };

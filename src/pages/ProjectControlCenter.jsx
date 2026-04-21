@@ -35,7 +35,7 @@ const TYPE_CONFIG = {
   Drawing:     { icon: "▦",  label: "DRAWING",       color: "#0EA5E9" },
   WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "var(--status-review)" },
   Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
-  ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "#FF9F43" },
+  ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "var(--status-review)" },
 };
 
 // ─── Signal KPI Card ─────────────────────────────────────────────────────────
@@ -652,7 +652,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
   // Severity segments for mini stacked bar
   const segments = [
     { key: "CRITICAL", count: critCount, color: SEVERITY.CRITICAL?.color || "var(--status-error)" },
-    { key: "HIGH",     count: highCount, color: SEVERITY.HIGH?.color || "#FF9F43" },
+    { key: "HIGH",     count: highCount, color: SEVERITY.HIGH?.color || "var(--status-warning-bright)" },
     { key: "MEDIUM",   count: medCount,  color: SEVERITY.MEDIUM?.color || "var(--status-warning)" },
     { key: "LOW",      count: lowCount,  color: SEVERITY.LOW?.color || "#8898A8" },
   ];

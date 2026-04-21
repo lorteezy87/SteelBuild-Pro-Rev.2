@@ -683,7 +683,7 @@ export default function ResourceScheduling() {
       width: 160px; height: 36px; border-radius: 6px;
       background: ${PHASE_COLORS[wp.phase] || PHASE_COLORS.default};
       opacity: 0.88; pointer-events: none; z-index: 9999;
-      border: 2px dashed #FFB300; box-shadow: 0 8px 32px rgba(255,179,0,0.4);
+      border: 2px dashed var(--status-warning-bright); box-shadow: 0 8px 32px rgba(255,179,0,0.4);
       cursor: grabbing; display: flex; align-items: center; padding: 0 10px;
       font-family: var(--font-body); font-size: 11px; font-weight: 600;
       color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1212,7 +1212,7 @@ export default function ResourceScheduling() {
             Phase: {hoverTooltip.wp.phase} {"\u00B7"} Status: {hoverTooltip.wp.status}<br/>
             Tonnage: {hoverTooltip.wp.tonnage || 0}T {"\u00B7"} Progress: {hoverTooltip.wp.percent_complete || 0}%<br/>
             Shop: {hoverTooltip.shopAct}h / {hoverTooltip.shopBud}h {"\u00B7"} Field: {hoverTooltip.fieldAct}h / {hoverTooltip.fieldBud}h<br/>
-            <span style={{ color: hoverTooltip.totalAct > hoverTooltip.totalBud ? "#FF3D3D" : "#00D68F", fontWeight: 700 }}>
+            <span style={{ color: hoverTooltip.totalAct > hoverTooltip.totalBud ? "var(--status-error-bright)" : "var(--status-success-bright)", fontWeight: 700 }}>
               Total: {hoverTooltip.totalAct}h / {hoverTooltip.totalBud}h ({hoverTooltip.totalBud > 0 ? Math.round((hoverTooltip.totalAct / hoverTooltip.totalBud) * 100) : 0}%)
             </span>
             {hoverTooltip.totalBud > 0 && (

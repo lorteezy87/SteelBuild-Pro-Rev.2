@@ -39,7 +39,7 @@ export const isThisWeek = (date) => {
 export const PHASE_COLORS = {
   Detailing:   "linear-gradient(135deg, var(--accent), var(--secondary))",
   Fabrication: "linear-gradient(135deg, var(--accent), var(--status-warning))",
-  Delivery:    "linear-gradient(135deg, #00D68F, #00A86B)",
+  Delivery:    "linear-gradient(135deg, var(--status-success-bright), #00A86B)",
   Erection:    "linear-gradient(135deg, #00B8D9, #0090B8)",
   default:     "linear-gradient(135deg, #475569, #334155)",
 };
