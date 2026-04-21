@@ -31,10 +31,10 @@ const TYPE_PAGE_MAP = {
 
 // ─── Type icon map ────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
-  RFI:         { icon: "⚑",  label: "RFI",          color: "#FFB400" },
+  RFI:         { icon: "⚑",  label: "RFI",          color: "var(--status-warning)" },
   Drawing:     { icon: "▦",  label: "DRAWING",       color: "#0EA5E9" },
-  WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "#E8650A" },
-  Delivery:    { icon: "📦", label: "DELIVERY",      color: "#10B981" },
+  WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "var(--status-review)" },
+  Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
   ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "#FF9F43" },
 };
 
@@ -232,7 +232,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
             {/* Timing */}
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
-              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-muted)",
+              color: item.overdueDays > 0 ? "var(--status-error)" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "var(--status-warning)" : "var(--text-muted)",
               whiteSpace: "nowrap",
             }}>
               {overdueTxt || (item.due_date ? new Date(item.due_date).toLocaleDateString("en-US", { month: "numeric", day: "numeric" }) : "\u2014")}
@@ -286,7 +286,7 @@ function PriorityRow({ item, expanded, onToggle, onOpenDrawer, onNavigateTitle }
               {item.waiting_on && (
                 <div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 3 }}>WAITING ON</div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#FFB400" }}>{item.waiting_on}</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--status-warning)" }}>{item.waiting_on}</div>
                 </div>
               )}
               <div>
@@ -371,7 +371,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>TIMING</div>
             <div style={{
               fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
-              color: item.overdueDays > 0 ? "#FF7A7A" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "#FFB400" : "var(--text-secondary)",
+              color: item.overdueDays > 0 ? "var(--status-error)" : item.dueSoonDays !== null && item.dueSoonDays <= 7 ? "var(--status-warning)" : "var(--text-secondary)",
             }}>
               {overdueTxt}
             </div>
@@ -413,7 +413,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
             {item.waiting_on && (
               <div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 4 }}>WAITING ON</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#FFB400" }}>{item.waiting_on}</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--status-warning)" }}>{item.waiting_on}</div>
               </div>
             )}
             {item.project_name && (
@@ -525,7 +525,7 @@ function MorningScan({ items, onSelect }) {
             <div style={{ flexShrink: 0, textAlign: "right" }}>
               <ActionBadge action={item.nextAction} />
               {item.overdueDays > 0 && (
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF7A7A", marginTop: 4 }}>{item.overdueDays}d overdue</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 4 }}>{item.overdueDays}d overdue</div>
               )}
             </div>
           </div>
@@ -550,7 +550,7 @@ function WaitingOnBoard({ board }) {
         <div key={party} style={{ background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid var(--divider)", background: "var(--hover-bg)" }}>
             <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{party}</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FFB400", background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.22)", padding: "1px 7px", borderRadius: 3 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "rgba(255,180,0,0.10)", border: "1px solid rgba(255,180,0,0.22)", padding: "1px 7px", borderRadius: 3 }}>
               {count} ITEMS
             </span>
           </div>
@@ -561,7 +561,7 @@ function WaitingOnBoard({ board }) {
                 {item.title}
               </span>
               {item.overdueDays > 0 && (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF7A7A", whiteSpace: "nowrap" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", whiteSpace: "nowrap" }}>
                   {item.overdueDays}d overdue
                 </span>
               )}
@@ -628,12 +628,12 @@ function AISummaryBanner({ kpis }) {
       color: "var(--text-secondary)",
       lineHeight: 1.55,
     }}>
-      You have <strong style={{ color: SEVERITY.CRITICAL?.color || "#FF5C5C" }}>{kpis.critical} critical</strong> items
-      and <strong style={{ color: "#FF7A7A" }}>{kpis.overdueAll} overdue</strong>.
+      You have <strong style={{ color: SEVERITY.CRITICAL?.color || "var(--status-error)" }}>{kpis.critical} critical</strong> items
+      and <strong style={{ color: "var(--status-error)" }}>{kpis.overdueAll} overdue</strong>.
       {kpis.blocksFab > 0 && (
-        <> <strong style={{ color: "#E8650A" }}>{kpis.blocksFab}</strong> items are blocking fabrication.</>
+        <> <strong style={{ color: "var(--status-review)" }}>{kpis.blocksFab}</strong> items are blocking fabrication.</>
       )}
-      {" "}CO exposure: <strong style={{ color: kpis.coExposure > 10000 ? "#FFB400" : "var(--text-primary)" }}>{coDisplay}</strong>.
+      {" "}CO exposure: <strong style={{ color: kpis.coExposure > 10000 ? "var(--status-warning)" : "var(--text-primary)" }}>{coDisplay}</strong>.
     </div>
   );
 }
@@ -651,9 +651,9 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
 
   // Severity segments for mini stacked bar
   const segments = [
-    { key: "CRITICAL", count: critCount, color: SEVERITY.CRITICAL?.color || "#FF5C5C" },
+    { key: "CRITICAL", count: critCount, color: SEVERITY.CRITICAL?.color || "var(--status-error)" },
     { key: "HIGH",     count: highCount, color: SEVERITY.HIGH?.color || "#FF9F43" },
-    { key: "MEDIUM",   count: medCount,  color: SEVERITY.MEDIUM?.color || "#FFB400" },
+    { key: "MEDIUM",   count: medCount,  color: SEVERITY.MEDIUM?.color || "var(--status-warning)" },
     { key: "LOW",      count: lowCount,  color: SEVERITY.LOW?.color || "#8898A8" },
   ];
 
@@ -681,7 +681,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
           max={total || 1}
           size={64}
           stroke={6}
-          color={SEVERITY.CRITICAL?.color || "#FF5C5C"}
+          color={SEVERITY.CRITICAL?.color || "var(--status-error)"}
           label={`${total}`}
         />
         <div>
@@ -718,7 +718,7 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
             {topWaiting.map(({ party, count }) => (
               <div key={party} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>{party}</span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#FFB400" }}>{count}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-warning)" }}>{count}</span>
               </div>
             ))}
           </div>
@@ -729,11 +729,11 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>BLOCKS FAB</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.blocksFab > 0 ? "var(--status-review)" : "var(--text-muted)" }}>{kpis.blocksFab}</div>
         </div>
         <div style={{ padding: "8px 10px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", marginBottom: 2 }}>OVERDUE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: kpis.overdueAll > 0 ? "var(--status-error)" : "var(--text-muted)" }}>{kpis.overdueAll}</div>
         </div>
       </div>
     </div>
@@ -985,7 +985,7 @@ export default function ProjectControlCenter() {
         <SignalCard
           label="OVERDUE"
           value={kpis.overdueAll}
-          color={kpis.overdueAll > 0 ? "#FF7A7A" : "var(--text-muted)"}
+          color={kpis.overdueAll > 0 ? "var(--status-error)" : "var(--text-muted)"}
           sub="items"
           previous={previousKpis?.overdueAll}
           invertTrend
@@ -1002,7 +1002,7 @@ export default function ProjectControlCenter() {
         <SignalCard
           label="BLOCKS FAB"
           value={kpis.blocksFab}
-          color={kpis.blocksFab > 0 ? "#E8650A" : "var(--text-muted)"}
+          color={kpis.blocksFab > 0 ? "var(--status-review)" : "var(--text-muted)"}
           sub="items"
           previous={previousKpis?.blocksFab}
           invertTrend
@@ -1018,7 +1018,7 @@ export default function ProjectControlCenter() {
         <SignalCard
           label="CO EXPOSURE"
           value={kpis.coExposure > 0 ? `$${(kpis.coExposure / 1000).toFixed(0)}k` : "$0"}
-          color={kpis.coExposure > 50000 ? "#FF7A7A" : kpis.coExposure > 10000 ? "#FFB400" : "var(--text-muted)"}
+          color={kpis.coExposure > 50000 ? "var(--status-error)" : kpis.coExposure > 10000 ? "var(--status-warning)" : "var(--text-muted)"}
           sub="open COs"
           previous={previousKpis?.coExposure != null ? (previousKpis.coExposure > 0 ? parseInt((previousKpis.coExposure / 1000).toFixed(0), 10) : 0) : undefined}
           invertTrend
@@ -1031,8 +1031,8 @@ export default function ProjectControlCenter() {
           @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
           @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
           @keyframes pccPulse {
-            0%, 100% { box-shadow: 0 0 20px var(--pulse-color, #FF5C5C30), 0 0 6px var(--pulse-color, #FF5C5C18); }
-            50% { box-shadow: 0 0 28px var(--pulse-color, #FF5C5C50), 0 0 10px var(--pulse-color, #FF5C5C30), 0 0 3px var(--pulse-color, #FF5C5C10); }
+            0%, 100% { box-shadow: 0 0 20px var(--pulse-color, var(--status-error)30), 0 0 6px var(--pulse-color, var(--status-error)18); }
+            50% { box-shadow: 0 0 28px var(--pulse-color, var(--status-error)50), 0 0 10px var(--pulse-color, var(--status-error)30), 0 0 3px var(--pulse-color, var(--status-error)10); }
           }
           .signal-card-pulse { animation: pccPulse 2.5s ease-in-out infinite; }
           @media (max-width: 900px) {

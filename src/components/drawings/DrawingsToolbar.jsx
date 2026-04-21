@@ -6,7 +6,7 @@ import { STAGES, DISCIPLINES, mono, surface, btnBase, btnPrimary, btnGhost } fro
 export function StatsBar({ stats, stageFilter, setStageFilter }) {
   const items = [
     { label: "PACKAGES",       value: stats.total,    color: "var(--text-primary)", filterKey: null },
-    { label: "RELEASED",       value: stats.released, color: "#10B981",             filterKey: "Released" },
+    { label: "RELEASED",       value: stats.released, color: "var(--status-success)",             filterKey: "Released" },
     { label: "IN REVIEW",     value: stats.inReview,  color: "#3B82F6",             filterKey: "_inReview" },
     { label: "OVERDUE",       value: stats.overdue,   color: "var(--status-error)",  filterKey: "_overdue" },
     { label: "PRIORITY",      value: stats.priority,  color: "var(--accent)",        filterKey: "_priority" },
@@ -117,7 +117,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
           padding: "6px 12px", borderRadius: "var(--radius-btn)", cursor: "pointer",
           background: stageFilter === "Released" ? "rgba(16,185,129,0.15)" : "none",
           border: `1px solid ${stageFilter === "Released" ? "rgba(16,185,129,0.35)" : "var(--border-default)"}`,
-          color: stageFilter === "Released" ? "#10B981" : "var(--text-muted)",
+          color: stageFilter === "Released" ? "var(--status-success)" : "var(--text-muted)",
           transition: "all 0.15s",
         }}
       >

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { formatDate } from "@/components/shared/formatters";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, StatusPill } from "@/components/design-system";
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
@@ -150,39 +150,10 @@ function DataTable({ columns, rows, rowKey, rowStyle }) {
   );
 }
 
-// ─── Status Badge ───────────────────────────────────────────────────────────
-
-function StatusPill({ status }) {
-  const statusMap = {
-    Delivered: { bg: "var(--status-success)", text: "#000" },
-    "In Transit": { bg: "var(--status-warning)", text: "#000" },
-    Scheduled: { bg: "var(--accent)", text: "#000" },
-    Pending: { bg: "var(--text-muted)", text: "#000" },
-    Complete: { bg: "var(--status-success)", text: "#000" },
-    "In Progress": { bg: "var(--accent)", text: "#000" },
-    "Not Started": { bg: "var(--text-muted)", text: "#000" },
-  };
-  const s = statusMap[status] || { bg: "var(--text-muted)", text: "#000" };
-
-  return (
-    <span
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 8,
-        fontWeight: 700,
-        letterSpacing: "0.10em",
-        textTransform: "uppercase",
-        padding: "3px 8px",
-        borderRadius: 4,
-        background: `${s.bg}25`,
-        color: s.bg,
-        border: `1px solid ${s.bg}40`,
-      }}
-    >
-      {status || "—"}
-    </span>
-  );
-}
+// StatusPill now comes from the shared design-system (auto-colored via
+// STATUS_COLOR tokens). Removed local copy — the previous one built an
+// invalid CSS string by concatenating `var(...)` with a hex alpha
+// suffix, so the tinted bg/border never actually rendered.
 
 // ─── LABOR TAB ──────────────────────────────────────────────────────────────
 
@@ -229,7 +200,7 @@ function LaborTab({ workPackages, dailyLogs }) {
   const laborCols = [
     { key: "work_package_number", label: "WP#", width: "70px", bold: true },
     { key: "description", label: "Description", width: "2fr", mono: false, fontSize: 11, render: (r) => r.description || "—" },
-    { key: "status", label: "Status", width: "100px", render: (r) => <StatusPill status={r.status} /> },
+    { key: "status", label: "Status", width: "100px", render: (r) => <StatusPill label={r.status || "—"} size="xs" /> },
     { key: "bShop", label: "Budget Shop", width: "100px", right: true, render: (r) => fmt(r.bShop) },
     { key: "aShop", label: "Actual Shop", width: "100px", right: true, render: (r) => fmt(r.aShop) },
     { key: "bField", label: "Budget Field", width: "100px", right: true, render: (r) => fmt(r.bField) },
@@ -410,7 +381,7 @@ function MaterialsTab({ workPackages, deliveries }) {
     { key: "actual_date", label: "Actual", width: "110px", right: true, render: (r) => formatDate(r.actual_date) },
     { key: "weight_tons", label: "Weight (tons)", width: "100px", right: true, render: (r) => fmtDec(safeNum(r.weight_tons)) },
     { key: "pieces", label: "Pieces", width: "80px", right: true, render: (r) => fmt(safeNum(r.pieces)) },
-    { key: "status", label: "Status", width: "110px", render: (r) => <StatusPill status={r.status} /> },
+    { key: "status", label: "Status", width: "110px", render: (r) => <StatusPill label={r.status || "—"} size="xs" /> },
   ];
 
   return (
