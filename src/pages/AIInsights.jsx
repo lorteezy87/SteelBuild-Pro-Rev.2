@@ -308,7 +308,7 @@ export default function PortfolioOverview() {
                       <div style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>#{p.project_number}</div>
                     </td>
                     <td style={{ padding: "9px 10px" }}>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: PHASE_COLORS[p.phase] || M.muted, background: `${PHASE_COLORS[p.phase] || "#666"}20`, borderRadius: 4, padding: "2px 6px", border: `1px solid ${PHASE_COLORS[p.phase] || "#666"}30` }}>{p.phase || "—"}</span>
+                      <span style={{ fontFamily: M.mono, fontSize: 8, color: PHASE_COLORS[p.phase] || M.muted, background: `${PHASE_COLORS[p.phase] || "var(--text-muted)"}20`, borderRadius: 4, padding: "2px 6px", border: `1px solid ${PHASE_COLORS[p.phase] || "var(--text-muted)"}30` }}>{p.phase || "—"}</span>
                     </td>
                     <td style={{ padding: "9px 10px" }}><StatusBadge status={p.health_status} /></td>
                     <td style={{ fontFamily: M.mono, fontSize: 10, color: M.text, padding: "9px 10px", textAlign: "right" }}>{formatCurrency(p.original_contract_value)}</td>

@@ -58,7 +58,7 @@ export default function TransmittalModal({
       >
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--bg-surface-high)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#10B981", letterSpacing: "0.06em" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--status-success)", letterSpacing: "0.06em" }}>
               GENERATE TRANSMITTAL
             </div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
@@ -132,7 +132,7 @@ export default function TransmittalModal({
           </button>
           <button
             onClick={handleGenerate}
-            style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "#10B981", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
+            style={{ padding: "8px 20px", background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.40)", color: "var(--status-success)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em" }}
           >
             {"\u2193"} GENERATE PDF
           </button>

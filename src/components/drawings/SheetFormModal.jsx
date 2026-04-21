@@ -161,7 +161,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
             <label style={labelStyle}>PDF Attachment</label>
             {form.file_url && !uploadFile && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ ...mono, fontSize: 10, color: "#10B981" }}>FILE ATTACHED</span>
+                <span style={{ ...mono, fontSize: 10, color: "var(--status-success)" }}>FILE ATTACHED</span>
                 <button onClick={() => set("file_url", "")} style={{ background: "none", border: "none", color: "var(--status-error)", fontSize: 10, cursor: "pointer", ...mono }}>REMOVE</button>
               </div>
             )}
