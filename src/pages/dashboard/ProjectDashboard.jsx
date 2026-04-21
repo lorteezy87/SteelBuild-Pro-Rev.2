@@ -51,7 +51,7 @@ import {
 import FinancialSnapshot from "./FinancialSnapshot";
 import AgingCard from "./AgingCard";
 import QuickUpdateRail from "./QuickUpdateRail";
-import { formatCurrency } from "@/components/shared/formatters";
+import { formatCurrency, formatDate } from "@/components/shared/formatters";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -274,9 +274,9 @@ export default function ProjectDashboard({
 
           {/* Dates row */}
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14 }}>
-            <Meta label="START"           value={formatDate(project?.start_date)} mono />
-            <Meta label="TARGET COMPLETE" value={formatDate(project?.target_completion_date)} mono />
-            <Meta label="FORECAST"        value={formatDate(project?.forecast_completion_date)} mono />
+            <Meta label="START"           value={fmtMetaDate(project?.start_date)} mono />
+            <Meta label="TARGET COMPLETE" value={fmtMetaDate(project?.target_completion_date)} mono />
+            <Meta label="FORECAST"        value={fmtMetaDate(project?.forecast_completion_date)} mono />
           </div>
 
           {/* Phase pipeline */}
@@ -489,7 +489,9 @@ function InlineLabel({ children }) {
   );
 }
 
-function formatDate(d) {
-  if (!d) return null;
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Shared `formatDate` returns "-" for empty input; we pass null through
+// instead so the downstream `Meta` component's `|| "—"` fallback renders
+// the em-dash we use elsewhere on this dashboard.
+function fmtMetaDate(d) {
+  return d ? formatDate(d) : null;
 }

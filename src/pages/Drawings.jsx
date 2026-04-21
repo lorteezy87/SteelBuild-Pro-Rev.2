@@ -24,7 +24,7 @@ import { batchProcess } from "@/utils/batchProcess";
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
   STAGE_ORDER, DISCIPLINES, EMPTY_FORM, IN_REVIEW_STAGES, STAGES,
-  mono, surface, btnGhost, btnPrimary,
+  mono, surface,
 } from "@/components/drawings/drawingsConfig";
 import {
   isOverdue, exportTransmittal, computeStats, computeDisciplineCounts, buildRevisionAlerts,
@@ -32,10 +32,12 @@ import {
 } from "@/components/drawings/drawingsUtils";
 
 // ── Presentation components ─────────────────────────────────────────────────
-import DrawingsTable, { ContextMenuItem } from "@/components/drawings/DrawingsTable";
+import DrawingsTable from "@/components/drawings/DrawingsTable";
 import DrawingsGrid from "@/components/drawings/DrawingsGrid";
 import { DisciplineChips, FilterBar, BulkActionsBar } from "@/components/drawings/DrawingsToolbar";
 import AlertBanner from "@/components/drawings/AlertBanner";
+import ActiveFilterPills from "@/components/drawings/ActiveFilterPills";
+import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 import RenameSetModal from "@/components/drawings/RenameSetModal";
@@ -830,30 +832,16 @@ export default function Drawings() {
       </ErrorBoundary>
 
       {/* ── Context Menu ───────────────────────────────────────────────────── */}
-      {contextMenu && (
-        <div
-          ref={contextRef}
-          style={{
-            position: "fixed", left: contextMenu.x, top: contextMenu.y, zIndex: 999,
-            ...surface, padding: "6px 0", minWidth: 180,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          {[
-            { label: "View PDF", action: () => { navigate(`/DrawingViewer?id=${contextMenu.drawing.id}`); setContextMenu(null); } },
-            { label: "Edit Sheet", action: () => { setEditing(contextMenu.drawing); setShowModal(true); setContextMenu(null); } },
-            { label: "Advance Stage →", action: () => handleAdvanceStage(contextMenu.drawing) },
-            ...(contextMenu.drawing.drawing_set_name?.trim() ? [{
-              label: "Set Approval ✓",
-              action: () => { openSetApproval(contextMenu.drawing.drawing_set_name.trim()); setContextMenu(null); },
-            }] : []),
-            { label: "Delete Sheet", action: () => handleDelete(contextMenu.drawing.id), danger: true },
-          ].map(item => (
-            <ContextMenuItem key={item.label} label={item.label} onClick={item.action} danger={item.danger} />
-          ))}
-        </div>
-      )}
+      <DrawingContextMenu
+        contextMenu={contextMenu}
+        contextRef={contextRef}
+        onView={(d) => navigate(`/DrawingViewer?id=${d.id}`)}
+        onEdit={(d) => { setEditing(d); setShowModal(true); }}
+        onAdvance={handleAdvanceStage}
+        onSetApproval={openSetApproval}
+        onDelete={handleDelete}
+        onDismiss={() => setContextMenu(null)}
+      />
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showModal && (
@@ -930,92 +918,3 @@ export default function Drawings() {
   );
 }
 
-/**
- * F22: Active-filter pill strip.
- *
- * Sits under FilterBar and renders one chip per active filter — search term,
- * discipline, stage filter — each with a little × to clear that filter. If
- * more than one filter is active, a final "CLEAR ALL" chip resets everything
- * at once. When no filters are on, this renders `null` so the row is
- * completely empty, not just visually blank.
- */
-function ActiveFilterPills({ search, discipline, stageFilter, onClearSearch, onClearDiscipline, onClearStage, onClearAll }) {
-  const pills = [];
-  if (search?.trim()) {
-    pills.push({ key: "search", label: `SEARCH: "${search.trim()}"`, onClear: onClearSearch });
-  }
-  if (discipline && discipline !== "ALL") {
-    pills.push({ key: "discipline", label: `DISCIPLINE: ${discipline}`, onClear: onClearDiscipline });
-  }
-  if (stageFilter && stageFilter !== "ALL") {
-    // Translate the internal keys (_overdue / _inReview / _priority / stage-key)
-    // into something the user will recognize.
-    let stageLabel = stageFilter;
-    if (stageFilter === "_overdue")  stageLabel = "OVERDUE";
-    else if (stageFilter === "_inReview") stageLabel = "IN REVIEW";
-    else if (stageFilter === "_priority") stageLabel = "PRIORITY";
-    else if (stageFilter === "Released") stageLabel = "IFC ONLY";
-    else {
-      const s = STAGES.find(x => x.key === stageFilter);
-      if (s) stageLabel = s.label;
-    }
-    pills.push({ key: "stage", label: `STAGE: ${stageLabel}`, onClear: onClearStage });
-  }
-  if (pills.length === 0) return null;
-
-  const pillStyle = {
-    ...mono,
-    fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    padding: "4px 6px 4px 10px",
-    borderRadius: "var(--radius-badge)",
-    border: "1px solid rgba(200,155,32,0.35)",
-    background: "rgba(200,155,32,0.10)",
-    color: "var(--accent)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  };
-  const xStyle = {
-    ...mono,
-    fontSize: 11,
-    fontWeight: 800,
-    lineHeight: 1,
-    padding: "2px 5px",
-    marginLeft: 2,
-    borderRadius: 3,
-    border: "1px solid transparent",
-    background: "transparent",
-    color: "var(--accent)",
-    cursor: "pointer",
-  };
-
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 14 }}>
-      <span style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", marginRight: 2 }}>
-        FILTERING BY
-      </span>
-      {pills.map(p => (
-        <span key={p.key} style={pillStyle}>
-          {p.label}
-          <button type="button" aria-label={`Clear ${p.key} filter`} onClick={p.onClear} style={xStyle}>×</button>
-        </span>
-      ))}
-      {pills.length > 1 && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          style={{
-            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-            padding: "4px 10px", borderRadius: "var(--radius-badge)",
-            border: "1px solid var(--border-default)",
-            background: "none", color: "var(--text-muted)", cursor: "pointer",
-          }}
-        >
-          CLEAR ALL
-        </button>
-      )}
-    </div>
-  );
-}
