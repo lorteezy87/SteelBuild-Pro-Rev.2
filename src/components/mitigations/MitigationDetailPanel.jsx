@@ -246,7 +246,7 @@ export default function MitigationDetailPanel({
                 {mitigation.status !== "Resolved" && (
                   <span style={{
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                    color: days > 30 ? "#FF5C5C" : days > 14 ? "#FFB400" : "var(--text-muted)",
+                    color: days > 30 ? "var(--status-error)" : days > 14 ? "var(--status-warning)" : "var(--text-muted)",
                     background: days > 14 ? "rgba(255,122,122,0.08)" : "var(--hover-bg)",
                     border: days > 14 ? "1px solid rgba(255,122,122,0.20)" : "1px solid var(--divider)",
                     borderRadius: 4, padding: "2px 7px",
@@ -277,7 +277,7 @@ export default function MitigationDetailPanel({
               background: "var(--bg-surface-low)", borderRadius: "var(--radius-card)",
               padding: "10px 12px", borderTop: "2px solid var(--status-warning)",
             }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: exposure >= 50000 ? "#FF5C5C" : "var(--text-primary)" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: exposure >= 50000 ? "var(--status-error)" : "var(--text-primary)" }}>
                 ${exposure.toLocaleString()}
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>

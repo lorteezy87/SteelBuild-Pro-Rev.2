@@ -268,7 +268,7 @@ function UsersManagementContent() {
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => setDeleteTarget(user)}
-                          style={{ color: "#FF3D3D" }}
+                          style={{ color: "var(--status-error-bright)" }}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>

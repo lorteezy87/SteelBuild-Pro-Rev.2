@@ -5,13 +5,13 @@ const PHASE_COLOR = {
   Detailing: "#8B5CF6",
   Fabrication: "var(--accent)",
   Delivery: "#00B8D9",
-  Erection: "#00D68F",
+  Erection: "var(--status-success-bright)",
 };
 
 const STATUS_COLOR = {
-  "Complete":    "#00D68F",
+  "Complete":    "var(--status-success-bright)",
   "In Progress": "var(--status-warning)",
-  "On Hold":     "#FF3D3D",
+  "On Hold":     "var(--status-error-bright)",
   "Not Started": "var(--text-muted)",
 };
 
@@ -172,8 +172,8 @@ function ZoneCell({ zone, isSelected, onClick }) {
           <MiniBar
             value={health.avgProgress || 0}
             color={
-              health.label === "Blocked" ? "#FF3D3D" :
-              health.label === "Complete" ? "#00D68F" :
+              health.label === "Blocked" ? "var(--status-error-bright)" :
+              health.label === "Complete" ? "var(--status-success-bright)" :
               health.label === "Active" ? "var(--status-warning)" : "var(--accent)"
             }
             height={4}
@@ -186,7 +186,7 @@ function ZoneCell({ zone, isSelected, onClick }) {
                 <span style={mono({ fontSize: 8, color: "var(--status-warning)" })}>▶ {health.inProgress.length}</span>
               )}
               {health.onHold?.length > 0 && (
-                <span style={mono({ fontSize: 8, color: "#FF3D3D" })}>⏸ {health.onHold.length}</span>
+                <span style={mono({ fontSize: 8, color: "var(--status-error-bright)" })}>⏸ {health.onHold.length}</span>
               )}
             </div>
             <span style={mono({ fontSize: 8, color: "var(--text-muted)" })}>{Math.round(health.avgProgress || 0)}%</span>
@@ -209,9 +209,9 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
   };
 
   const borderColor =
-    health.label === "Blocked" ? "#FF3D3D" :
-    health.label === "Warning" ? "#FFB300" :
-    health.label === "Complete" ? "#00D68F" :
+    health.label === "Blocked" ? "var(--status-error-bright)" :
+    health.label === "Warning" ? "var(--status-warning-bright)" :
+    health.label === "Complete" ? "var(--status-success-bright)" :
     health.label === "Active" ? "var(--status-warning)" : "var(--accent)";
 
   const totalTonnage = zone.wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
@@ -289,11 +289,11 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
                 onClick={() => onSelectWP(issue.wp)}
                 >
                   {issue.type === "hold"
-                    ? <Pause size={12} color="#FF3D3D" />
-                    : <AlertTriangle size={12} color="#FFB300" />
+                    ? <Pause size={12} color="var(--status-error-bright)" />
+                    : <AlertTriangle size={12} color="var(--status-warning-bright)" />
                   }
                   <div style={{ flex: 1 }}>
-                    <div style={mono({ fontSize: 9, color: issue.type === "hold" ? "#FF3D3D" : "#FFB300", fontWeight: 700 })}>
+                    <div style={mono({ fontSize: 9, color: issue.type === "hold" ? "var(--status-error-bright)" : "var(--status-warning-bright)", fontWeight: 700 })}>
                       {issue.label}
                     </div>
                     <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 1 }}>
@@ -341,7 +341,7 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={mono({ fontSize: 9, color: phColor })}>{wp.wp_number}</span>
                         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          {noDrawings && <span title="No drawings linked" style={mono({ fontSize: 8, color: "#FFB300" })}>⚠</span>}
+                          {noDrawings && <span title="No drawings linked" style={mono({ fontSize: 8, color: "var(--status-warning-bright)" })}>⚠</span>}
                           <span style={mono({ fontSize: 9, color: "var(--text-muted)" })}>{wp.percent_complete || 0}%</span>
                         </div>
                       </div>
@@ -350,7 +350,7 @@ function ZoneDetailPanel({ zone, onClose, onSelectWP }) {
                       </div>
                       <MiniBar
                         value={wp.percent_complete || 0}
-                        color={wp.status === "Complete" ? "#00D68F" : wp.status === "On Hold" ? "#FF3D3D" : phColor}
+                        color={wp.status === "Complete" ? "var(--status-success-bright)" : wp.status === "On Hold" ? "var(--status-error-bright)" : phColor}
                         height={3}
                       />
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
@@ -429,9 +429,9 @@ export default function SiteMapView({ wps, onSelectWP }) {
           </span>
           {[
             { label: "ACTIVE", value: activeZones, color: "var(--status-warning)" },
-            { label: "BLOCKED", value: blockedZones, color: "#FF3D3D" },
-            { label: "COMPLETE", value: completeZones, color: "#00D68F" },
-            { label: "ISSUES", value: totalIssues, color: "#FFB300" },
+            { label: "BLOCKED", value: blockedZones, color: "var(--status-error-bright)" },
+            { label: "COMPLETE", value: completeZones, color: "var(--status-success-bright)" },
+            { label: "ISSUES", value: totalIssues, color: "var(--status-warning-bright)" },
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: s.color }} />

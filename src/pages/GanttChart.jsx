@@ -421,7 +421,7 @@ function DetailPanel({ task, onClose }) {
         ].map(({ label, value, warn }) => (
           <div key={label}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: warn ? "#FF3D3D" : "var(--text-primary)", fontWeight: warn ? 700 : 500 }}>{value}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: warn ? "var(--status-error-bright)" : "var(--text-primary)", fontWeight: warn ? 700 : 500 }}>{value}</div>
           </div>
         ))}
       </div>

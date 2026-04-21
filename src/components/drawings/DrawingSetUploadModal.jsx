@@ -646,7 +646,7 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
       <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Upload Complete</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center", marginBottom: 24 }}>
         {fileResults.map(r => (
-          <div key={r.fileName} style={{ fontFamily: "var(--font-body)", fontSize: 12, color: r.status === "failed" ? "#FF3D3D" : "var(--text-muted)" }}>
+          <div key={r.fileName} style={{ fontFamily: "var(--font-body)", fontSize: 12, color: r.status === "failed" ? "var(--status-error-bright)" : "var(--text-muted)" }}>
             {r.status === "failed" ? "✗" : "✓"} {r.fileName} — {r.status === "failed" ? `failed: ${r.error}` : `${r.sheetCount} sheets`}
           </div>
         ))}
