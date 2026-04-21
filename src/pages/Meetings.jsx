@@ -7,6 +7,8 @@ import { useProjectContext } from "../components/shared/useProjectContext";
 import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 /* ── Meeting type templates for Quick Start empty state ── */
 const MEETING_TEMPLATES = [
@@ -202,38 +204,14 @@ export default function Meetings() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: 24,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Meetings
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} {"\u2022"} {filtered.length} Meetings
-          </p>
-        </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Meetings"
+        count={filtered.length}
+        unit=" · MEETINGS"
+        subtitle={`${stats.upcoming || 0} upcoming · ${stats.complete || 0} complete · OAC / Foreman / Pre-Con templates`}
+      >
         <button
           onClick={() => {
             setEditing(null);
@@ -241,113 +219,39 @@ export default function Meetings() {
             setShowForm(true);
           }}
           style={{
+            display: "flex", alignItems: "center", gap: 6,
             background: "var(--accent)",
-            color: "#07090E",
+            color: "var(--bg-base)",
             border: "none",
             borderRadius: "var(--radius-btn)",
-            padding: "10px 20px",
-            fontFamily: "var(--font-display)",
-            fontSize: "13px",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
             fontWeight: 700,
             cursor: "pointer",
             textTransform: "uppercase",
             letterSpacing: "0.08em",
-            minHeight: "44px",
-            minWidth: "44px",
-            transition: "background 0.15s, box-shadow 0.15s",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--accent-hover)";
-            e.currentTarget.style.boxShadow = "var(--shadow-glow-gold)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--accent)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + New Meeting
+          <Plus size={12} /> New Meeting
         </button>
-      </div>
+      </CommandBar>
 
-      {/* KPI Tiles - Interactive */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
         {kpiTiles.map((stat) => {
           const isActive = filterStatus === stat.statusFilter;
-          const shouldPulse = stat.pulse && stat.value > 0;
           return (
-            <div
+            <KpiTile
               key={stat.label}
-              role="button"
-              tabIndex={0}
+              compact
+              label={stat.label}
+              value={stat.value}
+              color={stat.color}
+              active={isActive}
               onClick={() => handleStatClick(stat.statusFilter)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") handleStatClick(stat.statusFilter);
-              }}
-              style={{
-                background: isActive ? `${stat.color}12` : "var(--bg-surface)",
-                border: isActive ? `1px solid ${stat.color}50` : "1px solid var(--border-default)",
-                borderRadius: "var(--radius-card)",
-                padding: "14px 16px",
-                borderTop: `2px solid ${stat.color}`,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                boxShadow: shouldPulse
-                  ? `0 0 12px ${stat.color}25`
-                  : isActive
-                    ? `0 0 16px ${stat.color}15`
-                    : "var(--shadow-card)",
-                animation: shouldPulse ? "gentlePulse 2s ease-in-out infinite" : "none",
-                minHeight: "44px",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.borderColor = `${stat.color}40`;
-                  e.currentTarget.style.background = `${stat.color}08`;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.borderColor = "var(--border-default)";
-                  e.currentTarget.style.background = "var(--bg-surface)";
-                }
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "22px",
-                  fontWeight: 700,
-                  color: stat.color,
-                  marginBottom: "4px",
-                  lineHeight: 1,
-                }}
-              >
-                {stat.value}
-              </div>
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "8px",
-                  fontWeight: 700,
-                  color: isActive ? stat.color : "var(--text-muted)",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {stat.label}
-              </div>
-              {isActive && stat.statusFilter !== "all" && (
-                <div
-                  style={{
-                    marginTop: "6px",
-                    height: "2px",
-                    borderRadius: "1px",
-                    background: stat.color,
-                    opacity: 0.6,
-                  }}
-                />
-              )}
-            </div>
+            />
           );
         })}
       </div>

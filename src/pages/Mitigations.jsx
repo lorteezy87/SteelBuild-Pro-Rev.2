@@ -11,6 +11,8 @@ import StatCard from "@/components/shared/StatCard";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DonutChart from "@/components/shared/DonutChart";
 import { createPageUrl } from "@/utils";
+import { CommandBar } from "@/components/design-system";
+import { Plus, Download } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -588,73 +590,58 @@ export default function Mitigations() {
           </div>
         )}
 
-        {/* ═══ HEADER ════════════════════════════════════════════════════════ */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h1 style={{
-              fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800,
-              color: "var(--text-primary)", margin: 0,
-              textTransform: "uppercase", letterSpacing: "0.04em",
-            }}>
-              Mitigations
-            </h1>
-            <p style={{
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              color: "var(--text-muted)", marginTop: 4,
-              letterSpacing: "0.12em", textTransform: "uppercase",
-            }}>
-              {selectedProject ? selectedProject.name : "All Projects"} &bull; {filtered.length} Issues &bull; Defensive Legal &amp; Financial Engine
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {/* Monthly Report Export */}
-            {mitigations.length > 0 && (
-              <button
-                onClick={handleExportAll}
-                title="Export monthly snapshot for audit trail"
-                style={{
-                  background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.30)",
-                  borderRadius: "var(--radius-btn)", padding: "8px 14px",
-                  color: "#0EA5E9", fontFamily: "var(--font-mono)", fontSize: 10,
-                  fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
-                  letterSpacing: "0.08em", whiteSpace: "nowrap",
-                }}
-              >
-                Monthly Report
-              </button>
-            )}
-
-            {/* Toggle Executive View */}
+        <CommandBar
+          eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+          title="Mitigations"
+          count={filtered.length}
+          unit=" · ISSUES"
+          subtitle={`${stats.open || 0} open · Defensive legal & financial engine`}
+        >
+          {mitigations.length > 0 && (
             <button
-              onClick={() => setShowExecutiveView(!showExecutiveView)}
+              onClick={handleExportAll}
+              title="Export monthly snapshot for audit trail"
               style={{
-                background: showExecutiveView ? "rgba(200,155,32,0.10)" : "var(--bg-surface)",
-                border: `1px solid ${showExecutiveView ? "rgba(200,155,32,0.30)" : "var(--border-default)"}`,
-                borderRadius: "var(--radius-btn)", padding: "8px 14px",
-                color: showExecutiveView ? "var(--accent)" : "var(--text-muted)",
-                fontFamily: "var(--font-mono)", fontSize: 10,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+                borderRadius: "var(--radius-btn)", padding: "8px 12px",
+                color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10,
                 fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
                 letterSpacing: "0.08em", whiteSpace: "nowrap",
               }}
             >
-              {showExecutiveView ? "Hide" : "Show"} Executive View
+              <Download size={12} /> Monthly Report
             </button>
-
-            <button
-              onClick={() => { setEditing(null); setPrefill(null); setShowForm(true); }}
-              style={{
-                background: "var(--accent)", color: "#07090E", border: "none",
-                borderRadius: "var(--radius-btn)", padding: "8px 16px",
-                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
-                cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
-                minHeight: 36,
-              }}
-            >
-              + Log Issue
-            </button>
-          </div>
-        </div>
+          )}
+          <button
+            onClick={() => setShowExecutiveView(!showExecutiveView)}
+            style={{
+              background: showExecutiveView ? "var(--accent-muted)" : "var(--bg-surface)",
+              border: `1px solid ${showExecutiveView ? "var(--accent)" : "var(--border-default)"}`,
+              borderRadius: "var(--radius-btn)", padding: "8px 12px",
+              color: showExecutiveView ? "var(--accent)" : "var(--text-secondary)",
+              fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 700, cursor: "pointer", textTransform: "uppercase",
+              letterSpacing: "0.08em", whiteSpace: "nowrap",
+            }}
+          >
+            {showExecutiveView ? "Hide" : "Show"} Exec View
+          </button>
+          <button
+            onClick={() => { setEditing(null); setPrefill(null); setShowForm(true); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--accent)", color: "var(--bg-base)", border: "none",
+              borderRadius: "var(--radius-btn)", padding: "8px 14px",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            <Plus size={12} /> Log Issue
+          </button>
+        </CommandBar>
 
         {/* ═══ EXECUTIVE VIEW (Heatmap) ═════════════════════════════════════ */}
         {showExecutiveView && mitigations.length > 0 && (

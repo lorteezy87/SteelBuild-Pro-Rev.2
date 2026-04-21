@@ -8,6 +8,8 @@ import DailyLogForm from "@/components/fieldops/DailyLogForm";
 import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus, Copy } from "lucide-react";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -201,116 +203,63 @@ export default function DailyLogs() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Daily Logs
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filteredLogs.length} Entries
-          </p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Daily Logs"
+        count={filteredLogs.length}
+        unit=" · ENTRIES"
+        subtitle="Field superintendent journal · man-hours · safety · delays"
+      >
+        <button
+          onClick={handleCopyFromYesterday}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)",
+            color: "var(--text-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+        >
+          <Copy size={12} /> Copy Yesterday
+        </button>
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)",
+            color: "var(--bg-base)",
+            border: "none",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Log
+        </button>
+      </CommandBar>
 
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={handleCopyFromYesterday}
-            style={{
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-body)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-          >
-            Copy From Yesterday
-          </button>
-          <button
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            style={{
-              background: "var(--accent)",
-              color: "white",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-body)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            + New Log
-          </button>
-        </div>
-      </div>
-
-      {/* Key Metrics Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid var(--accent)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "var(--accent)", marginBottom: 4 }}>
-            {metrics.totalManHours.toLocaleString()}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            Total Man-Hours
-          </div>
-        </div>
-        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #3b82f6" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#3b82f6", marginBottom: 4 }}>
-            {metrics.avgCrewSize.toFixed(1)}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            Avg Crew Size
-          </div>
-        </div>
-        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #ef4444" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#ef4444", marginBottom: 4 }}>
-            {metrics.safetyIncidents}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            Safety Incidents
-          </div>
-        </div>
-        <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "14px", borderTop: "2px solid #f59e0b" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: "#f59e0b", marginBottom: 4 }}>
-            {metrics.delayHours}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            Delay Hours
-          </div>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total Man-Hours"  value={metrics.totalManHours.toLocaleString()} color="var(--accent)" />
+        <KpiTile compact label="Avg Crew Size"    value={metrics.avgCrewSize.toFixed(1)}          color="var(--phase-fabrication)" />
+        <KpiTile compact label="Safety Incidents" value={metrics.safetyIncidents}                 color="var(--status-error)" />
+        <KpiTile compact label="Delay Hours"      value={metrics.delayHours}                      color="var(--status-warning)" />
       </div>
 
       {/* Search and Date Range Filters */}

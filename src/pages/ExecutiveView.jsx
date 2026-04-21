@@ -11,6 +11,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import TrueHealthChart from "../components/dashboard/TrueHealthChart";
+import { CommandBar } from "@/components/design-system";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -161,15 +162,13 @@ export default function ExecutiveView() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div>
-        <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          Executive Roll-Up
-        </h1>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Portfolio analytics &middot; {projects.length} projects
-        </p>
-      </div>
+      <CommandBar
+        eyebrow="C-SUITE"
+        title="Executive Roll-Up"
+        count={projects.length}
+        unit=" · PROJECTS"
+        subtitle="Portfolio analytics · phase mix · health · budget vs actual · labor burn"
+      />
 
       <KPIStrip items={kpis} />
 
