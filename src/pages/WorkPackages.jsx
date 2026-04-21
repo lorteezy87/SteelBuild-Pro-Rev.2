@@ -70,6 +70,20 @@ export default function WorkPackages() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Drawings are consumed by the WP form modal so the user can link
+  // drawings to a work package at create/edit time. Without this fetch
+  // the modal's `allDrawings` default of [] produces an empty search
+  // dropdown ("No drawings found for this project") regardless of how
+  // many drawings the project actually has.
+  const { data: drawings = [] } = useQuery({
+    queryKey: ["drawings", projectId],
+    queryFn: async () => {
+      if (projectId) return base44.entities.Drawing.filter({ project_id: projectId });
+      return base44.entities.Drawing.list();
+    },
+    staleTime: 30 * 1000,
+  });
+
   /* ── Mutations ── */
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.WorkPackage.update(id, data),
@@ -430,6 +444,7 @@ export default function WorkPackages() {
           wp={editingWP}
           projects={projects}
           nextNumber={editingWP?.wp_number || ""}
+          allDrawings={drawings}
         />
       )}
 
