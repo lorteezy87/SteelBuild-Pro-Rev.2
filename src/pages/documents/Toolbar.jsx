@@ -39,10 +39,10 @@ export default function Toolbar({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--status-warning)" }}>
-          {"\u25C8"} DOCUMENT REPOSITORY
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          ◈ Document Repository
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
           {allDocumentsCount} DOC{allDocumentsCount !== 1 ? "S" : ""}
         </span>
         <div style={{ width: 1, height: 24, background: "var(--border-default)" }} />
@@ -51,20 +51,24 @@ export default function Toolbar({
           onClick={onUploadOpen}
           style={{
             padding: "6px 12px",
-            background: "var(--accent-muted)",
-            border: "1px solid var(--accent-border)",
-            color: "var(--accent)",
-            borderRadius: 6,
+            background: "var(--accent)",
+            border: "none",
+            color: "var(--bg-base)",
+            borderRadius: "var(--radius-btn)",
             fontFamily: "var(--font-mono)",
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             gap: 6,
+            textTransform: "uppercase",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          <Upload size={14} /> UPLOAD
+          <Upload size={12} /> Upload
         </button>
 
         <button
@@ -72,20 +76,22 @@ export default function Toolbar({
           title="Export filtered list as CSV"
           style={{
             padding: "6px 12px",
-            background: "rgba(59,130,246,0.08)",
-            border: "1px solid rgba(59,130,246,0.25)",
-            color: "#3b82f6",
-            borderRadius: 6,
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)",
+            borderRadius: "var(--radius-btn)",
             fontFamily: "var(--font-mono)",
             fontSize: 10,
-            fontWeight: 600,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             gap: 6,
+            textTransform: "uppercase",
           }}
         >
-          <FileSpreadsheet size={14} /> EXPORT
+          <FileSpreadsheet size={12} /> Export
         </button>
 
         {reviewCount > 0 && (
@@ -93,20 +99,22 @@ export default function Toolbar({
             onClick={onReviewQueueClick}
             style={{
               padding: "6px 12px",
-              background: "rgba(234,179,8,0.10)",
-              border: "1px solid rgba(234,179,8,0.30)",
-              color: "#eab308",
-              borderRadius: 6,
+              background: "color-mix(in srgb, var(--status-warning) 12%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--status-warning) 30%, transparent)",
+              color: "var(--status-warning)",
+              borderRadius: "var(--radius-btn)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              fontWeight: 600,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: 6,
+              textTransform: "uppercase",
             }}
           >
-            <AlertCircle size={14} /> REVIEW QUEUE ({reviewCount})
+            <AlertCircle size={12} /> Review Queue ({reviewCount})
           </button>
         )}
 
@@ -115,20 +123,22 @@ export default function Toolbar({
             onClick={onTransmittalOpen}
             style={{
               padding: "6px 12px",
-              background: "rgba(16,185,129,0.10)",
-              border: "1px solid rgba(16,185,129,0.35)",
-              color: "#10B981",
-              borderRadius: 6,
+              background: "color-mix(in srgb, var(--status-success) 12%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--status-success) 30%, transparent)",
+              color: "var(--status-success)",
+              borderRadius: "var(--radius-btn)",
               fontFamily: "var(--font-mono)",
               fontSize: 10,
-              fontWeight: 600,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: 6,
+              textTransform: "uppercase",
             }}
           >
-            <FileDown size={14} /> TRANSMITTAL ({selectedCount})
+            <FileDown size={12} /> Transmittal ({selectedCount})
           </button>
         )}
       </div>

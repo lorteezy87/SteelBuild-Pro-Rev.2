@@ -5,6 +5,8 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 const FAB_STAGES = [
   { id: "drawings_approved", label: "Drawings Approved", short: "DWG APRVD", color: "var(--accent)" },
@@ -627,111 +629,63 @@ export default function FabRelease() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Fabrication
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              margin: 0,
-              marginTop: 2,
-            }}
-          >
-            {activeProject?.name || "Project"} · {derivedWPs.length} Work Packages · {totalTons.toFixed(1)}T
-          </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <CommandBar
+        eyebrow={activeProject?.name || "PROJECT"}
+        title="Fabrication"
+        count={derivedWPs.length}
+        unit={` · ${totalTons.toFixed(1)}T`}
+        subtitle="Drawings Approved → Material → Released → In Fab → Fabricated → Finish → Ready to Ship"
+      >
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+          {[
+            { id: "pipeline", label: "Pipeline" },
+            { id: "list", label: "List" },
+            { id: "board", label: "Board" },
+          ].map((v, i) => (
+            <button
+              key={v.id}
+              onClick={() => { setView(v.id); localStorage.setItem("fabView", v.id); }}
+              style={{
+                padding: "6px 12px",
+                border: "none",
+                borderRight: i < 2 ? "1px solid var(--border-default)" : "none",
+                background: view === v.id ? "var(--accent-muted)" : "transparent",
+                color: view === v.id ? "var(--accent)" : "var(--text-secondary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                textTransform: "uppercase",
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button
-            onClick={() => setShowNewWP(true)}
-            style={{
-              background: "var(--accent)",
-              border: "1px solid var(--accent)",
-              color: "var(--accent-text)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "8px 14px",
-              borderRadius: "var(--radius-btn)",
-              cursor: "pointer",
-            }}
-          >
-            + Log Update
-          </button>
-          <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
-            {[
-              { id: "pipeline", label: "Pipeline" },
-              { id: "list", label: "List" },
-              { id: "board", label: "Board" },
-            ].map((v) => (
-              <button
-                key={v.id}
-                onClick={() => {
-                  setView(v.id);
-                  localStorage.setItem("fabView", v.id);
-                }}
-                style={{
-                  padding: "6px 12px",
-                  border: "none",
-                  background: view === v.id ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v.id ? "var(--accent-text)" : "var(--text-secondary)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+        <button
+          onClick={() => setShowNewWP(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Log Update
+        </button>
+      </CommandBar>
 
-      {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        {[
-          { label: "Total Packages", value: stats.total, color: "var(--accent)" },
-          { label: "Total Tonnage", value: `${stats.totalTons}T`, color: "var(--status-info)" },
-          { label: "In Fabrication", value: stats.inFab, color: "var(--status-warning)" },
-          { label: "Ready to Ship", value: stats.rts, color: "var(--status-success)" },
-          { label: "On Hold", value: stats.onHold, color: "var(--status-error)" },
-        ].map((card) => (
-          <div
-            key={card.label}
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-card)",
-              padding: "12px",
-              borderTop: `2px solid ${card.color}`,
-            }}
-          >
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-              {card.label}
-            </div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 600, color: card.color }}>{card.value}</div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total Packages" value={stats.total}          color="var(--accent)" />
+        <KpiTile compact label="Total Tonnage"  value={`${stats.totalTons}T`} color="var(--phase-detailing)" />
+        <KpiTile compact label="In Fabrication" value={stats.inFab}          color="var(--phase-fabrication)" />
+        <KpiTile compact label="Ready to Ship"  value={stats.rts}            color="var(--status-success)" />
+        <KpiTile compact label="On Hold"        value={stats.onHold}         color="var(--status-error)" />
       </div>
 
       <TonnagePipeline />
