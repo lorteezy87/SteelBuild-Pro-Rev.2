@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import StatusBadge from "../components/shared/StatusBadge";
 import { formatDate } from "../components/shared/formatters";
 import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
+import { CommandBar, KpiTile } from "@/components/design-system";
 
 const PHASE_COLORS = {
   "Pre-Construction": { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)", bg: "rgba(0,229,255,0.10)" },
@@ -562,73 +563,113 @@ export default function GanttChart() {
     </div>
   );
 
+  const activePhaseCount = Object.values(groupByPhase(filteredTasks)).filter(g => g.length > 0).length;
+
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Gantt Chart</h1>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-            {filteredTasks.length} activities • {Object.values(groupByPhase(filteredTasks)).filter(g => g.length > 0).length} phases
-          </p>
+      <CommandBar
+        eyebrow={activeProject?.project_name || "SCHEDULE"}
+        title="Gantt Chart"
+        count={filteredTasks.length}
+        unit={` · ${activePhaseCount} PHASES`}
+        subtitle="Look-ahead lifecycle · Pre-Construction → Closeout"
+      >
+        <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Phase" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Phases</SelectItem>
+            {PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            {["Not Started", "In Progress", "Complete", "Delayed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <button
+          onClick={() => setSmartMode(!smartMode)}
+          style={{
+            padding: "6px 12px",
+            border: smartMode ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            color: smartMode ? "var(--accent)" : "var(--text-secondary)",
+            background: smartMode ? "var(--accent-muted)" : "transparent",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            transition: "all 0.15s",
+          }}
+        >
+          <span style={{ fontSize: 11, lineHeight: 1 }}>{smartMode ? "\u2728" : "\u2606"}</span>
+          SMART
+        </button>
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+          {Object.entries(ZOOM_LEVELS).map(([key, { label }]) => (
+            <button
+              key={key}
+              onClick={() => setZoom(key)}
+              style={{
+                padding: "6px 12px",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                color: zoom === key ? "var(--accent)" : "var(--text-secondary)",
+                background: zoom === key ? "var(--accent-muted)" : "transparent",
+              }}
+            >
+              {label.toUpperCase()}
+            </button>
+          ))}
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Phase" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Phases</SelectItem>
-              {PHASES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              {["Not Started", "In Progress", "Complete", "Delayed"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <button
-            onClick={() => setSmartMode(!smartMode)}
-            style={{
-              padding: "4px 10px",
-              border: smartMode ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              color: smartMode ? "var(--accent)" : "var(--text-secondary)",
-              background: smartMode ? "var(--info-muted)" : "transparent",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              transition: "all 0.15s",
-            }}
-          >
-            <span style={{ fontSize: 11, lineHeight: 1 }}>{smartMode ? "\u2728" : "\u2606"}</span>
-            SMART
-          </button>
-          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-            {Object.entries(ZOOM_LEVELS).map(([key, { label }]) => (
-              <button key={key} onClick={() => setZoom(key)} style={{ padding: "4px 10px", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoom === key ? "var(--accent)" : "var(--text-secondary)", background: zoom === key ? "var(--info-muted)" : "transparent" }}>{label}</button>
-            ))}
-          </div>
-        </div>
-      </div>
+      </CommandBar>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 14 }}>
-        {[
-          { label: "Total Activities", value: stats.total, color: "var(--status-warning)" },
-          { label: "Complete", value: stats.complete, color: "var(--status-success)" },
-          { label: "Delayed", value: stats.delayed, color: "var(--status-error)" },
-          { label: "Slipping", value: stats.slipping, color: "var(--status-warning)" },
-          { label: "Avg Progress", value: `${stats.avgProgress}%`, color: "var(--accent)" },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderTop: `2px solid ${color}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color }}>{value}</div>
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+        <KpiTile
+          compact
+          label="Activities"
+          value={stats.total}
+          color="var(--accent)"
+          active={phaseFilter === "all" && statusFilter === "all"}
+          onClick={() => { setPhaseFilter("all"); setStatusFilter("all"); }}
+        />
+        <KpiTile
+          compact
+          label="Complete"
+          value={stats.complete}
+          color="var(--status-success)"
+          active={statusFilter === "Complete"}
+          onClick={() => setStatusFilter(statusFilter === "Complete" ? "all" : "Complete")}
+        />
+        <KpiTile
+          compact
+          label="Delayed"
+          value={stats.delayed}
+          color="var(--status-error)"
+          active={statusFilter === "Delayed"}
+          onClick={() => setStatusFilter(statusFilter === "Delayed" ? "all" : "Delayed")}
+        />
+        <KpiTile
+          compact
+          label="Slipping"
+          value={stats.slipping}
+          color="var(--status-warning)"
+        />
+        <KpiTile
+          compact
+          label="Avg Progress"
+          value={`${stats.avgProgress}%`}
+          color="var(--phase-fabrication)"
+        />
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 10, padding: "0 4px" }}>
