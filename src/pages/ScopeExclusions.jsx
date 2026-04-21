@@ -9,7 +9,7 @@ import BulkScopeModal from "@/components/scope/BulkScopeModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { Check, X, Info, Layers, Search, Plus, Upload } from "lucide-react";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -166,126 +166,68 @@ export default function ScopeExclusions() {
   const openCreate = () => { setEditing(null); setShowForm(true); };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 24,
-              fontWeight: 700,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Scope & Exclusions
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--text-secondary)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} of {stats.total} Items
-            {stats.total > 0 && (
-              <> • <span style={{ color: "var(--status-success)" }}>{stats.completed} Complete</span></>
-            )}
-          </p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Scope & Exclusions"
+        count={filtered.length}
+        unit={` OF ${stats.total}`}
+        subtitle={`Contract-defined scope · exclusions · clarifications${stats.completed > 0 ? ` · ${stats.completed} complete` : ""}`}
+      >
+        <button
+          onClick={() => setShowBulk(true)}
+          disabled={!projectId}
+          title={!projectId ? "Select a project first" : "Bulk import scope items"}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)",
+            color: "var(--text-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: projectId ? "pointer" : "not-allowed",
+            opacity: projectId ? 1 : 0.5,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          <Upload size={12} /> Bulk Import
+        </button>
+        <button
+          onClick={openCreate}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)",
+            color: "var(--bg-base)",
+            border: "none",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Item
+        </button>
+      </CommandBar>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setShowBulk(true)}
-            disabled={!projectId}
-            title={!projectId ? "Select a project first" : "Bulk import scope items"}
-            style={{
-              background: "transparent",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "8px",
-              padding: "8px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: projectId ? "pointer" : "not-allowed",
-              opacity: projectId ? 1 : 0.5,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Upload size={12} strokeWidth={3} /> Bulk Import
-          </button>
-          <button
-            onClick={openCreate}
-            style={{
-              background: "var(--accent)",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "background 0.15s",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            <Plus size={12} strokeWidth={3} /> New Item
-          </button>
-        </div>
-      </div>
-
-      {/* Stats — clickable filters */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-        <StatCard
-          label="Total"
-          value={stats.total}
-          color="var(--accent)"
-          Icon={Layers}
-          active={filterType === "all"}
-          onClick={() => setFilterType("all")}
-        />
-        <StatCard
-          label="Scope"
-          value={stats.scope}
-          color="var(--status-success)"
-          Icon={Check}
-          active={filterType === "Scope"}
-          onClick={() => setFilterType(filterType === "Scope" ? "all" : "Scope")}
-        />
-        <StatCard
-          label="Exclusion"
-          value={stats.exclusion}
-          color="var(--status-error)"
-          Icon={X}
-          active={filterType === "Exclusion"}
-          onClick={() => setFilterType(filterType === "Exclusion" ? "all" : "Exclusion")}
-        />
-        <StatCard
-          label="Clarification"
-          value={stats.clarification}
-          color="var(--status-info)"
-          Icon={Info}
-          active={filterType === "Clarification"}
-          onClick={() => setFilterType(filterType === "Clarification" ? "all" : "Clarification")}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"         value={stats.total}         color="var(--accent)"
+                 active={filterType === "all"} onClick={() => setFilterType("all")} />
+        <KpiTile compact label="Scope"         value={stats.scope}         color="var(--status-success)"
+                 active={filterType === "Scope"} onClick={() => setFilterType(filterType === "Scope" ? "all" : "Scope")} />
+        <KpiTile compact label="Exclusion"     value={stats.exclusion}     color="var(--status-error)"
+                 active={filterType === "Exclusion"} onClick={() => setFilterType(filterType === "Exclusion" ? "all" : "Exclusion")} />
+        <KpiTile compact label="Clarification" value={stats.clarification} color="var(--status-info)"
+                 active={filterType === "Clarification"} onClick={() => setFilterType(filterType === "Clarification" ? "all" : "Clarification")} />
       </div>
 
       {/* Local search */}

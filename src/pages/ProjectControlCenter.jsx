@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import DonutChart from "@/components/shared/DonutChart";
 import TrendIndicator from "@/components/shared/TrendIndicator";
+import { Download } from "lucide-react";
 import {
   mapRFIsToPCCItems,
   mapDrawingsToPCCItems,
@@ -897,32 +898,30 @@ export default function ProjectControlCenter() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
 
       {/* ═══ COMMAND BAR ════════════════════════════════════════════ */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 56, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 60, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.02em" }}>
             PCC
           </span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>
-            PROJECT CONTROL CENTER
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            Project Control Center
           </span>
           {activeProject && (
-            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginLeft: 4 }}>
               {activeProject.name}
             </span>
           )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Last refresh */}
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
-            SCORED {lastRefresh.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Scored {lastRefresh.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
           </span>
 
-          {/* Type filter */}
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 28, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer", outline: "none" }}
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 32, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", outline: "none", textTransform: "uppercase" }}
           >
             <option value="all">All Types</option>
             {Object.entries(TYPE_CONFIG).map(([k, v]) => (
@@ -930,11 +929,10 @@ export default function ProjectControlCenter() {
             ))}
           </select>
 
-          {/* Severity filter */}
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 28, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer", outline: "none" }}
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 32, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", outline: "none", textTransform: "uppercase" }}
           >
             <option value="all">All Severity</option>
             {Object.keys(SEVERITY).map((k) => (
@@ -942,20 +940,21 @@ export default function ProjectControlCenter() {
             ))}
           </select>
 
-          {/* Export briefing */}
           {!isEmpty && (
             <button
               onClick={exportBriefing}
               title="Download daily briefing CSV"
               style={{
-                background: "rgba(200,155,32,0.10)", border: "1px solid rgba(200,155,32,0.30)",
-                borderRadius: 6, padding: "0 12px", height: 28,
-                color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9,
-                fontWeight: 700, cursor: "pointer", letterSpacing: "0.09em",
-                whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 6,
+                background: "var(--accent-muted)",
+                border: "1px solid var(--accent)",
+                borderRadius: "var(--radius-btn)", padding: "0 12px", height: 32,
+                color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10,
+                fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em",
+                whiteSpace: "nowrap", textTransform: "uppercase",
               }}
             >
-              ↓ EXPORT BRIEFING
+              <Download size={12} /> Export Briefing
             </button>
           )}
         </div>
