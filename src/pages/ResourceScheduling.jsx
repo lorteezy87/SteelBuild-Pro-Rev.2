@@ -18,6 +18,8 @@ import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeader from "./resourceScheduling/TimelineHeader";
 import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 import ResourceRow from "./resourceScheduling/ResourceRow";
+import { CommandBar } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 // One-shot keyframe injection — must run at module load, not render.
 injectKeyframes();
@@ -733,49 +735,24 @@ export default function ResourceScheduling() {
         background: "var(--bg-page)",
       }}
     >
-      {/* PROJECT SELECTOR */}
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          borderBottom: "1px solid var(--divider)",
-          padding: "10px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
+      {/* HEADER */}
+      <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
+        <CommandBar
+          eyebrow={activeProject?.name || "NO PROJECT SELECTED"}
+          title="Crew Scheduling"
+          count={resources.length}
+          unit={` · ${filteredWorkPackages.length} WP`}
+          subtitle="Drag work packages onto resource lanes · right-click to split or rebalance"
         >
-          PROJECT
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-            color: "var(--status-warning)",
-            fontWeight: 600,
-          }}
-        >
-          {activeProject?.name || "No project selected"}
-        </div>
-        <div
-          style={{
-            fontFamily: "var(--font-body)",
-            fontSize: 11,
-            color: "var(--text-secondary)",
-            marginLeft: "auto",
-          }}
-        >
-          {resources.length} resources · {filteredWorkPackages.length} work packages
-        </div>
+          <button
+            onClick={() => setShowNewResource(true)}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+          >
+            <Plus size={12} /> New Resource
+          </button>
+        </CommandBar>
       </div>
 
       {/* TOOLBAR */}
@@ -783,129 +760,87 @@ export default function ResourceScheduling() {
         style={{
           background: "var(--bg-page)",
           borderBottom: "1px solid var(--border-default)",
-          padding: "12px 16px",
+          padding: "8px 20px 12px",
           display: "flex",
           alignItems: "center",
-          gap: 16,
+          gap: 12,
           flexWrap: "wrap",
           flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 14,
-            fontWeight: 700,
-            color: "var(--text-primary)",
-          }}
-        >
-          RESOURCE BOARD
-        </div>
-
         {/* View toggle */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
           {[{ id: "board", label: "⊞ Board" }, { id: "capacity", label: "◎ Capacity" }].map(v => (
             <button key={v.id} onClick={() => setViewMode(v.id)} style={{
-              padding: "4px 12px", borderRadius: 6,
-              border: viewMode === v.id ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-              background: viewMode === v.id ? "rgba(0,229,255,0.06)" : "transparent",
+              padding: "6px 12px",
+              border: "none",
+              borderRight: v.id !== "capacity" ? "1px solid var(--border-default)" : "none",
+              background: viewMode === v.id ? "var(--accent-muted)" : "transparent",
               color: viewMode === v.id ? "var(--accent)" : "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", transition: "all 0.1s",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
             }}>{v.label}</button>
           ))}
         </div>
 
         {/* Zoom buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {["week", "month", "quarter"].map((mode) => (
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+          {["week", "month", "quarter"].map((mode, i) => (
             <button
               key={mode}
               onClick={() => setZoomMode(mode)}
               style={{
-                padding: "4px 10px",
-                borderRadius: 6,
-                border:
-                  zoomMode === mode
-                    ? "1px solid var(--accent)"
-                    : "1px solid var(--border-default)",
-                    background:
-                    zoomMode === mode ? "rgba(245,158,11,0.12)" : "transparent",
-                    color:
-                    zoomMode === mode
-                      ? "var(--status-warning)"
-                      : "var(--text-secondary)",
+                padding: "6px 12px",
+                border: "none",
+                borderRight: i < 2 ? "1px solid var(--border-default)" : "none",
+                background: zoomMode === mode ? "var(--accent-muted)" : "transparent",
+                color: zoomMode === mode ? "var(--accent)" : "var(--text-secondary)",
                 fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 600,
+                fontSize: 10,
+                fontWeight: 700,
                 letterSpacing: "0.08em",
                 cursor: "pointer",
-                transition: "all 0.1s",
+                textTransform: "uppercase",
               }}
             >
-              {mode === "week" ? "Week" : mode === "month" ? "Month" : "Quarter"}
+              {mode}
             </button>
           ))}
         </div>
 
         {/* Phase filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {["all", "Detailing", "Fabrication", "Delivery", "Erection"].map(
-            (p) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {["all", "Detailing", "Fabrication", "Delivery", "Erection"].map((p) => {
+            const phaseColor =
+              p === "Detailing"   ? "var(--phase-detailing)"   :
+              p === "Fabrication" ? "var(--phase-fabrication)" :
+              p === "Delivery"    ? "var(--phase-delivery)"    :
+              p === "Erection"    ? "var(--phase-erection)"    :
+                                    "var(--accent)";
+            const active = filterPhase === p;
+            return (
               <button
                 key={p}
                 onClick={() => setFilterPhase(p)}
                 style={{
-                  padding: "4px 10px",
+                  padding: "5px 10px",
                   borderRadius: 6,
-                  border:
-                    filterPhase === p
-                      ? "1px solid var(--accent)"
-                        : "1px solid var(--border-default)",
-                      background:
-                        filterPhase === p
-                          ? "rgba(245,158,11,0.08)"
-                          : "transparent",
-                      color:
-                        filterPhase === p
-                          ? "var(--status-warning)"
-                          : "var(--text-muted)",
+                  border: active ? `1px solid ${phaseColor}` : "1px solid var(--border-default)",
+                  background: active ? "color-mix(in srgb, " + phaseColor + " 14%, transparent)" : "transparent",
+                  color: active ? phaseColor : "var(--text-muted)",
                   fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 500,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
                   cursor: "pointer",
-                  transition: "all 0.1s",
                 }}
               >
                 {p === "all" ? "All Phases" : p}
               </button>
-            )
-          )}
+            );
+          })}
         </div>
-
-        {/* New Resource button */}
-        <button
-          onClick={() => setShowNewResource(true)}
-          style={{
-            marginLeft: "auto",
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid var(--accent)",
-            background: "var(--accent)",
-            color: "#07090E",
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            cursor: "pointer",
-            textTransform: "uppercase",
-            transition: "all 0.15s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
-        >
-          + New Resource
-        </button>
       </div>
 
       {/* New Resource Modal */}
