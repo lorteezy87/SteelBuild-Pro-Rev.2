@@ -3,8 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useProjectContext } from "@/components/shared/useProjectContext";
-import PageHeader from "@/components/shared/PageHeader";
-import { GitCompare } from "lucide-react";
+import { CommandBar } from "@/components/design-system";
+import { GitCompare, RefreshCw } from "lucide-react";
 import DrawingUploadZone from "@/components/drawings/analysis/DrawingUploadZone";
 import AnalysisCard from "@/components/drawings/analysis/AnalysisCard";
 import AnalysisDetailModal from "@/components/drawings/analysis/AnalysisDetailModal";
@@ -228,42 +228,53 @@ export default function DrawingAnalysis() {
     }
   }, [comparisons, comparisonKicked, qc, projectId, analysesById]);
 
+  const completeCount = analyses.filter(a => a.analysis_status === "complete").length;
+  const canCompare = projectId && completeCount >= 2;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <PageHeader
-            title="Drawing Analysis"
-            subtitle={`${activeProject?.name || "Select a project"} • AI-assisted review of structural steel PDFs`}
-            onRefresh={() => {
-              qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
-              qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
-              qc.invalidateQueries({ queryKey: ["drawing_revision_comparisons", projectId] });
-            }}
-          />
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={activeProject?.name || "SELECT A PROJECT"}
+        title="Drawing Analysis"
+        count={analyses.length}
+        unit=" · SETS"
+        subtitle="AI-assisted review of structural steel PDFs · revision comparison · finding detection"
+      >
         <button
-          onClick={() => setShowCompareDialog(true)}
-          disabled={!projectId || analyses.filter(a => a.analysis_status === "complete").length < 2}
-          title={!projectId ? "Select a project first" : "Compare two completed analyses"}
+          onClick={() => {
+            qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
+            qc.invalidateQueries({ queryKey: ["drawing_findings_bulk"] });
+            qc.invalidateQueries({ queryKey: ["drawing_revision_comparisons", projectId] });
+          }}
           style={{
-            padding: "8px 14px",
-            background: "transparent",
-            color: AI_ACCENT,
-            border: `1px solid ${AI_ACCENT}`,
-            borderRadius: 2,
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            cursor: (!projectId || analyses.filter(a => a.analysis_status === "complete").length < 2) ? "not-allowed" : "pointer",
-            opacity: (!projectId || analyses.filter(a => a.analysis_status === "complete").length < 2) ? 0.5 : 1,
-            display: "inline-flex", alignItems: "center", gap: 6,
-            alignSelf: "flex-start",
-            marginTop: 8,
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
           }}
         >
-          <GitCompare size={12} strokeWidth={2.5} /> Compare Revisions
+          <RefreshCw size={12} /> Refresh
         </button>
-      </div>
+        <button
+          onClick={() => setShowCompareDialog(true)}
+          disabled={!canCompare}
+          title={!projectId ? "Select a project first" : completeCount < 2 ? "Need at least 2 completed analyses" : "Compare two completed analyses"}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: canCompare ? "color-mix(in srgb, " + AI_ACCENT + " 14%, transparent)" : "var(--bg-surface)",
+            color: canCompare ? AI_ACCENT : "var(--text-muted)",
+            border: `1px solid ${canCompare ? AI_ACCENT : "var(--border-default)"}`,
+            borderRadius: "var(--radius-btn)", padding: "8px 12px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            cursor: canCompare ? "pointer" : "not-allowed",
+            opacity: canCompare ? 1 : 0.5,
+          }}
+        >
+          <GitCompare size={12} /> Compare Revisions
+        </button>
+      </CommandBar>
 
       {!projectId && (
         <div style={{

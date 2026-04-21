@@ -9,6 +9,7 @@ import * as pdfjsLib from "pdfjs-dist";
 // 4.x only ships `.mjs` workers and the file name was wrong, causing every
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -356,14 +357,14 @@ export default function DrawingViewer() {
         {/* Sidebar header */}
         <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--border-default)" }}>
           <button onClick={() => navigate("/Drawings")}
-            style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 0, marginBottom: 10 }}>
-            ← BACK TO DRAWINGS
+            style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 0, marginBottom: 10 }}>
+            <ArrowLeft size={12} /> Back to Drawings
           </button>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search sheets…"
-            style={{ width: "100%", padding: "6px 10px", background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }} />
-          <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6 }}>
-            {filtered.length} / {drawings.length} SHEETS
+            style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }} />
+          <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 8, letterSpacing: "0.10em", textTransform: "uppercase" }}>
+            {filtered.length} / {drawings.length} Sheets
           </div>
         </div>
 
@@ -374,7 +375,7 @@ export default function DrawingViewer() {
             const stageColor = STAGES[d.stage]?.color || "#6B7280";
             return (
               <div key={d.id} onClick={() => setActiveId(d.id)}
-                style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--hover-bg)", background: isActive ? "rgba(200,155,32,0.12)" : "none", borderLeft: `3px solid ${isActive ? "var(--accent)" : "transparent"}`, transition: "background 0.1s" }}>
+                style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--hover-bg)", background: isActive ? "var(--accent-muted)" : "none", borderLeft: `3px solid ${isActive ? "var(--accent)" : "transparent"}`, transition: "background 0.1s" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
                   <div>
                     <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: isActive ? "var(--accent)" : "var(--text-primary)", marginBottom: 2 }}>
@@ -405,11 +406,15 @@ export default function DrawingViewer() {
           <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border-default)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button onClick={() => { const p = filtered[activeIndex - 1]; if (p) setActiveId(p.id); }}
               disabled={activeIndex <= 0}
-              style={{ ...mono, fontSize: 12, background: "none", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-muted)", padding: "4px 10px", cursor: activeIndex <= 0 ? "not-allowed" : "pointer", opacity: activeIndex <= 0 ? 0.3 : 1 }}>←</button>
-            <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>{activeIndex + 1} / {filtered.length}</span>
+              style={{ display: "inline-flex", alignItems: "center", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", color: "var(--text-secondary)", padding: "4px 10px", cursor: activeIndex <= 0 ? "not-allowed" : "pointer", opacity: activeIndex <= 0 ? 0.3 : 1 }}>
+              <ChevronLeft size={14} />
+            </button>
+            <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>{activeIndex + 1} / {filtered.length}</span>
             <button onClick={() => { const n = filtered[activeIndex + 1]; if (n) setActiveId(n.id); }}
               disabled={activeIndex >= filtered.length - 1}
-              style={{ ...mono, fontSize: 12, background: "none", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-muted)", padding: "4px 10px", cursor: activeIndex >= filtered.length - 1 ? "not-allowed" : "pointer", opacity: activeIndex >= filtered.length - 1 ? 0.3 : 1 }}>→</button>
+              style={{ display: "inline-flex", alignItems: "center", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", color: "var(--text-secondary)", padding: "4px 10px", cursor: activeIndex >= filtered.length - 1 ? "not-allowed" : "pointer", opacity: activeIndex >= filtered.length - 1 ? 0.3 : 1 }}>
+              <ChevronRight size={14} />
+            </button>
           </div>
         )}
       </div>
@@ -425,15 +430,16 @@ export default function DrawingViewer() {
             title={sidebarOpen ? "Hide sheet list (more drawing space)" : "Show sheet list"}
             style={{
               ...toolBtn,
-              fontSize: 14,
-              padding: "4px 8px",
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "6px 8px",
               color: sidebarOpen ? "var(--accent)" : "var(--text-muted)",
-              background: sidebarOpen ? "var(--accent-muted)" : "none",
-              border: sidebarOpen ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
+              background: sidebarOpen ? "var(--accent-muted)" : "var(--bg-surface-low)",
+              border: sidebarOpen ? "1px solid var(--accent)" : "1px solid var(--border-default)",
               flexShrink: 0,
             }}
           >
-            {sidebarOpen ? "◁" : "▷"}
+            {sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
           </button>
           {/* Sheet info */}
           <div style={{ flex: 1, overflow: "hidden" }}>

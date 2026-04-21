@@ -5,7 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, Mail, Search, X, Users } from "lucide-react";
 import AdminRoute from "../components/shared/AdminRoute";
-import PageHeader from "../components/shared/PageHeader";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { RefreshCw } from "lucide-react";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import UserEditModal from "../components/users/UserEditModal";
 import StatusBadge from "../components/shared/StatusBadge";
@@ -95,41 +96,34 @@ function UsersManagementContent() {
   };
 
   return (
-    <div>
-      <PageHeader
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow="ADMIN · WORKSPACE"
         title="User Management"
-        subtitle={`${users.length} total users`}
-        onRefresh={refetch}
-      />
-
-      {/* Stat summary bar */}
-      {!isLoading && users.length > 0 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            padding: "3px 10px", borderRadius: 6,
+        count={users.length}
+        unit=" · USERS"
+        subtitle={`${adminCount} admin${adminCount !== 1 ? "s" : ""} · ${userCount} user${userCount !== 1 ? "s" : ""}`}
+      >
+        <button
+          onClick={refetch}
+          title="Refresh"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
             background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-            fontSize: 11, fontWeight: 600, color: "var(--text-secondary)",
-          }}>
-            <Users className="w-3 h-3" style={{ opacity: 0.6 }} />
-            {users.length} Total
-          </span>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            padding: "3px 10px", borderRadius: 6,
-            background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.20)",
-            fontSize: 11, fontWeight: 600, color: "#8B5CF6",
-          }}>
-            {adminCount} Admin{adminCount !== 1 ? "s" : ""}
-          </span>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            padding: "3px 10px", borderRadius: 6,
-            background: "rgba(59,130,246,0.10)", border: "1px solid rgba(59,130,246,0.20)",
-            fontSize: 11, fontWeight: 600, color: "#3B82F6",
-          }}>
-            {userCount} User{userCount !== 1 ? "s" : ""}
-          </span>
+            color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+      </CommandBar>
+
+      {!isLoading && users.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+          <KpiTile compact label="Total"     value={users.length} color="var(--accent)" />
+          <KpiTile compact label="Admins"    value={adminCount}   color="var(--phase-detailing)" />
+          <KpiTile compact label="Standard"  value={userCount}    color="var(--phase-fabrication)" />
         </div>
       )}
 
