@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
@@ -11,6 +11,7 @@ import { Pencil, Trash2, Plus, ChevronLeft, ChevronRight, RefreshCw } from "luci
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
+import { CommandBar, KpiTile } from "@/components/design-system";
 
 const PHASE_COLORS = {
   Detailing:   { bg: "rgba(99,102,241,0.12)",  color: "rgb(99,102,241)",  border: "rgba(99,102,241,0.3)"  },
@@ -205,6 +206,17 @@ export default function LookAheadSchedule() {
     return items.filter(i => (i.crew || "No Crew") === key);
   };
 
+  const stats = useMemo(() => {
+    const total = items.length;
+    const inProgress = items.filter(i => i.status === "In Progress").length;
+    const complete = items.filter(i => i.status === "Complete").length;
+    const delayed = items.filter(i => i.status === "Delayed").length;
+    const avgProgress = total > 0
+      ? Math.round(items.reduce((s, i) => s + (Number(i.percent_complete) || 0), 0) / total)
+      : 0;
+    return { total, inProgress, complete, delayed, avgProgress };
+  }, [items]);
+
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
@@ -214,81 +226,81 @@ export default function LookAheadSchedule() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            2-Week Look-Ahead
-          </h1>
-          {/* Week nav */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-            <button
-              onClick={() => setWeekOffset(o => o - 1)}
-              style={{ display: "flex", alignItems: "center", padding: "2px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, cursor: "pointer", color: "var(--text-secondary)" }}
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.04em" }}>
-              {fmtWindow(windowStart)} – {fmtWindow(windowEnd)}
-            </span>
-            <button
-              onClick={() => setWeekOffset(o => o + 1)}
-              style={{ display: "flex", alignItems: "center", padding: "2px 6px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, cursor: "pointer", color: "var(--text-secondary)" }}
-            >
-              <ChevronRight size={14} />
-            </button>
-            {weekOffset !== 0 && (
-              <button
-                onClick={() => setWeekOffset(0)}
-                style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}
-              >
-                Today
-              </button>
-            )}
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={activeProject?.project_name || "SCHEDULE"}
+        title="2-Week Look-Ahead"
+        count={items.length}
+        unit=" · ACTIVITIES"
+        subtitle={`${fmtWindow(windowStart)} – ${fmtWindow(windowEnd)}`}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 6 }}>
+          <button
+            onClick={() => setWeekOffset(o => o - 1)}
+            style={{ display: "flex", alignItems: "center", padding: "4px 6px", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer", color: "var(--text-secondary)" }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            onClick={() => setWeekOffset(0)}
+            disabled={weekOffset === 0}
+            style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: weekOffset === 0 ? "var(--text-muted)" : "var(--accent)", background: "none", border: "none", cursor: weekOffset === 0 ? "default" : "pointer", letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 8px" }}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setWeekOffset(o => o + 1)}
+            style={{ display: "flex", alignItems: "center", padding: "4px 6px", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer", color: "var(--text-secondary)" }}
+          >
+            <ChevronRight size={14} />
+          </button>
         </div>
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+          {["Phase", "Crew", "Project"].map(g => (
+            <button
+              key={g}
+              onClick={() => setGroupBy(g)}
+              style={{
+                padding: "6px 12px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                border: "none",
+                borderRight: g !== "Project" ? "1px solid var(--border-default)" : "none",
+                background: groupBy === g ? "var(--accent-muted)" : "transparent",
+                color: groupBy === g ? "var(--accent)" : "var(--text-secondary)",
+                cursor: "pointer",
+              }}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => { setEditing(null); setModalOpen(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
+          onMouseEnter={e => e.currentTarget.style.background = "var(--accent-hover)"}
+          onMouseLeave={e => e.currentTarget.style.background = "var(--accent)"}
+        >
+          <Plus size={12} /> Add Item
+        </button>
+        <button
+          onClick={refetch}
+          title="Refresh"
+          style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 10px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", cursor: "pointer", letterSpacing: "0.06em" }}
+        >
+          <RefreshCw size={12} />
+        </button>
+      </CommandBar>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Group by */}
-          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
-            {["Phase", "Crew", "Project"].map(g => (
-              <button
-                key={g}
-                onClick={() => setGroupBy(g)}
-                style={{
-                  padding: "6px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  border: "none",
-                  borderRight: g !== "Project" ? "1px solid var(--border-default)" : "none",
-                  background: groupBy === g ? "var(--accent)" : "var(--bg-surface)",
-                  color: groupBy === g ? "white" : "var(--text-muted)",
-                  cursor: "pointer",
-                }}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => { setEditing(null); setModalOpen(true); }}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "7px 14px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--accent-hover)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--accent)"}
-          >
-            <Plus size={12} /> Add Item
-          </button>
-          <button
-            onClick={refetch}
-            style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "7px 12px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}
-          >
-            <RefreshCw size={11} />
-          </button>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Activities"   value={stats.total}       color="var(--accent)" />
+        <KpiTile compact label="In Progress"  value={stats.inProgress}  color="var(--phase-fabrication)" />
+        <KpiTile compact label="Complete"     value={stats.complete}    color="var(--status-success)" />
+        <KpiTile compact label="Delayed"      value={stats.delayed}     color="var(--status-error)" />
+        <KpiTile compact label="Avg Progress" value={`${stats.avgProgress}%`} color="var(--phase-detailing)" />
       </div>
 
       {/* Table */}
