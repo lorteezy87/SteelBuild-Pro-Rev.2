@@ -9,11 +9,11 @@
  */
 
 import React from "react";
+import { formatCurrency } from "@/components/shared/formatters";
 
-const formatMoney = (n) => {
-  const num = Number(n) || 0;
-  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-};
+// Whole-dollar display — all dashboard tiles. Delegates to the shared
+// currency formatter (handles negatives as `-$1,234` natively).
+const formatMoney = (n) => formatCurrency(n, 0);
 
 export default function FinancialSnapshot({
   contractValue,
