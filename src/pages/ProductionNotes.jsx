@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar } from "@/components/design-system";
 
 const CATEGORY_COLORS = {
   General: "var(--text-muted)",
@@ -494,72 +495,75 @@ export default function ProductionNotes() {
           zIndex: 20,
           background: "var(--bg-sidebar)",
           borderBottom: "1px solid var(--divider)",
-          padding: "14px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
+          padding: "14px 24px 4px",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              color: "var(--text-primary)",
-            }}
-          >
-            WEEKLY PRODUCTION MEETING
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {showDateInput ? (
+        <CommandBar
+          eyebrow="WEEKLY PRODUCTION MEETING"
+          title={
+            showDateInput ? (
               <input
                 type="date"
                 value={meetingDate}
                 onChange={(e) => setMeetingDate(e.target.value)}
                 onBlur={() => setShowDateInput(false)}
+                autoFocus
                 style={{
                   background: "transparent",
-                  border: "1px solid var(--divider)",
-                  borderRadius: 4,
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 6,
                   color: "var(--text-primary)",
-                  fontFamily: "var(--font-mono)",
-                  padding: "4px 6px",
+                  fontFamily: "var(--font-display)",
+                  fontSize: 22,
+                  fontWeight: 800,
+                  padding: "2px 8px",
                 }}
               />
             ) : (
-              <span
-                style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-secondary)", cursor: "pointer" }}
-                onClick={() => setShowDateInput(true)}
-              >
+              <span onClick={() => setShowDateInput(true)} style={{ cursor: "pointer" }}>
                 {formatMeetingDate(meetingDate)}
               </span>
-            )}
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>
-              {activeProjects.length} PROJECTS · {notes.length} NOTES THIS WEEK
-            </span>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            )
+          }
+          count={notes.length}
+          unit=" · NOTES"
+          subtitle={`${activeProjects.length} active projects · Click date to reschedule`}
+        >
           <button
             onClick={() => window.print()}
             style={{
-              height: 34,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--divider)",
-              padding: "0 12px",
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
             }}
           >
-            <Printer size={16} /> PRINT / EXPORT
+            <Printer size={12} /> Print
+          </button>
+          <button
+            onClick={() => setAllCollapsed((v) => !v)}
+            style={{
+              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            {allCollapsed ? "Expand" : "Collapse"}
+          </button>
+          <button
+            onClick={() => setShowClosed((v) => !v)}
+            style={{
+              background: showClosed ? "var(--accent-muted)" : "var(--bg-surface)",
+              border: showClosed ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+              color: showClosed ? "var(--accent)" : "var(--text-secondary)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10,
+              fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            {showClosed ? "Hide Closed" : "Show All"}
           </button>
           <button
             onClick={() => {
@@ -567,51 +571,18 @@ export default function ProductionNotes() {
               if (first) handleQuickAdd(first);
             }}
             style={{
-              height: 34,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--accent)",
-              padding: "0 12px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
+              display: "flex", alignItems: "center", gap: 6,
+              background: "var(--accent)", color: "var(--bg-base)", border: "none",
+              borderRadius: "var(--radius-btn)", padding: "8px 14px",
+              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
           >
-            <Plus size={16} /> ADD NOTE
+            <Plus size={12} /> Add Note
           </button>
-          <button
-            onClick={() => setAllCollapsed((v) => !v)}
-            style={{
-              height: 34,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--divider)",
-              padding: "0 12px",
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-            }}
-          >
-            {allCollapsed ? "EXPAND ALL" : "COLLAPSE ALL"}
-          </button>
-          <button
-            onClick={() => setShowClosed((v) => !v)}
-            style={{
-              height: 34,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--divider)",
-              padding: "0 12px",
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-            }}
-          >
-            {showClosed ? "HIDE CLOSED" : "SHOW ALL"}
-          </button>
-        </div>
+        </CommandBar>
       </div>
 
       {/* KPI strip */}
