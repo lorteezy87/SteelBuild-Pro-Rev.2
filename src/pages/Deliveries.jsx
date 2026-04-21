@@ -1,19 +1,9 @@
 /**
- * Deliveries — shipment tracker for steel fab/erection projects.
+ * Deliveries — shipment tracker, rebuilt on Claude Design system.
  *
- * After the carve-up this shell owns only:
- *   1. React-Query wiring (deliveries, projects, workPackages).
- *   2. Mutations: per-row quick-advance, per-row status set,
- *      delete, bulk-status update.
- *   3. Derived data (projectMap, wpMap, filtered/grouped rows, KPIs,
- *      day/timeline arrays).
- *   4. The "overdue delivery → Alert" background effect.
- *   5. Composition of feature-folder components in `./deliveries/`.
- *
- * Visual blocks all live under `src/pages/deliveries/`:
- *   CommandBar, KpiStrip, AlertBanner, FilterBar, LookaheadPanel,
- *   DeliveryRow + ProjectGroup, TimelineView, DetailDrawer,
- *   BulkActionBar, EmptyState.
+ * Shell owns: React-Query fetches + mutations (per-row update, bulk
+ * status, delete), derived counts/filters, overdue-alert background
+ * effect, composition of design-system components.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -25,19 +15,29 @@ import { useProjectContext } from "@/components/shared/useProjectContext";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { batchProcess } from "@/utils/batchProcess";
 
+import {
+  CommandBar,
+  KpiTile,
+  PhaseChevron,
+  BulkActionBar,
+  EmptyState,
+  Button,
+  Icon,
+  Modal,
+  StatusPill,
+} from "@/components/design-system";
 import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
-import CommandBar    from "./deliveries/CommandBar";
-import KpiStrip      from "./deliveries/KpiStrip";
-import AlertBanner   from "./deliveries/AlertBanner";
-import FilterBar     from "./deliveries/FilterBar";
-import LookaheadPanel from "./deliveries/LookaheadPanel";
-import { DeliveryRow, ProjectGroup, DELIVERY_GRID } from "./deliveries/DeliveryRow";
-import TimelineView  from "./deliveries/TimelineView";
-import DetailDrawer  from "./deliveries/DetailDrawer";
-import BulkActionBar from "./deliveries/BulkActionBar";
-import EmptyState    from "./deliveries/EmptyState";
+import DeliveryRowV2, { DELIVERY_GRID } from "./deliveries/DeliveryRowV2";
+
+const PIPELINE_STAGES = [
+  { id: "sched", label: "SCHEDULED",  color: "var(--status-info)"    },
+  { id: "load",  label: "LOADING",    color: "var(--status-warning)" },
+  { id: "trans", label: "IN TRANSIT", color: "var(--phase-delivery)" },
+  { id: "del",   label: "DELIVERED",  color: "var(--status-success)" },
+];
 
 export default function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,29 +45,50 @@ export default function Deliveries() {
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const qc = useQueryClient();
 
-  const [view, setView] = useState("TABLE");
-  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("DUE");
-  const [overdueFirst, setOverdueFirst] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [collapsedProjects, setCollapsedProjects] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  /* ── Mutations ── */
-  const quickCompleteMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
-      toast.success("Delivery marked delivered");
-    },
-    onError: () => toast.error("Update failed"),
+  /* ── Data ── */
+  const { data: deliveries = [], isLoading } = useQuery({
+    queryKey: ["deliveries", projectId],
+    queryFn: () => (projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : []),
+    enabled: !!projectId,
+    staleTime: 60000,
+    refetchInterval: 60000,
   });
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId],
+    queryFn: () =>
+      projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : Promise.resolve([]),
+    enabled: !!projectId,
+  });
+
+  const wpMap = useMemo(() => {
+    const m = {};
+    for (const wp of workPackages) m[wp.id] = wp.wp_number || wp.name || "";
+    return m;
+  }, [workPackages]);
+
+  const projectMap = useMemo(() => {
+    const m = {};
+    for (const p of projects) m[p.id] = p.name || "";
+    return m;
+  }, [projects]);
+
+  /* ── Mutations ── */
   const transitMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
     onSuccess: () => {
@@ -91,12 +112,11 @@ export default function Deliveries() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }) => {
-      const { succeeded, failed } = await batchProcess(
-        ids,
-        (id) => base44.entities.Delivery.update(id, {
+      const { succeeded, failed } = await batchProcess(ids, (id) =>
+        base44.entities.Delivery.update(id, {
           status,
           actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
-        }),
+        })
       );
       if (failed.length > 0 && succeeded.length === 0) {
         throw new Error(`All ${failed.length} updates failed.`);
@@ -115,134 +135,72 @@ export default function Deliveries() {
     onError: () => toast.error("Bulk update failed"),
   });
 
-  /* ── Queries ── */
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["deliveries", projectId],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
-    enabled: !!projectId,
-    staleTime: 60000,
-    refetchInterval: 60000,
-  });
+  /* ── Counts + filtered ── */
+  const counts = useMemo(
+    () => ({
+      all:       deliveries.length,
+      scheduled: deliveries.filter((d) => d.status === "Scheduled").length,
+      loading:   deliveries.filter((d) => d.status === "Loading").length,
+      transit:   deliveries.filter((d) => d.status === "In Transit").length,
+      delivered: deliveries.filter((d) => d.status === "Delivered").length,
+      overdue:   deliveries.filter(
+        (d) =>
+          d.status !== "Delivered" &&
+          d.scheduled_date &&
+          new Date(d.scheduled_date) < new Date()
+      ).length,
+    }),
+    [deliveries]
+  );
 
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
-    staleTime: 5 * 60 * 1000,
-  });
+  const totalInboundTons = useMemo(
+    () =>
+      deliveries
+        .filter((d) => d.status !== "Delivered")
+        .reduce((s, d) => s + (Number(d.weight_tons) || 0), 0),
+    [deliveries]
+  );
 
-  const { data: workPackages = [] } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : Promise.resolve([])),
-    enabled: !!projectId,
-  });
-
-  /* ── Lookup maps ── */
-  const projectMap = useMemo(() => {
-    const map = {};
-    for (const p of projects) map[p.id] = p.name || p.project_name || "";
-    return map;
-  }, [projects]);
-
-  const wpMap = useMemo(() => {
-    const map = {};
-    for (const wp of workPackages) map[wp.id] = wp.name || wp.wp_number || "";
-    return map;
-  }, [workPackages]);
-
-  const projectCount = useMemo(() => {
-    const ids = new Set(deliveries.map((d) => d.project_id));
-    return ids.size;
-  }, [deliveries]);
-
-  /* ── Date anchors ── */
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-  const in7 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 7);
-    return d;
-  }, [today]);
-  const in30 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 30);
-    return d;
-  }, [today]);
-
-  /* ── Filter + sort ── */
   const filtered = useMemo(() => {
-    return deliveries
-      .filter((d) => {
-        if (filterStatus !== "ALL" && d.status !== filterStatus) return false;
-        const q = search.trim().toLowerCase();
-        if (q.length) {
-          const hay =
-            `${d.description || ""} ${wpMap[d.work_package_id] || ""} ${d.vendor || ""} ${d.po_number || ""} ${projectMap[d.project_id] || ""} ${d.carrier || ""} ${d.tracking_number || ""}`.toLowerCase();
-          if (!hay.includes(q)) return false;
+    const q = search.trim().toLowerCase();
+    return deliveries.filter((d) => {
+      if (filter === "overdue") {
+        if (!(d.status !== "Delivered" && d.scheduled_date && new Date(d.scheduled_date) < new Date())) {
+          return false;
         }
-        return true;
-      })
-      .sort((a, b) => {
-        const aDate = a.scheduled_date ? new Date(a.scheduled_date) : null;
-        const bDate = b.scheduled_date ? new Date(b.scheduled_date) : null;
-        if (overdueFirst) {
-          const aOver = aDate && aDate < today && a.status !== "Delivered";
-          const bOver = bDate && bDate < today && b.status !== "Delivered";
-          if (aOver && !bOver) return -1;
-          if (!aOver && bOver) return 1;
-        }
-        if (sortBy === "PROJECT") {
-          return (projectMap[a.project_id] || "").localeCompare(projectMap[b.project_id] || "");
-        }
-        if (sortBy === "VENDOR") {
-          return (a.vendor || "").localeCompare(b.vendor || "");
-        }
-        if (sortBy === "TONNAGE") {
-          return (Number(b.weight_tons) || 0) - (Number(a.weight_tons) || 0);
-        }
-        return (aDate?.getTime() || 0) - (bDate?.getTime() || 0);
-      });
-  }, [deliveries, filterStatus, search, sortBy, overdueFirst, today, projectMap, wpMap]);
+      } else if (filter !== "all" && d.status !== filter) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        (d.delivery_number || "").toLowerCase().includes(q) ||
+        (d.description || "").toLowerCase().includes(q) ||
+        (d.vendor || "").toLowerCase().includes(q) ||
+        (d.po_number || "").toLowerCase().includes(q) ||
+        (d.carrier || "").toLowerCase().includes(q)
+      );
+    });
+  }, [deliveries, filter, search]);
 
-  const grouped = useMemo(() => {
-    if (projectId) return null;
-    return filtered.reduce((acc, d) => {
-      const key = projectMap[d.project_id] || "Unassigned";
-      acc[key] = acc[key] || [];
-      acc[key].push(d);
-      return acc;
-    }, {});
-  }, [filtered, projectId, projectMap]);
+  /* ── Pipeline active-stage resolver ── */
+  const pipelineStages = useMemo(
+    () => [
+      { ...PIPELINE_STAGES[0], count: counts.scheduled },
+      { ...PIPELINE_STAGES[1], count: counts.loading   },
+      { ...PIPELINE_STAGES[2], count: counts.transit   },
+      { ...PIPELINE_STAGES[3], count: counts.delivered },
+    ],
+    [counts]
+  );
 
-  /* ── KPIs ── */
-  const kpis = useMemo(() => {
-    const scheduled = deliveries.filter((d) => d.status === "Scheduled").length;
-    const inTransit = deliveries.filter((d) => d.status === "In Transit").length;
-    const delivered = deliveries.filter((d) => d.status === "Delivered").length;
-    const partial = deliveries.filter((d) => ["Partial", "Rejected"].includes(d.status)).length;
-    const overdue = deliveries.filter(
-      (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
-    ).length;
-    const dueWeek = deliveries.filter((d) => {
-      if (!d.scheduled_date) return false;
-      const dt = new Date(d.scheduled_date);
-      return dt >= today && dt <= in7 && d.status !== "Delivered";
-    }).length;
-    const dueMonth = deliveries.filter((d) => {
-      if (!d.scheduled_date) return false;
-      const dt = new Date(d.scheduled_date);
-      return dt >= today && dt <= in30 && d.status !== "Delivered";
-    }).length;
-    const tonsPending = deliveries
-      .filter((d) => d.status !== "Delivered")
-      .reduce((s, d) => s + (Number(d.weight_tons) || 0), 0)
-      .toFixed(1);
-    return { scheduled, inTransit, delivered, partial, overdue, dueWeek, dueMonth, tonsPending };
-  }, [deliveries, today, in7, in30]);
+  const activePipelineIdx = useMemo(() => {
+    if (counts.loading > 0) return 1;
+    if (counts.transit > 0) return 2;
+    if (counts.scheduled > 0) return 0;
+    return 3;
+  }, [counts]);
 
-  /* ── Overdue → Alert background effect ── */
+  /* ── Overdue → Alert effect ── */
   useEffect(() => {
     if (!deliveries.length) return;
     const createDeliveryAlerts = async () => {
@@ -250,27 +208,27 @@ export default function Deliveries() {
         const existing = await base44.entities.Alert.filter({ alert_type: "Delivery_Overdue" });
         const existingIds = new Set(existing.map((a) => a.related_record_id).filter(Boolean));
         const existingTitles = new Set(existing.map((a) => a.title));
-        const todayZero = new Date();
-        todayZero.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         for (const d of deliveries) {
           if (d.status === "Delivered") continue;
           if (!d.scheduled_date) continue;
           const sched = new Date(d.scheduled_date);
           sched.setHours(0, 0, 0, 0);
-          const daysLate = Math.floor((todayZero - sched) / 86400000);
+          const daysLate = Math.floor((today - sched) / 86400000);
           if (daysLate <= 0) continue;
           if (existingIds.has(d.id)) continue;
-          const liveProjectName = projectMap[d.project_id] || "";
-          const liveDesc = d.description || wpMap[d.work_package_id] || "Delivery";
-          const alertTitle = `Delivery from ${d.vendor} is ${daysLate}d overdue`;
+          const projectName = projectMap[d.project_id] || "";
+          const desc = d.description || wpMap[d.work_package_id] || "Delivery";
+          const alertTitle = `Delivery from ${d.vendor || "Unknown"} is ${daysLate}d overdue`;
           if (existingTitles.has(alertTitle)) continue;
           await base44.entities.Alert.create({
             alert_type: "Delivery_Overdue",
             severity: daysLate >= 7 ? "Critical" : daysLate >= 3 ? "High" : "Medium",
             title: alertTitle,
-            description: `${liveDesc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${d.scheduled_date} · Status: ${d.status} · Project: ${liveProjectName || "—"}`,
+            description: `${desc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${d.scheduled_date} · Status: ${d.status} · Project: ${projectName}`,
             project_id: d.project_id,
-            project_name: liveProjectName,
+            project_name: projectName,
           });
         }
       } catch (e) {
@@ -281,227 +239,392 @@ export default function Deliveries() {
     return () => clearTimeout(t);
   }, [deliveries.length, projectMap, wpMap]);
 
-  /* ── Handlers ── */
-  const toggleSelect = (id) => {
+  /* ── Helpers ── */
+  const toggleSelect = (id) =>
     setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
     });
-  };
+
+  const toggleAll = (checked) =>
+    setSelectedIds(checked ? new Set(filtered.map((d) => d.id)) : new Set());
 
   const bulkUpdate = (status) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
     if (bulkUpdateMut.isPending) return;
-    // Guard: cannot bulk-mark "Delivered" if any linked WPs have incomplete fab
     if (status === "Delivered") {
       const blocked = ids.filter((id) => {
         const d = deliveries.find((dd) => dd.id === id);
         return d && !isFabComplete(d, workPackages);
       });
       if (blocked.length > 0) {
-        toast.error(`${blocked.length} delivery(ies) blocked — linked work package fabrication not complete`);
+        toast.error(
+          `${blocked.length} delivery(ies) blocked — linked work package fabrication not complete`
+        );
         return;
       }
     }
     bulkUpdateMut.mutate({ ids, status });
   };
 
-  const handleAdvanceStatus = (delivery) => {
-    if (delivery.status === "Scheduled") {
-      transitMut.mutate({ id: delivery.id, data: { status: "In Transit" } });
-    } else if (delivery.status === "In Transit") {
-      if (!isFabComplete(delivery, workPackages)) {
-        const wp = workPackages.find((w) => w.id === delivery.work_package_id);
-        toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
-        return;
-      }
-      quickCompleteMut.mutate({
-        id: delivery.id,
-        data: { status: "Delivered", actual_date: new Date().toISOString().split("T")[0] },
-      });
-    } else {
-      setEditing(delivery);
-    }
-  };
-
   const handleProjectSelect = (val) => {
-    if (val) {
-      searchParams.set("project", val);
-    } else {
-      searchParams.delete("project");
-    }
+    if (val) searchParams.set("project", val);
+    else searchParams.delete("project");
     setSearchParams(searchParams);
   };
 
-  /* ── Date arrays for lookahead / timeline ── */
-  const dayList = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        d.setHours(0, 0, 0, 0);
-        return d;
-      }),
-    [today]
-  );
+  /* ── Loading ── */
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
 
-  const timelineDays = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        d.setHours(0, 0, 0, 0);
-        return d;
-      }),
-    [today]
-  );
-
-  /* ── Rendered overdue list used by AlertBanner ── */
-  const overdueList = useMemo(
-    () =>
-      deliveries.filter(
-        (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
-      ),
-    [deliveries, today]
-  );
-
-  /* ── Row props passed to DeliveryRow / ProjectGroup ── */
-  const rowProps = {
-    today,
-    projectMap,
-    wpMap,
-    selectedIds,
-    onToggleSelect: toggleSelect,
-    onAdvanceStatus: handleAdvanceStatus,
-    onEdit: setEditing,
-    onOpenDetail: setDetail,
-  };
+  const projectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-page)" }}>
+    <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
       <CommandBar
-        deliveryCount={deliveries.length}
-        projectCount={projectCount}
-        view={view}
-        onViewChange={setView}
-        onExportAll={() => exportDeliveriesCSV(deliveries, projectMap, wpMap)}
-        onImport={() => setShowImport(true)}
-        onNew={() => { setEditing(null); setDetail(null); setShowForm(true); }}
-      />
+        eyebrow={`PRODUCTION · ${projectName.toUpperCase()}`}
+        title="Deliveries"
+        count={counts.all}
+        unit={` · ${totalInboundTons.toFixed(1)}T INBOUND`}
+        subtitle="Shipping tickets · load out · arrival signoff"
+      >
+        <Button
+          variant="secondary"
+          icon="download"
+          onClick={() => exportDeliveriesCSV(filtered, projectMap, wpMap)}
+        >
+          CSV
+        </Button>
+        <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
+          IMPORT TEKLA TICKET
+        </Button>
+        <Button
+          variant="primary"
+          icon="plus"
+          onClick={() => { setEditing(null); setDetail(null); setShowForm(true); }}
+        >
+          SCHEDULE LOAD
+        </Button>
+      </CommandBar>
 
-      <KpiStrip kpis={kpis} filterStatus={filterStatus} onFilterChange={setFilterStatus} />
+      {/* KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+        <KpiTile compact label="ALL"        value={counts.all}       color="var(--text-secondary)" active={filter === "all"}        onClick={() => setFilter("all")} />
+        <KpiTile compact label="SCHEDULED"  value={counts.scheduled} color="var(--status-info)"    active={filter === "Scheduled"}  onClick={() => setFilter("Scheduled")} />
+        <KpiTile compact label="LOADING"    value={counts.loading}   color="var(--status-warning)" active={filter === "Loading"}    onClick={() => setFilter("Loading")} />
+        <KpiTile compact label="IN TRANSIT" value={counts.transit}   color="var(--phase-delivery)" active={filter === "In Transit"} onClick={() => setFilter("In Transit")} />
+        <KpiTile compact label="DELIVERED"  value={counts.delivered} color="var(--status-success)" active={filter === "Delivered"}  onClick={() => setFilter("Delivered")} />
+        <KpiTile compact label="OVERDUE"    value={counts.overdue}   color="var(--status-error)"   active={filter === "overdue"}    onClick={() => setFilter("overdue")} />
+      </div>
 
-      <AlertBanner
-        visible={kpis.overdue > 0 || kpis.partial > 0}
-        overdueDeliveries={overdueList}
-        wpMap={wpMap}
-        projectMap={projectMap}
-        today={today}
-        onChipClick={(d) => setSearch(projectMap[d.project_id] || "")}
-      />
-
-      <FilterBar
-        search={search} onSearchChange={setSearch}
-        projectId={projectId} projects={projects} onProjectChange={handleProjectSelect}
-        filterStatus={filterStatus} onFilterStatusChange={setFilterStatus}
-        sortBy={sortBy} onSortByChange={setSortBy}
-        overdueFirst={overdueFirst} onToggleOverdueFirst={() => setOverdueFirst((v) => !v)}
-      />
-
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <LookaheadPanel
-          deliveries={deliveries}
-          projectMap={projectMap}
-          wpMap={wpMap}
-          today={today}
-          in7={in7}
-          in30={in30}
-          dayList={dayList}
-          hidden={deliveries.length === 0}
-          onSelect={setDetail}
-        />
-
-        <div style={{ flex: 1, overflowY: "auto", position: "relative", background: "var(--bg-page)" }}>
-          {deliveries.length === 0 ? (
-            <EmptyState onCreate={() => { setEditing(null); setDetail(null); setShowForm(true); }} />
-          ) : view === "TABLE" ? (
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <div
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 5,
-                  display: "grid",
-                  gridTemplateColumns: DELIVERY_GRID,
-                  background: "var(--bg-sidebar)",
-                  borderBottom: "1px solid var(--divider)",
-                  padding: "10px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "var(--text-muted)",
-                }}
-              >
-                <div> </div>
-                <div>Status</div>
-                <div>Project</div>
-                <div>Delivery Title</div>
-                <div>Vendor</div>
-                <div>PO #</div>
-                <div>Sched</div>
-                <div>Actual</div>
-                <div>Tons</div>
-                <div>Required</div>
-                <div>Actions</div>
-              </div>
-              {projectId
-                ? filtered.map((d) => <DeliveryRow key={d.id} delivery={d} {...rowProps} />)
-                : Object.entries(grouped || {}).map(([name, list]) => (
-                    <ProjectGroup
-                      key={name}
-                      name={name}
-                      list={list}
-                      today={today}
-                      collapsed={collapsedProjects[name]}
-                      onToggleCollapse={(n) => setCollapsedProjects((p) => ({ ...p, [n]: !p[n] }))}
-                      rowProps={rowProps}
-                    />
-                  ))}
-            </div>
-          ) : (
-            <TimelineView
-              projectId={projectId}
-              projectMap={projectMap}
-              wpMap={wpMap}
-              filtered={filtered}
-              grouped={grouped}
-              timelineDays={timelineDays}
-              today={today}
-              onSelect={setDetail}
-            />
-          )}
+      {/* Pipeline */}
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          padding: "12px 14px",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.14em",
+            marginBottom: 8,
+          }}
+        >
+          DELIVERY PIPELINE
         </div>
+        <PhaseChevron stages={pipelineStages} activeIdx={activePipelineIdx} showIcons={false} />
+      </div>
+
+      {/* Search + project selector */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 12px",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
+          <div
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }}
+          >
+            <Icon name="search" size={12} />
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search DEL #, WP, vendor, PO…"
+            style={{
+              width: "100%",
+              height: 30,
+              padding: "0 12px 0 30px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-input)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+        </div>
+        {!projectId && (
+          <select
+            value={projectId || ""}
+            onChange={(e) => handleProjectSelect(e.target.value)}
+            style={{
+              height: 30,
+              padding: "0 10px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-input)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+            }}
+          >
+            <option value="">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        )}
+        <div style={{ flex: 1 }} />
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.10em",
+          }}
+        >
+          {filtered.length} of {deliveries.length}
+        </span>
+      </div>
+
+      {/* Table */}
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: DELIVERY_GRID,
+            gap: 8,
+            padding: "8px 12px",
+            background: "var(--bg-surface-low)",
+            borderBottom: "1px solid var(--border-default)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+          }}
+        >
+          <div>
+            <input
+              type="checkbox"
+              checked={filtered.length > 0 && selectedIds.size === filtered.length}
+              onChange={(e) => toggleAll(e.target.checked)}
+            />
+          </div>
+          <div>DEL #</div>
+          <div>WP</div>
+          <div>Description</div>
+          <div>Scheduled</div>
+          <div>Tons</div>
+          <div>Pcs</div>
+          <div>Truck</div>
+          <div>Status</div>
+          <div></div>
+        </div>
+        {filtered.length > 0 ? (
+          filtered.map((d, i) => (
+            <DeliveryRowV2
+              key={d.id}
+              delivery={d}
+              idx={i}
+              selected={selectedIds.has(d.id)}
+              wpMap={wpMap}
+              onToggle={() => toggleSelect(d.id)}
+              onOpen={() => setDetail(d)}
+            />
+          ))
+        ) : (
+          <div style={{ padding: 24 }}>
+            <EmptyState
+              icon="delivery"
+              title={deliveries.length === 0 ? "No shipments tracked" : "No deliveries match your filters"}
+              body={
+                deliveries.length === 0
+                  ? "Start tracking steel deliveries, vendor shipments, and material arrivals."
+                  : "Clear filters or schedule a new load."
+              }
+            />
+          </div>
+        )}
       </div>
 
       <BulkActionBar
         count={selectedIds.size}
-        isPending={bulkUpdateMut.isPending}
-        onSetStatus={bulkUpdate}
-        onExport={() => exportDeliveriesCSV(
-          deliveries.filter((d) => selectedIds.has(d.id)),
-          projectMap,
-          wpMap,
-          "deliveries-selected.csv"
-        )}
         onClear={() => setSelectedIds(new Set())}
+        actions={[
+          { label: "→ IN TRANSIT",    icon: "arrow",    onClick: () => bulkUpdate("In Transit") },
+          { label: "MARK DELIVERED",  icon: "check",    onClick: () => bulkUpdate("Delivered") },
+          { label: "PARTIAL",         icon: "alert",    onClick: () => bulkUpdate("Partial") },
+          {
+            label: "EXPORT",
+            icon: "download",
+            onClick: () =>
+              exportDeliveriesCSV(
+                filtered.filter((d) => selectedIds.has(d.id)),
+                projectMap,
+                wpMap,
+                "deliveries-selected.csv"
+              ),
+          },
+        ]}
       />
+
+      {/* Detail Modal */}
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        eyebrow={detail ? detail.delivery_number || detail.id : ""}
+        title={detail ? (detail.delivery_title || detail.description || detail.vendor || "Delivery") : ""}
+        width={640}
+        footer={
+          detail && (
+            <>
+              <Button variant="ghost" onClick={() => setDetail(null)}>CLOSE</Button>
+              <Button variant="secondary" icon="ai" onClick={() => { setEditing(detail); setDetail(null); }}>
+                EDIT
+              </Button>
+              <Button
+                variant="danger"
+                icon="x"
+                onClick={() => { setDeleteTarget(detail); setDetail(null); }}
+              >
+                DELETE
+              </Button>
+              {detail.status !== "Delivered" && (
+                <Button
+                  variant="primary"
+                  icon="check"
+                  onClick={() =>
+                    transitMut.mutate({
+                      id: detail.id,
+                      data: {
+                        status: "Delivered",
+                        actual_date: new Date().toISOString().split("T")[0],
+                      },
+                    })
+                  }
+                >
+                  MARK DELIVERED
+                </Button>
+              )}
+            </>
+          )
+        }
+      >
+        {detail && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <StatusPill label={detail.status || "Scheduled"} />
+              {detail.priority === "Critical" && <StatusPill label="Critical" color="#FF6B35" />}
+              {detail.inspection_required && (
+                <StatusPill label="Inspection" color="var(--status-review)" />
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+              {[
+                ["VENDOR",         detail.vendor],
+                ["PO NUMBER",      detail.po_number],
+                ["CARRIER",        detail.carrier],
+                ["TRACKING",       detail.tracking_number],
+                ["SCHEDULED",      detail.scheduled_date],
+                ["REQUIRED",       detail.required_date],
+                ["ACTUAL",         detail.actual_date],
+                ["PIECES",         detail.pieces],
+                ["WEIGHT",         detail.weight_tons ? `${detail.weight_tons}T` : null],
+                ["WORK PACKAGE",   wpMap[detail.work_package_id]],
+                ["RECEIVING LOC",  detail.receiving_location],
+                ["RECEIVED BY",    detail.received_by],
+              ].map(([label, value]) => (
+                <MetaCell key={label} label={label} value={value} />
+              ))}
+            </div>
+            {detail.notes && (
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    color: "var(--text-muted)",
+                    letterSpacing: "0.14em",
+                    marginBottom: 6,
+                  }}
+                >
+                  NOTES
+                </div>
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    background: "var(--bg-surface-low)",
+                    border: "1px solid var(--border-default)",
+                    borderRadius: "var(--radius-card)",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 13,
+                    lineHeight: 1.55,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {detail.notes}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* Modals */}
       {showForm && <DeliveryFormModal projectId={projectId} onClose={() => setShowForm(false)} />}
+      {editing && (
+        <DeliveryFormModal
+          projectId={editing.project_id || projectId}
+          delivery={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
       <ShippingTicketImportModal
         open={showImport}
         projectId={projectId}
@@ -509,27 +632,6 @@ export default function Deliveries() {
         projects={projects}
         onClose={() => setShowImport(false)}
       />
-      {editing && <DeliveryFormModal projectId={editing.project_id || projectId} delivery={editing} onClose={() => setEditing(null)} />}
-
-      <DetailDrawer
-        detail={detail}
-        projectMap={projectMap}
-        wpMap={wpMap}
-        today={today}
-        onClose={() => setDetail(null)}
-        onAdvanceToStatus={(s) => {
-          transitMut.mutate({
-            id: detail.id,
-            data: {
-              status: s,
-              actual_date: s === "Delivered" ? new Date().toISOString().split("T")[0] : detail.actual_date,
-            },
-          });
-        }}
-        onEdit={() => { setEditing(detail); setDetail(null); }}
-        onDelete={() => setDeleteTarget(detail)}
-      />
-
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -537,6 +639,43 @@ export default function Deliveries() {
         title="Delete delivery?"
         description="This delivery will be removed."
       />
+    </div>
+  );
+}
+
+function MetaCell({ label, value }) {
+  return (
+    <div
+      style={{
+        padding: "8px 10px",
+        background: "var(--bg-surface-low)",
+        border: "1px solid var(--border-default)",
+        borderRadius: "var(--radius-card)",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          color: "var(--text-muted)",
+          letterSpacing: "0.14em",
+          marginBottom: 3,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          fontVariantNumeric: "tabular-nums",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {value || "—"}
+      </div>
     </div>
   );
 }
