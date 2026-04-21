@@ -7,6 +7,8 @@ import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
 import { toast } from "sonner";
 import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
+import { CommandBar } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 /* ─────────────────────────────────────────────
    Phase + Health configs
@@ -566,101 +568,69 @@ export default function Projects() {
 
       {/* ══ Command bar ══ */}
       <div style={{
-        height: 52,
         flexShrink: 0,
         background: "var(--bg-sidebar)",
         borderBottom: "1px solid var(--divider)",
-        display: "flex",
-        alignItems: "center",
-        padding: "0 24px",
-        gap: 16,
+        padding: "16px 24px 12px",
       }}>
-        {/* Title + count */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: "auto" }}>
-          <span style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 20,
-            fontWeight: 800,
-            color: "var(--text-primary)",
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-            lineHeight: 1,
-          }}>
-            PROJECTS
-          </span>
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "var(--accent-muted)",
-            border: "1px solid var(--accent-border)",
-            borderRadius: 3,
-            padding: "2px 8px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--accent)",
-            letterSpacing: "0.06em",
-          }}>
-            {projects.length}
-          </span>
-        </div>
-
-        {/* View toggle */}
-        <div style={{
-          display: "flex",
-          gap: 2,
-          background: "var(--hover-bg)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 4,
-          padding: 3,
-        }}>
-          {[["cards", "CARDS"], ["list", "LIST"]].map(([v, label]) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              style={{
-                background: view === v ? "var(--accent)" : "transparent",
-                border: "none",
-                borderRadius: 2,
-                padding: "4px 11px",
-                color: view === v ? "var(--on-accent)" : "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 800,
-                cursor: "pointer",
-                letterSpacing: "0.08em",
-                transition: "background 0.12s, color 0.12s",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* New project button */}
-        <button
-          onClick={() => { setEditing(null); setModalOpen(true); }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
-          style={{
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "none",
-            borderRadius: 3,
-            padding: "7px 16px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 800,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.09em",
-            transition: "background 0.12s",
-            whiteSpace: "nowrap",
-          }}
+        <CommandBar
+          eyebrow="PORTFOLIO"
+          title="Projects"
+          count={projects.length}
+          unit=" · ACTIVE + HISTORY"
+          subtitle={`${formatCurrency(kpis.totalVal)} portfolio value · ${kpis.active} active · ${kpis.atRisk} at risk`}
         >
-          + New Project
-        </button>
+          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+            {[["cards", "CARDS"], ["list", "LIST"]].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                style={{
+                  background: view === v ? "var(--accent-muted)" : "transparent",
+                  border: "none",
+                  borderRight: v === "cards" ? "1px solid var(--border-default)" : "none",
+                  padding: "6px 12px",
+                  color: view === v ? "var(--accent)" : "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => { setEditing(null); setModalOpen(true); }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "var(--accent)",
+              color: "var(--bg-base)",
+              border: "none",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 14px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              transition: "background 0.12s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Plus size={12} /> New Project
+          </button>
+        </CommandBar>
       </div>
 
       {/* ══ KPI strip ══ */}
