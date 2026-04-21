@@ -38,6 +38,8 @@ import UrgentCard from "./reports/UrgentCard";
 import ExecutiveSummary from "./reports/ExecutiveSummary";
 import WeeklySummary from "./reports/WeeklySummary";
 import ProjectStatusMatrix from "./reports/ProjectStatusMatrix";
+import { CommandBar } from "@/components/design-system";
+import { Download, Printer } from "lucide-react";
 
 export default function Reports() {
   const navigate = useNavigate();
@@ -345,9 +347,55 @@ export default function Reports() {
   /* ── MAIN RENDER ── */
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Header projectsCount={projects.length} now={now} />
+      <CommandBar
+        eyebrow="PORTFOLIO"
+        title="Reports"
+        count={projects.length}
+        unit=" · PROJECTS"
+        subtitle={`As of ${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · PM view / Executive view / Weekly summary / CSV + PDF export`}
+      >
+        <button
+          onClick={() => setShowWeeklySummary((p) => !p)}
+          style={{
+            background: showWeeklySummary ? "var(--accent-muted)" : "var(--bg-surface)",
+            color: showWeeklySummary ? "var(--accent)" : "var(--text-secondary)",
+            border: `1px solid ${showWeeklySummary ? "var(--accent)" : "var(--border-default)"}`,
+            borderRadius: "var(--radius-btn)", padding: "8px 12px",
+            ...mono, fontSize: 10, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+          }}
+        >
+          Weekly Summary
+        </button>
+        <button
+          onClick={() => exportReportCSV(filteredRows, portfolioValue, openRFIs.length, pendingCOs.length, budgetVariance)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)", color: "var(--text-secondary)",
+            border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)",
+            padding: "8px 12px", ...mono, fontSize: 10, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+          }}
+        >
+          <Download size={12} /> CSV
+        </button>
+        <button
+          onClick={printReport}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            ...mono, fontSize: 10, fontWeight: 700,
+            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Printer size={12} /> PDF
+        </button>
+      </CommandBar>
 
-      {/* Filter / view / export bar */}
+      {/* Filter / view bar */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input
           value={search}
@@ -373,48 +421,6 @@ export default function Reports() {
           active={viewMode}
           onChange={setViewMode}
         />
-        <button
-          onClick={() => setShowWeeklySummary((p) => !p)}
-          style={{
-            background: showWeeklySummary ? "rgba(200,155,32,0.15)" : "transparent",
-            color: showWeeklySummary ? "var(--accent)" : "var(--text-muted)",
-            border: `1px solid ${showWeeklySummary ? "var(--accent-border)" : "var(--border-default)"}`,
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
-            ...mono, fontSize: 8, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
-          }}
-        >
-          WEEKLY SUMMARY
-        </button>
-        <button
-          onClick={() => exportReportCSV(filteredRows, portfolioValue, openRFIs.length, pendingCOs.length, budgetVariance)}
-          style={{
-            background: "transparent", color: "var(--text-muted)",
-            border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)",
-            padding: "8px 14px", ...mono, fontSize: 8, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          ↓ CSV
-        </button>
-        <button
-          onClick={printReport}
-          style={{
-            background: "var(--accent)", color: "#fff", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 16px",
-            ...mono, fontSize: 9, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: "0.1em", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1={12} y1={15} x2={12} y2={3} />
-          </svg>
-          PDF
-        </button>
       </div>
 
       {showWeeklySummary && (
@@ -610,19 +616,19 @@ function Header({ projectsCount, now }) {
 
 function ToggleGroup({ options, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", overflow: "hidden" }}>
-      {options.map((o) => (
+    <div style={{ display: "flex", gap: 0, border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+      {options.map((o, i) => (
         <button
           key={o.key}
           onClick={() => onChange(o.key)}
           style={{
-            background: active === o.key ? "var(--accent)" : "transparent",
-            color: active === o.key ? "#fff" : "var(--text-muted)",
+            background: active === o.key ? "var(--accent-muted)" : "transparent",
+            color: active === o.key ? "var(--accent)" : "var(--text-secondary)",
             border: "none",
-            borderRight: "1px solid var(--border-default)",
+            borderRight: i < options.length - 1 ? "1px solid var(--border-default)" : "none",
             padding: "8px 12px",
             ...mono,
-            fontSize: 8,
+            fontSize: 10,
             fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.08em",

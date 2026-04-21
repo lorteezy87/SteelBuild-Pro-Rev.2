@@ -8,7 +8,8 @@ import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 export default function QualityControl() {
   const [searchParams] = useSearchParams();
@@ -123,40 +124,43 @@ export default function QualityControl() {
     : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Quality Control</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Records</p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Quality Control"
+        count={filtered.length}
+        unit=" · RECORDS"
+        subtitle={`${passRate}% pass rate · ${stats.pending} pending · material certs, weld inspections, NDT tests`}
+      >
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Test
+        </button>
+      </CommandBar>
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ New Test</button>
-      </div>
-
-      {/* Quality Metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "12px" }}>
-        <StatCard
-          label="Total Tests" value={stats.total} color="var(--accent)"
-          active={activeCard === null && !hasActiveFilters}
-          onClick={clearFilters}
-        />
-        <StatCard label="Pass Rate" value={`${passRate}%`} color="var(--status-success)" />
-        <StatCard
-          label="Passed" value={stats.passed} color="var(--status-success)"
-          active={activeCard === "passed"}
-          onClick={() => { setFilterResult("Pass"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }}
-        />
-        <StatCard
-          label="Failed" value={stats.failed} color="var(--status-error)"
-          active={activeCard === "failed"}
-          onClick={() => { setFilterResult("Fail"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }}
-        />
-        <StatCard
-          label="Pending" value={stats.pending} color="var(--status-warning)"
-          active={activeCard === "pending"}
-          onClick={() => { setFilterResult("all"); setFilterStatus("Pending"); setFilterType("all"); setSearchQuery(""); }}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total Tests" value={stats.total}    color="var(--accent)"
+                 active={activeCard === null && !hasActiveFilters}  onClick={clearFilters} />
+        <KpiTile compact label="Pass Rate"   value={`${passRate}%`} color="var(--status-success)" />
+        <KpiTile compact label="Passed"      value={stats.passed}   color="var(--status-success)"
+                 active={activeCard === "passed"}
+                 onClick={() => { setFilterResult("Pass"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }} />
+        <KpiTile compact label="Failed"      value={stats.failed}   color="var(--status-error)"
+                 active={activeCard === "failed"}
+                 onClick={() => { setFilterResult("Fail"); setFilterStatus(null); setFilterType("all"); setSearchQuery(""); }} />
+        <KpiTile compact label="Pending"     value={stats.pending}  color="var(--status-warning)"
+                 active={activeCard === "pending"}
+                 onClick={() => { setFilterResult("all"); setFilterStatus("Pending"); setFilterType("all"); setSearchQuery(""); }} />
       </div>
 
       {/* Search Bar */}

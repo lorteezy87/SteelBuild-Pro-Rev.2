@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import VendorFormModal from "@/components/vendors/VendorFormModal";
 import VendorList from "@/components/vendors/VendorList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import PageHeader from "../components/shared/PageHeader";
+import { CommandBar } from "@/components/design-system";
 import KPIStrip from "../components/shared/KPIStrip";
 import SearchFilter from "../components/shared/SearchFilter";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { formatCurrency } from "../components/shared/formatters";
+import { Plus, RefreshCw } from "lucide-react";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -213,13 +214,41 @@ export default function Vendors() {
 
   return (
     <div>
-      <PageHeader
+      <CommandBar
+        eyebrow="SUPPLY CHAIN"
         title="Vendors & Suppliers"
-        subtitle={`${vendors.length} vendor${vendors.length !== 1 ? "s" : ""} \u00B7 ${activeCount} active`}
-        onAdd={() => { setEditing(null); setShowForm(true); }}
-        onRefresh={refetch}
-        addLabel="New Vendor"
-      />
+        count={vendors.length}
+        unit=" · VENDORS"
+        subtitle={`${activeCount} active${riskVendors.length > 0 ? ` · ${riskVendors.length} at risk` : ""} · certs · insurance · on-time performance`}
+      >
+        <button
+          onClick={refetch}
+          title="Refresh"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
+            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Vendor
+        </button>
+      </CommandBar>
 
       <KPIStrip items={kpis} />
 

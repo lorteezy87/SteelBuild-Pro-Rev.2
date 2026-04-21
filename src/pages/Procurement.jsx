@@ -6,6 +6,8 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import StatusBadge from '@/components/shared/StatusBadge';
+import { CommandBar, KpiTile } from '@/components/design-system';
+import { Plus } from 'lucide-react';
 
 const PROCUREMENT_CATEGORIES = [
   'Structural Steel — Mill Order',
@@ -191,70 +193,35 @@ export default function Procurement() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <h1 style={{
-            fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700,
-            color: 'var(--text-primary)', margin: 0,
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-          }}>
-            Procurement Tracker
-          </h1>
-          <p style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9,
-            color: 'var(--text-muted)', marginTop: 4,
-            letterSpacing: '0.12em', textTransform: 'uppercase',
-          }}>
-            {selectedProject?.name} · {kpis.open} open items
-          </p>
-        </div>
+      <CommandBar
+        eyebrow={selectedProject?.name || "PROCUREMENT"}
+        title="Procurement Tracker"
+        count={kpis.total}
+        unit=" · ITEMS"
+        subtitle={`${kpis.open} open · ${kpis.overdue} overdue · ${kpis.longLead} long-lead`}
+      >
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
-            background: 'var(--accent)', color: '#fff', border: 'none',
-            borderRadius: 'var(--radius-btn)', padding: '8px 16px',
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--accent)', color: 'var(--bg-base)', border: 'none',
+            borderRadius: 'var(--radius-btn)', padding: '8px 14px',
             fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
             cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--accent)')}
         >
-          + Add Item
+          <Plus size={12} /> Add Item
         </button>
-      </div>
+      </CommandBar>
 
-      {/* KPI strip */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-        background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-        borderRadius: 'var(--radius-card)', overflow: 'hidden',
-      }}>
-        {[
-          { label: 'Total Items', value: kpis.total, color: 'var(--text-primary)' },
-          { label: 'Open', value: kpis.open, color: kpis.open > 0 ? 'var(--status-warning)' : 'var(--text-muted)' },
-          { label: 'Overdue', value: kpis.overdue, color: kpis.overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)', urgent: kpis.overdue > 0 },
-          { label: 'Date Slippage', value: kpis.late, color: kpis.late > 0 ? 'var(--status-warning)' : 'var(--text-muted)' },
-          { label: 'Long Lead', value: kpis.longLead, color: kpis.longLead > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
-        ].map(({ label, value, color, urgent }, i) => (
-          <div key={label} style={{
-            padding: '12px 16px',
-            borderRight: i < 4 ? '1px solid var(--divider)' : 'none',
-            borderTop: urgent ? '2px solid var(--status-error)' : '2px solid transparent',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9,
-              letterSpacing: '0.12em', color: 'var(--text-muted)',
-              textTransform: 'uppercase', marginBottom: 5,
-            }}>
-              {label}
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 22,
-              fontWeight: 700, color, lineHeight: 1,
-            }}>
-              {value}
-            </div>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+        <KpiTile compact label="Total Items"   value={kpis.total}    color="var(--accent)" />
+        <KpiTile compact label="Open"          value={kpis.open}     color="var(--status-warning)" />
+        <KpiTile compact label="Overdue"       value={kpis.overdue}  color="var(--status-error)" />
+        <KpiTile compact label="Date Slippage" value={kpis.late}     color="var(--status-warning)" />
+        <KpiTile compact label="Long Lead"     value={kpis.longLead} color="var(--status-review)" />
       </div>
 
       {/* Filters */}
