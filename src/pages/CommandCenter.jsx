@@ -1,41 +1,38 @@
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import UrgencyStrip from "@/components/commandcenter/UrgencyStrip";
 import ActionFeed from "@/components/commandcenter/ActionFeed";
 import FeedFilters from "@/components/commandcenter/FeedFilters";
 import ItemDetailDrawer from "@/components/commandcenter/ItemDetailDrawer";
 import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
-import { buildFeed, computeSummary } from "@/lib/commandCenter/feedAggregator";
+import TodayAgenda from "@/components/commandcenter/TodayAgenda";
+import WeekAhead from "@/components/commandcenter/WeekAhead";
+import { buildFeed } from "@/lib/commandCenter/feedAggregator";
 import { defaultFeedSort } from "@/lib/commandCenter/sortLogic";
+import { buildTodayView } from "@/lib/commandCenter/todayView";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar } from "@/components/design-system";
+import { CommandBar, KpiTile } from "@/components/design-system";
 
 /**
- * CommandCenter — personal action-triage cockpit.
+ * CommandCenter — today-first personal cockpit.
  *
- * Three zones:
- *   A) Urgency Summary Strip (top tiles)
- *   B) Action Feed (hero list)
- *   C) Forward Look Drawer (14-day lookahead, default collapsed)
- *
- * Pulls from all entity types across all projects. Single-user PM view.
+ * Layout:
+ *   1. CommandBar — friendly greeting + today's date + needs-you chip
+ *   2. Critical banner — red strip when blocking items exist
+ *   3. Snapshot tiles — 5 KpiTiles (Needs You / Overdue / Due Today /
+ *      Arriving / Waiting), each click-to-filter the action feed
+ *   4. Main 3fr/2fr grid:
+ *        Left  — TodayAgenda: Blocking / Overdue / Due Today / Arriving
+ *                Today / Active WPs
+ *        Right — WeekAhead: 7-day ribbon with per-day counts + previews
+ *   5. Full Action Feed — collapsible, search + filter for the long tail
  */
 
-const STALE_TIME = 60_000; // 60s — refetch on window focus
-
-// ── Urgency tile key → feed filter mapping ──────────────────────────────
-const TILE_TO_URGENCY = {
-  overdue:     ["overdue"],
-  dueThisWeek: ["due-soon"],
-  blocking:    ["blocking"],
-  awaiting:    ["awaiting"],
-  totalOpen:   null, // no filter — show all
-};
+const STALE_TIME = 60_000;
 
 export default function CommandCenter() {
   // ── State ───────────────────────────────────────────────────────────
-  const [urgencyFilter, setUrgencyFilter] = useState(null);
+  const [snapshotFilter, setSnapshotFilter] = useState(null); // one of snapshot keys
   const [chipFilters, setChipFilters] = useState({
     projectIds: [],
     itemTypes: [],
@@ -45,6 +42,7 @@ export default function CommandCenter() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [detailItem, setDetailItem] = useState(null);
   const [forwardLookOpen, setForwardLookOpen] = useState(false);
+  const [feedExpanded, setFeedExpanded] = useState(false);
 
   // ── Data queries ────────────────────────────────────────────────────
   const { data: projects = [], isLoading: projLoading } = useQuery({
@@ -131,71 +129,81 @@ export default function CommandCenter() {
     [rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes, projectMap]
   );
 
-  const summary = useMemo(() => computeSummary(rawFeed), [rawFeed]);
+  // ── Today-first view buckets ────────────────────────────────────────
+  const view = useMemo(
+    () => buildTodayView(rawFeed, { deliveries, workPackages, projectMap }),
+    [rawFeed, deliveries, workPackages, projectMap]
+  );
 
-  // ── Apply filters ───────────────────────────────────────────────────
+  // ── Apply snapshot + chip filters to the full feed ──────────────────
   const filteredFeed = useMemo(() => {
     let feed = [...rawFeed];
 
-    // Urgency tile filter
-    if (urgencyFilter) {
-      const allowed = TILE_TO_URGENCY[urgencyFilter];
-      if (allowed) {
-        feed = feed.filter((item) => allowed.includes(item.urgency));
+    if (snapshotFilter) {
+      if (snapshotFilter === "overdue") {
+        feed = feed.filter((i) => i.urgency === "overdue");
+      } else if (snapshotFilter === "dueToday") {
+        feed = feed.filter(
+          (i) =>
+            i.urgency === "blocking" ||
+            (i.urgency === "due-soon" && /due today/i.test(i.displayStatus)) ||
+            (i.daysValue === 0 && i.urgency !== "overdue")
+        );
+      } else if (snapshotFilter === "needsAction") {
+        feed = feed.filter(
+          (i) =>
+            i.urgency === "overdue" ||
+            i.urgency === "blocking" ||
+            (i.urgency === "due-soon" && /due today/i.test(i.displayStatus)) ||
+            (i.daysValue === 0 && i.urgency !== "overdue")
+        );
+      } else if (snapshotFilter === "arrivingToday") {
+        feed = feed.filter((i) => i.itemType === "DEL");
+      } else if (snapshotFilter === "waitingOthers") {
+        feed = feed.filter((i) => i.urgency === "awaiting");
       }
     }
 
-    // Chip filters
     const { projectIds, itemTypes, ownerFilter, search } = chipFilters;
-    if (projectIds.length > 0) {
-      feed = feed.filter((item) => projectIds.includes(item.projectId));
-    }
-    if (itemTypes.length > 0) {
-      feed = feed.filter((item) => itemTypes.includes(item.itemType));
-    }
-    if (ownerFilter.length > 0) {
-      feed = feed.filter((item) => item.owner && ownerFilter.includes(item.owner));
-    }
+    if (projectIds.length > 0) feed = feed.filter((i) => projectIds.includes(i.projectId));
+    if (itemTypes.length > 0) feed = feed.filter((i) => itemTypes.includes(i.itemType));
+    if (ownerFilter.length > 0) feed = feed.filter((i) => i.owner && ownerFilter.includes(i.owner));
     if (search) {
       const q = search.toLowerCase();
       feed = feed.filter(
-        (item) =>
-          (item.title || "").toLowerCase().includes(q) ||
-          (item.displayStatus || "").toLowerCase().includes(q) ||
-          (item.projectNumber || "").toLowerCase().includes(q)
+        (i) =>
+          (i.title || "").toLowerCase().includes(q) ||
+          (i.displayStatus || "").toLowerCase().includes(q) ||
+          (i.projectNumber || "").toLowerCase().includes(q)
       );
     }
 
-    // Sort
     feed.sort(defaultFeedSort);
     return feed;
-  }, [rawFeed, urgencyFilter, chipFilters]);
+  }, [rawFeed, snapshotFilter, chipFilters]);
 
-  // ── Unique owners for filter chips ──────────────────────────────────
   const uniqueOwners = useMemo(() => {
     const set = new Set();
-    for (const item of rawFeed) {
-      if (item.owner) set.add(item.owner);
-    }
+    for (const i of rawFeed) if (i.owner) set.add(i.owner);
     return [...set].sort();
   }, [rawFeed]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────
   const handleKeyDown = useCallback(
     (e) => {
-      // Don't capture when inside an input
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (!feedExpanded) return; // nav only applies to the expanded feed
 
       switch (e.key) {
         case "j":
         case "J":
           e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, filteredFeed.length - 1));
+          setSelectedIndex((p) => Math.min(p + 1, filteredFeed.length - 1));
           break;
         case "k":
         case "K":
           e.preventDefault();
-          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          setSelectedIndex((p) => Math.max(p - 1, 0));
           break;
         case "Enter":
           if (selectedIndex >= 0 && selectedIndex < filteredFeed.length) {
@@ -214,21 +222,19 @@ export default function CommandCenter() {
           break;
         case "e":
         case "E":
-          // Mark resolved — for production notes only in MVP
           if (selectedIndex >= 0 && selectedIndex < filteredFeed.length) {
-            const item = filteredFeed[selectedIndex];
-            if (item.itemType === "NOTE" && item.raw?.id) {
+            const it = filteredFeed[selectedIndex];
+            if (it.itemType === "NOTE" && it.raw?.id) {
               e.preventDefault();
-              base44.entities.ProductionNote.update(item.raw.id, {
-                is_resolved: true,
-                resolved_date: new Date().toISOString(),
-              }).catch(() => {});
+              base44.entities.ProductionNote
+                .update(it.raw.id, { is_resolved: true, resolved_date: new Date().toISOString() })
+                .catch(() => {});
             }
           }
           break;
       }
     },
-    [filteredFeed, selectedIndex, detailItem, forwardLookOpen]
+    [feedExpanded, filteredFeed, selectedIndex, detailItem, forwardLookOpen]
   );
 
   useEffect(() => {
@@ -236,7 +242,6 @@ export default function CommandCenter() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Reset selected index when feed changes
   useEffect(() => {
     setSelectedIndex(-1);
   }, [filteredFeed.length]);
@@ -250,14 +255,32 @@ export default function CommandCenter() {
     );
   }
 
+  const { snapshot } = view;
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const dateLabel = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const subtitle =
+    snapshot.needsAction > 0
+      ? `${snapshot.needsAction} item${snapshot.needsAction !== 1 ? "s" : ""} need your attention · ${projects.length} active project${projects.length !== 1 ? "s" : ""}`
+      : `All clear across ${projects.length} project${projects.length !== 1 ? "s" : ""} · nothing urgent today`;
+
+  const activeFilter = (key) => (snapshotFilter === key);
+  const toggleFilter = (key) => setSnapshotFilter((p) => (p === key ? null : key));
+
   return (
     <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
-        eyebrow="PORTFOLIO TRIAGE"
+        eyebrow={`${greeting} · ${dateLabel.toUpperCase()}`}
         title="Command Center"
-        count={rawFeed.length}
-        unit={` · ${projects.length} PROJECTS`}
-        subtitle="Personal action cockpit · J/K navigate · Enter opens · Esc closes · E resolves note"
+        count={snapshot.needsAction}
+        unit=" · NEEDS YOU"
+        subtitle={subtitle}
       >
         <button
           onClick={() => setForwardLookOpen(true)}
@@ -271,64 +294,218 @@ export default function CommandCenter() {
             letterSpacing: "0.08em",
             padding: "8px 14px",
             borderRadius: "var(--radius-btn)",
-            border: "1px solid var(--accent-border)",
+            border: "1px solid var(--accent)",
             background: "var(--accent-muted)",
             color: "var(--accent)",
             cursor: "pointer",
             textTransform: "uppercase",
-            transition: "all 0.15s",
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 16%, transparent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 18%, transparent)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent-muted)")}
         >
           14-Day Forward Look →
         </button>
       </CommandBar>
 
-      {/* Zone A — Urgency Strip */}
-      <UrgencyStrip
-        summary={summary}
-        activeFilter={urgencyFilter}
-        onFilterClick={setUrgencyFilter}
-      />
-
-      {/* Filter chips */}
-      <FeedFilters
-        projects={projects}
-        owners={uniqueOwners}
-        filters={chipFilters}
-        onFilterChange={setChipFilters}
-      />
-
-      {/* Active filter indicator */}
-      {(urgencyFilter || chipFilters.projectIds.length > 0 || chipFilters.itemTypes.length > 0 || chipFilters.ownerFilter.length > 0 || chipFilters.search) && (
+      {/* Critical banner — only when blocking items exist */}
+      {view.blocking.length > 0 && (
         <div
+          onClick={() => toggleFilter("dueToday")}
           style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.06em",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 16px",
+            background: "color-mix(in srgb, var(--status-error) 12%, transparent)",
+            border: "1px solid var(--status-error)",
+            borderRadius: "var(--radius-card)",
+            cursor: "pointer",
+            flexWrap: "wrap",
           }}
         >
-          Showing {filteredFeed.length} of {rawFeed.length} items
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 800,
+              padding: "3px 8px",
+              borderRadius: 3,
+              background: "var(--status-error)",
+              color: "var(--bg-base)",
+              letterSpacing: "0.12em",
+            }}
+          >
+            🔴 BLOCKING
+          </span>
+          <span
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+            }}
+          >
+            {view.blocking.length} item{view.blocking.length !== 1 ? "s" : ""} holding up fabrication or erection — action required
+          </span>
+          <span
+            style={{
+              marginLeft: "auto",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "var(--status-error)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Review →
+          </span>
         </div>
       )}
 
-      {/* Zone B — Action Feed */}
-      <ActionFeed
-        items={filteredFeed}
-        selectedIndex={selectedIndex}
-        onSelectIndex={setSelectedIndex}
-        onOpenDetail={setDetailItem}
-      />
+      {/* Snapshot tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+        <KpiTile
+          compact
+          label="Needs You"
+          value={snapshot.needsAction}
+          color="var(--accent)"
+          active={activeFilter("needsAction")}
+          onClick={() => toggleFilter("needsAction")}
+        />
+        <KpiTile
+          compact
+          label="Overdue"
+          value={snapshot.overdue}
+          color="var(--status-error)"
+          active={activeFilter("overdue")}
+          onClick={() => toggleFilter("overdue")}
+        />
+        <KpiTile
+          compact
+          label="Due Today"
+          value={snapshot.dueToday}
+          color="var(--status-warning)"
+          active={activeFilter("dueToday")}
+          onClick={() => toggleFilter("dueToday")}
+        />
+        <KpiTile
+          compact
+          label="Arriving Today"
+          value={snapshot.arrivingToday}
+          color="var(--phase-delivery)"
+          active={activeFilter("arrivingToday")}
+          onClick={() => toggleFilter("arrivingToday")}
+        />
+        <KpiTile
+          compact
+          label="Waiting Others"
+          value={snapshot.waitingOthers}
+          color="var(--text-muted)"
+          active={activeFilter("waitingOthers")}
+          onClick={() => toggleFilter("waitingOthers")}
+        />
+      </div>
 
-      {/* Item Detail Drawer */}
-      <ItemDetailDrawer
-        item={detailItem}
-        onClose={() => setDetailItem(null)}
-      />
+      {/* Main grid: Today (3fr) / Week Ahead (2fr) */}
+      <div
+        className="cc-main-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
+        <TodayAgenda buckets={view} onOpenDetail={setDetailItem} />
+        <WeekAhead weekByDay={view.weekByDay} onForwardLookClick={() => setForwardLookOpen(true)} />
+      </div>
 
-      {/* Zone C — Forward Look Drawer */}
+      {/* Collapsible full action feed */}
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          overflow: "hidden",
+        }}
+      >
+        <button
+          onClick={() => setFeedExpanded((v) => !v)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 16px",
+            background: feedExpanded ? "var(--bg-surface-low)" : "transparent",
+            border: "none",
+            borderBottom: feedExpanded ? "1px solid var(--divider)" : "none",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 13 }}>{feedExpanded ? "▾" : "▸"}</span>
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 13,
+                fontWeight: 800,
+                color: "var(--text-primary)",
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              All Open Items
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--text-muted)",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {filteredFeed.length}
+              {filteredFeed.length !== rawFeed.length ? ` of ${rawFeed.length}` : ""}
+            </span>
+          </div>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              color: "var(--text-muted)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {feedExpanded ? "J/K Navigate · Enter Opens · Esc Closes" : "Click to Expand"}
+          </span>
+        </button>
+
+        {feedExpanded && (
+          <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <FeedFilters
+              projects={projects}
+              owners={uniqueOwners}
+              filters={chipFilters}
+              onFilterChange={setChipFilters}
+            />
+            <ActionFeed
+              items={filteredFeed}
+              selectedIndex={selectedIndex}
+              onSelectIndex={setSelectedIndex}
+              onOpenDetail={setDetailItem}
+            />
+          </div>
+        )}
+      </div>
+
+      <ItemDetailDrawer item={detailItem} onClose={() => setDetailItem(null)} />
+
       <ForwardLookDrawer
         open={forwardLookOpen}
         onClose={() => setForwardLookOpen(false)}
@@ -336,6 +513,12 @@ export default function CommandCenter() {
         deliveries={deliveries}
         projectMap={projectMap}
       />
+
+      <style>{`
+        @media (max-width: 980px) {
+          .cc-main-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
