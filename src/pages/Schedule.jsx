@@ -12,20 +12,9 @@ import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
-import { PHASES } from "@/utils/phases";
+import { PHASES, PHASE_ABBREV } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
-
-/* ── Phase abbreviation map for WBS codes ────────────────────────────── */
-const PHASE_ABBREV = {
-  "Pre-Construction": "PC",
-  "Detailing":        "DET",
-  "Procurement":      "PRO",
-  "Fabrication":      "FAB",
-  "Delivery":         "DEL",
-  "Installation":     "INS",
-  "Closeout":         "CLO",
-};
 
 /**
  * Auto-generate a WBS code for a task based on its phase and the
