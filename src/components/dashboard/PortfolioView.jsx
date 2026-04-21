@@ -4,6 +4,7 @@ import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 import ProgressBar from "../shared/ProgressBar";
 
 /* ── Enhanced Mini SVG Sparkline with area fill and trend arrow ────────────── */
@@ -297,8 +298,26 @@ export default function PortfolioView({
   allExpenses = [],
 }) {
   const navigate = useNavigate();
+  const { setActiveProject } = useProjectContext();
   const [sortMode, setSortMode] = useState("health");
   const [kpiFilter, setKpiFilter] = useState(null);
+
+  /**
+   * Open the single-project dashboard for a given project id.
+   *
+   * The legacy code pointed these clicks at `/ProjectDashboard?project=X`,
+   * but there is no standalone `/ProjectDashboard` route — the single-
+   * project dashboard is rendered by `Dashboard.jsx` when an active
+   * project is set via `useProjectContext`. Attempting to navigate
+   * there directly 404'd. This helper selects the project in context,
+   * then routes to `/Dashboard`.
+   */
+  const openProjectDashboard = (projectId) => {
+    if (!projectId) return;
+    const proj = (projects || []).find((p) => p.id === projectId);
+    if (proj) setActiveProject(proj);
+    navigate("/Dashboard");
+  };
 
   // ── Sparkline history: store 7-day KPI snapshots in localStorage ──────────
   const [sparkHistory, setSparkHistory] = useState({});
@@ -1131,7 +1150,7 @@ export default function PortfolioView({
                   return (
                     <React.Fragment key={p.id}>
                     <tr
-                      onClick={() => navigate(`/ProjectDashboard?project=${p.id}`)}
+                      onClick={() => openProjectDashboard(p.id)}
                       style={{
                         borderBottom: "1px solid var(--divider)",
                         background: rowBg,
@@ -1263,13 +1282,21 @@ export default function PortfolioView({
                       <td style={{ padding: "6px 6px", textAlign: "center" }}>
                         <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
                           {[
-                            { label: "DASH", nav: `/ProjectDashboard?project=${p.id}`, primary: true },
+                            // DASH uses a callback to switch the active project AND go to /Dashboard
+                            // (there is no standalone /ProjectDashboard route). Peer buttons still
+                            // navigate via URL. `nav` is either a string (passed to navigate) or a
+                            // function (called directly) — branched below.
+                            { label: "DASH", nav: () => openProjectDashboard(p.id), primary: true },
                             ...(p.openRFIs > 0 ? [{ label: "RFIs", nav: createPageUrl("RFIs"), accent: "var(--status-warning)" }] : []),
                             ...(p.lateDeliveries > 0 ? [{ label: "DEL", nav: createPageUrl("Deliveries"), accent: "var(--status-error)" }] : []),
                           ].slice(0, 3).map((btn) => (
                             <button
                               key={btn.label}
-                              onClick={(e) => { e.stopPropagation(); navigate(btn.nav); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (typeof btn.nav === "function") btn.nav();
+                                else navigate(btn.nav);
+                              }}
                               style={{
                                 background: btn.primary ? "var(--accent-muted)" : "var(--bg-surface)",
                                 border: `1px solid ${btn.primary ? "var(--accent-border)" : btn.accent ? `${btn.accent}44` : "var(--border-default)"}`,
@@ -1475,7 +1502,7 @@ export default function PortfolioView({
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {dataIssues.map((issue, i) => (
                   <div key={i} style={{ borderLeft: `3px solid ${issue.severity === "high" ? "var(--status-warning)" : "var(--text-muted)"}`, background: issue.severity === "high" ? "var(--warning-muted)" : "transparent", borderRadius: "0 3px 3px 0", padding: "5px 8px", cursor: issue.projectId ? "pointer" : "default" }}
-                    onClick={() => issue.projectId && navigate(`/ProjectDashboard?project=${issue.projectId}`)}>
+                    onClick={() => openProjectDashboard(issue.projectId)}>
                     <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-primary)", fontWeight: 500 }}>{issue.project}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
                       <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{issue.issue}</span>
@@ -1511,7 +1538,7 @@ export default function PortfolioView({
               <tbody>
                 {productionData.map((p) => (
                   <tr key={p.id} style={{ borderBottom: "1px solid var(--divider)", cursor: "pointer" }}
-                    onClick={() => navigate(`/ProjectDashboard?project=${p.id}`)}
+                    onClick={() => openProjectDashboard(p.id)}
                     onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                     <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>
@@ -1678,7 +1705,7 @@ export default function PortfolioView({
             pccData.riskWatch.map((p, i) => {
               const color = p.status === "At Risk" ? "var(--status-error)" : "var(--status-warning)";
               return (
-                <div key={i} onClick={() => navigate(`/ProjectDashboard?project=${p.projectId}`)} style={{
+                <div key={i} onClick={() => openProjectDashboard(p.projectId)} style={{
                   borderLeft: `3px solid ${color}`,
                   background: `${color}08`, borderRadius: "0 4px 4px 0",
                   padding: "6px 8px", cursor: "pointer",
