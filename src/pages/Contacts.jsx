@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus, Upload, Search } from "lucide-react";
 
 const TYPE_COLORS = {
   Owner: "var(--status-error)",
@@ -164,114 +166,51 @@ export default function Contacts() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              letterSpacing: "0.02em",
-              margin: 0,
-              textTransform: "uppercase",
-              color: "var(--text-primary)",
-            }}
-          >
-            Contacts
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              marginTop: 6,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span>{selectedProject ? selectedProject.name : "All Projects"}</span>
-            <span style={{ color: "var(--border-strong)" }}>·</span>
-            <span>{filtered.length} {filtered.length === 1 ? "Contact" : "Contacts"}</span>
-            {filterType !== "all" && (
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                color: "var(--accent)",
-                background: "rgba(200,155,32,0.12)",
-                border: "1px solid rgba(200,155,32,0.3)",
-                padding: "1px 6px",
-                borderRadius: "var(--radius-badge)",
-                letterSpacing: "0.08em",
-              }}>
-                FILTERED: {filterType.toUpperCase()}
-              </span>
-            )}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            style={{
-              height: 36,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--border-default)",
-              padding: "0 14px",
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            IMPORT CSV
-          </button>
-          <button
-            onClick={() => { setEditingContact(null); setShowForm(true); }}
-            style={{
-              height: 36,
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--accent)",
-              padding: "0 14px",
-              background: "var(--accent)",
-              color: "#fff",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            + New Contact
-          </button>
-        </div>
-      </div>
-
-      {/* Stats strip */}
-      <div
-        style={{
-          display: "flex",
-          background: "var(--bg-surface)",
-          borderBottom: "1px solid var(--divider)",
-          overflowX: "auto",
-        }}
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Contacts"
+        count={filtered.length}
+        unit=" · CONTACTS"
+        subtitle={`Project directory · Owner / GC / Engineer / Subs / Suppliers / Inspectors${filterType !== "all" ? ` · filtered: ${filterType}` : ""}`}
       >
-        <StatCard label="Total" value={stats.total} color="var(--text-primary)" active={filterType === "all"} onClick={() => setFilterType("all")} />
-        <StatCard label="Owner" value={stats.owner} color={TYPE_COLORS.Owner} active={filterType === "Owner"} onClick={() => setFilterType(filterType === "Owner" ? "all" : "Owner")} />
-        <StatCard label="GC" value={stats.gc} color={TYPE_COLORS.GC} active={filterType === "GC"} onClick={() => setFilterType(filterType === "GC" ? "all" : "GC")} />
-        <StatCard label="Engineer" value={stats.engineer} color={TYPE_COLORS.Engineer} active={filterType === "Engineer"} onClick={() => setFilterType(filterType === "Engineer" ? "all" : "Engineer")} />
-        <StatCard label="Subcontractor" value={stats.subcontractor} color={TYPE_COLORS.Subcontractor} active={filterType === "Subcontractor"} onClick={() => setFilterType(filterType === "Subcontractor" ? "all" : "Subcontractor")} />
-        <StatCard label="Supplier" value={stats.supplier} color={TYPE_COLORS.Supplier} active={filterType === "Supplier"} onClick={() => setFilterType(filterType === "Supplier" ? "all" : "Supplier")} />
-        <StatCard label="Inspector" value={stats.inspector} color={TYPE_COLORS.Inspector} active={filterType === "Inspector"} onClick={() => setFilterType(filterType === "Inspector" ? "all" : "Inspector")} />
-        <StatCard label="Internal" value={stats.internal} color={TYPE_COLORS.Internal} active={filterType === "Internal"} onClick={() => setFilterType(filterType === "Internal" ? "all" : "Internal")} />
+        <button
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)",
+            borderRadius: "var(--radius-btn)", padding: "8px 12px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+        >
+          <Upload size={12} /> Import CSV
+        </button>
+        <button
+          onClick={() => { setEditingContact(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Contact
+        </button>
+      </CommandBar>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"        value={stats.total}          color="var(--accent)"                active={filterType === "all"}           onClick={() => setFilterType("all")} />
+        <KpiTile compact label="Owner"        value={stats.owner}          color={TYPE_COLORS.Owner}            active={filterType === "Owner"}         onClick={() => setFilterType(filterType === "Owner" ? "all" : "Owner")} />
+        <KpiTile compact label="GC"           value={stats.gc}             color={TYPE_COLORS.GC}               active={filterType === "GC"}            onClick={() => setFilterType(filterType === "GC" ? "all" : "GC")} />
+        <KpiTile compact label="Engineer"     value={stats.engineer}       color={TYPE_COLORS.Engineer}         active={filterType === "Engineer"}      onClick={() => setFilterType(filterType === "Engineer" ? "all" : "Engineer")} />
+        <KpiTile compact label="Subs"         value={stats.subcontractor}  color={TYPE_COLORS.Subcontractor}    active={filterType === "Subcontractor"} onClick={() => setFilterType(filterType === "Subcontractor" ? "all" : "Subcontractor")} />
+        <KpiTile compact label="Supplier"     value={stats.supplier}       color={TYPE_COLORS.Supplier}         active={filterType === "Supplier"}      onClick={() => setFilterType(filterType === "Supplier" ? "all" : "Supplier")} />
+        <KpiTile compact label="Inspector"    value={stats.inspector}      color={TYPE_COLORS.Inspector}        active={filterType === "Inspector"}     onClick={() => setFilterType(filterType === "Inspector" ? "all" : "Inspector")} />
+        <KpiTile compact label="Internal"     value={stats.internal}       color={TYPE_COLORS.Internal}         active={filterType === "Internal"}      onClick={() => setFilterType(filterType === "Internal" ? "all" : "Internal")} />
       </div>
 
       {/* Search Bar — prominent, full width */}

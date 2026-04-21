@@ -29,6 +29,8 @@ import ListView from "./constraints/ListView";
 import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
 import { CONSTRAINT_TYPES, TYPE_COLORS } from "./constraints/constants";
+import { CommandBar } from "@/components/design-system";
+import { Plus, Search } from "lucide-react";
 
 const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
@@ -228,119 +230,69 @@ export default function Constraints() {
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "18px 18px 28px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* Header */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              color: "var(--text-primary)",
-              lineHeight: 1.1,
-            }}
-          >
-            Constraint Log
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              marginTop: 4,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span>{activeProject?.name || projects.find((p) => p.id === projectId)?.name || "Project"}</span>
-            <span style={{ color: "var(--border-strong)" }}>·</span>
-            <span>{openCount} Open</span>
-            <span style={{ color: "var(--border-strong)" }}>·</span>
-            <span>{kpis.total} Total</span>
-            {overdueCount > 0 && (
-              <>
-                <span style={{ color: "var(--border-strong)" }}>·</span>
-                <span style={{ color: "var(--status-error)", fontWeight: 700 }}>{overdueCount} Overdue</span>
-              </>
-            )}
-          </div>
+      <CommandBar
+        eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "ALL PROJECTS"}
+        title="Constraint Log"
+        count={kpis.total}
+        unit=" · TOTAL"
+        subtitle={`${openCount} open${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""} · upstream blockers to field work`}
+      >
+        <div style={{ position: "relative" }}>
+          <Search size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search constraints..."
+            style={{ ...inputStyle, paddingLeft: 30, maxWidth: 240 }}
+          />
         </div>
-
-        <div className="filter-bar-responsive" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <span
+        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
+          {[["list", "≡ LIST"], ["board", "▦ BOARD"]].map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
               style={{
-                position: "absolute",
-                left: 10,
-                top: "50%",
-                transform: "translateY(-50%)",
-                fontSize: 11,
-                color: "var(--text-muted)",
-                pointerEvents: "none",
+                background: view === v ? "var(--accent-muted)" : "transparent",
+                color: view === v ? "var(--accent)" : "var(--text-secondary)",
+                border: "none",
+                borderRight: v === "list" ? "1px solid var(--border-default)" : "none",
+                padding: "6px 12px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
               }}
             >
-              🔍
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search constraints..."
-              style={{ ...inputStyle, paddingLeft: 28, maxWidth: 240 }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 6 }}>
-            {["list", "board"].map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                style={{
-                  background: view === v ? "var(--accent)" : "var(--bg-surface-low)",
-                  color: view === v ? "var(--accent-text)" : "var(--text-secondary)",
-                  border: "none",
-                  borderRadius: "var(--radius-btn)",
-                  padding: "7px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                {v === "list" ? "≡ List" : "▦ Board"}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { setEditing(null); setShowForm(true); }}
-            style={{
-              background: "var(--status-error)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "8px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            + Log Constraint
-          </button>
+              {label}
+            </button>
+          ))}
         </div>
-      </div>
+        <button
+          type="button"
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)",
+            color: "var(--bg-base)",
+            border: "none",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> Log Constraint
+        </button>
+      </CommandBar>
 
       <KpiStrip kpis={kpis} />
 

@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import InspectionFormModal from "@/components/inspections/InspectionFormModal";
 import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 const TYPES = [
   "Steel Fabrication",
@@ -137,118 +138,41 @@ export default function Inspections() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Breadcrumb */}
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-        letterSpacing: "0.10em", textTransform: "uppercase",
-      }}>
-        {selectedProject ? (
-          <>{selectedProject.name} <span style={{ opacity: 0.4 }}>/</span> Inspections</>
-        ) : (
-          <>All Projects <span style={{ opacity: 0.4 }}>/</span> Inspections</>
-        )}
-      </div>
-
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display, var(--font-body))",
-              fontSize: 22,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Inspections
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 600,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-            }}
-          >
-            {filtered.length} of {inspections.length} inspections
-            {filterType !== "all" || filterStatus !== "all" ? " (filtered)" : ""}
-          </p>
-        </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Inspections"
+        count={filtered.length}
+        unit={` OF ${inspections.length}`}
+        subtitle={`Welds · material · connections · coatings${filterType !== "all" || filterStatus !== "all" ? " · (filtered)" : ""}`}
+      >
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
           style={{
-            background: "var(--accent)",
-            color: "#07090E",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 16px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 800,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            transition: "all 0.15s",
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + New Inspection
+          <Plus size={12} /> New Inspection
         </button>
-      </div>
+      </CommandBar>
 
-      {/* Stats Grid — clickable, color-coded */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
-        <StatCard
-          label="Total"
-          value={stats.total}
-          color="var(--accent)"
-          active={filterStatus === "all"}
-          onClick={() => setFilterStatus("all")}
-        />
-        <StatCard
-          label="Scheduled"
-          value={stats.scheduled}
-          color={STATUS_COLORS.Scheduled}
-          active={filterStatus === "Scheduled"}
-          onClick={() => handleStatClick("Scheduled")}
-        />
-        <StatCard
-          label="In Progress"
-          value={stats.inProgress}
-          color={STATUS_COLORS["In Progress"]}
-          active={filterStatus === "In Progress"}
-          onClick={() => handleStatClick("In Progress")}
-        />
-        <StatCard
-          label="Completed"
-          value={stats.completed}
-          color={STATUS_COLORS.Completed}
-          active={filterStatus === "Completed"}
-          onClick={() => handleStatClick("Completed")}
-        />
-        <StatCard
-          label="Approved"
-          value={stats.approved}
-          color="var(--status-success, #10B981)"
-          active={false}
-          onClick={null}
-        />
-        <StatCard
-          label="Rejected"
-          value={stats.rejected}
-          color="var(--status-error, #FF3B3B)"
-          active={false}
-          onClick={null}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"       value={stats.total}      color="var(--accent)"
+                 active={filterStatus === "all"} onClick={() => setFilterStatus("all")} />
+        <KpiTile compact label="Scheduled"   value={stats.scheduled}  color={STATUS_COLORS.Scheduled}
+                 active={filterStatus === "Scheduled"} onClick={() => handleStatClick("Scheduled")} />
+        <KpiTile compact label="In Progress" value={stats.inProgress} color={STATUS_COLORS["In Progress"]}
+                 active={filterStatus === "In Progress"} onClick={() => handleStatClick("In Progress")} />
+        <KpiTile compact label="Completed"   value={stats.completed}  color={STATUS_COLORS.Completed}
+                 active={filterStatus === "Completed"} onClick={() => handleStatClick("Completed")} />
+        <KpiTile compact label="Approved"    value={stats.approved}   color="var(--status-success)" />
+        <KpiTile compact label="Rejected"    value={stats.rejected}   color="var(--status-error)" />
       </div>
 
       {/* Filters — full labels, no truncation */}
