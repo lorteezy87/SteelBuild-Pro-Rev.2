@@ -9,7 +9,7 @@ import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
-import { formatCurrency, formatCurrencyShort, formatPercent } from "../components/shared/formatters";
+import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -697,7 +697,7 @@ export default function CostDashboard() {
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-error)' }}>
-                {d.scheduled_date ? `Due ${new Date(d.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Overdue'}
+                {d.scheduled_date ? `Due ${formatDateShort(d.scheduled_date)}` : 'Overdue'}
               </div>
             </div>
           ))}
@@ -708,7 +708,7 @@ export default function CostDashboard() {
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-warning)' }}>
-                {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                {d.scheduled_date ? formatDateShort(d.scheduled_date) : '—'}
               </div>
             </div>
           ))}

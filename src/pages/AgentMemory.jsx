@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import LoadingSkeleton from '@/components/shared/LoadingSkeleton';
+import { formatDate } from '@/components/shared/formatters';
 
 export default function AgentMemory() {
   const qc = useQueryClient();
@@ -183,7 +184,7 @@ export default function AgentMemory() {
                       </span>
                     )}
                     <span style={{ color: 'var(--text-muted)' }}>
-                      {mem.created_at ? new Date(mem.created_at).toLocaleDateString() : ''}
+                      {mem.created_at ? formatDate(mem.created_at) : ''}
                     </span>
                   </div>
                 </div>
