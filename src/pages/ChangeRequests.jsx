@@ -8,6 +8,7 @@ import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestForm
 import ChangeRequestList from "@/components/changerequest/ChangeRequestList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
+import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
 
 export default function ChangeRequests() {
@@ -133,7 +134,7 @@ export default function ChangeRequests() {
                  active={filterStatus === "Approved"}  onClick={() => setFilterStatus(filterStatus === "Approved" ? "all" : "Approved")} />
         <KpiTile compact label="Rejected"    value={stats.rejected}  color="var(--status-error)"
                  active={filterStatus === "Rejected"}  onClick={() => setFilterStatus(filterStatus === "Rejected" ? "all" : "Rejected")} />
-        <KpiTile compact label="Cost Impact" value={`$${(stats.totalCostImpact || 0).toLocaleString()}`}
+        <KpiTile compact label="Cost Impact" value={formatCurrency(stats.totalCostImpact || 0, 0)}
                  color={stats.totalCostImpact > 0 ? "var(--status-warning)" : "var(--status-success)"} />
       </div>
 

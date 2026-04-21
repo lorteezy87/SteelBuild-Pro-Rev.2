@@ -4,32 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
 import DeleteDialog from '@/components/shared/DeleteDialog';
+import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@/components/shared/PhoenixModal';
 import { toast } from 'sonner';
 import { CommandBar } from '@/components/design-system';
 import { Plus } from 'lucide-react';
 
-const iStyle = {
-  width: '100%',
-  background: 'var(--bg-input)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 8,
-  padding: '8px 12px',
-  color: 'var(--text-primary)',
-  fontFamily: 'var(--font-body)',
-  fontSize: 12,
-  outline: 'none',
-  boxSizing: 'border-box',
-};
-
-const labelStyle = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: 9,
-  color: 'var(--text-muted)',
-  letterSpacing: '0.10em',
-  textTransform: 'uppercase',
-  display: 'block',
-  marginBottom: 4,
-};
+// Local aliases so the surviving filter-bar callers keep compiling without
+// edits. Both now delegate to the shared PhoenixModal style constants.
+const iStyle = inputStyle;
 
 const IMPACT_COLORS = {
   Critical: 'var(--status-error)',
@@ -390,52 +372,46 @@ function DecisionFormModal({ decision, onClose, onSave }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: 'var(--bg-surface-secondary)', border: '1px solid var(--border-default)', borderRadius: 16, padding: 24, maxWidth: 560, width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 20px 0', textTransform: 'uppercase', letterSpacing: '0.10em' }}>
-          {decision ? 'Edit Decision' : 'Log Decision'}
-        </h2>
-        <form onSubmit={e => { e.preventDefault(); onSave(form); }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Decision *</label>
-            <textarea style={{ ...iStyle, minHeight: 80, resize: 'vertical' }}
-              value={form.decision_text || ''} onChange={e => set('decision_text', e.target.value)}
-              required placeholder="What was decided?" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Decided By</label>
-              <input style={iStyle} value={form.decided_by || ''} onChange={e => set('decided_by', e.target.value)} placeholder="Name or role" />
-            </div>
-            <div>
-              <label style={labelStyle}>Phase</label>
-              <select style={iStyle} value={form.phase || 'Fabrication'} onChange={e => set('phase', e.target.value)}>
-                {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Impact Level</label>
-              <select style={iStyle} value={form.impact_level || 'High'} onChange={e => set('impact_level', e.target.value)}>
-                {['Critical', 'High', 'Medium', 'Low'].map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Rationale / Why</label>
-            <textarea style={{ ...iStyle, minHeight: 60, resize: 'vertical' }}
-              value={form.rationale || ''} onChange={e => set('rationale', e.target.value)}
-              placeholder="Why was this decision made?" />
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--divider)' }}>
-            <button type="button" onClick={onClose} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 16px', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>Cancel</button>
-            <button type="submit" style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>
-              {decision ? 'Save' : 'Log Decision'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <PhoenixModal
+      open
+      onClose={onClose}
+      title={decision ? 'Edit Decision' : 'Log Decision'}
+      maxWidth={560}
+      footer={<>
+        <button type="button" style={btnSecondary} onClick={onClose}>Cancel</button>
+        <button type="button" style={btnPrimary} onClick={() => onSave(form)}>
+          {decision ? 'Save' : 'Log Decision'}
+        </button>
+      </>}
+    >
+      <form onSubmit={e => { e.preventDefault(); onSave(form); }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <FormField label="Decision *">
+          <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
+            value={form.decision_text || ''} onChange={e => set('decision_text', e.target.value)}
+            required placeholder="What was decided?" />
+        </FormField>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <FormField label="Decided By">
+            <input style={inputStyle} value={form.decided_by || ''} onChange={e => set('decided_by', e.target.value)} placeholder="Name or role" />
+          </FormField>
+          <FormField label="Phase">
+            <select style={inputStyle} value={form.phase || 'Fabrication'} onChange={e => set('phase', e.target.value)}>
+              {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Impact Level">
+            <select style={inputStyle} value={form.impact_level || 'High'} onChange={e => set('impact_level', e.target.value)}>
+              {['Critical', 'High', 'Medium', 'Low'].map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </FormField>
+        </div>
+        <FormField label="Rationale / Why">
+          <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+            value={form.rationale || ''} onChange={e => set('rationale', e.target.value)}
+            placeholder="Why was this decision made?" />
+        </FormField>
+      </form>
+    </PhoenixModal>
   );
 }
 
@@ -446,61 +422,53 @@ function AssumptionFormModal({ assumption, onClose, onSave }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: 'var(--bg-surface-secondary)', border: '1px solid var(--border-default)', borderRadius: 16, padding: 24, maxWidth: 580, width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 20px 0', textTransform: 'uppercase', letterSpacing: '0.10em' }}>
-          {assumption ? 'Edit Assumption' : 'Log Assumption'}
-        </h2>
-        <form onSubmit={e => { e.preventDefault(); onSave(form); }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Assumption *</label>
-            <textarea style={{ ...iStyle, minHeight: 70, resize: 'vertical' }}
-              value={form.assumption_text || ''} onChange={e => set('assumption_text', e.target.value)}
-              required placeholder="What are we assuming to be true?" />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Made By</label>
-              <input style={iStyle} value={form.made_by || ''} onChange={e => set('made_by', e.target.value)} placeholder="Name or role" />
-            </div>
-            <div>
-              <label style={labelStyle}>Source Document</label>
-              <input style={iStyle} value={form.source_document || ''} onChange={e => set('source_document', e.target.value)} placeholder="RFI #, Drawing, Email..." />
-            </div>
-            <div>
-              <label style={labelStyle}>Impact if Wrong</label>
-              <select style={iStyle} value={form.impact || 'High'} onChange={e => set('impact', e.target.value)}>
-                {['Critical', 'High', 'Medium', 'Low'].map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Review Trigger Date</label>
-              <input type="date" style={iStyle} value={form.review_date || ''} onChange={e => set('review_date', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>Risk if Wrong</label>
-            <textarea style={{ ...iStyle, minHeight: 60, resize: 'vertical' }}
-              value={form.risk_if_wrong || ''} onChange={e => set('risk_if_wrong', e.target.value)}
-              placeholder="What happens if this assumption is incorrect?" />
-          </div>
-          {assumption && (
-            <div>
-              <label style={labelStyle}>Status</label>
-              <select style={iStyle} value={form.status || 'Active'} onChange={e => set('status', e.target.value)}>
-                {['Active', 'Verified', 'Invalidated', 'Closed'].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 8, borderTop: '1px solid var(--divider)' }}>
-            <button type="button" onClick={onClose} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '8px 16px', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>Cancel</button>
-            <button type="submit" style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>
-              {assumption ? 'Save' : 'Log Assumption'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <PhoenixModal
+      open
+      onClose={onClose}
+      title={assumption ? 'Edit Assumption' : 'Log Assumption'}
+      maxWidth={580}
+      footer={<>
+        <button type="button" style={btnSecondary} onClick={onClose}>Cancel</button>
+        <button type="button" style={btnPrimary} onClick={() => onSave(form)}>
+          {assumption ? 'Save' : 'Log Assumption'}
+        </button>
+      </>}
+    >
+      <form onSubmit={e => { e.preventDefault(); onSave(form); }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <FormField label="Assumption *">
+          <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }}
+            value={form.assumption_text || ''} onChange={e => set('assumption_text', e.target.value)}
+            required placeholder="What are we assuming to be true?" />
+        </FormField>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <FormField label="Made By">
+            <input style={inputStyle} value={form.made_by || ''} onChange={e => set('made_by', e.target.value)} placeholder="Name or role" />
+          </FormField>
+          <FormField label="Source Document">
+            <input style={inputStyle} value={form.source_document || ''} onChange={e => set('source_document', e.target.value)} placeholder="RFI #, Drawing, Email..." />
+          </FormField>
+          <FormField label="Impact if Wrong">
+            <select style={inputStyle} value={form.impact || 'High'} onChange={e => set('impact', e.target.value)}>
+              {['Critical', 'High', 'Medium', 'Low'].map(i => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Review Trigger Date">
+            <input type="date" style={inputStyle} value={form.review_date || ''} onChange={e => set('review_date', e.target.value)} />
+          </FormField>
+        </div>
+        <FormField label="Risk if Wrong">
+          <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+            value={form.risk_if_wrong || ''} onChange={e => set('risk_if_wrong', e.target.value)}
+            placeholder="What happens if this assumption is incorrect?" />
+        </FormField>
+        {assumption && (
+          <FormField label="Status">
+            <select style={inputStyle} value={form.status || 'Active'} onChange={e => set('status', e.target.value)}>
+              {['Active', 'Verified', 'Invalidated', 'Closed'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </FormField>
+        )}
+      </form>
+    </PhoenixModal>
   );
 }
