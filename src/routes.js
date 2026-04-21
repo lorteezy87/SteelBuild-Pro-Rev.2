@@ -73,6 +73,8 @@ export const PAGE_LABELS = {
   Settings:              "Settings",
   UsersManagement:       "User Management",
   Financials_Detail:     "Financials Detail",
+  FeetInchesCalculator:  "Feet & Inches Calculator",
+  SteelWeightCalculator: "Steel Weight Calculator",
 };
 
 /**
