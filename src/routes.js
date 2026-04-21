@@ -75,6 +75,7 @@ export const PAGE_LABELS = {
   Financials_Detail:     "Financials Detail",
   FeetInchesCalculator:  "Feet & Inches Calculator",
   SteelWeightCalculator: "Steel Weight Calculator",
+  CranePickCalculator:   "Crane Pick Calculator",
 };
 
 /**
