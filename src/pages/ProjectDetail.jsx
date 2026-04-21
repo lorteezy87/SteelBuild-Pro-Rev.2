@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { formatCurrency, formatPercent } from "@/components/shared/formatters";
 import { CommandBar } from "@/components/design-system";
 import { ArrowLeft } from "lucide-react";
+import ProjectHandoffChecklist from "@/components/projects/ProjectHandoffChecklist";
 
 const HEALTH_COLORS = {
   "On Track": "var(--status-success)",
@@ -15,6 +16,7 @@ const HEALTH_COLORS = {
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "handoff", label: "Handoff" },
   { id: "schedule", label: "Schedule" },
   { id: "documents", label: "Documents" },
   { id: "rfis", label: "RFIs" },
@@ -358,6 +360,10 @@ export default function ProjectDetail() {
           </div>
         )}
 
+        {activeTab === "handoff" && (
+          <ProjectHandoffChecklist projectId={projectId} />
+        )}
+
         {activeTab === "rfis" && (
           <div>
             <h3
@@ -514,7 +520,7 @@ export default function ProjectDetail() {
           </div>
         )}
 
-        {!["overview", "rfis", "materials"].includes(activeTab) && (
+        {!["overview", "handoff", "rfis", "materials"].includes(activeTab) && (
           <p style={{ color: "var(--text-muted)" }}>
             {tabs.find((t) => t.id === activeTab)?.label} content coming soon.
           </p>
