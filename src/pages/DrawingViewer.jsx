@@ -9,7 +9,10 @@ import * as pdfjsLib from "pdfjs-dist";
 // 4.x only ships `.mjs` workers and the file name was wrong, causing every
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, Keyboard } from "lucide-react";
+import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
+import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
+import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -47,6 +50,7 @@ export default function DrawingViewer() {
   const [activeId, setActiveId] = useState(initialId || null);
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [zoom, setZoom] = useState(1.0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -312,6 +316,13 @@ export default function DrawingViewer() {
         setCurrentPage(p => Math.max(1, p - 1));
       } else if (e.key === "[" || e.key === "]") {
         setSidebarOpen(o => !o);
+      } else if (e.key === "?") {
+        // `?` — Shift+/ on US keyboards. Only intercept when no modifiers
+        // other than Shift are held so Ctrl+?/browser find still works.
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          setShortcutsOpen(o => !o);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -422,6 +433,9 @@ export default function DrawingViewer() {
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
+        {/* Breadcrumb + stage pipeline */}
+        <ViewerHeader projectName={activeProject?.name} activeDrawing={activeDrawing} />
+
         {/* Viewer toolbar */}
         <div style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
           {/* Sidebar toggle */}
@@ -496,10 +510,36 @@ export default function DrawingViewer() {
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
           </button>
+          <button
+            onClick={() => setShortcutsOpen(o => !o)}
+            title="Keyboard shortcuts (?)"
+            style={{
+              ...toolBtn,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "5px 8px",
+              color: "var(--text-muted)",
+            }}
+          >
+            <Keyboard size={12} />
+            <span style={{ ...mono, fontSize: 9, fontWeight: 700 }}>?</span>
+          </button>
         </div>
 
-        {/* Viewer area — iframe (browser-native) or pdfjs canvas */}
-        <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "stretch", background: "#1a1a2e" }}>
+        {/* Viewer area — iframe (browser-native) or pdfjs canvas.
+            Deep slate backdrop with a subtle radial vignette so the paper
+            (drop-shadowed canvas) reads as a physical sheet on a layout
+            table. Matches the "legit drawing viewer" look of Bluebeam /
+            PlanGrid / Procore. */}
+        <div style={{
+          flex: 1,
+          overflow: "auto",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "stretch",
+          background: "radial-gradient(ellipse at center, #121822 0%, #0A0E15 100%)",
+        }}>
           {!activeDrawing ? (
             <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
@@ -547,20 +587,30 @@ export default function DrawingViewer() {
               )}
             </div>
           ) : (
-            <div style={{ position: "relative", padding: 24 }}>
+            <div style={{ position: "relative", padding: 32 }}>
               {rendering && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 10, ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>
-                  RENDERING…
-                </div>
+                <RenderSkeleton label={`Rendering page ${currentPage}${totalPages > 1 ? ` of ${totalPages}` : ""}`} />
               )}
               {/* Canvas + overlay wrapper. The wrapper is sized to the
                   canvas so absolutely-positioned overlay children line up
                   with the rendered PDF regardless of zoom or padding. It
                   hosts two layers: (1) the PDF link-annotation hotspots
                   harvested by pdfjs and (2) the regex-detected callouts
-                  stored on the drawing record. */}
+                  stored on the drawing record.
+
+                  Paper-on-dark: the canvas gets a stronger drop shadow +
+                  a thin light border so it reads like a real sheet of
+                  vellum on a dark layout table. */}
               <div style={{ position: "relative", display: "inline-block" }}>
-                <canvas ref={canvasRef} style={{ display: "block", boxShadow: "0 4px 32px rgba(0,0,0,0.6)" }} />
+                <canvas
+                  ref={canvasRef}
+                  style={{
+                    display: "block",
+                    boxShadow: "0 12px 48px rgba(0,0,0,0.75), 0 2px 6px rgba(0,0,0,0.45)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    background: "#fff",
+                  }}
+                />
 
                 {/* ── Annotation overlay layer — clickable PDF link hotspots ── */}
                 {annotations.length > 0 && (
@@ -644,14 +694,34 @@ export default function DrawingViewer() {
         </div>
 
         {/* Keyboard shortcuts hint */}
-        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16 }}>
+        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16, alignItems: "center" }}>
           {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
             <span key={key} style={{ ...mono, fontSize: 9, color: "var(--border-strong)" }}>
               <span style={{ color: "var(--text-muted)" }}>{key}</span> {desc}
             </span>
           ))}
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            style={{
+              marginLeft: "auto",
+              ...mono,
+              fontSize: 9,
+              fontWeight: 700,
+              color: "var(--accent)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            All shortcuts (?)
+          </button>
         </div>
       </div>
+
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }
