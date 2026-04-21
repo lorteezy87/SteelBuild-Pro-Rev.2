@@ -117,7 +117,13 @@ export default function WorkPackages() {
       setDeleteTarget(null);
       toast.success("Work package deleted");
     },
-    onError: () => toast.error("Delete failed"),
+    // Surface the real server error rather than a generic "Delete
+    // failed" — makes RLS / FK-constraint diagnostics possible from
+    // the toast alone without opening devtools.
+    onError: (err) => {
+      console.error("WP delete failed", err);
+      toast.error(`Delete failed: ${err?.message || "unknown error"}`);
+    },
   });
 
   const bulkCreateMut = useMutation({
@@ -382,6 +388,7 @@ export default function WorkPackages() {
                 onToggle={() => toggleSelect(w.id)}
                 onEdit={handleWPEdit}
                 onOpen={() => setSelectedBoardWP(w)}
+                onDelete={(wp) => setDeleteTarget(wp)}
               />
             ))
           ) : (
