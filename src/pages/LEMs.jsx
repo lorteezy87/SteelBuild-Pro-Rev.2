@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { formatDate } from "@/components/shared/formatters";
+import { CommandBar } from "@/components/design-system";
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
@@ -510,9 +511,10 @@ export default function LEMs() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <PageHeader
+      <CommandBar
+        eyebrow={activeProject?.name || "PROJECT"}
         title="Labor, Equipment & Materials"
-        subtitle={activeProject?.name ? `${activeProject.name} — LEM Tracking` : "LEM Tracking"}
+        subtitle="Crew hours · equipment utilization · material usage tracking"
       />
 
       <TabBar tabs={TABS} active={activeTab} onSelect={setActiveTab} />

@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Upload } from "lucide-react";
 
 export default function Photos() {
   const [searchParams] = useSearchParams();
@@ -72,48 +73,25 @@ export default function Photos() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 24,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              margin: 0,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            Project Photos
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "var(--text-muted)",
-              marginTop: 4,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Photos
-          </p>
-        </div>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Project Photos"
+        count={filtered.length}
+        unit=" · PHOTOS"
+        subtitle="Progress · safety · issues · delivery · punchlist · field documentation"
+      >
         <button
           onClick={() => setShowUpload(true)}
           style={{
+            display: "flex", alignItems: "center", gap: 6,
             background: "var(--accent)",
-            color: "white",
+            color: "var(--bg-base)",
             border: "none",
             borderRadius: "var(--radius-btn)",
-            padding: "8px 16px",
-            fontFamily: "var(--font-body)",
-            fontSize: "10px",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
             fontWeight: 700,
             cursor: "pointer",
             textTransform: "uppercase",
@@ -122,18 +100,23 @@ export default function Photos() {
           onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
-          + Upload Photo
+          <Upload size={12} /> Upload Photo
         </button>
-      </div>
+      </CommandBar>
 
-      {/* Stats Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "12px" }}>
-        <StatCard label="Total" value={stats.total} color="var(--accent)" />
-        <StatCard label="Progress" value={stats.progress} color="var(--status-info)" />
-        <StatCard label="Safety" value={stats.safety} color="var(--status-error)" />
-        <StatCard label="Issues" value={stats.issue} color="var(--status-warning)" />
-        <StatCard label="Delivery" value={stats.delivery} color="var(--status-success)" />
-        <StatCard label="Punchlist" value={stats.punchlist} color="var(--accent)" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"     value={stats.total}    color="var(--accent)"
+                 active={filterCategory === "all"} onClick={() => setFilterCategory("all")} />
+        <KpiTile compact label="Progress"  value={stats.progress} color="var(--status-info)"
+                 active={filterCategory === "Progress"} onClick={() => setFilterCategory(filterCategory === "Progress" ? "all" : "Progress")} />
+        <KpiTile compact label="Safety"    value={stats.safety}   color="var(--status-error)"
+                 active={filterCategory === "Safety"} onClick={() => setFilterCategory(filterCategory === "Safety" ? "all" : "Safety")} />
+        <KpiTile compact label="Issues"    value={stats.issue}    color="var(--status-warning)"
+                 active={filterCategory === "Issue"} onClick={() => setFilterCategory(filterCategory === "Issue" ? "all" : "Issue")} />
+        <KpiTile compact label="Delivery"  value={stats.delivery} color="var(--status-success)"
+                 active={filterCategory === "Delivery"} onClick={() => setFilterCategory(filterCategory === "Delivery" ? "all" : "Delivery")} />
+        <KpiTile compact label="Punchlist" value={stats.punchlist} color="var(--phase-detailing)"
+                 active={filterCategory === "Punchlist"} onClick={() => setFilterCategory(filterCategory === "Punchlist" ? "all" : "Punchlist")} />
       </div>
 
       {/* Filters */}

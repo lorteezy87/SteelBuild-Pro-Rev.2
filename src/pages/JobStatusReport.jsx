@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { CommandBar } from "@/components/design-system";
 
 /* ─── Helpers ──────────────────────────────────────────────────── */
 const HEALTH = {
@@ -602,68 +603,37 @@ export default function JobStatusReport() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* ── Header ── */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 22, gap: 16,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 8,
-            background: "var(--accent-muted)",
-            border: "1px solid var(--accent-border)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <FileText size={16} color="var(--accent)" />
-          </div>
-          <div>
-            <h1 style={{
-              fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800,
-              color: "var(--text-primary)", margin: 0, letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}>
-              Job Status Reports
-            </h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 3 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <Calendar size={10} color="var(--text-muted)" />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
-                  {today}
-                </span>
-              </div>
-              <span style={{ color: "var(--divider)" }}>·</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <Clock size={10} color="var(--text-muted)" />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
-                  NEXT RUN: MON 6:00 AM
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <CommandBar
+        eyebrow="OWNER REPORTING"
+        title="Job Status Reports"
+        count={projects.length}
+        unit=" · PROJECTS"
+        subtitle={`${today} · Next auto-run: Mon 6:00 AM`}
+      >
         <button
           onClick={handleGenerateAll}
           disabled={bulkStatus === "loading" || projects.length === 0}
           style={{
             display: "flex", alignItems: "center", gap: 8,
-            padding: "11px 20px", borderRadius: 8,
-            background: bulkStatus === "done" ? "var(--success-muted)" : "var(--accent)",
-            border: "none",
-            color: bulkStatus === "done" ? "var(--success)" : "var(--on-accent)",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800,
+            padding: "8px 14px", borderRadius: "var(--radius-btn)",
+            background: bulkStatus === "done" ? "color-mix(in srgb, var(--status-success) 14%, transparent)" : "var(--accent)",
+            border: bulkStatus === "done" ? "1px solid var(--status-success)" : "none",
+            color: bulkStatus === "done" ? "var(--status-success)" : "var(--bg-base)",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
             cursor: bulkStatus === "loading" ? "not-allowed" : "pointer",
             letterSpacing: "0.08em", textTransform: "uppercase",
             opacity: (bulkStatus === "loading" || projects.length === 0) ? 0.55 : 1,
             transition: "all 0.15s",
             whiteSpace: "nowrap",
           }}
+          onMouseEnter={(e) => bulkStatus === "idle" && (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => bulkStatus === "idle" && (e.currentTarget.style.background = "var(--accent)")}
         >
           {bulkStatus === "loading" ? (<><Loader2 size={12} className="spin-icon" /> Generating…</>)
             : bulkStatus === "done" ? (<><CheckCircle2 size={12} /> Done · {bulkResults.length}</>)
             : (<><Download size={12} /> Generate {hasSelection ? `${selectedCount} Selected` : "All"}</>)}
         </button>
-      </div>
+      </CommandBar>
 
       {/* ── Operational KPI row ── */}
       <div style={{
