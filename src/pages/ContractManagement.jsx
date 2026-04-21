@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { formatDate } from "@/components/shared/formatters";
+import { CommandBar } from "@/components/design-system";
 
 // ─── Currency formatters ────────────────────────────────────────────────────
 const fmt = (v) => {
@@ -590,7 +591,11 @@ export default function ContractManagement() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (isLoading) return (
     <div style={{ padding: "24px 28px" }}>
-      <PageHeader title="Contract Management" subtitle="Loading..." />
+      <CommandBar
+        eyebrow="CONTRACT"
+        title="Contract Management"
+        subtitle="Loading..."
+      />
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
         {[1, 2, 3].map(i => (
           <div key={i} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", height: 80, animation: "pulse 1.5s ease-in-out infinite", opacity: 0.5 }} />
@@ -604,7 +609,13 @@ export default function ContractManagement() {
 
   return (
     <div style={{ padding: "24px 28px", background: "var(--bg-page)", minHeight: "100vh" }}>
-      <PageHeader title="Contract Management" subtitle={project?.name || activeProject?.name || "Project"} />
+      <CommandBar
+        eyebrow={project?.name || activeProject?.name || "PROJECT"}
+        title="Contract Management"
+        count={changeOrders?.length || 0}
+        unit=" · CHANGE ORDERS"
+        subtitle={`${fmtShort(revisedValue || 0)} revised contract · ${fmtShort(pendingCOTotal || 0)} pending CO value`}
+      />
 
       <ContractOverviewPanel
         project={project}
