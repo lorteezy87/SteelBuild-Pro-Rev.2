@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestFormModal";
 import ChangeRequestList from "@/components/changerequest/ChangeRequestList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import StatCard from "@/components/shared/StatCard";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus } from "lucide-react";
 
 export default function ChangeRequests() {
   const [searchParams] = useSearchParams();
@@ -100,24 +101,40 @@ export default function ChangeRequests() {
   const priorities = ["Critical", "High", "Medium", "Low"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>Change Requests</h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>{selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Requests</p>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Change Requests"
+        count={filtered.length}
+        unit=" · REQUESTS"
+        subtitle={`${stats.submitted} submitted · ${stats.approved} approved · pre-CO formal request tracking`}
+      >
+        <button
+          onClick={() => { setEditing(null); setShowForm(true); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Request
+        </button>
+      </CommandBar>
 
-        <button onClick={() => {setEditing(null); setShowForm(true);}} style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}>+ New Request</button>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
-        <StatCard label="Total" value={stats.total} color="var(--accent)" />
-        <StatCard label="Submitted" value={stats.submitted} color="var(--status-warning)" />
-        <StatCard label="Approved" value={stats.approved} color="var(--status-success)" />
-        <StatCard label="Rejected" value={stats.rejected} color="var(--status-error)" />
-        <StatCard label="Cost Impact" value={`$${(stats.totalCostImpact || 0).toLocaleString()}`} color={stats.totalCostImpact > 0 ? "var(--status-warning)" : "var(--status-success)"} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+        <KpiTile compact label="Total"       value={stats.total}     color="var(--accent)" />
+        <KpiTile compact label="Submitted"   value={stats.submitted} color="var(--status-warning)"
+                 active={filterStatus === "Submitted"} onClick={() => setFilterStatus(filterStatus === "Submitted" ? "all" : "Submitted")} />
+        <KpiTile compact label="Approved"    value={stats.approved}  color="var(--status-success)"
+                 active={filterStatus === "Approved"}  onClick={() => setFilterStatus(filterStatus === "Approved" ? "all" : "Approved")} />
+        <KpiTile compact label="Rejected"    value={stats.rejected}  color="var(--status-error)"
+                 active={filterStatus === "Rejected"}  onClick={() => setFilterStatus(filterStatus === "Rejected" ? "all" : "Rejected")} />
+        <KpiTile compact label="Cost Impact" value={`$${(stats.totalCostImpact || 0).toLocaleString()}`}
+                 color={stats.totalCostImpact > 0 ? "var(--status-warning)" : "var(--status-success)"} />
       </div>
 
       {/* Filters */}

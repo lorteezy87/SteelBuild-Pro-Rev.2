@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
+import { CommandBar } from "@/components/design-system";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -46,24 +47,47 @@ export default function AlertsCenter() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontFamily: "var(--font-body)", fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Alerts & Notifications</h1>
-            {unreadCount > 0 && <span style={{ background: "var(--status-error)", color: "white", borderRadius: 10, padding: "2px 8px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700 }}>{unreadCount}</span>}
-          </div>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginTop: 3 }}>{filtered.length} ACTIVE ALERTS</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button variant="outline" size="sm" onClick={markAllRead} disabled={unreadCount === 0}>
-            <CheckCheck className="w-3.5 h-3.5 mr-1" />Mark All Read
-          </Button>
-          <button onClick={generateAlerts} disabled={generating} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-btn)", color: "white", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: generating ? "not-allowed" : "pointer", opacity: generating ? 0.7 : 1 }}>
-            {generating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Scanning...</> : <><RefreshCw className="w-3.5 h-3.5" />Scan for Alerts</>}
-          </button>
-        </div>
-      </div>
+      <CommandBar
+        eyebrow="NOTIFICATIONS"
+        title="Alerts & Notifications"
+        count={filtered.length}
+        unit=" · ACTIVE"
+        subtitle={`${unreadCount} unread · cross-entity scanner · RFI / Drawing / CO / Delivery / WP triggers`}
+      >
+        <button
+          onClick={markAllRead}
+          disabled={unreadCount === 0}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            color: unreadCount === 0 ? "var(--text-muted)" : "var(--text-secondary)",
+            borderRadius: "var(--radius-btn)", padding: "8px 12px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: unreadCount === 0 ? "not-allowed" : "pointer",
+            textTransform: "uppercase", opacity: unreadCount === 0 ? 0.5 : 1,
+          }}
+        >
+          <CheckCheck className="w-3 h-3" /> Mark All Read
+        </button>
+        <button
+          onClick={generateAlerts}
+          disabled={generating}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: generating ? "not-allowed" : "pointer",
+            textTransform: "uppercase", opacity: generating ? 0.7 : 1,
+          }}
+          onMouseEnter={(e) => !generating && (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => !generating && (e.currentTarget.style.background = "var(--accent)")}
+        >
+          {generating
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Scanning...</>
+            : <><RefreshCw className="w-3 h-3" /> Scan</>}
+        </button>
+      </CommandBar>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>

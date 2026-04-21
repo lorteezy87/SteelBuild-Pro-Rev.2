@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend
 } from "recharts";
+import { CommandBar } from "@/components/design-system";
 
 const M = {
   card: "var(--bg-surface)", border: "var(--border-default)", text: "var(--text-primary)",
@@ -164,28 +165,32 @@ export default function PortfolioOverview() {
   }, [projects, allRFIs, allCOs, allWPs, allCodes, allLogs, allDeliveries, allActionItems]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontFamily: M.display, fontSize: 24, fontWeight: 800, color: M.text, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Portfolio Overview</h1>
-          <p style={{ fontFamily: M.mono, fontSize: 9, color: M.muted, marginTop: 4, letterSpacing: "0.12em" }}>CROSS-PROJECT PERFORMANCE — ALL {projects.length} ACTIVE PROJECTS · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {[
-              { label: "On Track", color: HEALTH_COLORS["On Track"], count: stats.healthChartData.find(h => h.name === "On Track")?.value || 0 },
-              { label: "Watch", color: HEALTH_COLORS["Watch"], count: stats.healthChartData.find(h => h.name === "Watch")?.value || 0 },
-              { label: "At Risk", color: HEALTH_COLORS["At Risk"], count: stats.healthChartData.find(h => h.name === "At Risk")?.value || 0 },
-            ].map(({ label, color, count }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 4, background: `${color}15`, border: `1px solid ${color}30`, borderRadius: 8, padding: "4px 10px" }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-                <span style={{ fontFamily: M.mono, fontSize: 8, color, letterSpacing: "0.08em" }}>{count} {label}</span>
-              </div>
-            ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow="AI INSIGHTS"
+        title="Portfolio Overview"
+        count={projects.length}
+        unit=" · ACTIVE PROJECTS"
+        subtitle={`Cross-project performance · ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`}
+      >
+        {[
+          { label: "On Track", color: HEALTH_COLORS["On Track"], count: stats.healthChartData.find(h => h.name === "On Track")?.value || 0 },
+          { label: "Watch", color: HEALTH_COLORS["Watch"], count: stats.healthChartData.find(h => h.name === "Watch")?.value || 0 },
+          { label: "At Risk", color: HEALTH_COLORS["At Risk"], count: stats.healthChartData.find(h => h.name === "At Risk")?.value || 0 },
+        ].map(({ label, color, count }) => (
+          <div key={label} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: `color-mix(in srgb, ${color} 12%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+            borderRadius: "var(--radius-btn)", padding: "6px 12px",
+          }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, boxShadow: `0 0 4px ${color}` }} />
+            <span style={{ fontFamily: M.mono, fontSize: 10, fontWeight: 700, color, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {count} {label}
+            </span>
           </div>
-        </div>
-      </div>
+        ))}
+      </CommandBar>
 
       {/* Top KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
