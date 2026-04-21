@@ -96,6 +96,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCD0", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
+  { icon: "\u2194",       name: "Decimal / Fraction Converter", group: "Tools", page: "DecimalFractionConverter" },
 ];
 
 // ── Modules dropdown nav groups (3-column layout) ────────────────────
@@ -197,9 +198,10 @@ export const NAV_GROUPS = [
   {
     label: "TOOLS",
     items: [
-      { label: "Ft/In Calculator",         icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
-      { label: "Steel Weight Calculator",  icon: "\u2696",       page: "SteelWeightCalculator" },
-      { label: "Crane Pick Calculator",    icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
+      { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
+      { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
+      { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
+      { label: "Decimal / Fraction Converter", icon: "\u2194",       page: "DecimalFractionConverter" },
     ],
   },
 ];
@@ -300,9 +302,10 @@ export const SIDEBAR_GROUPS = [
     label: "TOOLS",
     collapsible: true,
     items: [
-      { label: "Ft/In Calculator",         icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
-      { label: "Steel Weight Calculator",  icon: "\u2696",       page: "SteelWeightCalculator" },
-      { label: "Crane Pick Calculator",    icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
+      { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
+      { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
+      { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
+      { label: "Decimal / Fraction Converter", icon: "\u2194",       page: "DecimalFractionConverter" },
     ],
   },
 ];

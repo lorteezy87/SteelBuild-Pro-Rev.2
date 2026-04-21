@@ -147,9 +147,10 @@ const ROUTE_DOMAINS = {
 
   // ── Tools ──
   tools: {
-    FeetInchesCalculator:   lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),
-    SteelWeightCalculator:  lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),
-    CranePickCalculator:    lazyWithRetry(() => import("@/pages/CranePickCalculator")),
+    FeetInchesCalculator:       lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),
+    SteelWeightCalculator:      lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),
+    CranePickCalculator:        lazyWithRetry(() => import("@/pages/CranePickCalculator")),
+    DecimalFractionConverter:   lazyWithRetry(() => import("@/pages/DecimalFractionConverter")),
   },
 
   // ── Reporting ──
