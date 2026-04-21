@@ -15,6 +15,7 @@ import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import { PHASES, PHASE_ABBREV } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
+import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
 
 /**
  * Auto-generate a WBS code for a task based on its phase and the
@@ -506,81 +507,50 @@ export default function Schedule() {
     setShowBulkDeleteConfirm(false);
   };
 
+  // Phase counts for KPI row
+  const phaseCounts = useMemo(() => {
+    const m = { all: scheduleTasks.length };
+    PHASES.forEach((p) => {
+      m[p] = scheduleTasks.filter((t) => t.phase === p).length;
+    });
+    return m;
+  }, [scheduleTasks]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Header */}
+      {/* CommandBar */}
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Schedule
-            </h1>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              {selectedProject ? selectedProject.name : "All Projects"} &middot; {scheduleTasks.length} Tasks
-            </p>
-          </div>
-          <button
-            onClick={() => setShowAddTask(true)}
-            disabled={!hasProject}
-            style={{
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: hasProject ? "pointer" : "not-allowed",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              opacity: hasProject ? 1 : 0.45,
-            }}
-          >
-            + Add Task
-          </button>
-          <button
-            onClick={() => setShowBulkAdd(true)}
-            disabled={!hasProject}
-            style={{
-              marginLeft: 8,
-              background: "var(--bg-surface)",
-              color: "#fff",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: !hasProject ? "not-allowed" : "pointer",
-              opacity: !hasProject ? 0.45 : 1,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            + Bulk Add
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
+        <CommandBar
+          eyebrow={`PROJECT MANAGEMENT · ${(selectedProject?.name || "ALL PROJECTS").toUpperCase()}`}
+          title="Schedule"
+          count={scheduleTasks.length}
+          unit=" TASKS"
+          subtitle="Project lifecycle · Pre-Construction → Closeout"
+        >
+          <Button
+            variant="secondary"
+            icon="upload"
             disabled={importing || !hasProject}
-            style={{
-              marginLeft: 8,
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 12px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: importing || !hasProject ? "not-allowed" : "pointer",
-              opacity: importing || !hasProject ? 0.5 : 1,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
+            onClick={() => fileInputRef.current?.click()}
           >
-            {importing ? "Importing..." : "Import MPP"}
-          </button>
+            {importing ? "IMPORTING…" : "IMPORT MPP"}
+          </Button>
+          <Button
+            variant="outline"
+            icon="plus"
+            disabled={!hasProject}
+            onClick={() => setShowBulkAdd(true)}
+          >
+            BULK ADD
+          </Button>
+          <Button
+            variant="primary"
+            icon="plus"
+            disabled={!hasProject}
+            onClick={() => setShowAddTask(true)}
+          >
+            ADD TASK
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -591,34 +561,38 @@ export default function Schedule() {
               if (f) handleImportMPP(f);
             }}
           />
-        </div>
+        </CommandBar>
       </div>
 
-      {/* Phase Filter */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 24px 0" }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Phase:</span>
-        {["all", ...PHASES].map((p) => (
-          <button
-            key={p}
-            onClick={() => setPhaseFilter(p)}
-            style={{
-              background: phaseFilter === p ? "var(--accent-muted)" : "transparent",
-              border: `1px solid ${phaseFilter === p ? "var(--accent-border)" : "var(--border-default)"}`,
-              borderRadius: 4,
-              padding: "4px 10px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
-              color: phaseFilter === p ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              transition: "all 0.1s",
-            }}
-          >
-            {p === "all" ? "All" : p}
-          </button>
-        ))}
+      {/* Phase Filter — click-to-filter KPI tiles (one per lifecycle phase) */}
+      <div style={{ flexShrink: 0, padding: "0 24px 14px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${PHASES.length + 1}, 1fr)`,
+            gap: 8,
+          }}
+        >
+          <KpiTile
+            compact
+            label="ALL PHASES"
+            value={phaseCounts.all}
+            color="var(--text-secondary)"
+            active={phaseFilter === "all"}
+            onClick={() => setPhaseFilter("all")}
+          />
+          {PHASES.map((p) => (
+            <KpiTile
+              key={p}
+              compact
+              label={p.toUpperCase()}
+              value={phaseCounts[p] || 0}
+              color="var(--accent)"
+              active={phaseFilter === p}
+              onClick={() => setPhaseFilter(p)}
+            />
+          ))}
+        </div>
       </div>
 
       {/* View Tabs */}
