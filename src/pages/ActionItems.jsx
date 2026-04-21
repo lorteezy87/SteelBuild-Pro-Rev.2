@@ -7,6 +7,8 @@ import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import ActionItemList from "@/components/actionitems/ActionItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
+import { CommandBar, KpiTile } from "@/components/design-system";
+import { Plus, Search } from "lucide-react";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -118,92 +120,75 @@ export default function ActionItems() {
   const priorities = ["Critical", "High", "Medium", "Low"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-body)", fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Action Items
-          </h1>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            {selectedProject ? selectedProject.name : "All Projects"} • {filtered.length} Items
-          </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <CommandBar
+        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
+        title="Action Items"
+        count={filtered.length}
+        unit=" · ITEMS"
+        subtitle={`${stats.open} open · ${stats.critical} critical · ${stats.complete} complete`}
+      >
+        <div style={{ position: "relative" }}>
+          <Search size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
+          <input
+            type="text"
+            placeholder="Search items..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-btn)",
+              padding: "8px 12px 8px 30px",
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              color: "var(--text-primary)",
+              outline: "none",
+              width: 200,
+            }}
+          />
         </div>
+        <button
+          onClick={() => { setEditingItem(null); setShowForm(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Action Item
+        </button>
+      </CommandBar>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {/* Search */}
-          <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 12, pointerEvents: "none" }}>🔍</span>
-            <input
-              type="text"
-              placeholder="Search items..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-default)",
-                borderRadius: "var(--radius-btn)",
-                padding: "7px 12px 7px 30px",
-                fontFamily: "var(--font-body)",
-                fontSize: 11,
-                color: "var(--text-primary)",
-                outline: "none",
-                width: 200,
-              }}
-            />
-          </div>
-
-          <button
-            onClick={() => { setEditingItem(null); setShowForm(true); }}
-            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-body)", fontSize: "10px", fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            + New Action Item
-          </button>
-        </div>
-      </div>
-
-      {/* Clickable Stat Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         {statCards.map((stat) => {
           const isActive = stat.filterKey
             ? filterStatus === stat.filterKey
             : stat.priorityKey
             ? filterPriority === stat.priorityKey
-            : false;
-          const isAlertCard = stat.value > 0 && (stat.label === "Critical" || stat.label === "Open");
+            : filterStatus === "all" && filterPriority === "all";
+          const clickable = !!(stat.filterKey || stat.priorityKey || stat.label === "Total");
           return (
-            <div
+            <KpiTile
               key={stat.label}
-              onClick={() => {
-                if (stat.filterKey) {
-                  setFilterStatus(prev => prev === stat.filterKey ? "all" : stat.filterKey);
-                } else if (stat.priorityKey) {
-                  setFilterPriority(prev => prev === stat.priorityKey ? "all" : stat.priorityKey);
-                }
-              }}
-              style={{
-                background: isActive ? `${stat.color}18` : isAlertCard ? `${stat.color}0a` : "var(--bg-surface)",
-                border: isActive ? `1px solid ${stat.color}60` : isAlertCard ? `1px solid ${stat.color}30` : "none",
-                borderRadius: "var(--radius-card)",
-                padding: "12px",
-                borderTop: `2px solid ${stat.color}`,
-                cursor: stat.filterKey || stat.priorityKey ? "pointer" : "default",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={e => { if (stat.filterKey || stat.priorityKey) e.currentTarget.style.background = `${stat.color}18`; }}
-              onMouseLeave={e => { e.currentTarget.style.background = isActive ? `${stat.color}18` : isAlertCard ? `${stat.color}0a` : "var(--bg-surface)"; }}
-              title={stat.filterKey ? `Filter by ${stat.label}` : stat.priorityKey ? `Filter by ${stat.label} priority` : ""}
-            >
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: "22px", fontWeight: 700, color: stat.color, marginBottom: "4px" }}>
-                {stat.label === "Critical" && stat.value > 0 ? `🔥 ${stat.value}` : stat.value}
-              </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                {stat.label}
-                {(stat.filterKey || stat.priorityKey) && <span style={{ marginLeft: 4, opacity: 0.5 }}>↑</span>}
-              </div>
-            </div>
+              compact
+              label={stat.label}
+              value={stat.value}
+              color={stat.color}
+              active={isActive}
+              onClick={
+                clickable
+                  ? () => {
+                      if (stat.label === "Total") {
+                        setFilterStatus("all");
+                        setFilterPriority("all");
+                      } else if (stat.filterKey) {
+                        setFilterStatus((prev) => (prev === stat.filterKey ? "all" : stat.filterKey));
+                      } else if (stat.priorityKey) {
+                        setFilterPriority((prev) => (prev === stat.priorityKey ? "all" : stat.priorityKey));
+                      }
+                    }
+                  : undefined
+              }
+            />
           );
         })}
       </div>
