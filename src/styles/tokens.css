@@ -73,7 +73,16 @@
   --text-muted:               #7B8BA2;
   --text-disabled:            rgba(123,139,162,0.50);
 
-  /* Semantic status colors */
+  /* Semantic status colors
+   *
+   * Two-tier palette:
+   *   --status-*         soft/subtle — mono chips, table-row status, inline
+   *                      text on plain surfaces. GitHub-like muted palette.
+   *   --status-*-bright  vivid/high-contrast — Gantt bars, workflow badges,
+   *                      map/status tiles, on-hold/complete indicators, and
+   *                      anything that needs to read clearly over colored
+   *                      backgrounds. Use for glanceable visual signals.
+   */
   --status-success:           #3FB950;
   --status-warning:           #E3B341;
   --status-error:             #F85149;
@@ -81,6 +90,9 @@
   --status-review:            #F97316;
   --status-review-muted:      rgba(249,115,22,0.12);
   --status-review-border:     rgba(249,115,22,0.40);
+  --status-success-bright:    #00D68F;
+  --status-warning-bright:    #FFB400;
+  --status-error-bright:      #FF3D3D;
   --success:                  #3FB950;
   --success-muted:            rgba(63,185,80,0.10);
   --success-border:           rgba(63,185,80,0.30);
@@ -212,6 +224,12 @@
   --status-review:            #EA580C;
   --status-review-muted:      rgba(234,88,12,0.08);
   --status-review-border:     rgba(234,88,12,0.30);
+  /* Bright tier (see dark-theme block for the naming rationale). Light-
+   * theme values are tuned slightly deeper so the vivid feel survives
+   * against the lighter surface backgrounds. */
+  --status-success-bright:    #059669;
+  --status-warning-bright:    #D97706;
+  --status-error-bright:      #DC2626;
   --success:                  #16A34A;
   --success-muted:            rgba(22,163,74,0.08);
   --success-border:           rgba(22,163,74,0.25);

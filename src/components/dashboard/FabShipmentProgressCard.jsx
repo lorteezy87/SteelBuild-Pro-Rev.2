@@ -62,7 +62,7 @@ export default function FabShipmentProgressCard({ wps = [] }) {
         </div>
 
         {/* Tonnage progress bars */}
-        <TonBar label="Released" tons={releasedTons} totalTons={totalTons} color="#FFB300" />
+        <TonBar label="Released" tons={releasedTons} totalTons={totalTons} color="var(--status-warning-bright)" />
         <TonBar label="Fabricated" tons={fabTons} totalTons={totalTons} color="var(--accent)" />
         <TonBar label="Shipped" tons={shippedTons} totalTons={totalTons} color="#FF9A60" />
         <TonBar label="Erected" tons={erectedTons} totalTons={totalTons} color="#00E676" />
@@ -71,7 +71,7 @@ export default function FabShipmentProgressCard({ wps = [] }) {
         {totalTons > 0 && (() => {
           const phases = ["Released", "Fabricated", "Shipped", "Erected"];
           const vals = [releasedTons, fabTons, shippedTons, erectedTons];
-          const colors = ["#FFB300", "var(--accent)", "#FF9A60", "#00E676"];
+          const colors = ["var(--status-warning-bright)", "var(--accent)", "#FF9A60", "#00E676"];
           const chartData = phases.map((p, i) => ({ phase: p, tons: Math.round(vals[i]) }));
           return (
             <div style={{ marginBottom: 16 }}>

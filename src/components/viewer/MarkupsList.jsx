@@ -11,9 +11,9 @@ const TYPE_ICON = {
 };
 
 const STATUS_COLOR = {
-  accepted: "#00D68F",
-  rejected: "#FF3D3D",
-  pending:  "#FFB020",
+  accepted: "var(--status-success-bright)",
+  rejected: "var(--status-error-bright)",
+  pending:  "var(--status-warning-bright)",
   none:     "rgba(160,175,210,0.30)",
 };
 
@@ -138,7 +138,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
                     padding: 2, flexShrink: 0, lineHeight: 1,
                     transition: "color 0.1s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#FF3D3D")}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--status-error-bright)")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(160,175,210,0.30)")}
                 >
                   <Trash2 size={13} />

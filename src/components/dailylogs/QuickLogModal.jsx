@@ -85,7 +85,7 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
       <DialogContent style={{ maxWidth: 440, background: "var(--bg-surface-low)", border: "1px solid var(--accent-border)" }}>
         <DialogHeader>
           <DialogTitle style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--text-primary)" }}>
-            <Zap style={{ width: 16, height: 16, color: "#FFB300" }} />
+            <Zap style={{ width: 16, height: 16, color: "var(--status-warning-bright)" }} />
             Quick Log
             {activeProject?.name && (
               <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: 4 }}>{activeProject.name}</span>

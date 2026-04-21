@@ -6,7 +6,7 @@ const PHASES = [
   { id: 1, label: "Pre-Construction",    key: "Pre-Construction",  color: "#64748B" },
   { id: 2, label: "Detailing",           key: "Detailing",         color: "#0EA5E9" },
   { id: 3, label: "Procurement",         key: "Procurement",       color: "#F59E0B" },
-  { id: 4, label: "Fabrication",         key: "Fabrication",       color: "#E8650A" },
+  { id: 4, label: "Fabrication",         key: "Fabrication",       color: "var(--status-review)" },
   { id: 5, label: "Delivery",            key: "Delivery",          color: "#10B981" },
   { id: 6, label: "Installation",        key: "Installation",      color: "#06B6D4" },
   { id: 7, label: "Closeout",            key: "Closeout",          color: "#6B7280" },

@@ -693,7 +693,7 @@ export default function Mitigations() {
                   max={mitigations.length || 1}
                   size={52}
                   stroke={5}
-                  color={stats.open > 0 ? "#FF7A7A" : "var(--status-success)"}
+                  color={stats.open > 0 ? "var(--status-error)" : "var(--status-success)"}
                   label={`${stats.open}`}
                 />
                 <div>
@@ -708,19 +708,19 @@ export default function Mitigations() {
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.avgDaysOpen > 14 ? "#FF7A7A" : "var(--text-primary)" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.avgDaysOpen > 14 ? "var(--status-error)" : "var(--text-primary)" }}>
                     {stats.avgDaysOpen}d
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>AVG DAYS OPEN</div>
                 </div>
                 <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.staleCount > 0 ? "#FF7A7A" : "var(--text-muted)" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.staleCount > 0 ? "var(--status-error)" : "var(--text-muted)" }}>
                     {stats.staleCount}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>STALE (14d+)</div>
                 </div>
                 <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.highExposureCount > 0 ? "#FFB400" : "var(--text-muted)" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.highExposureCount > 0 ? "var(--status-warning-bright)" : "var(--text-muted)" }}>
                     {stats.highExposureCount}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>HIGH ($50k+)</div>
@@ -977,7 +977,7 @@ export default function Mitigations() {
                         : selected?.id === m.id
                           ? "var(--bg-surface-low)"
                           : "transparent",
-                    borderLeft: needsAttention ? "3px solid #FF5C5C" : "3px solid transparent",
+                    borderLeft: needsAttention ? "3px solid var(--status-error)" : "3px solid transparent",
                   }}
                   onMouseEnter={(e) => {
                     if (selected?.id !== m.id && !isSelected) e.currentTarget.style.background = "var(--hover-bg)";
@@ -1113,7 +1113,7 @@ export default function Mitigations() {
                   <div style={{
                     fontFamily: "var(--font-mono)", fontSize: 10, textAlign: "right",
                     fontWeight: isHighExp ? 700 : 400,
-                    color: isHighExp ? "#FF5C5C" : "var(--text-secondary)",
+                    color: isHighExp ? "var(--status-error)" : "var(--text-secondary)",
                   }}>
                     {m.cost_exposure ? `$${Number(m.cost_exposure).toLocaleString()}` : "\u2014"}
                   </div>
@@ -1122,7 +1122,7 @@ export default function Mitigations() {
                   <div style={{
                     fontFamily: "var(--font-mono)", fontSize: 10, textAlign: "right",
                     fontWeight: 700,
-                    color: days > 30 ? "#FF5C5C" : days > 14 ? "#FFB400" : days > 7 ? "var(--text-secondary)" : "var(--text-muted)",
+                    color: days > 30 ? "var(--status-error)" : days > 14 ? "var(--status-warning)" : days > 7 ? "var(--text-secondary)" : "var(--text-muted)",
                   }}>
                     {m.status === "Resolved" ? (
                       <span style={{ color: "var(--status-success)", fontWeight: 400 }}>Done</span>

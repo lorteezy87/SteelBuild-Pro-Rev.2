@@ -4,10 +4,10 @@ import { getDaysBetween } from './scheduleUtils';
 const TASK_TYPE_COLORS = {
   Fabrication: 'var(--accent)',
   Delivery: '#00B8D9',
-  Install: '#00D68F',
+  Install: 'var(--status-success-bright)',
   Submittal: '#8B5CF6',
-  RFI: '#FFB400',
-  Milestone: '#FFB400',
+  RFI: 'var(--status-warning-bright)',
+  Milestone: 'var(--status-warning-bright)',
   Task: 'rgba(160,175,210,0.5)',
 };
 
