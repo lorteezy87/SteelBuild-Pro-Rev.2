@@ -34,8 +34,7 @@ import {
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable, { ContextMenuItem } from "@/components/drawings/DrawingsTable";
 import DrawingsGrid from "@/components/drawings/DrawingsGrid";
-import { StatsBar, DisciplineChips, FilterBar, BulkActionsBar } from "@/components/drawings/DrawingsToolbar";
-import StagePipeline from "@/components/drawings/StagePipeline";
+import { DisciplineChips, FilterBar, BulkActionsBar } from "@/components/drawings/DrawingsToolbar";
 import AlertBanner from "@/components/drawings/AlertBanner";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
@@ -44,6 +43,14 @@ import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+
+// ── Design-system chrome (Claude Design redesign) ─────────────────────────
+import {
+  CommandBar,
+  KpiTile,
+  PhaseChevron,
+  Button,
+} from "@/components/design-system";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -632,39 +639,42 @@ export default function Drawings() {
       style={{ padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
       onClick={() => { setContextMenu(null); }}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <div style={{ ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.25em", textTransform: "uppercase", marginBottom: 4 }}>
-            DRAWINGS & SUBMITTALS
-          </div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-            {activeProject?.name}
-          </h1>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={btnGhost} onClick={() => exportTransmittal(filtered, activeProject?.name)}>
-            ↓ TRANSMITTAL
-          </button>
-          <button style={btnGhost} onClick={() => { setEditing(null); setShowModal(true); }}>
-            + ADD SHEET
-          </button>
-          <button
-            style={btnGhost}
-            onClick={() => setRevisionOpen(true)}
-            disabled={drawingSetRecords.length === 0 && existingSetNames.length === 0}
-            title="Upload a new revision of an existing set"
-          >
-            ⟲ NEW REVISION
-          </button>
-          <button style={btnPrimary} onClick={() => setUploadSetOpen(true)}>
-            + UPLOAD SET
-          </button>
-        </div>
-      </div>
+      {/* ── CommandBar ─────────────────────────────────────────────────────── */}
+      <CommandBar
+        eyebrow={`DESIGN & DOCUMENTS · ${(activeProject?.name || "").toUpperCase()}`}
+        title="Drawings & Submittals"
+        count={stats.total}
+        unit={` · ${stats.sheetCount} SHEETS`}
+        subtitle="Not Started → OFA → BFA → OFS → BFS → IFC → Released"
+      >
+        <Button variant="secondary" icon="download" onClick={() => exportTransmittal(filtered, activeProject?.name)}>
+          TRANSMITTAL
+        </Button>
+        <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
+          ADD SHEET
+        </Button>
+        <Button
+          variant="outline"
+          icon="arrow"
+          onClick={() => setRevisionOpen(true)}
+          disabled={drawingSetRecords.length === 0 && existingSetNames.length === 0}
+          title="Upload a new revision of an existing set"
+        >
+          NEW REVISION
+        </Button>
+        <Button variant="primary" icon="upload" onClick={() => setUploadSetOpen(true)}>
+          UPLOAD SET
+        </Button>
+      </CommandBar>
 
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <StatsBar stats={stats} stageFilter={stageFilter} setStageFilter={setStageFilter} />
+      {/* ── KPI Row ────────────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
+        <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => setStageFilter("ALL")} />
+        <KpiTile compact label="RELEASED"  value={stats.released} color="var(--status-success)"  active={stageFilter === "Released"}   onClick={() => setStageFilter("Released")} />
+        <KpiTile compact label="IN REVIEW" value={stats.inReview} color="var(--status-info)"     active={stageFilter === "_inReview"}  onClick={() => setStageFilter(stageFilter === "_inReview" ? "ALL" : "_inReview")} />
+        <KpiTile compact label="OVERDUE"   value={stats.overdue}  color="var(--status-error)"    active={stageFilter === "_overdue"}   onClick={() => setStageFilter(stageFilter === "_overdue" ? "ALL" : "_overdue")} />
+        <KpiTile compact label="PRIORITY"  value={stats.priority} color="var(--status-review)"   active={stageFilter === "_priority"}  onClick={() => setStageFilter(stageFilter === "_priority" ? "ALL" : "_priority")} />
+      </div>
 
       {/* ── Revision Alerts ────────────────────────────────────────────────── */}
       {revisionAlerts.length > 0 && (
@@ -682,17 +692,56 @@ export default function Drawings() {
         </div>
       )}
 
-      {/* ── Stage Pipeline ─────────────────────────────────────────────────── */}
+      {/* ── Submittal Stage Pipeline (PhaseChevron) ────────────────────────── */}
       <ErrorBoundary label="Stage Pipeline">
-        <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
-          <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 10 }}>
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-card)",
+            padding: "12px 14px",
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              ...mono,
+              fontSize: 9,
+              color: "var(--text-muted)",
+              letterSpacing: "0.14em",
+              marginBottom: 8,
+            }}
+          >
             SUBMITTAL STAGE PIPELINE
           </div>
-          <StagePipeline
-            drawings={drawings}
-            activeStage={stageFilter !== "ALL" && !stageFilter.startsWith("_") ? stageFilter : null}
-            onStageClick={(key) => setStageFilter(prev => prev === key ? "ALL" : key)}
-          />
+          {(() => {
+            // Build stage counts from all drawings
+            const counts = STAGES.reduce((acc, s) => {
+              acc[s.key] = drawings.filter((d) => d.stage === s.key).length;
+              return acc;
+            }, {});
+            // Pipeline stages (use only the forward-flow stages; Released is the terminal)
+            const pipeStages = STAGES.map((s) => ({
+              id: s.key,
+              label: s.label,
+              color: s.color,
+              count: counts[s.key] || 0,
+            }));
+            // Active = current stage filter if it's a real stage, else the first
+            // non-empty non-terminal stage (the bottleneck).
+            let activeIdx = 0;
+            const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
+              ? STAGES.findIndex((s) => s.key === stageFilter)
+              : -1;
+            if (filteredActive >= 0) {
+              activeIdx = filteredActive;
+            } else {
+              for (let i = STAGES.length - 2; i >= 1; i--) {
+                if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+              }
+            }
+            return <PhaseChevron stages={pipeStages} activeIdx={activeIdx} showIcons={false} />;
+          })()}
         </div>
       </ErrorBoundary>
 
