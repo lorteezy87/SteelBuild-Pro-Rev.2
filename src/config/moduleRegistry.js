@@ -93,6 +93,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEE1", name: "Warranty",           group: "Closeout",      page: "Warranty" },
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
+  { icon: "\uD83D\uDCD0", name: "Ft/In Calculator",   group: "Tools",         page: "FeetInchesCalculator" },
 ];
 
 // ── Modules dropdown nav groups (3-column layout) ────────────────────
@@ -191,12 +192,18 @@ export const NAV_GROUPS = [
       { label: "Activity Log",       icon: "\uD83D\uDCCA", page: "Activity" },
     ],
   },
+  {
+    label: "TOOLS",
+    items: [
+      { label: "Ft/In Calculator", icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
+    ],
+  },
 ];
 
 // Column assignment for the 3-column modules dropdown
 const COLUMN_1_GROUPS = ["OVERVIEW", "JOB SETUP", "DOCUMENTS & DRAWINGS", "COMMUNICATIONS"];
 const COLUMN_2_GROUPS = ["FABRICATION", "DELIVERIES", "FIELD", "SCHEDULING"];
-const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING"];
+const COLUMN_3_GROUPS = ["COST CONTROL", "REPORTING", "TOOLS"];
 
 export function getDropdownColumn(groupLabel) {
   if (COLUMN_1_GROUPS.includes(groupLabel)) return 0;
@@ -283,6 +290,13 @@ export const SIDEBAR_GROUPS = [
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
+    ],
+  },
+  {
+    label: "TOOLS",
+    collapsible: true,
+    items: [
+      { label: "Ft/In Calculator", icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
     ],
   },
 ];

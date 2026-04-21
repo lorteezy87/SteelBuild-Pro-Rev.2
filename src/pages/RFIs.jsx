@@ -20,127 +20,26 @@ import {
 } from "@/components/shared/crudFeedback";
 import { batchProcess } from "@/utils/batchProcess";
 
-const mono = { fontFamily: "var(--font-mono)" };
-const BIC_COLORS = {
-  Contractor: { bg: "rgba(0,229,255,0.15)", text: "var(--accent)" },
-  GC: { bg: "rgba(68,226,205,0.18)", text: "var(--secondary)" },
-  Engineer: { bg: "rgba(255,185,95,0.15)", text: "var(--status-warning)" },
-  Architect: { bg: "rgba(168,240,203,0.18)", text: "var(--status-success)" },
-  Owner: { bg: "rgba(255,180,171,0.18)", text: "var(--status-error)" },
-};
-const PRIORITY_CFG = {
-  Critical: { color: "var(--status-error)", bg: "var(--danger-muted)" },
-  High: { color: "var(--status-warning)", bg: "var(--warning-muted)" },
-  Medium: { color: "var(--accent)", bg: "var(--accent-muted)" },
-  Low: { color: "var(--text-muted)", bg: "var(--hover-bg)" },
-};
-const STATUS_CFG = {
-  Open: { color: "var(--status-warning)", bg: "var(--warning-muted)" },
-  "Under Review": { color: "var(--status-info)", bg: "var(--info-muted)" },
-  Answered: { color: "var(--status-success)", bg: "var(--success-muted)" },
-  Closed: { color: "var(--text-muted)", bg: "var(--hover-bg)" },
-};
-const statusColumns = ["Open", "Under Review", "Answered", "Closed"];
-const RFI_NUMBER_PATTERN = /^RFI #(\d+)$/i;
-
-const extractRfiSequence = (value) => {
-  if (!value) return null;
-  const match = String(value).trim().match(RFI_NUMBER_PATTERN);
-  return match ? Number(match[1]) : null;
-};
-
-const sortRfisForRepair = (a, b) => {
-  const numericDiff = (extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER) - (extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER);
-  if (numericDiff !== 0) return numericDiff;
-
-  // Use created_date (full timestamp) for precise ordering of bulk-uploaded RFIs
-  const createdA = new Date(a.created_date || 0).getTime();
-  const createdB = new Date(b.created_date || 0).getTime();
-  if (createdA !== createdB) return createdA - createdB;
-
-  // Fall back to submitted_date, then id
-  const dateA = new Date(a.submitted_date || 0).getTime();
-  const dateB = new Date(b.submitted_date || 0).getTime();
-  if (dateA !== dateB) return dateA - dateB;
-
-  return String(a.id).localeCompare(String(b.id));
-};
-
-const buildRfiNumberRepairs = (records) => {
-  const groups = records.reduce((acc, record) => {
-    const key = record.project_id || "__missing_project__";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(record);
-    return acc;
-  }, {});
-
-  const repairs = [];
-  let skippedWithoutProject = 0;
-
-  Object.entries(groups).forEach(([projectKey, group]) => {
-    if (projectKey === "__missing_project__") {
-      skippedWithoutProject += group.length;
-      return;
-    }
-
-    const sorted = [...group].sort(sortRfisForRepair);
-    const reserved = new Set();
-    let nextNumber = 0;
-    const candidates = [];
-
-    sorted.forEach((record) => {
-      const numeric = extractRfiSequence(record.rfi_number);
-      if (numeric && !reserved.has(numeric)) {
-        reserved.add(numeric);
-        nextNumber = Math.max(nextNumber, numeric);
-        return;
-      }
-
-      candidates.push(record);
-    });
-
-    candidates.forEach((record) => {
-      nextNumber += 1;
-      repairs.push({
-        id: record.id,
-        project_id: record.project_id,
-        project_name: record.project_name || "",
-        previous_number: record.rfi_number || "",
-        next_number: `RFI #${String(nextNumber).padStart(3, "0")}`,
-      });
-    });
-  });
-
-  return { repairs, skippedWithoutProject };
-};
-
-const daysOpen = (r) => {
-  if (!r.submitted_date) return 0;
-  const start = new Date(r.submitted_date + "T00:00:00");
-  const end = r.date_answered && ["Answered", "Closed"].includes(r.status) ? new Date(r.date_answered + "T00:00:00") : new Date();
-  return Math.max(0, Math.floor((end - start) / 86400000));
-};
-const isClosed = (r) => ["Answered", "Closed"].includes(r.status);
-const isOverdue = (r) => !isClosed(r) && r.date_required && parseUTCDate(r.date_required) < new Date();
-
-const Pill = ({ label, color, bg }) => (
-  <span
-    style={{
-      ...mono,
-      fontSize: 8,
-      fontWeight: 700,
-      padding: "2px 8px",
-      borderRadius: 2,
-      background: bg,
-      color,
-      textTransform: "uppercase",
-      letterSpacing: "0.06em",
-      display: "inline-block",
-    }}
-  >
-    {label}
-  </span>
-);
+// Feature-folder extraction (stage 1) — RFIs.jsx carve-up
+import {
+  mono,
+  BIC_COLORS,
+  PRIORITY_CFG,
+  STATUS_CFG,
+  statusColumns,
+  KPI_ACCENT_MAP,
+  BIC_PARTIES,
+  PRIORITIES,
+} from "./rfis/constants";
+import {
+  extractRfiSequence,
+  buildRfiNumberRepairs,
+  daysOpen,
+  isClosed,
+  isOverdue,
+  exportRFIsToCSV,
+} from "./rfis/utils";
+import { Pill, Section, Meta, ContentBox } from "./rfis/subcomponents";
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
@@ -558,13 +457,6 @@ export default function RFIs() {
     return result;
   }, [rfis]);
 
-  const KPI_ACCENT_MAP = {
-    "var(--status-success)": "rgba(34,197,94,0.10)",
-    "var(--status-warning)": "rgba(245,158,11,0.10)",
-    "var(--status-error)":   "rgba(239,68,68,0.10)",
-    "var(--status-info)":    "rgba(96,165,250,0.10)",
-    "var(--accent)":         "rgba(200,155,32,0.08)",
-  };
   const renderKPI = (label, value, color, onClick, extraStyle = {}) => {
     const accent = KPI_ACCENT_MAP[color];
     return (
@@ -589,67 +481,6 @@ export default function RFIs() {
       </div>
     );
   };
-  const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
-    const headers = [
-      "RFI #",
-      "Project",
-      "Title",
-      "Priority",
-      "Status",
-      "Ball in Court",
-      "Submitted By",
-      "Submitted Date",
-      "Date Required",
-      "Date Answered",
-      "Answered By",
-      "Drawing Ref",
-      "Spec Section",
-      "Assigned To",
-      "Days Open",
-      "Cost Impact",
-      "Cost Amount",
-      "Schedule Impact",
-      "Schedule Days",
-      "Question",
-      "Answer",
-    ];
-    const data = rows.map((r) => {
-      return [
-        r.rfi_number || "",
-        r.project_name || "",
-        r.title || "",
-        r.priority || "",
-        r.status || "",
-        r.ball_in_court || "",
-        r.submitted_by || "",
-        r.submitted_date || "",
-        r.date_required || "",
-        r.date_answered || "",
-        r.answered_by || "",
-        r.drawing_reference || "",
-        r.spec_section || "",
-        r.assigned_to || "",
-        daysOpen(r),
-        r.cost_impact ? "Yes" : "No",
-        r.cost_impact_amount || "",
-        r.schedule_impact ? "Yes" : "No",
-        r.schedule_impact_days || "",
-        (r.question || "").replace(/,/g, ";"),
-        (r.answer || "").replace(/,/g, ";"),
-      ];
-    });
-    const csv = [headers, ...data]
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   if (rfisLoading) {
     return (
       <div style={{ padding: 24, background: "var(--bg-page)", height: "calc(100vh - 92px)" }}>
@@ -1638,40 +1469,3 @@ export default function RFIs() {
   );
 }
 
-function Section({ title, children }) {
-  return (
-    <div>
-      <div style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 8, ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>{title}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>{children}</div>
-    </div>
-  );
-}
-
-function Meta({ label, value, highlight, span2 }) {
-  return (
-    <div style={{ gridColumn: span2 ? "span 2" : "span 1" }}>
-      <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500, color: highlight ? "var(--status-error)" : "var(--text-primary)" }}>{value || "—"}</div>
-    </div>
-  );
-}
-
-function ContentBox({ children, accent, success }) {
-  return (
-    <div
-      style={{
-        padding: "12px 14px",
-        borderRadius: 4,
-        border: "1px solid " + (accent ? "var(--accent-border)" : success ? "var(--success-border)" : "var(--border-default)"),
-        background: accent ? "var(--accent-muted)" : success ? "var(--success-muted)" : "var(--bg-surface-low)",
-        borderLeft: "3px solid " + (accent ? "var(--accent)" : success ? "var(--status-success)" : "var(--accent)"),
-        fontFamily: "var(--font-body)",
-        fontSize: 13,
-        color: "var(--text-primary)",
-        lineHeight: 1.7,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
