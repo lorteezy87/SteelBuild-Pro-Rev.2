@@ -21,11 +21,15 @@ const SHORTCUTS = [
     { keys: ["j", "k"], desc: "Next / previous PDF page (vim)" },
     { keys: ["["], desc: "Toggle sheet list sidebar" },
     { keys: ["]"], desc: "Toggle sheet list sidebar" },
+    { keys: ["f"], desc: "Toggle thumbnail filmstrip" },
+    { keys: ["i"], desc: "Toggle sheet context panel" },
   ]},
-  { group: "Zoom", items: [
-    { keys: ["+", "="], desc: "Zoom in (25%)" },
-    { keys: ["−"],      desc: "Zoom out (25%)" },
-    { keys: ["0"],      desc: "Reset zoom to 100%" },
+  { group: "Zoom & Rotate", items: [
+    { keys: ["+", "="],   desc: "Zoom in (25%)" },
+    { keys: ["−"],        desc: "Zoom out (25%)" },
+    { keys: ["0"],        desc: "Reset zoom to 100%" },
+    { keys: ["r"],        desc: "Rotate 90° clockwise" },
+    { keys: ["Shift+R"],  desc: "Rotate 90° counter-clockwise" },
   ]},
   { group: "Other", items: [
     { keys: ["?"],   desc: "Show this shortcut panel" },
