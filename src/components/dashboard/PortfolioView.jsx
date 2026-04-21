@@ -1085,7 +1085,16 @@ export default function PortfolioView({
               </div>
             }
           />
-          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 520 }}>
+          {/* Project Health Overview scroll wrapper
+           *
+           * Keeps horizontal scrolling for the 14-column table on narrow
+           * screens. The vertical bound is now viewport-proportional
+           * (`min(980px, 78vh)`) so a 15-project portfolio shows roughly
+           * 12-14 rows at a glance on a 1080p monitor — up from the old
+           * 520px hard cap that only surfaced 6-7 rows. The outer grid
+           * scroll still catches anything past the card height, so no
+           * data is hidden, it just flows past the fold. */}
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "min(980px, 78vh)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-sidebar)" }}>
@@ -1365,7 +1374,12 @@ export default function PortfolioView({
           } />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
             {/* Left: Budget vs Actual chart */}
-            <div style={{ padding: "12px 16px", borderRight: "1px solid var(--divider)", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(280, budgetChartData.length * 36 + 40) : 280 }}>
+            {/* Budget vs Actual — chart height scales per-project and
+             * bars are now thicker (14px vs 10px) so the legend is
+             * readable on a tablet. Per-row spacing bumped to 44px so
+             * the two bars per project (Budget + Actual) aren't
+             * stacked on top of each other. */}
+            <div style={{ padding: "12px 16px", borderRight: "1px solid var(--divider)", height: budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? Math.max(320, budgetChartData.length * 44 + 56) : 320 }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 8 }}>Budget vs Actual</div>
               {budgetChartData.some((d) => d.Budget > 0 || d.Actual > 0) ? (
                 <ResponsiveContainer width="100%" height="90%">
@@ -1373,8 +1387,8 @@ export default function PortfolioView({
                     <YAxis dataKey="name" type="category" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} width={80} />
                     <XAxis type="number" tick={{ fill: "var(--text-secondary)", fontSize: 10, fontFamily: "var(--font-mono)" }} />
                     <Tooltip content={<PhoenixTooltip />} />
-                    <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={10} />
-                    <Bar dataKey="Actual" name="Actual" barSize={10}>
+                    <Bar dataKey="Budget" name="Budget" fill="var(--bg-surface-highest)" barSize={14} />
+                    <Bar dataKey="Actual" name="Actual" barSize={14}>
                       {budgetChartData.map((entry, index) => {
                         let fill = "var(--accent)";
                         if (entry.overBudget) fill = "var(--status-error)";
@@ -1447,7 +1461,9 @@ export default function PortfolioView({
               {dataIssues.length > 0 ? "ACTION NEEDED" : "ALL COMPLETE"}
             </span>
           } />
-          <div style={{ padding: "10px 12px", maxHeight: 300, overflowY: "auto" }}>
+          {/* Data Issues — relaxed cap so up to ~8 issues are visible
+           * before internal scrolling kicks in (was 300px → ~3 items). */}
+          <div style={{ padding: "10px 12px", maxHeight: "min(600px, 62vh)", overflowY: "auto" }}>
             {dataIssues.length === 0 ? (
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", fontWeight: 700, padding: 16, textAlign: "center" }}>
                 ALL DATA COMPLETE
@@ -1552,7 +1568,11 @@ export default function PortfolioView({
       <HeaderBar title="Priority Command Center" count={pccData.priorities.length + pccData.waitingOn.length}
         right={<span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>DETERMINISTIC · RANKED BY SIGNAL SEVERITY</span>}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 200 }}>
+      {/* Priority Command Center — min-height bumped so the three
+       * columns read as a substantial surface even when only 1-2 items
+       * are present per column, and so there's always room for the
+       * column header + 2-3 items without feeling cramped. */}
+      <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 320 }}>
 
         {/* Column 1: TODAY'S PRIORITIES */}
         <div style={{ borderRight: "1px solid var(--divider)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
