@@ -278,7 +278,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
             return (
               <div key={task.id} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
                 style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--hover-bg)", background: isActive ? phase.bg : isHov ? "var(--hover-bg)" : "transparent" }}>
-                <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "#00D68F" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "var(--status-success)" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
                   {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "var(--border-strong)", borderRight: "2px solid var(--text-muted)" }} />}
                   {pos.width > 50 && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>{pct > 0 ? `${pct}%` : ""} {pos.width > 100 ? task.activity : ""}</span>}
                 </div>

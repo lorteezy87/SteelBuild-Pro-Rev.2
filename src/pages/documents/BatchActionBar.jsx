@@ -37,8 +37,8 @@ export default function BatchActionBar({
       borderRadius: 10,
       animation: "fadeIn 0.15s ease-out",
     }}>
-      <CheckSquare size={16} style={{ color: "#10B981" }} />
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#10B981" }}>
+      <CheckSquare size={16} style={{ color: "var(--status-success)" }} />
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--status-success)" }}>
         {selectedCount} SELECTED
       </span>
       <div style={{ width: 1, height: 20, background: "var(--bg-surface-high)" }} />

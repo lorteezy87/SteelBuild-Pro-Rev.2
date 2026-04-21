@@ -560,7 +560,8 @@ export default function Deliveries() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <StatusPill label={detail.status || "Scheduled"} />
-              {detail.priority === "Critical" && <StatusPill label="Critical" color="#FF6B35" />}
+              {/* StatusPill auto-colors "Critical" from STATUS_COLOR tokens — no explicit color needed */}
+              {detail.priority === "Critical" && <StatusPill label="Critical" />}
               {detail.inspection_required && (
                 <StatusPill label="Inspection" color="var(--status-review)" />
               )}
