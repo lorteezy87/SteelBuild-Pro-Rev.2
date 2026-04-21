@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
+import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
@@ -1074,8 +1075,12 @@ export default function DrawingSetUploadModal({
         message:  `Creating ${records.length} drawing entries…`,
       }));
 
+      // Collect the inserted drawing rows (with DB IDs) so we can
+      // fan out matching Detailing schedule tasks after.
+      const insertedRows = [];
       try {
         const inserted = await base44.entities.Drawing.bulkCreate(records);
+        if (Array.isArray(inserted)) insertedRows.push(...inserted);
         createdRows = Array.isArray(inserted) ? inserted.length : records.length;
       } catch (bulkErr) {
         // Bulk failed — fall back to per-row so one bad sheet doesn't lose
@@ -1086,7 +1091,8 @@ export default function DrawingSetUploadModal({
           if (cancelledRef.current) break;
           const sheet = selectedSheets[i];
           try {
-            await base44.entities.Drawing.create(records[i]);
+            const row = await base44.entities.Drawing.create(records[i]);
+            if (row) insertedRows.push(row);
             createdRows++;
           } catch (err) {
             console.error("Failed to create sheet:", sheet.sheetNumber, err);
@@ -1097,6 +1103,28 @@ export default function DrawingSetUploadModal({
             progress: 40 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 50),
             message:  `Recovering… ${createdRows + failedRows} of ${selectedSheets.length}`,
           }));
+        }
+      }
+
+      // Auto-create matching Detailing/Submittal schedule tasks. Idempotent —
+      // re-running the upload won't double-insert because the helper dedupes
+      // by drawing_id in metadata.
+      if (insertedRows.length > 0 && !cancelledRef.current) {
+        setProcessingStatus(prev => ({
+          ...prev,
+          progress: 92,
+          message:  `Linking ${insertedRows.length} schedule tasks…`,
+        }));
+        try {
+          const { created: taskCount } = await autoCreateDetailingTasks(
+            insertedRows,
+            { projectName: insertedRows[0]?.project_name }
+          );
+          if (taskCount > 0) {
+            qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
+          }
+        } catch (err) {
+          console.warn("[drawings] auto-schedule tasks failed:", err);
         }
       }
 
