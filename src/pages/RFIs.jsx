@@ -27,7 +27,6 @@ import {
   PRIORITY_CFG,
   STATUS_CFG,
   statusColumns,
-  KPI_ACCENT_MAP,
   BIC_PARTIES,
   PRIORITIES,
 } from "./rfis/constants";
@@ -40,6 +39,11 @@ import {
   exportRFIsToCSV,
 } from "./rfis/utils";
 import { Pill, Section, Meta, ContentBox } from "./rfis/subcomponents";
+import KpiStrip from "./rfis/KpiStrip";
+import OverdueBar from "./rfis/OverdueBar";
+import FilterBar from "./rfis/FilterBar";
+import BulkActionBar from "./rfis/BulkActionBar";
+import BulkImportModal from "./rfis/BulkImportModal";
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
@@ -457,30 +461,6 @@ export default function RFIs() {
     return result;
   }, [rfis]);
 
-  const renderKPI = (label, value, color, onClick, extraStyle = {}) => {
-    const accent = KPI_ACCENT_MAP[color];
-    return (
-      <div
-        onClick={onClick}
-        style={{
-          padding: "12px 20px",
-          borderTop: accent ? `3px solid ${color}` : "3px solid transparent",
-          borderRight: "1px solid var(--divider)",
-          borderLeft: "none",
-          borderBottom: "none",
-          cursor: onClick ? "pointer" : "default",
-          background: accent || "var(--bg-surface)",
-          transition: "filter 0.1s",
-          ...extraStyle,
-        }}
-        onMouseEnter={(e) => { if (onClick) e.currentTarget.style.filter = "brightness(1.12)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-      >
-        <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-        <div style={{ ...mono, fontSize: 22, fontWeight: 800, color }}>{value}</div>
-      </div>
-    );
-  };
   if (rfisLoading) {
     return (
       <div style={{ padding: 24, background: "var(--bg-page)", height: "calc(100vh - 92px)" }}>
@@ -592,247 +572,42 @@ export default function RFIs() {
           </button>
         </div>
       </div>
-      {/* KPI strip */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-        {renderKPI("Open", kpis.open, "var(--status-warning)", () => setFilterStatus("Open"))}
-        {renderKPI("Under Review", kpis.underReview, "var(--status-info)", () => setFilterStatus("Under Review"))}
-        {renderKPI("Answered", kpis.answered, "var(--status-success)")}
-        {renderKPI("Closed", kpis.closed, "var(--text-muted)")}
-        {renderKPI("Critical", kpis.critical, "var(--status-error)", () => setFilterPriority("Critical"))}
-        {renderKPI("Overdue", kpis.overdue, kpis.overdue > 0 ? "var(--status-error)" : "var(--text-secondary)", () => setFilterStatus("Open"), kpis.overdue > 0 ? { borderTop: "2px solid var(--status-error)" } : {})}
-        {renderKPI("Due This Week", kpis.dueThisWeek, kpis.dueThisWeek > 0 ? "var(--status-warning)" : "var(--text-secondary)")}
-        {renderKPI(
-          "Avg Response",
-          kpis.avgResponse != null ? `${kpis.avgResponse}d` : "—",
-          kpis.avgResponse == null ? "var(--text-muted)" : kpis.avgResponse > 14 ? "var(--status-error)" : kpis.avgResponse > 7 ? "var(--status-warning)" : "var(--status-success)"
-        )}
-        {renderKPI("Cost Exposure", kpis.costExposure ? `$${kpis.costExposure.toLocaleString()}` : "$0", kpis.costExposure > 0 ? "var(--status-warning)" : "var(--text-muted)")}
-        {renderKPI("Sched Exposure", kpis.scheduleDays ? `${kpis.scheduleDays}d` : "0d", kpis.scheduleDays > 0 ? "var(--status-error)" : "var(--text-muted)")}
-      </div>
+      <KpiStrip kpis={kpis} setFilterStatus={setFilterStatus} setFilterPriority={setFilterPriority} />
+      <OverdueBar overdueList={overdueList} overdueCount={kpis.overdue} onSelect={setSelectedRFI} />
 
-      {overdueList.length > 0 && (
-        <div style={{ background: "linear-gradient(90deg, rgba(255,61,61,0.14) 0%, rgba(255,61,61,0.06) 100%)", borderBottom: "2px solid rgba(255,61,61,0.35)", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, overflowX: "auto", flexShrink: 0 }}>
-          <div style={{ ...mono, fontSize: 9, fontWeight: 800, color: "var(--status-error)", letterSpacing: "0.10em", textTransform: "uppercase", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)", animation: "gentlePulse 2s ease-in-out infinite" }} />
-            {kpis.overdue} OVERDUE
-          </div>
-          <div style={{ width: 1, height: 20, background: "rgba(255,61,61,0.3)", flexShrink: 0 }} />
-          {overdueList.map((r) => {
-            const due = r.date_required ? parseUTCDate(r.date_required) : null;
-            const lateDays = due ? Math.abs(Math.ceil((due - new Date()) / 86400000)) : 0;
-            const bic = BIC_COLORS[r.ball_in_court || "Contractor"] || BIC_COLORS.Contractor;
-            return (
-              <div
-                key={r.id}
-                onClick={() => setSelectedRFI(r)}
-                style={{
-                  background: "rgba(255,61,61,0.10)",
-                  border: "1px solid rgba(255,61,61,0.30)",
-                  borderRadius: "var(--radius-badge, 6px)",
-                  padding: "6px 12px",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.20)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,61,61,0.10)")}
-              >
-                <span style={{ ...mono, fontSize: 10, fontWeight: 800, color: "var(--status-error)" }}>{r.rfi_number}</span>
-                <span style={{ ...mono, fontSize: 9, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>
-                <span style={{ ...mono, fontSize: 8, fontWeight: 700, color: bic.text, background: bic.bg, padding: "1px 5px", borderRadius: 3 }}>{r.ball_in_court || "CTR"}</span>
-                <span style={{ ...mono, fontSize: 9, fontWeight: 800, color: "var(--status-error)" }}>{lateDays}d late</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {/* Filters */}
-      <div className="filter-bar-responsive" style={{ height: 40, flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)", overflowX: "auto" }}>
-        <input
-          placeholder="Search RFIs..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ flex: 1, maxWidth: 280, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)" }}
-        />
-        {["all", "Open", "Under Review", "Answered", "Closed"].map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            style={{
-              background: filterStatus === s ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterStatus === s ? "var(--accent-text)" : "var(--text-secondary)",
-              border: "none",
-              borderRadius: 6,
-              padding: "6px 10px",
-              ...mono,
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              cursor: "pointer",
-            }}
-          >
-            {s === "all" ? "All" : s}
-          </button>
-        ))}
-        {["all", "Critical", "High", "Medium", "Low"].map((p) => (
-          <button
-            key={p}
-            onClick={() => setFilterPriority(p)}
-            style={{
-              background: filterPriority === p ? "var(--accent)" : "var(--bg-surface-low)",
-              color: filterPriority === p ? "var(--accent-text)" : "var(--text-secondary)",
-              border: "none",
-              borderRadius: 6,
-              padding: "6px 10px",
-              ...mono,
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              cursor: "pointer",
-            }}
-          >
-            {p === "all" ? "All Priority" : p}
-          </button>
-        ))}
-        <select
-          value={filterBIC}
-          onChange={(e) => setFilterBIC(e.target.value)}
-          style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", ...mono, fontSize: 9 }}
-        >
-          <option value="all">All BIC</option>
-          {["Contractor", "GC", "Engineer", "Architect", "Owner"].map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sortField}
-          onChange={(e) => setSortField(e.target.value)}
-          style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 8px", color: "var(--text-primary)", ...mono, fontSize: 9 }}
-        >
-          <option value="date_required">Due Date</option>
-          <option value="rfi_number">RFI #</option>
-          <option value="project_name">Project</option>
-          <option value="priority">Priority</option>
-          <option value="days">Days Open</option>
-        </select>
-        <button
-          onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
-          style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 8px", ...mono, fontSize: 9, color: "var(--text-primary)", cursor: "pointer" }}
-        >
-          {sortDir === "asc" ? "?" : "?"}
-        </button>
-        <button
-          onClick={() => setOverdueFirst((v) => !v)}
-          style={{
-            background: overdueFirst ? "var(--accent)" : "var(--bg-surface-low)",
-            color: overdueFirst ? "var(--accent-text)" : "var(--text-secondary)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 6,
-            padding: "6px 10px",
-            ...mono,
-            fontSize: 8,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Overdue First
-        </button>
-        <button
-          onClick={() => exportRFIsToCSV(filtered)}
-          style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 10px", ...mono, fontSize: 9, color: "var(--text-primary)", cursor: "pointer" }}
-        >
-          Export
-        </button>
-        <label style={{ display: "flex", alignItems: "center", gap: 4, ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", cursor: "pointer", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={showVoided} onChange={() => setShowVoided((v) => !v)} style={{ cursor: "pointer", accentColor: "var(--accent)" }} />
-          Show Voided
-        </label>
-      </div>
+      <FilterBar
+        search={search} setSearch={setSearch}
+        filterStatus={filterStatus} setFilterStatus={setFilterStatus}
+        filterPriority={filterPriority} setFilterPriority={setFilterPriority}
+        filterBIC={filterBIC} setFilterBIC={setFilterBIC}
+        sortField={sortField} setSortField={setSortField}
+        sortDir={sortDir} setSortDir={setSortDir}
+        overdueFirst={overdueFirst} setOverdueFirst={setOverdueFirst}
+        showVoided={showVoided} setShowVoided={setShowVoided}
+        onExport={() => exportRFIsToCSV(filtered)}
+      />
 
-      {/* Bulk action bar */}
-      {selectedRFIs.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px", background: "var(--accent-muted)", borderBottom: "1px solid var(--accent)", flexShrink: 0, flexWrap: "wrap" }}>
-          <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{selectedRFIs.size} selected</span>
-          <span style={{ color: "var(--divider)" }}>|</span>
-          <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>SET STATUS →</span>
-          {statusColumns.map((s) => (
-            <button key={s} onClick={() => bulkUpdateMut.mutate({ ids: [...selectedRFIs], data: { status: s, ...((s === "Answered" || s === "Closed") ? { date_answered: new Date().toISOString().split("T")[0] } : {}) } })}
-              style={{ padding: "3px 10px", borderRadius: 4, border: `1px solid ${STATUS_CFG[s]?.color || "var(--border-default)"}`, background: `${STATUS_CFG[s]?.color || "var(--accent)"}18`, color: STATUS_CFG[s]?.color || "var(--accent)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
-              {s}
-            </button>
-          ))}
-          <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>SET PRIORITY →</span>
-          {["Critical", "High", "Medium", "Low"].map((p) => (
-            <button key={p} onClick={() => bulkUpdateMut.mutate({ ids: [...selectedRFIs], data: { priority: p } })}
-              style={{ padding: "3px 10px", borderRadius: 4, border: `1px solid ${PRIORITY_CFG[p]?.color || "var(--border-default)"}`, background: `${PRIORITY_CFG[p]?.color || "var(--accent)"}18`, color: PRIORITY_CFG[p]?.color || "var(--text-muted)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", textTransform: "uppercase" }}>
-              {p}
-            </button>
-          ))}
-          <button onClick={() => { exportRFIsToCSV(filtered.filter((r) => selectedRFIs.has(r.id))); }}
-            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-secondary)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer", marginLeft: "auto" }}>
-            ↓ Export {selectedRFIs.size}
-          </button>
-          <button onClick={() => setShowBulkDelete(true)}
-            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
-            ✕ Delete {selectedRFIs.size}
-          </button>
-          <button onClick={() => setSelectedRFIs(new Set())}
-            style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-muted)", ...mono, fontSize: 8, fontWeight: 700, cursor: "pointer" }}>
-            ✕ Clear
-          </button>
-        </div>
-      )}
+      <BulkActionBar
+        selectedCount={selectedRFIs.size}
+        onSetStatus={(s) => bulkUpdateMut.mutate({
+          ids: [...selectedRFIs],
+          data: { status: s, ...((s === "Answered" || s === "Closed") ? { date_answered: new Date().toISOString().split("T")[0] } : {}) },
+        })}
+        onSetPriority={(p) => bulkUpdateMut.mutate({ ids: [...selectedRFIs], data: { priority: p } })}
+        onExportSelected={() => exportRFIsToCSV(filtered.filter((r) => selectedRFIs.has(r.id)))}
+        onRequestDelete={() => setShowBulkDelete(true)}
+        onClear={() => setSelectedRFIs(new Set())}
+      />
 
-      {/* Bulk Import Modal */}
-      {showBulkImport && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowBulkImport(false); }}>
-          <div style={{ width: 560, background: "var(--bg-surface)", border: "1px solid var(--border-strong)", borderRadius: 4, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>Bulk Add RFIs</div>
-                <div style={{ ...mono, fontSize: 8, color: "var(--text-muted)", marginTop: 2 }}>One RFI per line · Format: Subject | Priority | BIC | Due Date | Drawing Ref</div>
-              </div>
-              <button onClick={() => setShowBulkImport(false)} style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: 20 }}>×</button>
-            </div>
-            <div style={{ padding: 20 }}>
-              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginBottom: 6 }}>EXAMPLE:</div>
-              <div style={{ ...mono, fontSize: 9, color: "var(--accent)", background: "var(--bg-surface-low)", padding: "6px 10px", borderRadius: 4, marginBottom: 12, lineHeight: 1.7 }}>
-                Beam connection at Grid C-4 | Critical | Engineer | 2026-05-01 | S-201<br/>
-                Anchor bolt layout confirmation | High | GC | 2026-05-10<br/>
-                Missing embed plate at Column B-7 | High | Architect
-              </div>
-              <textarea
-                value={bulkImportText}
-                onChange={(e) => setBulkImportText(e.target.value)}
-                placeholder="Paste your RFI list here, one per line..."
-                autoFocus
-                style={{ width: "100%", minHeight: 160, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "10px 12px", fontSize: 12, color: "var(--text-primary)", outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, boxSizing: "border-box" }}
-              />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-                <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
-                  {bulkImportText.trim() ? `${bulkImportText.trim().split("\n").filter(Boolean).length} RFIs to import` : "No lines entered"}
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setShowBulkImport(false)} style={{ padding: "8px 16px", borderRadius: 4, border: "1px solid var(--border-default)", background: "var(--bg-surface-low)", color: "var(--text-muted)", ...mono, fontSize: 9, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button
-                    disabled={!bulkImportText.trim() || bulkImportMut.isPending || !projectId}
-                    onClick={() => bulkImportMut.mutate(parseBulkImport())}
-                    style={{ padding: "8px 20px", borderRadius: 4, border: "none", background: "var(--accent)", color: "var(--accent-text)", ...mono, fontSize: 9, fontWeight: 700, cursor: bulkImportText.trim() && projectId ? "pointer" : "not-allowed", opacity: bulkImportText.trim() && projectId ? 1 : 0.5 }}>
-                    {bulkImportMut.isPending ? "Importing..." : `Import ${bulkImportText.trim() ? bulkImportText.trim().split("\n").filter(Boolean).length : 0} RFIs`}
-                  </button>
-                </div>
-              </div>
-              {!projectId && <div style={{ ...mono, fontSize: 9, color: "var(--status-error)", marginTop: 8 }}>⚠ Select a project first before bulk importing</div>}
-            </div>
-          </div>
-        </div>
-      )}
+      <BulkImportModal
+        open={showBulkImport}
+        text={bulkImportText}
+        setText={setBulkImportText}
+        onClose={() => setShowBulkImport(false)}
+        onImport={() => bulkImportMut.mutate(parseBulkImport())}
+        isImporting={bulkImportMut.isPending}
+        projectId={projectId}
+      />
 
       {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
