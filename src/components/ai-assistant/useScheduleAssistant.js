@@ -22,8 +22,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/schedule-assistant`;
-
 /**
  * Extract the latest tool_call's provenance from the audit log, if any.
  * The edge function returns tool_calls[] with { tool, input, result: {ok,
@@ -83,28 +81,32 @@ export function useScheduleAssistant({ projectId }) {
     abortRef.current = ctrl;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error("Not signed in — reload and sign in again to use the AI.");
-      }
-
-      const res = await fetch(FUNCTION_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
+      // supabase.functions.invoke does three things raw fetch didn't:
+      //   1. Sends the required `apikey: <anon>` header that Supabase's
+      //      edge gateway checks BEFORE it runs our function.
+      //   2. Automatically attaches the signed-in user's Bearer JWT.
+      //   3. Forwards AbortSignal so we can cancel in-flight requests.
+      // With verify_jwt=true on the function, missing the apikey header is
+      // an instant 401 at the gateway — which is exactly the bug we saw.
+      const { data: body, error: invokeErr } = await supabase.functions.invoke(
+        "schedule-assistant",
+        {
+          body: { project_id: projectId, messages: outbound },
+          // @ts-ignore — supabase-js forwards this to the underlying fetch
+          signal: ctrl.signal,
         },
-        body: JSON.stringify({
-          project_id: projectId,
-          messages: outbound,
-        }),
-        signal: ctrl.signal,
-      });
+      );
 
-      const body = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(body?.error || `Edge function returned ${res.status}`);
+      if (invokeErr) {
+        // FunctionsHttpError puts the upstream status on the context.
+        const upstream = invokeErr?.context?.status;
+        const detail = body?.error || invokeErr.message || "Edge function failed";
+        throw new Error(
+          upstream ? `Edge function returned ${upstream}: ${detail}` : detail,
+        );
+      }
+      if (body?.error) {
+        throw new Error(body.error);
       }
 
       const answer = body?.answer || "(no answer)";
