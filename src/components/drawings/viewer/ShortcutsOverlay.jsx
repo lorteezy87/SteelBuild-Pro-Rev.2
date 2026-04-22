@@ -31,9 +31,17 @@ const SHORTCUTS = [
     { keys: ["r"],        desc: "Rotate 90° clockwise" },
     { keys: ["Shift+R"],  desc: "Rotate 90° counter-clockwise" },
   ]},
+  { group: "Markup", items: [
+    { keys: ["v"],        desc: "Select tool (default)" },
+    { keys: ["p"],        desc: "Redline pen (freehand)" },
+    { keys: ["b"],        desc: "Rectangle / box" },
+    { keys: ["a"],        desc: "Arrow" },
+    { keys: ["t"],        desc: "Text note pin" },
+    { keys: ["Del"],      desc: "Delete selected markup" },
+  ]},
   { group: "Other", items: [
     { keys: ["?"],   desc: "Show this shortcut panel" },
-    { keys: ["Esc"], desc: "Close dialogs / panels" },
+    { keys: ["Esc"], desc: "Close dialogs · back to select tool" },
   ]},
 ];
 
