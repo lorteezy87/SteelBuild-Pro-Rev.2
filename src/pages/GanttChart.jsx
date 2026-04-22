@@ -72,6 +72,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
               <div
                 key={task.id}
                 onClick={() => onTogglePhase(task.phase)}
+                onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
                 style={{
                   height: ROW_HEIGHT,
                   display: "grid",
@@ -289,11 +290,14 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
             if (task.isSummary) {
               const pos = getBarPosition(task);
               const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+              const summaryHandlers = {
+                onContextMenu: (e) => { e.preventDefault(); onContextMenu?.(e, task); },
+              };
               if (!pos) {
-                return <div key={task.id} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)", background: `${phase.solid}08` }} />;
+                return <div key={task.id} {...summaryHandlers} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)", background: `${phase.solid}08` }} />;
               }
               return (
-                <div key={task.id} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
+                <div key={task.id} {...summaryHandlers} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: pos.width, height: 8, background: phase.solid, opacity: 0.55 }} />
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left + pos.width - 3, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
@@ -814,7 +818,14 @@ export default function GanttChart() {
   }, [dependencyPick]);
 
   const handleContextMenu = useCallback((e, task) => {
-    if (!task || task.isSummary) return;
+    // Debug — confirm handler fires. Remove after verifying.
+    // eslint-disable-next-line no-console
+    console.debug("[Gantt] contextmenu fired", { task: task?.activity, x: e.clientX, y: e.clientY });
+    if (!task) return;
+    if (task.isSummary) {
+      toast.info("Right-click a task, not a phase header");
+      return;
+    }
     setMenu({ x: e.clientX, y: e.clientY, task });
   }, []);
 
