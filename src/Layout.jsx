@@ -30,6 +30,7 @@ import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
+import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -443,6 +444,7 @@ export default function Layout({ children, currentPageName }) {
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
         <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
         <QuickAddFAB />
+        <AiAssistantLauncher />
         <Toaster
           position="bottom-right"
           toastOptions={{
