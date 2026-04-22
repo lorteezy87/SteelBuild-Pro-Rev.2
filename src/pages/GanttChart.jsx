@@ -55,7 +55,7 @@ function isWeekend(d) { const day = d.getDay(); return day === 0 || day === 6; }
 function isToday(d) { const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }
 function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }); }
 
-function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, onContextMenu, cutId, dependencyPickSourceId }) {
+function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, cutId, dependencyPickSourceId }) {
   return (
     <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
       <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--accent-border)" }}>
@@ -71,8 +71,8 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
             return (
               <div
                 key={task.id}
+                data-gantt-phase={task.phase}
                 onClick={() => onTogglePhase(task.phase)}
-                onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
                 style={{
                   height: ROW_HEIGHT,
                   display: "grid",
@@ -120,8 +120,8 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
           return (
             <div
               key={task.id}
+              data-gantt-task-id={task.id}
               onClick={() => onSelect(task.id)}
-              onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
               onMouseEnter={() => onHover(task.id)}
               onMouseLeave={() => onHover(null)}
               style={{
@@ -174,7 +174,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
   );
 }
 
-function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode, onContextMenu }) {
+function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode }) {
   const scrollRef = useRef(null);
   const { minDate, maxDate } = dateRange;
   const { pxPerDay } = ZOOM_LEVELS[zoom];
@@ -290,14 +290,11 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
             if (task.isSummary) {
               const pos = getBarPosition(task);
               const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
-              const summaryHandlers = {
-                onContextMenu: (e) => { e.preventDefault(); onContextMenu?.(e, task); },
-              };
               if (!pos) {
-                return <div key={task.id} {...summaryHandlers} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)", background: `${phase.solid}08` }} />;
+                return <div key={task.id} data-gantt-phase={task.phase} style={{ height: ROW_HEIGHT, borderBottom: "1px solid var(--hover-bg)", background: `${phase.solid}08` }} />;
               }
               return (
-                <div key={task.id} {...summaryHandlers} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
+                <div key={task.id} data-gantt-phase={task.phase} style={{ height: ROW_HEIGHT, position: "relative", borderBottom: `1px solid ${phase.solid}22`, background: `${phase.solid}08` }}>
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: pos.width, height: 8, background: phase.solid, opacity: 0.55 }} />
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
                   <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: pos.left + pos.width - 3, width: 3, height: 20, background: phase.solid, opacity: 0.80 }} />
@@ -315,9 +312,9 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
             return (
               <div
                 key={task.id}
+                data-gantt-task-id={task.id}
                 onMouseEnter={() => onHover(task.id)}
                 onMouseLeave={() => onHover(null)}
-                onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
                 style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--hover-bg)", background: isActive ? phase.bg : isHov ? "var(--hover-bg)" : "transparent" }}>
                 <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "var(--status-success)" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
                   {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "var(--border-strong)", borderRight: "2px solid var(--text-muted)" }} />}
@@ -817,16 +814,78 @@ export default function GanttChart() {
     return () => window.removeEventListener("keydown", onKey);
   }, [dependencyPick]);
 
-  const handleContextMenu = useCallback((e, task) => {
-    // Temporary diagnostic — using console.log + toast so it's visible at
-    // default log level and without devtools open. Remove after verifying.
-    // eslint-disable-next-line no-console
-    console.log("[Gantt] contextmenu fired", { task: task?.activity, x: e.clientX, y: e.clientY });
-    toast.info(`Right-click: ${task?.activity || "(none)"}`);
-    if (!task) return;
-    if (task.isSummary) return;
-    setMenu({ x: e.clientX, y: e.clientY, task });
+  // Document-level contextmenu listener scoped to the Gantt container.
+  // Walks up from event.target to find the row via data-gantt-task-id or
+  // data-gantt-phase. This is immune to event-bubbling quirks inside
+  // scroll containers and overlapping SVG layers.
+  const ganttRootRef = useRef(null);
+  useEffect(() => {
+    const onCtx = (ev) => {
+      const root = ganttRootRef.current;
+      if (!root || !(ev.target instanceof Element)) return;
+      if (!root.contains(ev.target)) return;
+
+      const taskEl = ev.target.closest("[data-gantt-task-id]");
+      const phaseEl = !taskEl ? ev.target.closest("[data-gantt-phase]") : null;
+      if (!taskEl && !phaseEl) return;
+
+      ev.preventDefault();
+
+      if (taskEl) {
+        const id = taskEl.getAttribute("data-gantt-task-id");
+        const task = items.find((t) => t.id === id);
+        if (task) setMenu({ x: ev.clientX, y: ev.clientY, task });
+        return;
+      }
+      const phase = phaseEl.getAttribute("data-gantt-phase");
+      setMenu({ x: ev.clientX, y: ev.clientY, phase });
+    };
+    document.addEventListener("contextmenu", onCtx);
+    return () => document.removeEventListener("contextmenu", onCtx);
+  }, [items]);
+
+  // Phase-level actions for summary (parent) row right-click.
+  const addTaskToPhase = useCallback(async (phase) => {
+    const newRecord = {
+      project_id: activeProject.id,
+      project_name: activeProject.project_name || activeProject.name || "",
+      activity: "New Activity",
+      phase,
+      crew: "",
+      planned_start: null,
+      planned_end: null,
+      forecast_start: null,
+      forecast_end: null,
+      percent_complete: 0,
+      status: "Not Started",
+      constraints: "",
+    };
+    try {
+      const created = await createMut.mutateAsync(newRecord);
+      toast.success(`Added task to ${phase}`);
+      if (created?.id) { setSelectedId(created.id); setShowDetail(true); }
+    } catch { /* handled */ }
+  }, [activeProject, createMut]);
+
+  const collapseOtherPhases = useCallback((phase) => {
+    setCollapsedPhases(new Set(PHASES.filter((p) => p !== phase)));
   }, []);
+
+  const expandAllPhases = useCallback(() => setCollapsedPhases(new Set()), []);
+
+  const completeAllInPhase = useCallback(async (phase) => {
+    const tasks = items.filter((t) => derivePhase(t) === phase && t.status !== "Complete");
+    if (tasks.length === 0) { toast.info("No open tasks in this phase"); return; }
+    if (!window.confirm(`Mark all ${tasks.length} open tasks in ${phase} as Complete?`)) return;
+    let ok = 0;
+    for (const t of tasks) {
+      try {
+        await updateMut.mutateAsync({ id: t.id, data: { status: "Complete", percent_complete: 100 } });
+        ok += 1;
+      } catch { /* skip */ }
+    }
+    toast.success(`Completed ${ok} / ${tasks.length} in ${phase}`);
+  }, [items, updateMut]);
 
   const handleRowClick = useCallback((id) => {
     // Intercept clicks while in dependency-pick mode.
@@ -840,6 +899,25 @@ export default function GanttChart() {
   }, [dependencyPick, items, completeDependencyPick, selectedId]);
 
   const menuItems = useMemo(() => {
+    // Phase (parent) row right-click
+    if (menu?.phase && !menu?.task) {
+      const p = menu.phase;
+      const isCollapsed = collapsedPhases.has(p);
+      return [
+        { label: `Add task to ${p}`, icon: "＋", onClick: () => addTaskToPhase(p) },
+        { type: "sep" },
+        {
+          label: isCollapsed ? "Expand phase" : "Collapse phase",
+          icon: isCollapsed ? "▾" : "▸",
+          onClick: () => togglePhase(p),
+        },
+        { label: "Collapse other phases", icon: "⇔", onClick: () => collapseOtherPhases(p) },
+        { label: "Expand all phases", icon: "⇳", onClick: expandAllPhases },
+        { type: "sep" },
+        { label: "Complete all in phase", icon: "✓", onClick: () => completeAllInPhase(p) },
+      ];
+    }
+    // Task row right-click
     if (!menu?.task) return [];
     const t = menu.task;
     const hasClipboard = !!clipboard?.task;
@@ -850,7 +928,7 @@ export default function GanttChart() {
       { label: "Make a subtask", icon: "↳", onClick: () => makeSubtask(t), disabled: !!t.parent_id },
       { label: "Promote Subtask", icon: "↰", onClick: () => promoteSubtask(t), disabled: !t.parent_id },
       { type: "sep" },
-      { label: "Cut Task", icon: "✂", shortcut: "", onClick: () => cutTask(t) },
+      { label: "Cut Task", icon: "✂", onClick: () => cutTask(t) },
       { label: "Copy Task", icon: "⧉", onClick: () => copyTask(t) },
       { label: "Paste Task", icon: "⎘", onClick: () => pasteTask(t), disabled: !hasClipboard },
       { label: "Insert Task Above", icon: "＋", onClick: () => insertTaskAbove(t) },
@@ -863,7 +941,7 @@ export default function GanttChart() {
       { type: "sep" },
       { label: "Delete Task", icon: "🗑", danger: true, onClick: () => deleteTask(t) },
     ];
-  }, [menu, clipboard, openDetails, makeSubtask, promoteSubtask, cutTask, copyTask, pasteTask, insertTaskAbove, startAddDependency, removeDependencies, completeTask, copyLink, deleteTask]);
+  }, [menu, clipboard, collapsedPhases, addTaskToPhase, togglePhase, collapseOtherPhases, expandAllPhases, completeAllInPhase, openDetails, makeSubtask, promoteSubtask, cutTask, copyTask, pasteTask, insertTaskAbove, startAddDependency, removeDependencies, completeTask, copyLink, deleteTask]);
 
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
@@ -876,7 +954,7 @@ export default function GanttChart() {
   const activePhaseCount = Object.values(groupByPhase(filteredTasks)).filter(g => g.length > 0).length;
 
   return (
-    <div>
+    <div ref={ganttRootRef}>
       <CommandBar
         eyebrow={activeProject?.project_name || "SCHEDULE"}
         title="Gantt Chart"
@@ -1021,7 +1099,6 @@ export default function GanttChart() {
               collapsedPhases={collapsedPhases}
               onTogglePhase={togglePhase}
               smartMode={smartMode}
-              onContextMenu={handleContextMenu}
               cutId={clipboard?.mode === "cut" ? clipboard?.task?.id : null}
               dependencyPickSourceId={dependencyPick?.sourceId || null}
             />
@@ -1033,7 +1110,6 @@ export default function GanttChart() {
               zoom={zoom}
               dateRange={dateRange}
               smartMode={smartMode}
-              onContextMenu={handleContextMenu}
             />
             {showDetail && selectedTask && <DetailPanel task={selectedTask} onClose={() => { setShowDetail(false); setSelectedId(null); }} />}
           </div>
