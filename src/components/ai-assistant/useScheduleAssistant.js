@@ -81,46 +81,50 @@ export function useScheduleAssistant({ projectId }) {
     abortRef.current = ctrl;
 
     try {
-      // supabase.functions.invoke does three things raw fetch didn't:
-      //   1. Sends the required `apikey: <anon>` header that Supabase's
-      //      edge gateway checks BEFORE it runs our function.
-      //   2. Automatically attaches the signed-in user's Bearer JWT.
-      //   3. Forwards AbortSignal so we can cancel in-flight requests.
-      // With verify_jwt=true on the function, missing the apikey header is
-      // an instant 401 at the gateway — which is exactly the bug we saw.
-      const { data: body, error: invokeErr } = await supabase.functions.invoke(
-        "schedule-assistant",
-        {
-          body: { project_id: projectId, messages: outbound },
-          // @ts-ignore — supabase-js forwards this to the underlying fetch
-          signal: ctrl.signal,
-        },
-      );
+      // Raw fetch rather than supabase.functions.invoke. Two reasons:
+      //   1. functions.invoke wraps non-2xx in a FunctionsHttpError and
+      //      eats the JSON error body — we kept showing the user a
+      //      generic "non-2xx status code" instead of what the edge
+      //      function actually said. fetch() doesn't throw on 4xx so
+      //      we can always read res.json() for the real reason.
+      //   2. We explicitly send BOTH headers the Supabase edge gateway
+      //      needs: apikey (required for verify_jwt) AND Authorization
+      //      with the fresh session's access_token. functions.invoke
+      //      does this too, but doing it ourselves also lets us force
+      //      a session refresh right before send so a stale token
+      //      doesn't become a confusing 401.
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      if (invokeErr) {
-        // supabase-js throws FunctionsHttpError on non-2xx but does NOT
-        // auto-parse the JSON body — invokeErr.context is the raw Response.
-        // Pull the real error message out so the red banner shows the cause
-        // (e.g. "Invalid or expired session: AuthSessionMissingError") not
-        // the generic "Edge Function returned a non-2xx status code".
-        const upstream = invokeErr?.context?.status;
-        let detail = invokeErr.message || "Edge function failed";
-        try {
-          const ctx = invokeErr.context;
-          if (ctx && typeof ctx.json === "function") {
-            const errBody = await ctx.json();
-            if (errBody?.error) detail = errBody.error;
-          } else if (ctx && typeof ctx.text === "function") {
-            const t = await ctx.text();
-            if (t) {
-              try { const parsed = JSON.parse(t); if (parsed?.error) detail = parsed.error; }
-              catch { detail = t.slice(0, 400); }
-            }
-          }
-        } catch { /* keep detail */ }
-        throw new Error(
-          upstream ? `Edge function returned ${upstream}: ${detail}` : detail,
-        );
+      // Pull a live session. If the cached access_token is expired the
+      // client refreshes it here; if there's literally no session, we fail
+      // fast with a useful message instead of shipping the anon key (which
+      // passes verify_jwt but fails getUser() in the edge fn and produces
+      // a confusing 401).
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) throw new Error(`Session error: ${sessionErr.message}`);
+      if (!session?.access_token) {
+        throw new Error("Not signed in — refresh the page and sign in again.");
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/schedule-assistant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ project_id: projectId, messages: outbound }),
+        signal: ctrl.signal,
+      });
+
+      // Parse body whether 2xx or not — edge function always returns JSON.
+      let body = null;
+      try { body = await res.json(); } catch { /* non-json response */ }
+
+      if (!res.ok) {
+        const detail = body?.error || res.statusText || "Edge function failed";
+        throw new Error(`Edge function returned ${res.status}: ${detail}`);
       }
       if (body?.error) {
         throw new Error(body.error);
