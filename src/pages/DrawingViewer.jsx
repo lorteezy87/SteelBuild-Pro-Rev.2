@@ -637,7 +637,31 @@ export default function DrawingViewer() {
             Deep slate backdrop with a subtle radial vignette so the paper
             (drop-shadowed canvas) reads as a physical sheet on a layout
             table. Matches the "legit drawing viewer" look of Bluebeam /
-            PlanGrid / Procore. */}
+            PlanGrid / Procore.
+
+            Wrapped in a `position: relative` container so the markup
+            toolbar can float over the viewport (see below) and NOT scroll
+            away with the content when the user zooms in or pans. */}
+        <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          {/* Markup toolbar — fixed to the viewer pane, NOT to the scroll
+              content. Stays visible no matter how far the user pans the
+              sheet. Only shown when we actually have a drawing to mark up. */}
+          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+            <AnnotationToolbar
+              activeTool={activeTool}
+              onToolChange={setActiveTool}
+              activeColor={activeColor}
+              onColorChange={setActiveColor}
+              markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+              onClearPage={() => {
+                markup.items
+                  .filter((m) => (m.pdf_page || 1) === currentPage)
+                  .forEach((m) => markup.removeItem(m.id));
+              }}
+              saving={markup.saving}
+              saveError={markup.saveError}
+            />
+          )}
         <div style={{
           flex: 1,
           overflow: "auto",
@@ -697,22 +721,6 @@ export default function DrawingViewer() {
               {rendering && (
                 <RenderSkeleton label={`Rendering page ${currentPage}${totalPages > 1 ? ` of ${totalPages}` : ""}`} />
               )}
-              {/* Markup toolbar — fixed to the viewer area, floats over the
-                  canvas padding so it doesn't move as the canvas resizes. */}
-              <AnnotationToolbar
-                activeTool={activeTool}
-                onToolChange={setActiveTool}
-                activeColor={activeColor}
-                onColorChange={setActiveColor}
-                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
-                onClearPage={() => {
-                  markup.items
-                    .filter((m) => (m.pdf_page || 1) === currentPage)
-                    .forEach((m) => markup.removeItem(m.id));
-                }}
-                saving={markup.saving}
-                saveError={markup.saveError}
-              />
 
               {/* Canvas + overlay wrapper. The wrapper is sized to the
                   canvas so absolutely-positioned overlay children line up
@@ -831,6 +839,7 @@ export default function DrawingViewer() {
             </div>
           )}
         </div>
+        </div>{/* /position:relative viewer-pane wrapper for floating markup toolbar */}
 
         {/* Thumbnail filmstrip */}
         {filmstripOpen && drawings.length > 0 && (
