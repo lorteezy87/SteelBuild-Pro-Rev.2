@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +9,8 @@ import StatusBadge from "../components/shared/StatusBadge";
 import { formatDate } from "../components/shared/formatters";
 import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
 import { CommandBar, KpiTile } from "@/components/design-system";
+import GanttContextMenu from "../components/gantt/GanttContextMenu";
+import { createPageUrl } from "@/utils";
 
 const PHASE_COLORS = {
   "Pre-Construction": { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)", bg: "rgba(0,229,255,0.10)" },
@@ -52,7 +55,7 @@ function isWeekend(d) { const day = d.getDay(); return day === 0 || day === 6; }
 function isToday(d) { const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }
 function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }); }
 
-function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode }) {
+function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, onContextMenu, cutId, dependencyPickSourceId }) {
   return (
     <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
       <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--accent-border)" }}>
@@ -110,10 +113,40 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
           const isActive = task.id === selectedId;
           const isHovered = task.id === hoveredId;
           const phase = PHASE_COLORS[task.phase] || PHASE_COLORS.Fabrication;
+          const depth = Math.max(0, Math.min(3, Number(task.depth) || 0));
+          const isCut = cutId === task.id;
+          const isPickSource = dependencyPickSourceId === task.id;
           return (
-            <div key={task.id} onClick={() => onSelect(task.id)} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
-              style={{ height: ROW_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", paddingLeft: 28, gap: 4, borderBottom: "1px solid var(--hover-bg)", borderLeft: isActive ? `3px solid ${phase.solid}` : "3px solid transparent", background: isActive ? phase.bg : isHovered ? "var(--hover-bg)" : "transparent", cursor: "pointer", transition: "background 0.1s" }}>
+            <div
+              key={task.id}
+              onClick={() => onSelect(task.id)}
+              onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
+              onMouseEnter={() => onHover(task.id)}
+              onMouseLeave={() => onHover(null)}
+              style={{
+                height: ROW_HEIGHT,
+                display: "grid",
+                gridTemplateColumns: "1fr 70px 70px 60px",
+                alignItems: "center",
+                padding: "0 12px",
+                paddingLeft: 28 + depth * 16,
+                gap: 4,
+                borderBottom: "1px solid var(--hover-bg)",
+                borderLeft: isPickSource
+                  ? `3px solid var(--status-warning)`
+                  : isActive
+                  ? `3px solid ${phase.solid}`
+                  : "3px solid transparent",
+                background: isActive ? phase.bg : isHovered ? "var(--hover-bg)" : "transparent",
+                cursor: "pointer",
+                transition: "background 0.1s",
+                opacity: isCut ? 0.45 : 1,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                {depth > 0 && (
+                  <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1 }}>↳</span>
+                )}
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: phase.solid, flexShrink: 0 }} />
                 <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.activity}</span>
                 {smartMode && (task.status === "Blocked" || task.status === "Delayed" || task.constraints) && (
@@ -140,7 +173,7 @@ function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPh
   );
 }
 
-function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode }) {
+function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smartMode, onContextMenu }) {
   const scrollRef = useRef(null);
   const { minDate, maxDate } = dateRange;
   const { pxPerDay } = ZOOM_LEVELS[zoom];
@@ -276,7 +309,11 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
             const forecastOverlay = getForecastOverlay(task);
 
             return (
-              <div key={task.id} onMouseEnter={() => onHover(task.id)} onMouseLeave={() => onHover(null)}
+              <div
+                key={task.id}
+                onMouseEnter={() => onHover(task.id)}
+                onMouseLeave={() => onHover(null)}
+                onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, task); }}
                 style={{ height: ROW_HEIGHT, position: "relative", borderBottom: "1px solid var(--hover-bg)", background: isActive ? phase.bg : isHov ? "var(--hover-bg)" : "transparent" }}>
                 <div style={{ position: "absolute", top: 10, left: pos.left, width: pos.width, height: 20, borderRadius: 4, background: task.status === "Complete" ? "var(--status-success)" : phase.bar, opacity: isActive || isHov ? 1 : 0.85, boxShadow: isActive ? `0 0 12px ${phase.solid}44` : "none", transition: "opacity 0.15s, box-shadow 0.15s", overflow: "hidden" }}>
                   {pct > 0 && pct < 100 && <div style={{ position: "absolute", top: 0, left: 0, width: `${pct}%`, height: "100%", background: "var(--border-strong)", borderRight: "2px solid var(--text-muted)" }} />}
@@ -456,6 +493,7 @@ function DetailPanel({ task, onClose }) {
 
 export default function GanttChart() {
   const { activeProject } = useProjectContext();
+  const qc = useQueryClient();
   const [zoom, setZoom] = useState("week");
   const [selectedId, setSelectedId] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -464,8 +502,11 @@ export default function GanttChart() {
   const [showDetail, setShowDetail] = useState(false);
   const [collapsedPhases, setCollapsedPhases] = useState(new Set());
   const [smartMode, setSmartMode] = useState(true);
+  const [menu, setMenu] = useState(null); // { x, y, task }
+  const [clipboard, setClipboard] = useState(null); // { mode: "cut"|"copy", task }
+  const [dependencyPick, setDependencyPick] = useState(null); // { sourceId }
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ["lookahead-gantt", activeProject?.id],
     queryFn: () => activeProject?.id
       ? base44.entities.LookAhead.filter({ project_id: activeProject.id }, "-created_at")
@@ -473,12 +514,59 @@ export default function GanttChart() {
     enabled: !!activeProject?.id,
   });
 
+  // Lift parent_id / dependencies out of metadata for downstream rendering.
+  const items = useMemo(() => (rawItems || []).map((t) => ({
+    ...t,
+    parent_id: t.parent_id ?? t.metadata?.parent_id ?? null,
+    dependencies: Array.isArray(t.dependencies)
+      ? t.dependencies
+      : Array.isArray(t.metadata?.dependencies)
+      ? t.metadata.dependencies
+      : [],
+  })), [rawItems]);
+
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["lookahead-gantt", activeProject?.id] });
+    qc.invalidateQueries({ queryKey: ["lookahead", activeProject?.id] });
+  }, [qc, activeProject?.id]);
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.LookAhead.update(id, data),
+    onSuccess: invalidate,
+    onError: (e) => toast.error(`Update failed: ${e?.message || "Unknown error"}`),
+  });
+  const createMut = useMutation({
+    mutationFn: (d) => base44.entities.LookAhead.create(d),
+    onSuccess: invalidate,
+    onError: (e) => toast.error(`Create failed: ${e?.message || "Unknown error"}`),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.LookAhead.delete(id),
+    onSuccess: invalidate,
+    onError: (e) => toast.error(`Delete failed: ${e?.message || "Unknown error"}`),
+  });
+
+  const patchMeta = useCallback((task, patch) => {
+    const nextMeta = { ...(task.metadata || {}), ...patch };
+    return updateMut.mutateAsync({ id: task.id, data: { metadata: nextMeta } });
+  }, [updateMut]);
+
   const displayRows = useMemo(() => {
     const base = items.filter(i => {
       if (phaseFilter !== "all" && derivePhase(i) !== phaseFilter) return false;
       if (statusFilter !== "all" && i.status !== statusFilter) return false;
       return true;
     });
+
+    // Compute depth via parent chain; children nest under their parent.
+    const byId = new Map(base.map((t) => [t.id, t]));
+    const depthFor = (t, seen = new Set()) => {
+      if (!t?.parent_id || seen.has(t.id)) return 0;
+      seen.add(t.id);
+      const parent = byId.get(t.parent_id);
+      if (!parent) return 0;
+      return 1 + depthFor(parent, seen);
+    };
 
     const groups = groupByPhase(base);
     const rows = [];
@@ -508,7 +596,22 @@ export default function GanttChart() {
         avgPct,
       });
 
-      tasks.forEach(t => rows.push({ ...t, isSummary: false }));
+      // Order: parents first, then children indented below. Preserve
+      // relative created-at order otherwise.
+      const byParent = new Map();
+      for (const t of tasks) {
+        const key = t.parent_id && byId.has(t.parent_id) ? t.parent_id : "__root__";
+        if (!byParent.has(key)) byParent.set(key, []);
+        byParent.get(key).push(t);
+      }
+      const emit = (list) => {
+        for (const t of list) {
+          rows.push({ ...t, isSummary: false, depth: depthFor(t) });
+          const kids = byParent.get(t.id);
+          if (kids?.length) emit(kids);
+        }
+      };
+      emit(byParent.get("__root__") || []);
     }
     return rows;
   }, [items, phaseFilter, statusFilter]);
@@ -554,6 +657,203 @@ export default function GanttChart() {
       return next;
     });
   };
+
+  // ── Context menu actions ──────────────────────────────────────────────
+  const openDetails = useCallback((task) => {
+    setSelectedId(task.id);
+    setShowDetail(true);
+  }, []);
+
+  // "Make a subtask" nests under the nearest task above in the same phase.
+  const makeSubtask = useCallback((task) => {
+    const samePhase = items
+      .filter((i) => derivePhase(i) === derivePhase(task) && i.id !== task.id);
+    // Use created_at to pick the one just above in list order (desc sort → "above" means created later).
+    const aboveCandidates = samePhase
+      .filter((i) => (i.created_at || "") > (task.created_at || ""))
+      .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+    const parent = aboveCandidates[0] || samePhase[0];
+    if (!parent) {
+      toast.error("No task above to nest under");
+      return;
+    }
+    if (parent.parent_id === task.id) {
+      toast.error("Cannot nest under a descendant");
+      return;
+    }
+    patchMeta(task, { parent_id: parent.id }).then(() => toast.success("Made subtask"));
+  }, [items, patchMeta]);
+
+  const promoteSubtask = useCallback((task) => {
+    if (!task.parent_id) { toast.info("Not a subtask"); return; }
+    patchMeta(task, { parent_id: null }).then(() => toast.success("Promoted"));
+  }, [patchMeta]);
+
+  const cutTask = useCallback((task) => {
+    setClipboard({ mode: "cut", task });
+    toast.info(`Cut: ${task.activity}`);
+  }, []);
+
+  const copyTask = useCallback((task) => {
+    setClipboard({ mode: "copy", task });
+    toast.success(`Copied: ${task.activity}`);
+  }, []);
+
+  const pasteTask = useCallback(async (targetTask) => {
+    if (!clipboard?.task) return;
+    const src = clipboard.task;
+    // Strip server-managed fields; keep phase/dates/etc.
+    const {
+      id, created_at, updated_at, created_date, updated_date,
+      ...rest
+    } = src;
+    const newRecord = {
+      ...rest,
+      activity: clipboard.mode === "copy" ? `${src.activity} (copy)` : src.activity,
+      // Paste below targetTask: nest under same parent when applicable.
+      metadata: {
+        ...(src.metadata || {}),
+        parent_id: targetTask?.parent_id ?? src.metadata?.parent_id ?? null,
+      },
+    };
+    try {
+      await createMut.mutateAsync(newRecord);
+      if (clipboard.mode === "cut") {
+        await deleteMut.mutateAsync(src.id);
+      }
+      toast.success("Pasted");
+      setClipboard(null);
+    } catch { /* errors handled in mutations */ }
+  }, [clipboard, createMut, deleteMut]);
+
+  const insertTaskAbove = useCallback(async (task) => {
+    const newRecord = {
+      project_id: task.project_id,
+      project_name: task.project_name,
+      activity: "New Activity",
+      phase: task.phase || derivePhase(task),
+      crew: "",
+      planned_start: task.planned_start || null,
+      planned_end: task.planned_end || null,
+      forecast_start: null,
+      forecast_end: null,
+      percent_complete: 0,
+      status: "Not Started",
+      constraints: "",
+      metadata: { parent_id: task.parent_id || null },
+    };
+    try {
+      const created = await createMut.mutateAsync(newRecord);
+      toast.success("Task inserted");
+      if (created?.id) {
+        setSelectedId(created.id);
+        setShowDetail(true);
+      }
+    } catch { /* handled */ }
+  }, [createMut]);
+
+  const deleteTask = useCallback(async (task) => {
+    if (!window.confirm(`Delete "${task.activity}"? This cannot be undone.`)) return;
+    try {
+      await deleteMut.mutateAsync(task.id);
+      if (selectedId === task.id) { setSelectedId(null); setShowDetail(false); }
+      toast.success("Deleted");
+    } catch { /* handled */ }
+  }, [deleteMut, selectedId]);
+
+  const copyLink = useCallback(async (task) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}${createPageUrl("GanttChart")}?task=${task.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Clipboard unavailable");
+    }
+  }, []);
+
+  const startAddDependency = useCallback((task) => {
+    setDependencyPick({ sourceId: task.id });
+    toast.info("Click the predecessor task to add dependency (Esc to cancel)");
+  }, []);
+
+  const completeDependencyPick = useCallback(async (targetTask) => {
+    if (!dependencyPick) return;
+    const source = items.find((t) => t.id === dependencyPick.sourceId);
+    setDependencyPick(null);
+    if (!source) return;
+    if (targetTask.id === source.id) { toast.error("Cannot depend on itself"); return; }
+    const currentDeps = Array.isArray(source.dependencies) ? source.dependencies : [];
+    if (currentDeps.includes(targetTask.id)) { toast.info("Dependency already exists"); return; }
+    await patchMeta(source, { dependencies: [...currentDeps, targetTask.id] });
+    toast.success(`Added dependency: ${targetTask.activity} → ${source.activity}`);
+  }, [dependencyPick, items, patchMeta]);
+
+  const removeDependencies = useCallback(async (task) => {
+    if (!task.dependencies?.length) { toast.info("No dependencies to remove"); return; }
+    await patchMeta(task, { dependencies: [] });
+    toast.success("Dependencies cleared");
+  }, [patchMeta]);
+
+  const completeTask = useCallback(async (task) => {
+    try {
+      await updateMut.mutateAsync({
+        id: task.id,
+        data: { status: "Complete", percent_complete: 100 },
+      });
+      toast.success("Task marked complete");
+    } catch { /* handled */ }
+  }, [updateMut]);
+
+  // Cancel dependency pick via Esc
+  useEffect(() => {
+    if (!dependencyPick) return;
+    const onKey = (e) => { if (e.key === "Escape") { setDependencyPick(null); toast.info("Cancelled"); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dependencyPick]);
+
+  const handleContextMenu = useCallback((e, task) => {
+    if (!task || task.isSummary) return;
+    setMenu({ x: e.clientX, y: e.clientY, task });
+  }, []);
+
+  const handleRowClick = useCallback((id) => {
+    // Intercept clicks while in dependency-pick mode.
+    if (dependencyPick) {
+      const t = items.find((x) => x.id === id);
+      if (t) completeDependencyPick(t);
+      return;
+    }
+    setSelectedId(id === selectedId ? null : id);
+    setShowDetail(id !== selectedId);
+  }, [dependencyPick, items, completeDependencyPick, selectedId]);
+
+  const menuItems = useMemo(() => {
+    if (!menu?.task) return [];
+    const t = menu.task;
+    const hasClipboard = !!clipboard?.task;
+    const hasDeps = Array.isArray(t.dependencies) && t.dependencies.length > 0;
+    return [
+      { label: "Open Task Details", icon: "🔍", onClick: () => openDetails(t) },
+      { type: "sep" },
+      { label: "Make a subtask", icon: "↳", onClick: () => makeSubtask(t), disabled: !!t.parent_id },
+      { label: "Promote Subtask", icon: "↰", onClick: () => promoteSubtask(t), disabled: !t.parent_id },
+      { type: "sep" },
+      { label: "Cut Task", icon: "✂", shortcut: "", onClick: () => cutTask(t) },
+      { label: "Copy Task", icon: "⧉", onClick: () => copyTask(t) },
+      { label: "Paste Task", icon: "⎘", onClick: () => pasteTask(t), disabled: !hasClipboard },
+      { label: "Insert Task Above", icon: "＋", onClick: () => insertTaskAbove(t) },
+      { type: "sep" },
+      { label: "Add dependency", icon: "→", onClick: () => startAddDependency(t) },
+      { label: "Remove dependencies", icon: "⊘", onClick: () => removeDependencies(t), disabled: !hasDeps },
+      { type: "sep" },
+      { label: "Complete task", icon: "✓", onClick: () => completeTask(t), disabled: t.status === "Complete" },
+      { label: "Copy link to task", icon: "🔗", onClick: () => copyLink(t) },
+      { type: "sep" },
+      { label: "Delete Task", icon: "🗑", danger: true, onClick: () => deleteTask(t) },
+    ];
+  }, [menu, clipboard, openDetails, makeSubtask, promoteSubtask, cutTask, copyTask, pasteTask, insertTaskAbove, startAddDependency, removeDependencies, completeTask, copyLink, deleteTask]);
 
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
@@ -702,12 +1002,65 @@ export default function GanttChart() {
           <div style={{ textAlign: "center", padding: 48, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>No look-ahead items found. Add activities from the Look-Ahead Schedule page.</div>
         ) : (
           <div style={{ display: "flex", overflow: "hidden" }}>
-            <TaskList tasks={visibleRows} selectedId={selectedId} onSelect={(id) => { setSelectedId(id === selectedId ? null : id); setShowDetail(id !== selectedId); }} onHover={setHoveredId} hoveredId={hoveredId} collapsedPhases={collapsedPhases} onTogglePhase={togglePhase} smartMode={smartMode} />
-            <Timeline tasks={visibleRows} selectedId={selectedId} hoveredId={hoveredId} onHover={setHoveredId} zoom={zoom} dateRange={dateRange} smartMode={smartMode} />
+            <TaskList
+              tasks={visibleRows}
+              selectedId={selectedId}
+              onSelect={handleRowClick}
+              onHover={setHoveredId}
+              hoveredId={hoveredId}
+              collapsedPhases={collapsedPhases}
+              onTogglePhase={togglePhase}
+              smartMode={smartMode}
+              onContextMenu={handleContextMenu}
+              cutId={clipboard?.mode === "cut" ? clipboard?.task?.id : null}
+              dependencyPickSourceId={dependencyPick?.sourceId || null}
+            />
+            <Timeline
+              tasks={visibleRows}
+              selectedId={selectedId}
+              hoveredId={hoveredId}
+              onHover={setHoveredId}
+              zoom={zoom}
+              dateRange={dateRange}
+              smartMode={smartMode}
+              onContextMenu={handleContextMenu}
+            />
             {showDetail && selectedTask && <DetailPanel task={selectedTask} onClose={() => { setShowDetail(false); setSelectedId(null); }} />}
           </div>
         )}
       </PhoenixPanel>
+
+      {dependencyPick && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "var(--status-warning)",
+            color: "#111",
+            padding: "8px 16px",
+            borderRadius: 6,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.45)",
+            zIndex: 900,
+          }}
+        >
+          DEPENDENCY PICK MODE — click the predecessor task · Esc to cancel
+        </div>
+      )}
+
+      {menu && (
+        <GanttContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }
