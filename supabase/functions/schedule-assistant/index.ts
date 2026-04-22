@@ -120,9 +120,19 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createSupabaseClient(authHeader);
 
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    // getUser() with no argument looks for a session in localStorage — on
+    // the edge runtime there isn't one. Pass the token from the request
+    // header explicitly so /auth/v1/user can validate it against a real
+    // user row. Without this, getUser returns AuthSessionMissingError and
+    // we 401 on every call even when the JWT is fine.
+    const token = authHeader.slice("Bearer ".length).trim();
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData?.user) {
-      return json({ error: "Invalid or expired session" }, 401);
+      console.error("getUser failed:", userErr?.message);
+      return json(
+        { error: `Invalid or expired session${userErr?.message ? `: ${userErr.message}` : ""}` },
+        401,
+      );
     }
 
     const anthropic = new Anthropic({
@@ -315,7 +325,13 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    // supabase-js sends apikey + x-client-info + x-supabase-auth on every
+    // call via functions.invoke(). Browsers strict-check these against the
+    // preflight response — leaving any off returns a generic "Failed to
+    // send a request to the Edge Function" CORS block in the client.
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, apikey, x-client-info, x-supabase-auth",
+    "Access-Control-Max-Age": "86400",
   };
 }
 
