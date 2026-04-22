@@ -7,6 +7,7 @@ import ItemDetailDrawer from "@/components/commandcenter/ItemDetailDrawer";
 import ForwardLookDrawer from "@/components/commandcenter/ForwardLookDrawer";
 import TodayAgenda from "@/components/commandcenter/TodayAgenda";
 import WeekAhead from "@/components/commandcenter/WeekAhead";
+import UpcomingWindows from "@/components/commandcenter/UpcomingWindows";
 import { buildFeed } from "@/lib/commandCenter/feedAggregator";
 import { defaultFeedSort } from "@/lib/commandCenter/sortLogic";
 import { buildTodayView } from "@/lib/commandCenter/todayView";
@@ -420,6 +421,9 @@ export default function CommandCenter() {
         <TodayAgenda buckets={view} onOpenDetail={setDetailItem} />
         <WeekAhead weekByDay={view.weekByDay} onForwardLookClick={() => setForwardLookOpen(true)} />
       </div>
+
+      {/* Two-window upcoming queue: 48h imminent / 10-day near-term */}
+      <UpcomingWindows feed={rawFeed} onOpenDetail={setDetailItem} />
 
       {/* Collapsible full action feed */}
       <div
