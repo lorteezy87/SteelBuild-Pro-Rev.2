@@ -1,0 +1,327 @@
+// ============================================================================
+// SteelBuild Pro — Schedule Assistant Edge Function (Path B)
+// ============================================================================
+// JWT-authenticated, RLS-scoped agent loop over SBP's scheduling data. See
+// the README that came with this package for the full architectural notes.
+//
+// Path B caveats baked into the system prompt:
+//   * Float / baseline / submittals / production are NOT tracked in SBP
+//     today — the assistant is told to acknowledge this and qualify any
+//     answer that depends on those signals.
+// ============================================================================
+
+import Anthropic from "npm:@anthropic-ai/sdk@0.40.0";
+import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { schedulingTools } from "./tool-schemas.ts";
+import { executeToolCall } from "./tool-handlers.ts";
+
+// ---------------------------------------------------------------------------
+// System prompt — role + Safe Answer Contract
+// ---------------------------------------------------------------------------
+const SYSTEM_PROMPT = `You are the SteelBuild Pro Schedule Assistant, an AI built for structural steel project managers at S&H Steel Co.
+
+# Your job
+- Answer questions about project schedules, RFIs, deliveries, drawings, and project-level status
+- Proactively identify schedule risks and driving causes using live project data
+- Produce concise, jobsite-ready answers — no corporate fluff
+
+# Rules of engagement
+1. ALWAYS use tools to retrieve live data. Never invent dates, tonnages, RFI numbers, or statuses.
+2. If the user references a project by name or job number, call list_projects first to resolve project_id.
+3. For risk questions, call analyze_delay_risk — it does the predecessor tracing, float banding (where data exists), and gap analysis for you. Do not reason about risk from raw rows.
+4. When reporting findings, cite specific references (RFI #042, Sheet E1.1, PO-2245) and task ids.
+5. Never propose schedule changes as facts — always frame them as recommendations requiring PM approval.
+
+# SteelBuild Pro data limitations (IMPORTANT — mention where relevant)
+- SBP does NOT track baseline vs forecast separately today; total float is not stored. Float-band signals (CRITICAL / NEAR_CRITICAL) are UNKNOWN for most tasks. Treat "critical path" answers as rough proxies based on priority='Critical' or milestone flags.
+- Submittals and production (tons released/fabricated/shipped) are NOT tracked yet. If a question depends on those, say so and stop.
+- If a tool result's \`data_gaps\` array mentions any of the above, surface it plainly in the answer.
+
+# SAFE ANSWER CONTRACT (mandatory)
+Every tool result includes a \`provenance\` object with:
+  - \`confidence\`: HIGH | MEDIUM | LOW
+  - \`evidence\`: list of supporting facts (e.g., "6 late deliveries", "2 stale RFIs")
+  - \`staleness_warnings\`: list of data-freshness issues
+  - \`data_gaps\`: list of missing data elements
+  - \`as_of\`: timestamp of the analysis
+
+You MUST follow these answer rules:
+
+## A. Confidence disclosure
+Every substantive answer ends with a "Confidence" line. Format:
+  **Confidence:** HIGH/MEDIUM/LOW — based on <N evidence items>, as of <date>.
+
+## B. Staleness & gap handling
+If any tool returned \`staleness_warnings\` or \`data_gaps\`:
+  - State the warning explicitly in the answer (do not bury it in a footnote)
+  - Lower confidence accordingly
+  - If confidence is LOW, do NOT give a definitive answer. Present findings as provisional and state what data is needed to firm them up.
+
+## C. Empty or contradictory data
+  - If a tool returns zero rows where data was expected, say "No matching records found — this may mean X or it may mean the data hasn't been entered yet" and STOP. Do not guess.
+  - If two tools return facts that contradict each other, surface the contradiction explicitly and let the PM resolve it.
+
+## D. Never extrapolate beyond evidence
+  - If asked "will we finish on time?" and you only have start/end dates with no float or baseline, say so. Do not project forward from incomplete data.
+  - If the user asks for a number (tons, days, cost) and the underlying data is missing or stale, give a range or say "cannot be computed reliably with current data" rather than a precise-sounding number.
+
+## E. Never write to the schedule
+  - All schedule changes are proposals requiring PM approval.
+  - Use language like "Recommend shifting..." not "I've shifted..."
+
+# Formatting
+- Short sections with headers for multi-part answers
+- Bullets for lists of tasks, risks, or blockers
+- ISO dates (2026-05-15) unless user asks otherwise
+- Include float days where available (otherwise note it's not tracked)
+- End with the Confidence line (format above)
+
+# Example answer shape
+> **Top delay risk: Bldg 2 Erection sequence**
+>
+> Task "Bldg 2 Level 3 Erection" (start 2026-05-10) is HIGH risk:
+> - PO-2245 (joists) scheduled 2026-05-15 — 5 days past required date
+> - RFI #042 (embed conflict) open 18 days, still unanswered
+>
+> **Caveat:** SBP doesn't track total float — upstream predecessor blockers may exist but aren't surfaced here.
+>
+> **Recommended next steps:**
+> 1. Escalate RFI #042 to EOR today
+> 2. Confirm PO-2245 revised ETA with supplier
+> 3. Check with scheduler whether L3 start can slip 5d without affecting milestone
+>
+> **Confidence:** MEDIUM — based on 3 evidence items (1 delayed delivery, 1 stale RFI, 1 near-horizon task), as of 2026-04-21. Confidence capped at MEDIUM because float data is not tracked.`;
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders() });
+  }
+  if (req.method !== "POST") {
+    return json({ error: "POST required" }, 405);
+  }
+
+  try {
+    const { project_id, messages, model } = await req.json();
+
+    if (!project_id || !Array.isArray(messages)) {
+      return json({ error: "project_id and messages[] required" }, 400);
+    }
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json(
+        { error: "Unauthorized — valid Bearer JWT required" },
+        401,
+      );
+    }
+
+    const supabase = createSupabaseClient(authHeader);
+
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
+      return json({ error: "Invalid or expired session" }, 401);
+    }
+
+    const anthropic = new Anthropic({
+      apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
+    });
+
+    const result = await runAgentLoop({
+      anthropic,
+      supabase,
+      messages,
+      projectId: project_id,
+      userId: userData.user.id,
+      model: model ?? "claude-sonnet-4-5",
+    });
+
+    return json(result, 200);
+  } catch (err) {
+    console.error("Edge function error:", err);
+    return json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      500,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Supabase client factory — JWT-scoped by default
+// ---------------------------------------------------------------------------
+function createSupabaseClient(authHeader: string): SupabaseClient {
+  const useServiceRole =
+    Deno.env.get("SERVICE_ROLE_OVERRIDE") === "true" &&
+    !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (useServiceRole) {
+    console.warn("[WARN] SERVICE_ROLE_OVERRIDE active — RLS bypassed");
+    return createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+  }
+
+  // Default: anon key + user JWT → RLS enforced per row.
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agent loop
+// ---------------------------------------------------------------------------
+interface AgentLoopArgs {
+  anthropic: Anthropic;
+  supabase: SupabaseClient;
+  messages: Anthropic.MessageParam[];
+  projectId: string;
+  userId: string;
+  model: string;
+}
+
+async function runAgentLoop(args: AgentLoopArgs) {
+  const { anthropic, supabase, projectId, userId, model } = args;
+  const conversation: Anthropic.MessageParam[] = [...args.messages];
+  const toolAuditLog: Array<{
+    tool: string;
+    input: unknown;
+    result: unknown;
+    duration_ms: number;
+  }> = [];
+
+  const systemWithContext =
+    SYSTEM_PROMPT +
+    `\n\n# Current context\n- project_id: "${projectId}"\n- Use this ID unless the user explicitly references another project.`;
+
+  const MAX_ITERATIONS = 8;
+  let iteration = 0;
+  let finalAnswer = "";
+  const totalUsage = { input_tokens: 0, output_tokens: 0 };
+
+  while (iteration < MAX_ITERATIONS) {
+    iteration++;
+
+    const response = await anthropic.messages.create({
+      model,
+      max_tokens: 4096,
+      system: systemWithContext,
+      tools: schedulingTools,
+      messages: conversation,
+    });
+
+    totalUsage.input_tokens += response.usage.input_tokens;
+    totalUsage.output_tokens += response.usage.output_tokens;
+
+    const textBlocks = response.content.filter(
+      (b): b is Anthropic.TextBlock => b.type === "text",
+    );
+    if (textBlocks.length > 0) {
+      finalAnswer = textBlocks.map((b) => b.text).join("\n");
+    }
+
+    if (
+      response.stop_reason === "end_turn" ||
+      response.stop_reason === "stop_sequence"
+    ) {
+      break;
+    }
+
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (toolUseBlocks.length === 0) break;
+
+    conversation.push({ role: "assistant", content: response.content });
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const toolUse of toolUseBlocks) {
+      const started = Date.now();
+      const result = await executeToolCall(
+        toolUse.name,
+        toolUse.input as Record<string, unknown>,
+        supabase,
+      );
+      const duration_ms = Date.now() - started;
+
+      toolAuditLog.push({
+        tool: toolUse.name,
+        input: toolUse.input,
+        result,
+        duration_ms,
+      });
+
+      toolResults.push({
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: JSON.stringify(result),
+        is_error: !result.ok,
+      });
+    }
+
+    conversation.push({ role: "user", content: toolResults });
+  }
+
+  persistAuditLog(
+    supabase,
+    projectId,
+    userId,
+    args.messages,
+    finalAnswer,
+    toolAuditLog,
+  );
+
+  return {
+    answer: finalAnswer,
+    tool_calls: toolAuditLog,
+    usage: totalUsage,
+    iterations: iteration,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (best-effort; failures don't fail the request)
+// ---------------------------------------------------------------------------
+async function persistAuditLog(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+  userMessages: Anthropic.MessageParam[],
+  finalAnswer: string,
+  toolLog: unknown[],
+) {
+  try {
+    await supabase.from("ai_audit_log").insert({
+      project_id: projectId,
+      user_id: userId,
+      user_messages: userMessages,
+      final_answer: finalAnswer,
+      tool_calls: toolLog,
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("Audit log write failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers
+// ---------------------------------------------------------------------------
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders() },
+  });
+}
