@@ -138,7 +138,13 @@ export default function DrawingViewer() {
         if (cancelled) { doc.destroy(); return; }
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
-        setCurrentPage(1);
+        // Honor the active drawing's intended page (e.g. sheet B on page 3
+        // of a multi-sheet master PDF). Previously we blindly reset to 1
+        // here, which raced with the [activeDrawing?.id] effect — if this
+        // fired second, a click would "appear to do nothing" (sheet became
+        // active but PDF stayed on page 1). Clamp to the doc's page range.
+        const desired = Number(activeDrawing?.pdf_page) || 1;
+        setCurrentPage(Math.max(1, Math.min(doc.numPages, desired)));
         setPdfError(null);
       })
       .catch(err => {
