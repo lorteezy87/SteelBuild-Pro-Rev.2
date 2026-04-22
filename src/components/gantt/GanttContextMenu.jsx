@@ -19,7 +19,13 @@ export default function GanttContextMenu({ x, y, items, onClose }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    // Only close on LEFT-button mousedown outside the menu. Right-clicks
+    // elsewhere must be allowed to reach the row's onContextMenu handler,
+    // which will reposition this menu to the new target.
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     const onScroll = () => onClose();
     window.addEventListener("mousedown", onDown);
