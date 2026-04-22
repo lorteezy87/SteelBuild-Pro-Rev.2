@@ -220,6 +220,9 @@ export default function AiAssistantDrawer({ open, onClose }) {
       >
         <textarea
           ref={inputRef}
+          id="sbp-ai-composer"
+          name="sbp-ai-composer"
+          aria-label="Ask the SteelBuild Pro AI"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
