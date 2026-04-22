@@ -404,6 +404,9 @@ function MarkupItem({
           >
             <textarea
               xmlns="http://www.w3.org/1999/xhtml"
+              id={`sbp-note-${item.id}`}
+              name={`sbp-note-${item.id}`}
+              aria-label="Markup note"
               autoFocus
               defaultValue={item.text || ""}
               onChange={(e) => onNoteTextChange?.(e.target.value)}
