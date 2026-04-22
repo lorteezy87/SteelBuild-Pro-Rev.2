@@ -818,14 +818,13 @@ export default function GanttChart() {
   }, [dependencyPick]);
 
   const handleContextMenu = useCallback((e, task) => {
-    // Debug — confirm handler fires. Remove after verifying.
+    // Temporary diagnostic — using console.log + toast so it's visible at
+    // default log level and without devtools open. Remove after verifying.
     // eslint-disable-next-line no-console
-    console.debug("[Gantt] contextmenu fired", { task: task?.activity, x: e.clientX, y: e.clientY });
+    console.log("[Gantt] contextmenu fired", { task: task?.activity, x: e.clientX, y: e.clientY });
+    toast.info(`Right-click: ${task?.activity || "(none)"}`);
     if (!task) return;
-    if (task.isSummary) {
-      toast.info("Right-click a task, not a phase header");
-      return;
-    }
+    if (task.isSummary) return;
     setMenu({ x: e.clientX, y: e.clientY, task });
   }, []);
 
