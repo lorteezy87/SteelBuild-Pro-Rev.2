@@ -98,9 +98,26 @@ export function useScheduleAssistant({ projectId }) {
       );
 
       if (invokeErr) {
-        // FunctionsHttpError puts the upstream status on the context.
+        // supabase-js throws FunctionsHttpError on non-2xx but does NOT
+        // auto-parse the JSON body — invokeErr.context is the raw Response.
+        // Pull the real error message out so the red banner shows the cause
+        // (e.g. "Invalid or expired session: AuthSessionMissingError") not
+        // the generic "Edge Function returned a non-2xx status code".
         const upstream = invokeErr?.context?.status;
-        const detail = body?.error || invokeErr.message || "Edge function failed";
+        let detail = invokeErr.message || "Edge function failed";
+        try {
+          const ctx = invokeErr.context;
+          if (ctx && typeof ctx.json === "function") {
+            const errBody = await ctx.json();
+            if (errBody?.error) detail = errBody.error;
+          } else if (ctx && typeof ctx.text === "function") {
+            const t = await ctx.text();
+            if (t) {
+              try { const parsed = JSON.parse(t); if (parsed?.error) detail = parsed.error; }
+              catch { detail = t.slice(0, 400); }
+            }
+          }
+        } catch { /* keep detail */ }
         throw new Error(
           upstream ? `Edge function returned ${upstream}: ${detail}` : detail,
         );
