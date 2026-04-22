@@ -15,6 +15,9 @@ import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
 import ContextPanel from "@/components/drawings/viewer/ContextPanel";
+import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
+import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/AnnotationToolbar";
+import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -71,11 +74,23 @@ export default function DrawingViewer() {
   const canvasRef = useRef(null);
   const annotLayerRef = useRef(null);
   const renderTaskRef = useRef(null);
-  const [annotations, setAnnotations] = useState([]);
+  // pdfjs-extracted link hotspots (internal PDF links, external URLs).
+  // Renamed from `annotations` to avoid colliding with the new `markup`
+  // JSONB column used by AnnotationLayer.
+  const [linkHotspots, setLinkHotspots] = useState([]);
   // Natural page size at scale 1 (PDF user units). Callouts are stored in
   // this coordinate space with a top-left origin, so the overlay multiplies
   // by `zoom` to position itself over the rendered canvas.
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
+  // Live pdfjs viewport for the current render. AnnotationLayer uses it to
+  // project markup (stored in PDF units) to canvas pixels + hit-test pointer
+  // events. Updated after every successful render.
+  const [currentViewport, setCurrentViewport] = useState(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  // ── Markup (Tier 3 annotations) ─────────────────────────────────────
+  const [activeTool, setActiveTool] = useState("select");
+  const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   const { data: drawings = [] } = useQuery({
@@ -95,6 +110,13 @@ export default function DrawingViewer() {
   const activeDrawing = drawings.find(d => d.id === activeId);
 
   const activeIndex = filtered.findIndex(d => d.id === activeId);
+
+  // Markup hook is intentionally placed after activeDrawing so we can pass
+  // its initial array in — Tier 3 persists drawing markup in drawings.markup.
+  const markup = useMarkup({
+    drawingId: activeId,
+    initialMarkup: activeDrawing?.markup,
+  });
 
   // Resolve file_url (storage path) to a signed URL.
   // If file_url is a stale Supabase signed URL, extract the path and re-sign.
@@ -192,6 +214,12 @@ export default function DrawingViewer() {
       renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
       await renderTaskRef.current.promise;
 
+      // Publish viewport + size so AnnotationLayer can project markup.
+      // We do this AFTER the render so the overlay never displays against
+      // a mismatched canvas (prevents a 1-frame "jump" on zoom).
+      setCurrentViewport(viewport);
+      setCanvasSize({ width: viewport.width, height: viewport.height });
+
       // ── Extract link annotations for clickable overlays ──────────────
       try {
         const annots = await page.getAnnotations({ intent: "display" });
@@ -215,9 +243,9 @@ export default function DrawingViewer() {
               title: a.title || "",
             };
           });
-        setAnnotations(linkAnnots);
+        setLinkHotspots(linkAnnots);
       } catch {
-        setAnnotations([]);
+        setLinkHotspots([]);
       }
     } catch (err) {
       if (err?.name !== "RenderingCancelledException") {
@@ -341,6 +369,20 @@ export default function DrawingViewer() {
           e.preventDefault();
           setShortcutsOpen(o => !o);
         }
+      } else if (e.key === "v" || e.key === "V") {
+        setActiveTool("select");
+      } else if (e.key === "p" || e.key === "P") {
+        setActiveTool("pen");
+      } else if (e.key === "b" || e.key === "B") {
+        setActiveTool("rect");
+      } else if (e.key === "a" || e.key === "A") {
+        setActiveTool("arrow");
+      } else if (e.key === "t" || e.key === "T") {
+        setActiveTool("note");
+      } else if (e.key === "Escape") {
+        // Esc snaps back to select so keyboard users can bail on a tool
+        // without hunting for the toolbar.
+        setActiveTool("select");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -655,6 +697,23 @@ export default function DrawingViewer() {
               {rendering && (
                 <RenderSkeleton label={`Rendering page ${currentPage}${totalPages > 1 ? ` of ${totalPages}` : ""}`} />
               )}
+              {/* Markup toolbar — fixed to the viewer area, floats over the
+                  canvas padding so it doesn't move as the canvas resizes. */}
+              <AnnotationToolbar
+                activeTool={activeTool}
+                onToolChange={setActiveTool}
+                activeColor={activeColor}
+                onColorChange={setActiveColor}
+                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+                onClearPage={() => {
+                  markup.items
+                    .filter((m) => (m.pdf_page || 1) === currentPage)
+                    .forEach((m) => markup.removeItem(m.id));
+                }}
+                saving={markup.saving}
+                saveError={markup.saveError}
+              />
+
               {/* Canvas + overlay wrapper. The wrapper is sized to the
                   canvas so absolutely-positioned overlay children line up
                   with the rendered PDF regardless of zoom or padding. It
@@ -676,10 +735,10 @@ export default function DrawingViewer() {
                   }}
                 />
 
-                {/* ── Annotation overlay layer — clickable PDF link hotspots ── */}
-                {annotations.length > 0 && (
+                {/* ── PDF link-hotspot layer (clickable internal/external links) ── */}
+                {linkHotspots.length > 0 && (
                   <div ref={annotLayerRef} style={{ position: "absolute", top: 0, left: 0, width: canvasRef.current?.width || 0, height: canvasRef.current?.height || 0, pointerEvents: "none" }}>
-                    {annotations.map(a => (
+                    {linkHotspots.map(a => (
                       <div
                         key={a.id}
                         onClick={() => handleAnnotationClick(a)}
@@ -703,6 +762,22 @@ export default function DrawingViewer() {
                     ))}
                   </div>
                 )}
+
+                {/* ── Markup layer (Tier 3: user-drawn redlines/shapes/notes) ──
+                     Rendered ABOVE link hotspots + callouts so the user can
+                     draw freely and selected items stay on top. */}
+                <AnnotationLayer
+                  viewport={currentViewport}
+                  canvasWidth={canvasSize.width}
+                  canvasHeight={canvasSize.height}
+                  pdfPage={currentPage}
+                  items={markup.items}
+                  activeTool={activeTool}
+                  activeColor={activeColor}
+                  onAddItem={markup.addItem}
+                  onRemoveItem={markup.removeItem}
+                  onUpdateItem={markup.updateItem}
+                />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
                 {Array.isArray(activeDrawing?.callouts) && activeDrawing.callouts.length > 0 && (
