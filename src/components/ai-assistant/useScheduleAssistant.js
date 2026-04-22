@@ -118,13 +118,39 @@ export function useScheduleAssistant({ projectId }) {
         signal: ctrl.signal,
       });
 
-      // Parse body whether 2xx or not — edge function always returns JSON.
+      // Parse body whether 2xx or not. The edge function always returns
+      // JSON, but the Supabase gateway can reject the request BEFORE the
+      // function runs (e.g. expired JWT, wrong project) with a plain-text
+      // body or no body at all. Fall back to text() so the real reason
+      // isn't swallowed.
       let body = null;
-      try { body = await res.json(); } catch { /* non-json response */ }
+      let rawText = "";
+      try {
+        rawText = await res.text();
+        if (rawText) { try { body = JSON.parse(rawText); } catch { /* plain text */ } }
+      } catch { /* network read failed */ }
 
       if (!res.ok) {
-        const detail = body?.error || res.statusText || "Edge function failed";
-        throw new Error(`Edge function returned ${res.status}: ${detail}`);
+        // eslint-disable-next-line no-console
+        console.error("[schedule-assistant] non-2xx response", {
+          status: res.status,
+          statusText: res.statusText,
+          wwwAuthenticate: res.headers.get("www-authenticate"),
+          body,
+          rawText,
+        });
+        const detail =
+          body?.error ||
+          body?.message ||
+          (rawText && !rawText.startsWith("<") ? rawText : "") ||
+          res.headers.get("www-authenticate") ||
+          res.statusText ||
+          "Edge function failed";
+        const hint =
+          res.status === 401
+            ? " — your session may have expired (try signing out and back in) or the edge function's SUPABASE_URL doesn't match this project."
+            : "";
+        throw new Error(`Edge function returned ${res.status}: ${detail}${hint}`);
       }
       if (body?.error) {
         throw new Error(body.error);
