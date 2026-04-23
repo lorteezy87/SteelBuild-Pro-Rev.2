@@ -59,8 +59,14 @@ function aggregateDrawingsBySet(drawings, projectMap) {
         sheets: [],
         items: [],
         worstUrgency: "normal",
-        earliestDue: null,   // earliest future due_date (YYYY-MM-DD)
-        latestOverdue: null, // latest past due_date
+        earliestDue: null,     // earliest future due_date (YYYY-MM-DD)
+        earliestOverdue: null, // EARLIEST past due_date — the biggest days-
+                               // overdue value, i.e. the most-urgent past-due
+                               // item. Previously we only tracked
+                               // latestOverdue, which represented the
+                               // least-overdue item and caused the set's
+                               // effectiveDue to pick a stale / nearly-
+                               // resolved date as the bucket anchor.
         overdueCount: 0,
         dueSoonCount: 0,
         owners: new Set(),
@@ -79,7 +85,8 @@ function aggregateDrawingsBySet(drawings, projectMap) {
     if (due) {
       const today = new Date().toISOString().slice(0, 10);
       if (due < today) {
-        if (!g.latestOverdue || due > g.latestOverdue) g.latestOverdue = due;
+        // EARLIEST overdue = largest days-past signal = most urgent.
+        if (!g.earliestOverdue || due < g.earliestOverdue) g.earliestOverdue = due;
       } else if (!g.earliestDue || due < g.earliestDue) {
         g.earliestDue = due;
       }
@@ -107,9 +114,25 @@ function aggregateDrawingsBySet(drawings, projectMap) {
       displayStatus = `${total} sheet${total !== 1 ? "s" : ""} in progress`;
     }
 
-    // Synthetic raw record so UpcomingWindows / todayView's date-lookup code
-    // (which reads raw.due_date) keeps working at the set level.
-    const effectiveDue = g.latestOverdue || g.earliestDue || null;
+    // Synthetic raw record so UpcomingWindows / todayView's date-lookup
+    // code (which reads raw.due_date) keeps working at the set level.
+    //
+    // Selection rule:
+    //   - If the set is primarily overdue (≥ half of actionable sheets
+    //     are past due), anchor on the EARLIEST overdue date so the set
+    //     sorts to the top of the overdue bucket. Previously we picked
+    //     the latest overdue — that's the least-urgent past-due date and
+    //     understated the real signal.
+    //   - Otherwise, anchor on the earliest FUTURE date so the set lands
+    //     in the right UpcomingWindows bucket (48h / 10d). A set with
+    //     one stale overdue sheet + 20 future sheets no longer binds
+    //     to the past-due window; it shows up where the future work is.
+    //
+    // Falls back to whatever is available, in that preference order.
+    const majorityOverdue = g.overdueCount > 0 && g.overdueCount >= total / 2;
+    const effectiveDue = majorityOverdue
+      ? (g.earliestOverdue || g.earliestDue)
+      : (g.earliestDue || g.earliestOverdue || null);
 
     out.push({
       urgency: g.worstUrgency,
