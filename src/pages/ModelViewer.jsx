@@ -101,14 +101,12 @@ function applyDefaultSteelColor(root) {
   });
 }
 
-// Flip on shadow casting/receiving across the whole model tree.
-function enableShadows(root) {
-  root.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
+// Shadow-pass helper — no-op unless the renderer has shadowMap enabled.
+// We leave the tree-walk in so we can flip shadows back on in one line if
+// the renderer config is ever re-hardened.
+function enableShadows(/* root */) {
+  // intentionally no-op; shadow maps caused blurry output with the OBC
+  // SimpleRenderer, so we ship without casting shadows for now.
 }
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────
@@ -188,70 +186,44 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Scene appearance — studio backdrop, PBR environment,
-        // shadow-casting key light. Previously a flat white background with
-        // matte lights made steel look like plastic; the upgrades:
-        //   - Gradient sky (CSS on parent div, renderer is alpha-transparent)
-        //     gives a horizon line so the model feels grounded.
-        //   - RoomEnvironment PMREM produces a plausible indoor reflection
-        //     map — bolts + flanges pick up specular highlights and actually
-        //     read as steel, not matte plastic.
-        //   - Contact shadow plane under the model anchors it in space.
-        //   - Brighter key light casts a real shadow via shadowMap.
+        // 5. Scene appearance — conservative defaults + PBR env map.
+        //
+        // History: a prior revision tried to be fancy with a transparent
+        // renderer clear + ACES tone mapping + sRGB output + shadow maps.
+        // Those overrides fought the OBC SimpleRenderer's initialization
+        // and produced a washed-out / blurry render where the model was
+        // nearly invisible. Rolled back to renderer defaults; we only
+        // touch `scene.environment` (safe, doesn't change render pipeline)
+        // and `scene.background` (Color, not null — avoids alpha surprises).
         const threeScene = world.scene.three;
-        threeScene.background = null; // transparent — CSS gradient shows through
+        threeScene.background = new THREE.Color(0xeaeef3); // soft neutral
 
-        const renderer3 = world.renderer.three;
-        renderer3.setClearColor(0x000000, 0);     // transparent clear
-        renderer3.shadowMap.enabled = true;
-        renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer3.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer3.toneMappingExposure = 1.05;
-        renderer3.outputColorSpace = THREE.SRGBColorSpace;
-
-        // PBR environment — makes metallic materials look right.
+        // PBR environment — scene.environment is reflection-only; doesn't
+        // render as the background. Gives metals a plausible indoor IBL
+        // without depending on a transparent canvas.
         try {
+          const renderer3 = world.renderer.three;
           const pmrem = new THREE.PMREMGenerator(renderer3);
           const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
           threeScene.environment = envTex;
           envMapRef.current = { pmrem, envTex };
         } catch (e) { console.warn("env map generation failed", e); }
 
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.35);
+        // Direct lights — bright and neutral. No shadow maps; they were
+        // the likely culprit for the blurriness with this renderer.
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
         threeScene.add(hemiLight);
-        const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
-        keyLight.position.set(80, 160, 80);
-        keyLight.castShadow = true;
-        keyLight.shadow.mapSize.set(2048, 2048);
-        keyLight.shadow.camera.left = -200;
-        keyLight.shadow.camera.right = 200;
-        keyLight.shadow.camera.top = 200;
-        keyLight.shadow.camera.bottom = -200;
-        keyLight.shadow.camera.near = 10;
-        keyLight.shadow.camera.far = 600;
-        keyLight.shadow.bias = -0.0005;
-        keyLight.shadow.normalBias = 0.05;
-        keyShadowLightRef.current = keyLight;
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(80, 120, 60);
         threeScene.add(keyLight);
         const fillLight = new THREE.DirectionalLight(0xb0c4de, 0.35);
         fillLight.position.set(-80, 60, -60);
         threeScene.add(fillLight);
         const rimLight = new THREE.DirectionalLight(0xffe0b0, 0.25);
-        rimLight.position.set(0, -20, -120);
+        rimLight.position.set(0, -40, -100);
         threeScene.add(rimLight);
-
-        // Shadow-receiving ground plane. The plane itself is invisible
-        // (ShadowMaterial) so only the darkening of the contact shadow
-        // shows — the CSS gradient keeps reading through it.
-        const shadowPlane = new THREE.Mesh(
-          new THREE.PlaneGeometry(1000, 1000),
-          new THREE.ShadowMaterial({ opacity: 0.35 }),
-        );
-        shadowPlane.rotation.x = -Math.PI / 2;
-        shadowPlane.position.y = -0.01;
-        shadowPlane.receiveShadow = true;
-        shadowPlaneRef.current = shadowPlane;
-        threeScene.add(shadowPlane);
+        keyShadowLightRef.current = null;
+        shadowPlaneRef.current = null;
 
         // CAD-style grid with two line weights so major axes stand out.
         const grid = new THREE.GridHelper(400, 80, 0x9aa3b4, 0xcdd2dc);
@@ -414,7 +386,7 @@ export default function ModelViewer() {
     ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
   }, []);
 
-  // ─── MODEL BOUNDS (drives section slider + shadow plane position) ──
+  // ─── MODEL BOUNDS (drives section slider + measure-marker sizing) ──
   const captureModelBounds = useCallback((target) => {
     if (!target) return;
     const box = new THREE.Box3().setFromObject(target);
@@ -424,29 +396,6 @@ export default function ModelViewer() {
     const size = max.clone().sub(min);
     const diagonal = size.length();
     setModelBounds({ min, max, size, diagonal });
-
-    // Pin the shadow plane just below the model's footprint so the contact
-    // shadow feels anchored instead of floating.
-    if (shadowPlaneRef.current) {
-      shadowPlaneRef.current.position.y = min.y - 0.01;
-    }
-    // Aim the key light at the model so the shadow camera frustum covers it.
-    if (keyShadowLightRef.current) {
-      const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
-      const span = Math.max(diagonal * 0.75, 50);
-      keyShadowLightRef.current.target.position.copy(center);
-      keyShadowLightRef.current.target.updateMatrixWorld();
-      keyShadowLightRef.current.position.set(
-        center.x + span,
-        center.y + span * 1.6,
-        center.z + span,
-      );
-      const s = keyShadowLightRef.current.shadow.camera;
-      const half = Math.max(span, 50);
-      s.left = -half; s.right = half; s.top = half; s.bottom = -half;
-      s.near = 1; s.far = span * 6;
-      s.updateProjectionMatrix();
-    }
   }, []);
 
   // ─── SELECTION OUTLINE ──────────────────────────────────────────
@@ -1303,9 +1252,8 @@ export default function ModelViewer() {
           </div>
         )}
 
-        {/* 3D Canvas — gradient backdrop shows through the transparent
-            renderer clear. Subtle horizon line (darker ground, lighter sky)
-            grounds the model visually instead of the old flat white. */}
+        {/* 3D Canvas. The scene background is a THREE.Color (opaque), so
+            the parent's background style doesn't need to show through. */}
         <div
           ref={containerRef}
           style={{
@@ -1313,7 +1261,6 @@ export default function ModelViewer() {
             position: "relative",
             overflow: "hidden",
             cursor: measureMode ? "crosshair" : "default",
-            background: "linear-gradient(180deg, #dbe2ec 0%, #c4cdd9 48%, #9fa8b8 52%, #b4bcca 100%)",
           }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
