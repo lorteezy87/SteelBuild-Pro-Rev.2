@@ -31,6 +31,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
 import RfiLogImportModal from "@/components/rfis/RfiLogImportModal";
+import RfiBulkEditModal from "@/components/rfis/RfiBulkEditModal";
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import {
   appendRecordToCaches,
@@ -81,6 +82,7 @@ export default function RFIs() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
@@ -99,12 +101,23 @@ export default function RFIs() {
   /* ── URL-driven selection (from cross-page deep links) ── */
   const urlRfiId = searchParams.get("id");
   const urlSearch = searchParams.get("search");
+  const urlNew = searchParams.get("new");
   useEffect(() => { if (urlSearch) setSearch(urlSearch); }, [urlSearch]);
   useEffect(() => {
     if (!urlRfiId || !rfis.length) return;
     const found = rfis.find((r) => r.id === urlRfiId);
     if (found) setSelectedRFI(found);
   }, [urlRfiId, rfis]);
+  // Auto-open the create modal when QuickAddFAB navigated here with ?new=1.
+  // Runs once on mount if the flag is present. The flag is intentionally
+  // NOT cleared from the URL so back-button behavior stays predictable.
+  useEffect(() => {
+    if (urlNew === "1" && !showForm && !editingRFI) {
+      setEditingRFI(null);
+      setShowForm(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Mutations ── */
   const createMut = useMutation({
@@ -542,6 +555,13 @@ export default function RFIs() {
             onClick: () => bulkUpdateMut.mutate({ ids: [...selectedIds], data: { status: "Under Review" } }),
           },
           {
+            // Full bulk-edit modal — lets users update priority, BIC,
+            // required date, etc. on the whole selection at once.
+            label: "BULK EDIT",
+            icon: "edit",
+            onClick: () => setShowBulkEdit(true),
+          },
+          {
             label: "EXPORT",
             icon: "download",
             onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))),
@@ -553,6 +573,16 @@ export default function RFIs() {
             onClick: () => setShowBulkDelete(true),
           },
         ]}
+      />
+
+      <RfiBulkEditModal
+        open={showBulkEdit}
+        count={selectedIds.size}
+        onCancel={() => setShowBulkEdit(false)}
+        onSubmit={(data) => {
+          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+          setShowBulkEdit(false);
+        }}
       />
 
       {/* Modals */}

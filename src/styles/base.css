@@ -142,3 +142,27 @@ input::placeholder, textarea::placeholder {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px !important;
 }
+
+/* ── Modal / Dialog typography safety-net ──
+ *
+ * Some modals across the app predate the theming tokens and set
+ * `color: #fff` inline for headings or body text. That looked fine on
+ * the original dark surface but renders as white-on-white in light
+ * mode — unreadable. This selector forces text inside any role="dialog"
+ * (our plain-overlay modals) and Radix dialog portal (.DialogContent
+ * class names) to use the current theme's text-primary unless an
+ * individual element overrides with a CSS variable.
+ *
+ * Inline styles using hardcoded colors still beat this (inline wins by
+ * specificity) — those need to be fixed in the component. But this
+ * catches the common case of children inheriting from a parent with
+ * `color: #fff` set inline: the child without its own color picks up
+ * from the computed style chain, which falls through to this rule.
+ */
+[role="dialog"],
+[role="dialog"] h1, [role="dialog"] h2, [role="dialog"] h3, [role="dialog"] h4,
+[role="dialog"] p,
+[role="dialog"] label,
+[role="dialog"] span:not([style*="color"]) {
+  color: var(--text-primary);
+}
