@@ -4,7 +4,6 @@ import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
 
 // FragmentsManager.init() requires a worker URL. Without it, IFC loads
 // silently produce zero geometry. We serve the worker from /public/thatopen/
@@ -115,8 +114,6 @@ export default function ModelViewer() {
   const keyShadowLightRef = useRef(null);
   const shadowPlaneRef = useRef(null);
   const selectionOutlineRef = useRef(null);          // THREE.Group parented to selected mesh
-  const viewHelperRef = useRef(null);                // three ViewHelper (corner gizmo)
-  const viewHelperElRef = useRef(null);              // DOM node mounted for the helper
   const clippingPlaneRef = useRef(null);             // horizontal section plane
   const measurementStateRef = useRef({               // 2-click measurement
     active: false, firstPoint: null, markerObjs: [],
@@ -311,10 +308,6 @@ export default function ModelViewer() {
           envMapRef.current.pmrem?.dispose?.();
         } catch { /* ignore */ }
         envMapRef.current = null;
-      }
-      if (viewHelperRef.current) {
-        try { viewHelperRef.current.dispose?.(); } catch { /* ignore */ }
-        viewHelperRef.current = null;
       }
       if (componentsRef.current) {
         try { componentsRef.current.dispose(); } catch { /* ignore cleanup errors */ }
@@ -997,34 +990,15 @@ export default function ModelViewer() {
     return () => container.removeEventListener("click", onClick);
   }, [members, measureMode, modelBounds, selectMember, addMeasureMarker, addMeasureLine, formatDistance]);
 
-  // ─── AXIS GIZMO (corner widget) ─────────────────────────────────
-  useEffect(() => {
-    const world = worldRef.current;
-    const el = viewHelperElRef.current;
-    if (!world?.camera?.three || !world?.renderer?.three || !el) return;
-    const helper = new ViewHelper(world.camera.three, world.renderer.three.domElement);
-    helper.controls = world.camera.controls;
-    viewHelperRef.current = helper;
-
-    let raf = 0;
-    const draw = () => {
-      raf = requestAnimationFrame(draw);
-      try { helper.render(world.renderer.three); } catch { /* ignore */ }
-    };
-    raf = requestAnimationFrame(draw);
-
-    const onClick = (ev) => {
-      try { helper.handleClick(ev); } catch { /* ignore */ }
-    };
-    el.addEventListener("pointerup", onClick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener("pointerup", onClick);
-      try { helper.dispose?.(); } catch { /* ignore */ }
-      viewHelperRef.current = null;
-    };
-  }, [engineReady]);
+  // ─── AXIS GIZMO — DISABLED ──────────────────────────────────────
+  // three/examples ViewHelper renders into the main WebGL canvas and
+  // calls renderer.setViewport / setScissor on every draw. OBC's
+  // SimpleRenderer doesn't restore those between frames, so the main
+  // scene started rendering into the tiny corner viewport and looked
+  // blurry / invisible. Removed for now; keyboard shortcuts 1-6 still
+  // snap the view so the gizmo is a nice-to-have, not a need-to-have.
+  // If we want it back, we'll render the helper into a separate WebGL
+  // canvas that's overlaid on the main one.
 
   // ─── FILTERED MEMBERS ──────────────────────────────────────────
   const filteredMembers = useMemo(() => {
@@ -1345,16 +1319,6 @@ export default function ModelViewer() {
               >DONE (M)</button>
             </div>
           )}
-
-          {/* Axis gizmo mount — bottom-right corner. ViewHelper draws into
-              the main WebGL canvas; this div intercepts clicks. */}
-          <div
-            ref={viewHelperElRef}
-            style={{
-              position: "absolute", bottom: 12, right: 12, width: 120, height: 120, zIndex: 15,
-              pointerEvents: "auto", cursor: "pointer",
-            }}
-          />
 
           {/* Error overlay */}
           {uploadError && (
