@@ -58,7 +58,7 @@ export default function ResourceRow({
           : rowHeatBg !== "transparent"
             ? rowHeatBg
             : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-surface-low)"),
-        borderBottom: "1px solid var(--hover-bg)",
+        borderBottom: "1px solid var(--border-default)",
         minHeight: 60,
         transition: "background 0.2s",
       }}
@@ -140,7 +140,7 @@ export default function ResourceRow({
               }}>
                 {rowBudgetHrs}h bud {"\u00B7"} {rowActualHrs}h act {"\u00B7"} {rowBurnPct}%
               </div>
-              <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
+              <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--border-default)", marginTop: 3 }}>
                 <div style={{
                   width: `${Math.min(100, rowBurnPct)}%`,
                   height: "100%", borderRadius: 2,

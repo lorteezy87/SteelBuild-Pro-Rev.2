@@ -45,8 +45,8 @@ export default function UnscheduledTray({
             onOpenContextMenu({ x: e.clientX, y: e.clientY, wp });
           }}
           style={{
-            background: "var(--hover-bg)",
-            border: "1px dashed rgba(245,158,11,0.3)",
+            background: "var(--bg-surface-low)",
+            border: "1px dashed var(--border-strong)",
             borderRadius: 8,
             padding: "8px 10px",
             marginBottom: 6,

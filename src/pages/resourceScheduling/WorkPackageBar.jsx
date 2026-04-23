@@ -44,7 +44,11 @@ export default function WorkPackageBar({
         overflow: "hidden",
         userSelect: "none",
         zIndex: 10,
-        boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        // Crisp edge + subtle inner highlight + drop shadow — makes the bar
+        // read as a solid chip in both light and dark themes. Previously
+        // just had the drop shadow which disappeared on white surfaces.
+        border: "1px solid rgba(0,0,0,0.14)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.18)",
       }}
     >
       {/* Progress overlay */}
