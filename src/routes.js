@@ -39,6 +39,7 @@ export const PAGE_LABELS = {
   LookAheadSchedule:     "Look-Ahead Schedule",
   GanttChart:            "Gantt Chart",
   FieldPlan:             "Field Plan",
+  Submittals:            "Submittals",
   Schedule:              "Schedule",
   Deliveries:            "Deliveries",
   DailyLogs:             "Daily Logs",
@@ -114,7 +115,7 @@ export const ALL_ROUTE_PATHS = Array.from(new Set([
  */
 export const PROJECT_SCOPED_PAGES = new Set([
   "Dashboard", "ProjectControlCenter", "Drawings", "DrawingAnalysis", "DrawingViewer", "ModelViewer",
-  "Schedule", "GanttChart", "FieldPlan", "Financials", "CostDashboard", "RFIs", "Deliveries",
+  "Schedule", "GanttChart", "FieldPlan", "Submittals", "Financials", "CostDashboard", "RFIs", "Deliveries",
   "DailyLogs", "Photos", "Inspections", "Punchlist", "Safety", "QualityControl",
   "WorkPackages", "Constraints", "FabRelease", "Procurement", "JobStatusReport",
   "ChangeOrders", "SOV", "Expenses", "Meetings", "ActionItems", "ProductionNotes",
