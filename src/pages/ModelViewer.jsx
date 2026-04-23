@@ -997,90 +997,6 @@ export default function ModelViewer() {
     return () => window.removeEventListener("keydown", handler);
   }, [fitCamera, setView, isolateSelection, hideSelection, showAll, toggleMeasureMode, takeScreenshot, measureMode, selectedMember, clearSelectionOutline]);
 
-  // ─── CANVAS PICKING (click-to-select + measure-mode pickpoints) ──
-  useEffect(() => {
-    const container = containerRef.current;
-    const world = worldRef.current;
-    if (!container || !world?.camera?.three || !world?.scene?.three) return;
-
-    const onClick = (ev) => {
-      // Only left-click. Drag-releases emit a click too — suppress if the
-      // mouse moved significantly between mousedown/mouseup.
-      if (ev.button !== 0) return;
-      const rect = container.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
-        -(((ev.clientY - rect.top) / rect.height) * 2 - 1),
-      );
-      const caster = raycasterRef.current;
-      caster.setFromCamera(ndc, world.camera.three);
-
-      const root = loadedModelRef.current || world.scene.three;
-      const hits = caster.intersectObject(root, true).filter((h) => h.object.isMesh && h.object.visible);
-      if (hits.length === 0) return;
-      const hit = hits[0];
-
-      // Measurement mode: first click stores a point, second computes.
-      if (measureMode) {
-        const pt = hit.point.clone();
-        addMeasureMarker(pt);
-        if (measurementStateRef.current.firstPoint) {
-          const a = measurementStateRef.current.firstPoint;
-          addMeasureLine(a, pt);
-          const dist = a.distanceTo(pt);
-          const diag = modelBounds?.diagonal || 0;
-          setMeasureReading(formatDistance(dist, diag));
-          measurementStateRef.current.firstPoint = null;
-        } else {
-          measurementStateRef.current.firstPoint = pt;
-          setMeasureReading({ meters: null, ftIn: "Click second point…" });
-        }
-        return;
-      }
-
-      // Normal selection: find the matching member row + outline it.
-      const mesh = hit.object;
-      const matching = members.find((m) => m.mesh === mesh);
-      if (matching) selectMember(matching);
-    };
-
-    container.addEventListener("click", onClick);
-    return () => container.removeEventListener("click", onClick);
-  }, [members, measureMode, modelBounds, selectMember, addMeasureMarker, addMeasureLine, formatDistance]);
-
-  // ─── AXIS GIZMO (corner widget) ─────────────────────────────────
-  useEffect(() => {
-    const world = worldRef.current;
-    const el = viewHelperElRef.current;
-    if (!world?.camera?.three || !world?.renderer?.three || !el) return;
-    // ViewHelper needs the canvas element for click-to-snap view changes.
-    const helper = new ViewHelper(world.camera.three, world.renderer.three.domElement);
-    helper.controls = world.camera.controls; // camera-controls integration
-    viewHelperRef.current = helper;
-
-    // The helper draws itself into a tiny overlay canvas we mount in the
-    // corner. Render loop hook:
-    let raf = 0;
-    const draw = () => {
-      raf = requestAnimationFrame(draw);
-      try { helper.render(world.renderer.three); } catch { /* ignore */ }
-    };
-    raf = requestAnimationFrame(draw);
-
-    // Click-to-snap: pass through the click to helper.handleClick.
-    const onClick = (ev) => {
-      try { helper.handleClick(ev); } catch { /* ignore */ }
-    };
-    el.addEventListener("pointerup", onClick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener("pointerup", onClick);
-      try { helper.dispose?.(); } catch { /* ignore */ }
-      viewHelperRef.current = null;
-    };
-  }, [engineReady]);
-
   // ─── MEMBER SELECTION ──────────────────────────────────────────
   const selectMember = useCallback((member) => {
     setSelectedMember(member);
@@ -1103,6 +1019,84 @@ export default function ModelViewer() {
       clearSelectionOutline();
     }
   }, [attachSelectionOutline, clearSelectionOutline]);
+
+  // ─── CANVAS PICKING (click-to-select + measure-mode pickpoints) ──
+  // Declared AFTER selectMember so the useEffect can reference it
+  // without hitting the TDZ on first render.
+  useEffect(() => {
+    const container = containerRef.current;
+    const world = worldRef.current;
+    if (!container || !world?.camera?.three || !world?.scene?.three) return;
+
+    const onClick = (ev) => {
+      if (ev.button !== 0) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -(((ev.clientY - rect.top) / rect.height) * 2 - 1),
+      );
+      const caster = raycasterRef.current;
+      caster.setFromCamera(ndc, world.camera.three);
+
+      const root = loadedModelRef.current || world.scene.three;
+      const hits = caster.intersectObject(root, true).filter((h) => h.object.isMesh && h.object.visible);
+      if (hits.length === 0) return;
+      const hit = hits[0];
+
+      if (measureMode) {
+        const pt = hit.point.clone();
+        addMeasureMarker(pt);
+        if (measurementStateRef.current.firstPoint) {
+          const a = measurementStateRef.current.firstPoint;
+          addMeasureLine(a, pt);
+          const dist = a.distanceTo(pt);
+          const diag = modelBounds?.diagonal || 0;
+          setMeasureReading(formatDistance(dist, diag));
+          measurementStateRef.current.firstPoint = null;
+        } else {
+          measurementStateRef.current.firstPoint = pt;
+          setMeasureReading({ meters: null, ftIn: "Click second point…" });
+        }
+        return;
+      }
+
+      const mesh = hit.object;
+      const matching = members.find((m) => m.mesh === mesh);
+      if (matching) selectMember(matching);
+    };
+
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, [members, measureMode, modelBounds, selectMember, addMeasureMarker, addMeasureLine, formatDistance]);
+
+  // ─── AXIS GIZMO (corner widget) ─────────────────────────────────
+  useEffect(() => {
+    const world = worldRef.current;
+    const el = viewHelperElRef.current;
+    if (!world?.camera?.three || !world?.renderer?.three || !el) return;
+    const helper = new ViewHelper(world.camera.three, world.renderer.three.domElement);
+    helper.controls = world.camera.controls;
+    viewHelperRef.current = helper;
+
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      try { helper.render(world.renderer.three); } catch { /* ignore */ }
+    };
+    raf = requestAnimationFrame(draw);
+
+    const onClick = (ev) => {
+      try { helper.handleClick(ev); } catch { /* ignore */ }
+    };
+    el.addEventListener("pointerup", onClick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("pointerup", onClick);
+      try { helper.dispose?.(); } catch { /* ignore */ }
+      viewHelperRef.current = null;
+    };
+  }, [engineReady]);
 
   // ─── FILTERED MEMBERS ──────────────────────────────────────────
   const filteredMembers = useMemo(() => {
