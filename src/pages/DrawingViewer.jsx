@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
@@ -108,6 +109,42 @@ export default function DrawingViewer() {
     : drawings;
 
   const activeDrawing = drawings.find(d => d.id === activeId);
+  const markupScale = activeDrawing?.markup_scale || null;
+
+  const qc = useQueryClient();
+
+  // Calibrate handler — invoked by AnnotationLayer when the user commits
+  // a calibrate gesture. Prompts for the real-world distance (accepts
+  // feet-inches like 10'-0, 10-0, 10'0", 10ft, or plain inches like 120
+  // or 120"), parses it, computes scale factor, persists to the drawing.
+  const handleCalibrate = useCallback(async (pdfInches) => {
+    if (!activeDrawing?.id) return;
+    if (pdfInches <= 0) return;
+
+    const raw = window.prompt(
+      `This page measures ${pdfInches.toFixed(2)}" on the PDF.\n\n` +
+      `What is the REAL-WORLD distance between the two points?\n` +
+      `Accepts: 10'-0, 10'0", 120", 120, 10ft, 10 feet`,
+      "",
+    );
+    if (raw == null) return;              // user cancelled
+    const realInches = parseRealDistance(raw);
+    if (!Number.isFinite(realInches) || realInches <= 0) {
+      toast.error(`Could not parse "${raw}" as a distance. Try formats like 10'-0 or 120"`);
+      return;
+    }
+    const scale = realInches / pdfInches;
+    try {
+      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: scale });
+      qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+      toast.success(
+        `Calibrated · 1 page inch = ${scale.toFixed(1)} real inches ` +
+        `(${formatScaleFraction(scale)})`,
+      );
+    } catch (err) {
+      toast.error(`Save failed: ${err.message}`);
+    }
+  }, [activeDrawing, projectId, qc]);
 
   const activeIndex = filtered.findIndex(d => d.id === activeId);
 
@@ -384,6 +421,8 @@ export default function DrawingViewer() {
         setActiveTool("arrow");
       } else if (e.key === "m" || e.key === "M") {
         setActiveTool("measure");
+      } else if (e.key === "k" || e.key === "K") {
+        setActiveTool("calibrate");
       } else if (e.key === "t" || e.key === "T") {
         setActiveTool("note");
       } else if (e.key === "Escape") {
@@ -899,9 +938,11 @@ export default function DrawingViewer() {
                   items={markup.items}
                   activeTool={activeTool}
                   activeColor={activeColor}
+                  markupScale={markupScale}
                   onAddItem={markup.addItem}
                   onRemoveItem={markup.removeItem}
                   onUpdateItem={markup.updateItem}
+                  onCalibrate={handleCalibrate}
                 />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
@@ -1023,3 +1064,62 @@ const toolBtn = {
   fontSize: 13,
   lineHeight: 1,
 };
+
+/**
+ * Parse a user-entered real-world distance into inches. Supports:
+ *   10'-0       → 120
+ *   10'0"       → 120
+ *   10'-6 1/2"  → 126.5
+ *   10ft        → 120
+ *   10 feet     → 120
+ *   120"        → 120
+ *   120         → 120 (bare number assumed inches)
+ *   10.5       (inches)
+ * Returns NaN on unparseable input.
+ */
+function parseRealDistance(raw) {
+  if (!raw) return NaN;
+  const s = String(raw).trim().toLowerCase();
+
+  // Feet + inches: "10'-0" / "10'0\"" / "10' 0" / "10'-6 1/2\""
+  const ftInMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)\s*[-\s]?\s*(\d+(?:\.\d+)?)?\s*(?:\d+\s*\/\s*\d+)?\s*"?$/i);
+  if (ftInMatch) {
+    const feet = parseFloat(ftInMatch[1]);
+    const inches = ftInMatch[2] ? parseFloat(ftInMatch[2]) : 0;
+    const fracMatch = s.match(/(\d+)\s*\/\s*(\d+)\s*"?$/);
+    const frac = fracMatch ? parseFloat(fracMatch[1]) / parseFloat(fracMatch[2]) : 0;
+    return feet * 12 + inches + frac;
+  }
+
+  // Plain inches: "120\"" / "120 in" / bare number
+  const inMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:"|in|inches|inch)?$/i);
+  if (inMatch) return parseFloat(inMatch[1]);
+
+  // Feet only with "ft": "10ft" / "10 feet"
+  const ftMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:ft|feet)$/i);
+  if (ftMatch) return parseFloat(ftMatch[1]) * 12;
+
+  return NaN;
+}
+
+/**
+ * Turn a scale factor (real_inches_per_pdf_inch) into a human-readable
+ * architectural scale label. 48 → "1/4\" = 1'-0\"", 96 → "1/8\" = 1'-0\"",
+ * 24 → "1/2\" = 1'-0\"" — matching how PMs read drawings. Non-standard
+ * scales fall back to "1:X" ratio form.
+ */
+function formatScaleFraction(scale) {
+  const standard = [
+    { ratio: 12,  label: '1" = 1\'-0"' },
+    { ratio: 16,  label: '3/4" = 1\'-0"' },
+    { ratio: 24,  label: '1/2" = 1\'-0"' },
+    { ratio: 32,  label: '3/8" = 1\'-0"' },
+    { ratio: 48,  label: '1/4" = 1\'-0"' },
+    { ratio: 96,  label: '1/8" = 1\'-0"' },
+    { ratio: 192, label: '1/16" = 1\'-0"' },
+  ];
+  for (const s of standard) {
+    if (Math.abs(scale - s.ratio) / s.ratio < 0.03) return s.label;
+  }
+  return `1:${scale.toFixed(0)}`;
+}
