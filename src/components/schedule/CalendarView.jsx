@@ -5,7 +5,7 @@ const TASK_TYPE_COLORS = {
   Fabrication: 'var(--accent)',
   Delivery: '#00B8D9',
   Install: 'var(--status-success-bright)',
-  Submittal: '#8B5CF6',
+  Submittal: '#0D9488',
   RFI: 'var(--status-warning-bright)',
   Milestone: 'var(--status-warning-bright)',
   Task: 'rgba(160,175,210,0.5)',

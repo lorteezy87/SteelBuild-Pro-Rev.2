@@ -103,7 +103,7 @@ export default function BatchActionBar({
         )}
       </div>
 
-      <button onClick={onBulkDownload} style={batchBtnStyle("rgba(139,92,246,0.10)", "rgba(139,92,246,0.25)", "#8b5cf6")}>
+      <button onClick={onBulkDownload} style={batchBtnStyle("rgba(13,148,136,0.10)", "rgba(13,148,136,0.25)", "#0d9488")}>
         <Download size={12} /> DOWNLOAD
       </button>
 

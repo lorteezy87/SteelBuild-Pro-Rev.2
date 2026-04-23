@@ -10,7 +10,7 @@ import { CloudUpload, FileText, FileCode, File, FileImage, FileArchive } from "l
 const ICONS = [
   { Icon: FileText,    label: "PDF", color: "#F87171" },
   { Icon: FileCode,    label: "DWG", color: "#38BDF8" },
-  { Icon: File,        label: "IFC", color: "#A78BFA" },
+  { Icon: File,        label: "IFC", color: "#0891B2" },
   { Icon: FileImage,   label: "IMG", color: "#2DD4BF" },
   { Icon: FileArchive, label: "ZIP", color: "#FBBF24" },
 ];

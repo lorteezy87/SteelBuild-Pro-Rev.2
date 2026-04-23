@@ -258,7 +258,7 @@ function DeliveryBar({ delivery, leftPx, widthPx }) {
     "Delivered":   { bg: "rgba(16,185,129,0.15)", border: "#10B981", text: "#10B981" },
     "Partial":     { bg: "rgba(239,68,68,0.12)",  border: "#EF4444", text: "#EF4444" },
     "Rejected":    { bg: "rgba(239,68,68,0.15)",  border: "#EF4444", text: "#EF4444" },
-    "Delayed":     { bg: "rgba(168,85,247,0.12)", border: "#A855F7", text: "#A855F7" },
+    "Delayed":     { bg: "rgba(220,38,38,0.12)", border: "#DC2626", text: "#DC2626" },
   };
   const c = statusColors[delivery.status] || statusColors["Scheduled"];
   const isLate = delivery.scheduled_date && new Date(delivery.scheduled_date) < new Date() && delivery.status !== "Delivered";
@@ -286,7 +286,7 @@ const DELIVERY_STATUS_DOT = {
   "Delivered":  "#10B981",
   "Partial":    "#EF4444",
   "Rejected":   "#EF4444",
-  "Delayed":    "#A855F7",
+  "Delayed":    "#DC2626",
 };
 
 const ROW_H   = 40;

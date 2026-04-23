@@ -178,7 +178,7 @@ export default function ViewerToolbar({
           disabled={analysisRunning}
           style={{
             padding: "6px 12px",
-            background: "linear-gradient(135deg,#8B5CF6,#6D40D4)",
+            background: "linear-gradient(135deg,#0D9488,#0B7F74)",
             border: "none",
             color: "#fff",
             borderRadius: 6,
