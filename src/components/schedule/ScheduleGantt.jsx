@@ -957,17 +957,21 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
                 )}
                 {/* Stage — only rendered with a picker on Detailing-phase
-                    rows. For other phases we emit an empty span so the grid
-                    layout stays aligned. Stage persists in
+                    rows. `phase` here is the PHASES config object from the
+                    row (not a string), so we check phase.key. For other
+                    phases we emit an em-dash so the grid layout stays
+                    aligned. Stage persists in
                     schedule_tasks.metadata.detailing_stage; onSave is the
-                    parent Schedule page's ScheduleTask.update callback and
-                    accepts a full task object, so we pass the merged
-                    metadata + id explicitly. */}
-                {phase === "Detailing" ? (
+                    parent Schedule page's ScheduleTask.update callback.
+                    stopPropagation on mousedown + click so the row's
+                    onTaskClick doesn't fire while the select is open. */}
+                {phase?.key === "Detailing" ? (
                   <select
                     value={task.metadata?.detailing_stage || ""}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => {
+                      e.stopPropagation();
                       const newStage = e.target.value || null;
                       if (onSave) {
                         onSave({
