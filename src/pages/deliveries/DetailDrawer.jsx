@@ -49,7 +49,7 @@ export default function DetailDrawer({
           style={{
             padding: "16px 20px",
             borderBottom: "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             display: "flex",
             flexDirection: "column",
             gap: 8,
@@ -121,7 +121,7 @@ export default function DetailDrawer({
           </Section>
         </div>
 
-        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-sidebar)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", gap: 8, flexWrap: "wrap" }}>
           {statusList.map((s) => (
             <button
               key={s}

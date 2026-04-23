@@ -131,7 +131,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--divider)', background: 'var(--bg-sidebar)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--divider)', background: 'var(--bg-surface-low)' }}>
           {['DETAILS', 'DEPENDENCIES', 'NOTES', 'HISTORY'].map(tab => (
             <button
               key={tab}
@@ -207,7 +207,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                       defaultValue=""
                       onChange={(e) => { if (e.target.value) { addPredecessor(e.target.value); e.target.value = ''; } }}
                       style={{
-                        width: '100%', background: 'var(--bg-sidebar)', border: '1px solid var(--border-default)',
+                        width: '100%', background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
                         borderRadius: 6, padding: '6px 8px', fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)',
                       }}
                     >
@@ -248,7 +248,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
               style={{
                 width: '100%',
                 height: 200,
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--border-default)',
                 borderRadius: 8,
                 padding: 12,
@@ -322,7 +322,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',
@@ -343,7 +343,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',
@@ -373,7 +373,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           readOnly={readOnly}
           style={{
             width: '100%',
-            background: readOnly ? 'var(--hover-bg)' : 'var(--bg-sidebar)',
+            background: readOnly ? 'var(--hover-bg)' : 'var(--bg-surface-low)',
             border: '1px solid var(--border-default)',
             borderRadius: 6,
             padding: '6px 8px',

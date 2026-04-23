@@ -569,7 +569,7 @@ export default function Projects() {
       {/* ══ Command bar ══ */}
       <div style={{
         flexShrink: 0,
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         borderBottom: "1px solid var(--divider)",
         padding: "16px 24px 12px",
       }}>

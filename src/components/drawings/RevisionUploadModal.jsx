@@ -129,7 +129,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
           style={{
             width: "100%",
             height: 38,
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
             borderRadius: 8,
             padding: "0 12px 0 36px",
@@ -451,7 +451,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       )}
 
       {/* Comparison table */}
-      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.revision || "—"})</div>

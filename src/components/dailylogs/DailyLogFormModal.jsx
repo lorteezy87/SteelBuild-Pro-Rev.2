@@ -19,7 +19,7 @@ const ACTIVITY_CHIPS = [
 
 const nativeSelectStyle = {
   width: "100%",
-  background: "var(--bg-sidebar)",
+  background: "var(--bg-surface-low)",
   border: "1px solid var(--bg-surface-high)",
   borderRadius: 8,
   padding: "10px 12px",

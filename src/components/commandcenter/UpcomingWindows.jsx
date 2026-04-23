@@ -88,7 +88,7 @@ function Panel({ title, subtitle, accent, count, items, onOpenDetail }) {
           justifyContent: "space-between",
           padding: "10px 14px",
           borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderLeft: `3px solid ${accent}`,
         }}
       >

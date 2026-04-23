@@ -341,7 +341,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
           padding: '16px 20px',
           borderBottom: '1px solid var(--divider)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
         }}>
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>
@@ -389,7 +389,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '8px 14px', borderRadius: 6,
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent)',
                 color: 'var(--accent)',
                 fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
@@ -460,7 +460,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
               rows={4}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--border-default)',
                 borderRadius: 6,
                 padding: 10,
@@ -504,11 +504,11 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
 
               <div style={{
                 maxHeight: 280, overflowY: 'auto',
-                background: 'var(--bg-sidebar)', borderRadius: 6,
+                background: 'var(--bg-surface-low)', borderRadius: 6,
                 border: '1px solid var(--divider)',
               }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-sidebar)' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface-low)' }}>
                     <tr>
                       {['Row', 'Date', 'Description', 'Type', 'Cost Code', 'Amount', 'Vendor', 'Status', 'Issues'].map((h) => (
                         <th key={h} style={{
@@ -570,7 +570,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
         <div style={{
           padding: '14px 20px',
           borderTop: '1px solid var(--divider)',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>

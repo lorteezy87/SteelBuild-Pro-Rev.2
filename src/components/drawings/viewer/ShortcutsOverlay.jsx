@@ -91,7 +91,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
           style={{
             padding: "14px 18px",
             borderBottom: "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -196,7 +196,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
           style={{
             padding: "10px 18px",
             borderTop: "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             ...mono,
             fontSize: 9,
             color: "var(--text-muted)",

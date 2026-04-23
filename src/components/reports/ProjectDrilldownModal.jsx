@@ -247,7 +247,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
           borderBottom: "1px solid var(--border)",
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
           flexShrink: 0,
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
         }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>

@@ -209,7 +209,7 @@ const HeaderBar = ({ title, right, count }) => (
       justifyContent: "space-between",
       padding: "12px 16px",
       borderBottom: "1px solid var(--divider)",
-      background: "var(--bg-sidebar)",
+      background: "var(--bg-surface-low)",
     }}
   >
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -792,7 +792,7 @@ export default function PortfolioView({
       {/* Brand Header */}
       <div
         style={{
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           padding: "20px 24px",
           display: "flex",
@@ -1116,7 +1116,7 @@ export default function PortfolioView({
           <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "min(980px, 78vh)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "var(--bg-sidebar)" }}>
+                <tr style={{ background: "var(--bg-surface-low)" }}>
                   {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
@@ -1131,7 +1131,7 @@ export default function PortfolioView({
                         whiteSpace: "nowrap",
                         position: "sticky",
                         top: 0,
-                        background: "var(--bg-sidebar)",
+                        background: "var(--bg-surface-low)",
                         zIndex: 2,
                       }}
                     >
@@ -1322,7 +1322,7 @@ export default function PortfolioView({
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
                       <td colSpan={14} style={{ padding: 0, border: "none" }}>
-                        <div style={{ width: "100%", height: 3, background: "var(--bg-sidebar)" }}>
+                        <div style={{ width: "100%", height: 3, background: "var(--bg-surface-low)" }}>
                           <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
                         </div>
                       </td>
@@ -1527,9 +1527,9 @@ export default function PortfolioView({
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "var(--bg-sidebar)" }}>
+                <tr style={{ background: "var(--bg-surface-low)" }}>
                   {["Project", "WPs", "In Fab", "Complete", "On Hold", "Fab %", "Tonnage", "Erection Ready", "Constraints"].map((h) => (
-                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-sidebar)", zIndex: 1 }}>
+                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 1 }}>
                       {h}
                     </th>
                   ))}
@@ -1732,7 +1732,7 @@ export default function PortfolioView({
         style={{
           width: 280,
           flexShrink: 0,
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderLeft: "1px solid var(--divider)",
           overflowY: "auto",
           padding: "16px 14px",
