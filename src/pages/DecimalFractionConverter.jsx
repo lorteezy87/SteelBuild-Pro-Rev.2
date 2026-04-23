@@ -459,7 +459,7 @@ function FractionToDecimalPanel() {
 // ── Sub-components ────────────────────────────────────────────────
 function PanelHeader({ label }) {
   return (
-    <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-sidebar)" }}>
+    <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
       <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
         {label}
       </div>

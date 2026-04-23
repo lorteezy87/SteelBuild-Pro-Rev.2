@@ -591,7 +591,7 @@ function PickSummaryModal({ onClose, data }) {
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "14px 20px", borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
         }}>
           <div>
             <div style={{ fontFamily: "Space Grotesk, var(--font-display)", fontSize: 16, fontWeight: 800, letterSpacing: "0.04em" }}>
@@ -672,7 +672,7 @@ function PickSummaryModal({ onClose, data }) {
         {/* Footer actions */}
         <div style={{
           display: "flex", gap: 8, padding: "12px 20px",
-          borderTop: "1px solid var(--divider)", background: "var(--bg-sidebar)",
+          borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)",
           justifyContent: "flex-end",
         }}>
           <button onClick={onClose} style={footerBtn("secondary")}>Close</button>
@@ -772,7 +772,7 @@ function footerBtn(variant) {
 // ── Sub-components ────────────────────────────────────────────────
 function SectionHeader({ n, label }) {
   return (
-    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-sidebar)", display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", alignItems: "center", gap: 10 }}>
       <span style={{
         ...mono, fontSize: 9, fontWeight: 800, color: "var(--accent)",
         letterSpacing: "0.16em",

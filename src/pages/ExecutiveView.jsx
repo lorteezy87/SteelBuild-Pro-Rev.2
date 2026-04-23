@@ -336,7 +336,7 @@ export default function ExecutiveView() {
             <div style={{
               display: "grid", gridTemplateColumns: "2fr 80px 90px 120px",
               padding: "9px 16px",
-              background: "var(--bg-sidebar)",
+              background: "var(--bg-surface-low)",
               borderBottom: "1px solid var(--divider)",
             }}>
               {["Project", "Open", "Overdue", "Avg Days Open"].map(col => (

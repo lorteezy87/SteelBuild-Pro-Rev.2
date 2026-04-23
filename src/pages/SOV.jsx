@@ -695,7 +695,7 @@ export default function SOV() {
         <React.Fragment key={group.label}>
           <tr
             style={{
-              background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)",
+              background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)",
               borderTop: "2px solid var(--divider)", cursor: "pointer",
             }}
             onClick={() => toggleGroup(group.label)}
@@ -998,7 +998,7 @@ export default function SOV() {
                     fontFamily: "var(--font-body)", fontSize: 10, letterSpacing: "0.12em",
                     textTransform: "uppercase", color: "var(--text-muted)",
                     fontWeight: 700, padding: "12px 16px",
-                    background: "var(--bg-sidebar)",
+                    background: "var(--bg-surface-low)",
                     borderBottom: "1px solid var(--divider)",
                     textAlign: col.right ? "right" : "left",
                     whiteSpace: "nowrap",

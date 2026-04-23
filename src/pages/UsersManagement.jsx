@@ -167,7 +167,7 @@ function UsersManagementContent() {
       <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden" }}>
         <Table>
           <TableHeader>
-            <TableRow style={{ background: "var(--bg-sidebar)", borderBottom: "1px solid var(--border-default)" }}>
+            <TableRow style={{ background: "var(--bg-surface-low)", borderBottom: "1px solid var(--border-default)" }}>
               <TableHead style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: 11, letterSpacing: "0.05em" }}>Email</TableHead>
               <TableHead style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: 11, letterSpacing: "0.05em" }}>Name</TableHead>
               <TableHead style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: 11, letterSpacing: "0.05em" }}>Role</TableHead>

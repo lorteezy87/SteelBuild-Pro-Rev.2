@@ -261,7 +261,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.deckStatus || 'Pending'}
                   onChange={(e) => handleChange('deckStatus', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -287,7 +287,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.deckLinkedDeliveryId || ''}
                   onChange={(e) => handleChange('deckLinkedDeliveryId', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -320,7 +320,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 rows={2}
                 style={{
                   width: '100%',
-                  background: 'var(--bg-sidebar)',
+                  background: 'var(--bg-surface-low)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 7,
                   color: 'var(--text-primary)',
@@ -496,7 +496,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.joistStatus || 'Pending'}
                   onChange={(e) => handleChange('joistStatus', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -522,7 +522,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.joistLinkedDeliveryId || ''}
                   onChange={(e) => handleChange('joistLinkedDeliveryId', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -555,7 +555,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 rows={2}
                 style={{
                   width: '100%',
-                  background: 'var(--bg-sidebar)',
+                  background: 'var(--bg-surface-low)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 7,
                   color: 'var(--text-primary)',
@@ -585,7 +585,7 @@ function DeckJoistInput({ label, value, onChange, required }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
           borderRadius: 7,
           height: 34,
@@ -612,7 +612,7 @@ function DeckJoistDate({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
           borderRadius: 7,
           height: 34,

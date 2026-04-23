@@ -28,7 +28,7 @@ export default function LookaheadPanel({
         width: hidden ? 0 : 260,
         flexShrink: 0,
         borderRight: hidden ? "none" : "1px solid var(--divider)",
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         overflowY: "auto",
         overflow: hidden ? "hidden" : undefined,
         transition: "width 0.2s ease",
@@ -53,7 +53,7 @@ export default function LookaheadPanel({
             <div
               style={{
                 padding: "6px 16px",
-                background: isToday ? "var(--accent-muted)" : "var(--bg-sidebar)",
+                background: isToday ? "var(--accent-muted)" : "var(--bg-surface-low)",
                 borderBottom: "1px solid var(--divider)",
                 borderTop: idx === 0 ? "none" : "1px solid var(--divider)",
                 display: "flex",

@@ -116,7 +116,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
             </label>
             <Select value={form.project_id} onValueChange={(v) => set("project_id", v)}>
               <SelectTrigger style={{
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 color: 'var(--text-primary)'
@@ -157,7 +157,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                 style={{
                   width: '100%',
                   height: 38,
-                  background: 'var(--bg-sidebar)',
+                  background: 'var(--bg-surface-low)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 8,
                   padding: '0 28px 0 12px',
@@ -187,7 +187,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
                         key={cc.code}
                         value={cc.code}
                         disabled={alreadyAdded}
-                        style={{ background: 'var(--bg-sidebar)', color: alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                        style={{ background: 'var(--bg-surface-low)', color: alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)' }}>
 
                           {cc.code} — {cc.name}{alreadyAdded ? ' (already added)' : ''}
                         </option>);
@@ -215,7 +215,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
 
               <div style={{
                 height: 38,
-                background: selectedCode ? 'var(--accent-muted)' : 'var(--bg-sidebar)',
+                background: selectedCode ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
                 border: '1px solid',
                 borderColor: selectedCode ? 'var(--accent-border)' : 'var(--accent-border)',
                 borderRadius: 8,
@@ -254,7 +254,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               onChange={(e) => set("budget_amount", e.target.value)}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
@@ -283,7 +283,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               onChange={(e) => set("actual_cost", e.target.value)}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
@@ -312,7 +312,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               onChange={(e) => set("committed_cost", e.target.value)}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
@@ -341,7 +341,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               onChange={(e) => set("forecast_to_complete", e.target.value)}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',
@@ -366,7 +366,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
             </label>
             <div style={{
               width: '100%',
-              background: 'var(--bg-sidebar)',
+              background: 'var(--bg-surface-low)',
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
@@ -391,7 +391,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
             </label>
             <div style={{
               width: '100%',
-              background: 'var(--bg-sidebar)',
+              background: 'var(--bg-surface-low)',
               border: '1px solid var(--border-default)',
               borderRadius: 8,
               padding: '8px 12px',
@@ -420,7 +420,7 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
               rows={2}
               style={{
                 width: '100%',
-                background: 'var(--bg-sidebar)',
+                background: 'var(--bg-surface-low)',
                 border: '1px solid var(--accent-border)',
                 borderRadius: 8,
                 padding: '8px 12px',

@@ -32,7 +32,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
       ) : (
         <>
           {/* Header */}
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-sidebar)", flexShrink: 0 }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...mono, fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.08em" }}>{rfi.rfi_number}</div>
@@ -181,7 +181,7 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
           </div>
 
           {/* Footer actions */}
-          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-sidebar)", display: "flex", gap: 8, flexShrink: 0 }}>
+          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", gap: 8, flexShrink: 0 }}>
             <button
               onClick={onEdit}
               style={{ flex: 1, background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 4, padding: "10px 12px", ...mono, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" }}

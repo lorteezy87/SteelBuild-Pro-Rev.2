@@ -145,7 +145,7 @@ function StepFiles({ files, setFiles, onBack, onUpload, setName }) {
       {setName && (
         <div style={{
           marginBottom: 12, padding: "8px 12px", borderRadius: 8,
-          background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)",
+          background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)",
           display: "flex", alignItems: "center", gap: 8,
         }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>DRAWING SET</span>
@@ -176,7 +176,7 @@ function StepFiles({ files, setFiles, onBack, onUpload, setName }) {
         onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
 
       {files.length > 0 && (
-        <div style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
           {files.map((f, i) => {
             const tooBig = f.size / (1024 * 1024) > MAX_PDF_SIZE_MB;
             return (
@@ -437,7 +437,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
 
   const metaFieldStyle = {
     width: "100%",
-    background: "var(--bg-sidebar)",
+    background: "var(--bg-surface-low)",
     border: "1px solid var(--bg-surface-high)",
     borderRadius: 6,
     padding: "5px 8px",
@@ -462,7 +462,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
       <div style={{
         padding: "10px 12px",
         border: `1px solid ${anyAiFilled ? "rgba(132,204,22,0.30)" : "var(--bg-surface-high)"}`,
-        background: anyAiFilled ? "rgba(132,204,22,0.05)" : "var(--bg-sidebar)",
+        background: anyAiFilled ? "rgba(132,204,22,0.05)" : "var(--bg-surface-low)",
         borderRadius: 8,
         marginBottom: 10,
       }}>
@@ -542,15 +542,15 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
         <button onClick={() => toggleAll(true)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "none", border: "1px solid var(--warning-border)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☑ ALL</button>
         <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
         <input placeholder="Search sheets..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 100, background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
+          style={{ flex: 1, minWidth: 100, background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
         <select value={discFilter} onChange={e => setDiscFilter(e.target.value)}
-          style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+          style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
           <option value="all">All Disciplines</option>
           {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         {multiFile && (
           <select value={fileFilter} onChange={e => setFileFilter(e.target.value)}
-            style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
+            style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
             <option value="all">All Files</option>
             {uniqueFiles.map(f => <option key={f} value={f}>{f.replace(/\.pdf$/i, "")}</option>)}
           </select>
@@ -561,7 +561,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
       </div>
 
       {/* Table */}
-      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, marginBottom: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "var(--bg-surface-low)", position: "sticky", top: 0, zIndex: 1 }}>
@@ -600,7 +600,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <select value={s.discipline || "Structural"} onChange={e => updateSheet(i, "discipline", e.target.value)}
-                    style={{ background: "var(--bg-sidebar)", border: "1px solid var(--bg-surface-high)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+                    style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
                     {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </td>

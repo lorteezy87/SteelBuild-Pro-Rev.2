@@ -64,7 +64,7 @@ export default function ProjectStatusMatrix({
             gridTemplateColumns: GRID_COLS,
             padding: "9px 16px",
             gap: 8,
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             borderBottom: "1px solid var(--divider)",
             position: "sticky",
             top: 0,

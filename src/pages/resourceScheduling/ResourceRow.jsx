@@ -57,7 +57,7 @@ export default function ResourceRow({
           ? "rgba(239,68,68,0.04)"
           : rowHeatBg !== "transparent"
             ? rowHeatBg
-            : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-sidebar)"),
+            : (idx % 2 === 0 ? "var(--bg-page)" : "var(--bg-surface-low)"),
         borderBottom: "1px solid var(--hover-bg)",
         minHeight: 60,
         transition: "background 0.2s",
@@ -70,7 +70,10 @@ export default function ResourceRow({
           padding: "8px 12px",
           paddingLeft: entry.isMember ? 28 : 12,
           flexShrink: 0,
-          background: entry.isMember ? "var(--bg-sidebar)" : "var(--bg-page)",
+          // Member sub-rows used bg-sidebar which is dark navy in light
+          // mode — made the resource-name column a solid blue stripe.
+          // bg-surface-mid reads as a subtle nested band in both themes.
+          background: entry.isMember ? "var(--bg-surface-mid)" : "var(--bg-page)",
           borderRight: "1px solid var(--border-default)",
           display: "flex",
           alignItems: "flex-start",

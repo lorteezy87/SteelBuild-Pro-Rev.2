@@ -147,7 +147,7 @@ export default function RFIList({
           gridTemplateColumns: COLS,
           gap: 10,
           padding: "10px 16px",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           alignItems: "center",
         }}
@@ -428,7 +428,7 @@ export default function RFIList({
       <div
         style={{
           padding: "8px 16px",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderTop: "1px solid var(--divider)",
           display: "flex",
           justifyContent: "space-between",

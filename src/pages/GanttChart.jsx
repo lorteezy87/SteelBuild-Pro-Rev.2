@@ -81,7 +81,7 @@ function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short
 function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, cutId, dependencyPickSourceId }) {
   return (
     <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
-      <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--accent-border)" }}>
+      <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-surface-low)", borderBottom: "1px solid var(--accent-border)" }}>
         {["Activity", "Start", "End", "Status"].map(h => (
           <span key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>{h}</span>
         ))}
@@ -289,7 +289,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
   return (
     <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "hidden", position: "relative" }}>
       <div style={{ width: timelineWidth, minHeight: "100%" }}>
-        <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--bg-sidebar)" }}>
+        <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--bg-surface-low)" }}>
           <div style={{ display: "flex", height: 24, borderBottom: "1px solid var(--divider)" }}>
             {monthHeaders.map((h, i) => (
               <div key={i} style={{ width: h.width, padding: "0 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", display: "flex", alignItems: "center", borderRight: "1px solid var(--divider)" }}>{h.label}</div>
