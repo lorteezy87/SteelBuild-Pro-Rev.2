@@ -1488,12 +1488,22 @@ export default function PortfolioView({
                         <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
                           {[
                             // DASH uses a callback to switch the active project AND go to /Dashboard
-                            // (there is no standalone /ProjectDashboard route). Peer buttons still
-                            // navigate via URL. `nav` is either a string (passed to navigate) or a
-                            // function (called directly) — branched below.
-                            { label: "DASH", nav: () => openProjectDashboard(p.id), primary: true },
-                            ...(p.openRFIs > 0 ? [{ label: "RFIs", nav: createPageUrl("RFIs"), accent: "var(--status-warning)" }] : []),
-                            ...(p.lateDeliveries > 0 ? [{ label: "DEL", nav: createPageUrl("Deliveries"), accent: "var(--status-error)" }] : []),
+                            // (there is no standalone /ProjectDashboard route). Peer buttons navigate
+                            // via URL and carry `?project=<id>` so the destination page filters to
+                            // this row's project (previously they dumped the user on ALL RFIs / ALL
+                            // deliveries, losing context from the click that just happened).
+                            //
+                            // SCHED is always rendered — every PM reviews the schedule, even when
+                            // there's no signal. RFIs / DEL stay conditional so they only appear when
+                            // there's something to act on (keeps the 3-slot row uncluttered).
+                            { label: "DASH",  nav: () => openProjectDashboard(p.id), primary: true },
+                            { label: "SCHED", nav: `${createPageUrl("Schedule")}?project=${p.id}`, accent: "var(--status-info)" },
+                            ...(p.openRFIs > 0
+                              ? [{ label: "RFIs", nav: `${createPageUrl("RFIs")}?project=${p.id}`, accent: "var(--status-warning)" }]
+                              : []),
+                            ...(p.lateDeliveries > 0
+                              ? [{ label: "DEL", nav: `${createPageUrl("Deliveries")}?project=${p.id}`, accent: "var(--status-error)" }]
+                              : []),
                           ].slice(0, 3).map((btn) => (
                             <button
                               key={btn.label}
