@@ -64,6 +64,11 @@ export const THRESHOLDS = {
   DELIVERY_SOON_DAYS: 7,
   WP_FAB_RISK_LAG_DAYS: 14,
   SOV_DUE_SOON_DAYS: 7,
+  // Schedule tasks surface in the feed if within this many days of
+  // today (past or future). Beyond that, they'd clutter the feed —
+  // user will see them in the Gantt instead.
+  TASK_HORIZON_DAYS: 30,
+  TASK_DUE_SOON_DAYS: 7,
 };
 
 // ── RFI ─────────────────────────────────────────────────────────────────
@@ -386,6 +391,113 @@ export function sovUrgency(sovGroup, projectMap = {}) {
     projectNumber: project.project_number || null,
     sourceId: `sov-${sovGroup.project_id}-${sovGroup.application_number}`,
     raw: sovGroup,
+  };
+}
+
+// ── Schedule Task ───────────────────────────────────────────────────────
+//
+// Every non-complete schedule_task inside our TASK_HORIZON_DAYS becomes
+// a feed item. This is the missing piece that was keeping Installation-
+// phase rows out of the 48-hour / 10-day windows: Command Center was
+// pulling rfis, drawings, deliveries, WPs, COs, SOV, notes — but not
+// schedule_tasks themselves.
+//
+// Anchor date picks what's most relevant for the row:
+//   - "Not Started"       → anchor on start_date   (when work should begin)
+//   - "In Progress"       → anchor on end_date     (when it's due to finish)
+//   - "Delayed"           → anchor on end_date, forced overdue
+//   - anything else w/ dates → fall back to start_date, then end_date
+//
+// raw.due_date is populated with the chosen anchor so the downstream
+// UpcomingWindows + todayView components (which look at raw.due_date /
+// raw.scheduled_date / raw.date_required / raw.period_to) bucket the
+// task into the correct horizon without further changes.
+export function scheduleTaskUrgency(task, projectMap = {}) {
+  if (!task) return null;
+  const project = projectMap[task.project_id] || {};
+  const status = task.status || "Not Started";
+
+  // Done & cancelled don't need action.
+  if (status === "Complete" || status === "Cancelled") return null;
+
+  // Pick the anchor date — drives bucket placement and days-calculation.
+  let anchor = null;
+  let anchorKind = null;
+  if (status === "In Progress" || status === "Delayed") {
+    anchor = task.end_date || task.start_date || null;
+    anchorKind = task.end_date ? "finish" : "start";
+  } else {
+    anchor = task.start_date || task.end_date || null;
+    anchorKind = task.start_date ? "start" : "finish";
+  }
+  if (!anchor) return null; // no dates → can't place
+
+  const dueDays = daysUntil(anchor);
+  if (!Number.isFinite(dueDays)) return null;
+
+  // Horizon gate: keep the feed focused. Anything past-due gets in; anything
+  // further than TASK_HORIZON_DAYS in the future drops out unless it's
+  // blocking (On Hold).
+  const onHold = status === "On Hold";
+  if (!onHold && dueDays > THRESHOLDS.TASK_HORIZON_DAYS) return null;
+
+  // Urgency classification.
+  let urgency = "normal";
+  let displayStatus;
+  if (onHold) {
+    urgency = "blocking";
+    displayStatus = "On hold — blocked";
+  } else if (status === "Delayed") {
+    urgency = "overdue";
+    displayStatus = `Delayed${dueDays < 0 ? ` — ${Math.abs(dueDays)}d past finish` : ""}`;
+  } else if (dueDays < 0) {
+    urgency = "overdue";
+    displayStatus = anchorKind === "finish"
+      ? `${Math.abs(dueDays)}d past finish`
+      : `${Math.abs(dueDays)}d past start`;
+  } else if (dueDays === 0) {
+    urgency = "due-soon";
+    displayStatus = anchorKind === "finish" ? "Due today" : "Starts today";
+  } else if (dueDays <= THRESHOLDS.TASK_DUE_SOON_DAYS) {
+    urgency = "due-soon";
+    displayStatus = anchorKind === "finish"
+      ? `Due in ${dueDays}d`
+      : `Starts in ${dueDays}d`;
+  } else {
+    urgency = "normal";
+    displayStatus = anchorKind === "finish"
+      ? `Due in ${dueDays}d`
+      : `Starts in ${dueDays}d`;
+  }
+
+  // Compose row copy
+  const phaseLabel = task.phase ? task.phase : null;
+  const prefix = phaseLabel ? `${phaseLabel} — ` : "";
+  const titleBits = [task.wbs_code, task.task_name].filter(Boolean);
+  const title = titleBits.length ? titleBits.join(" — ") : "(unnamed task)";
+  const owner = task.resource_names || task.assigned_to || task.crew || null;
+
+  return {
+    urgency,
+    // Same sign convention as RFI/Delivery: higher daysValue = more
+    // urgent within the same bucket. `-dueDays` turns past-due into
+    // positive numbers that sort first.
+    daysValue: -dueDays,
+    displayStatus: `${prefix}${displayStatus}`,
+    quickAction: { label: "View Schedule", route: `/Schedule?project=${task.project_id}` },
+    itemType: "TASK",
+    title,
+    owner,
+    projectId: task.project_id,
+    projectNumber: project.project_number || null,
+    sourceId: task.id,
+    raw: {
+      ...task,
+      // Prime due_date with the chosen anchor so UpcomingWindows and
+      // todayView (which expect raw.due_date / scheduled_date / etc.)
+      // place this item into the right day without special-casing.
+      due_date: anchor,
+    },
   };
 }
 
