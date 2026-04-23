@@ -109,6 +109,16 @@ export default function CommandCenter() {
     refetchOnWindowFocus: true,
   });
 
+  // Schedule tasks from the Gantt — feeds Installation / Fabrication /
+  // Detailing rows into the 48h + 10d windows so everything the user
+  // sees on the Gantt also shows up here.
+  const { data: scheduleTasks = [] } = useQuery({
+    queryKey: ["cc-schedule-tasks"],
+    queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
+    staleTime: STALE_TIME,
+    refetchOnWindowFocus: true,
+  });
+
   const isLoading = projLoading || rfiLoading;
 
   // ── Project map ─────────────────────────────────────────────────────
@@ -124,10 +134,10 @@ export default function CommandCenter() {
   const rawFeed = useMemo(
     () =>
       buildFeed(
-        { rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes },
+        { rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes, scheduleTasks },
         projectMap
       ),
-    [rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes, projectMap]
+    [rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes, scheduleTasks, projectMap]
   );
 
   // ── Today-first view buckets ────────────────────────────────────────
