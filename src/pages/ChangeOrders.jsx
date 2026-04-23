@@ -17,6 +17,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useSearchParams } from "react-router-dom";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
@@ -54,6 +55,7 @@ const STATUS_INDEX = {
 export default function ChangeOrders() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
+  const [searchParams] = useSearchParams();
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -62,6 +64,15 @@ export default function ChangeOrders() {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && !modalOpen) {
+      setEditing(null);
+      setModalOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250);
