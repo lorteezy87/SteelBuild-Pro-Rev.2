@@ -125,17 +125,29 @@ function statusColor(s) { return STATUS_COLOR[s] || "var(--text-muted)"; }
 //
 // parseDateUTC returns a valid UTC Date or null. toDateOnly returns a
 // YYYY-MM-DD string or null. All date math below funnels through these.
+//
+// Year clamp: a data-entry typo like "0026-06-15" (year 26 AD) or
+// "12026-06-15" (year 12026) parses successfully in JS but then makes the
+// gantt build a timeline spanning *thousands* of years worth of weeks —
+// hundreds of thousands of DOM nodes, browser freeze. We reject any year
+// outside [1900, 2200] so one bad row can't nuke the view.
+const MIN_YEAR = 1900;
+const MAX_YEAR = 2200;
 function parseDateUTC(input) {
   if (!input) return null;
   if (input instanceof Date) {
-    return isNaN(input.getTime()) ? null : input;
+    if (isNaN(input.getTime())) return null;
+    const y = input.getUTCFullYear();
+    return (y < MIN_YEAR || y > MAX_YEAR) ? null : input;
   }
   const s = String(input).trim();
   if (!s) return null;
   // Treat pure YYYY-MM-DD as UTC midnight; anything with time info parse as-is.
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00Z` : s;
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  return (y < MIN_YEAR || y > MAX_YEAR) ? null : d;
 }
 function toDateOnly(input) {
   const d = parseDateUTC(input);
@@ -547,12 +559,31 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
     });
     // Always include today in the range so the TODAY line is always visible
     dates.push(today);
-    const start = new Date(Math.min(...dates));
-    const end   = new Date(Math.max(...dates));
+    let start = new Date(Math.min(...dates));
+    let end   = new Date(Math.max(...dates));
+    // Belt-and-suspenders: parseDateUTC already clamps to [1900,2200], but if
+    // a rogue date somehow lands here and we ended up with NaN or a wild
+    // year, fall back to a today-centred window rather than generating a
+    // million weeks and freezing the browser.
+    const startYear = start.getUTCFullYear();
+    const endYear   = end.getUTCFullYear();
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) ||
+        startYear < MIN_YEAR || endYear > MAX_YEAR) {
+      start = new Date(today); start.setDate(start.getDate() - start.getDay() - 7);
+      end   = new Date(today); end.setDate(end.getDate() + (6 - end.getDay()) + 21);
+    }
     start.setDate(start.getDate() - start.getDay());
     end.setDate(end.getDate() + (6 - end.getDay()) + 7);
     const weeks = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
+    // Hard cap at ~10 years of weeks (520). If someone's data actually
+    // legitimately spans more than that, the gantt is the wrong tool.
+    const MAX_WEEKS = 520;
+    let d = new Date(start);
+    while (d <= end && weeks.length < MAX_WEEKS) {
+      weeks.push(new Date(d));
+      d.setDate(d.getDate() + 7);
+    }
+    if (weeks.length >= MAX_WEEKS) end = new Date(weeks[weeks.length - 1]);
     return { start, end, weeks };
   }, [allTasks, deliveries]);
 
