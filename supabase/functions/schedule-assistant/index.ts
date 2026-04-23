@@ -11,7 +11,12 @@
 // ============================================================================
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.40.0";
-import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
+// Pinned to npm (not jsr) so we always get the latest v2 release — JSR's
+// mirror lagged behind npm and didn't ship ES256 / asymmetric-JWT support
+// until v2.45+. The Supabase project has since migrated Auth to ES256
+// signing, which produced the "Unsupported JWT algorithm ES256" 401
+// error whenever the edge function called supabase.auth.getUser(token).
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { schedulingTools } from "./tool-schemas.ts";
 import { executeToolCall } from "./tool-handlers.ts";
 

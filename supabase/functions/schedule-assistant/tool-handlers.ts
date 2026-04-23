@@ -19,7 +19,11 @@
 //     layer handles it gracefully and surfaces the gaps in data_gaps[].
 // ============================================================================
 
-import { SupabaseClient } from "jsr:@supabase/supabase-js@2";
+// Keep in lockstep with index.ts — npm:@supabase/supabase-js@^2.47 supports
+// ES256-signed JWTs (the asymmetric-key signing that Supabase migrated to
+// for Auth). Older jsr:@supabase/supabase-js@2 threw
+// "Unsupported JWT algorithm ES256" on auth.getUser().
+import { SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import {
   buildScheduleFacts,
   normalizeActivity,
