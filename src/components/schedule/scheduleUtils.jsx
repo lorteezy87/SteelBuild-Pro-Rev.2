@@ -140,3 +140,94 @@ export function isWeekend(date) {
   const day = d.getDay();
   return day === 0 || day === 6;
 }
+
+// ── Auto-scheduling via dependencies ─────────────────────────────────
+//
+// Parse the stringified dependencies column into a plain array. Mirrors
+// the helper in ScheduleGantt / TaskDetailDrawer so callers can import
+// from one place.
+export function parseDependencies(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+
+/**
+ * Given a task and a list of its predecessor task records, return the
+ * auto-scheduled start and end dates (finish-to-start, 1-day lag),
+ * preserving the task's current duration.
+ *
+ * The rule: a task can't start until the day *after* the LATEST
+ * predecessor's finish. If the task's current start already satisfies
+ * that constraint, returns null to signal "nothing to shift" — callers
+ * should only persist when a change is actually produced.
+ *
+ * Dates are all YYYY-MM-DD date-only strings. Duration is measured in
+ * whole days between start and end. If either task date is missing we
+ * assume 1-day duration as a reasonable default.
+ *
+ * Sanity: predecessor end dates outside [1900, 2200] are ignored (same
+ * clamp the gantt uses) so one bad typo can't fling the suggestion
+ * thousands of years into the future.
+ */
+const MIN_SANE_YEAR = 1900;
+const MAX_SANE_YEAR = 2200;
+function parseDateOnly(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(str) ? `${str}T00:00:00Z` : str;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  if (y < MIN_SANE_YEAR || y > MAX_SANE_YEAR) return null;
+  return d;
+}
+function toIsoDate(d) {
+  return d.toISOString().slice(0, 10);
+}
+function addDays(d, n) {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() + n);
+  return out;
+}
+
+export function computeAutoScheduledDates(task, predecessors) {
+  if (!task || !predecessors || predecessors.length === 0) return null;
+
+  // Latest (sanity-clamped) predecessor finish date.
+  let latestEnd = null;
+  for (const p of predecessors) {
+    const d = parseDateOnly(p?.end_date);
+    if (!d) continue;
+    if (!latestEnd || d > latestEnd) latestEnd = d;
+  }
+  if (!latestEnd) return null;
+
+  // Earliest legal start = the day after the latest predecessor end.
+  const earliestStart = addDays(latestEnd, 1);
+
+  const currentStart = parseDateOnly(task.start_date);
+  // If the task already starts on or after the constraint, nothing to do.
+  // (User intentionally put it later — we don't pull tasks backwards.)
+  if (currentStart && currentStart >= earliestStart) return null;
+
+  // Preserve duration in whole days (minimum 1 day).
+  const currentEnd = parseDateOnly(task.end_date);
+  let durationDays = 1;
+  if (currentStart && currentEnd) {
+    durationDays = Math.max(1, Math.round((currentEnd - currentStart) / 86400000));
+  }
+
+  const newStart = earliestStart;
+  const newEnd = addDays(newStart, Math.max(0, durationDays - 1));
+
+  return {
+    start_date: toIsoDate(newStart),
+    end_date: toIsoDate(newEnd),
+    // Helpful metadata for toast messaging — not persisted.
+    _shiftedFrom: task.start_date || null,
+    _driver: latestEnd ? toIsoDate(latestEnd) : null,
+  };
+}
