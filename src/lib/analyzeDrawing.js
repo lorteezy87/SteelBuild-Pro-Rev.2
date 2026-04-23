@@ -573,6 +573,27 @@ export async function analyzeDrawing(analysis, {
       }
     }
 
+    // IMPORTANT ORDERING:
+    // Run importAnalyzedDrawings BEFORE we flip analysis_status to
+    // 'complete'. Previously the status flip came first, so if the auto-
+    // import threw (e.g. storage race, constraint violation), the UI
+    // would show a "complete" analysis while the canonical Drawings table
+    // was still empty — silent data loss with no retry handle, because
+    // imported_set_id remained null.
+    //
+    // Now we import while status is still 'processing' (importAnalyzedDrawings
+    // was relaxed to accept that), then flip. If the import throws, we
+    // surface that in error_message with status='complete' so the user sees
+    // a truthful "analysis done, import failed — click Import to retry."
+    let autoImportError = null;
+    try {
+      const fresh = { ...analysis, analysis_status: "processing", ai_summary: summary };
+      await importAnalyzedDrawings(fresh);
+    } catch (importErr) {
+      autoImportError = importErr?.message || String(importErr);
+      console.warn("[analyzeDrawing] auto-import failed:", autoImportError);
+    }
+
     await supabase
       .from("drawing_analyses")
       .update({
@@ -581,23 +602,15 @@ export async function analyzeDrawing(analysis, {
         ai_summary:      summary,
         model,
         raw_ai_response: data?.raw ?? null,
-        error_message:   null,
+        // error_message is our failure-surfacing channel. null = clean;
+        // any string means the UI should render a warning chip + the
+        // "Import to Drawings" button so the user can retry the import
+        // without re-running the expensive LLM call.
+        error_message: autoImportError
+          ? `Auto-import failed: ${autoImportError.slice(0, 400)}`
+          : null,
       })
       .eq("id", analysisId);
-
-    // Auto-import the analyzed sheets into the canonical Drawings workflow
-    // so they participate in KPIs / due-date alerts / stage advancement.
-    // Idempotent via drawing_analyses.imported_set_id — a later re-analysis
-    // won't overwrite manual edits on the target set / sheets.
-    try {
-      const fresh = { ...analysis, analysis_status: "complete", ai_summary: summary };
-      await importAnalyzedDrawings(fresh);
-    } catch (importErr) {
-      // Import is best-effort — the analysis itself succeeded, so we don't
-      // flip the parent row to 'error'. The user can retry via the "Import
-      // to Drawings" button on the detail modal.
-      console.warn("[analyzeDrawing] auto-import failed:", importErr?.message || importErr);
-    }
 
     return { sheets, findings, aiSummary: summary };
   } catch (err) {

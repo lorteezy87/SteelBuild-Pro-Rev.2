@@ -26,6 +26,7 @@ import { base44 } from "@/api/base44Client";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
+import { sanitizeDrawingPayload } from "@/lib/drawingEnums";
 
 // ─── Normalize set name ─────────────────────────────────────────────────
 function normalizeSetName(name) {
@@ -90,7 +91,16 @@ export function useDrawings(projectId) {
         throw new Error(errors.map((e) => e.message).join(" "));
       }
 
-      return await base44.entities.Drawing.create(normalized);
+      // Defensive enum coercion: any stage / upload_status /
+      // ai_extraction_status value that doesn't match the DB CHECK
+      // constraints is silently rejected by Postgres and the user loses
+      // the save. Coerce to the closest valid value; surface a warning
+      // when we had to correct something so operators notice schema drift.
+      const { record, warnings } = sanitizeDrawingPayload(normalized);
+      if (warnings.length) {
+        console.warn("[useDrawings.create] payload coerced:", warnings);
+      }
+      return await base44.entities.Drawing.create(record);
     },
     onSuccess: async (created) => {
       await invalidateAll();
@@ -120,7 +130,11 @@ export function useDrawings(projectId) {
       if (data.drawing_set_name !== undefined) {
         data.drawing_set_name = normalizeSetName(data.drawing_set_name);
       }
-      return await base44.entities.Drawing.update(id, data);
+      const { record, warnings } = sanitizeDrawingPayload(data);
+      if (warnings.length) {
+        console.warn("[useDrawings.update] payload coerced:", warnings);
+      }
+      return await base44.entities.Drawing.update(id, record);
     },
     onSuccess: async () => {
       await invalidateAll();
