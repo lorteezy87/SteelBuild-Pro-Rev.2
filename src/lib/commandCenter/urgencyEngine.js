@@ -18,24 +18,21 @@
  */
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+// Delegate to the shared local-midnight helpers so urgencyEngine,
+// todayView, and UpcomingWindows all agree on what "today" is. Prior
+// to unification these split on UTC-vs-local midnight and could place
+// the same item into different windows depending on time of day.
 
-const MS_PER_DAY = 86_400_000;
+import {
+  daysSince as _daysSince,
+  daysUntil as _daysUntil,
+  todayLocalISO,
+} from "@/lib/dateMath";
 
-export const daysSince = (dateStr) => {
-  if (!dateStr) return 0;
-  const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00Z` : dateStr);
-  if (isNaN(d)) return 0;
-  return Math.floor((Date.now() - d.getTime()) / MS_PER_DAY);
-};
+export const daysSince = (v) => _daysSince(v);
+export const daysUntil = (v) => _daysUntil(v);
 
-export const daysUntil = (dateStr) => {
-  if (!dateStr) return Infinity;
-  const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00Z` : dateStr);
-  if (isNaN(d)) return Infinity;
-  return Math.floor((d.getTime() - Date.now()) / MS_PER_DAY);
-};
-
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => todayLocalISO();
 
 // ── Tunable thresholds ──────────────────────────────────────────────────
 

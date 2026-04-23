@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
+import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
@@ -993,7 +994,15 @@ export default function DrawingSetUploadModal({
       }
 
       if (!parentSetId) {
-        const created = await base44.entities.DrawingSet.create({
+        // The DB enforces UNIQUE(project_id, set_name) on drawing_sets
+        // (migration 020 / see memory/supabase_drawings_constraints.md).
+        // If a concurrent upload from another session wrote the same
+        // set_name between our lookup above and this CREATE, Postgres
+        // raises 23505 and the whole batch would die with a cryptic
+        // error. Recover: on unique_violation, re-query and attach to
+        // whichever row won the race. Only if even that lookup is empty
+        // do we surface the error to the user.
+        const { record: sanitizedSet } = sanitizeDrawingSetPayload({
           project_id:      activeProject?.id,
           project_name:    activeProject?.name,
           set_name:        resolvedSetName,
@@ -1009,7 +1018,39 @@ export default function DrawingSetUploadModal({
           needs_review_count: 0,
           failed_count:       0,
         });
-        parentSetId = created?.id;
+        try {
+          const created = await base44.entities.DrawingSet.create(sanitizedSet);
+          parentSetId = created?.id;
+        } catch (createErr) {
+          const msg = String(createErr?.message || createErr || "").toLowerCase();
+          const isUniqueViolation =
+            msg.includes("duplicate key") ||
+            msg.includes("unique constraint") ||
+            msg.includes("uq_drawing_sets_project_set_name") ||
+            msg.includes("23505");
+          if (!isUniqueViolation) throw createErr;
+
+          console.warn(
+            `[DrawingSetUploadModal] race on set "${resolvedSetName}" — another session created it first; re-looking up.`,
+          );
+          const winner = await base44.entities.DrawingSet.filter({
+            project_id: activeProject?.id,
+            set_name:   resolvedSetName,
+          });
+          if (Array.isArray(winner) && winner.length > 0) {
+            parentSetId = winner[0].id;
+          } else {
+            // Extremely unlikely: insert failed uniqueness but post-lookup
+            // can't find the winner (e.g. it was soft-deleted between the
+            // insert attempt and this query). Surface a clear message
+            // instead of the raw Postgres error.
+            throw new Error(
+              `A drawing set named "${resolvedSetName}" already exists on this project but could not be loaded. ` +
+              `Refresh the page and try again, or pick a different set name.`,
+            );
+          }
+        }
+
         if (!parentSetId) {
           throw new Error("Drawing set was created but no id returned — cannot attach children.");
         }
@@ -1077,11 +1118,18 @@ export default function DrawingSetUploadModal({
 
       // Collect the inserted drawing rows (with DB IDs) so we can
       // fan out matching Detailing schedule tasks after.
+      //
+      // Defensive enum pass: every record's stage / upload_status /
+      // ai_extraction_status is coerced to a DB-CHECK-valid value so a
+      // typo / stale constant / future schema drift doesn't silently
+      // fail the INSERT and lose the user's upload.
+      const sanitizedRecords = records.map((r) => sanitizeDrawingPayload(r).record);
+
       const insertedRows = [];
       try {
-        const inserted = await base44.entities.Drawing.bulkCreate(records);
+        const inserted = await base44.entities.Drawing.bulkCreate(sanitizedRecords);
         if (Array.isArray(inserted)) insertedRows.push(...inserted);
-        createdRows = Array.isArray(inserted) ? inserted.length : records.length;
+        createdRows = Array.isArray(inserted) ? inserted.length : sanitizedRecords.length;
       } catch (bulkErr) {
         // Bulk failed — fall back to per-row so one bad sheet doesn't lose
         // the whole batch. This is the slow path; the common case is the
@@ -1091,7 +1139,7 @@ export default function DrawingSetUploadModal({
           if (cancelledRef.current) break;
           const sheet = selectedSheets[i];
           try {
-            const row = await base44.entities.Drawing.create(records[i]);
+            const row = await base44.entities.Drawing.create(sanitizedRecords[i]);
             if (row) insertedRows.push(row);
             createdRows++;
           } catch (err) {

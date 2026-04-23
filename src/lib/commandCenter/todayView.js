@@ -17,31 +17,30 @@
  * Also exposes a `snapshot` with the 5 headline numbers for the KPI tiles.
  */
 
-const MS_PER_DAY = 86_400_000;
+// Share the local-midnight convention with urgencyEngine and
+// UpcomingWindows so a given item never lands in two different "today"
+// buckets depending on which file is doing the math. Previously each
+// file re-implemented these with subtly different UTC-vs-local rules.
+import {
+  toLocalMidnight,
+  startOfToday,
+  isToday as _isToday,
+  daysUntil,
+} from "@/lib/dateMath";
 
-function startOfDayMs(d = new Date()) {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  return t.getTime();
-}
+const startOfDayMs = (d) => {
+  const m = d ? toLocalMidnight(d) : startOfToday();
+  return m ? m.getTime() : startOfToday().getTime();
+};
 
-function parseDate(s) {
-  if (!s) return null;
-  const d = new Date(s.length === 10 ? `${s}T00:00:00` : s);
-  return isNaN(d) ? null : d;
-}
+const parseDate = (s) => toLocalMidnight(s);
 
-function isToday(s) {
-  const d = parseDate(s);
-  if (!d) return false;
-  return startOfDayMs(d) === startOfDayMs();
-}
+const isToday = (s) => _isToday(s);
 
-function daysFromToday(s) {
-  const d = parseDate(s);
-  if (!d) return null;
-  return Math.round((startOfDayMs(d) - startOfDayMs()) / MS_PER_DAY);
-}
+const daysFromToday = (s) => {
+  const n = daysUntil(s);
+  return Number.isFinite(n) ? n : null;
+};
 
 export function buildTodayView(feed = [], { deliveries = [], workPackages = [], projectMap = {} } = {}) {
   const blocking = [];

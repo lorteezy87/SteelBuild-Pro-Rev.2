@@ -191,13 +191,20 @@ const createEntityClient = (tableName) => ({
 
   /**
    * Get a single record by id.
+   *
+   * Soft-delete aware. list() and filter() already skip rows where
+   * is_deleted=true; get() used to bypass that filter, which meant a UI
+   * that re-fetched a record after soft-delete (edit modal, detail
+   * drawer) could resurrect the tombstoned row. A deleted row now
+   * surfaces as a normal "row not found" error — callers already handle
+   * SupabaseOperationError, so no call-site changes are needed.
    */
   get: async (id) => {
-    const { data, error } = await supabase
-      .from(tableName)
-      .select('*')
-      .eq('id', id)
-      .single();
+    let q = supabase.from(tableName).select('*').eq('id', id);
+    if (SOFT_DELETE_TABLES.has(tableName)) {
+      q = q.eq('is_deleted', false);
+    }
+    const { data, error } = await q.single();
     if (error) throw new SupabaseOperationError(tableName, 'get', error);
     return addAliases(data);
   },
