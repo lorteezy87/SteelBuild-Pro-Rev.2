@@ -19,6 +19,7 @@ import ContextPanel from "@/components/drawings/viewer/ContextPanel";
 import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
 import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/AnnotationToolbar";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
+import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -145,6 +146,29 @@ export default function DrawingViewer() {
       toast.error(`Save failed: ${err.message}`);
     }
   }, [activeDrawing, projectId, qc]);
+
+  // Auto-detect scale from the PDF's title block text layer. Runs on
+  // demand (toolbar AUTO button). We don't auto-run on load — PDFs
+  // without extractable text would silently report "nothing found" on
+  // every load, and engineer-prepared drawings often have multiple
+  // scales per sheet (plan vs detail). Explicit button keeps it
+  // predictable.
+  const handleAutoDetectScale = useCallback(async () => {
+    if (!activeDrawing?.id || !pdfDoc) return;
+    try {
+      const hit = await detectScaleFromPdf(pdfDoc);
+      if (!hit) {
+        toast.info("No scale pattern found in the PDF text layer. Use Calibrate (K) to set manually.");
+        return;
+      }
+      await base44.entities.Drawing.update(activeDrawing.id, { markup_scale: hit.scale });
+      qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+      const confidence = hit.confidence === "high" ? "" : " (low confidence — verify with Calibrate if needed)";
+      toast.success(`Detected scale ${hit.label} on page ${hit.page}${confidence}`);
+    } catch (err) {
+      toast.error(`Auto-detect failed: ${err.message}`);
+    }
+  }, [activeDrawing, pdfDoc, projectId, qc]);
 
   const activeIndex = filtered.findIndex(d => d.id === activeId);
 
@@ -709,6 +733,45 @@ export default function DrawingViewer() {
             style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
             ↓ PDF
           </button>
+
+          {/* Scale indicator + auto-detect button. Shown only when a PDF is
+              loaded. Reads activeDrawing.markup_scale; if null, shows "NO SCALE"
+              + an AUTO button that parses the title block. */}
+          {pdfDoc && (
+            <>
+              <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 4px" }} />
+              <span
+                title={markupScale
+                  ? `Calibrated scale (1 PDF inch = ${markupScale.toFixed(1)} real inches). Measurements render in real ft-in.`
+                  : "No scale calibrated — measure tool shows raw page-inches with a ~ prefix."}
+                style={{
+                  ...mono, fontSize: 9, fontWeight: 700,
+                  padding: "4px 8px",
+                  borderRadius: 3,
+                  background: markupScale ? "rgba(0,229,255,0.10)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${markupScale ? "rgba(0,229,255,0.45)" : "var(--border-default)"}`,
+                  color: markupScale ? "#00E5FF" : "var(--text-muted)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {markupScale ? formatScaleFraction(markupScale) : "NO SCALE"}
+              </span>
+              <button
+                onClick={handleAutoDetectScale}
+                title="Scan the PDF title block and try to auto-detect the scale (K key opens the manual Calibrate tool if this fails)"
+                disabled={!activeDrawing?.id}
+                style={{
+                  ...toolBtn, ...mono, fontSize: 9,
+                  color: "var(--text-muted)",
+                  opacity: activeDrawing?.id ? 1 : 0.4,
+                }}
+              >
+                AUTO
+              </button>
+            </>
+          )}
           <button
             onClick={() => setFilmstripOpen(o => !o)}
             title={filmstripOpen ? "Hide thumbnail filmstrip (F)" : "Show thumbnail filmstrip (F)"}
