@@ -149,7 +149,7 @@ const PHASE_DOT = {
   Detailing: "var(--status-info)",
   Fabrication: "var(--accent)",
   Delivery: "var(--status-warning)",
-  "Erection/Installation": "#8B5CF6",
+  "Erection/Installation": "#0D9488",
   Closeout: "var(--status-success)",
 };
 

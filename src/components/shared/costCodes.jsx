@@ -21,7 +21,7 @@ export const CATEGORY_ORDER = ['Labor', 'Materials', 'Subcontractor', 'Equipment
 export const CATEGORY_COLORS = {
   Labor:         'var(--status-warning)',
   Materials:     'var(--status-info)',
-  Subcontractor: '#8B5CF6',
+  Subcontractor: '#0D9488',
   Equipment:     'var(--nc-accent-orange)',
   'Misc.':       'var(--text-muted)',
   Overhead:      'var(--status-success)',

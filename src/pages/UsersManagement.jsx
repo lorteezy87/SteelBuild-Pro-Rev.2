@@ -14,7 +14,7 @@ import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
 
-const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#0D9488', '#F97316', '#06B6D4'];
 
 function getInitials(name) {
   if (!name) return "?";

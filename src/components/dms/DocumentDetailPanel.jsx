@@ -18,7 +18,7 @@ const STATUS_COLORS = {
 };
 
 const ENTITY_LABELS = {
-  work_package_id: { label: "Work Package", color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
+  work_package_id: { label: "Work Package", color: "#0d9488", bg: "rgba(13,148,136,0.12)" },
   rfi_id:          { label: "RFI",          color: "#f97316", bg: "rgba(249,115,22,0.12)" },
   delivery_id:     { label: "Delivery",     color: "#0891b2", bg: "rgba(8,145,178,0.12)" },
   change_order_id: { label: "Change Order", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
@@ -171,7 +171,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
           >
             {tab}
             {tab === "versions" && versionStack.length > 1 && (
-              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(139,92,246,0.15)", color: "#8b5cf6" }}>
+              <span style={{ marginLeft: 4, fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(13,148,136,0.15)", color: "#0d9488" }}>
                 {versionStack.length}
               </span>
             )}

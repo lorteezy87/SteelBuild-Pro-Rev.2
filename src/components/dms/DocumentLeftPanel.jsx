@@ -189,7 +189,7 @@ export default function DocumentLeftPanel({ documents = [], filteredCount, activ
       {/* Linked To */}
       <CollapsibleSection title="Linked To">
         {[
-          { label: "Work Packages", type: "WP",  color: "#8b5cf6" },
+          { label: "Work Packages", type: "WP",  color: "#0d9488" },
           { label: "Deliveries",    type: "DEL", color: "#0891b2" },
           { label: "RFIs",          type: "RFI", color: "#f97316" },
           { label: "Submittals",    type: "SUB", color: "#eab308" },

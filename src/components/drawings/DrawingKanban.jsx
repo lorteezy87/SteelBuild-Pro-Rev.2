@@ -226,8 +226,8 @@ function SetCard({ setGroup, index, onEdit, onAnnotate }) {
                   onClick={(e) => { e.stopPropagation(); onAnnotate(sheets[0]); }}
                   style={{
                     flex: 1, padding: "3px 0",
-                    background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.22)",
-                    borderRadius: 4, color: "#A78BFA",
+                    background: "rgba(13,148,136,0.10)", border: "1px solid rgba(13,148,136,0.22)",
+                    borderRadius: 4, color: "#0891B2",
                     fontFamily: "var(--font-mono)", fontSize: 9,
                     letterSpacing: "0.08em", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 3

@@ -25,7 +25,7 @@ export const PHASE_COLORS = {
 export const PHASE_HEX = {
   Detailing:   "#C89B20",
   Fabrication: "#3B82F6",
-  Delivery:    "#8B5CF6",
+  Delivery:    "#0D9488",
   Erection:    "#22C55E",
 };
 
