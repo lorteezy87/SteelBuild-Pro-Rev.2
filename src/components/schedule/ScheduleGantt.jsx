@@ -334,15 +334,38 @@ const DELIVERY_STATUS_DOT = {
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
-const LEFT_W  = 680;
-// grid: WBS | TASK NAME | DUR | START | FINISH | PRED | RESOURCES | STATUS | %
-// GRID columns:
-//   WBS · TASK · DUR · START · FINISH · PRED · RESOURCES · STATUS · STAGE · %
-// The STAGE column (88px) only renders content for Detailing-phase rows —
-// elsewhere it stays blank. Adding it universally (rather than per-phase
-// GRID variants) keeps row alignment identical across phase groups so the
-// right-hand gantt bars track cleanly.
-const GRID = "50px 1fr 40px 68px 68px 48px 80px 72px 88px 36px";
+
+// Column widths are now user-adjustable via drag handles on each header.
+// TASK NAME is "flex" (takes remaining space) — represented as 0 in the
+// state array and rendered as 1fr in the CSS grid. Every other column is
+// a fixed pixel width the user can drag wider/narrower. Persisted to
+// localStorage so the user's layout sticks across reloads.
+//
+// Header order: WBS · TASK · DUR · START · FINISH · PRED · RESOURCES ·
+//               STATUS · STAGE · %
+const COL_KEYS = ["wbs", "name", "dur", "start", "finish", "pred", "res", "status", "stage", "pct"];
+const DEFAULT_COL_WIDTHS = [50, 0, 40, 68, 68, 48, 80, 72, 88, 36];
+const MIN_COL_WIDTH = 24;
+// Task-name (flex) column gets at least this much. Bumped from 140 → 240
+// to make names readable out of the box — the user complained names were
+// too cramped. Users can still drag other columns narrower for more name
+// room, or drag the name column's handle to pin a specific width.
+const MIN_NAME_WIDTH = 240;
+const COL_WIDTHS_KEY = "sbp-gantt-col-widths-v1";
+
+function loadColWidths() {
+  try {
+    const raw = typeof window !== "undefined" && window.localStorage?.getItem(COL_WIDTHS_KEY);
+    if (!raw) return DEFAULT_COL_WIDTHS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COL_WIDTHS.length) return DEFAULT_COL_WIDTHS;
+    return parsed.map((w, i) => {
+      if (typeof w !== "number" || !Number.isFinite(w)) return DEFAULT_COL_WIDTHS[i];
+      // Don't trust stored widths smaller than our hard min (could lock users out).
+      return w === 0 ? 0 : Math.max(MIN_COL_WIDTH, Math.min(400, w));
+    });
+  } catch { return DEFAULT_COL_WIDTHS; }
+}
 
 // Valid drawing-stage values. Matches the drawings.stage CHECK constraint
 // minus "Not Started" — stage on a scheduled detailing task only becomes
@@ -363,6 +386,63 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [collapsedTasks, setCollapsedTasks] = useState({});
+
+  // ── Resizable columns ───────────────────────────────────────────────
+  // Widths live in state; dragging a header divider mutates the index
+  // for that column. 0 means "flex" (1fr) — used by TASK NAME so it
+  // auto-fills leftover space. Persisted to localStorage per-user.
+  const [colWidths, setColWidths] = useState(loadColWidths);
+  const GRID = useMemo(
+    () => colWidths.map(w => (w === 0 ? `minmax(${MIN_NAME_WIDTH}px, 1fr)` : `${w}px`)).join(" "),
+    [colWidths]
+  );
+  // Left-panel width auto-grows with the fixed columns so TASK NAME never
+  // collapses below MIN_NAME_WIDTH. Flex (0-width) entries contribute the
+  // min — the column itself gets more via 1fr if there's extra space.
+  const LEFT_W = useMemo(
+    () => colWidths.reduce((sum, w) => sum + (w === 0 ? MIN_NAME_WIDTH : w), 0) + 24 /* inner padding */,
+    [colWidths]
+  );
+  // Drag handler factory for a given column index. We capture the
+  // pointer at mousedown, track deltaX, clamp, and persist on mouseup.
+  const startColResize = (colIndex, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colWidths[colIndex];
+    // For the flex column we pin a concrete starting width so dragging
+    // it feels natural (otherwise going from 1fr → Npx mid-drag jumps).
+    const effectiveStart = startW === 0 ? MIN_NAME_WIDTH : startW;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (mv) => {
+      const delta = mv.clientX - startX;
+      const next = Math.max(MIN_COL_WIDTH, Math.min(400, effectiveStart + delta));
+      setColWidths(prev => {
+        const out = [...prev];
+        out[colIndex] = next;
+        return out;
+      });
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+      setColWidths(curr => {
+        try { window.localStorage?.setItem(COL_WIDTHS_KEY, JSON.stringify(curr)); } catch {}
+        return curr;
+      });
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+  const resetColWidths = () => {
+    setColWidths(DEFAULT_COL_WIDTHS);
+    try { window.localStorage?.removeItem(COL_WIDTHS_KEY); } catch {}
+  };
   const toggleTask = (taskId) => setCollapsedTasks(c => ({ ...c, [taskId]: !c[taskId] }));
   const leftRef   = useRef(null);
   const rightHead = useRef(null);
@@ -828,10 +908,50 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
 
       {/* ── Synchronized header row ─────────────────────────────────── */}
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
-        {/* Left header */}
+        {/* Left header — each column cell wraps its label in a relative
+            container with a drag handle on the right edge. Dragging any
+            handle resizes THAT column; TASK NAME (flex) auto-rebalances.
+            Double-click the handle to reset that single column to its
+            default width; double-click the "% " header to reset ALL. */}
         <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-surface-low)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
           {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "STAGE", "%"].map((h, i) => (
-            <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
+            <div key={i} style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", overflow: "visible" }}
+                 onDoubleClick={i === 9 ? resetColWidths : undefined}
+                 title={i === 9 ? "Double-click to reset all column widths" : undefined}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{h}</span>
+              {/* Drag handle — last column has no handle (nothing to its right) */}
+              {i < 9 && (
+                <div
+                  onMouseDown={(e) => startColResize(i, e)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setColWidths(prev => {
+                      const out = [...prev];
+                      out[i] = DEFAULT_COL_WIDTHS[i];
+                      try { window.localStorage?.setItem(COL_WIDTHS_KEY, JSON.stringify(out)); } catch {}
+                      return out;
+                    });
+                  }}
+                  title="Drag to resize · double-click to reset"
+                  style={{
+                    position: "absolute",
+                    right: -6,
+                    top: 4,
+                    bottom: 4,
+                    width: 8,
+                    cursor: "col-resize",
+                    zIndex: 5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  onMouseEnter={(e) => { const bar = e.currentTarget.firstChild; if (bar) bar.style.background = "var(--accent)"; }}
+                  onMouseLeave={(e) => { const bar = e.currentTarget.firstChild; if (bar) bar.style.background = "var(--divider)"; }}
+                >
+                  <div style={{ width: 2, height: "60%", background: "var(--divider)", borderRadius: 1, transition: "background 120ms" }} />
+                </div>
+              )}
+            </div>
           ))}
         </div>
         {/* Right timeline header */}
