@@ -128,7 +128,7 @@ export function ProjectGroup({
           alignItems: "center",
           gap: 10,
           padding: "10px 12px",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           cursor: "pointer",
         }}

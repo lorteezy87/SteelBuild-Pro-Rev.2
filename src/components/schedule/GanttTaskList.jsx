@@ -49,7 +49,7 @@ export default function GanttTaskList({ tasks = [], onSelectTask, selectedTaskId
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-surface-low)', borderRight: '1px solid var(--border-default)' }}>
       {/* Header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 86px 86px 44px 44px 80px', borderBottom: '1px solid var(--border-default)', background: 'var(--bg-sidebar)', padding: '0 12px', height: 28, alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 86px 86px 44px 44px 80px', borderBottom: '1px solid var(--border-default)', background: 'var(--bg-surface-low)', padding: '0 12px', height: 28, alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>WBS</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Task Name</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: '0.10em', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Start</div>

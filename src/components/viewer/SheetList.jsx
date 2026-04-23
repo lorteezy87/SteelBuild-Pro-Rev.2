@@ -10,7 +10,7 @@ export default function SheetList({ document, currentPage, onPageChange }) {
     <div
       style={{
         width: 220,
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         borderRight: "1px solid var(--bg-surface-high)",
         display: "flex",
         flexDirection: "column",

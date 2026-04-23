@@ -100,7 +100,7 @@ export default function ContextPanel({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           flexShrink: 0,
         }}
       >

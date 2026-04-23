@@ -22,7 +22,7 @@ const empty = {
 
 const iStyle = {
   width: '100%',
-  background: 'var(--bg-sidebar)',
+  background: 'var(--bg-surface-low)',
   border: '1px solid var(--border-default)',
   borderRadius: 6,
   padding: '7px 11px',
@@ -57,7 +57,7 @@ const sectionLabel = {
 };
 
 const triggerStyle = {
-  background: 'var(--bg-sidebar)',
+  background: 'var(--bg-surface-low)',
   border: '1px solid var(--border-default)',
   borderRadius: 6,
   color: 'var(--text-primary)',

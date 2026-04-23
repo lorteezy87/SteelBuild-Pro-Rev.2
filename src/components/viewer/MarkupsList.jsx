@@ -23,7 +23,7 @@ export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, 
   return (
     <div style={{
       width: 260,
-      background: "var(--bg-sidebar)",
+      background: "var(--bg-surface-low)",
       borderLeft: "1px solid var(--bg-surface-high)",
       display: "flex",
       flexDirection: "column",

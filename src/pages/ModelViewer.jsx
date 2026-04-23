@@ -4,7 +4,6 @@ import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
 
 // FragmentsManager.init() requires a worker URL. Without it, IFC loads
@@ -88,14 +87,6 @@ function applyDefaultSteelColor(root) {
     for (const mat of mats) {
       if (isUncoloredMaterial(mat)) {
         mat.color.copy(DEFAULT_STEEL_COLOR);
-      }
-      // PBR tuning — steel reads metallic with a touch of roughness. Apply
-      // even to colored materials so shop drawings / colored cladding still
-      // pick up the environment map reflections instead of looking matte.
-      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-        if (mat.metalness === undefined || mat.metalness === 0) mat.metalness = 0.55;
-        if (mat.roughness === undefined || mat.roughness === 1) mat.roughness = 0.45;
-        mat.envMapIntensity = 0.9;
       }
     }
   });
@@ -186,31 +177,18 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Scene appearance — conservative defaults + PBR env map.
+        // 5. Scene appearance — minimal & reliable.
         //
-        // History: a prior revision tried to be fancy with a transparent
-        // renderer clear + ACES tone mapping + sRGB output + shadow maps.
-        // Those overrides fought the OBC SimpleRenderer's initialization
-        // and produced a washed-out / blurry render where the model was
-        // nearly invisible. Rolled back to renderer defaults; we only
-        // touch `scene.environment` (safe, doesn't change render pipeline)
-        // and `scene.background` (Color, not null — avoids alpha surprises).
+        // History: tried tone mapping + sRGB output + PBR env map, both
+        // caused render issues. The OBC SimpleRenderer has a specific
+        // initialization sequence that doesn't tolerate those overrides.
+        // Stripped back to: neutral background + standard lights + grid.
+        // The model is visible and legible in both themes, which is the
+        // primary requirement. Env-map / IBL is a future upgrade.
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0xeaeef3); // soft neutral
+        threeScene.background = new THREE.Color(0xf1f5f9); // light slate-50
 
-        // PBR environment — scene.environment is reflection-only; doesn't
-        // render as the background. Gives metals a plausible indoor IBL
-        // without depending on a transparent canvas.
-        try {
-          const renderer3 = world.renderer.three;
-          const pmrem = new THREE.PMREMGenerator(renderer3);
-          const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-          threeScene.environment = envTex;
-          envMapRef.current = { pmrem, envTex };
-        } catch (e) { console.warn("env map generation failed", e); }
-
-        // Direct lights — bright and neutral. No shadow maps; they were
-        // the likely culprit for the blurriness with this renderer.
+        // Direct lights — bright and neutral, no shadow maps.
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
         threeScene.add(hemiLight);
         const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
@@ -222,12 +200,13 @@ export default function ModelViewer() {
         const rimLight = new THREE.DirectionalLight(0xffe0b0, 0.25);
         rimLight.position.set(0, -40, -100);
         threeScene.add(rimLight);
+        envMapRef.current = null;
         keyShadowLightRef.current = null;
         shadowPlaneRef.current = null;
 
         // CAD-style grid with two line weights so major axes stand out.
-        const grid = new THREE.GridHelper(400, 80, 0x9aa3b4, 0xcdd2dc);
-        grid.material.opacity = 0.55;
+        const grid = new THREE.GridHelper(400, 80, 0x94a3b8, 0xcbd5e1);
+        grid.material.opacity = 0.65;
         grid.material.transparent = true;
         grid.material.depthWrite = false;
         threeScene.add(grid);
@@ -1222,9 +1201,9 @@ export default function ModelViewer() {
             </div>
             <input
               type="text" placeholder="Search..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
-              style={{ margin: "8px", padding: "6px 10px", background: "var(--bg-sidebar)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", outline: "none" }}
+              style={{ margin: "8px", padding: "6px 10px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", outline: "none" }}
             />
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ margin: "0 8px 8px", padding: "6px 10px", background: "var(--bg-sidebar)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ margin: "0 8px 8px", padding: "6px 10px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>
               <option value="all">All Types</option>
               {["COLUMN", "BEAM", "GIRDER", "SLAB", "BRACE", "STAIR", "WALL", "MEMBER"].map((t) => (
                 <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase() + "s"}</option>

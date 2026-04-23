@@ -15,7 +15,7 @@ export function PhoenixPanel({ title, count, actions, children, style = {} }) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "12px 18px",
           borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {title && (

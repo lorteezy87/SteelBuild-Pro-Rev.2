@@ -90,7 +90,7 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
           gap: 10,
           padding: "12px 14px",
           borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

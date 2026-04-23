@@ -23,7 +23,7 @@ export default function ViewerToolbar({
     <div
       style={{
         height: 48,
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         borderBottom: "1px solid var(--bg-surface-high)",
         padding: "0 16px",
         display: "flex",

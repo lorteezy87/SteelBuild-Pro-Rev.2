@@ -77,7 +77,7 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
           gridTemplateColumns: '48px 1fr 80px 86px 86px 44px 44px 80px',
           position: 'sticky',
           top: 0,
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           borderBottom: '1px solid var(--border-default)',
           padding: '0 12px',
           height: 28,
@@ -211,7 +211,7 @@ export default function ListView({ tasks = [], onSelectTask, groupBy = 'phase', 
                             if (e.key === 'Escape') setEditingPct(null);
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          style={{ width: 38, padding: '1px 3px', fontFamily: 'var(--font-mono)', fontSize: 9, textAlign: 'center', background: 'var(--bg-sidebar)', border: '1px solid var(--accent)', borderRadius: 3, color: 'var(--accent)' }}
+                          style={{ width: 38, padding: '1px 3px', fontFamily: 'var(--font-mono)', fontSize: 9, textAlign: 'center', background: 'var(--bg-surface-low)', border: '1px solid var(--accent)', borderRadius: 3, color: 'var(--accent)' }}
                         />
                       ) : (
                         <span title={(!task.linked_entity_type || task.linked_entity_type === 'none') ? 'Click to edit' : 'Managed by linked entity'}>

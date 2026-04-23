@@ -33,7 +33,7 @@ export default function LeftSidebar({
   kpis,
 }) {
   return (
-    <div style={{ width: 270, flexShrink: 0, borderRight: "1px solid var(--divider)", background: "var(--bg-sidebar)", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: 270, flexShrink: 0, borderRight: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>RFI Tracker</div>
 
       {/* Ball in Court */}

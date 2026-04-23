@@ -25,7 +25,7 @@ export const thStyle = {
   textTransform: "uppercase",
   whiteSpace: "nowrap",
   borderBottom: "1px solid var(--divider)",
-  background: "var(--bg-sidebar)",
+  background: "var(--bg-surface-low)",
   position: "sticky",
   top: 0,
   zIndex: 10,

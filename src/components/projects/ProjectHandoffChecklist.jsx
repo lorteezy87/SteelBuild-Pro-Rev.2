@@ -197,7 +197,7 @@ export default function ProjectHandoffChecklist({ projectId }) {
           gridTemplateColumns: "40px minmax(220px, 2.2fr) 110px 150px 130px 110px",
           gap: 8,
           padding: "8px 10px",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           ...mono,
           fontSize: 9,
