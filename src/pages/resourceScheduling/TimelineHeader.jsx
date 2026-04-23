@@ -40,7 +40,7 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
                   width: banner.width,
                   padding: "6px 8px",
                   textAlign: "center",
-                  borderRight: "1px solid var(--hover-bg)",
+                  borderRight: "1px solid var(--border-default)",
                   flexShrink: 0,
                 }}
               >
@@ -75,7 +75,7 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
               key={idx}
               style={{
                 width: h.width,
-                borderRight: "1px solid var(--hover-bg)",
+                borderRight: "1px solid var(--border-default)",
                 padding: "6px 8px",
                 textAlign: "center",
                 background: h.isToday ? "rgba(245,158,11,0.08)" : "transparent",
