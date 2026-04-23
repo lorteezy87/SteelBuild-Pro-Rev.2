@@ -490,7 +490,47 @@ export default function PortfolioView({
       if (!d) return false;
       return d.getTime() < thirtyDaysAgo;
     });
-    return { portfolioValue, totalBudget, totalSpend, overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30 };
+
+    // Cash at risk — the combined dollar value of exposures the PM team
+    // should be actively managing right now. Two buckets:
+    //   1. Pending change-order value. COs in Submitted/Under Review/
+    //      Draft state are dollars that have been proposed but aren't
+    //      committed either way. They're "at risk" in the sense that a
+    //      rejection erodes margin we thought we had.
+    //   2. Over-budget exposure. For each cost_code where actual spend
+    //      exceeds the budget amount, we accumulate (actual - budget).
+    //      That's the delta we're bleeding past plan.
+    // Sum is the single number the exec asks: "how much cash is in
+    // limbo across our portfolio right now?"
+    const pendingCOValue = allCOs
+      .filter((c) => statusIn(c.status, ["Submitted", "Under Review", "Draft"]))
+      .reduce((s, c) => s + (Number(c.co_amount) || Number(c.cost_impact_amount) || 0), 0);
+
+    // Build a map of actual-spend-per-cost-code so we can compare to
+    // budgets. allExpenses is keyed by project_id + cost_code_id (the
+    // cost codes are the source of truth for budget).
+    const spendByCode = new Map();
+    for (const e of allExpenses) {
+      if (!statusIn(e.payment_status, ["Paid"])) continue;
+      const key = e.cost_code_id || e.cost_code || null;
+      if (!key) continue;
+      spendByCode.set(key, (spendByCode.get(key) || 0) + (Number(e.amount) || 0));
+    }
+    let overBudgetExposure = 0;
+    for (const code of allCodes) {
+      const budget = Number(code.budget_amount) || 0;
+      if (budget <= 0) continue;
+      const actual = spendByCode.get(code.id) || spendByCode.get(code.code) || 0;
+      if (actual > budget) overBudgetExposure += (actual - budget);
+    }
+
+    const cashAtRisk = pendingCOValue + overBudgetExposure;
+
+    return {
+      portfolioValue, totalBudget, totalSpend,
+      overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30,
+      cashAtRisk, pendingCOValue, overBudgetExposure,
+    };
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics]);
 
   // ── Persist sparkline snapshot once per day ────────────────────────────────
@@ -1005,6 +1045,57 @@ export default function PortfolioView({
             {formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")}
           </span>
         </div>
+
+        {/* Cash at risk — featured (wider, not filterable). Complements
+            the portfolio-value tile by answering "how much cash is exposed
+            right now?" = pending CO value + over-budget exposure. Only
+            rendered when there's actual exposure to surface — when the
+            number is 0, the tile silently hides so it doesn't read as a
+            fake metric. Tooltip breaks down the two components for exec
+            scrutiny. Color flips to error when ≥5% of portfolio value. */}
+        {portfolioKPIs.cashAtRisk > 0 && (
+          <div
+            title={[
+              `Pending CO value: ${formatCurrency(portfolioKPIs.pendingCOValue).replace(/\.\d+/, "")}`,
+              `Over-budget exposure: ${formatCurrency(portfolioKPIs.overBudgetExposure).replace(/\.\d+/, "")}`,
+            ].join("\n")}
+            style={{
+              padding: "12px 28px",
+              borderRight: "1px solid var(--divider)",
+              borderTop: `3px solid ${
+                portfolioKPIs.cashAtRisk > portfolioKPIs.portfolioValue * 0.05
+                  ? "var(--status-error)"
+                  : "var(--status-warning)"
+              }`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              minWidth: 200,
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+              Cash at Risk
+            </span>
+            <span style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 28,
+              fontWeight: 800,
+              lineHeight: 1,
+              color: portfolioKPIs.cashAtRisk > portfolioKPIs.portfolioValue * 0.05
+                ? "var(--status-error)"
+                : "var(--status-warning)",
+            }}>
+              {formatCurrency(portfolioKPIs.cashAtRisk).replace(/\.\d+/, "")}
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+              {portfolioKPIs.pendingCOValue > 0 && portfolioKPIs.overBudgetExposure > 0
+                ? "PENDING COs + OVERRUN"
+                : portfolioKPIs.pendingCOValue > 0
+                  ? "PENDING COs"
+                  : "OVER BUDGET"}
+            </span>
+          </div>
+        )}
         <KPIBlock label="Active Projects" value={projects.filter((p) => p.status === "Active" || !p.status).length} bordered color="var(--accent)" />
         <KPIBlock
           label="Total Spend"
