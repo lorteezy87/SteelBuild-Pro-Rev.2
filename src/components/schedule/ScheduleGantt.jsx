@@ -294,7 +294,20 @@ const SUM_H   = 36;
 const HEAD_H  = 40;
 const LEFT_W  = 680;
 // grid: WBS | TASK NAME | DUR | START | FINISH | PRED | RESOURCES | STATUS | %
-const GRID = "50px 1fr 40px 68px 68px 48px 80px 72px 36px";
+// GRID columns:
+//   WBS · TASK · DUR · START · FINISH · PRED · RESOURCES · STATUS · STAGE · %
+// The STAGE column (88px) only renders content for Detailing-phase rows —
+// elsewhere it stays blank. Adding it universally (rather than per-phase
+// GRID variants) keeps row alignment identical across phase groups so the
+// right-hand gantt bars track cleanly.
+const GRID = "50px 1fr 40px 68px 68px 48px 80px 72px 88px 36px";
+
+// Valid drawing-stage values. Matches the drawings.stage CHECK constraint
+// minus "Not Started" — stage on a scheduled detailing task only becomes
+// meaningful once work is in motion. "IFC" is the end-user label for
+// Released so we expose both; the save path normalizes IFC → Released.
+const DETAILING_STAGES = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+const STAGE_DISPLAY = { Released: "IFC" };  // show IFC in the UI
 
 export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
@@ -751,7 +764,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
         {/* Left header */}
         <div style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, background: "var(--bg-surface-low)", borderRight: "1px solid var(--divider)", display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4 }}>
-          {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "%"].map((h, i) => (
+          {["WBS", "TASK NAME", "DUR", "START", "FINISH", "PRED", "RESOURCES", "STATUS", "STAGE", "%"].map((h, i) => (
             <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--text-muted)", textTransform: "uppercase", textAlign: i >= 2 ? "center" : "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h}</span>
           ))}
         </div>
@@ -819,7 +832,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
               const isLate = d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered";
               const label = d.description || d.vendor || "Delivery";
               return (
-                <div key={`del-${d.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: "50px 1fr 40px 68px 68px 48px 80px 72px 36px", alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: "transparent", borderLeft: isLate ? "3px solid #EF4444" : "3px solid transparent" }}
+                <div key={`del-${d.id}`} style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: "transparent", borderLeft: isLate ? "3px solid #EF4444" : "3px solid transparent" }}
                   onMouseEnter={() => setHoveredRowId(`del-${d.id}`)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
@@ -842,6 +855,8 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   <span title={d.vendor || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.vendor || "—"}</span>
                   {/* Status */}
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: dotColor, textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{d.status || "—"}</span>
+                  {/* Stage — deliveries don't have a detailing stage */}
+                  <span />
                   {/* No % for deliveries */}
                   <span />
                 </div>
@@ -940,6 +955,46 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   </select>
                 ) : (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                )}
+                {/* Stage — only rendered with a picker on Detailing-phase
+                    rows. For other phases we emit an empty span so the grid
+                    layout stays aligned. Stage persists in
+                    schedule_tasks.metadata.detailing_stage; onSave is the
+                    parent Schedule page's ScheduleTask.update callback and
+                    accepts a full task object, so we pass the merged
+                    metadata + id explicitly. */}
+                {phase === "Detailing" ? (
+                  <select
+                    value={task.metadata?.detailing_stage || ""}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      const newStage = e.target.value || null;
+                      if (onSave) {
+                        onSave({
+                          id: task.id,
+                          metadata: { ...(task.metadata || {}), detailing_stage: newStage },
+                        });
+                      }
+                    }}
+                    style={{
+                      fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                      background: "var(--bg-input)",
+                      border: `1px solid ${task.metadata?.detailing_stage ? "var(--accent-border)" : "var(--divider)"}`,
+                      borderRadius: 3,
+                      color: task.metadata?.detailing_stage ? "var(--accent)" : "var(--text-muted)",
+                      padding: "2px 2px",
+                      width: "100%",
+                      letterSpacing: "0.04em",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">—</option>
+                    {DETAILING_STAGES.map((s) => (
+                      <option key={s} value={s}>{STAGE_DISPLAY[s] || s}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center" }}>—</span>
                 )}
                 {/* % or save/cancel */}
                 {isEditing ? (
