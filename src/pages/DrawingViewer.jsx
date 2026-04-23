@@ -389,14 +389,73 @@ export default function DrawingViewer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [filtered, activeIndex, totalPages]);
 
-  // ── Fit width ──────────────────────────────────────────────────────────────
-  const handleFitWidth = async () => {
+  // ── Fit width / Fit page / zoom preset ────────────────────────────────────
+  const handleFitWidth = useCallback(async () => {
     if (!pdfDoc || !canvasRef.current) return;
     const page = await pdfDoc.getPage(currentPage);
-    const vp = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: 1, rotation });
     const container = canvasRef.current.parentElement;
-    if (container) setZoom(+(container.clientWidth / vp.width).toFixed(2));
-  };
+    if (container) {
+      // 16px pad so the page doesn't butt up against the scroll container edges.
+      const target = (container.clientWidth - 32) / vp.width;
+      setZoom(+target.toFixed(2));
+    }
+  }, [pdfDoc, currentPage, rotation]);
+
+  const handleFitPage = useCallback(async () => {
+    if (!pdfDoc || !canvasRef.current) return;
+    const page = await pdfDoc.getPage(currentPage);
+    const vp = page.getViewport({ scale: 1, rotation });
+    const container = canvasRef.current.parentElement;
+    if (!container) return;
+    const sX = (container.clientWidth - 32) / vp.width;
+    const sY = (container.clientHeight - 32) / vp.height;
+    setZoom(+Math.min(sX, sY).toFixed(2));
+  }, [pdfDoc, currentPage, rotation]);
+
+  // Dispatch from the zoom preset <select>. Keeps the select value in sync
+  // with `zoom` state because the first option is always the current zoom.
+  const handleZoomPreset = useCallback((v) => {
+    if (v === "fitW") { handleFitWidth(); return; }
+    if (v === "fitP") { handleFitPage();  return; }
+    const n = parseFloat(v);
+    if (Number.isFinite(n) && n > 0) setZoom(n);
+  }, [handleFitWidth, handleFitPage]);
+
+  // Ctrl/Cmd + wheel = zoom at cursor. Without the ctrl check, users trying
+  // to scroll the drawing with a touchpad would accidentally zoom.
+  const handleCanvasWheel = useCallback((e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom((z) => {
+      const next = Math.max(0.1, Math.min(5.0, +(z + delta).toFixed(2)));
+      return next;
+    });
+  }, []);
+
+  // Spacebar-hold pan. Track press/release + change cursor to "grab"/"grabbing".
+  // While held, the markup tool is suppressed so dragging pans instead of drawing.
+  // spacebarPanRef is read by the pan event handlers attached via the container
+  // ref callback, which close over a stable ref not React state.
+  const [spacePan, setSpacePan] = useState(false);
+  const spacebarPanRef = useRef(false);
+  useEffect(() => { spacebarPanRef.current = spacePan; }, [spacePan]);
+  useEffect(() => {
+    const onDown = (e) => {
+      if (e.code !== "Space") return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      e.preventDefault();
+      setSpacePan(true);
+    };
+    const onUp = (e) => { if (e.code === "Space") setSpacePan(false); };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+    };
+  }, []);
 
   // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async () => {
@@ -544,17 +603,35 @@ export default function DrawingViewer() {
             </div>
           )}
 
-          {/* Zoom controls */}
+          {/* Zoom controls — pro-viewer style: -/+ around a preset dropdown.
+              Dropdown value "fitW" / "fitP" / "1" maps to actions in handleZoomPreset. */}
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))} style={toolBtn}>−</button>
-            <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)", minWidth: 42, textAlign: "center" }}>
-              {Math.round(zoom * 100)}%
-            </span>
-            <button onClick={() => setZoom(z => Math.min(4.0, +(z + 0.25).toFixed(2)))} style={toolBtn}>+</button>
+            <button onClick={() => setZoom(z => Math.max(0.1, +(z - 0.1).toFixed(2)))} title="Zoom out (−)" style={toolBtn}>−</button>
+            <select
+              value={zoom.toFixed(2)}
+              onChange={(e) => handleZoomPreset(e.target.value)}
+              style={{
+                fontFamily: "var(--font-mono)", fontSize: 10, padding: "4px 6px",
+                border: "1px solid var(--border-default)", borderRadius: 4,
+                background: "var(--bg-surface)", color: "var(--text-primary)",
+                minWidth: 82, cursor: "pointer",
+              }}
+            >
+              {/* Current value as first item so the select always reflects reality */}
+              <option value={zoom.toFixed(2)}>{Math.round(zoom * 100)}%</option>
+              <option value="fitW">Fit Width</option>
+              <option value="fitP">Fit Page</option>
+              <option value="0.50">50%</option>
+              <option value="0.75">75%</option>
+              <option value="1.00">100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.50">150%</option>
+              <option value="2.00">200%</option>
+              <option value="3.00">300%</option>
+              <option value="4.00">400%</option>
+            </select>
+            <button onClick={() => setZoom(z => Math.min(5.0, +(z + 0.1).toFixed(2)))} title="Zoom in (+)" style={toolBtn}>+</button>
           </div>
-
-          <button onClick={() => setZoom(1.0)} style={{ ...toolBtn, ...mono, fontSize: 9 }}>1:1</button>
-          <button onClick={handleFitWidth} style={{ ...toolBtn, ...mono, fontSize: 9 }}>FIT</button>
           <button
             onClick={() => setRotation(r => (r + 90) % 360)}
             title={`Rotate (R) — currently ${rotation}°`}
@@ -662,14 +739,47 @@ export default function DrawingViewer() {
               saveError={markup.saveError}
             />
           )}
-        <div style={{
-          flex: 1,
-          overflow: "auto",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "stretch",
-          background: "radial-gradient(ellipse at center, #121822 0%, #0A0E15 100%)",
-        }}>
+        <div
+          onWheel={handleCanvasWheel}
+          ref={(el) => {
+            // Keep a pan drag ref so spacebar-hold → drag pans. This is the
+            // standard pro-viewer pan: hold space, mouse drag scrolls the
+            // container, cursor flips to grab/grabbing for feedback.
+            if (!el) return;
+            if (el._panBound) return;
+            el._panBound = true;
+            let panning = false;
+            let startX = 0, startY = 0, scrollX = 0, scrollY = 0;
+            el.addEventListener("mousedown", (ev) => {
+              // Only pan on LEFT mouse AND spacebar held, OR middle mouse.
+              const shouldPan = (ev.button === 0 && spacebarPanRef.current) || ev.button === 1;
+              if (!shouldPan) return;
+              ev.preventDefault();
+              panning = true;
+              startX = ev.clientX; startY = ev.clientY;
+              scrollX = el.scrollLeft; scrollY = el.scrollTop;
+              el.style.cursor = "grabbing";
+            });
+            const stop = () => { if (panning) { panning = false; el.style.cursor = spacebarPanRef.current ? "grab" : ""; } };
+            el.addEventListener("mouseup", stop);
+            el.addEventListener("mouseleave", stop);
+            el.addEventListener("mousemove", (ev) => {
+              if (!panning) return;
+              el.scrollLeft = scrollX - (ev.clientX - startX);
+              el.scrollTop  = scrollY - (ev.clientY - startY);
+            });
+          }}
+          style={{
+            flex: 1,
+            overflow: "auto",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "stretch",
+            // Neutral workspace — works in both light + dark themes.
+            background: "var(--bg-void)",
+            cursor: spacePan ? "grab" : "default",
+          }}
+        >
           {!activeDrawing ? (
             <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
               <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
