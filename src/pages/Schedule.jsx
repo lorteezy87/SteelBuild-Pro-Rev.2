@@ -17,6 +17,7 @@ import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
+import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 
 /**
  * Auto-generate a WBS code for a task based on its phase and the
@@ -56,6 +57,7 @@ export default function Schedule() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkResource, setShowBulkResource] = useState(false);
   const [bulkResourceValue, setBulkResourceValue] = useState("");
+  const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
   const { data: scheduleTasks = [] } = useQuery({
@@ -555,6 +557,41 @@ export default function Schedule() {
             title="Download .ics for Outlook / Teams / Google Calendar"
           >
             EXPORT .ICS
+          </Button>
+          <Button
+            variant="secondary"
+            icon="download"
+            disabled={
+              !hasProject ||
+              scheduleTasks.length === 0 ||
+              view !== "gantt" ||
+              exportingPdf
+            }
+            onClick={async () => {
+              setExportingPdf(true);
+              const t = toast.loading("Generating PDF…");
+              try {
+                const { pageCount, filename } = await exportGanttToPdf({
+                  project: selectedProject,
+                });
+                toast.success(
+                  `Exported ${filename}${pageCount > 1 ? ` (${pageCount} pages)` : ""}`,
+                  { id: t }
+                );
+              } catch (err) {
+                console.error("[Schedule] PDF export failed:", err);
+                toast.error(`PDF export failed: ${err?.message || "unknown error"}`, { id: t });
+              } finally {
+                setExportingPdf(false);
+              }
+            }}
+            title={
+              view !== "gantt"
+                ? "Switch to the Gantt view to export"
+                : "Export the Gantt chart as a PDF for distribution"
+            }
+          >
+            {exportingPdf ? "EXPORTING…" : "EXPORT PDF"}
           </Button>
           <Button
             variant="outline"
