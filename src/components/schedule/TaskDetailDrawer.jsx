@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { calculateTaskDuration } from './scheduleUtils';
+import { toast } from 'sonner';
+import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 
 /**
@@ -40,11 +41,43 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
   });
 
   // Dependency management
+  //
+  // Adding a predecessor auto-shifts start/end so the task lines up
+  // behind the LATEST predecessor's finish (FS + 1 day), preserving
+  // this task's current duration. The suggestion is written into
+  // formData — the user can still edit start_date or end_date in the
+  // Details tab before hitting Save, without removing the dependency.
+  // We only pull dates FORWARD; if the user's current start already
+  // satisfies the constraint, nothing is changed.
   const addPredecessor = (predId) => {
     const current = parseDeps(formData.dependencies);
     if (current.includes(predId)) return;
     const updated = [...current, predId];
-    setFormData({ ...formData, dependencies: JSON.stringify(updated) });
+
+    // Compute auto-shift using every predecessor (existing + the new one),
+    // so adding a predecessor that finishes before the current ones
+    // doesn't pull the task backwards.
+    const allPredTasks = allTasks.filter(t => updated.includes(t.id));
+    const shift = computeAutoScheduledDates(formData, allPredTasks);
+
+    if (shift) {
+      setFormData({
+        ...formData,
+        dependencies: JSON.stringify(updated),
+        start_date: shift.start_date,
+        end_date: shift.end_date,
+      });
+      const fmt = (iso) => {
+        try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); }
+        catch { return iso; }
+      };
+      toast.info(
+        `Dates shifted to ${fmt(shift.start_date)} – ${fmt(shift.end_date)} based on dependency`,
+        { description: 'Guideline only — edit dates in the Details tab if needed.' }
+      );
+    } else {
+      setFormData({ ...formData, dependencies: JSON.stringify(updated) });
+    }
   };
 
   const removePredecessor = (predId) => {
