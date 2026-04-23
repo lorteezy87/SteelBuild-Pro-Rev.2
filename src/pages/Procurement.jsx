@@ -263,7 +263,7 @@ export default function Procurement() {
           display: 'grid',
           gridTemplateColumns: '1fr 140px 100px 100px 100px 80px 100px',
           padding: '10px 16px',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           borderBottom: '1px solid var(--divider)',
           gap: 12,
         }}>

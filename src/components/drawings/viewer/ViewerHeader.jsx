@@ -55,7 +55,7 @@ export default function ViewerHeader({ projectName, activeDrawing }) {
       style={{
         borderBottom: "1px solid var(--border-default)",
         background:
-          "linear-gradient(180deg, var(--bg-sidebar) 0%, var(--bg-surface) 100%)",
+          "linear-gradient(180deg, var(--bg-surface-low) 0%, var(--bg-surface) 100%)",
         flexShrink: 0,
       }}
     >

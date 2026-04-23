@@ -197,7 +197,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
           style={{
             padding: "18px 24px 14px",
             borderBottom: "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",

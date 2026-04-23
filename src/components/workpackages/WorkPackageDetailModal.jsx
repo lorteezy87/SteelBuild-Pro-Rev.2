@@ -67,7 +67,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
       >
         <div
           style={{
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             padding: "20px 24px",
             borderBottom: "1px solid var(--divider)",
           }}

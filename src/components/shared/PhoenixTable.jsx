@@ -12,7 +12,7 @@ export default function PhoenixTable({ columns, children, loading, empty, colSpa
                 fontFamily: "var(--font-body)", fontSize: 10, letterSpacing: "0.12em",
                 textTransform: "uppercase", color: "var(--text-muted)",
                 fontWeight: 700, padding: "12px 16px",
-                background: "var(--bg-sidebar)",
+                background: "var(--bg-surface-low)",
                 borderBottom: "1px solid var(--divider)",
                 textAlign: col.right ? "right" : "left",
                 whiteSpace: "nowrap"

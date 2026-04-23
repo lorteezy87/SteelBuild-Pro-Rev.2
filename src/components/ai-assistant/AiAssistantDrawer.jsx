@@ -78,7 +78,7 @@ export default function AiAssistantDrawer({ open, onClose }) {
         bottom: 0,
         width: "min(440px, 100vw)",
         zIndex: 520,
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         borderLeft: "1px solid var(--border-strong)",
         boxShadow: "-12px 0 32px rgba(0,0,0,0.55)",
         display: "flex",

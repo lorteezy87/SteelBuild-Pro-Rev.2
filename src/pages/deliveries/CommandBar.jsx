@@ -20,7 +20,7 @@ export default function CommandBar({
       style={{
         height: 56,
         flexShrink: 0,
-        background: "var(--bg-sidebar)",
+        background: "var(--bg-surface-low)",
         borderBottom: "1px solid var(--divider)",
         padding: "0 20px",
         display: "flex",

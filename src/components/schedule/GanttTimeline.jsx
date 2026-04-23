@@ -69,7 +69,7 @@ export default function GanttTimeline({ tasks = [], selectedTaskId, zoomLevel = 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface-low)', overflow: 'hidden' }}>
       {/* Timeline Header */}
-      <div style={{ height: 44, borderBottom: '1px solid var(--border-default)', background: 'var(--bg-sidebar)', overflow: 'hidden' }}>
+      <div style={{ height: 44, borderBottom: '1px solid var(--border-default)', background: 'var(--bg-surface-low)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', height: '100%' }}>
           {/* Months row */}
           <div style={{ height: 20, display: 'flex', borderBottom: '1px solid var(--divider)', width: timelineWidth }}>

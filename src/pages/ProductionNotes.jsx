@@ -493,7 +493,7 @@ export default function ProductionNotes() {
           position: "sticky",
           top: 0,
           zIndex: 20,
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           borderBottom: "1px solid var(--divider)",
           padding: "14px 24px 4px",
         }}
@@ -771,7 +771,7 @@ export default function ProductionNotes() {
                   {/* Snapshot row */}
                   <div
                     style={{
-                      background: "var(--bg-sidebar)",
+                      background: "var(--bg-surface-low)",
                       padding: "10px 20px",
                       borderBottom: "1px solid var(--divider)",
                       display: "grid",

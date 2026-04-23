@@ -113,7 +113,7 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',
@@ -135,7 +135,7 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',

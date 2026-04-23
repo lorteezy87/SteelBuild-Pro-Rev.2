@@ -1117,7 +1117,12 @@ export default function ResourceScheduling() {
           style={{
             flex: 1,
             overflow: "auto",
-            background: "var(--bg-sidebar)",
+            // Previously --bg-sidebar, which is a near-black in dark mode
+            // but navy (#1E293B) in light mode — painted the whole timeline
+            // board dark blue and swallowed every work-package bar.
+            // bg-surface-low reads as a distinct-but-light chart backdrop
+            // in both themes.
+            background: "var(--bg-surface-low)",
             position: "relative",
             userSelect: "none",
             touchAction: "none",

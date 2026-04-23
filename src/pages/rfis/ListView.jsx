@@ -51,7 +51,7 @@ export default function ListView({
 }) {
   return (
     <div style={{ flex: 1, overflow: "auto", overflowX: "auto", WebkitOverflowScrolling: "touch", position: "relative" }}>
-      <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: GRID_COLS, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 5, display: "grid", gridTemplateColumns: GRID_COLS, background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", padding: "10px 12px", ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
         <div>
           <input
             type="checkbox"

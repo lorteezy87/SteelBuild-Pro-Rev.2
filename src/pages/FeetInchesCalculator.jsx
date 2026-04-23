@@ -322,7 +322,7 @@ export default function FeetInchesCalculator() {
           {/* ── Left: calc pad ─────────────────────────── */}
           <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
             {/* Display */}
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-sidebar)" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
                 Running Total {pendingOp ? `(pending ${pendingOp})` : ""}
               </div>

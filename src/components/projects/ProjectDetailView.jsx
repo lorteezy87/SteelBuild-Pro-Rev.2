@@ -61,7 +61,7 @@ function SectionCard({ title, children }) {
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 2, overflow: 'hidden', marginBottom: 14 }}>
       {title && (
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)', background: 'var(--bg-sidebar)' }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)', background: 'var(--bg-surface-low)' }}>
           <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{title}</span>
         </div>
       )}
@@ -188,7 +188,7 @@ function WorkPackagesTab({ workPackages }) {
         { label: 'Total Tonnage', value: `${workPackages.reduce((s,w) => s+(Number(w.tonnage)||0),0).toFixed(1)}T` },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Work Package','Phase','Status','% Done','Tons','Shop Hrs'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -290,7 +290,7 @@ function DrawingsTab({ drawings }) {
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Sheet #', 'Title', 'Discipline', 'Stage', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -341,7 +341,7 @@ function RFIsTab({ rfis }) {
         { label: 'Answered', value: rfis.filter(r => r.status === 'Answered').length, color: 'var(--status-success)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['RFI #', 'Title', 'Priority', 'Status', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -387,7 +387,7 @@ function DeliveriesTab({ deliveries }) {
         { label: 'Total Weight', value: `${deliveries.reduce((s,d)=>s+(Number(d.weight_tons)||0),0).toFixed(1)}T` },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Delivery Title', 'Vendor', 'Status', 'Scheduled', 'Weight'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -530,7 +530,7 @@ export default function ProjectDetailView({ project, onClose }) {
       <div style={{ width: '78vw', maxWidth: 1080, background: 'var(--bg-page)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '16px 24px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <div style={{ padding: '16px 24px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
           <div style={{ width: 38, height: 38, borderRadius: 2, background: phase.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: phase.color, fontFamily: 'Space Grotesk, sans-serif' }}>
               {project.name?.charAt(0)?.toUpperCase()}

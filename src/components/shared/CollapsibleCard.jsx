@@ -71,7 +71,7 @@ export default function CollapsibleCard({
           width: "100%",
           padding: "12px 14px",
           borderBottom: collapsed ? "none" : "1px solid var(--divider)",
-          background: "var(--bg-sidebar)",
+          background: "var(--bg-surface-low)",
           cursor: "pointer",
           textAlign: "left",
           userSelect: "none",
