@@ -1033,7 +1033,7 @@ export default function ResourceScheduling() {
                 <div style={{
                   fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
                     letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
-                  borderBottom: "1px solid var(--hover-bg)", marginBottom: 6,
+                  borderBottom: "1px solid var(--border-default)", marginBottom: 6,
                 }}>
                   {type === "Equipment" ? "⚙" : type === "Subcontractor" ? "🔨" : type === "Material" ? "📦" : "👷"} {type} ({typeResources.length})
                 </div>
@@ -1083,7 +1083,7 @@ export default function ResourceScheduling() {
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, marginTop: 4, color: isOverBudget ? "var(--status-error)" : "var(--text-muted)", letterSpacing: "0.06em" }}>
                         {resBudgetHrs}h bud {"\u00B7"} {resActualHrs}h act {"\u00B7"} {resBurnPct}%
                       </div>
-                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--divider)", marginTop: 3 }}>
+                      <div style={{ width: "100%", height: 3, borderRadius: 2, background: "var(--border-default)", marginTop: 3 }}>
                         <div style={{ width: `${Math.min(100, resBurnPct)}%`, height: "100%", borderRadius: 2, background: resBurnPct > 100 ? "var(--status-error)" : resBurnPct > 80 ? "var(--status-warning)" : "var(--accent)", transition: "width 0.4s" }} />
                       </div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
