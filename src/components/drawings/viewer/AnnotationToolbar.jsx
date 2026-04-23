@@ -8,7 +8,7 @@
  */
 
 import React from "react";
-import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Trash2 } from "lucide-react";
+import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Trash2 } from "lucide-react";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -22,11 +22,17 @@ export const MARKUP_COLORS = [
 ];
 
 export const MARKUP_TOOLS = [
-  { key: "select", label: "Select",  shortcut: "V", icon: MousePointer2 },
-  { key: "pen",    label: "Redline", shortcut: "P", icon: Pencil },
-  { key: "rect",   label: "Rect",    shortcut: "B", icon: Square },
-  { key: "arrow",  label: "Arrow",   shortcut: "A", icon: ArrowUpRight },
-  { key: "note",   label: "Note",    shortcut: "T", icon: StickyNote },
+  { key: "select",    label: "Select",     shortcut: "V", icon: MousePointer2 },
+  { key: "pen",       label: "Redline",    shortcut: "P", icon: Pencil },
+  { key: "rect",      label: "Rect",       shortcut: "B", icon: Square },
+  // Highlight drags like rect but commits with a translucent fill and
+  // no stroke — lets users mark up large areas without obscuring the PDF.
+  { key: "highlight", label: "Highlight",  shortcut: "H", icon: Highlighter },
+  { key: "arrow",     label: "Arrow",      shortcut: "A", icon: ArrowUpRight },
+  // Measure is two-click: first click anchors, second click commits a
+  // line + live distance label. Persists so a review partner can see it.
+  { key: "measure",   label: "Measure",    shortcut: "M", icon: Ruler },
+  { key: "note",      label: "Note",       shortcut: "T", icon: StickyNote },
 ];
 
 export default function AnnotationToolbar({
