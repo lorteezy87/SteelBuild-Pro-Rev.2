@@ -8,7 +8,7 @@
  */
 
 import React from "react";
-import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Trash2 } from "lucide-react";
+import { MousePointer2, Pencil, Square, ArrowUpRight, StickyNote, Highlighter, Ruler, Scaling, Trash2 } from "lucide-react";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -32,6 +32,11 @@ export const MARKUP_TOOLS = [
   // Measure is two-click: first click anchors, second click commits a
   // line + live distance label. Persists so a review partner can see it.
   { key: "measure",   label: "Measure",    shortcut: "M", icon: Ruler },
+  // Calibrate — identical gesture to measure but on commit prompts for
+  // the real-world distance between the two picked points, and stores
+  // the resulting scale factor on the drawing row. Every subsequent
+  // measurement reads that scale to render real feet-inches.
+  { key: "calibrate", label: "Calibrate",  shortcut: "K", icon: Scaling },
   { key: "note",      label: "Note",       shortcut: "T", icon: StickyNote },
 ];
 
