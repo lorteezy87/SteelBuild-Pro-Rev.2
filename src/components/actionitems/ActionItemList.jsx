@@ -15,13 +15,19 @@ const STATUS_COLORS = {
   Cancelled:     "var(--text-muted)",
 };
 
+// Previously: `new Date(dateStr)` parsed 'YYYY-MM-DD' as UTC midnight,
+// then setHours(0,0,0,0) zeroed in local time — the two points were
+// separated by the user's UTC offset. In negative-offset timezones a
+// due date of 2025-01-15 viewed in the afternoon could show "Due in
+// 0 days" on 2025-01-14. We now normalize via the shared dateMath
+// helpers so every due-date calc uses local midnight consistently.
+import { daysUntil as _daysUntil, toLocalMidnight as _toLocalMidnight } from "@/lib/dateMath";
+
 function relativeDueDate(dateStr, status) {
   if (!dateStr) return null;
-  const due = new Date(dateStr);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  const diff = Math.round((due - now) / (1000 * 60 * 60 * 24));
+  const due = _toLocalMidnight(dateStr);
+  if (!due) return null;
+  const diff = _daysUntil(dateStr);
   const isDone = status === "Complete" || status === "Cancelled";
 
   if (isDone) return { label: due.toLocaleDateString(), overdue: false };
@@ -46,7 +52,10 @@ export default function ActionItemList({ actionItems = [], onEdit, onResolve, on
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       {actionItems.map((item) => {
-        const isOverdue = item.due_date && new Date(item.due_date) < new Date() && item.status !== "Complete" && item.status !== "Cancelled";
+        // Use local-midnight day math so a 2025-01-15 due date reads as
+        // "overdue on 2025-01-16", not "overdue at UTC midnight minus user's
+        // UTC offset."
+        const isOverdue = item.due_date && _daysUntil(item.due_date) < 0 && item.status !== "Complete" && item.status !== "Cancelled";
         const dueInfo = relativeDueDate(item.due_date, item.status);
         const priorityCfg = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.Medium;
         const isCritical = item.priority === "Critical";

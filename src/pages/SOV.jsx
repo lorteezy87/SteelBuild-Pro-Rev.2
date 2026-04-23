@@ -15,7 +15,7 @@ import SOVFormModal from "../components/sov/SOVFormModal";
 import { CommandBar } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { PTD } from "../components/shared/PhoenixTable";
-import { formatCurrency, formatPercent } from "../components/shared/formatters";
+import { formatCurrency, formatPercent, roundCurrency } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
 
@@ -382,19 +382,25 @@ export default function SOV() {
     return Number(globalRetainage);
   }, [globalRetainage, customRetainage]);
 
-  /* ── calc() with over-billing detection (Requirement 5) ── */
+  /* ── calc() with over-billing detection (Requirement 5) ──
+   * All currency math is rounded to cents at each step so the row-level
+   * display, totals row, and mismatch-variance all agree. Previously the
+   * raw floats propagated (e.g. 99.99 * 33.33 / 100 = 33.326667) and the
+   * totals row disagreed with the sum of the rendered rows by a few cents
+   * on a 50-line SOV — enough to trip the mismatch-variance warning on
+   * otherwise-correct pay apps. */
   const calc = useCallback((s) => {
-    const sv = Number(s.scheduled_value) || 0;
+    const sv = roundCurrency(s.scheduled_value);
     const prevPct = Number(s.previous_percent_complete) || 0;
     const curPct = Number(s.current_percent_complete) || 0;
     const retPct = effectiveRetainage != null
       ? effectiveRetainage
       : (Number(s.retainage_percent) || 0);
-    const thisPeriod = sv * ((curPct - prevPct) / 100);
-    const toDate = sv * (curPct / 100);
-    const balance = sv - toDate;
-    const retAmt = toDate * (retPct / 100);
-    const netToDate = toDate - retAmt;
+    const thisPeriod = roundCurrency(sv * ((curPct - prevPct) / 100));
+    const toDate = roundCurrency(sv * (curPct / 100));
+    const balance = roundCurrency(sv - toDate);
+    const retAmt = roundCurrency(toDate * (retPct / 100));
+    const netToDate = roundCurrency(toDate - retAmt);
     const overBilled = curPct > 100 || balance < 0;
     return { thisPeriod, toDate, balance, retAmt, netToDate, retPct, overBilled };
   }, [effectiveRetainage]);
@@ -430,16 +436,22 @@ export default function SOV() {
     }),
   [sovs, appFilter, statusFilter]);
 
-  const totals = useMemo(() => filtered.reduce((acc, s) => {
-    const c = calc(s);
-    acc.scheduled += Number(s.scheduled_value) || 0;
-    acc.thisPeriod += c.thisPeriod;
-    acc.toDate += c.toDate;
-    acc.balance += c.balance;
-    acc.retainage += c.retAmt;
-    acc.net += c.netToDate;
+  const totals = useMemo(() => {
+    // Round AFTER each accumulation so the running totals agree with the
+    // displayed rows exactly. Not rounding here re-introduces the drift
+    // calc() just eliminated.
+    const acc = filtered.reduce((a, s) => {
+      const c = calc(s);
+      a.scheduled  = roundCurrency(a.scheduled  + roundCurrency(s.scheduled_value));
+      a.thisPeriod = roundCurrency(a.thisPeriod + c.thisPeriod);
+      a.toDate     = roundCurrency(a.toDate     + c.toDate);
+      a.balance    = roundCurrency(a.balance    + c.balance);
+      a.retainage  = roundCurrency(a.retainage  + c.retAmt);
+      a.net        = roundCurrency(a.net        + c.netToDate);
+      return a;
+    }, { scheduled: 0, thisPeriod: 0, toDate: 0, balance: 0, retainage: 0, net: 0 });
     return acc;
-  }, { scheduled: 0, thisPeriod: 0, toDate: 0, balance: 0, retainage: 0, net: 0 }), [filtered, calc]);
+  }, [filtered, calc]);
 
   /* ── Requirement 10 — SOV mismatch detection ── */
   const projectBudget = Number(
@@ -450,11 +462,20 @@ export default function SOV() {
     || 0,
   );
   const totalScheduledValue = useMemo(
-    () => sovs.reduce((sum, s) => sum + (Number(s.scheduled_value) || 0), 0),
+    () => roundCurrency(
+      sovs.reduce((sum, s) => roundCurrency(sum + roundCurrency(s.scheduled_value)), 0),
+    ),
     [sovs],
   );
-  const mismatchVariance = projectBudget > 0 ? totalScheduledValue - projectBudget : 0;
-  const hasMismatch = projectBudget > 0 && Math.abs(mismatchVariance) > 0.01;
+  const mismatchVariance = projectBudget > 0
+    ? roundCurrency(totalScheduledValue - projectBudget)
+    : 0;
+  // Mismatch threshold scales with contract size: $0.50 floor or 0.1% of
+  // project budget, whichever is larger. A $0.01 tolerance was noise-
+  // sensitive — rounding drift on a $12M contract beats it routinely,
+  // firing false-positive "SOV doesn't match contract" warnings.
+  const mismatchTolerance = Math.max(0.5, projectBudget * 0.001);
+  const hasMismatch = projectBudget > 0 && Math.abs(mismatchVariance) > mismatchTolerance;
 
   /* ── Requirement 6 — Phase grouping ── */
   const phaseGroups = useMemo(() => {

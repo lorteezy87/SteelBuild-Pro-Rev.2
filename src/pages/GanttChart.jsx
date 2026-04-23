@@ -39,20 +39,43 @@ const ZOOM_LEVELS = {
   month: { pxPerDay: 6,  label: "Month" },
 };
 
+// Day math inside the Gantt grid. Previously mixed setUTCHours (in
+// getDaysBetween) with getFullYear/getMonth/getDate (in isToday), so in
+// non-UTC timezones the "today" vertical line and the date-range start
+// drifted by a day from what the task rows were rendering. All math now
+// runs against LOCAL midnight to match the rest of the app (urgencyEngine,
+// todayView, UpcomingWindows — see src/lib/dateMath.js).
+function toLocalMidnight(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    const [y, m, dd] = value.trim().split("-").map(Number);
+    return new Date(y, m - 1, dd, 0, 0, 0, 0);
+  }
+  const d = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (isNaN(d)) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function getDaysBetween(d1, d2) {
-  const a = new Date(d1); a.setUTCHours(0, 0, 0, 0);
-  const b = new Date(d2); b.setUTCHours(0, 0, 0, 0);
-  return Math.round((b - a) / 86400000);
+  const a = toLocalMidnight(d1);
+  const b = toLocalMidnight(d2);
+  if (!a || !b) return 0;
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
 function addDays(date, days) {
-  const d = new Date(date);
+  const d = toLocalMidnight(date) || new Date();
   d.setDate(d.getDate() + days);
   return d;
 }
 
 function isWeekend(d) { const day = d.getDay(); return day === 0 || day === 6; }
-function isToday(d) { const t = new Date(); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate(); }
+function isToday(d) {
+  const a = toLocalMidnight(d);
+  const b = toLocalMidnight(new Date());
+  return !!a && !!b && a.getTime() === b.getTime();
+}
 function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }); }
 
 function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, cutId, dependencyPickSourceId }) {
@@ -212,15 +235,15 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
     const start = task.planned_start || task.forecast_start;
     const end = task.planned_end || task.forecast_end;
     if (!start || !end) return null;
-    const daysFromStart = getDaysBetween(minDate, new Date(start + "T00:00:00Z"));
-    const duration = getDaysBetween(new Date(start + "T00:00:00Z"), new Date(end + "T00:00:00Z")) + 1;
+    const daysFromStart = getDaysBetween(minDate, toLocalMidnight(start));
+    const duration = getDaysBetween(toLocalMidnight(start), toLocalMidnight(end)) + 1;
     return { left: daysFromStart * pxPerDay, width: Math.max(pxPerDay, duration * pxPerDay) };
   };
 
   const getForecastOverlay = (task) => {
     if (!task.forecast_end || !task.planned_end || task.forecast_end <= task.planned_end) return null;
-    const daysFromStart = getDaysBetween(minDate, new Date(task.planned_end + "T00:00:00Z"));
-    const duration = getDaysBetween(new Date(task.planned_end + "T00:00:00Z"), new Date(task.forecast_end + "T00:00:00Z"));
+    const daysFromStart = getDaysBetween(minDate, toLocalMidnight(task.planned_end));
+    const duration = getDaysBetween(toLocalMidnight(task.planned_end), toLocalMidnight(task.forecast_end));
     if (duration <= 0) return null;
     return { left: daysFromStart * pxPerDay, width: duration * pxPerDay };
   };
@@ -242,8 +265,9 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
     const start = task.planned_start || task.forecast_start;
     const end = task.planned_end || task.forecast_end;
     if (!start || !end) return null;
-    const startDate = new Date(start + "T00:00:00Z");
-    const endDate = new Date(end + "T00:00:00Z");
+    const startDate = toLocalMidnight(start);
+    const endDate = toLocalMidnight(end);
+    if (!startDate || !endDate) return null;
     const today = new Date(); today.setUTCHours(0, 0, 0, 0);
     const totalDuration = getDaysBetween(startDate, endDate);
     if (totalDuration <= 0) return null;
@@ -629,10 +653,10 @@ export default function GanttChart() {
   const dateRange = useMemo(() => {
     const dates = [];
     filteredTasks.forEach(t => {
-      if (t.planned_start) dates.push(new Date(t.planned_start + "T00:00:00Z"));
-      if (t.planned_end) dates.push(new Date(t.planned_end + "T00:00:00Z"));
-      if (t.forecast_start) dates.push(new Date(t.forecast_start + "T00:00:00Z"));
-      if (t.forecast_end) dates.push(new Date(t.forecast_end + "T00:00:00Z"));
+      if (t.planned_start)  { const d = toLocalMidnight(t.planned_start);  if (d) dates.push(d); }
+      if (t.planned_end)    { const d = toLocalMidnight(t.planned_end);    if (d) dates.push(d); }
+      if (t.forecast_start) { const d = toLocalMidnight(t.forecast_start); if (d) dates.push(d); }
+      if (t.forecast_end)   { const d = toLocalMidnight(t.forecast_end);   if (d) dates.push(d); }
     });
     if (dates.length === 0) { const today = new Date(); return { minDate: addDays(today, -7), maxDate: addDays(today, 21) }; }
     return { minDate: addDays(new Date(Math.min(...dates)), -3), maxDate: addDays(new Date(Math.max(...dates)), 7) };

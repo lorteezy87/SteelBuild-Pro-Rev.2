@@ -139,7 +139,15 @@ function aggregateDrawingsBySet(drawings, projectMap) {
 /**
  * Aggregate SOVItem rows into pay-app-level groups by (project_id, application_number).
  * Each group exposes the latest period_to and totals.
+ *
+ * Currency math is rounded to cents per line (before accumulating) AND at
+ * the end of accumulation. IEEE-754 float drift across 40–50 line items can
+ * otherwise push a pay-app total off by a few cents from the row-by-row
+ * display, which is enough to trip the mismatch-variance alarms downstream.
+ * roundCurrency is `Math.round(n * 100) / 100`.
  */
+import { roundCurrency } from "@/components/shared/formatters";
+
 function aggregateSOVByApp(sovItems) {
   const map = new Map();
   for (const s of sovItems) {
@@ -156,9 +164,11 @@ function aggregateSOVByApp(sovItems) {
       });
     }
     const group = map.get(key);
-    group.totalScheduled += Number(s.scheduled_value) || 0;
+    const scheduled = roundCurrency(s.scheduled_value);
     const pct = Number(s.current_percent_complete) || 0;
-    group.totalBilled += (Number(s.scheduled_value) || 0) * (pct / 100);
+    const billedForLine = roundCurrency(scheduled * (pct / 100));
+    group.totalScheduled = roundCurrency(group.totalScheduled + scheduled);
+    group.totalBilled    = roundCurrency(group.totalBilled + billedForLine);
     // Keep latest period_to
     if (s.period_to && (!group.period_to || s.period_to > group.period_to)) {
       group.period_to = s.period_to;
