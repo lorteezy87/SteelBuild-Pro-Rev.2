@@ -75,8 +75,33 @@ export default function AnnotationLayer({
       setDraft({ kind: "pen", points: [{ x, y }] });
     } else if (activeTool === "rect") {
       setDraft({ kind: "rect", x0: x, y0: y, x1: x, y1: y });
+    } else if (activeTool === "highlight") {
+      setDraft({ kind: "highlight", x0: x, y0: y, x1: x, y1: y });
     } else if (activeTool === "arrow") {
       setDraft({ kind: "arrow", x0: x, y0: y, x1: x, y1: y });
+    } else if (activeTool === "measure") {
+      // Two-click tool. First click anchors + enters "tracking" mode where
+      // pointermove extends the line to the cursor; second click commits.
+      // Kept in the draft state machine so Esc cancels cleanly.
+      if (!draft || draft.kind !== "measure" || draft.committed) {
+        setDraft({ kind: "measure", x0: x, y0: y, x1: x, y1: y, tracking: true });
+      } else if (draft.tracking) {
+        // Second click — commit the measurement as a persisted item.
+        const dx = x - draft.x0;
+        const dy = y - draft.y0;
+        if (dx * dx + dy * dy > 1) {
+          onAddItem({
+            id: newMarkupId(),
+            kind: "measure",
+            pdf_page: pdfPage,
+            color: activeColor,
+            geom: { x1: draft.x0, y1: draft.y0, x2: x, y2: y },
+            created_at: new Date().toISOString(),
+          });
+        }
+        setDraft(null);
+      }
+      return; // measure handles pointer capture differently — skip default capture below
     } else if (activeTool === "note") {
       const id = newMarkupId();
       onAddItem({
@@ -91,12 +116,13 @@ export default function AnnotationLayer({
       setEditingNoteId(id);
     }
 
-    if (activeTool === "pen" || activeTool === "rect" || activeTool === "arrow") {
+    if (activeTool === "pen" || activeTool === "rect" || activeTool === "highlight" || activeTool === "arrow") {
       // Capture subsequent pointer events so we get mouseup even when the
-      // pointer leaves the SVG bounds.
+      // pointer leaves the SVG bounds. Measure uses a different gesture
+      // (click → move → click) so it doesn't need pointer capture.
       try { svgRef.current?.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     }
-  }, [activeTool, activeColor, isDrawingTool, onAddItem, pdfPage, viewport]);
+  }, [activeTool, activeColor, isDrawingTool, onAddItem, pdfPage, viewport, draft]);
 
   const handlePointerMove = useCallback((e) => {
     if (!draft || !viewport) return;
@@ -106,7 +132,10 @@ export default function AnnotationLayer({
       if (prev.kind === "pen") {
         return { ...prev, points: [...prev.points, { x, y }] };
       }
-      if (prev.kind === "rect" || prev.kind === "arrow") {
+      if (prev.kind === "rect" || prev.kind === "highlight" || prev.kind === "arrow") {
+        return { ...prev, x1: x, y1: y };
+      }
+      if (prev.kind === "measure" && prev.tracking) {
         return { ...prev, x1: x, y1: y };
       }
       return prev;
@@ -139,6 +168,26 @@ export default function AnnotationLayer({
         onAddItem({
           id: newMarkupId(),
           kind: "rect",
+          pdf_page: pdfPage,
+          color: activeColor,
+          geom: { x, y, w, h },
+          created_at: new Date().toISOString(),
+        });
+      }
+    } else if (draft.kind === "highlight") {
+      const x = Math.min(draft.x0, draft.x1);
+      const y = Math.min(draft.y0, draft.y1);
+      const w = Math.abs(draft.x1 - draft.x0);
+      const h = Math.abs(draft.y1 - draft.y0);
+      if (w > 2 && h > 2) {
+        // Highlight uses yellow by default even if activeColor is a
+        // stroke-appropriate color (red/blue), because highlight needs
+        // a translucent warm tone to read as "marked" without
+        // obscuring the underlying PDF. If the user explicitly picked
+        // a non-default color we honor it.
+        onAddItem({
+          id: newMarkupId(),
+          kind: "highlight",
           pdf_page: pdfPage,
           color: activeColor,
           geom: { x, y, w, h },
@@ -293,6 +342,67 @@ function renderDraft(draft, viewport, color) {
       />
     );
   }
+  if (draft.kind === "highlight") {
+    const r = pdfRectToCanvas(viewport, {
+      x: Math.min(draft.x0, draft.x1),
+      y: Math.min(draft.y0, draft.y1),
+      w: Math.abs(draft.x1 - draft.x0),
+      h: Math.abs(draft.y1 - draft.y0),
+    });
+    return (
+      <rect
+        x={r.left}
+        y={r.top}
+        width={r.width}
+        height={r.height}
+        stroke="none"
+        fill={color}
+        fillOpacity={0.28}
+      />
+    );
+  }
+  if (draft.kind === "measure" && draft.tracking) {
+    const [x1, y1] = pdfToCanvas(viewport, draft.x0, draft.y0);
+    const [x2, y2] = pdfToCanvas(viewport, draft.x1, draft.y1);
+    const dx = draft.x1 - draft.x0;
+    const dy = draft.y1 - draft.y0;
+    const pdfDist = Math.sqrt(dx * dx + dy * dy);
+    const label = formatMeasureLabel(pdfDist);
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    return (
+      <g>
+        {/* Endpoint crosshairs so the anchor point is obvious */}
+        <circle cx={x1} cy={y1} r={5} fill="none" stroke={color} strokeWidth={2} />
+        <circle cx={x2} cy={y2} r={5} fill="none" stroke={color} strokeWidth={2} />
+        <line
+          x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke={color}
+          strokeWidth={2}
+          strokeDasharray="6 4"
+          opacity={0.9}
+        />
+        <rect
+          x={midX - 42} y={midY - 11}
+          width={84} height={22}
+          rx={3}
+          fill="rgba(12,14,17,0.85)"
+          stroke={color}
+          strokeWidth={1}
+        />
+        <text
+          x={midX} y={midY + 4}
+          textAnchor="middle"
+          fontFamily="var(--font-mono)"
+          fontSize={11}
+          fontWeight={700}
+          fill="#fff"
+        >
+          {label}
+        </text>
+      </g>
+    );
+  }
   if (draft.kind === "arrow") {
     const [x1, y1] = pdfToCanvas(viewport, draft.x0, draft.y0);
     const [x2, y2] = pdfToCanvas(viewport, draft.x1, draft.y1);
@@ -362,6 +472,66 @@ function MarkupItem({
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
         onClick={handleClick}
       />
+    );
+  }
+
+  if (item.kind === "highlight") {
+    const r = pdfRectToCanvas(viewport, item.geom);
+    return (
+      <rect
+        x={r.left}
+        y={r.top}
+        width={r.width}
+        height={r.height}
+        stroke={selected ? color : "none"}
+        strokeWidth={selected ? 1.5 : 0}
+        fill={color}
+        fillOpacity={0.28}
+        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
+        onClick={handleClick}
+      />
+    );
+  }
+
+  if (item.kind === "measure") {
+    const [x1, y1] = pdfToCanvas(viewport, item.geom.x1, item.geom.y1);
+    const [x2, y2] = pdfToCanvas(viewport, item.geom.x2, item.geom.y2);
+    const dx = item.geom.x2 - item.geom.x1;
+    const dy = item.geom.y2 - item.geom.y1;
+    const label = formatMeasureLabel(Math.sqrt(dx * dx + dy * dy));
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    return (
+      <g
+        style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
+        onClick={handleClick}
+      >
+        <circle cx={x1} cy={y1} r={4} fill={color} />
+        <circle cx={x2} cy={y2} r={4} fill={color} />
+        <line
+          x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke={color}
+          strokeWidth={selected ? 2.5 : 2}
+        />
+        <rect
+          x={midX - 42} y={midY - 11}
+          width={84} height={22}
+          rx={3}
+          fill="rgba(12,14,17,0.88)"
+          stroke={color}
+          strokeWidth={1}
+        />
+        <text
+          x={midX} y={midY + 4}
+          textAnchor="middle"
+          fontFamily="var(--font-mono)"
+          fontSize={11}
+          fontWeight={700}
+          fill="#fff"
+        >
+          {label}
+        </text>
+      </g>
     );
   }
 
@@ -472,10 +642,33 @@ function MarkupItem({
 
 function cursorFor(tool) {
   switch (tool) {
-    case "pen":   return "crosshair";
-    case "rect":  return "crosshair";
-    case "arrow": return "crosshair";
-    case "note":  return "copy";
-    default:      return "default";
+    case "pen":       return "crosshair";
+    case "rect":      return "crosshair";
+    case "highlight": return "crosshair";
+    case "arrow":     return "crosshair";
+    case "measure":   return "crosshair";
+    case "note":      return "copy";
+    default:          return "default";
   }
+}
+
+/**
+ * Format a distance in PDF user units (points: 1/72 inch) into an engineer-
+ * friendly label. Without a drawing-scale calibration we can only show the
+ * raw page measurement, so we surface both the page-inch value and a hint
+ * that scale calibration is needed for real-world dimensions. Phase 2 will
+ * add a "calibrate with known length" step that stores a scale factor in
+ * drawings.markup_scale and drives this label to real feet-inches.
+ */
+function formatMeasureLabel(pdfDist) {
+  // PDF user units are points (1/72 inch). Show in inches with tick-friendly
+  // precision. Under 12" → inches with tenths; 12"+ → ft'-in" to match the
+  // way PMs read drawings.
+  const inches = pdfDist / 72;
+  if (inches < 12) {
+    return `${inches.toFixed(1)}"`;
+  }
+  const ft = Math.floor(inches / 12);
+  const rem = inches - ft * 12;
+  return `${ft}'-${rem.toFixed(1)}"`;
 }

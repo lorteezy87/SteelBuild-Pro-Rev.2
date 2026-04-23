@@ -375,8 +375,15 @@ export default function DrawingViewer() {
         setActiveTool("pen");
       } else if (e.key === "b" || e.key === "B") {
         setActiveTool("rect");
+      } else if (e.key === "h" || e.key === "H") {
+        // H = highlight. Lowercase only — uppercase H on some layouts
+        // collides with browser "Open history" (not a thing by default
+        // but some extensions bind it); lowercase is safe.
+        setActiveTool("highlight");
       } else if (e.key === "a" || e.key === "A") {
         setActiveTool("arrow");
+      } else if (e.key === "m" || e.key === "M") {
+        setActiveTool("measure");
       } else if (e.key === "t" || e.key === "T") {
         setActiveTool("note");
       } else if (e.key === "Escape") {
