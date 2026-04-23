@@ -114,15 +114,45 @@ const STATUS_COLOR = {
 function statusColor(s) { return STATUS_COLOR[s] || "var(--text-muted)"; }
 
 // ── Formatting helpers ────────────────────────────────────────────────────
+//
+// A single robust parser for date-like inputs. Schedule tasks *should* all
+// store YYYY-MM-DD date-only strings, but real data gets messy: some rows
+// come back as full ISO timestamps ("2026-04-23T12:00:00Z"), some as Date
+// objects, some as junk. The old code blindly did `new Date(str + "T00:00:00Z")`
+// which produces an Invalid Date when `str` already has a T, and then any
+// downstream `.toISOString()` throws "RangeError: Invalid time value" — that
+// crashes the ENTIRE Gantt via the effectiveDates useMemo.
+//
+// parseDateUTC returns a valid UTC Date or null. toDateOnly returns a
+// YYYY-MM-DD string or null. All date math below funnels through these.
+function parseDateUTC(input) {
+  if (!input) return null;
+  if (input instanceof Date) {
+    return isNaN(input.getTime()) ? null : input;
+  }
+  const s = String(input).trim();
+  if (!s) return null;
+  // Treat pure YYYY-MM-DD as UTC midnight; anything with time info parse as-is.
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00Z` : s;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+function toDateOnly(input) {
+  const d = parseDateUTC(input);
+  return d ? d.toISOString().slice(0, 10) : null;
+}
+
 function fmtDate(d) {
-  if (!d) return "—";
-  const dt = new Date(d + "T00:00:00Z");
+  const dt = parseDateUTC(d);
+  if (!dt) return "—";
   return dt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "UTC" });
 }
 
 function calcDuration(start, end) {
-  if (!start || !end) return "—";
-  const days = Math.round((new Date(end + "T00:00:00Z") - new Date(start + "T00:00:00Z")) / 86400000);
+  const s = parseDateUTC(start);
+  const e = parseDateUTC(end);
+  if (!s || !e) return "—";
+  const days = Math.round((e - s) / 86400000);
   return days >= 0 ? `${days}d` : "—";
 }
 
@@ -423,14 +453,16 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
 
     const dayMs = 86400000;
     const addDays = (iso, n) => {
-      if (!iso) return iso;
-      const d = new Date(iso + "T00:00:00Z");
+      const d = parseDateUTC(iso);
+      if (!d) return null; // unparsable input — bail rather than throw downstream
       d.setUTCDate(d.getUTCDate() + n);
       return d.toISOString().slice(0, 10);
     };
     const diffDays = (a, b) => {
-      if (!a || !b) return 0;
-      return Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / dayMs);
+      const da = parseDateUTC(a);
+      const db = parseDateUTC(b);
+      if (!da || !db) return 0;
+      return Math.round((db - da) / dayMs);
     };
 
     const resolve = (taskId, visiting) => {
@@ -440,8 +472,12 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
 
       const task = taskById[taskId];
       if (!task) { visiting.delete(taskId); return null; }
-      if (!task.start_date || !task.end_date) {
-        out[taskId] = { start: task.start_date, end: task.end_date, shifted: false };
+      // Normalize to YYYY-MM-DD up front so string comparisons below are safe
+      // even when upstream data arrives as a full ISO timestamp or a Date.
+      const startOnly = toDateOnly(task.start_date);
+      const endOnly   = toDateOnly(task.end_date);
+      if (!startOnly || !endOnly) {
+        out[taskId] = { start: startOnly, end: endOnly, shifted: false };
         visiting.delete(taskId);
         return out[taskId];
       }
@@ -450,21 +486,22 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       // (data-entry bug) would otherwise short-circuit cycle detection on
       // the first hop and leave its bar undefined.
       const deps = parseDeps(task.dependencies).filter(depId => depId && depId !== taskId);
-      let earliestStart = task.start_date;
+      let earliestStart = startOnly;
       let shifted = false;
       for (const depId of deps) {
         const depResolved = resolve(depId, visiting);
         if (depResolved?.end) {
           const candidate = addDays(depResolved.end, 1);
-          if (candidate > earliestStart) {
+          if (candidate && candidate > earliestStart) {
             earliestStart = candidate;
             shifted = true;
           }
         }
       }
 
-      const dur = Math.max(0, diffDays(task.start_date, task.end_date));
-      const newEnd = dur === 0 ? earliestStart : addDays(earliestStart, dur);
+      const dur = Math.max(0, diffDays(startOnly, endOnly));
+      const newEndRaw = dur === 0 ? earliestStart : addDays(earliestStart, dur);
+      const newEnd = newEndRaw || endOnly; // fall back rather than storing null
       out[taskId] = { start: earliestStart, end: newEnd, shifted };
       visiting.delete(taskId);
       return out[taskId];
@@ -482,9 +519,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   // stale stored finish. Tasks marked Complete are never overdue.
   const isOverdue = (task) => {
     if (!task || task.status === "Complete") return false;
-    const e = effEnd(task);
+    const e = parseDateUTC(effEnd(task));
     if (!e) return false;
-    return new Date(e + "T00:00:00Z") < today;
+    return e < today;
   };
 
   const dateRange = useMemo(() => {
@@ -498,19 +535,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 7)) weeks.push(new Date(d));
       return { start: s, end: e, weeks };
     }
-    const dates = allTasks.flatMap(t => {
-      const s = effStart(t);
-      const e = effEnd(t);
-      return [
-        s ? new Date(s + "T00:00:00Z") : null,
-        e ? new Date(e + "T00:00:00Z") : null,
-      ];
-    }).filter(Boolean);
+    const dates = allTasks.flatMap(t => [
+      parseDateUTC(effStart(t)),
+      parseDateUTC(effEnd(t)),
+    ]).filter(Boolean);
     // Include delivery dates so the timeline stretches to cover them
     deliveries.forEach(d => {
-      if (d.scheduled_date) dates.push(new Date(d.scheduled_date + "T00:00:00Z"));
-      if (d.required_date) dates.push(new Date(d.required_date + "T00:00:00Z"));
-      if (d.actual_date) dates.push(new Date(d.actual_date + "T00:00:00Z"));
+      const sd = parseDateUTC(d.scheduled_date); if (sd) dates.push(sd);
+      const rd = parseDateUTC(d.required_date);  if (rd) dates.push(rd);
+      const ad = parseDateUTC(d.actual_date);    if (ad) dates.push(ad);
     });
     // Always include today in the range so the TODAY line is always visible
     dates.push(today);
@@ -552,13 +585,15 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
 
   const px = (dateStr) => {
-    if (!dateStr) return 0;
-    const d = new Date(dateStr + "T00:00:00Z");
+    const d = parseDateUTC(dateStr);
+    if (!d) return 0;
     return Math.max(0, (d - dateRange.start) / 86400000 * PX_PER_DAY);
   };
   const spanPx = (start, end) => {
-    if (!start || !end) return 0;
-    return Math.max(4, (new Date(end + "T00:00:00Z") - new Date(start + "T00:00:00Z")) / 86400000 * PX_PER_DAY);
+    const s = parseDateUTC(start);
+    const e = parseDateUTC(end);
+    if (!s || !e) return 0;
+    return Math.max(4, (e - s) / 86400000 * PX_PER_DAY);
   };
 
   const todayPx = (today - dateRange.start) / 86400000 * PX_PER_DAY;
