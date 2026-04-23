@@ -845,10 +845,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const totalHeight = rows.reduce((h, r) => h + ((r.type === "summary" || r.type === "delivery-summary") ? SUM_H : ROW_H), 0);
 
   return (
-    <div ref={containerRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
+    <div ref={containerRef} data-gantt-export-root style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg-page)", overflow: "hidden" }}>
 
       {/* ── Toolbar ─────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+      <div data-gantt-export-exclude style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
         {/* Stats */}
         <div style={{ display: "flex", gap: 16, flex: 1 }}>
           {[
