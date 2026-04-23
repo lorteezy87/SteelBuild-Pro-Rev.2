@@ -530,6 +530,7 @@ export default function GanttChart() {
   const [menu, setMenu] = useState(null); // { x, y, task }
   const [clipboard, setClipboard] = useState(null); // { mode: "cut"|"copy", task }
   const [dependencyPick, setDependencyPick] = useState(null); // { sourceId }
+  const [parentPick, setParentPick]           = useState(null); // { childId } — "Make a subtask" pick mode
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ["lookahead-gantt", activeProject?.id],
@@ -689,25 +690,44 @@ export default function GanttChart() {
     setShowDetail(true);
   }, []);
 
-  // "Make a subtask" nests under the nearest task above in the same phase.
+  // "Make a subtask" now uses an explicit pick-parent mode (like
+  // dependency picking). Click any task next → THAT becomes the parent.
+  // This replaced a silent "auto-pick the task above" that confused users
+  // when the auto-pick landed on the wrong row.
   const makeSubtask = useCallback((task) => {
-    const samePhase = items
-      .filter((i) => derivePhase(i) === derivePhase(task) && i.id !== task.id);
-    // Use created_at to pick the one just above in list order (desc sort → "above" means created later).
-    const aboveCandidates = samePhase
-      .filter((i) => (i.created_at || "") > (task.created_at || ""))
-      .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
-    const parent = aboveCandidates[0] || samePhase[0];
-    if (!parent) {
-      toast.error("No task above to nest under");
+    setParentPick({ childId: task.id });
+    toast.info("Click the parent task to nest under · Esc to cancel");
+  }, []);
+
+  const completeParentPick = useCallback(async (parentTask) => {
+    if (!parentPick) return;
+    const child = items.find((t) => t.id === parentPick.childId);
+    setParentPick(null);
+    if (!child) return;
+    if (child.id === parentTask.id) {
+      toast.error("Can't nest a task under itself");
       return;
     }
-    if (parent.parent_id === task.id) {
-      toast.error("Cannot nest under a descendant");
-      return;
+    // Reject cycles — walk up parent chain of prospective parent.
+    const byId = new Map(items.map((t) => [t.id, t]));
+    let cursor = parentTask;
+    const visited = new Set();
+    while (cursor) {
+      if (cursor.id === child.id) {
+        toast.error("That task is already a descendant of this one");
+        return;
+      }
+      if (visited.has(cursor.id)) break;
+      visited.add(cursor.id);
+      cursor = cursor.parent_id ? byId.get(cursor.parent_id) : null;
     }
-    patchMeta(task, { parent_id: parent.id }).then(() => toast.success("Made subtask"));
-  }, [items, patchMeta]);
+    try {
+      await patchMeta(child, { parent_id: parentTask.id });
+      toast.success(`"${child.activity}" nested under "${parentTask.activity}"`);
+    } catch (err) {
+      toast.error(`Could not nest: ${err.message}`);
+    }
+  }, [parentPick, items, patchMeta]);
 
   const promoteSubtask = useCallback((task) => {
     if (!task.parent_id) { toast.info("Not a subtask"); return; }
@@ -832,16 +852,27 @@ export default function GanttChart() {
 
   // Cancel dependency pick via Esc
   useEffect(() => {
-    if (!dependencyPick) return;
-    const onKey = (e) => { if (e.key === "Escape") { setDependencyPick(null); toast.info("Cancelled"); } };
+    // Escape cancels any active pick mode.
+    if (!dependencyPick && !parentPick) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        if (dependencyPick) setDependencyPick(null);
+        if (parentPick)     setParentPick(null);
+        toast.info("Cancelled");
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dependencyPick]);
+  }, [dependencyPick, parentPick]);
 
   // Document-level contextmenu listener scoped to the Gantt container.
   // Walks up from event.target to find the row via data-gantt-task-id or
   // data-gantt-phase. This is immune to event-bubbling quirks inside
   // scroll containers and overlapping SVG layers.
+  //
+  // Registered with capture:true so nothing higher in the tree (custom
+  // blockers, ad-block extensions, design-system wrappers) can swallow
+  // it before we see the event.
   const ganttRootRef = useRef(null);
   useEffect(() => {
     const onCtx = (ev) => {
@@ -854,18 +885,26 @@ export default function GanttChart() {
       if (!taskEl && !phaseEl) return;
 
       ev.preventDefault();
+      ev.stopPropagation();
 
       if (taskEl) {
         const id = taskEl.getAttribute("data-gantt-task-id");
         const task = items.find((t) => t.id === id);
-        if (task) setMenu({ x: ev.clientX, y: ev.clientY, task });
+        if (!task) {
+          // Task data isn't loaded yet for this id — surface instead of
+          // silently dropping so users aren't left wondering why nothing
+          // happened after a right-click.
+          toast.info("Task data still loading — try again in a moment.");
+          return;
+        }
+        setMenu({ x: ev.clientX, y: ev.clientY, task });
         return;
       }
       const phase = phaseEl.getAttribute("data-gantt-phase");
       setMenu({ x: ev.clientX, y: ev.clientY, phase });
     };
-    document.addEventListener("contextmenu", onCtx);
-    return () => document.removeEventListener("contextmenu", onCtx);
+    document.addEventListener("contextmenu", onCtx, true);
+    return () => document.removeEventListener("contextmenu", onCtx, true);
   }, [items]);
 
   // Phase-level actions for summary (parent) row right-click.
@@ -912,15 +951,20 @@ export default function GanttChart() {
   }, [items, updateMut]);
 
   const handleRowClick = useCallback((id) => {
-    // Intercept clicks while in dependency-pick mode.
+    // Intercept clicks while a pick mode is active.
     if (dependencyPick) {
       const t = items.find((x) => x.id === id);
       if (t) completeDependencyPick(t);
       return;
     }
+    if (parentPick) {
+      const t = items.find((x) => x.id === id);
+      if (t) completeParentPick(t);
+      return;
+    }
     setSelectedId(id === selectedId ? null : id);
     setShowDetail(id !== selectedId);
-  }, [dependencyPick, items, completeDependencyPick, selectedId]);
+  }, [dependencyPick, parentPick, items, completeDependencyPick, completeParentPick, selectedId]);
 
   const menuItems = useMemo(() => {
     // Phase (parent) row right-click
@@ -1124,7 +1168,7 @@ export default function GanttChart() {
               onTogglePhase={togglePhase}
               smartMode={smartMode}
               cutId={clipboard?.mode === "cut" ? clipboard?.task?.id : null}
-              dependencyPickSourceId={dependencyPick?.sourceId || null}
+              dependencyPickSourceId={dependencyPick?.sourceId || parentPick?.childId || null}
             />
             <Timeline
               tasks={visibleRows}
@@ -1160,6 +1204,29 @@ export default function GanttChart() {
           }}
         >
           DEPENDENCY PICK MODE — click the predecessor task · Esc to cancel
+        </div>
+      )}
+
+      {parentPick && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "var(--accent)",
+            color: "#fff",
+            padding: "8px 16px",
+            borderRadius: 6,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.45)",
+            zIndex: 900,
+          }}
+        >
+          ↳ SUBTASK PICK MODE — click the task that will become the parent · Esc to cancel
         </div>
       )}
 

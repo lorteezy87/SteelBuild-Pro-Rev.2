@@ -53,6 +53,7 @@ export const MODULE_GROUPS = {
   SCHEDULING: [
     { label: "Schedule",              page: "Schedule" },
     { label: "Gantt Chart",           page: "GanttChart" },
+    { label: "Field Plan",            page: "FieldPlan" },
     { label: "Resource Mgmt",         page: "ResourceManagement" },
     { label: "Lookahead",             page: "Lookahead" },
   ],
