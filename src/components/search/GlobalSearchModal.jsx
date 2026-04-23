@@ -26,7 +26,7 @@ const COLOR_MAP = {
   Drawing: "#0EA5E9",
   WorkPackage: "var(--status-review)",
   ChangeOrder: "var(--status-review)",
-  Contact: "#8B5CF6",
+  Contact: "#0D9488",
   Module: "var(--accent)",
 };
 

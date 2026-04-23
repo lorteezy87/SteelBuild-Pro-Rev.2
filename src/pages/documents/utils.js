@@ -68,8 +68,8 @@ export function exportDocsCsv(docs, projectName) {
 export const LIST_FILETYPE_STYLES = {
   pdf:  { bg: "rgba(239,68,68,0.18)",   color: "#F87171" },
   dwg:  { bg: "rgba(56,189,248,0.18)",  color: "#38BDF8" },
-  ifc:  { bg: "rgba(167,139,250,0.18)", color: "#A78BFA" },
-  gltf: { bg: "rgba(167,139,250,0.18)", color: "#A78BFA" },
+  ifc:  { bg: "rgba(8,145,178,0.18)", color: "#0891B2" },
+  gltf: { bg: "rgba(8,145,178,0.18)", color: "#0891B2" },
   xlsx: { bg: "rgba(52,211,153,0.18)",  color: "#34D399" },
   docx: { bg: "rgba(96,165,250,0.18)",  color: "#60A5FA" },
   img:  { bg: "rgba(45,212,191,0.18)",  color: "#2DD4BF" },

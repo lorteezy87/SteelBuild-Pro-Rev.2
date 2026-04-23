@@ -321,7 +321,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                   sub={cpi == null ? "No EVM data" : cpi >= 1 ? "On / Under budget" : cpi >= 0.9 ? "Slight overrun" : "Significant overrun"}
                   color={cpi == null ? "var(--text-muted)" : cpi >= 1 ? "var(--status-success)" : cpi >= 0.9 ? "var(--status-warning)" : "var(--status-error)"} />
                 <KPITile label="Work Packages" value={`${wpsComplete}/${wps.length}`}
-                  sub={`${avgComplete}% avg complete`} color="#A78BFA" />
+                  sub={`${avgComplete}% avg complete`} color="#0891B2" />
               </div>
 
               {/* Budget Trend + Cost by Phase */}
@@ -430,7 +430,7 @@ export default function ProjectDrilldownModal({ project, onClose }) {
                               </div>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#A78BFA" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "#0891B2" }}>
                                 {member.packages}
                               </div>
                               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>

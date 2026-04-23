@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 
 const BIC_COLORS_MAP = {
   Contractor: "var(--accent)",
-  GC: "#8B5CF6",
+  GC: "#0D9488",
   Engineer: "var(--status-warning)",
   Architect: "var(--status-success)",
   Owner: "var(--status-error)",

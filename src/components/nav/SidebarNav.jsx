@@ -6,7 +6,7 @@ import { ChevronsLeft, ChevronsRight, Search, Clock } from "lucide-react";
 const GROUP_ACCENTS = {
   "OVERVIEW":            "#E0B030", // gold
   "PROJECT MANAGEMENT":  "#58A6FF", // blue
-  "DESIGN & DRAWINGS":   "#8B5CF6", // violet
+  "DESIGN & DRAWINGS":   "#0D9488", // violet
   "PRODUCTION":          "#3FB950", // green
   "FINANCIALS":          "#E3B341", // amber
   "DOCUMENTS & REPORTS": "#06B6D4", // cyan

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 const STATUS_COLORS = {
   Open: "var(--status-warning)",
-  "Pending PM Review": "#A78BFA",
+  "Pending PM Review": "#0891B2",
   Noticed: "var(--status-info)",
   "Action Taken": "var(--accent)",
   Resolved: "var(--status-success)",
@@ -17,7 +17,7 @@ const ROOT_CAUSE_COLORS = {
   "Site Readiness": "#E8650A",
   "Material Delay": "#FFB400",
   "Coordination Gap": "#0EA5E9",
-  "Scope Change": "#A78BFA",
+  "Scope Change": "#0891B2",
   "Weather/Force Majeure": "#8898A8",
   "Subcontractor": "#06B6D4",
   "Owner Decision": "#FF9F43",

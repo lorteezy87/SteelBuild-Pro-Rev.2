@@ -14,7 +14,7 @@ const FAB_STAGES = [
   { id: "shop_released", label: "Released to Shop", short: "RELEASED", color: "var(--status-warning)" },
   { id: "in_fabrication", label: "In Fabrication", short: "IN FAB", color: "var(--tertiary)" },
   { id: "fabricated", label: "Fabricated", short: "FABRICATED", color: "var(--status-info)" },
-  { id: "finish_treatment", label: "Paint / Galv", short: "FINISH", color: "#C084FC" },
+  { id: "finish_treatment", label: "Paint / Galv", short: "FINISH", color: "#B45309" },
   { id: "ready_to_ship", label: "Ready to Ship", short: "RTS", color: "var(--status-success)" },
 ];
 

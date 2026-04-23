@@ -45,7 +45,7 @@ export const DOC_DISCIPLINES = [
 export const FILE_TYPE_CONFIG = {
   pdf:   { icon: "PDF", bg: "#dc2626", text: "#fff" },
   dwg:   { icon: "DWG", bg: "#2563eb", text: "#fff" },
-  dxf:   { icon: "DXF", bg: "#7c3aed", text: "#fff" },
+  dxf:   { icon: "DXF", bg: "#0d9488", text: "#fff" },
   ifc:   { icon: "3D",  bg: "#059669", text: "#fff" },
   rvt:   { icon: "RVT", bg: "#d97706", text: "#fff" },
   jpg:   { icon: "IMG", bg: "#0891b2", text: "#fff" },

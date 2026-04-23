@@ -82,7 +82,7 @@ export default function RolesTab({ user }) {
       )}
 
       {!isAdmin && (
-        <div style={{ padding: 16, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 8, color: '#A78BFA', fontSize: 12, lineHeight: 1.6 }}>
+        <div style={{ padding: 16, background: 'rgba(13,148,136,0.08)', border: '1px solid rgba(13,148,136,0.25)', borderRadius: 8, color: '#0891B2', fontSize: 12, lineHeight: 1.6 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>👑 Admin access required</div>
           <div>Contact your administrator to manage team members and roles.</div>
         </div>

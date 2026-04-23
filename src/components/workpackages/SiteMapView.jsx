@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { X, AlertTriangle, Pause } from "lucide-react";
 
 const PHASE_COLOR = {
-  Detailing: "#8B5CF6",
+  Detailing: "#0D9488",
   Fabrication: "var(--accent)",
   Delivery: "#00B8D9",
   Erection: "var(--status-success-bright)",
