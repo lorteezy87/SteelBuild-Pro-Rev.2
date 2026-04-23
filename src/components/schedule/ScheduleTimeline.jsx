@@ -134,7 +134,7 @@ export default function ScheduleTimeline({
     }
 
     // Regular task bar
-    let gradientColor = "linear-gradient(135deg, #8B5CF6, #6D40D4)";
+    let gradientColor = "linear-gradient(135deg, #0D9488, #0B7F74)";
     if (task.phase === "Fabrication")
       gradientColor = "var(--accent)";
     else if (task.phase === "Delivery")

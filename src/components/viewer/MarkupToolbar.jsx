@@ -40,7 +40,7 @@ const COLORS = [
   "#FFE600",
   "#00D68F",
   "#00B8D9",
-  "#8B5CF6",
+  "#0D9488",
   "#FFFFFF",
 ];
 

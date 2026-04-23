@@ -5,7 +5,7 @@ const TASK_TYPE_COLORS = {
 Fabrication: { gradient: 'var(--accent)', solid: 'var(--accent)' },
 Delivery: { gradient: 'linear-gradient(90deg, #00B8D9, #0090B8)', solid: '#00B8D9' },
 Install: { gradient: 'linear-gradient(90deg, var(--status-success-bright), #00A86B)', solid: 'var(--status-success-bright)' },
-Submittal: { gradient: 'linear-gradient(90deg, #8B5CF6, #6D40D4)', solid: '#8B5CF6' },
+Submittal: { gradient: 'linear-gradient(90deg, #0D9488, #0B7F74)', solid: '#0D9488' },
 RFI: { gradient: 'linear-gradient(90deg, var(--status-warning-bright), #FF8C00)', solid: 'var(--status-warning-bright)' },
 Milestone: { gradient: 'none', solid: 'var(--status-warning-bright)' },
 Task: { gradient: 'linear-gradient(90deg, rgba(160,175,210,0.4), rgba(130,145,180,0.4))', solid: 'rgba(160,175,210,0.5)' },

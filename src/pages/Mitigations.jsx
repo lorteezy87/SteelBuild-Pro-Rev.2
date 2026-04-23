@@ -17,7 +17,7 @@ import { Plus, Download } from "lucide-react";
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_COLORS = {
   Open: "var(--status-warning)",
-  "Pending PM Review": "#A78BFA",
+  "Pending PM Review": "#0891B2",
   Noticed: "var(--status-info)",
   "Action Taken": "var(--accent)",
   Resolved: "var(--status-success)",
@@ -31,7 +31,7 @@ const ROOT_CAUSE_COLORS = {
   "Site Readiness":        "#E8650A",
   "Material Delay":        "#FFB400",
   "Coordination Gap":      "#0EA5E9",
-  "Scope Change":          "#A78BFA",
+  "Scope Change":          "#0891B2",
   "Weather/Force Majeure": "#8898A8",
   "Subcontractor":         "#06B6D4",
   "Owner Decision":        "#FF9F43",
@@ -726,7 +726,7 @@ export default function Mitigations() {
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>HIGH ($50k+)</div>
                 </div>
                 <div style={{ background: "var(--hover-bg)", borderRadius: 6, padding: "8px 10px" }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.pendingReview > 0 ? "#A78BFA" : "var(--text-muted)" }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: stats.pendingReview > 0 ? "#0891B2" : "var(--text-muted)" }}>
                     {stats.pendingReview}
                   </div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>PM REVIEW</div>

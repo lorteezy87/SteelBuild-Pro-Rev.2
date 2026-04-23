@@ -1,7 +1,7 @@
 import React from "react";
 import { Trash2 } from "lucide-react";
 
-const COLORS = ["var(--accent)", "#FF3D3D", "var(--status-warning)", "#FFE600", "var(--status-success)", "var(--accent)", "#8B5CF6", "#FFFFFF"];
+const COLORS = ["var(--accent)", "#FF3D3D", "var(--status-warning)", "#FFE600", "var(--status-success)", "var(--accent)", "#0D9488", "#FFFFFF"];
 
 export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
   if (!markup) return null;

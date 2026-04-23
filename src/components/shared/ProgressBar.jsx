@@ -6,7 +6,8 @@ export default function ProgressBar({ value = 0, max = 100, color = "blue", show
   if (color === "rose") { fill = "var(--status-error)"; }
   else if (color === "amber") { fill = "var(--status-warning)"; }
   else if (color === "green") { fill = "var(--status-success)"; }
-  else if (color === "purple") { fill = "var(--chart-4)"; }
+  // "purple" kept as a legacy alias for amber (see KPIStrip comment).
+  else if (color === "purple") { fill = "var(--status-warning)"; }
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>

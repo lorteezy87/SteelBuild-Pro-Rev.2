@@ -21,7 +21,7 @@ const TABS = [
 ];
 
 const PHASE_CONFIG = {
-  Detailing:   { color: '#8B5CF6' },
+  Detailing:   { color: '#0D9488' },
   Fabrication: { color: 'var(--accent)' },
   Delivery:    { color: '#06B6D4' },
   Erection:    { color: '#22C55E' },
@@ -168,7 +168,7 @@ function WorkPackagesTab({ workPackages }) {
     'On Hold':     'var(--status-warning)',
   };
   const PHASE_COLORS = {
-    Detailing:   '#8B5CF6',
+    Detailing:   '#0D9488',
     Fabrication: 'var(--accent)',
     Delivery:    '#06B6D4',
     Erection:    '#22C55E',

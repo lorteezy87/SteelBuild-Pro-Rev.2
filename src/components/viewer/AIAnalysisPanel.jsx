@@ -57,7 +57,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
       style={{
         width: 320,
         background: "var(--bg-sidebar)",
-        borderLeft: "2px solid rgba(139,92,246,0.30)",
+        borderLeft: "2px solid rgba(13,148,136,0.30)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"

@@ -5,7 +5,11 @@ const accentMap = {
   green:  { color: "var(--status-success)", bg: "rgba(34,197,94,0.07)" },
   amber:  { color: "var(--status-warning)", bg: "rgba(245,158,11,0.07)" },
   rose:   { color: "var(--status-error)",   bg: "rgba(239,68,68,0.07)" },
-  purple: { color: "var(--chart-4)",        bg: "rgba(168,85,247,0.07)" },
+  // "purple" is a legacy prop name — callers (CostDashboard, ExecutiveView,
+  // etc.) still pass color="purple" for contingency / reserve tiles. The
+  // actual color is now industrial amber; true purple read as out-of-place
+  // in a steel fab UI. Alias "amber" for new call-sites.
+  purple: { color: "var(--status-warning)", bg: "rgba(245,158,11,0.07)" },
   slate:  { color: "var(--accent)",         bg: "rgba(200,155,32,0.06)" },
 };
 

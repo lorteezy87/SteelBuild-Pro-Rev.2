@@ -245,7 +245,7 @@
 
   --phase-detailing:          #B8860B;
   --phase-fab:                #2563EB;
-  --phase-delivery:           #7C3AED;
+  --phase-delivery:           #0D9488;  /* teal — logistics/shipping (was #0D9488 violet) */
   --phase-erection:           #16A34A;
   --phase-closeout:           #6B7280;
 

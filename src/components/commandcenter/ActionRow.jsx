@@ -36,7 +36,7 @@ const TYPE_COLORS = {
   DWG:  { color: "var(--status-info)",    bg: "var(--info-muted)" },
   SUB:  { color: "var(--secondary)",      bg: "rgba(68,226,205,0.12)" },
   CO:   { color: "var(--accent)",         bg: "var(--accent-muted)" },
-  DEL:  { color: "#8B5CF6",              bg: "rgba(139,92,246,0.12)" },
+  DEL:  { color: "#0D9488",              bg: "rgba(13,148,136,0.12)" },
   WP:   { color: "var(--status-success)", bg: "var(--success-muted)" },
   PAY:  { color: "var(--tertiary)",       bg: "rgba(168,240,203,0.12)" },
   NOTE: { color: "var(--text-muted)",     bg: "var(--hover-bg)" },

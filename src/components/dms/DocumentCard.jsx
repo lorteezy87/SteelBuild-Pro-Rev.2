@@ -6,8 +6,8 @@ import { createPageUrl } from "@/utils";
 const FILE_TYPE_CONFIG = {
   pdf:   { icon: "PDF",  bg: "rgba(239,68,68,0.18)",     color: "#F87171",  border: "rgba(239,68,68,0.35)" },
   dwg:   { icon: "DWG",  bg: "rgba(56,189,248,0.18)",    color: "#38BDF8",  border: "rgba(56,189,248,0.35)" },
-  ifc:   { icon: "IFC",  bg: "rgba(167,139,250,0.18)",   color: "#A78BFA",  border: "rgba(167,139,250,0.35)" },
-  gltf:  { icon: "3D",   bg: "rgba(167,139,250,0.18)",   color: "#A78BFA",  border: "rgba(167,139,250,0.35)" },
+  ifc:   { icon: "IFC",  bg: "rgba(8,145,178,0.18)",   color: "#0891B2",  border: "rgba(8,145,178,0.35)" },
+  gltf:  { icon: "3D",   bg: "rgba(8,145,178,0.18)",   color: "#0891B2",  border: "rgba(8,145,178,0.35)" },
   xlsx:  { icon: "XLS",  bg: "rgba(52,211,153,0.18)",    color: "#34D399",  border: "rgba(52,211,153,0.35)" },
   docx:  { icon: "DOC",  bg: "rgba(96,165,250,0.18)",    color: "#60A5FA",  border: "rgba(96,165,250,0.35)" },
   img:   { icon: "IMG",  bg: "rgba(45,212,191,0.18)",    color: "#2DD4BF",  border: "rgba(45,212,191,0.35)" },
@@ -33,7 +33,7 @@ const STATUS_COLORS = {
 const CATEGORY_COLORS = {
   "Blueprint":          { bg: "rgba(96,165,250,0.15)",   color: "#60A5FA",  border: "rgba(96,165,250,0.30)" },
   "Shop Drawing":       { bg: "rgba(56,189,248,0.15)",   color: "#38BDF8",  border: "rgba(56,189,248,0.30)" },
-  "IFC Model":          { bg: "rgba(167,139,250,0.15)",  color: "#A78BFA",  border: "rgba(167,139,250,0.30)" },
+  "IFC Model":          { bg: "rgba(8,145,178,0.15)",  color: "#0891B2",  border: "rgba(8,145,178,0.30)" },
   "Specification":      { bg: "rgba(251,191,36,0.12)",   color: "#FBBF24",  border: "rgba(251,191,36,0.25)" },
   "Submittal":          { bg: "rgba(45,212,191,0.15)",   color: "#2DD4BF",  border: "rgba(45,212,191,0.30)" },
   "Transmittal":        { bg: "rgba(52,211,153,0.15)",   color: "#34D399",  border: "rgba(52,211,153,0.30)" },

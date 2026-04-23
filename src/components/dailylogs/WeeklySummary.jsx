@@ -12,7 +12,7 @@ export default function WeeklySummary({ weekLogs, weekStats }) {
     { 
       label: "Field Hours", 
       value: weekStats.totalHours, 
-      color: "#8B5CF6" 
+      color: "#0D9488" 
     },
     { 
       label: "Delay Hours", 
