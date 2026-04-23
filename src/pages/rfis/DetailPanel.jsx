@@ -19,6 +19,7 @@ import { parseUTCDate } from "@/components/shared/formatters";
 import { mono, BIC_COLORS, BIC_PARTIES, PRIORITY_CFG, STATUS_CFG, statusColumns } from "./constants";
 import { isOverdue } from "./utils";
 import { Pill, Section, Meta, ContentBox } from "./subcomponents";
+import CommentThread from "@/components/collaboration/CommentThread";
 
 export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdit, onDelete }) {
   return (
@@ -178,6 +179,19 @@ export default function DetailPanel({ rfi, projectName, onClose, onUpdate, onEdi
                 )}
               </Section>
             )}
+
+            {/* Threaded conversation — realtime across all users viewing
+                this RFI. Lives on `comments` table with entity_type='rfi'. */}
+            <Section title="Discussion">
+              <div style={{ height: 320 }}>
+                <CommentThread
+                  entityType="rfi"
+                  entityId={rfi.id}
+                  projectId={rfi.project_id}
+                  compact
+                />
+              </div>
+            </Section>
           </div>
 
           {/* Footer actions */}

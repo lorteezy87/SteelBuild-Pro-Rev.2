@@ -75,6 +75,7 @@ const ROUTE_DOMAINS = {
     DrawingViewer:    lazyWithRetry(() => import("@/pages/DrawingViewer")),
     Documents:        lazyWithRetry(() => import("@/pages/Documents")),
     ModelViewer:      lazyWithRetry(() => import("@/pages/ModelViewer")),
+    Submittals:       lazyWithRetry(() => import("@/pages/Submittals")),
   },
 
   // ── Fabrication & Production ──
