@@ -125,19 +125,52 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createSupabaseClient(authHeader);
 
-    // getUser() with no argument looks for a session in localStorage — on
-    // the edge runtime there isn't one. Pass the token from the request
-    // header explicitly so /auth/v1/user can validate it against a real
-    // user row. Without this, getUser returns AuthSessionMissingError and
-    // we 401 on every call even when the JWT is fine.
+    // Verify the user's JWT by calling Supabase Auth's /auth/v1/user endpoint
+    // DIRECTLY instead of going through supabase.auth.getUser(). Older
+    // supabase-js versions throw "Unsupported JWT algorithm ES256" when
+    // they try to locally verify the asymmetric-signed JWTs that modern
+    // Supabase projects issue. Even after upgrading the library, the local-
+    // verify code path can still lag behind Supabase's key rotation. A
+    // direct fetch is immune to that: the Auth service knows its own keys
+    // and returns the user row on success, 401 on failure. No library
+    // involvement.
     const token = authHeader.slice("Bearer ".length).trim();
-    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-    if (userErr || !userData?.user) {
-      console.error("getUser failed:", userErr?.message);
-      return json(
-        { error: `Invalid or expired session${userErr?.message ? `: ${userErr.message}` : ""}` },
-        401,
-      );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !supabaseAnon) {
+      console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY env");
+      return json({ error: "Edge function not configured" }, 500);
+    }
+
+    let userData: { id: string; email?: string } | null = null;
+    try {
+      const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "apikey": supabaseAnon,
+        },
+      });
+      if (userResp.ok) {
+        const body = await userResp.json();
+        if (body?.id) userData = { id: body.id, email: body.email };
+      } else {
+        const errBody = await userResp.text();
+        console.error(`Auth /user returned ${userResp.status}: ${errBody.slice(0, 200)}`);
+        return json(
+          {
+            error: `Invalid or expired session (auth/user ${userResp.status})`,
+          },
+          401,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Auth /user fetch threw:", msg);
+      return json({ error: `Auth service unreachable: ${msg}` }, 502);
+    }
+
+    if (!userData) {
+      return json({ error: "Invalid or expired session — no user returned" }, 401);
     }
 
     const anthropic = new Anthropic({
@@ -149,7 +182,7 @@ Deno.serve(async (req: Request) => {
       supabase,
       messages,
       projectId: project_id,
-      userId: userData.user.id,
+      userId: userData.id,
       model: model ?? "claude-sonnet-4-5",
     });
 
