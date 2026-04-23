@@ -263,6 +263,15 @@ export default function WorkPackages() {
     setWPModalOpen(true);
   };
 
+  // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
+  React.useEffect(() => {
+    if (searchParams.get("new") === "1" && projectId && !wpModalOpen) {
+      handleWPCreate();
+    }
+    // Only trigger on initial arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
   /* ── Loading ── */
   if (wpLoading) {
     return (
@@ -306,7 +315,13 @@ export default function WorkPackages() {
         >
           BULK ADD
         </Button>
-        <Button variant="primary" icon="plus" onClick={handleWPCreate}>
+        <Button
+          variant="primary"
+          icon="plus"
+          onClick={handleWPCreate}
+          disabled={!projectId}
+          title={!projectId ? "Select a project first" : "Create a new work package"}
+        >
           NEW WP
         </Button>
       </CommandBar>
