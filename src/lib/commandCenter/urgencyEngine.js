@@ -65,9 +65,13 @@ export const THRESHOLDS = {
   WP_FAB_RISK_LAG_DAYS: 14,
   SOV_DUE_SOON_DAYS: 7,
   // Schedule tasks surface in the feed if within this many days of
-  // today (past or future). Beyond that, they'd clutter the feed —
-  // user will see them in the Gantt instead.
-  TASK_HORIZON_DAYS: 30,
+  // today (past or future). 90d covers ~3 months of near-term work
+  // (typical Detailing → Fabrication → Delivery → Installation
+  // sequence for a steel package), so every Gantt row the user is
+  // actively working toward is reachable from the Command Center.
+  // Tasks further out still live on the Gantt itself; the cap keeps
+  // the main feed from being a firehose on big projects.
+  TASK_HORIZON_DAYS: 90,
   TASK_DUE_SOON_DAYS: 7,
 };
 
