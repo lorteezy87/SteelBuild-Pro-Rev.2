@@ -866,6 +866,120 @@ export default function PortfolioView({
         </div>
       </div>
 
+      {/* ── Priority Watchlist — surfaces the top 3 projects in worst health,
+           each with a 1-line "what's wrong" narrative. Click-to-drill opens
+           that project's dashboard. When every project is On Track we show an
+           all-clear state so the slot doesn't collapse and feel like a bug.
+           Consumes enrichedMetrics, which already carries healthScore +
+           healthReasons, so zero extra computation. */}
+      {(() => {
+        const SEVERITY = { "At Risk": 0, "Watch": 1, "On Track": 2 };
+        const sorted = enrichedMetrics
+          .filter((p) => p.effectiveHealth !== "On Track" || p.healthScore < 70)
+          .sort((a, b) => {
+            const sevDiff = (SEVERITY[a.effectiveHealth] ?? 2) - (SEVERITY[b.effectiveHealth] ?? 2);
+            if (sevDiff !== 0) return sevDiff;
+            return (a.healthScore ?? 100) - (b.healthScore ?? 100);
+          })
+          .slice(0, 3);
+        const hasRisks = sorted.length > 0;
+        return (
+          <div
+            style={{
+              background: "var(--bg-surface-low)",
+              borderBottom: "1px solid var(--divider)",
+              padding: "12px 24px",
+              display: "flex",
+              alignItems: "stretch",
+              gap: 12,
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 160 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: hasRisks ? "var(--status-error)" : "var(--status-success)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                {hasRisks ? "Priority Watchlist" : "All Clear"}
+              </div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginTop: 2, lineHeight: 1.25 }}>
+                {hasRisks ? "Top projects needing your attention" : "No projects flagged this hour"}
+              </div>
+            </div>
+            <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${Math.max(sorted.length, 1)}, minmax(0, 1fr))`, gap: 10 }}>
+              {hasRisks ? sorted.map((p) => {
+                const sev = p.effectiveHealth === "At Risk" ? "error" : p.effectiveHealth === "Watch" ? "warning" : "info";
+                const sevColor = sev === "error" ? "var(--status-error)" : sev === "warning" ? "var(--status-warning)" : "var(--status-info)";
+                const reasons = (p.healthReasons || []).slice(0, 2);
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProjectDashboard(p.id)}
+                    style={{
+                      background: "var(--bg-surface)",
+                      border: `1px solid var(--border-default)`,
+                      borderLeft: `3px solid ${sevColor}`,
+                      borderRadius: 4,
+                      padding: "8px 12px",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      transition: "border-color 0.12s, transform 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border-default)";
+                      e.currentTarget.style.transform = "none";
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em" }}>
+                        {p.project_number || "—"}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                        {p.name || p.project_name || "—"}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 3, background: `color-mix(in srgb, ${sevColor} 14%, transparent)`, color: sevColor, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                        {p.effectiveHealth}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4, overflow: "hidden" }}>
+                      {reasons.length > 0 ? reasons.join(" · ") : "No specific signals available"}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+                        Health {p.healthScore ?? "—"}/100
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em" }}>
+                        Open →
+                      </span>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div
+                  style={{
+                    background: "var(--success-muted)",
+                    border: "1px solid var(--success-border)",
+                    borderRadius: 4,
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--status-success)" }}>✓</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)" }}>
+                    Every project is tracking on schedule. Keep an eye on pending COs and long-lead deliveries to stay ahead.
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Status Bar — all tiles are clickable filters with sparklines */}
       <div
         style={{
