@@ -68,8 +68,13 @@ export async function importAnalyzedDrawings(analysis, { sheets } = {}) {
   if (analysis.imported_set_id) {
     return { setId: analysis.imported_set_id, drawingCount: 0, skipped: true };
   }
-  if (analysis.analysis_status !== "complete") {
-    throw new Error(`Analysis ${analysis.id} is not complete yet (${analysis.analysis_status}).`);
+  // Accept both 'complete' (normal re-import via the detail-modal button)
+  // and 'processing' (auto-import called from inside analyzeDrawing before
+  // the status flip — we want the import to succeed BEFORE the parent row
+  // claims 'complete', otherwise a failed import leaves a lying-complete
+  // row with no data in the canonical Drawings table).
+  if (analysis.analysis_status !== "complete" && analysis.analysis_status !== "processing") {
+    throw new Error(`Analysis ${analysis.id} is not ready to import (${analysis.analysis_status}).`);
   }
 
   // Load sheets if not supplied.

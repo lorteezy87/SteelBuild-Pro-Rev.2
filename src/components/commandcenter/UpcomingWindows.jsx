@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import ActionFeed from "./ActionFeed";
+import { daysUntil } from "@/lib/dateMath";
 
 /**
  * UpcomingWindows — two side-by-side panels surfacing feed items by horizon:
@@ -15,26 +16,6 @@ import ActionFeed from "./ActionFeed";
  * behind it.
  */
 
-const MS_PER_DAY = 86_400_000;
-
-function startOfDayMs(d = new Date()) {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  return t.getTime();
-}
-
-function parseDate(s) {
-  if (!s) return null;
-  const d = new Date(String(s).length === 10 ? `${s}T00:00:00` : s);
-  return isNaN(d) ? null : d;
-}
-
-function daysFromToday(s) {
-  const d = parseDate(s);
-  if (!d) return null;
-  return Math.round((startOfDayMs(d) - startOfDayMs()) / MS_PER_DAY);
-}
-
 function dueDaysFor(item) {
   const raw = item.raw || {};
   const due =
@@ -43,7 +24,8 @@ function dueDaysFor(item) {
     raw.due_date ||
     raw.period_to ||
     null;
-  return daysFromToday(due);
+  const n = daysUntil(due);
+  return Number.isFinite(n) ? n : null;
 }
 
 export default function UpcomingWindows({ feed = [], onOpenDetail }) {
