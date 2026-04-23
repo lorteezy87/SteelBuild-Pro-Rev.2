@@ -90,6 +90,7 @@ const ROUTE_DOMAINS = {
   scheduling: {
     Schedule:             lazyWithRetry(() => import("@/pages/Schedule")),
     GanttChart:           lazyWithRetry(() => import("@/pages/GanttChart")),
+    FieldPlan:            lazyWithRetry(() => import("@/pages/FieldPlan")),
     ResourceManagement:   lazyWithRetry(() => import("@/pages/ResourceManagement")),
     ResourceScheduling:   lazyWithRetry(() => import("@/pages/ResourceScheduling")),
   },
