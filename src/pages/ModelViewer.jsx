@@ -4,6 +4,8 @@ import { base44 } from "@/api/base44Client";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { ViewHelper } from "three/examples/jsm/helpers/ViewHelper.js";
 
 // FragmentsManager.init() requires a worker URL. Without it, IFC loads
 // silently produce zero geometry. We serve the worker from /public/thatopen/
@@ -86,9 +88,25 @@ function applyDefaultSteelColor(root) {
     for (const mat of mats) {
       if (isUncoloredMaterial(mat)) {
         mat.color.copy(DEFAULT_STEEL_COLOR);
-        mat.metalness = mat.metalness ?? 0.4;
-        mat.roughness = mat.roughness ?? 0.6;
       }
+      // PBR tuning — steel reads metallic with a touch of roughness. Apply
+      // even to colored materials so shop drawings / colored cladding still
+      // pick up the environment map reflections instead of looking matte.
+      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+        if (mat.metalness === undefined || mat.metalness === 0) mat.metalness = 0.55;
+        if (mat.roughness === undefined || mat.roughness === 1) mat.roughness = 0.45;
+        mat.envMapIntensity = 0.9;
+      }
+    }
+  });
+}
+
+// Flip on shadow casting/receiving across the whole model tree.
+function enableShadows(root) {
+  root.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
     }
   });
 }
@@ -103,6 +121,19 @@ export default function ModelViewer() {
   const fragmentsManagerRef = useRef(null);
   const rafHandleRef = useRef(0);
 
+  // Visual-polish / tool refs
+  const envMapRef = useRef(null);
+  const keyShadowLightRef = useRef(null);
+  const shadowPlaneRef = useRef(null);
+  const selectionOutlineRef = useRef(null);          // THREE.Group parented to selected mesh
+  const viewHelperRef = useRef(null);                // three ViewHelper (corner gizmo)
+  const viewHelperElRef = useRef(null);              // DOM node mounted for the helper
+  const clippingPlaneRef = useRef(null);             // horizontal section plane
+  const measurementStateRef = useRef({               // 2-click measurement
+    active: false, firstPoint: null, markerObjs: [],
+  });
+  const raycasterRef = useRef(new THREE.Raycaster());
+
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [uploadError, setUploadError] = useState(null);
@@ -113,6 +144,14 @@ export default function ModelViewer() {
   const [isDragging, setIsDragging] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [engineReady, setEngineReady] = useState(false);
+
+  // Tool mode + section state
+  const [sectionEnabled, setSectionEnabled] = useState(false);
+  const [sectionHeight, setSectionHeight] = useState(50); // percent through model
+  const [modelBounds, setModelBounds] = useState(null);    // {min, max, diagonal}
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measureReading, setMeasureReading] = useState(null); // { distanceFt, ftIn }
+  const [isolateActive, setIsolateActive] = useState(false); // elements hidden via isolate
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
@@ -149,29 +188,76 @@ export default function ModelViewer() {
         // 4. Setup scene (adds default lighting)
         world.scene.setup();
 
-        // 5. Customize scene appearance — white background for visibility
+        // 5. Scene appearance — studio backdrop, PBR environment,
+        // shadow-casting key light. Previously a flat white background with
+        // matte lights made steel look like plastic; the upgrades:
+        //   - Gradient sky (CSS on parent div, renderer is alpha-transparent)
+        //     gives a horizon line so the model feels grounded.
+        //   - RoomEnvironment PMREM produces a plausible indoor reflection
+        //     map — bolts + flanges pick up specular highlights and actually
+        //     read as steel, not matte plastic.
+        //   - Contact shadow plane under the model anchors it in space.
+        //   - Brighter key light casts a real shadow via shadowMap.
         const threeScene = world.scene.three;
-        threeScene.background = new THREE.Color(0xffffff);
+        threeScene.background = null; // transparent — CSS gradient shows through
 
-        // Stronger, balanced lighting so models read clearly on white.
-        // SimpleScene.setup() already adds a default ambient + directional,
-        // but it's tuned for dark backgrounds and washes out on white.
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.55);
+        const renderer3 = world.renderer.three;
+        renderer3.setClearColor(0x000000, 0);     // transparent clear
+        renderer3.shadowMap.enabled = true;
+        renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer3.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer3.toneMappingExposure = 1.05;
+        renderer3.outputColorSpace = THREE.SRGBColorSpace;
+
+        // PBR environment — makes metallic materials look right.
+        try {
+          const pmrem = new THREE.PMREMGenerator(renderer3);
+          const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+          threeScene.environment = envTex;
+          envMapRef.current = { pmrem, envTex };
+        } catch (e) { console.warn("env map generation failed", e); }
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xa8a8b0, 0.35);
         threeScene.add(hemiLight);
-        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
-        keyLight.position.set(80, 120, 60);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+        keyLight.position.set(80, 160, 80);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.set(2048, 2048);
+        keyLight.shadow.camera.left = -200;
+        keyLight.shadow.camera.right = 200;
+        keyLight.shadow.camera.top = 200;
+        keyLight.shadow.camera.bottom = -200;
+        keyLight.shadow.camera.near = 10;
+        keyLight.shadow.camera.far = 600;
+        keyLight.shadow.bias = -0.0005;
+        keyLight.shadow.normalBias = 0.05;
+        keyShadowLightRef.current = keyLight;
         threeScene.add(keyLight);
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        const fillLight = new THREE.DirectionalLight(0xb0c4de, 0.35);
         fillLight.position.set(-80, 60, -60);
         threeScene.add(fillLight);
-        const rimLight = new THREE.DirectionalLight(0xffffff, 0.25);
-        rimLight.position.set(0, -40, -100);
+        const rimLight = new THREE.DirectionalLight(0xffe0b0, 0.25);
+        rimLight.position.set(0, -20, -120);
         threeScene.add(rimLight);
 
-        // Add grid (subtle gray on white)
-        const grid = new THREE.GridHelper(200, 40, 0xbbbbbb, 0xdddddd);
-        grid.material.opacity = 0.6;
+        // Shadow-receiving ground plane. The plane itself is invisible
+        // (ShadowMaterial) so only the darkening of the contact shadow
+        // shows — the CSS gradient keeps reading through it.
+        const shadowPlane = new THREE.Mesh(
+          new THREE.PlaneGeometry(1000, 1000),
+          new THREE.ShadowMaterial({ opacity: 0.35 }),
+        );
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.y = -0.01;
+        shadowPlane.receiveShadow = true;
+        shadowPlaneRef.current = shadowPlane;
+        threeScene.add(shadowPlane);
+
+        // CAD-style grid with two line weights so major axes stand out.
+        const grid = new THREE.GridHelper(400, 80, 0x9aa3b4, 0xcdd2dc);
+        grid.material.opacity = 0.55;
         grid.material.transparent = true;
+        grid.material.depthWrite = false;
         threeScene.add(grid);
 
         // 6. Tune camera controls for a tight, direct CAD-viewport feel.
@@ -268,6 +354,17 @@ export default function ModelViewer() {
         cancelAnimationFrame(rafHandleRef.current);
         rafHandleRef.current = 0;
       }
+      if (envMapRef.current) {
+        try {
+          envMapRef.current.envTex?.dispose?.();
+          envMapRef.current.pmrem?.dispose?.();
+        } catch { /* ignore */ }
+        envMapRef.current = null;
+      }
+      if (viewHelperRef.current) {
+        try { viewHelperRef.current.dispose?.(); } catch { /* ignore */ }
+        viewHelperRef.current = null;
+      }
       if (componentsRef.current) {
         try { componentsRef.current.dispose(); } catch { /* ignore cleanup errors */ }
       }
@@ -276,6 +373,10 @@ export default function ModelViewer() {
       loadedModelRef.current = null;
       gltfSceneRef.current = null;
       fragmentsManagerRef.current = null;
+      keyShadowLightRef.current = null;
+      shadowPlaneRef.current = null;
+      selectionOutlineRef.current = null;
+      clippingPlaneRef.current = null;
     };
   }, []);
 
@@ -312,6 +413,233 @@ export default function ModelViewer() {
 
     ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
   }, []);
+
+  // ─── MODEL BOUNDS (drives section slider + shadow plane position) ──
+  const captureModelBounds = useCallback((target) => {
+    if (!target) return;
+    const box = new THREE.Box3().setFromObject(target);
+    if (box.isEmpty()) return;
+    const min = box.min.clone();
+    const max = box.max.clone();
+    const size = max.clone().sub(min);
+    const diagonal = size.length();
+    setModelBounds({ min, max, size, diagonal });
+
+    // Pin the shadow plane just below the model's footprint so the contact
+    // shadow feels anchored instead of floating.
+    if (shadowPlaneRef.current) {
+      shadowPlaneRef.current.position.y = min.y - 0.01;
+    }
+    // Aim the key light at the model so the shadow camera frustum covers it.
+    if (keyShadowLightRef.current) {
+      const center = new THREE.Vector3().addVectors(min, max).multiplyScalar(0.5);
+      const span = Math.max(diagonal * 0.75, 50);
+      keyShadowLightRef.current.target.position.copy(center);
+      keyShadowLightRef.current.target.updateMatrixWorld();
+      keyShadowLightRef.current.position.set(
+        center.x + span,
+        center.y + span * 1.6,
+        center.z + span,
+      );
+      const s = keyShadowLightRef.current.shadow.camera;
+      const half = Math.max(span, 50);
+      s.left = -half; s.right = half; s.top = half; s.bottom = -half;
+      s.near = 1; s.far = span * 6;
+      s.updateProjectionMatrix();
+    }
+  }, []);
+
+  // ─── SELECTION OUTLINE ──────────────────────────────────────────
+  // Build a bright yellow edge-line overlay as a sibling of the selected
+  // mesh. Cheaper than post-processing OutlinePass, looks great, survives
+  // tile streaming because we rebuild it on every selection change.
+  const clearSelectionOutline = useCallback(() => {
+    if (!selectionOutlineRef.current) return;
+    const o = selectionOutlineRef.current;
+    o.parent?.remove(o);
+    o.traverse?.((c) => {
+      try { c.geometry?.dispose?.(); } catch { /* ignore */ }
+      try { c.material?.dispose?.(); } catch { /* ignore */ }
+    });
+    selectionOutlineRef.current = null;
+  }, []);
+
+  const attachSelectionOutline = useCallback((mesh) => {
+    clearSelectionOutline();
+    if (!mesh || !mesh.geometry) return;
+    const edges = new THREE.EdgesGeometry(mesh.geometry, 25); // angle in deg
+    const line = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({
+        color: 0xffcc00,
+        linewidth: 2,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+    );
+    line.renderOrder = 9999; // draw on top
+    mesh.add(line);
+    selectionOutlineRef.current = line;
+  }, [clearSelectionOutline]);
+
+  // ─── SECTION (CLIPPING) PLANE ───────────────────────────────────
+  useEffect(() => {
+    const world = worldRef.current;
+    if (!world?.renderer?.three) return;
+    const renderer3 = world.renderer.three;
+    if (!sectionEnabled || !modelBounds) {
+      renderer3.localClippingEnabled = false;
+      renderer3.clippingPlanes = [];
+      clippingPlaneRef.current = null;
+      return;
+    }
+    renderer3.localClippingEnabled = true;
+    const { min, max } = modelBounds;
+    const y = min.y + (max.y - min.y) * (sectionHeight / 100);
+    if (!clippingPlaneRef.current) {
+      // Plane points DOWN, so everything above `y` is clipped.
+      clippingPlaneRef.current = new THREE.Plane(new THREE.Vector3(0, -1, 0), y);
+    } else {
+      clippingPlaneRef.current.constant = y;
+    }
+    renderer3.clippingPlanes = [clippingPlaneRef.current];
+  }, [sectionEnabled, sectionHeight, modelBounds]);
+
+  // ─── ISOLATE / HIDE ─────────────────────────────────────────────
+  // Isolate = hide everything except the selected mesh. Toggles off to
+  // restore visibility. Per-mesh `_isoHidden` flag lets us avoid storing
+  // a Map and skips already-hidden elements on repeated toggles.
+  const isolateSelection = useCallback(() => {
+    const world = worldRef.current;
+    const selected = selectedMember?.mesh;
+    if (!world || !selected) return;
+
+    if (isolateActive) {
+      // Restore
+      (loadedModelRef.current || world.scene.three).traverse((c) => {
+        if (c.isMesh && c._isoHidden) {
+          c.visible = true;
+          c._isoHidden = false;
+        }
+      });
+      setIsolateActive(false);
+      return;
+    }
+    (loadedModelRef.current || world.scene.three).traverse((c) => {
+      if (c.isMesh && c !== selected) {
+        c.visible = false;
+        c._isoHidden = true;
+      }
+    });
+    setIsolateActive(true);
+  }, [selectedMember, isolateActive]);
+
+  const hideSelection = useCallback(() => {
+    const selected = selectedMember?.mesh;
+    if (!selected) return;
+    selected.visible = false;
+  }, [selectedMember]);
+
+  const showAll = useCallback(() => {
+    const world = worldRef.current;
+    if (!world) return;
+    (loadedModelRef.current || world.scene.three).traverse((c) => {
+      if (c.isMesh) {
+        c.visible = true;
+        c._isoHidden = false;
+      }
+    });
+    setIsolateActive(false);
+  }, []);
+
+  // ─── MEASUREMENT TOOL ───────────────────────────────────────────
+  // Format a distance (in the model's native units — usually meters for
+  // IFC, unknown for GLTF) into feet-inches for a steel PM audience.
+  // We assume meters unless the number looks like it's already in feet
+  // (diagonal > 1000 suggests millimeters, which we downconvert).
+  const formatDistance = useCallback((meters, diagonal) => {
+    let m = meters;
+    // Guess units from model scale: diagonal > 5000 → file was in mm.
+    if (diagonal > 5000) m = meters / 1000;
+    const totalInches = m * 39.3701;
+    const ft = Math.floor(totalInches / 12);
+    const inch = totalInches - ft * 12;
+    return {
+      meters: m,
+      ftIn: `${ft}'-${inch.toFixed(1)}"`,
+    };
+  }, []);
+
+  const clearMeasurementMarkers = useCallback(() => {
+    const world = worldRef.current;
+    if (!world) return;
+    for (const obj of measurementStateRef.current.markerObjs) {
+      world.scene?.three?.remove(obj);
+      try { obj.geometry?.dispose?.(); } catch { /* ignore */ }
+      try { obj.material?.dispose?.(); } catch { /* ignore */ }
+    }
+    measurementStateRef.current.markerObjs = [];
+    measurementStateRef.current.firstPoint = null;
+  }, []);
+
+  const toggleMeasureMode = useCallback(() => {
+    setMeasureMode((on) => {
+      if (on) {
+        // Turning OFF — clear markers + reading
+        clearMeasurementMarkers();
+        setMeasureReading(null);
+      }
+      return !on;
+    });
+  }, [clearMeasurementMarkers]);
+
+  const addMeasureMarker = useCallback((point) => {
+    const world = worldRef.current;
+    if (!world?.scene?.three) return;
+    const diag = modelBounds?.diagonal || 50;
+    const size = Math.max(0.15, diag * 0.004);
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(size, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff4747, depthTest: false, transparent: true, opacity: 0.95 }),
+    );
+    sphere.renderOrder = 9999;
+    sphere.position.copy(point);
+    world.scene.three.add(sphere);
+    measurementStateRef.current.markerObjs.push(sphere);
+    return sphere;
+  }, [modelBounds]);
+
+  const addMeasureLine = useCallback((a, b) => {
+    const world = worldRef.current;
+    if (!world?.scene?.three) return;
+    const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const line = new THREE.Line(
+      geom,
+      new THREE.LineBasicMaterial({ color: 0xff4747, depthTest: false, linewidth: 2, transparent: true, opacity: 0.95 }),
+    );
+    line.renderOrder = 9999;
+    world.scene.three.add(line);
+    measurementStateRef.current.markerObjs.push(line);
+  }, []);
+
+  // ─── SCREENSHOT ─────────────────────────────────────────────────
+  const takeScreenshot = useCallback(() => {
+    const world = worldRef.current;
+    if (!world?.renderer?.three) return;
+    const renderer3 = world.renderer.three;
+    // Force a fresh render so the captured buffer isn't stale.
+    try { renderer3.render(world.scene.three, world.camera.three); } catch { /* ignore */ }
+    const dataUrl = renderer3.domElement.toDataURL("image/png");
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = modelLoaded?.name
+      ? `${modelLoaded.name.replace(/\.[^.]+$/, "")}-${stamp}.png`
+      : `model-${stamp}.png`;
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
+  }, [modelLoaded]);
 
   // ─── CLEAR MODEL ────────────────────────────────────────────────
   // Async because FragmentsModels.disposeModel() is async — without awaiting
@@ -361,6 +689,17 @@ export default function ModelViewer() {
     loadedModelRef.current = null;
     setMembers([]);
     setSelectedMember(null);
+    setModelBounds(null);
+    setSectionEnabled(false);
+    setIsolateActive(false);
+    setMeasureReading(null);
+    clearMeasurementMarkers();
+    // Remove any outline attached to prior selection
+    if (selectionOutlineRef.current) {
+      selectionOutlineRef.current.parent?.remove(selectionOutlineRef.current);
+      selectionOutlineRef.current.traverse?.((o) => o?.geometry?.dispose?.());
+      selectionOutlineRef.current = null;
+    }
   }, []);
 
   // ─── LOAD GLTF/GLB ────────────────────────────────────────────
@@ -398,6 +737,7 @@ export default function ModelViewer() {
       // apply steel color to whatever remains uncolored.
       normalizeMaterials(model);
       applyDefaultSteelColor(model);
+      enableShadows(model);
       world.scene.three.add(model);
       gltfSceneRef.current = model;
 
@@ -418,6 +758,7 @@ export default function ModelViewer() {
 
       loadedModelRef.current = model;
       fitCamera(model);
+      captureModelBounds(model);
 
       setModelLoaded({ name: file.name, memberCount: extracted.length, format: "GLTF" });
       setLoadingModel({ active: false, progress: 100, status: "", fileName: "" });
@@ -462,6 +803,7 @@ export default function ModelViewer() {
       if (modelObject) {
         normalizeMaterials(modelObject);
         applyDefaultSteelColor(modelObject);
+        enableShadows(modelObject);
         world.scene.three.add(modelObject);
       }
 
@@ -476,6 +818,7 @@ export default function ModelViewer() {
           if (modelObject) {
             normalizeMaterials(modelObject);
             applyDefaultSteelColor(modelObject);
+            enableShadows(modelObject);
           }
         });
       } catch (e) { console.warn("onViewUpdated hook failed", e); }
@@ -516,7 +859,9 @@ export default function ModelViewer() {
         if (box.isEmpty()) return false;
         normalizeMaterials(modelObject);
         applyDefaultSteelColor(modelObject);
+        enableShadows(modelObject);
         fitCamera(modelObject);
+        captureModelBounds(modelObject);
         // Re-extract members now that real meshes exist
         const fresh = [];
         let i = 0;
@@ -612,23 +957,135 @@ export default function ModelViewer() {
   }, []);
 
   // ─── KEYBOARD SHORTCUTS ────────────────────────────────────────
+  // f       Fit all
+  // [       Toggle element list
+  // 1..6    View presets (iso/front/top/right/left/back)
+  // i       Isolate selected
+  // h       Hide selected
+  // a       Show all
+  // m       Toggle measure mode
+  // c       Toggle section plane
+  // p       Screenshot
+  // Esc     Cancel measure / clear selection
   useEffect(() => {
     const handler = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
-      if (e.key === "f" || e.key === "F") {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+      const k = e.key.toLowerCase();
+      if (k === "f") {
         const model = loadedModelRef.current;
         if (model) fitCamera(model);
+      } else if (k === "[") {
+        setLeftPanelOpen((p) => !p);
+      } else if (k === "1") { setView("iso");  }
+      else   if (k === "2") { setView("front"); }
+      else   if (k === "3") { setView("top");   }
+      else   if (k === "4") { setView("right"); }
+      else   if (k === "5") { setView("left");  }
+      else   if (k === "6") { setView("back");  }
+      else   if (k === "i") { isolateSelection(); }
+      else   if (k === "h") { hideSelection(); }
+      else   if (k === "a") { showAll(); }
+      else   if (k === "m") { toggleMeasureMode(); }
+      else   if (k === "c") { setSectionEnabled((v) => !v); }
+      else   if (k === "p") { takeScreenshot(); }
+      else   if (e.key === "Escape") {
+        if (measureMode) { toggleMeasureMode(); }
+        else if (selectedMember) { setSelectedMember(null); clearSelectionOutline(); }
       }
-      if (e.key === "[") setLeftPanelOpen((p) => !p);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fitCamera]);
+  }, [fitCamera, setView, isolateSelection, hideSelection, showAll, toggleMeasureMode, takeScreenshot, measureMode, selectedMember, clearSelectionOutline]);
+
+  // ─── CANVAS PICKING (click-to-select + measure-mode pickpoints) ──
+  useEffect(() => {
+    const container = containerRef.current;
+    const world = worldRef.current;
+    if (!container || !world?.camera?.three || !world?.scene?.three) return;
+
+    const onClick = (ev) => {
+      // Only left-click. Drag-releases emit a click too — suppress if the
+      // mouse moved significantly between mousedown/mouseup.
+      if (ev.button !== 0) return;
+      const rect = container.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -(((ev.clientY - rect.top) / rect.height) * 2 - 1),
+      );
+      const caster = raycasterRef.current;
+      caster.setFromCamera(ndc, world.camera.three);
+
+      const root = loadedModelRef.current || world.scene.three;
+      const hits = caster.intersectObject(root, true).filter((h) => h.object.isMesh && h.object.visible);
+      if (hits.length === 0) return;
+      const hit = hits[0];
+
+      // Measurement mode: first click stores a point, second computes.
+      if (measureMode) {
+        const pt = hit.point.clone();
+        addMeasureMarker(pt);
+        if (measurementStateRef.current.firstPoint) {
+          const a = measurementStateRef.current.firstPoint;
+          addMeasureLine(a, pt);
+          const dist = a.distanceTo(pt);
+          const diag = modelBounds?.diagonal || 0;
+          setMeasureReading(formatDistance(dist, diag));
+          measurementStateRef.current.firstPoint = null;
+        } else {
+          measurementStateRef.current.firstPoint = pt;
+          setMeasureReading({ meters: null, ftIn: "Click second point…" });
+        }
+        return;
+      }
+
+      // Normal selection: find the matching member row + outline it.
+      const mesh = hit.object;
+      const matching = members.find((m) => m.mesh === mesh);
+      if (matching) selectMember(matching);
+    };
+
+    container.addEventListener("click", onClick);
+    return () => container.removeEventListener("click", onClick);
+  }, [members, measureMode, modelBounds, selectMember, addMeasureMarker, addMeasureLine, formatDistance]);
+
+  // ─── AXIS GIZMO (corner widget) ─────────────────────────────────
+  useEffect(() => {
+    const world = worldRef.current;
+    const el = viewHelperElRef.current;
+    if (!world?.camera?.three || !world?.renderer?.three || !el) return;
+    // ViewHelper needs the canvas element for click-to-snap view changes.
+    const helper = new ViewHelper(world.camera.three, world.renderer.three.domElement);
+    helper.controls = world.camera.controls; // camera-controls integration
+    viewHelperRef.current = helper;
+
+    // The helper draws itself into a tiny overlay canvas we mount in the
+    // corner. Render loop hook:
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      try { helper.render(world.renderer.three); } catch { /* ignore */ }
+    };
+    raf = requestAnimationFrame(draw);
+
+    // Click-to-snap: pass through the click to helper.handleClick.
+    const onClick = (ev) => {
+      try { helper.handleClick(ev); } catch { /* ignore */ }
+    };
+    el.addEventListener("pointerup", onClick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("pointerup", onClick);
+      try { helper.dispose?.(); } catch { /* ignore */ }
+      viewHelperRef.current = null;
+    };
+  }, [engineReady]);
 
   // ─── MEMBER SELECTION ──────────────────────────────────────────
   const selectMember = useCallback((member) => {
     setSelectedMember(member);
     if (member?.mesh) {
+      attachSelectionOutline(member.mesh);
       const world = worldRef.current;
       if (world?.camera?.controls) {
         const box = new THREE.Box3().setFromObject(member.mesh);
@@ -642,8 +1099,10 @@ export default function ModelViewer() {
         const pos = center.clone().add(offset);
         world.camera.controls.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
       }
+    } else {
+      clearSelectionOutline();
     }
-  }, []);
+  }, [attachSelectionOutline, clearSelectionOutline]);
 
   // ─── FILTERED MEMBERS ──────────────────────────────────────────
   const filteredMembers = useMemo(() => {
@@ -697,6 +1156,70 @@ export default function ModelViewer() {
 
           {modelLoaded && <div style={{ width: 1, height: 16, background: "var(--divider)" }} />}
 
+          {/* Section toggle + slider live below, this is just the switch */}
+          {modelLoaded && (
+            <button
+              onClick={() => setSectionEnabled((v) => !v)}
+              title="Section plane (C)"
+              style={{
+                ...tbBtn,
+                color: sectionEnabled ? "var(--accent)" : "var(--text-muted)",
+                background: sectionEnabled ? "rgba(200,155,32,0.12)" : "transparent",
+              }}
+            >
+              ⬓ SECTION
+            </button>
+          )}
+
+          {/* Measure */}
+          {modelLoaded && (
+            <button
+              onClick={toggleMeasureMode}
+              title="Measure (M)"
+              style={{
+                ...tbBtn,
+                color: measureMode ? "#ff7a7a" : "var(--text-muted)",
+                background: measureMode ? "rgba(255,71,71,0.12)" : "transparent",
+                borderColor: measureMode ? "rgba(255,71,71,0.45)" : "var(--border-default)",
+              }}
+            >
+              📏 MEASURE
+            </button>
+          )}
+
+          {/* Isolate */}
+          {modelLoaded && (
+            <button
+              onClick={isolateSelection}
+              title="Isolate selected (I)"
+              disabled={!selectedMember && !isolateActive}
+              style={{
+                ...tbBtn,
+                color: isolateActive ? "var(--accent)" : "var(--text-muted)",
+                background: isolateActive ? "rgba(200,155,32,0.12)" : "transparent",
+                opacity: !selectedMember && !isolateActive ? 0.5 : 1,
+              }}
+            >
+              ◉ ISOLATE
+            </button>
+          )}
+
+          {/* Show all */}
+          {modelLoaded && (
+            <button onClick={showAll} title="Show all (A)" style={tbBtn}>
+              ◎ SHOW ALL
+            </button>
+          )}
+
+          {/* Screenshot */}
+          {modelLoaded && (
+            <button onClick={takeScreenshot} title="Screenshot (P)" style={tbBtn}>
+              📷 SNAP
+            </button>
+          )}
+
+          {modelLoaded && <div style={{ width: 1, height: 16, background: "var(--divider)" }} />}
+
           {/* List toggle */}
           {members.length > 0 && (
             <button onClick={() => setLeftPanelOpen((p) => !p)} title="Toggle element list ([)" style={{
@@ -723,15 +1246,22 @@ export default function ModelViewer() {
       {/* Control hints bar */}
       {modelLoaded && (
         <div style={{
-          height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 16,
+          height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
           background: "var(--bg-surface-low)", borderBottom: "1px solid var(--border-default)",
           fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em",
         }}>
           <span>LMB: Rotate</span>
-          <span>RMB / MMB: Pan</span>
+          <span>RMB: Pan</span>
           <span>Scroll: Zoom</span>
-          <span>F: Fit All</span>
-          <span>[: Toggle List</span>
+          <span>1-6: Views</span>
+          <span>F: Fit</span>
+          <span>I: Isolate</span>
+          <span>H: Hide</span>
+          <span>A: Show All</span>
+          <span>M: Measure</span>
+          <span>C: Section</span>
+          <span>P: Snap</span>
+          <span>[: List</span>
         </div>
       )}
 
@@ -779,10 +1309,18 @@ export default function ModelViewer() {
           </div>
         )}
 
-        {/* 3D Canvas */}
+        {/* 3D Canvas — gradient backdrop shows through the transparent
+            renderer clear. Subtle horizon line (darker ground, lighter sky)
+            grounds the model visually instead of the old flat white. */}
         <div
           ref={containerRef}
-          style={{ flex: 1, position: "relative", overflow: "hidden" }}
+          style={{
+            flex: 1,
+            position: "relative",
+            overflow: "hidden",
+            cursor: measureMode ? "crosshair" : "default",
+            background: "linear-gradient(180deg, #dbe2ec 0%, #c4cdd9 48%, #9fa8b8 52%, #b4bcca 100%)",
+          }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
           onDrop={handleDrop}
@@ -834,6 +1372,69 @@ export default function ModelViewer() {
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>{loadingModel.progress}%</div>
             </div>
           )}
+
+          {/* Section plane slider — shows only when toggled on + model loaded */}
+          {sectionEnabled && modelBounds && (
+            <div style={{
+              position: "absolute", top: 14, left: 14, zIndex: 20,
+              background: "rgba(20,24,32,0.82)", backdropFilter: "blur(6px)",
+              border: "1px solid rgba(245,158,11,0.35)", borderRadius: 8,
+              padding: "10px 12px", color: "#F2F4F8", minWidth: 180,
+              fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.06em",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ color: "var(--accent)", fontWeight: 700 }}>SECTION</span>
+                <span>{sectionHeight}%</span>
+              </div>
+              <input
+                type="range" min={0} max={100} value={sectionHeight}
+                onChange={(e) => setSectionHeight(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "var(--accent)" }}
+              />
+              <div style={{ fontSize: 8, color: "rgba(242,244,248,0.6)", marginTop: 4 }}>
+                Slice horizontal · C to toggle
+              </div>
+            </div>
+          )}
+
+          {/* Measure reading — shows first/second point prompts + final distance */}
+          {measureMode && (
+            <div style={{
+              position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 20,
+              background: "rgba(255,71,71,0.12)", backdropFilter: "blur(6px)",
+              border: "1px solid rgba(255,71,71,0.55)", borderRadius: 8,
+              padding: "8px 14px", color: "#F2F4F8",
+              fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.06em",
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ color: "#ff7a7a", fontWeight: 700 }}>📏 MEASURE</span>
+              <span>
+                {measureReading?.ftIn
+                  ? (measureReading.meters == null
+                      ? measureReading.ftIn
+                      : `${measureReading.ftIn} (${measureReading.meters.toFixed(2)} m)`)
+                  : "Click first point on model"}
+              </span>
+              <button
+                onClick={toggleMeasureMode}
+                style={{
+                  marginLeft: 8, padding: "2px 8px", background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.18)", borderRadius: 4,
+                  color: "#F2F4F8", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer",
+                }}
+              >DONE (M)</button>
+            </div>
+          )}
+
+          {/* Axis gizmo mount — bottom-right corner. ViewHelper draws into
+              the main WebGL canvas; this div intercepts clicks. */}
+          <div
+            ref={viewHelperElRef}
+            style={{
+              position: "absolute", bottom: 12, right: 12, width: 120, height: 120, zIndex: 15,
+              pointerEvents: "auto", cursor: "pointer",
+            }}
+          />
 
           {/* Error overlay */}
           {uploadError && (

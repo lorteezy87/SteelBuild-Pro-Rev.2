@@ -105,11 +105,16 @@ from (
     ('look_ahead'),
     ('production_notes'),
     ('user_projects'),
-    ('project_members'),
+    -- NOTE: project_members intentionally excluded — documentation
+    -- references the name but the project uses user_projects in
+    -- practice. See migration 011 + verify_rls_isolation audit trail.
     ('ai_audit_log'),
     ('drawing_analyses'),
     ('drawing_sheets'),
     ('drawing_findings'),
+    ('drawing_revision_comparisons'),
+    ('drawing_revision_deltas'),
+    ('delivery_items'),
     ('number_sequences')
 ) as t(table_name)
 left join pg_policies p on p.tablename = t.table_name and p.schemaname = 'public'

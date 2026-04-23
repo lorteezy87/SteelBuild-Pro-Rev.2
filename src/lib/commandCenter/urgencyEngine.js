@@ -4,7 +4,7 @@
  * Each function accepts one entity record and returns:
  * {
  *   urgency:       'overdue' | 'due-soon' | 'blocking' | 'awaiting' | 'normal',
- *   daysValue:     number,          // positive = days overdue or until due
+ *   daysValue:     number,          // see "daysValue contract" below
  *   displayStatus: string,          // human label for the feed row
  *   quickAction:   { label: string, route: string },
  *   itemType:      string,          // badge label: RFI / DWG / CO / DEL / WP / SUB / PAY / NOTE
@@ -13,6 +13,26 @@
  *   projectId:     string,
  *   projectNumber: string | null,
  * }
+ *
+ * ── daysValue contract (sortLogic.js relies on this — do NOT break it) ────
+ *
+ *   Invariant: within any single urgency bucket, HIGHER daysValue = more urgent.
+ *
+ *   sortLogic's tie-breaker is `b.daysValue - a.daysValue` (descending), so
+ *   this convention drives the order items appear inside each bucket.
+ *
+ *   Concrete semantics per entity:
+ *     - RFI / Drawing / Delivery / SOVItem with a due date: store `-dueDays`
+ *       so 5-days-overdue → +5 (sorts above 1-day-overdue → +1) and
+ *       1-day-away → -1 (sorts above 5-days-away → -5).
+ *     - RFI / ChangeOrder / WorkPackage / DrawingSet without a due date:
+ *       store `daysSince(created/issued/submitted)` so older-is-more-urgent.
+ *     - ProductionNote: store `age` (days since note_date) for the same
+ *       older-is-more-urgent pattern.
+ *
+ *   Both branches satisfy "higher = more urgent" — a refactor that stores
+ *   `+dueDays` (positive-for-future) would silently invert the sort inside
+ *   the overdue bucket. Tests in urgencyEngine.test.js guard against this.
  *
  * Tunable thresholds are exported as constants so they can be overridden.
  */
