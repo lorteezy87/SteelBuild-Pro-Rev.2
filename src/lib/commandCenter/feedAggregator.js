@@ -17,6 +17,7 @@ import {
   workPackageUrgency,
   sovUrgency,
   productionNoteUrgency,
+  scheduleTaskUrgency,
 } from "./urgencyEngine";
 
 // ── Drawing aggregation (sheet → set) ───────────────────────────────────
@@ -218,6 +219,7 @@ export function buildFeed(entities, projectMap = {}) {
     workPackages = [],
     sovItems = [],
     productionNotes = [],
+    scheduleTasks = [],
   } = entities;
 
   const feed = [];
@@ -269,6 +271,16 @@ export function buildFeed(entities, projectMap = {}) {
   // Production Notes
   for (const note of productionNotes) {
     const item = productionNoteUrgency(note, projectMap);
+    if (item) feed.push(item);
+  }
+
+  // Schedule Tasks — every non-complete task within the urgency engine's
+  // horizon shows up so Installation, Fabrication, Detailing rows appear
+  // in the 48h / 10d windows and the main feed. Gated inside
+  // scheduleTaskUrgency itself (horizon + status check) so we don't
+  // flood the feed with far-future tasks.
+  for (const t of scheduleTasks) {
+    const item = scheduleTaskUrgency(t, projectMap);
     if (item) feed.push(item);
   }
 
