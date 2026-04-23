@@ -145,81 +145,201 @@ function normalizeCategory(raw) {
   return null; // column is nullable — OK to drop unknown
 }
 
-const SYSTEM_PROMPT = `You are a senior structural steel project manager analyzing a drawing set.
-Return your analysis through the submit_analysis tool. All fields are required.
+const SYSTEM_PROMPT = `You are a senior structural-steel project manager reviewing a drawing set for S&H Steel Co.
+You will return the analysis through the submit_analysis tool. No prose outside the tool call.
 
-SHEET INDEX — highest priority.
-List EVERY sheet in the PDF, in page order, even if the sheet is a
-cover page, index, notes page, or general-notes sheet. Don't skip
-any. sheet_number is the printed sheet ID (e.g. "S-101", "E-2.3",
-"D-415", "SH-12"). title is the title-block title verbatim — do not
-paraphrase. page_index is the zero-based page number in the PDF.
+# Core rules
 
-Sheet categories: 'structural' (S-series), 'erection' (E-series),
-'detailing' (D-series), 'shop' (SH-series). If a sheet's series is
-ambiguous, use the closest fit; don't guess wildly. Return the
-literal lowercase string.
+1. Ground every claim in what is physically visible on the PDF. If you
+   cannot point to an exact grid line / detail callout / revision mark /
+   dimension string, DO NOT emit the finding. It is better to return
+   zero findings than one invented one.
+2. Copy verbatim — sheet numbers, titles, grid labels, detail tags.
+   No paraphrasing. No title-case normalization.
+3. Enumerate every page. If the PDF has 37 pages, sheet_index has 37
+   entries, in page order, even for cover / index / general-notes /
+   blank pages. Missing a page is a worse error than a vague title.
+4. Default to fewer findings. If the set is clean, ai_summary says so
+   and findings = []. Do not pad with filler.
 
-FINDINGS — only what you can substantiate.
-Focus on issues a PM/detailer would flag before fab release:
-  - missing bolt callouts (A325/A490, SC/N/X, edge distance)
-  - AESS class omissions (1–4) or conflicting AESS requirements
-  - embed elevation conflicts (top-of-concrete vs. top-of-steel ambiguity)
-  - column splice location clarity (elevation, orientation, field vs shop)
-  - connection type ambiguity (shear tab vs bolted clip vs moment vs seismic)
-  - revision clouds without narrative description in the revision block
-  - grid or column line mismatches between plan and elevation
-  - dimension chain errors (sum ≠ overall, floating dimensions, missing hold)
+# Sheet index
 
-Severity guidance:
+- sheet_number: the printed sheet ID in the title block (e.g. "S-101",
+  "E-2.3", "D-415", "SH-12"). If a page has no sheet number, use the
+  closest available label (e.g. "Cover", "Index") — do not invent one.
+- title: the title-block title, verbatim. Keep punctuation/case.
+- category: one of 'structural' (S-series), 'erection' (E-series),
+  'detailing' (D-series), 'shop' (SH-series). For ambiguous series,
+  pick the nearest — do not wildcard-guess.
+- page_index: zero-based page number in the PDF.
+
+# Findings — acceptance bar
+
+Every finding MUST satisfy all of the following, or be dropped:
+  (a) sheet_number names a real sheet from sheet_index
+  (b) description cites a specific location: grid line ("A.5 / 3"),
+      detail callout ("Detail 5/S-301"), elevation tag, revision cloud
+      number, or dimension string
+  (c) the issue is something a fabricator/detailer would flag before
+      release — not a general "needs review" observation
+  (d) recommended_action is concrete (cite RFI target, dimension to
+      confirm, embed elevation to reconcile) — not "coordinate with EOR"
+
+Focus areas (examples of fab-blocking ambiguity):
+  - missing bolt callouts (A325 vs A490, SC/N/X, edge distance)
+  - AESS class omission (1–4) or conflicting AESS notes
+  - embed elevation conflicts (top-of-concrete vs top-of-steel)
+  - column splice location / orientation / field-vs-shop ambiguity
+  - connection type ambiguity (shear tab vs clip vs moment vs seismic)
+  - revision clouds without a narrative entry in the revision block
+  - grid or column line mismatch between plan and elevation
+  - dimension chain errors (sum ≠ overall, floating, missing hold)
+
+## Good vs bad examples
+
+GOOD:
+  sheet_number: "S-301"
+  finding_type: "callout_issue"
+  severity: "high"
+  description: "Detail 3/S-301 (beam-to-column shear tab at grid B/3):
+               bolt callout shows '(4)' with no grade or hole type.
+               Adjacent Detail 2/S-301 specifies (4) 3/4" A325-N STD."
+  recommended_action: "Issue RFI to EOR to confirm bolt grade and hole
+                       type for Detail 3/S-301; assume match to Detail
+                       2/S-301 unless advised otherwise."
+
+BAD (drop — too vague, no anchor):
+  "S-301 connection details need more information."
+
+BAD (drop — invented location):
+  "Detail 9/S-999 at grid Q.3 has a dimension error."  (no such detail
+  on the sheet)
+
+# Severity
+
   critical = blocks fabrication or creates safety risk
   high     = blocks release of a sheet or assembly
   medium   = needs resolution before shop start
   low      = detailing cleanup, will not block fab
   info     = observation, no action needed
 
-Be specific: every finding description must cite the sheet number AND
-a location on the sheet (grid line, detail callout, elevation,
-revision mark). Generic findings ("needs more detail", "unclear") are
-not useful — omit them. It is better to return zero findings than to
-invent any. If the set is clean, ai_summary should say so.`;
+# Summary
+
+ai_summary: 2–3 sentences. Name the set (stage / rev / issue date if
+known), the total sheet count, and the top 1–2 fab-blocking items if
+any. If the set is clean, say so plainly.`;
 
 const ANALYSIS_TOOL = {
   name: "submit_analysis",
-  description: "Return the structured drawing-set analysis.",
+  description:
+    "Return the structured drawing-set analysis. MUST enumerate every page " +
+    "in the PDF under sheet_index. Findings MUST be anchored to a specific " +
+    "on-sheet location (grid / detail tag / revision mark / dimension). " +
+    "Prefer zero findings over vague findings.",
   input_schema: {
     type: "object",
     required: ["sheet_index", "ai_summary", "findings"],
     properties: {
       sheet_index: {
         type: "array",
-        description: "Every sheet extracted from the PDF, in page order.",
+        description:
+          "ONE entry per page of the PDF, in page order. Do not skip " +
+          "cover / index / general-notes / blank pages — include them with " +
+          "the closest printed label.",
         items: {
           type: "object",
-          required: ["sheet_number", "title", "category"],
+          required: ["sheet_number", "title", "category", "page_index"],
           properties: {
-            sheet_number: { type: "string" },
-            title:        { type: "string" },
-            category:     { type: "string", enum: ["structural", "erection", "detailing", "shop"] },
-            page_index:   { type: "integer" },
+            sheet_number: {
+              type: "string",
+              description:
+                "Printed sheet ID from the title block (e.g. 'S-101', " +
+                "'E-2.3'). Verbatim — no paraphrase. For pages without an " +
+                "ID, use the closest label (e.g. 'Cover', 'Index').",
+            },
+            title: {
+              type: "string",
+              description:
+                "Title-block title, verbatim. Keep original punctuation " +
+                "and capitalization.",
+            },
+            category: {
+              type: "string",
+              enum: ["structural", "erection", "detailing", "shop"],
+              description:
+                "Closest series match. 'structural' = S-series, " +
+                "'erection' = E-series, 'detailing' = D-series, " +
+                "'shop' = SH-series.",
+            },
+            page_index: {
+              type: "integer",
+              minimum: 0,
+              description: "Zero-based page number in the PDF.",
+            },
           },
         },
       },
       ai_summary: {
         type: "string",
-        description: "2–3 sentence overview of the set and top risks.",
+        description:
+          "2–3 sentences. Name the set (stage/rev if known), total " +
+          "sheet count, and top 1–2 fab-blocking items. If clean, say so " +
+          "plainly. No marketing language.",
       },
       findings: {
         type: "array",
+        description:
+          "Substantiated findings ONLY. Each must cite a specific on-sheet " +
+          "location. Drop anything vague — return [] if nothing qualifies.",
         items: {
           type: "object",
-          required: ["sheet_number", "finding_type", "severity", "description", "recommended_action"],
+          required: [
+            "sheet_number",
+            "finding_type",
+            "severity",
+            "description",
+            "recommended_action",
+          ],
           properties: {
-            sheet_number:       { type: "string" },
-            finding_type:       { type: "string", enum: ["missing_info","coordination_conflict","callout_issue","revision_delta","dimension_concern","aess_concern"] },
-            severity:           { type: "string", enum: ["critical","high","medium","low","info"] },
-            description:        { type: "string" },
-            recommended_action: { type: "string" },
+            sheet_number: {
+              type: "string",
+              description:
+                "Must exactly match a sheet_number already emitted in " +
+                "sheet_index.",
+            },
+            finding_type: {
+              type: "string",
+              enum: [
+                "missing_info",
+                "coordination_conflict",
+                "callout_issue",
+                "revision_delta",
+                "dimension_concern",
+                "aess_concern",
+              ],
+            },
+            severity: {
+              type: "string",
+              enum: ["critical", "high", "medium", "low", "info"],
+              description:
+                "critical = blocks fab/safety · high = blocks release · " +
+                "medium = resolve before shop · low = cleanup · info = FYI.",
+            },
+            description: {
+              type: "string",
+              minLength: 40,
+              description:
+                "State the issue and cite its exact location: grid line " +
+                "(e.g. 'B/3'), detail tag ('Detail 3/S-301'), revision " +
+                "cloud number, or dimension string. No generic phrasing.",
+            },
+            recommended_action: {
+              type: "string",
+              minLength: 20,
+              description:
+                "Concrete next step — e.g. 'RFI EOR to confirm bolt " +
+                "grade on Detail 3/S-301' — not 'coordinate with team'.",
+            },
           },
         },
       },
@@ -324,6 +444,13 @@ export async function analyzeDrawing(analysis, {
         // dozen-or-so findings. 4000 was tight enough that tool_use
         // JSON sometimes got truncated on larger sets.
         maxTokens: 8000,
+        // Structured extraction over engineering drawings is NOT a
+        // creative task. Anthropic's default temperature is 1.0 which
+        // encouraged the model to invent plausible-sounding but
+        // unanchored findings. 0 makes the output deterministic enough
+        // that the same PDF produces the same sheet_index across runs
+        // and findings stop drifting into generic phrasing.
+        temperature: 0,
         system: SYSTEM_PROMPT,
         tools: [ANALYSIS_TOOL],
         tool_choice: { type: "tool", name: "submit_analysis" },
@@ -375,15 +502,58 @@ export async function analyzeDrawing(analysis, {
       if (sheetsErr) throw new Error(`Sheet insert failed: ${sheetsErr.message}`);
     }
 
-    // Persist findings. Each finding_type / severity passes through a
-    // normalizer so Claude can return a close-enough label (e.g.
-    // "coordination" vs "coordination_conflict") without breaking the
-    // CHECK constraint. Description is required, so drop rows where the
-    // model returned an empty string.
+    // Persist findings. Two layers of quality gate here:
+    //   1. Normalize finding_type / severity so a close-enough label
+    //      ("coordination" → "coordination_conflict") still passes the
+    //      CHECK constraint instead of losing the signal.
+    //   2. Post-filter for the acceptance bar we declared in the prompt —
+    //      the description must cite a concrete on-sheet anchor, and the
+    //      sheet_number must match a sheet we actually enumerated. Any
+    //      finding that fails is dropped (not persisted) so a drifted
+    //      model run doesn't pollute the UI.
+    const knownSheetNumbers = new Set(
+      sheets
+        .map((s) => String(s.sheet_number || "").trim())
+        .filter(Boolean),
+    );
+    const hasLocationAnchor = (desc) => {
+      if (!desc) return false;
+      const s = String(desc);
+      if (s.trim().length < 40) return false;
+      // At least one of: grid ref (A/3, B.5 / 3), detail tag (Detail 3/S-301
+      // or 3/S-301), revision cloud (Rev 2, Cloud 5), dimension ("12'-6"").
+      return (
+        /\bDetail\s+\w[\w\.]*\s*\/\s*[A-Z]+-?\d+/i.test(s) ||   // Detail 3/S-301
+        /\b\d+\s*\/\s*[A-Z]+-?\d[\w\.\-]*/.test(s) ||           // 3/S-301
+        /\bgrid\b|\baxis\b|\bline\b/i.test(s) && /[A-Za-z]\.?\d|\d\s*\/\s*[A-Za-z]/.test(s) || // grid A/3 or grid A.5
+        /\bRev(?:ision)?\s*(?:cloud\s*)?\d+/i.test(s) ||         // Rev 2 / Revision cloud 5
+        /\b\d+\s*[-–]\s*\d+\s*(?:"|in\b|”)/i.test(s) ||         // dimension like 12'-6"
+        /\b[A-Z]\d+\s*(?:&|and|to)\s*[A-Z]\d+/i.test(s)         // grid range A1 to A5
+      );
+    };
+
+    const droppedFindings = [];
     if (findings.length) {
       const findingRows = findings
-        .filter(f => f && String(f.description || "").trim().length > 0)
-        .map(f => ({
+        .filter((f) => {
+          if (!f) return false;
+          const desc = String(f.description || "").trim();
+          if (desc.length === 0) {
+            droppedFindings.push({ reason: "empty_description", f });
+            return false;
+          }
+          const sn = String(f.sheet_number || "").trim();
+          if (knownSheetNumbers.size > 0 && sn && !knownSheetNumbers.has(sn)) {
+            droppedFindings.push({ reason: "unknown_sheet_number", f });
+            return false;
+          }
+          if (!hasLocationAnchor(desc)) {
+            droppedFindings.push({ reason: "no_location_anchor", f });
+            return false;
+          }
+          return true;
+        })
+        .map((f) => ({
           analysis_id:        analysisId,
           sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
           finding_type:       normalizeFindingType(f.finding_type),
@@ -391,6 +561,12 @@ export async function analyzeDrawing(analysis, {
           description:        String(f.description).slice(0, 2000),
           recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
         }));
+      if (droppedFindings.length) {
+        console.warn(
+          `[analyzeDrawing] dropped ${droppedFindings.length}/${findings.length} findings for failing the quality bar:`,
+          droppedFindings.slice(0, 5).map((d) => d.reason),
+        );
+      }
       if (findingRows.length) {
         const { error: fErr } = await supabase.from("drawing_findings").insert(findingRows);
         if (fErr) throw new Error(`Findings insert failed: ${fErr.message}`);
