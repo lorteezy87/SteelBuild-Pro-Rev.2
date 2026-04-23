@@ -124,6 +124,7 @@ const SOFT_DELETE_TABLES = new Set([
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings',
+  'submittals', 'comments',
 ]);
 
 /**
@@ -329,6 +330,9 @@ export const entities = {
   ChangeOrder:           createEntityClient('change_orders'),
   ChangeRequest:         createEntityClient('change_requests'),
   ScheduleTask:          createEntityClient('schedule_tasks'),
+  TaskDependency:        createEntityClient('task_dependencies'),
+  Submittal:             createEntityClient('submittals'),
+  Comment:               createEntityClient('comments'),
   Expense:               createEntityClient('expenses'),
   Delivery:              createEntityClient('deliveries'),
   WorkPackage:           createEntityClient('work_packages'),

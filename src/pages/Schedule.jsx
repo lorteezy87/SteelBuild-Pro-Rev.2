@@ -16,6 +16,7 @@ import { PHASES, PHASE_ABBREV } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
+import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 
 /**
  * Auto-generate a WBS code for a task based on its phase and the
@@ -534,6 +535,26 @@ export default function Schedule() {
             onClick={() => fileInputRef.current?.click()}
           >
             {importing ? "IMPORTING…" : "IMPORT MPP"}
+          </Button>
+          <Button
+            variant="secondary"
+            icon="calendar"
+            disabled={!hasProject || scheduleTasks.length === 0}
+            onClick={() => {
+              const events = scheduleTasks
+                .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
+                .filter(Boolean);
+              if (events.length === 0) { toast.info("No tasks with dates to export."); return; }
+              downloadIcs({
+                filename: `schedule-${selectedProject?.project_number || "project"}.ics`,
+                calendarName: `${selectedProject?.name || "Project"} — Schedule`,
+                events,
+              });
+              toast.success(`Exported ${events.length} tasks to calendar`);
+            }}
+            title="Download .ics for Outlook / Teams / Google Calendar"
+          >
+            EXPORT .ICS
           </Button>
           <Button
             variant="outline"
