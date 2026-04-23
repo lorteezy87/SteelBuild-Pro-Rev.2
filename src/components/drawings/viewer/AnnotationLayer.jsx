@@ -41,9 +41,11 @@ export default function AnnotationLayer({
   items,
   activeTool,
   activeColor,
+  markupScale,       // real_inches_per_pdf_inch; null = not calibrated
   onAddItem,
   onRemoveItem,
   onUpdateItem,
+  onCalibrate,       // (pdfDist) => void — parent prompts user + persists scale
 }) {
   const svgRef = useRef(null);
 
@@ -79,29 +81,40 @@ export default function AnnotationLayer({
       setDraft({ kind: "highlight", x0: x, y0: y, x1: x, y1: y });
     } else if (activeTool === "arrow") {
       setDraft({ kind: "arrow", x0: x, y0: y, x1: x, y1: y });
-    } else if (activeTool === "measure") {
-      // Two-click tool. First click anchors + enters "tracking" mode where
-      // pointermove extends the line to the cursor; second click commits.
-      // Kept in the draft state machine so Esc cancels cleanly.
-      if (!draft || draft.kind !== "measure" || draft.committed) {
-        setDraft({ kind: "measure", x0: x, y0: y, x1: x, y1: y, tracking: true });
+    } else if (activeTool === "measure" || activeTool === "calibrate") {
+      // Both are two-click tools sharing the same draft state. On commit:
+      //   - measure    → persists as a markup_item with kind="measure"
+      //   - calibrate  → dispatches onCalibrate(pdfDist) to the parent,
+      //                  which prompts the user for the real-world length
+      //                  and saves the scale factor to the drawing row.
+      if (!draft || (draft.kind !== "measure" && draft.kind !== "calibrate") || draft.committed) {
+        setDraft({
+          kind: activeTool,        // "measure" | "calibrate"
+          x0: x, y0: y, x1: x, y1: y,
+          tracking: true,
+        });
       } else if (draft.tracking) {
-        // Second click — commit the measurement as a persisted item.
         const dx = x - draft.x0;
         const dy = y - draft.y0;
         if (dx * dx + dy * dy > 1) {
-          onAddItem({
-            id: newMarkupId(),
-            kind: "measure",
-            pdf_page: pdfPage,
-            color: activeColor,
-            geom: { x1: draft.x0, y1: draft.y0, x2: x, y2: y },
-            created_at: new Date().toISOString(),
-          });
+          if (activeTool === "calibrate") {
+            // PDF points → PDF inches (points are 1/72 inch)
+            const pdfInches = Math.sqrt(dx * dx + dy * dy) / 72;
+            onCalibrate?.(pdfInches);
+          } else {
+            onAddItem({
+              id: newMarkupId(),
+              kind: "measure",
+              pdf_page: pdfPage,
+              color: activeColor,
+              geom: { x1: draft.x0, y1: draft.y0, x2: x, y2: y },
+              created_at: new Date().toISOString(),
+            });
+          }
         }
         setDraft(null);
       }
-      return; // measure handles pointer capture differently — skip default capture below
+      return; // two-click tools manage their own state — skip default capture
     } else if (activeTool === "note") {
       const id = newMarkupId();
       onAddItem({
@@ -135,7 +148,7 @@ export default function AnnotationLayer({
       if (prev.kind === "rect" || prev.kind === "highlight" || prev.kind === "arrow") {
         return { ...prev, x1: x, y1: y };
       }
-      if (prev.kind === "measure" && prev.tracking) {
+      if ((prev.kind === "measure" || prev.kind === "calibrate") && prev.tracking) {
         return { ...prev, x1: x, y1: y };
       }
       return prev;
@@ -235,7 +248,7 @@ export default function AnnotationLayer({
   // Build the draft preview once per render. Non-draft items are projected
   // individually inside the <MarkupItem/> component — that lets a single
   // re-render from zoom or rotate still be cheap.
-  const draftPreview = draft ? renderDraft(draft, viewport, activeColor) : null;
+  const draftPreview = draft ? renderDraft(draft, viewport, activeColor, markupScale) : null;
 
   return (
     <svg
@@ -288,6 +301,7 @@ export default function AnnotationLayer({
           key={m.id}
           item={m}
           viewport={viewport}
+          markupScale={markupScale}
           selected={selectedId === m.id}
           editing={editingNoteId === m.id}
           interactive={activeTool === "select"}
@@ -307,7 +321,7 @@ export default function AnnotationLayer({
   );
 }
 
-function renderDraft(draft, viewport, color) {
+function renderDraft(draft, viewport, color, scaleForLabel) {
   if (draft.kind === "pen") {
     return (
       <polyline
@@ -361,33 +375,39 @@ function renderDraft(draft, viewport, color) {
       />
     );
   }
-  if (draft.kind === "measure" && draft.tracking) {
+  if ((draft.kind === "measure" || draft.kind === "calibrate") && draft.tracking) {
     const [x1, y1] = pdfToCanvas(viewport, draft.x0, draft.y0);
     const [x2, y2] = pdfToCanvas(viewport, draft.x1, draft.y1);
     const dx = draft.x1 - draft.x0;
     const dy = draft.y1 - draft.y0;
     const pdfDist = Math.sqrt(dx * dx + dy * dy);
-    const label = formatMeasureLabel(pdfDist);
+    // Calibration preview shows raw page inches (that's what the user is
+    // about to assign a real value to). Measure preview honors the
+    // current scale if set — reading in real units while aiming.
+    const label = draft.kind === "calibrate"
+      ? formatMeasureLabel(pdfDist, null)
+      : formatMeasureLabel(pdfDist, scaleForLabel);
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
+    const stroke = draft.kind === "calibrate" ? "#00E5FF" : color;  // cyan for calibrate
     return (
       <g>
         {/* Endpoint crosshairs so the anchor point is obvious */}
-        <circle cx={x1} cy={y1} r={5} fill="none" stroke={color} strokeWidth={2} />
-        <circle cx={x2} cy={y2} r={5} fill="none" stroke={color} strokeWidth={2} />
+        <circle cx={x1} cy={y1} r={5} fill="none" stroke={stroke} strokeWidth={2} />
+        <circle cx={x2} cy={y2} r={5} fill="none" stroke={stroke} strokeWidth={2} />
         <line
           x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={color}
+          stroke={stroke}
           strokeWidth={2}
           strokeDasharray="6 4"
           opacity={0.9}
         />
         <rect
-          x={midX - 42} y={midY - 11}
-          width={84} height={22}
+          x={midX - 56} y={midY - 11}
+          width={112} height={22}
           rx={3}
-          fill="rgba(12,14,17,0.85)"
-          stroke={color}
+          fill="rgba(12,14,17,0.88)"
+          stroke={stroke}
           strokeWidth={1}
         />
         <text
@@ -398,7 +418,7 @@ function renderDraft(draft, viewport, color) {
           fontWeight={700}
           fill="#fff"
         >
-          {label}
+          {draft.kind === "calibrate" ? `SET: ${label}` : label}
         </text>
       </g>
     );
@@ -424,6 +444,7 @@ function renderDraft(draft, viewport, color) {
 function MarkupItem({
   item,
   viewport,
+  markupScale,
   selected,
   editing,
   interactive,
@@ -498,7 +519,7 @@ function MarkupItem({
     const [x2, y2] = pdfToCanvas(viewport, item.geom.x2, item.geom.y2);
     const dx = item.geom.x2 - item.geom.x1;
     const dy = item.geom.y2 - item.geom.y1;
-    const label = formatMeasureLabel(Math.sqrt(dx * dx + dy * dy));
+    const label = formatMeasureLabel(Math.sqrt(dx * dx + dy * dy), markupScale);
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
     return (
@@ -647,6 +668,7 @@ function cursorFor(tool) {
     case "highlight": return "crosshair";
     case "arrow":     return "crosshair";
     case "measure":   return "crosshair";
+    case "calibrate": return "crosshair";
     case "note":      return "copy";
     default:          return "default";
   }
@@ -654,21 +676,26 @@ function cursorFor(tool) {
 
 /**
  * Format a distance in PDF user units (points: 1/72 inch) into an engineer-
- * friendly label. Without a drawing-scale calibration we can only show the
- * raw page measurement, so we surface both the page-inch value and a hint
- * that scale calibration is needed for real-world dimensions. Phase 2 will
- * add a "calibrate with known length" step that stores a scale factor in
- * drawings.markup_scale and drives this label to real feet-inches.
+ * friendly label.
+ *
+ * If `scale` is provided (real_inches_per_pdf_inch — see drawings.markup_scale
+ * set by the Calibrate tool), the label reads as real-world feet-inches.
+ * Without it, falls back to raw page-inches + a ~ prefix so the user knows
+ * they're looking at page measurements, not real dimensions.
+ *
+ * Number formatting rules match how PMs read dimension strings on shop
+ * drawings: under 12" → decimal inches (e.g. 8.3"), 12"+ → F'-I.I" format
+ * (e.g. 14'-6.2"). No rounding beyond one decimal — users need enough
+ * precision to eyeball whether a spec matches.
  */
-function formatMeasureLabel(pdfDist) {
-  // PDF user units are points (1/72 inch). Show in inches with tick-friendly
-  // precision. Under 12" → inches with tenths; 12"+ → ft'-in" to match the
-  // way PMs read drawings.
-  const inches = pdfDist / 72;
+function formatMeasureLabel(pdfDist, scale) {
+  const pdfInches = pdfDist / 72;
+  const inches = scale ? pdfInches * scale : pdfInches;
+  const prefix = scale ? "" : "~"; // ~ means "page inches, not calibrated"
   if (inches < 12) {
-    return `${inches.toFixed(1)}"`;
+    return `${prefix}${inches.toFixed(1)}"`;
   }
   const ft = Math.floor(inches / 12);
   const rem = inches - ft * 12;
-  return `${ft}'-${rem.toFixed(1)}"`;
+  return `${prefix}${ft}'-${rem.toFixed(1)}"`;
 }
