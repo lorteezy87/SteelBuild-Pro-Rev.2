@@ -62,6 +62,14 @@ export default function Dashboard() {
     queryKey: ["expenses-all"],
     queryFn: () => base44.entities.Expense.list(),
   });
+  // Portfolio timeline column needs schedule_tasks for every project.
+  // Tiny payload — one row per task, a few date columns — so fetching
+  // them globally is cheaper than per-project drilldown round-trips.
+  const { data: allScheduleTasks = [] } = useQuery({
+    queryKey: ["schedule-tasks-all"],
+    queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
+    staleTime: 60 * 1000,
+  });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
   const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
@@ -93,6 +101,7 @@ export default function Dashboard() {
           allDeliveries={allDeliveries}
           allActionItems={allActionItems}
           allExpenses={allExpenses}
+          allScheduleTasks={allScheduleTasks}
         />
       </ErrorBoundary>
     );
