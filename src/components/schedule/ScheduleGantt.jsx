@@ -43,14 +43,33 @@ function buildTreeOrder(tasks) {
       roots.push(t);
     }
   });
-  // Sort children by start_date within each parent
-  const sortByStart = (a, b) => {
-    if (!a.start_date) return 1;
-    if (!b.start_date) return -1;
-    return new Date(a.start_date) - new Date(b.start_date);
+  // Order within each sibling group:
+  //   1. Prefer sort_order (manually set by the user via Move Up /
+  //      Move Down). Lower value = higher on screen.
+  //   2. Tasks without a sort_order fall to the end and then sort by
+  //      start_date, so newly-created rows still slot in chronologically
+  //      until a user moves them explicitly.
+  //   3. created_at is the final tiebreaker so render order stays
+  //      stable across refreshes when two rows are otherwise equal.
+  const sortByOrder = (a, b) => {
+    const aHas = a.sort_order !== null && a.sort_order !== undefined;
+    const bHas = b.sort_order !== null && b.sort_order !== undefined;
+    if (aHas && bHas && a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    // Fallback to start_date
+    if (!a.start_date && b.start_date) return 1;
+    if (a.start_date && !b.start_date) return -1;
+    if (a.start_date && b.start_date) {
+      const d = new Date(a.start_date) - new Date(b.start_date);
+      if (d !== 0) return d;
+    }
+    // Last-resort stable tiebreaker: created_at
+    if (a.created_at && b.created_at) return new Date(a.created_at) - new Date(b.created_at);
+    return 0;
   };
-  Object.values(childMap).forEach(arr => arr.sort(sortByStart));
-  roots.sort(sortByStart);
+  Object.values(childMap).forEach(arr => arr.sort(sortByOrder));
+  roots.sort(sortByOrder);
 
   // DFS flatten
   const result = [];
@@ -630,6 +649,74 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const canIndent  = (task) => computeIndentTarget(task)  !== null;
   const canOutdent = (task) => computeOutdentTarget(task) !== null;
 
+  // ── Move Up / Move Down (manual ordering within siblings) ───────────
+  //
+  // Siblings = tasks in the same phase AND same parent_task_id. A root
+  // task's siblings are the other root tasks in its phase. A child's
+  // siblings are the other children of its parent.
+  //
+  // Move mechanics: swap sort_order with the adjacent sibling. Both
+  // rows are updated; the user sees the move land after the next
+  // refetch. If the task has no sort_order yet (shouldn't happen
+  // post-backfill but defend anyway), we synthesize one from its
+  // position before swapping.
+  const findSiblings = (task) => {
+    const flat = phaseFlatByKey[task.phase] || [];
+    return flat.filter((t) => (t.parent_task_id || null) === (task.parent_task_id || null));
+  };
+  const computeMoveUpTarget = (task) => {
+    const sibs = findSiblings(task);
+    const idx = sibs.findIndex((t) => t.id === task.id);
+    if (idx <= 0) return null;
+    return sibs[idx - 1];
+  };
+  const computeMoveDownTarget = (task) => {
+    const sibs = findSiblings(task);
+    const idx = sibs.findIndex((t) => t.id === task.id);
+    if (idx < 0 || idx >= sibs.length - 1) return null;
+    return sibs[idx + 1];
+  };
+  const canMoveUp   = (task) => computeMoveUpTarget(task)   !== null;
+  const canMoveDown = (task) => computeMoveDownTarget(task) !== null;
+
+  // Swap sort_order between two sibling tasks. Falls back to assigning
+  // sensible numbers if either is null. We fire both updates in
+  // parallel — the query invalidation after onSave picks up both.
+  const swapOrder = async (taskA, taskB) => {
+    if (!onSave) return;
+    let a = taskA.sort_order;
+    let b = taskB.sort_order;
+    // Post-backfill everyone has a sort_order, but defend against
+    // a future where a freshly-created task lands here with null.
+    if (a == null && b == null) { a = 2000; b = 1000; }
+    else if (a == null)          { a = b + 1000; }
+    else if (b == null)          { b = a + 1000; }
+    try {
+      await Promise.all([
+        onSave({ id: taskA.id, sort_order: b }),
+        onSave({ id: taskB.id, sort_order: a }),
+      ]);
+    } catch { /* onSave toasts errors itself */ }
+  };
+  const handleMoveUp = async (task) => {
+    if (!onSave) return;
+    const tgt = computeMoveUpTarget(task);
+    if (!tgt) {
+      toast.info("Already at the top of its group.");
+      return;
+    }
+    await swapOrder(task, tgt);
+  };
+  const handleMoveDown = async (task) => {
+    if (!onSave) return;
+    const tgt = computeMoveDownTarget(task);
+    if (!tgt) {
+      toast.info("Already at the bottom of its group.");
+      return;
+    }
+    await swapOrder(task, tgt);
+  };
+
   // onSave writes its own "Task saved" toast. We add targeted toasts
   // for the disabled / no-op paths so a hover-click that went nowhere
   // tells the user why ("Already at root", etc.) instead of feeling
@@ -664,7 +751,6 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   useEffect(() => {
     if (!hoveredRowId) return undefined;
     const onKey = (ev) => {
-      if (ev.key !== "Tab") return;
       const el = document.activeElement;
       const inEditable = el && (
         el.tagName === "INPUT" ||
@@ -675,14 +761,31 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       if (inEditable) return;
       const task = allTasks.find((t) => t.id === hoveredRowId);
       if (!task) return;
-      ev.preventDefault();
-      if (ev.shiftKey) handleOutdent(task);
-      else             handleIndent(task);
+      // Tab / Shift+Tab → indent / outdent (change parent_task_id)
+      if (ev.key === "Tab") {
+        ev.preventDefault();
+        if (ev.shiftKey) handleOutdent(task);
+        else             handleIndent(task);
+        return;
+      }
+      // Alt+ArrowUp / Alt+ArrowDown → move up / down among siblings
+      // (swap sort_order). Alt avoids clashing with the browser's
+      // own Home/End/PageUp scrolling behaviours.
+      if (ev.altKey && ev.key === "ArrowUp") {
+        ev.preventDefault();
+        handleMoveUp(task);
+        return;
+      }
+      if (ev.altKey && ev.key === "ArrowDown") {
+        ev.preventDefault();
+        handleMoveDown(task);
+        return;
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // Only re-bind when the hovered row changes — handleIndent/Outdent
-    // are stable via closure over allTasks which is in the dep array.
+    // Only re-bind when the hovered row changes — handlers close over
+    // allTasks + sort_order state which is refetched into allTasks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoveredRowId, allTasks]);
 
@@ -1263,14 +1366,52 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
                     style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: (task._depth || 0) * 16, overflow: "hidden" }}
                   >
-                    {/* Inline indent/outdent — only the hovered row
-                        shows these so the name column stays quiet by
-                        default. canOutdent disables at root; canIndent
-                        disables on the first task of the phase. Tab /
-                        Shift+Tab do the same thing on the hovered row
-                        (see keydown effect above). */}
+                    {/* Inline hierarchy + ordering controls — only
+                        the hovered row shows these so the name column
+                        stays quiet. Four buttons in a single strip:
+                          ▲  move up within siblings (swap sort_order)
+                          ▼  move down within siblings
+                          ◂  outdent one level
+                          ▸  indent under the task above
+                        Keyboard mirrors the clicks: Alt+↑/↓ for move,
+                        Tab/Shift+Tab for indent/outdent. */}
                     {leftHovered && (
                       <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, marginRight: 2, gap: 1 }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMoveUp(task); }}
+                          disabled={!canMoveUp(task)}
+                          title="Move up (Alt+↑) — reorder within siblings"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: canMoveUp(task) ? "pointer" : "not-allowed",
+                            color: canMoveUp(task) ? "var(--accent)" : "var(--divider)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 10,
+                            lineHeight: 1,
+                            padding: "0 3px",
+                          }}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMoveDown(task); }}
+                          disabled={!canMoveDown(task)}
+                          title="Move down (Alt+↓) — reorder within siblings"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: canMoveDown(task) ? "pointer" : "not-allowed",
+                            color: canMoveDown(task) ? "var(--accent)" : "var(--divider)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 10,
+                            lineHeight: 1,
+                            padding: "0 3px",
+                          }}
+                        >
+                          ▼
+                        </button>
+                        <span style={{ width: 1, height: 10, background: "var(--divider)", margin: "0 2px" }} />
                         <button
                           onClick={(e) => { e.stopPropagation(); handleOutdent(task); }}
                           disabled={!canOutdent(task)}
