@@ -139,6 +139,11 @@ export default function CommandCenter() {
       ),
     [rfis, drawings, drawingSets, changeOrders, deliveries, workPackages, sovItems, productionNotes, scheduleTasks, projectMap]
   );
+  // Timestamp pulses whenever any of the underlying query results
+  // change. Driven by rawFeed's identity because that's the closest
+  // single handle we have to "did the numbers change?". Feeds the
+  // KpiTile trust footers so PMs can see how fresh each count is.
+  const feedUpdatedAt = useMemo(() => Date.now(), [rawFeed]);
 
   // ── Today-first view buckets ────────────────────────────────────────
   const view = useMemo(
@@ -374,7 +379,11 @@ export default function CommandCenter() {
         </div>
       )}
 
-      {/* Snapshot tiles */}
+      {/* Snapshot tiles — wired with source + updatedAt so PMs can see
+          where each count came from and how fresh it is. feedUpdatedAt
+          pulses whenever rawFeed recomputes (i.e. any of the 9 entity
+          queries refetched), which is the closest we can get to "when
+          did these numbers actually change?". */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
         <KpiTile
           compact
@@ -383,6 +392,8 @@ export default function CommandCenter() {
           color="var(--accent)"
           active={activeFilter("needsAction")}
           onClick={() => toggleFilter("needsAction")}
+          source="action feed"
+          updatedAt={feedUpdatedAt}
         />
         <KpiTile
           compact
@@ -391,6 +402,8 @@ export default function CommandCenter() {
           color="var(--status-error)"
           active={activeFilter("overdue")}
           onClick={() => toggleFilter("overdue")}
+          source="rfis + drawings + tasks"
+          updatedAt={feedUpdatedAt}
         />
         <KpiTile
           compact
@@ -399,6 +412,8 @@ export default function CommandCenter() {
           color="var(--status-warning)"
           active={activeFilter("dueToday")}
           onClick={() => toggleFilter("dueToday")}
+          source="due-date rollup"
+          updatedAt={feedUpdatedAt}
         />
         <KpiTile
           compact
@@ -407,6 +422,8 @@ export default function CommandCenter() {
           color="var(--phase-delivery)"
           active={activeFilter("arrivingToday")}
           onClick={() => toggleFilter("arrivingToday")}
+          source="deliveries"
+          updatedAt={feedUpdatedAt}
         />
         <KpiTile
           compact
@@ -415,6 +432,8 @@ export default function CommandCenter() {
           color="var(--text-muted)"
           active={activeFilter("waitingOthers")}
           onClick={() => toggleFilter("waitingOthers")}
+          source="ball-in-court"
+          updatedAt={feedUpdatedAt}
         />
       </div>
 
