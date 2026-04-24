@@ -13,7 +13,7 @@ import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
-import { PHASES, PHASE_ABBREV } from "@/utils/phases";
+import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
@@ -22,22 +22,45 @@ import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 
 /**
- * Auto-generate a WBS code for a task based on its phase and the
- * existing tasks in that phase. Format: "FAB-003"
+ * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
+ * where <phase> is the numeric phase id (1-7 from PHASE_NUMBER) and
+ * <n> is the next available index within that phase.
+ *
+ * Examples:
+ *   Detailing, first task      → "2.1"
+ *   Detailing, third task      → "2.3"
+ *   Installation, first task   → "6.1"
+ *
+ * Falls back to "0.<n>" if we don't know the phase — rare enough
+ * that we'd rather have something consistent than invent a prefix.
  */
 function generateWBS(phase, existingTasks) {
-  const abbrev = PHASE_ABBREV[phase] || phase?.slice(0, 3).toUpperCase() || "TSK";
+  const phaseNum = PHASE_NUMBER[phase] ?? 0;
   const samePhase = (existingTasks || []).filter(t => t.phase === phase);
-  // Find highest existing index in this phase's WBS codes
+  // Match the new X.Y / X.Y.Z format. The final numeric segment is
+  // this task's index within the phase — we take the max and add 1.
+  // Old DET-003-style codes in the DB are also matched (trailing
+  // digits) so the counter doesn't restart when a project hasn't
+  // been migrated yet.
   let maxIdx = 0;
-  samePhase.forEach(t => {
-    if (t.wbs_code) {
-      const match = t.wbs_code.match(/(\d+)$/);
-      if (match) maxIdx = Math.max(maxIdx, parseInt(match[1], 10));
+  for (const t of samePhase) {
+    const code = t.wbs_code;
+    if (!code) continue;
+    // Prefer new-format pattern "<phase>.<n>" or "<phase>.<n>.<m>"
+    const mNew = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(code);
+    if (mNew) {
+      const idx = parseInt(mNew[2], 10);
+      if (Number.isFinite(idx) && idx > maxIdx) maxIdx = idx;
+      continue;
     }
-  });
-  const nextIdx = maxIdx + 1;
-  return `${abbrev}-${String(nextIdx).padStart(3, "0")}`;
+    // Legacy "ABC-NNN" — pull the trailing number as a fallback.
+    const mLeg = /(\d+)$/.exec(code);
+    if (mLeg) {
+      const idx = parseInt(mLeg[1], 10);
+      if (Number.isFinite(idx) && idx > maxIdx) maxIdx = idx;
+    }
+  }
+  return `${phaseNum}.${maxIdx + 1}`;
 }
 
 export default function Schedule() {
@@ -112,19 +135,30 @@ export default function Schedule() {
     retry: false,
   });
 
-  /* ── Auto-assign WBS codes to tasks that don't have one ────────── */
+  /* ── Auto-assign WBS codes to tasks that don't have one ──────────
+     New format: "<phase>.<n>" (phase is PHASE_NUMBER 1-7, n is the
+     sequence within the phase). Handles migration from the legacy
+     "ABC-NNN" format transparently — any code we can parse a trailing
+     number out of counts toward the per-phase max so new codes pick
+     up from there without colliding. */
   const enrichedTasks = useMemo(() => {
     if (!scheduleTasks.length) return scheduleTasks;
     const phaseCounts = {};
     const result = [];
-    // First pass: count existing WBS max per phase
+    // First pass: find the highest n seen per phase, accepting both
+    // new-format (2.3 / 2.3.1) and legacy-format (DET-003) codes.
     scheduleTasks.forEach(t => {
-      if (t.wbs_code) {
-        const match = t.wbs_code.match(/(\d+)$/);
-        if (match) {
-          const ph = t.phase || "Other";
-          phaseCounts[ph] = Math.max(phaseCounts[ph] || 0, parseInt(match[1], 10));
-        }
+      if (!t.wbs_code) return;
+      const ph = t.phase || "Other";
+      let idx = 0;
+      const mNew = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(t.wbs_code);
+      if (mNew) idx = parseInt(mNew[2], 10);
+      else {
+        const mLeg = /(\d+)$/.exec(t.wbs_code);
+        if (mLeg) idx = parseInt(mLeg[1], 10);
+      }
+      if (Number.isFinite(idx)) {
+        phaseCounts[ph] = Math.max(phaseCounts[ph] || 0, idx);
       }
     });
     // Second pass: assign WBS to tasks missing it
@@ -134,9 +168,9 @@ export default function Schedule() {
         result.push(t);
       } else {
         const ph = t.phase || "Other";
-        const abbrev = PHASE_ABBREV[ph] || ph.slice(0, 3).toUpperCase();
+        const phaseNum = PHASE_NUMBER[ph] ?? 0;
         phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
-        const wbs = `${abbrev}-${String(phaseCounts[ph]).padStart(3, "0")}`;
+        const wbs = `${phaseNum}.${phaseCounts[ph]}`;
         result.push({ ...t, wbs_code: wbs });
         toBackfill.push({ id: t.id, wbs });
       }

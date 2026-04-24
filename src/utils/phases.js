@@ -29,9 +29,10 @@ export const PHASE_COLORS = {
 };
 
 /**
- * 3-letter abbreviations used in WBS codes and compact column labels.
- * Schedule.jsx previously inlined this map; centralized here so Gantt,
- * Lookahead, and any future pages share the same short form.
+ * 3-letter abbreviations kept around for compact column labels (the
+ * small phase-badge chip in the Gantt summary row falls back to these
+ * when PHASE_NUMBER is missing). No longer used for WBS codes — those
+ * moved to decimal phase.task format (see PHASE_NUMBER below).
  */
 export const PHASE_ABBREV = {
   'Pre-Construction': 'PC',
@@ -41,6 +42,26 @@ export const PHASE_ABBREV = {
   'Delivery':         'DEL',
   'Installation':     'INS',
   'Closeout':         'CLO',
+};
+
+/**
+ * Phase number used in WBS codes. Matches the Gantt's PHASES array
+ * ids 1-7 so the summary row ("2.0 DETAILING") and the row WBS codes
+ * ("2.1", "2.2", "2.3") share a single numeric identity.
+ *
+ * WBS code format:
+ *   - Phase summary:       "<phase>.0"    e.g. "2.0" for Detailing
+ *   - Flat task:           "<phase>.<n>"  e.g. "2.1", "2.2"
+ *   - Nested child task:   "<phase>.<parent>.<child>" e.g. "2.1.1"
+ */
+export const PHASE_NUMBER = {
+  'Pre-Construction': 1,
+  'Detailing':        2,
+  'Procurement':      3,
+  'Fabrication':      4,
+  'Delivery':         5,
+  'Installation':     6,
+  'Closeout':         7,
 };
 
 // Derive phase from task fields when not explicitly set

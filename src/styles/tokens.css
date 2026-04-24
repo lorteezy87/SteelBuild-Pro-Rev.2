@@ -184,7 +184,13 @@
   --bg-surface-highest:       #CBD5E1;  /* slate-300 — pressed/disabled */
   --bg-surface-lowest:        #F8FAFC;
   --bg-input:                 #FFFFFF;
-  --bg-sidebar:               #0F172A;  /* slate-900 — actual sidebar only */
+  /* Sidebar was slate-900 (dark) in light mode which made every
+     --text-primary/--text-muted label inside the nav render as
+     dark-on-dark and effectively illegible. Flipping to pure white
+     so the sidebar reads as a card-style surface against the
+     slate-100 page canvas. Dark mode keeps its deep sidebar (see
+     first block of this file). */
+  --bg-sidebar:               #FFFFFF;
   --bg-card:                  #FFFFFF;
   --bg-base:                  #F1F5F9;
   --bg-elevated:              #FFFFFF;

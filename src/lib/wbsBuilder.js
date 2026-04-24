@@ -35,7 +35,7 @@
  * build rather than silently scheduling tasks into phases the Gantt
  * doesn't know about.
  */
-import { PHASES, PHASE_ABBREV } from "@/utils/phases";
+import { PHASES, PHASE_ABBREV, PHASE_NUMBER } from "@/utils/phases";
 
 // Fast-lookup sets for validation.
 const VALID_PHASES  = new Set(PHASES);
@@ -624,8 +624,13 @@ export function buildWbs(parseResult, { startDate = null } = {}) {
         const taskEnd = new Date(taskStart);
         taskEnd.setUTCDate(taskEnd.getUTCDate() + Math.max(1, tmpl.duration) - 1);
 
+        // Counters still keyed by the legacy wbsPrefix so phases that
+        // share a prefix (e.g. multiple Detailing scope types) count
+        // independently of Fabrication / Delivery. Output format is
+        // the new decimal scheme "<phase>.<n>" keyed off PHASE_NUMBER.
         phaseCounters[tmpl.wbsPrefix] = (phaseCounters[tmpl.wbsPrefix] || 0) + 1;
-        const wbs_code = `${tmpl.wbsPrefix}-${String(phaseCounters[tmpl.wbsPrefix]).padStart(3, "0")}`;
+        const phaseNum = PHASE_NUMBER[tmpl.phase] ?? 0;
+        const wbs_code = `${phaseNum}.${phaseCounters[tmpl.wbsPrefix]}`;
 
         const task = {
           task_name:      `${base} — ${tmpl.verb}`,
