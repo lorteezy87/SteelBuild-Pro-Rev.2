@@ -31,6 +31,8 @@ import {
   removeLink as removeLinkSvc,
   LINKABLE_TYPE_LABELS,
   ALL_STATUSES,
+  computeZoneStatus,
+  recomputeAndPersistZoneStatus,
 } from "@/lib/drawingHub";
 
 const mono    = { fontFamily: "var(--font-mono)" };
@@ -107,6 +109,15 @@ export default function ZonePanel({
     return out;
   }, [linkedItems]);
 
+  // Run the rule engine over the currently loaded link data. Pure
+  // function — reruns only when linkedItems changes. Drives the "why"
+  // bullet list in the Overview tab and the little suggestion chip in
+  // the header when the rule engine disagrees with the stored status.
+  const computed = useMemo(
+    () => computeZoneStatus(linkedItems),
+    [linkedItems]
+  );
+
   // Filtered list for the active tab.
   const tabItems = useMemo(() => {
     const tab = TABS.find((t) => t.id === activeTab);
@@ -114,6 +125,25 @@ export default function ZonePanel({
     const set = new Set(tab.types);
     return linkedItems.filter((i) => set.has(i.link.linked_record_type));
   }, [linkedItems, activeTab]);
+
+  // Shared post-link-mutation step: re-pull links, recompute the zone's
+  // status via the rule engine, and persist if it changed. Keeps the
+  // stored zone.status row fresh so the overlay paints correct colors
+  // on first render for other viewers who haven't loaded the links yet.
+  async function afterLinksChanged() {
+    const fresh = await refetchLinks();
+    const freshItems = fresh?.data || [];
+    try {
+      await recomputeAndPersistZoneStatus(zone, freshItems);
+    } catch (err) {
+      // Rule-engine persistence is best-effort — don't block the UI
+      // on it. The computed view in the panel still shows the "right"
+      // answer even if the write failed.
+      console.warn("[ZonePanel] status recompute failed:", err?.message);
+    }
+    qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
+    qc.invalidateQueries({ queryKey: ["drawing-zones"] });
+  }
 
   // Link-create mutation.
   const createMut = useMutation({
@@ -130,9 +160,7 @@ export default function ZonePanel({
     },
     onSuccess: async () => {
       toast.success("Linked");
-      await refetchLinks();
-      // Also refresh the count badges on the overlay.
-      qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
+      await afterLinksChanged();
     },
     onError: (err) => toast.error(`Link failed: ${err?.message || "unknown error"}`),
   });
@@ -141,8 +169,7 @@ export default function ZonePanel({
     mutationFn: async (linkId) => removeLinkSvc({ linkId }),
     onSuccess: async () => {
       toast.success("Unlinked");
-      await refetchLinks();
-      qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
+      await afterLinksChanged();
     },
     onError: (err) => toast.error(`Unlink failed: ${err?.message || "unknown error"}`),
   });
@@ -344,7 +371,28 @@ export default function ZonePanel({
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px" }}>
           {activeTab === "overview" && (
-            <OverviewTab zone={zone} items={linkedItems} counts={counts} />
+            <OverviewTab
+              zone={zone}
+              items={linkedItems}
+              counts={counts}
+              computed={computed}
+              onApplyComputed={async () => {
+                try {
+                  await onZoneUpdate?.({
+                    status: computed.status,
+                    status_reason: computed.reason || null,
+                    status_computed_at: new Date().toISOString(),
+                    status_computed_by: "rule_engine",
+                    is_manual_status_override: false,
+                    manual_status_override_at: null,
+                    manual_status_override_by: null,
+                  });
+                  toast.success(`Status → ${computed.status} (rule engine)`);
+                } catch (err) {
+                  toast.error(`Apply failed: ${err?.message || "unknown"}`);
+                }
+              }}
+            />
           )}
           {activeTab === "activity" && (
             <ActivityTab zone={zone} />
@@ -376,8 +424,8 @@ export default function ZonePanel({
 }
 
 // ── Overview tab ─────────────────────────────────────────────────────
-function OverviewTab({ zone, items, counts }) {
-  const rfiOpen = items.filter((i) => i.link.linked_record_type === "rfi" && i.record && i.record.status !== "Answered" && i.record.status !== "Closed" && i.record.status !== "Void").length;
+function OverviewTab({ zone, items, counts, computed, onApplyComputed }) {
+  const rfiOpen = items.filter((i) => i.link.linked_record_type === "rfi" && i.record && !/^(answered|closed|void)$/i.test(i.record.status || "")).length;
   const wpActive = items.filter((i) => i.link.linked_record_type === "work_package" && i.record && /In Progress|Active|Fabrication|Erection|Installation/i.test(i.record.status || "")).length;
   const delPending = items.filter((i) => i.link.linked_record_type === "delivery" && i.record && !/Delivered|Received/i.test(i.record.status || "")).length;
   const photoCount = (counts.photo || 0) + (counts.document || 0);
@@ -388,6 +436,16 @@ function OverviewTab({ zone, items, counts }) {
     { label: "Pending Deliveries", value: delPending },
     { label: "Photos / Docs",      value: photoCount },
   ];
+
+  // Rule-engine "why" card. Shows the drivers that produced the
+  // computed status. If the computed value differs from what's
+  // stored on the zone (manual override, stale cache, etc.), the
+  // user can one-click adopt the rule-engine value.
+  const suggestion = computed?.status && computed.status !== zone.status;
+  const suggestionColor = {
+    red: "#EF4444", amber: "#F59E0B", purple: "#8B5CF6",
+    blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
+  }[computed?.status] || "#94A3B8";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -414,6 +472,55 @@ function OverviewTab({ zone, items, counts }) {
           </div>
         ))}
       </div>
+
+      {/* Rule-engine "why" — the single biggest trust upgrade. */}
+      {computed && computed.drivers && computed.drivers.length > 0 && (
+        <div
+          style={{
+            padding: "10px 12px",
+            background: `color-mix(in srgb, ${suggestionColor} 8%, var(--bg-page))`,
+            border: `1px solid ${suggestionColor}`,
+            borderRadius: 3,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
+            <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: suggestionColor, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+              Rule engine · {computed.status}
+            </div>
+            {suggestion && (
+              <button
+                onClick={onApplyComputed}
+                title={`Apply the rule-engine status (${computed.status}) and clear manual override`}
+                style={{
+                  ...mono,
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                  padding: "3px 8px",
+                  background: suggestionColor,
+                  color: "#000",
+                  border: "none",
+                  borderRadius: 2,
+                  cursor: "pointer",
+                }}
+              >
+                Apply →
+              </button>
+            )}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+            {computed.drivers.map((d, i) => (
+              <li key={i} style={{ ...mono, fontSize: 10, color: "var(--text-primary)", lineHeight: 1.5 }}>
+                · {d}
+              </li>
+            ))}
+          </ul>
+          {zone.is_manual_status_override && (
+            <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 6, fontStyle: "italic", letterSpacing: "0.04em" }}>
+              Zone is currently pinned to "{zone.status}" by a manual override; rule engine is advisory.
+            </div>
+          )}
+        </div>
+      )}
+
       {zone.description && (
         <div style={{ padding: "10px 12px", background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 3 }}>
           <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
@@ -424,9 +531,11 @@ function OverviewTab({ zone, items, counts }) {
           </div>
         </div>
       )}
-      <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 8 }}>
-        Status-rule engine lands in V1.5 — today the status is whatever you set it to.
-      </div>
+      {zone.status_reason && (
+        <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+          Current status rationale: {zone.status_reason}
+        </div>
+      )}
     </div>
   );
 }

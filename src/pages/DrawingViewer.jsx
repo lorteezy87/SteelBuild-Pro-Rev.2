@@ -26,10 +26,13 @@ import {
   ensureCurrentRevision,
   listZones,
   listLinksForZones,
+  hydrateLinks,
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
   summarizeLinks,
+  computeZoneStatus,
+  recomputeAndPersistZoneStatus,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -273,21 +276,77 @@ export default function DrawingViewer() {
   // Link-count summaries keyed by zone id — used by the label chip to
   // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
   // the list of zones changes (e.g. a new one is drawn).
-  const { data: zoneSummaries = new Map() } = useQuery({
-    queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length],
+  //
+  // This query also runs the rule engine over each zone's links and
+  // captures the computed status in `computedByZone`. That drives
+  // live overlay colors (via zonesWithComputed below) AND fires a
+  // best-effort background recompute-and-persist so the stored
+  // zone.status row stays in sync with reality — next time the viewer
+  // loads it can paint the right color immediately without waiting
+  // on a re-fetch of every linked record.
+  const { data: zoneData = { summaries: new Map(), computed: new Map() } } = useQuery({
+    queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length, zones.map((z) => z.id + ":" + z.status).join(",")],
     queryFn: async () => {
       const ids = zones.map((z) => z.id);
-      if (ids.length === 0) return new Map();
+      if (ids.length === 0) return { summaries: new Map(), computed: new Map() };
       const byZone = await listLinksForZones(ids);
-      const out = new Map();
-      for (const [zid, links] of byZone.entries()) {
-        out.set(zid, summarizeLinks(links));
+      const summaries = new Map();
+      const computed = new Map();
+      // Pre-hydrate every link in one sweep per record type (hydrateLinks
+      // already batches by type), then feed each zone's subset into the
+      // rule engine.
+      const allLinks = [];
+      for (const arr of byZone.values()) allLinks.push(...arr);
+      const hydrated = await hydrateLinks(allLinks); // Map<linkId, {link, record}>
+      for (const z of zones) {
+        const zoneLinks = byZone.get(z.id) || [];
+        summaries.set(z.id, summarizeLinks(zoneLinks));
+        const zoneItems = zoneLinks
+          .map((l) => hydrated.get(l.id))
+          .filter(Boolean);
+        computed.set(z.id, computeZoneStatus(zoneItems));
       }
-      return out;
+      // Fire-and-forget: persist computed status for any zone where
+      // the stored value drifted and the user hasn't manually pinned
+      // it. Never blocks the overlay render on these writes.
+      (async () => {
+        for (const z of zones) {
+          const c = computed.get(z.id);
+          if (!c) continue;
+          if (z.is_manual_status_override) continue;
+          if (c.status === z.status) continue;
+          try {
+            await recomputeAndPersistZoneStatus(
+              z,
+              (byZone.get(z.id) || []).map((l) => hydrated.get(l.id)).filter(Boolean),
+            );
+          } catch {
+            // Silent — rule-engine writes are advisory; panel still
+            // shows the right answer.
+          }
+        }
+      })();
+      return { summaries, computed };
     },
     enabled: zones.length > 0,
     staleTime: 30 * 1000,
   });
+  const zoneSummaries = zoneData.summaries;
+  const zoneComputed  = zoneData.computed;
+
+  // Overlay reads the computed status when available so colors are
+  // live even if the DB write hasn't caught up yet. Falls back to
+  // zone.status (which also stays fresh via the background write
+  // above). is_manual_status_override wins — rule engine is advisory
+  // when the user has explicitly pinned a color.
+  const zonesWithComputed = useMemo(() => {
+    return zones.map((z) => {
+      if (z.is_manual_status_override) return z;
+      const c = zoneComputed?.get?.(z.id);
+      if (!c || !c.status) return z;
+      return { ...z, status: c.status };
+    });
+  }, [zones, zoneComputed]);
 
   // Handler: user drag-created a new zone. Mint it with a default
   // label = its zone_key so the user sees something immediately; they
@@ -1207,7 +1266,7 @@ export default function DrawingViewer() {
                   mode={zoneMode}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
-                  zones={zones}
+                  zones={zonesWithComputed}
                   zoneSummaries={zoneSummaries}
                   selectedZoneId={selectedZoneId}
                   onSelectZone={setSelectedZoneId}
