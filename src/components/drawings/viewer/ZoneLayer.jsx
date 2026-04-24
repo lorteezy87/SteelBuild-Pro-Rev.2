@@ -3,27 +3,32 @@
  *
  * Runs parallel to AnnotationLayer on the Drawing Viewer canvas but
  * uses a different storage model: zones are normalized to the canvas
- * ([0,1] bbox) instead of PDF user units, so they stay aligned no
- * matter the zoom or rotation as long as the canvas re-renders to the
- * same sheet.
+ * ([0,1] bbox or polygon vertices) instead of PDF user units, so they
+ * stay aligned no matter the zoom or rotation as long as the canvas
+ * re-renders to the same sheet.
  *
- * Three interaction modes (driven by `mode` prop):
- *   "off"    — component renders nothing, no pointer capture
- *   "view"   — existing zones rendered as status-colored rectangles;
+ * Interaction modes (driven by `mode` prop):
+ *   "off"    — renders nothing, no pointer capture
+ *   "view"   — existing zones rendered as status-colored shapes;
  *              click selects, double-click opens the right-side panel
- *   "draw"   — user drag-creates a new rectangle; mouseup fires
- *              onDrawComplete({xMin,yMin,xMax,yMax}); parent does the
- *              create + any follow-up UX (label prompt, etc.)
+ *   "draw"   — user creates a new zone. Shape depends on drawShape:
+ *                "rect"    : click-drag a rectangle (MVP behaviour)
+ *                "polygon" : click to place each vertex; double-click,
+ *                            Enter, or click back near the first vertex
+ *                            to finish; Escape cancels mid-draw
+ *              mouseup (rect) or polygon-close fires
+ *              onDrawComplete({ shape:"rect", xMin,yMin,xMax,yMax })
+ *              or            onDrawComplete({ shape:"polygon", points })
  *
  * Keeps itself out of the way of AnnotationLayer by:
  *   - only capturing pointer events when mode === "draw" (otherwise
- *     pointerEvents="none" everywhere except the zone rectangles
- *     themselves, which have pointerEvents="auto" for click/hover)
+ *     pointerEvents="none" everywhere except the zone shapes themselves,
+ *     which have pointerEvents="auto" for click/hover)
  *   - sitting ABOVE the annotation layer in z-order during "draw"
  *     mode, BELOW during "view" mode so markup stays interactive
  */
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Matches drawing_zones status CHECK constraint. Key colors tuned to
 // be visible on both a white sheet and the dark viewport padding —
@@ -38,10 +43,12 @@ const STATUS_COLORS = {
 };
 const DRAFT_COLOR = { fill: "rgba(0,229,255,0.14)", border: "#00E5FF" };
 
-const MIN_PX = 8; // don't let a stray click create a 1px zone
+const MIN_PX       = 8;  // don't let a stray click create a 1px rectangle zone
+const CLOSE_RADIUS = 10; // px tolerance for "click back on first vertex to close"
 
 export default function ZoneLayer({
   mode = "view",            // "off" | "view" | "draw"
+  drawShape = "rect",       // "rect" | "polygon" — only consulted in draw mode
   canvasWidth,
   canvasHeight,
   zones = [],               // drawing_zone rows (active + current revision)
@@ -49,44 +56,135 @@ export default function ZoneLayer({
   selectedZoneId,           // currently focused zone
   onSelectZone,             // (zoneId) => void
   onOpenZone,               // (zoneId) => void — double-click / Enter
-  onDrawComplete,           // ({xMin,yMin,xMax,yMax}) => Promise
+  onDrawComplete,           // see "Interaction modes" above
 }) {
   const svgRef = useRef(null);
-  const [draft, setDraft] = useState(null); // { x0, y0, x1, y1 } in canvas px
+  // Rectangle draft (one drag): { x0, y0, x1, y1 } in canvas px.
+  const [rectDraft, setRectDraft] = useState(null);
+  // Polygon draft (accumulated clicks): { points: [[x,y], …], hover: [x,y] | null }
+  const [polyDraft, setPolyDraft] = useState(null);
 
   const active = mode !== "off" && canvasWidth > 0 && canvasHeight > 0;
-  const canvasOriginToPoint = (ev) => {
+
+  // ── Coordinate helpers ──────────────────────────────────────────────
+  const canvasOriginToPoint = useCallback((ev) => {
     const r = svgRef.current?.getBoundingClientRect();
     if (!r) return null;
     return {
       x: Math.max(0, Math.min(canvasWidth,  ev.clientX - r.left)),
       y: Math.max(0, Math.min(canvasHeight, ev.clientY - r.top)),
     };
-  };
+  }, [canvasWidth, canvasHeight]);
 
+  const normalizePoint = useCallback((p) => {
+    // Safety clamp — canvasOriginToPoint already clamps but floating
+    // point drift can still push by epsilon. DB CHECK constraints
+    // would reject those.
+    return [
+      Math.max(0, Math.min(1, p.x / canvasWidth)),
+      Math.max(0, Math.min(1, p.y / canvasHeight)),
+    ];
+  }, [canvasWidth, canvasHeight]);
+
+  // ── Polygon finish / cancel ─────────────────────────────────────────
+  const cancelPolygonDraft = useCallback(() => setPolyDraft(null), []);
+
+  const finishPolygonDraft = useCallback(async () => {
+    if (!polyDraft || polyDraft.points.length < 3) {
+      // Not enough vertices — drop the draft so the user can start over
+      // without an "invalid polygon" toast every time they double-click.
+      setPolyDraft(null);
+      return;
+    }
+    const points = polyDraft.points.map(normalizePoint);
+    setPolyDraft(null);
+    try {
+      await onDrawComplete?.({ shape: "polygon", points });
+    } catch { /* caller surfaces the error */ }
+  }, [polyDraft, normalizePoint, onDrawComplete]);
+
+  // ── Keyboard: Enter finishes polygon, Escape cancels ────────────────
+  useEffect(() => {
+    if (mode !== "draw" || drawShape !== "polygon" || !polyDraft) return undefined;
+    const onKey = (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); finishPolygonDraft(); }
+      else if (ev.key === "Escape") { ev.preventDefault(); cancelPolygonDraft(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, drawShape, polyDraft, finishPolygonDraft, cancelPolygonDraft]);
+
+  // If the user switches draw shape mid-polygon, drop the draft so we
+  // don't leave a partial ring as a ghost when they flip to rect mode.
+  useEffect(() => {
+    if (drawShape !== "polygon") setPolyDraft(null);
+    if (drawShape !== "rect")    setRectDraft(null);
+    if (mode !== "draw")         { setPolyDraft(null); setRectDraft(null); }
+  }, [drawShape, mode]);
+
+  // ── Mouse handlers (dispatch on mode + shape) ──────────────────────
   const onMouseDown = (ev) => {
     if (mode !== "draw") return;
-    // Only left-button starts a draft. Spacebar-pan in the parent still
-    // intercepts first, so this won't fight panning.
-    if (ev.button !== 0) return;
+    if (ev.button !== 0) return;  // left-click only; middle/right stay free for pan
     const p = canvasOriginToPoint(ev);
     if (!p) return;
-    ev.preventDefault();
-    setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+
+    if (drawShape === "rect") {
+      ev.preventDefault();
+      setRectDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+      return;
+    }
+
+    // Polygon branch — each click adds a vertex. If we're close to the
+    // first vertex and have at least 3 so far, treat this click as
+    // "close the ring" instead.
+    if (drawShape === "polygon") {
+      ev.preventDefault();
+      setPolyDraft((cur) => {
+        if (!cur) return { points: [[p.x, p.y]], hover: null };
+        const first = cur.points[0];
+        const dx = p.x - first[0];
+        const dy = p.y - first[1];
+        if (cur.points.length >= 3 && Math.sqrt(dx * dx + dy * dy) <= CLOSE_RADIUS) {
+          // Closing click — schedule the finish after state settles so
+          // finishPolygonDraft sees the fully-populated draft.
+          queueMicrotask(() => {
+            setPolyDraft((latest) => {
+              if (!latest || latest.points.length < 3) return latest;
+              const points = latest.points.map((pt) => [
+                Math.max(0, Math.min(1, pt[0] / canvasWidth)),
+                Math.max(0, Math.min(1, pt[1] / canvasHeight)),
+              ]);
+              onDrawComplete?.({ shape: "polygon", points });
+              return null;
+            });
+          });
+          return cur;
+        }
+        return { ...cur, points: [...cur.points, [p.x, p.y]] };
+      });
+    }
   };
+
   const onMouseMove = (ev) => {
-    if (!draft || mode !== "draw") return;
+    if (mode !== "draw") return;
     const p = canvasOriginToPoint(ev);
     if (!p) return;
-    setDraft((d) => (d ? { ...d, x1: p.x, y1: p.y } : d));
+
+    if (drawShape === "rect" && rectDraft) {
+      setRectDraft((d) => (d ? { ...d, x1: p.x, y1: p.y } : d));
+    } else if (drawShape === "polygon" && polyDraft) {
+      setPolyDraft((cur) => (cur ? { ...cur, hover: [p.x, p.y] } : cur));
+    }
   };
+
   const onMouseUp = async () => {
-    if (!draft || mode !== "draw") { setDraft(null); return; }
-    const x0 = Math.min(draft.x0, draft.x1);
-    const x1 = Math.max(draft.x0, draft.x1);
-    const y0 = Math.min(draft.y0, draft.y1);
-    const y1 = Math.max(draft.y0, draft.y1);
-    setDraft(null);
+    if (mode !== "draw" || drawShape !== "rect" || !rectDraft) return;
+    const x0 = Math.min(rectDraft.x0, rectDraft.x1);
+    const x1 = Math.max(rectDraft.x0, rectDraft.x1);
+    const y0 = Math.min(rectDraft.y0, rectDraft.y1);
+    const y1 = Math.max(rectDraft.y0, rectDraft.y1);
+    setRectDraft(null);
     if ((x1 - x0) < MIN_PX || (y1 - y0) < MIN_PX) return; // discard stray
     const bbox = {
       xMin: x0 / canvasWidth,
@@ -94,35 +192,68 @@ export default function ZoneLayer({
       xMax: x1 / canvasWidth,
       yMax: y1 / canvasHeight,
     };
-    // Safety clamp — canvasOriginToPoint already clamps but floating
-    // point drift can still push by epsilon. DB CHECK constraints
-    // would reject those.
     bbox.xMin = Math.max(0, Math.min(1, bbox.xMin));
     bbox.yMin = Math.max(0, Math.min(1, bbox.yMin));
     bbox.xMax = Math.max(0, Math.min(1, bbox.xMax));
     bbox.yMax = Math.max(0, Math.min(1, bbox.yMax));
     if (bbox.xMax <= bbox.xMin || bbox.yMax <= bbox.yMin) return;
-    try { await onDrawComplete?.(bbox); } catch { /* caller handles */ }
+    try {
+      await onDrawComplete?.({ shape: "rect", ...bbox });
+    } catch { /* caller handles */ }
   };
 
+  // Double-click in polygon draw mode finishes the ring.
+  const onDoubleClick = (ev) => {
+    if (mode !== "draw" || drawShape !== "polygon" || !polyDraft) return;
+    ev.preventDefault();
+    finishPolygonDraft();
+  };
+
+  // ── Computed draft shapes for rendering ────────────────────────────
   const draftRect = useMemo(() => {
-    if (!draft) return null;
-    const x = Math.min(draft.x0, draft.x1);
-    const y = Math.min(draft.y0, draft.y1);
-    const w = Math.abs(draft.x1 - draft.x0);
-    const h = Math.abs(draft.y1 - draft.y0);
+    if (!rectDraft) return null;
+    const x = Math.min(rectDraft.x0, rectDraft.x1);
+    const y = Math.min(rectDraft.y0, rectDraft.y1);
+    const w = Math.abs(rectDraft.x1 - rectDraft.x0);
+    const h = Math.abs(rectDraft.y1 - rectDraft.y0);
     return { x, y, w, h };
-  }, [draft]);
+  }, [rectDraft]);
+
+  const draftPolyPointsAttr = useMemo(() => {
+    if (!polyDraft || polyDraft.points.length === 0) return null;
+    const segs = polyDraft.points.map(([x, y]) => `${x},${y}`);
+    return segs.join(" ");
+  }, [polyDraft]);
+
+  // Pre-compute zone rendering payload so the JSX below isn't a maze.
+  // For rectangles we emit a <rect>; for polygons we emit a <polygon>.
+  // The label chip uses the bbox (x_min/y_min/x_max/y_max) either way
+  // so positioning stays consistent.
+  const zoneShapes = useMemo(() => zones.map((z) => {
+    const palette = STATUS_COLORS[z.status] || STATUS_COLORS.neutral;
+    const xPx = z.x_min * canvasWidth;
+    const yPx = z.y_min * canvasHeight;
+    const wPx = (z.x_max - z.x_min) * canvasWidth;
+    const hPx = (z.y_max - z.y_min) * canvasHeight;
+    const isSelected = z.id === selectedZoneId;
+    const summary = zoneSummaries?.get?.(z.id);
+    const count = summary?.total || 0;
+    const isPolygon = z.shape_type === "polygon" && Array.isArray(z.polygon_points) && z.polygon_points.length >= 3;
+    const polygonAttr = isPolygon
+      ? z.polygon_points.map(([x, y]) => `${x * canvasWidth},${y * canvasHeight}`).join(" ")
+      : null;
+    return { z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr };
+  }), [zones, canvasWidth, canvasHeight, selectedZoneId, zoneSummaries]);
 
   if (!active) return null;
 
   // Pointer-capture strategy:
   //   - in "draw" mode the whole SVG captures pointer events so drags work
   //     anywhere over the canvas (zones are decorative)
-  //   - in "view" mode the SVG is inert and only the individual rectangles
+  //   - in "view" mode the SVG is inert and only the individual shapes
   //     capture clicks; this keeps AnnotationLayer interactive below.
   const svgPointerEvents = mode === "draw" ? "auto" : "none";
-  const rectPointerEvents = mode === "draw" ? "none" : "auto";
+  const shapePointerEvents = mode === "draw" ? "none" : "auto";
 
   return (
     <svg
@@ -135,36 +266,37 @@ export default function ZoneLayer({
         width:  canvasWidth,
         height: canvasHeight,
         pointerEvents: svgPointerEvents,
-        cursor: mode === "draw" ? "crosshair" : "default",
+        cursor: mode === "draw" ? (drawShape === "polygon" ? "crosshair" : "crosshair") : "default",
         zIndex: mode === "draw" ? 25 : 15,
       }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp /* commit on leave so a quick off-canvas drag doesn't leave a phantom draft */}
+      onDoubleClick={onDoubleClick}
+      onMouseLeave={onMouseUp /* commit rect draft on leave so a quick off-canvas drag doesn't leave a phantom */}
     >
-      {zones.map((z) => {
-        const palette = STATUS_COLORS[z.status] || STATUS_COLORS.neutral;
-        const x = z.x_min * canvasWidth;
-        const y = z.y_min * canvasHeight;
-        const w = (z.x_max - z.x_min) * canvasWidth;
-        const h = (z.y_max - z.y_min) * canvasHeight;
-        const isSelected = z.id === selectedZoneId;
-        const summary = zoneSummaries?.get?.(z.id);
-        const count = summary?.total || 0;
-
-        return (
-          <g
-            key={z.id}
-            style={{ pointerEvents: rectPointerEvents, cursor: "pointer" }}
-            onClick={(ev) => { ev.stopPropagation(); onSelectZone?.(z.id); }}
-            onDoubleClick={(ev) => { ev.stopPropagation(); onOpenZone?.(z.id); }}
-          >
-            <title>
-              {`${z.zone_key} · ${z.label}${count ? ` — ${count} linked item${count !== 1 ? "s" : ""}` : " — no links yet"}`}
-            </title>
+      {zoneShapes.map(({ z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr }) => (
+        <g
+          key={z.id}
+          style={{ pointerEvents: shapePointerEvents, cursor: "pointer" }}
+          onClick={(ev) => { ev.stopPropagation(); onSelectZone?.(z.id); }}
+          onDoubleClick={(ev) => { ev.stopPropagation(); onOpenZone?.(z.id); }}
+        >
+          <title>
+            {`${z.zone_key} · ${z.label}${count ? ` — ${count} linked item${count !== 1 ? "s" : ""}` : " — no links yet"}`}
+          </title>
+          {isPolygon ? (
+            <polygon
+              points={polygonAttr}
+              fill={palette.fill}
+              stroke={palette.border}
+              strokeWidth={isSelected ? 3 : 1.75}
+              strokeDasharray={z.status === "neutral" ? "4 3" : undefined}
+              style={{ transition: "stroke-width 0.1s" }}
+            />
+          ) : (
             <rect
-              x={x} y={y} width={w} height={h}
+              x={xPx} y={yPx} width={wPx} height={hPx}
               fill={palette.fill}
               stroke={palette.border}
               strokeWidth={isSelected ? 3 : 1.75}
@@ -173,37 +305,37 @@ export default function ZoneLayer({
               ry={2}
               style={{ transition: "stroke-width 0.1s" }}
             />
-            {/* Label chip — top-left corner, scaled to zone size so it
-                doesn't cover tiny zones. Hidden if the zone is smaller
-                than the chip itself. */}
-            {w >= 56 && h >= 20 && (
-              <g transform={`translate(${x + 4}, ${y + 4})`}>
-                <rect
-                  width={Math.min(w - 8, 96)}
-                  height={14}
-                  fill="rgba(15,17,24,0.72)"
-                  stroke={palette.border}
-                  strokeWidth={0.75}
-                  rx={2}
-                  ry={2}
-                />
-                <text
-                  x={5} y={10}
-                  fontFamily="var(--font-mono, 'JetBrains Mono', monospace)"
-                  fontSize={9}
-                  fontWeight={700}
-                  fill="#FFFFFF"
-                  style={{ letterSpacing: "0.04em" }}
-                >
-                  {z.zone_key}{count > 0 ? ` · ${count}` : ""}
-                </text>
-              </g>
-            )}
-          </g>
-        );
-      })}
+          )}
+          {/* Label chip — top-left of the bbox so polygons and rectangles
+              land their labels in the same place. Hidden if the bbox is
+              too small for the chip to look right. */}
+          {wPx >= 56 && hPx >= 20 && (
+            <g transform={`translate(${xPx + 4}, ${yPx + 4})`}>
+              <rect
+                width={Math.min(wPx - 8, 96)}
+                height={14}
+                fill="rgba(15,17,24,0.72)"
+                stroke={palette.border}
+                strokeWidth={0.75}
+                rx={2}
+                ry={2}
+              />
+              <text
+                x={5} y={10}
+                fontFamily="var(--font-mono, 'JetBrains Mono', monospace)"
+                fontSize={9}
+                fontWeight={700}
+                fill="#FFFFFF"
+                style={{ letterSpacing: "0.04em" }}
+              >
+                {z.zone_key}{count > 0 ? ` · ${count}` : ""}
+              </text>
+            </g>
+          )}
+        </g>
+      ))}
 
-      {/* Live draft rectangle while dragging */}
+      {/* Live rectangle draft while dragging */}
       {draftRect && (
         <rect
           x={draftRect.x} y={draftRect.y}
@@ -216,6 +348,57 @@ export default function ZoneLayer({
           ry={2}
           pointerEvents="none"
         />
+      )}
+
+      {/* Live polygon draft — in-progress ring + hover preview segment
+          so the user sees where the next vertex would land. Vertices get
+          small filled circles; the first vertex becomes a larger target
+          once we have 3+ points so the "click to close" affordance is
+          obvious. */}
+      {polyDraft && (
+        <g pointerEvents="none">
+          {/* Preview ring including the hovered segment, if any. We draw
+              a polyline (not polygon) during drafting so it's clearly
+              "not closed yet" until the user commits. */}
+          <polyline
+            points={
+              draftPolyPointsAttr +
+              (polyDraft.hover ? ` ${polyDraft.hover[0]},${polyDraft.hover[1]}` : "")
+            }
+            fill="none"
+            stroke={DRAFT_COLOR.border}
+            strokeWidth={2}
+            strokeDasharray="5 3"
+          />
+          {/* Faint fill preview so the user feels the shape take form.
+              We include the hover point here too so the preview fill
+              tracks the mouse. */}
+          {polyDraft.points.length >= 2 && (
+            <polygon
+              points={
+                draftPolyPointsAttr +
+                (polyDraft.hover ? ` ${polyDraft.hover[0]},${polyDraft.hover[1]}` : "")
+              }
+              fill={DRAFT_COLOR.fill}
+              stroke="none"
+            />
+          )}
+          {polyDraft.points.map((pt, i) => {
+            const isFirst = i === 0;
+            const canClose = polyDraft.points.length >= 3 && isFirst;
+            return (
+              <circle
+                key={i}
+                cx={pt[0]}
+                cy={pt[1]}
+                r={canClose ? 6 : 3.5}
+                fill={canClose ? "rgba(0,229,255,0.25)" : DRAFT_COLOR.border}
+                stroke={DRAFT_COLOR.border}
+                strokeWidth={canClose ? 2 : 1}
+              />
+            );
+          })}
+        </g>
       )}
     </svg>
   );
