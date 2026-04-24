@@ -69,7 +69,16 @@ export default function Schedule() {
   const projectId = searchParams.get("project") || activeProject?.id || null;
   const [view, setView] = useState("gantt");
   const [expandedTask, setExpandedTask] = useState(null);
-  const [phaseFilter, setPhaseFilter] = useState("all");
+  // Seed the phase filter from the URL if a caller (e.g. the Portfolio
+  // mini-Gantt) deep-linked with ?phase=Detailing. If the incoming
+  // value doesn't match a known phase we silently fall back to "all"
+  // so a typo'd URL doesn't leave the page empty.
+  const initialPhase = (() => {
+    const q = searchParams.get("phase");
+    if (!q) return "all";
+    return PHASES.includes(q) ? q : "all";
+  })();
+  const [phaseFilter, setPhaseFilter] = useState(initialPhase);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
