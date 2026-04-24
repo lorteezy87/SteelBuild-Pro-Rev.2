@@ -229,7 +229,7 @@ function summarizeProjectSchedule(tasks = []) {
  * Pure visual, no data-fetching. Takes the pre-computed summary from
  * summarizeProjectSchedule() so the parent can memoise once per render.
  */
-function MiniProjectTimeline({ summary, width = 170, height = 22 }) {
+function MiniProjectTimeline({ summary, width = 170, height = 22, onPhaseClick, onTimelineClick }) {
   if (!summary || !summary.phases.length || !summary.min || !summary.max) {
     return (
       <div style={{
@@ -238,7 +238,10 @@ function MiniProjectTimeline({ summary, width = 170, height = 22 }) {
         fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
         border: "1px dashed var(--divider)", borderRadius: 3,
         letterSpacing: "0.1em",
-      }}>
+        cursor: onTimelineClick ? "pointer" : "default",
+      }}
+      onClick={(e) => { if (onTimelineClick) { e.stopPropagation(); onTimelineClick(); } }}
+      >
         NO SCHEDULE
       </div>
     );
@@ -258,17 +261,30 @@ function MiniProjectTimeline({ summary, width = 170, height = 22 }) {
         border: "1px solid var(--divider)",
         borderRadius: 3,
         overflow: "hidden",
+        cursor: onTimelineClick ? "pointer" : "default",
       }}
-      title={`${min.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} → ${max.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} · click to open schedule`}
+      title={`${min.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} → ${max.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} · click bar for phase · click strip for full schedule`}
+      onClick={(e) => {
+        // Fires when user clicks outside any phase bar (e.g. the gap
+        // between phases). Bars stop propagation so this doesn't
+        // double-fire.
+        if (onTimelineClick) { e.stopPropagation(); onTimelineClick(); }
+      }}
     >
       {phases.map((p) => {
         const leftPct  = ((p.start - min) / total) * 100;
         const widthPct = Math.max(2, ((p.end - p.start) / total) * 100);
         const color = TIMELINE_PHASE_COLOR[p.key] || "var(--text-muted)";
+        const isClickable = !!onPhaseClick;
         return (
           <div
             key={p.key}
-            title={`${p.key}: ${p.start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} → ${p.end.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`}
+            title={`${p.key}: ${p.start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} → ${p.end.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}${isClickable ? " · click to filter schedule to this phase" : ""}`}
+            onClick={(e) => {
+              if (!isClickable) return;
+              e.stopPropagation();
+              onPhaseClick(p.key);
+            }}
             style={{
               position: "absolute",
               top: 3,
@@ -278,7 +294,11 @@ function MiniProjectTimeline({ summary, width = 170, height = 22 }) {
               background: color,
               opacity: 0.85,
               borderRadius: 2,
+              cursor: isClickable ? "pointer" : "default",
+              transition: "opacity 0.12s",
             }}
+            onMouseEnter={(e) => { if (isClickable) e.currentTarget.style.opacity = "1"; }}
+            onMouseLeave={(e) => { if (isClickable) e.currentTarget.style.opacity = "0.85"; }}
           />
         );
       })}
@@ -1685,19 +1705,21 @@ export default function PortfolioView({
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: PHASE_DOT[p.phase] || "var(--text-muted)", display: "inline-block", marginRight: 6 }} />
                         {p.phase || "—"}
                       </td>
-                      {/* Timeline — compact per-project mini-Gantt. Clicking
-                          any row already opens the project dashboard, so
-                          the strip inherits that behaviour without its own
-                          onClick — we just stop stray drags from bubbling. */}
+                      {/* Timeline — compact per-project mini-Gantt. The bars
+                          are now individually clickable: phase bar → Schedule
+                          scoped to this project + filtered to that phase; any
+                          other part of the strip → the full schedule. We stop
+                          propagation inside so neither firing triggers the
+                          outer row click ("open project dashboard"). */}
                       <td
                         style={{ padding: "6px 8px", textAlign: "center" }}
-                        onClick={(e) => {
-                          // Allow the outer row onClick to navigate; nothing
-                          // here needs to stop propagation. Left intact so
-                          // future interactive tooltips can hook in cleanly.
-                        }}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <MiniProjectTimeline summary={projectScheduleSummaries[p.id]} />
+                        <MiniProjectTimeline
+                          summary={projectScheduleSummaries[p.id]}
+                          onTimelineClick={() => navigate(`${createPageUrl("Schedule")}?project=${p.id}`)}
+                          onPhaseClick={(phaseKey) => navigate(`${createPageUrl("Schedule")}?project=${p.id}&phase=${encodeURIComponent(phaseKey)}`)}
+                        />
                       </td>
                       <td style={{ padding: "6px 8px", textAlign: "center" }}>
                         <HealthPill status={hStatus} score={p.healthScore} reasons={p.healthReasons} />
@@ -1707,10 +1729,17 @@ export default function PortfolioView({
                           </div>
                         )}
                       </td>
-                      {/* Budget */}
+                      {/* Budget — click drills into Expenses scoped to project.
+                          The Expenses page is the closest surface to budget +
+                          cost-code data today; long-term a dedicated Costs
+                          page would land these three columns cleaner. */}
                       <td
-                        title={p.hasBudgetData ? `Budget: ${formatCurrency(p.budget)} · Source: Cost Codes` : "No cost codes set up — add cost codes to track budget"}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--status-warning)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
+                        }}
+                        title={p.hasBudgetData ? `Budget: ${formatCurrency(p.budget)} · Source: Cost Codes · Click to view expenses` : "No cost codes set up — click to open Expenses"}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasBudgetData ? "var(--text-primary)" : "var(--status-warning)", cursor: "pointer" }}
                       >
                         {p.hasBudgetData ? formatCurrency(p.budget).replace(/\.\d+/, "") : (
                           <span style={{ fontSize: 8, fontWeight: 600, color: "var(--status-warning)", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 3, padding: "1px 5px" }}>
@@ -1718,22 +1747,31 @@ export default function PortfolioView({
                           </span>
                         )}
                       </td>
-                      {/* Actual */}
+                      {/* Actual — drills into Expenses */}
                       <td
-                        title={p.hasActualData ? `Actual spend: ${formatCurrency(p.actual)} · Source: Paid Expenses` : "No expense data — enter expenses to track actuals"}
-                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
+                        }}
+                        title={p.hasActualData ? `Actual spend: ${formatCurrency(p.actual)} · Source: Paid Expenses · Click to view` : "No expense data — click to open Expenses"}
+                        style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: p.hasActualData ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer" }}
                       >
                         {p.hasActualData ? formatCurrency(p.actual).replace(/\.\d+/, "") : (
                           <span style={{ fontSize: 8, color: "var(--text-muted)" }}>$0</span>
                         )}
                       </td>
-                      {/* Variance = Budget - Actual (positive = under budget) */}
+                      {/* Variance = Budget - Actual (positive = under budget) — drills into Expenses */}
                       <td
-                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("Expenses")}?project=${p.id}`);
+                        }}
+                        title={`Budget: ${p.hasBudgetData ? formatCurrency(p.budget) : "N/A"} | Actual: ${p.hasActualData ? formatCurrency(p.actual) : "N/A"} | Variance: ${variance !== null ? (isOverBudget ? "-" : "+") + formatCurrency(Math.abs(variance)) : "N/A"} · Click to view expenses`}
                         style={{
                           padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
                           color: variance === null ? "var(--text-muted)" : isOverBudget ? "var(--status-error)" : "var(--status-success)",
                           background: isOverBudget ? "rgba(248,81,73,0.06)" : "transparent",
+                          cursor: "pointer",
                         }}
                       >
                         {variance === null ? "—" : (
@@ -1746,14 +1784,21 @@ export default function PortfolioView({
                           </span>
                         )}
                       </td>
-                      {/* Projected Margin = Contract Value − max(budget, actual + pending CO exposure) */}
+                      {/* Projected Margin = Contract Value − max(budget, actual + pending CO exposure).
+                          Drills into Change Orders because pending COs are the
+                          primary variable pushing the margin around. */}
                       <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("ChangeOrders")}?project=${p.id}`);
+                        }}
                         title={p.projectedMargin === null
                           ? "No contract value entered — set original_contract_value to see projected margin"
-                          : `Contract: ${formatCurrency(p.contractValue)} · Est. cost at completion: ${formatCurrency(p.estimatedCostAtCompletion)} · Margin: ${(p.projectedMarginPct ?? 0).toFixed(1)}%`}
+                          : `Contract: ${formatCurrency(p.contractValue)} · Est. cost at completion: ${formatCurrency(p.estimatedCostAtCompletion)} · Margin: ${(p.projectedMarginPct ?? 0).toFixed(1)}% · Click to review COs`}
                         style={{
                           padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
                           color: p.projectedMargin === null ? "var(--text-muted)" : p.projectedMargin < 0 ? "var(--status-error)" : (p.projectedMarginPct ?? 0) < 5 ? "var(--status-warning)" : "var(--status-success)",
+                          cursor: "pointer",
                         }}
                       >
                         {p.projectedMargin === null ? "—" : (
@@ -1770,23 +1815,33 @@ export default function PortfolioView({
                         )}
                       </td>
                       <td
-                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("RFIs")}?project=${p.id}`);
+                        }}
+                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue · Click to open RFIs`}
                         style={{
                           padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
                           color: p.overdueRFIs > 0 ? "var(--status-error)" : p.openRFIs > 3 ? "var(--status-warning)" : "var(--text-primary)",
                           fontSize: 16, fontWeight: 800,
                           background: p.overdueRFIs > 2 ? "rgba(248,81,73,0.08)" : p.openRFIs > 5 ? "rgba(227,179,65,0.06)" : "transparent",
+                          cursor: "pointer",
                         }}
                       >
                         {p.openRFIs}
                       </td>
                       <td
-                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("RFIs")}?project=${p.id}`);
+                        }}
+                        title={`${p.openRFIs} open, ${p.overdueRFIs} overdue · Click to open RFIs`}
                         style={{
                           padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)",
                           color: p.overdueRFIs > 0 ? "var(--status-error)" : "var(--text-muted)",
                           fontSize: 10, fontWeight: p.overdueRFIs > 0 ? 700 : 400,
                           background: p.overdueRFIs > 0 ? "rgba(248,81,73,0.06)" : "transparent",
+                          cursor: "pointer",
                         }}
                       >
                         {p.overdueRFIs > 0 ? (
@@ -1795,16 +1850,34 @@ export default function PortfolioView({
                           </span>
                         ) : p.overdueRFIs}
                       </td>
-                      <td style={{ padding: "6px 8px", minWidth: 130 }}>
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("WorkPackages")}?project=${p.id}`);
+                        }}
+                        title="WP progress · Click to open Work Packages"
+                        style={{ padding: "6px 8px", minWidth: 130, cursor: "pointer" }}
+                      >
                         <ProgressBar value={p.avgProgress || 0} />
                       </td>
                       <td
-                        title={`${p.pendingCOs.length} pending COs totaling ${formatCurrency(p.pendingCOValue)}`}
-                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: p.pendingCOs.length > 0 ? 16 : 10, fontWeight: p.pendingCOs.length > 0 ? 800 : 400, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("ChangeOrders")}?project=${p.id}`);
+                        }}
+                        title={`${p.pendingCOs.length} pending COs totaling ${formatCurrency(p.pendingCOValue)} · Click to review`}
+                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: p.pendingCOs.length > 0 ? 16 : 10, fontWeight: p.pendingCOs.length > 0 ? 800 : 400, color: p.pendingCOs.length > 0 ? "var(--status-warning)" : "var(--text-muted)", cursor: "pointer" }}
                       >
                         {p.pendingCOs.length > 0 ? `${p.pendingCOs.length} · ${formatCurrency(p.pendingCOValue).replace(/\.\d+/, "")}` : "—"}
                       </td>
-                      <td title={p.tonnage > 0 ? `${p.tonnage}T total · ${p.avgProgress}% WP progress · Source: Work Packages` : "No tonnage entered — add tonnage to work packages"} style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.tonnage > 0 ? "var(--text-secondary)" : "var(--text-muted)" }}>{p.tonnage > 0 ? `${p.tonnage}T` : <span style={{ fontSize: 8 }}>0T</span>}</td>
+                      <td
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${createPageUrl("WorkPackages")}?project=${p.id}`);
+                        }}
+                        title={p.tonnage > 0 ? `${p.tonnage}T total · ${p.avgProgress}% WP progress · Source: Work Packages · Click to open` : "No tonnage entered — click to open Work Packages"}
+                        style={{ padding: "6px 8px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 10, color: p.tonnage > 0 ? "var(--text-secondary)" : "var(--text-muted)", cursor: "pointer" }}
+                      >{p.tonnage > 0 ? `${p.tonnage}T` : <span style={{ fontSize: 8 }}>0T</span>}</td>
                       <td style={{ padding: "6px 6px", textAlign: "center" }}>
                         <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
                           {[
