@@ -28,6 +28,7 @@ import {
   listZones,
   listLinksForZones,
   hydrateLinks,
+  computeZoneDensity,
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
@@ -256,6 +257,10 @@ export default function DrawingViewer() {
   // (V2 irregular-area geometry). Lives at viewer level so it survives
   // switches between draw ↔ view without being reset.
   const [drawShape, setDrawShape] = useState("rect"); // "rect" | "polygon"
+  // V2: overlay picks how existing zones are colored in view mode —
+  // "status" uses the rule-engine color palette (red/amber/…); "heatmap"
+  // recolors by weighted issue-density so the hottest zones jump out.
+  const [zoneOverlay, setZoneOverlay] = useState("status"); // "status" | "heatmap"
   const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [panelZoneId, setPanelZoneId] = useState(null);  // open in right-side ZonePanel
   // Filter state for the zone overlay (V1.5). statusSet=empty means
@@ -294,14 +299,15 @@ export default function DrawingViewer() {
   // zone.status row stays in sync with reality — next time the viewer
   // loads it can paint the right color immediately without waiting
   // on a re-fetch of every linked record.
-  const { data: zoneData = { summaries: new Map(), computed: new Map() } } = useQuery({
+  const { data: zoneData = { summaries: new Map(), computed: new Map(), densities: new Map() } } = useQuery({
     queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length, zones.map((z) => z.id + ":" + z.status).join(",")],
     queryFn: async () => {
       const ids = zones.map((z) => z.id);
-      if (ids.length === 0) return { summaries: new Map(), computed: new Map() };
+      if (ids.length === 0) return { summaries: new Map(), computed: new Map(), densities: new Map() };
       const byZone = await listLinksForZones(ids);
       const summaries = new Map();
       const computed = new Map();
+      const densities = new Map();
       // Pre-hydrate every link in one sweep per record type (hydrateLinks
       // already batches by type), then feed each zone's subset into the
       // rule engine.
@@ -315,6 +321,7 @@ export default function DrawingViewer() {
           .map((l) => hydrated.get(l.id))
           .filter(Boolean);
         computed.set(z.id, computeZoneStatus(zoneItems));
+        densities.set(z.id, computeZoneDensity(zoneItems));
       }
       // Fire-and-forget: persist computed status for any zone where
       // the stored value drifted and the user hasn't manually pinned
@@ -336,13 +343,14 @@ export default function DrawingViewer() {
           }
         }
       })();
-      return { summaries, computed };
+      return { summaries, computed, densities };
     },
     enabled: zones.length > 0,
     staleTime: 30 * 1000,
   });
   const zoneSummaries = zoneData.summaries;
   const zoneComputed  = zoneData.computed;
+  const zoneDensities = zoneData.densities;
 
   // Overlay reads the computed status when available so colors are
   // live even if the DB write hasn't caught up yet. Falls back to
@@ -1175,6 +1183,37 @@ export default function DrawingViewer() {
                   </button>
                 );
               })}
+              {/* Heatmap overlay toggle — only useful when there are
+                  zones to recolor. In VIEW mode it swaps the status
+                  palette for a density-weighted cool→amber→red ramp so
+                  hot zones on the sheet jump out at a glance. Hidden
+                  in OFF + DRAW because there's nothing to recolor. */}
+              {zoneMode === "view" && zones.length > 0 && (
+                <button
+                  onClick={() => setZoneOverlay((v) => (v === "heatmap" ? "status" : "heatmap"))}
+                  title={zoneOverlay === "heatmap"
+                    ? "Switch back to status colors"
+                    : "Heatmap: recolor zones by weighted issue density (overdue RFIs, failed inspections, blocked WPs, late deliveries)"}
+                  style={{
+                    padding: "5px 10px",
+                    border: `1px solid ${zoneOverlay === "heatmap" ? "#EF4444" : "transparent"}`,
+                    background: zoneOverlay === "heatmap"
+                      ? "rgba(239,68,68,0.14)"
+                      : "transparent",
+                    color: zoneOverlay === "heatmap" ? "#EF4444" : "var(--text-muted)",
+                    borderRadius: 3,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.10em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    marginLeft: 4,
+                  }}
+                >
+                  HEAT
+                </button>
+              )}
+
               {/* Shape chooser — only relevant while DRAW is active.
                   Rectangle is fastest (drag) and polygon is for
                   irregular zones like erection bays or stair cores.
@@ -1430,6 +1469,8 @@ export default function DrawingViewer() {
                 <ZoneLayer
                   mode={zoneMode}
                   drawShape={drawShape}
+                  overlay={zoneOverlay}
+                  zoneDensities={zoneDensities}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
                   zones={filteredZones}
