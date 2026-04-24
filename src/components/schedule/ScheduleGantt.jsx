@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import { derivePhase } from "../../utils/phases";
 import { risksForTaskWindow } from "@/lib/weatherRisk";
 import {
@@ -629,16 +630,28 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const canIndent  = (task) => computeIndentTarget(task)  !== null;
   const canOutdent = (task) => computeOutdentTarget(task) !== null;
 
+  // onSave writes its own "Task saved" toast. We add targeted toasts
+  // for the disabled / no-op paths so a hover-click that went nowhere
+  // tells the user why ("Already at root", etc.) instead of feeling
+  // broken. Errors from onSave still surface via its own toast path.
   const handleIndent = async (task) => {
+    if (!onSave) return;
     const tgt = computeIndentTarget(task);
-    if (!tgt || !onSave) return;
+    if (!tgt) {
+      toast.info("Nothing above to nest under — this is the first task in its phase.");
+      return;
+    }
     try {
       await onSave({ id: task.id, parent_task_id: tgt.newParentId });
     } catch { /* onSave toasts errors itself */ }
   };
   const handleOutdent = async (task) => {
+    if (!onSave) return;
     const tgt = computeOutdentTarget(task);
-    if (!tgt || !onSave) return;
+    if (!tgt) {
+      toast.info("Already at top level — can't outdent further.");
+      return;
+    }
     try {
       await onSave({ id: task.id, parent_task_id: tgt.newParentId });
     } catch { /* onSave toasts errors itself */ }
