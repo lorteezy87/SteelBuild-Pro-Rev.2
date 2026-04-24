@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export default function InspectionFormModal({ projectId, inspection = null, onClose, onSave, isSaving = false }) {
   const [formData, setFormData] = useState({
@@ -53,10 +54,33 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
   });
 
   const handleSubmit = () => {
-    if (isSaving || !formData.project_id || !formData.inspection_date) return;
+    if (isSaving) return;
+    // Explicit toasts instead of a silent bail — this form was
+    // failing to save "silently" before because it returned without
+    // telling the user why. Required fields per the DB schema:
+    //   project_id  NOT NULL (no default)
+    //   status      NOT NULL (defaults to "Scheduled" — we set it)
+    // Everything else is nullable.
+    if (!formData.project_id) {
+      toast.error("Select a project before saving the inspection.");
+      return;
+    }
+    if (!formData.inspection_date) {
+      toast.error("Inspection date is required.");
+      return;
+    }
+    // Strip alias + audit fields the entity client wouldn't accept on
+    // update. Virtual aliases (created_date / updated_date) are
+    // filtered server-side too, but trimming here makes the payload
+    // smaller and the intent clearer.
+    const {
+      created_date, updated_date, created_at, updated_at,
+      is_deleted, deleted_at,
+      ...clean
+    } = formData;
     onSave?.({
-      ...formData,
-      deficiencies_count: parseInt(formData.deficiencies_count) || 0,
+      ...clean,
+      deficiencies_count: parseInt(formData.deficiencies_count, 10) || 0,
     });
   };
 
