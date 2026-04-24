@@ -215,6 +215,16 @@ BAD (drop — invented location):
   "Detail 9/S-999 at grid Q.3 has a dimension error."  (no such detail
   on the sheet)
 
+# Bounding box (REQUIRED for every finding)
+
+For every finding, return a normalized bounding box [x_min, y_min, x_max, y_max]
+in [0,1] coordinates of the cited sheet's page bounds, where (0,0) is the
+top-left corner of the page and (1,1) is the bottom-right. Make the box tight
+around the area of concern — typically 5–25% of the sheet — not the whole
+page. If the finding spans multiple regions, choose the most diagnostic one.
+Also return the zero-based page_index of the cited sheet whenever possible
+so downstream tools can resolve the bbox to a specific PDF page.
+
 # Severity
 
   critical = blocks fabrication or creates safety risk
@@ -299,6 +309,7 @@ const ANALYSIS_TOOL = {
             "severity",
             "description",
             "recommended_action",
+            "bbox",
           ],
           properties: {
             sheet_number: {
@@ -339,6 +350,32 @@ const ANALYSIS_TOOL = {
               description:
                 "Concrete next step — e.g. 'RFI EOR to confirm bolt " +
                 "grade on Detail 3/S-301' — not 'coordinate with team'.",
+            },
+            bbox: {
+              type: "object",
+              required: ["x_min", "y_min", "x_max", "y_max"],
+              description:
+                "Normalized bounding box of the area of concern on the " +
+                "cited sheet. Coordinates are in [0,1] of the sheet's " +
+                "page bounds, with (0,0) at top-left and (1,1) at " +
+                "bottom-right. Keep the box tight (typically 5–25% of " +
+                "the sheet), not the full page. x_max MUST be > x_min " +
+                "and y_max MUST be > y_min.",
+              properties: {
+                x_min: { type: "number", minimum: 0, maximum: 1 },
+                y_min: { type: "number", minimum: 0, maximum: 1 },
+                x_max: { type: "number", minimum: 0, maximum: 1 },
+                y_max: { type: "number", minimum: 0, maximum: 1 },
+              },
+            },
+            page_index: {
+              type: "integer",
+              minimum: 0,
+              description:
+                "Zero-based PDF page index for the cited sheet. Optional " +
+                "but strongly preferred — lets downstream tools resolve " +
+                "the bbox to a specific page without re-matching by " +
+                "sheet_number.",
             },
           },
         },
@@ -532,7 +569,29 @@ export async function analyzeDrawing(analysis, {
       );
     };
 
+    // Normalize an AI-supplied bbox into 4 numerics in [0,1] with x_max>x_min,
+    // y_max>y_min — or null if anything is malformed. We never fail the run
+    // on a bad bbox; we just log and persist the finding without one.
+    const sheetPageIndexBySheetNumber = new Map(
+      sheets
+        .filter((s) => s && Number.isInteger(s.page_index))
+        .map((s) => [String(s.sheet_number || "").trim(), s.page_index]),
+    );
+    const normalizeBbox = (raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const x_min = Number(raw.x_min);
+      const y_min = Number(raw.y_min);
+      const x_max = Number(raw.x_max);
+      const y_max = Number(raw.y_max);
+      const all = [x_min, y_min, x_max, y_max];
+      if (all.some((n) => !Number.isFinite(n))) return null;
+      if (all.some((n) => n < 0 || n > 1)) return null;
+      if (!(x_max > x_min) || !(y_max > y_min)) return null;
+      return { x_min, y_min, x_max, y_max };
+    };
+
     const droppedFindings = [];
+    let bboxMissingCount = 0;
     if (findings.length) {
       const findingRows = findings
         .filter((f) => {
@@ -553,14 +612,39 @@ export async function analyzeDrawing(analysis, {
           }
           return true;
         })
-        .map((f) => ({
-          analysis_id:        analysisId,
-          sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
-          finding_type:       normalizeFindingType(f.finding_type),
-          severity:           normalizeSeverity(f.severity),
-          description:        String(f.description).slice(0, 2000),
-          recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
-        }));
+        .map((f) => {
+          const bbox = normalizeBbox(f.bbox);
+          if (!bbox) bboxMissingCount += 1;
+          // Prefer the model-supplied page_index; fall back to the sheet_index
+          // entry's page_index so the bbox is always resolvable to a page
+          // even when the model omits the field.
+          const sn = f.sheet_number ? String(f.sheet_number).trim() : null;
+          const pageFromSheet = sn && sheetPageIndexBySheetNumber.has(sn)
+            ? sheetPageIndexBySheetNumber.get(sn)
+            : null;
+          const pageIndex = Number.isInteger(f.page_index)
+            ? f.page_index
+            : (Number.isInteger(pageFromSheet) ? pageFromSheet : null);
+          return {
+            analysis_id:        analysisId,
+            sheet_number:       f.sheet_number ? String(f.sheet_number).slice(0, 64) : null,
+            finding_type:       normalizeFindingType(f.finding_type),
+            severity:           normalizeSeverity(f.severity),
+            description:        String(f.description).slice(0, 2000),
+            recommended_action: f.recommended_action ? String(f.recommended_action).slice(0, 1000) : null,
+            page_index:         pageIndex,
+            x_min:              bbox ? bbox.x_min : null,
+            y_min:              bbox ? bbox.y_min : null,
+            x_max:              bbox ? bbox.x_max : null,
+            y_max:              bbox ? bbox.y_max : null,
+            bbox_source:        bbox ? "ai" : null,
+          };
+        });
+      if (bboxMissingCount > 0) {
+        console.warn(
+          `[analyzeDrawing] ${bboxMissingCount}/${findingRows.length} findings missing or malformed bbox — persisting with NULL bbox columns.`,
+        );
+      }
       if (droppedFindings.length) {
         console.warn(
           `[analyzeDrawing] dropped ${droppedFindings.length}/${findings.length} findings for failing the quality bar:`,
