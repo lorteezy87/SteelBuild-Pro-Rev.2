@@ -21,7 +21,7 @@ import { useSearchParams } from "react-router-dom";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
-import ChangeOrderImportModal from "@/components/changeOrders/ChangeOrderImportModal";
+import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
