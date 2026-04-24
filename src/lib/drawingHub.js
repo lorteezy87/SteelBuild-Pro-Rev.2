@@ -616,6 +616,210 @@ function _hydratedToArray(h) {
   return [];
 }
 
+// ── Readiness scoring (V2) ───────────────────────────────────────────
+//
+// Each zone carries three companion scores — Fabrication, Delivery,
+// Erection — that answer "can we proceed here?" rather than "is
+// something on fire?" (which is what computeZoneStatus covers).
+// Scores are 0–100 percentages. A score of null means "no data" —
+// the UI shows a dash instead of a misleading 0% or 100%.
+//
+// Rules are deterministic and mirror the rule-engine drivers so the
+// reasons the UI surfaces stay consistent across status chips and
+// readiness gauges.
+//
+// Fabrication: driven by linked drawings reaching "Released" stage +
+//              linked work packages in fab phase + the absence of
+//              blocking RFIs.
+// Delivery:    % of linked deliveries that are Delivered / Received
+//              (with penalties for late / rejected).
+// Erection:    the composite — min(Fab, Delivery) capped further by
+//              any failed inspection or blocked work package. If a
+//              zone has no installation-phase signal, returns null.
+const READINESS_DRAWING_STAGE_SCORES = {
+  Released: 100,
+  IFC:      100, // alias for Released per elsewhere in app
+  FFF:       85,
+  BFS:       70,
+  OFS:       60,
+  BFA:       40,
+  OFA:       20,
+  "Not Started": 0,
+};
+
+function _recordStage(rec) {
+  // Drawings use `stage`; work packages use `status`. We look at both
+  // because the app uses the same vocabulary ("Fabrication", "Erection",
+  // "Installation") across tables.
+  return String(rec?.stage || rec?.status || "").trim();
+}
+
+/**
+ * Compute the three readiness percentages for a zone given its
+ * hydrated links (as from hydrateLinks). Returns numbers in [0,100]
+ * or null where there's no input signal of that kind.
+ *
+ *   {
+ *     fabrication: 72 | null,
+ *     delivery:    100 | null,
+ *     erection:    55 | null,
+ *     drivers: {
+ *       fabrication: ["3/4 drawings released"],
+ *       delivery:    ["2 of 3 delivered"],
+ *       erection:    ["Blocked by INSP-12 failed"],
+ *     }
+ *   }
+ *
+ * Safe to call with zero links — returns all-null. Ignores orphaned
+ * links (link without resolved record) so a stale row doesn't skew
+ * the score.
+ */
+export function computeZoneReadiness(hydrated) {
+  const items = _hydratedToArray(hydrated).filter(
+    (x) => x.link && (x.link.is_confirmed === undefined || x.link.is_confirmed === true) && !x.link.removed_at && x.record,
+  );
+
+  const out = {
+    fabrication: null,
+    delivery:    null,
+    erection:    null,
+    drivers: { fabrication: [], delivery: [], erection: [] },
+  };
+
+  // ── Collect per-type buckets ──────────────────────────────────────
+  const drawings   = [];
+  const workPkgs   = [];
+  const rfis       = [];
+  const deliveries = [];
+  const inspections = [];
+
+  for (const { link, record } of items) {
+    switch (link.linked_record_type) {
+      case "drawing":      drawings.push(record); break;
+      case "work_package": workPkgs.push(record); break;
+      case "rfi":          rfis.push(record); break;
+      case "delivery":     deliveries.push({ rec: record, link }); break;
+      case "inspection":   inspections.push(record); break;
+      default: break;
+    }
+  }
+
+  const blockingOpenRFIs = rfis.filter((r) => {
+    if (IS_RFI_RESOLVED(r.status)) return false;
+    // A blocking RFI for readiness is either explicitly flagged (role
+    // elsewhere) or simply overdue — both indicate "waiting on info".
+    const due = _daysUntil(r.date_required, new Date());
+    return due !== null && due < 0;
+  });
+
+  const failedInspections = inspections.filter(
+    (r) => IS_INSP_FAILED(r.status) && !r.resolved_at,
+  );
+
+  // ── Fabrication ───────────────────────────────────────────────────
+  // Weighted: 60% driven by drawings reaching Released, 30% by linked
+  // fab-phase work package progress, 10% by absence of blocking RFIs.
+  // If no drawings + no WPs are linked, return null — we genuinely
+  // don't know how fab-ready this zone is without either signal.
+  {
+    const parts = [];
+    if (drawings.length > 0) {
+      const avg = drawings.reduce((s, d) => s + (READINESS_DRAWING_STAGE_SCORES[_recordStage(d)] ?? 0), 0) / drawings.length;
+      parts.push({ weight: 0.6, score: avg });
+      const released = drawings.filter((d) => /released|ifc/i.test(_recordStage(d))).length;
+      out.drivers.fabrication.push(`${released}/${drawings.length} drawing${drawings.length !== 1 ? "s" : ""} released`);
+    }
+    const fabWPs = workPkgs.filter((w) => /fabric/i.test(_recordStage(w)));
+    if (fabWPs.length > 0) {
+      const avg = fabWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / fabWPs.length;
+      parts.push({ weight: 0.3, score: avg });
+      out.drivers.fabrication.push(
+        `${fabWPs.length} fab WP${fabWPs.length !== 1 ? "s" : ""} avg ${Math.round(avg)}%`,
+      );
+    }
+    if (blockingOpenRFIs.length > 0) {
+      parts.push({ weight: 0.1, score: 0 });
+      out.drivers.fabrication.push(
+        `${blockingOpenRFIs.length} blocking RFI${blockingOpenRFIs.length !== 1 ? "s" : ""} open`,
+      );
+    } else if (rfis.length > 0) {
+      parts.push({ weight: 0.1, score: 100 });
+    }
+    if (parts.length > 0) {
+      const totalW = parts.reduce((s, p) => s + p.weight, 0);
+      const weighted = parts.reduce((s, p) => s + p.weight * p.score, 0);
+      out.fabrication = Math.max(0, Math.min(100, Math.round(weighted / totalW)));
+    }
+  }
+
+  // ── Delivery ──────────────────────────────────────────────────────
+  // Count-based: % of linked deliveries that are done, minus a 20pt
+  // hit for each exception (late/rejected). Clamped to [0,100].
+  {
+    if (deliveries.length > 0) {
+      const done = deliveries.filter(({ rec }) => IS_DEL_DONE(rec.status)).length;
+      const exceptions = deliveries.filter(({ rec }) => IS_DEL_EXCEPTION(rec.status)).length;
+      const base = (done / deliveries.length) * 100;
+      const penalty = exceptions * 20;
+      out.delivery = Math.max(0, Math.min(100, Math.round(base - penalty)));
+      out.drivers.delivery.push(`${done}/${deliveries.length} delivered`);
+      if (exceptions > 0) out.drivers.delivery.push(`${exceptions} exception${exceptions !== 1 ? "s" : ""}`);
+    }
+  }
+
+  // ── Erection ──────────────────────────────────────────────────────
+  // Erection is the composite: you need both the steel fabbed AND on
+  // site before the crew can touch it. We take min(fab, delivery),
+  // then apply hard blockers (failed inspection, blocked WP) that
+  // snap the score toward 0 regardless of upstream readiness.
+  {
+    const fab = out.fabrication;
+    const del = out.delivery;
+    if (fab === null && del === null) {
+      // No upstream signal — leave null. But erection-phase WPs alone
+      // can inform us too.
+      const erectWPs = workPkgs.filter((w) => /erect|install/i.test(_recordStage(w)));
+      if (erectWPs.length > 0) {
+        const avg = erectWPs.reduce((s, w) => s + (Number(w.percent_complete) || 0), 0) / erectWPs.length;
+        out.erection = Math.max(0, Math.min(100, Math.round(avg)));
+        out.drivers.erection.push(
+          `${erectWPs.length} erect/install WP${erectWPs.length !== 1 ? "s" : ""} avg ${Math.round(avg)}%`,
+        );
+      }
+    } else {
+      const base = Math.min(fab ?? 100, del ?? 100);
+      let score = base;
+      const reasons = [];
+      reasons.push(`min(fab ${fab ?? "—"}, del ${del ?? "—"}) = ${base}`);
+
+      if (failedInspections.length > 0) {
+        score = Math.min(score, 20);
+        reasons.push(
+          `blocked by ${failedInspections.length} failed inspection${failedInspections.length !== 1 ? "s" : ""}`,
+        );
+      }
+      const blockedWPs = workPkgs.filter((w) => IS_WP_BLOCKED(w.status));
+      if (blockedWPs.length > 0) {
+        score = Math.min(score, 30);
+        reasons.push(
+          `${blockedWPs.length} WP${blockedWPs.length !== 1 ? "s" : ""} blocked`,
+        );
+      }
+      if (blockingOpenRFIs.length > 0) {
+        score = Math.min(score, 50);
+        reasons.push(
+          `${blockingOpenRFIs.length} RFI${blockingOpenRFIs.length !== 1 ? "s" : ""} overdue`,
+        );
+      }
+
+      out.erection = Math.max(0, Math.min(100, Math.round(score)));
+      out.drivers.erection = reasons;
+    }
+  }
+
+  return out;
+}
+
 /**
  * Recompute + persist a zone's status from its current hydrated link
  * records. Writes back only when the computed value differs from the
