@@ -12,6 +12,7 @@ import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
+import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_ABBREV } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
@@ -50,6 +51,7 @@ export default function Schedule() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [showWbsBuilder, setShowWbsBuilder] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
@@ -608,6 +610,15 @@ export default function Schedule() {
             {exportingPdf ? "EXPORTING…" : "EXPORT PDF"}
           </Button>
           <Button
+            variant="secondary"
+            icon="sparkles"
+            disabled={!hasProject}
+            onClick={() => setShowWbsBuilder(true)}
+            title="Generate a WBS from a short scope-of-work description — tasks are filed under the project's existing phases."
+          >
+            WBS BUILDER
+          </Button>
+          <Button
             variant="outline"
             icon="plus"
             disabled={!hasProject}
@@ -783,6 +794,12 @@ export default function Schedule() {
         projectName={selectedProject?.name || ""}
         isSaving={bulkSaving}
         existingTasks={enrichedTasks}
+      />
+
+      <WbsBuilderModal
+        open={showWbsBuilder}
+        projectId={projectId || activeProject?.id}
+        onClose={() => setShowWbsBuilder(false)}
       />
 
       <DeleteDialog
