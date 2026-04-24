@@ -20,6 +20,14 @@ import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
 import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/AnnotationToolbar";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
+import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
+import {
+  ensureCurrentRevision,
+  listZones,
+  listLinksForZones,
+  createZone as createZoneSvc,
+  summarizeLinks,
+} from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -229,6 +237,77 @@ export default function DrawingViewer() {
     drawingId: activeId,
     initialMarkup: activeDrawing?.markup,
   });
+
+  // ── Drawing-hub zones (MVP Slice 0) ────────────────────────────────
+  // Three modes for the overlay:
+  //   "off"  — hidden (default; viewer behaves as it always has)
+  //   "view" — render saved zones; click → select, dbl-click → panel
+  //   "draw" — drag-create a new rectangle zone
+  const [zoneMode, setZoneMode] = useState("off");
+  const [selectedZoneId, setSelectedZoneId] = useState(null);
+
+  // Resolve (or create) the drawing_revisions row that zones attach to.
+  // MVP: every drawing gets a v1 revision the first time the user opens
+  // zones on it. No explicit revision onboarding required.
+  const { data: currentRevision } = useQuery({
+    queryKey: ["drawing-revision-current", activeId],
+    queryFn: async () => {
+      if (!activeDrawing?.id) return null;
+      return ensureCurrentRevision({ drawing: activeDrawing });
+    },
+    enabled: !!activeDrawing?.id && zoneMode !== "off",
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: zones = [], refetch: refetchZones } = useQuery({
+    queryKey: ["drawing-zones", currentRevision?.id],
+    queryFn: () => listZones(currentRevision?.id),
+    enabled: !!currentRevision?.id,
+    staleTime: 30 * 1000,
+  });
+
+  // Link-count summaries keyed by zone id — used by the label chip to
+  // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
+  // the list of zones changes (e.g. a new one is drawn).
+  const { data: zoneSummaries = new Map() } = useQuery({
+    queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length],
+    queryFn: async () => {
+      const ids = zones.map((z) => z.id);
+      if (ids.length === 0) return new Map();
+      const byZone = await listLinksForZones(ids);
+      const out = new Map();
+      for (const [zid, links] of byZone.entries()) {
+        out.set(zid, summarizeLinks(links));
+      }
+      return out;
+    },
+    enabled: zones.length > 0,
+    staleTime: 30 * 1000,
+  });
+
+  // Handler: user drag-created a new zone. Mint it with a default
+  // label = its zone_key so the user sees something immediately; they
+  // can rename in the detail panel (or later we'll prompt here).
+  const handleZoneDrawComplete = useCallback(async (bbox) => {
+    if (!currentRevision || !activeDrawing) return;
+    try {
+      const created = await createZoneSvc({
+        projectId:  activeDrawing.project_id,
+        drawingId:  activeDrawing.id,
+        revisionId: currentRevision.id,
+        label:      "",  // service auto-names with zone_key when empty
+        xMin: bbox.xMin, yMin: bbox.yMin,
+        xMax: bbox.xMax, yMax: bbox.yMax,
+      });
+      toast.success(`Zone ${created.zone_key} created`);
+      setSelectedZoneId(created.id);
+      // Drop back to view mode so the user can see their new zone.
+      setZoneMode("view");
+      await refetchZones();
+    } catch (err) {
+      toast.error(`Couldn't save zone: ${err?.message || "unknown error"}`);
+    }
+  }, [currentRevision, activeDrawing, refetchZones]);
 
   // Resolve file_url (storage path) to a signed URL.
   // If file_url is a stale Supabase signed URL, extract the path and re-sign.
@@ -899,6 +978,61 @@ export default function DrawingViewer() {
               saveError={markup.saveError}
             />
           )}
+
+          {/* Zones toggle — floats top-right of the viewer pane. Three-state:
+              OFF → VIEW (show saved zones) → DRAW (drag to create). Click
+              cycles OFF↔VIEW; click+Alt to jump straight to DRAW. Left
+              ghostly in the layout when we don't have a renderable sheet. */}
+          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
+            <div
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 12,
+                zIndex: 40,
+                display: "flex",
+                gap: 6,
+                padding: 4,
+                borderRadius: 6,
+                background: "rgba(15,17,24,0.72)",
+                border: "1px solid var(--border-default)",
+                backdropFilter: "blur(6px)",
+                fontFamily: "var(--font-mono)",
+              }}
+              title="Zones: rectangular coordination areas linked to RFIs / WPs / deliveries."
+            >
+              {[
+                { id: "off",  label: "OFF",   desc: "Hide zone overlay" },
+                { id: "view", label: `VIEW${zones.length ? ` · ${zones.length}` : ""}`, desc: "Show zones · click to select" },
+                { id: "draw", label: "DRAW",  desc: "Drag-create a new zone" },
+              ].map((btn) => {
+                const isActive = zoneMode === btn.id;
+                return (
+                  <button
+                    key={btn.id}
+                    onClick={() => { setZoneMode(btn.id); setSelectedZoneId(null); }}
+                    title={btn.desc}
+                    style={{
+                      padding: "5px 10px",
+                      border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
+                      background: isActive
+                        ? "rgba(0,229,255,0.14)"
+                        : "transparent",
+                      color: isActive ? "#00E5FF" : "var(--text-muted)",
+                      borderRadius: 3,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.10em",
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         <div
           onWheel={handleCanvasWheel}
           ref={(el) => {
@@ -1057,6 +1191,31 @@ export default function DrawingViewer() {
                   onRemoveItem={markup.removeItem}
                   onUpdateItem={markup.updateItem}
                   onCalibrate={handleCalibrate}
+                />
+
+                {/* ── Drawing-hub coordination zones (MVP Slice 0) ──
+                    Normalized-bbox rectangles linking to RFIs / WPs /
+                    deliveries / photos / inspections. Toggled by the
+                    "Zones" button in the toolbar; in "draw" mode the
+                    user can drag out a new zone, which saves via
+                    drawingHub.createZone and snaps back to "view". */}
+                <ZoneLayer
+                  mode={zoneMode}
+                  canvasWidth={canvasSize.width}
+                  canvasHeight={canvasSize.height}
+                  zones={zones}
+                  zoneSummaries={zoneSummaries}
+                  selectedZoneId={selectedZoneId}
+                  onSelectZone={setSelectedZoneId}
+                  onOpenZone={(zid) => {
+                    setSelectedZoneId(zid);
+                    // Right-panel handler lands in the next slice; for
+                    // MVP the selection state + toast is the visible
+                    // feedback that the zone was picked.
+                    const z = zones.find((x) => x.id === zid);
+                    if (z) toast.info(`Zone ${z.zone_key} — detail panel lands next`);
+                  }}
+                  onDrawComplete={handleZoneDrawComplete}
                 />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
