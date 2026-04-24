@@ -21,6 +21,7 @@ import { useSearchParams } from "react-router-dom";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
+import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
@@ -61,6 +62,7 @@ export default function ChangeOrders() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -270,6 +272,14 @@ export default function ChangeOrders() {
         unit={` · ${formatMoney(atRiskValue)} AT RISK`}
         subtitle="Draft → Submitted → Under Review → Approved. Deducts and credits supported."
       >
+        <Button
+          variant="secondary"
+          icon="upload"
+          onClick={() => setImportOpen(true)}
+          title="Bulk import change orders from a CSV (Sage / Vista / Procore / Excel)"
+        >
+          IMPORT CSV
+        </Button>
         <Button
           variant="primary"
           icon="plus"
@@ -513,6 +523,13 @@ export default function ChangeOrders() {
         co={editing}
         projects={projects}
         nextNumber={`CO-${String((cos.length || 0) + 1).padStart(3, "0")}`}
+      />
+      <ChangeOrderImportModal
+        open={importOpen}
+        projectId={projectId}
+        projectName={projectName}
+        projects={projects}
+        onClose={() => setImportOpen(false)}
       />
       <DeleteDialog
         open={!!deleteTarget}
