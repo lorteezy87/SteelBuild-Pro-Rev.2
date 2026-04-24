@@ -307,17 +307,22 @@ button:disabled, [disabled] {
   background-image: linear-gradient(to right, rgba(200,155,32,0.04) 1px, transparent 1px);
 }
 
-/* ── Top nav ── */
+/* ── Top nav ──
+ *
+ * The nav's background + border are driven entirely by theme tokens
+ * (--nav-bg, --border-default) so dark mode stays dark-glass and light
+ * mode reads as a proper white nav that meshes with the rest of the
+ * light theme. Previously the light-mode override slammed the bar to
+ * a dark slate via !important, which left the inline text/icon colors
+ * (var(--text-muted) etc., which resolve to near-black in light mode)
+ * invisible against the forced-dark surface.
+ *
+ * This class contributes ONLY the blur + a subtle shadow. The actual
+ * background color comes from the inline `background: var(--nav-bg)`
+ * on the <nav> element in Layout.jsx.
+ */
 .nav-glass {
-  background: rgba(7,9,14,0.96) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
-  box-shadow: none !important;
-}
-
-/* ── Light theme nav override ── */
-[data-theme="light"] .nav-glass {
-  background: #1E293B !important;
-  border-bottom-color: rgba(255,255,255,0.08) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
 }
