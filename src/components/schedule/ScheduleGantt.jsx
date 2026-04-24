@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { derivePhase } from "../../utils/phases";
+import { risksForTaskWindow } from "@/lib/weatherRisk";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 const PHASES = [
@@ -374,7 +375,7 @@ function loadColWidths() {
 const DETAILING_STAGES = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
 const STAGE_DISPLAY = { Released: "IFC" };  // show IFC in the UI
 
-export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
+export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], weatherRisk = null, expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -605,6 +606,26 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
 
   const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
   const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
+
+  // ── Weather-risk overlay ───────────────────────────────────────────
+  // Only attach risks to field-sensitive phases (Installation, Delivery).
+  // Indoor work doesn't get flagged — a rainy day in Phoenix isn't a
+  // problem for Detailing. Memoised keyed by (weatherRisk, allTasks)
+  // so the lookup per row is O(1).
+  const WEATHER_SENSITIVE_PHASES = useMemo(() => new Set(["Installation", "Delivery", "Erection", "Erection/Installation"]), []);
+  const weatherRiskByTask = useMemo(() => {
+    const out = {};
+    if (!weatherRisk?.risks?.length || !allTasks?.length) return out;
+    for (const t of allTasks) {
+      if (!WEATHER_SENSITIVE_PHASES.has(t.phase)) continue;
+      const hits = risksForTaskWindow(weatherRisk.risks, effStart(t), effEnd(t));
+      if (hits.length > 0) out[t.id] = hits;
+    }
+    return out;
+    // effStart/effEnd depend on effectiveDates; adding it to deps keeps
+    // the memo honest if dependencies shift a task into bad weather.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weatherRisk, allTasks, effectiveDates, WEATHER_SENSITIVE_PHASES]);
 
   // Overdue uses the *effective* finish so a task whose predecessor slipped
   // is judged against where the bar actually sits in the gantt — not the
@@ -1099,6 +1120,41 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     )}
                     {!task._hasChildren && task._depth > 0 && <span style={{ width: 14, flexShrink: 0 }} />}
                     {isMilestoneTask(task) && <span style={{ marginRight: 4, color: "var(--accent)" }}>◆</span>}
+                    {/* Weather-risk chip — only on Installation/Delivery
+                        rows whose window overlaps rough forecast days.
+                        Tooltip lists specific dates + drivers so the
+                        super can plan around them. */}
+                    {weatherRiskByTask[task.id] && (() => {
+                      const hits = weatherRiskByTask[task.id];
+                      const worst = hits.reduce((m, h) => (h.severity > m ? h.severity : m), 0);
+                      const color = worst >= 3 ? "#EF4444" : "#F59E0B";
+                      const label = hits.length === 1 ? hits[0].date.slice(5) : `${hits.length} days`;
+                      const tipLines = hits.slice(0, 5).map((h) => `${h.date}: ${h.summary}`);
+                      if (hits.length > 5) tipLines.push(`…${hits.length - 5} more`);
+                      return (
+                        <span
+                          title={`Weather risk:\n${tipLines.join("\n")}\n(${weatherRisk?.source || "Open-Meteo"})`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 3,
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 8,
+                            fontWeight: 800,
+                            letterSpacing: "0.08em",
+                            color,
+                            border: `1px solid ${color}`,
+                            borderRadius: 2,
+                            padding: "0 4px",
+                            marginRight: 5,
+                            flexShrink: 0,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          ⚠ {label}
+                        </span>
+                      );
+                    })()}
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: task._hasChildren ? 700 : 500, color: overdue ? "#EF4444" : task._hasChildren ? "var(--accent-light, var(--text-primary))" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {sanitizeTaskName(task)}
                     </span>
