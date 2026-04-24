@@ -585,6 +585,94 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   // ── Date range ─────────────────────────────────────────────────────
   const allTasks = grouped.flatMap(g => g.tasks);
 
+  // ── Hierarchy helpers (inline indent / outdent) ─────────────────────
+  //
+  // Each task carries parent_task_id in the DB. `buildTreeOrder()` (at
+  // the top of this file) flattens the tree per phase so we already
+  // have _depth / _hasChildren on every row. These helpers compute the
+  // new parent_task_id when the user clicks the in-row indent/outdent
+  // buttons (or hits Tab / Shift+Tab while hovering a row):
+  //
+  //   Indent: make the task a child of the closest preceding task
+  //           whose depth is ≤ this task's depth. New depth = that
+  //           task's depth + 1. Flat-order traversal guarantees we
+  //           never nest into our own descendants (they come after
+  //           us in the list) so cycle-safety is automatic.
+  //   Outdent: promote up one level — new parent = current parent's
+  //            parent_task_id (or null → root).
+  const phaseFlatByKey = useMemo(() => {
+    const m = {};
+    for (const g of grouped) m[g.phase.key] = g.tasks;
+    return m;
+  }, [grouped]);
+
+  const computeIndentTarget = (task) => {
+    const flat = phaseFlatByKey[task.phase] || [];
+    const idx = flat.findIndex((t) => t.id === task.id);
+    if (idx <= 0) return null;
+    const myDepth = task._depth || 0;
+    for (let i = idx - 1; i >= 0; i--) {
+      const prev = flat[i];
+      if ((prev._depth || 0) <= myDepth) {
+        return { newParentId: prev.id };
+      }
+    }
+    return null;
+  };
+
+  const computeOutdentTarget = (task) => {
+    if (!task.parent_task_id) return null;
+    const parent = allTasks.find((t) => t.id === task.parent_task_id);
+    return { newParentId: parent?.parent_task_id || null };
+  };
+
+  const canIndent  = (task) => computeIndentTarget(task)  !== null;
+  const canOutdent = (task) => computeOutdentTarget(task) !== null;
+
+  const handleIndent = async (task) => {
+    const tgt = computeIndentTarget(task);
+    if (!tgt || !onSave) return;
+    try {
+      await onSave({ id: task.id, parent_task_id: tgt.newParentId });
+    } catch { /* onSave toasts errors itself */ }
+  };
+  const handleOutdent = async (task) => {
+    const tgt = computeOutdentTarget(task);
+    if (!tgt || !onSave) return;
+    try {
+      await onSave({ id: task.id, parent_task_id: tgt.newParentId });
+    } catch { /* onSave toasts errors itself */ }
+  };
+
+  // Tab / Shift+Tab while hovering a task row indents / outdents that
+  // row without needing the user to click the small in-row buttons.
+  // We only bind when a task row is hovered AND we're not inside a
+  // text input (to avoid hijacking Tab inside the inline edit input).
+  useEffect(() => {
+    if (!hoveredRowId) return undefined;
+    const onKey = (ev) => {
+      if (ev.key !== "Tab") return;
+      const el = document.activeElement;
+      const inEditable = el && (
+        el.tagName === "INPUT" ||
+        el.tagName === "TEXTAREA" ||
+        el.tagName === "SELECT" ||
+        el.isContentEditable
+      );
+      if (inEditable) return;
+      const task = allTasks.find((t) => t.id === hoveredRowId);
+      if (!task) return;
+      ev.preventDefault();
+      if (ev.shiftKey) handleOutdent(task);
+      else             handleIndent(task);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // Only re-bind when the hovered row changes — handleIndent/Outdent
+    // are stable via closure over allTasks which is in the dep array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoveredRowId, allTasks]);
+
   // ── Effective dates: cascade through dependencies so a late predecessor
   // automatically shifts its successors forward in the gantt view. The
   // underlying task.start_date / task.end_date in the DB are NEVER mutated;
@@ -1162,6 +1250,50 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     onDoubleClick={e => onSave && startInlineEdit(task, e)}
                     style={{ display: "flex", alignItems: "center", gap: 4, paddingLeft: (task._depth || 0) * 16, overflow: "hidden" }}
                   >
+                    {/* Inline indent/outdent — only the hovered row
+                        shows these so the name column stays quiet by
+                        default. canOutdent disables at root; canIndent
+                        disables on the first task of the phase. Tab /
+                        Shift+Tab do the same thing on the hovered row
+                        (see keydown effect above). */}
+                    {leftHovered && (
+                      <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, marginRight: 2, gap: 1 }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOutdent(task); }}
+                          disabled={!canOutdent(task)}
+                          title="Outdent (Shift+Tab) — promote one level up"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: canOutdent(task) ? "pointer" : "not-allowed",
+                            color: canOutdent(task) ? "var(--accent)" : "var(--divider)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 11,
+                            lineHeight: 1,
+                            padding: "0 3px",
+                          }}
+                        >
+                          ◂
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleIndent(task); }}
+                          disabled={!canIndent(task)}
+                          title="Indent (Tab) — make this a subtask of the task above"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: canIndent(task) ? "pointer" : "not-allowed",
+                            color: canIndent(task) ? "var(--accent)" : "var(--divider)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 11,
+                            lineHeight: 1,
+                            padding: "0 3px",
+                          }}
+                        >
+                          ▸
+                        </button>
+                      </span>
+                    )}
                     {task._hasChildren && (
                       <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 9, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>
                         {collapsedTasks[task.id] ? "▶" : "▾"}
