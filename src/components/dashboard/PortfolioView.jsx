@@ -391,11 +391,17 @@ const HeaderBar = ({ title, right, count }) => (
   </div>
 );
 
+// KPIBlock — shared tile layout for the portfolio KPI strip. Fixes a
+// cut-off bug where long currency values ("$125,432,187") wrapped or
+// clipped because the number span had no whitespace rule and the
+// tile had a too-small min-width. We now clamp the tile to a minimum
+// that fits an 11-digit dollar amount at the reduced 20px size +
+// pin the value row to a single line with graceful overflow.
 const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
   <div
     onClick={onClick}
     style={{
-      padding: "12px 24px",
+      padding: "12px 20px",
       borderRight: bordered ? "1px solid var(--divider)" : "none",
       display: "flex",
       flexDirection: "column",
@@ -404,6 +410,8 @@ const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
       borderTop: active ? "3px solid var(--accent)" : "3px solid transparent",
       boxShadow: active ? "0 0 12px rgba(59,130,246,0.25)" : "none",
       transition: "box-shadow 0.2s, border-top 0.2s",
+      minWidth: 160,
+      overflow: "hidden",
     }}
   >
     <span
@@ -413,17 +421,25 @@ const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
         letterSpacing: "0.14em",
         textTransform: "uppercase",
         color: "var(--text-muted)",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}
     >
       {label}
     </span>
     <span
+      title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
       style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: 800,
-        lineHeight: 1,
+        lineHeight: 1.1,
         color: color || "var(--text-primary)",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        fontVariantNumeric: "tabular-nums",
       }}
     >
       {value}
@@ -1237,18 +1253,38 @@ export default function PortfolioView({
           flexWrap: "wrap",
         }}
       >
-        {/* Portfolio Value — featured (wider, not filterable) */}
+        {/* Portfolio Value — featured (wider, not filterable).
+            Overflow-safe: value span is nowrap + tabular-nums so
+            long currency strings don't wrap and line up tidily
+            column-to-column. */}
         <div style={{
-          padding: "12px 28px",
+          padding: "12px 22px",
           borderRight: "1px solid var(--divider)",
           borderTop: "3px solid var(--accent)",
           display: "flex",
           flexDirection: "column",
           gap: 4,
-          minWidth: 200,
+          minWidth: 220,
+          overflow: "hidden",
         }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Portfolio Value</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, lineHeight: 1, color: "var(--accent)" }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 9,
+            letterSpacing: "0.14em", textTransform: "uppercase",
+            color: "var(--text-muted)", whiteSpace: "nowrap",
+            overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            Portfolio Value
+          </span>
+          <span
+            title={formatCurrency(portfolioKPIs.portfolioValue)}
+            style={{
+              fontFamily: "var(--font-mono)", fontSize: 24,
+              fontWeight: 800, lineHeight: 1.1, color: "var(--accent)",
+              whiteSpace: "nowrap", overflow: "hidden",
+              textOverflow: "ellipsis",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
             {formatCurrency(portfolioKPIs.portfolioValue).replace(/\.\d+/, "")}
           </span>
         </div>
@@ -1267,7 +1303,7 @@ export default function PortfolioView({
               `Over-budget exposure: ${formatCurrency(portfolioKPIs.overBudgetExposure).replace(/\.\d+/, "")}`,
             ].join("\n")}
             style={{
-              padding: "12px 28px",
+              padding: "12px 22px",
               borderRight: "1px solid var(--divider)",
               borderTop: `3px solid ${
                 portfolioKPIs.cashAtRisk > portfolioKPIs.portfolioValue * 0.05
@@ -1277,24 +1313,41 @@ export default function PortfolioView({
               display: "flex",
               flexDirection: "column",
               gap: 4,
-              minWidth: 200,
+              minWidth: 220,
+              overflow: "hidden",
             }}
           >
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9,
+              letterSpacing: "0.14em", textTransform: "uppercase",
+              color: "var(--text-muted)", whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>
               Cash at Risk
             </span>
-            <span style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 28,
-              fontWeight: 800,
-              lineHeight: 1,
-              color: portfolioKPIs.cashAtRisk > portfolioKPIs.portfolioValue * 0.05
-                ? "var(--status-error)"
-                : "var(--status-warning)",
-            }}>
+            <span
+              title={formatCurrency(portfolioKPIs.cashAtRisk)}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 24,
+                fontWeight: 800,
+                lineHeight: 1.1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                fontVariantNumeric: "tabular-nums",
+                color: portfolioKPIs.cashAtRisk > portfolioKPIs.portfolioValue * 0.05
+                  ? "var(--status-error)"
+                  : "var(--status-warning)",
+              }}
+            >
               {formatCurrency(portfolioKPIs.cashAtRisk).replace(/\.\d+/, "")}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 8,
+              color: "var(--text-muted)", letterSpacing: "0.06em",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
               {portfolioKPIs.pendingCOValue > 0 && portfolioKPIs.overBudgetExposure > 0
                 ? "PENDING COs + OVERRUN"
                 : portfolioKPIs.pendingCOValue > 0
@@ -1338,7 +1391,12 @@ export default function PortfolioView({
                   ? `0 0 18px color-mix(in srgb, ${tile.color} 20%, transparent), 0 0 36px color-mix(in srgb, ${tile.color} 8%, transparent)`
                   : "none",
                 transition: "box-shadow 0.2s, border-top 0.2s, background 0.2s",
-                minWidth: 100,
+                // Bumped from 100px to 140px — the sparkline + 2-digit
+                // count previously squeezed against the label and
+                // clipped on denser layouts. Also adds overflow:hidden
+                // so the label chip never pokes into the next tile.
+                minWidth: 140,
+                overflow: "hidden",
                 position: "relative",
               }}
             >
@@ -1356,11 +1414,24 @@ export default function PortfolioView({
                   }}
                 />
               )}
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? tile.color : tile.warn ? tile.color : "var(--text-muted)" }}>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9,
+                letterSpacing: "0.14em", textTransform: "uppercase",
+                color: isActive ? tile.color : tile.warn ? tile.color : "var(--text-muted)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}>
                 {tile.label}
               </span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, lineHeight: 1, color: tile.warn ? tile.color : "var(--status-success)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 20,
+                  fontWeight: 800, lineHeight: 1.1,
+                  color: tile.warn ? tile.color : "var(--status-success)",
+                  fontVariantNumeric: "tabular-nums",
+                  whiteSpace: "nowrap",
+                }}>
                   {tile.val}
                 </span>
                 <MiniSparkline data={sparkFor(tile.sparkField)} color={tile.warn ? tile.color : "var(--text-muted)"} />
