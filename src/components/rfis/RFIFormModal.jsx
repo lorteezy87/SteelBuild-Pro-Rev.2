@@ -26,7 +26,7 @@ const Field = ({ label, span = 1, children }) => (
   </div>
 );
 
-export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null }) {
+export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "" }) {
   const qc = useQueryClient();
 
   const empty = {
@@ -43,11 +43,22 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     distribution_list: "",
   };
 
-  const [formData, setFormData] = useState(rfi ? { ...empty, ...rfi } : empty);
+  // Pre-fill drawing_reference when the modal is opened for a NEW
+  // RFI (rfi === null) — used by the drawing-hub "Create RFI from
+  // zone" flow so the user sees the sheet + zone context baked in
+  // before they start typing. Still editable, just not blank.
+  const seedEmpty = {
+    ...empty,
+    project_id: projectId || empty.project_id,
+    drawing_reference: initialDrawingReference || empty.drawing_reference,
+  };
+  const [formData, setFormData] = useState(rfi ? { ...empty, ...rfi } : seedEmpty);
 
   useEffect(() => {
-    setFormData(rfi ? { ...empty, ...rfi } : { ...empty, project_id: projectId || "" });
-  }, [rfi, projectId]);
+    setFormData(rfi
+      ? { ...empty, ...rfi }
+      : { ...empty, project_id: projectId || "", drawing_reference: initialDrawingReference || "" });
+  }, [rfi, projectId, initialDrawingReference]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
