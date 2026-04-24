@@ -1,6 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import { derivePhase } from "../../utils/phases";
 import { risksForTaskWindow } from "@/lib/weatherRisk";
+import {
+  DETAILING_STAGE_GATES,
+  DETAILING_STAGE_META,
+  getStageDates,
+  usesStageDates,
+} from "@/lib/stageDates";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 const PHASES = [
@@ -225,6 +231,49 @@ function MilestoneDiamond({ leftPx, task }) {
 }
 
 // ── Task gantt bar ────────────────────────────────────────────────────────
+// Detailing stage-gate milestones. Renders up to four small diamonds
+// on the right-panel task row at each filled stage-gate date
+// (OFA / BFA / FFF / Released). Purely decorative — bar placement
+// uses the derived start/end. Returns null for non-Detailing tasks or
+// when no gates are filled, so it's safe to mount on every row.
+function StageGateMilestones({ task, px }) {
+  if (!usesStageDates(task)) return null;
+  const dates = getStageDates(task);
+  const hits = DETAILING_STAGE_GATES
+    .map((gate) => ({ gate, date: dates[gate] }))
+    .filter((h) => !!h.date);
+  if (hits.length === 0) return null;
+  return (
+    <>
+      {hits.map(({ gate, date }) => {
+        const meta = DETAILING_STAGE_META[gate] || {};
+        const left = px(date);
+        return (
+          <div
+            key={gate}
+            title={`${meta.label} — ${meta.caption || gate} · ${date}`}
+            style={{
+              position: "absolute",
+              left: left - 5,
+              top: "50%",
+              transform: "translateY(-50%) rotate(45deg)",
+              width: 10,
+              height: 10,
+              background: meta.color || "var(--accent)",
+              border: "1.5px solid #0F1118",
+              borderRadius: 2,
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.15)",
+              pointerEvents: "auto",
+              cursor: "default",
+              zIndex: 3,
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
 function TaskBar({ task, leftPx, widthPx }) {
   const pct = displayPct(task);
   const name = sanitizeTaskName(task);
@@ -1402,6 +1451,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     ) : (
                       <TaskBar task={task} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} />
                     )}
+                    {/* Detailing stage-gate milestones — color-coded
+                        diamonds (OFA / BFA / FFF / Released) overlayed
+                        on the task bar at each filled date. Purely
+                        decorative; bar placement comes from the
+                        derived start/end. Component short-circuits
+                        for non-Detailing rows. */}
+                    <StageGateMilestones task={task} px={px} />
+
                     {/* Submittal review bars linked to this WP */}
                     {showSubmittals && submittals
                       .filter(s => s.is_submittal && s.linked_wp_id === task.id && s.due_date)
