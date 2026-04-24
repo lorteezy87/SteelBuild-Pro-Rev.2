@@ -1385,6 +1385,11 @@ export default function DrawingViewer() {
           queries so the overlay count badges stay in sync. */}
       <ZonePanel
         zone={panelZoneId ? zones.find((z) => z.id === panelZoneId) : null}
+        sheet={currentRevision
+          ? { sheet_number: currentRevision.sheet_number, sheet_title: currentRevision.sheet_title, revision_code: currentRevision.revision_code }
+          : activeDrawing
+            ? { sheet_number: activeDrawing.sheet_number || activeDrawing.drawing_number, sheet_title: activeDrawing.title }
+            : null}
         open={!!panelZoneId}
         onClose={() => setPanelZoneId(null)}
         onZoneUpdate={async (patch) => {
