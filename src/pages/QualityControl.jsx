@@ -212,7 +212,15 @@ export default function QualityControl() {
       </div>
 
       {/* Form Modal */}
-      {showForm && <QCFormModal projectId={projectId} record={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} />}
+      {showForm && (
+        <QCFormModal
+          projectId={projectId}
+          record={editing}
+          onClose={() => { setShowForm(false); setEditing(null); }}
+          onSave={handleSave}
+          isSaving={createMut.isPending || updateMut.isPending}
+        />
+      )}
 
       {/* QC Records List */}
       {isLoading ? (

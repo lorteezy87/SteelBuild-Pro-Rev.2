@@ -45,23 +45,34 @@ export default function ActivityPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // The `activities` table stores columns in snake_case (entity_type,
+  // performed_by, project_id). Earlier this page was reading the
+  // Base44-style camelCase aliases (userName, entityType, projectId)
+  // which never exist on Supabase rows — every filter silently
+  // evaluated to true/empty and the feed looked broken. We now read
+  // the real column names, keeping legacy fallbacks in case a future
+  // seed switches back to camelCase.
   const uniqueUsers = useMemo(
-    () => [...new Set(activities.map((a) => a.userName).filter(Boolean))],
+    () => [...new Set(activities.map((a) => a.performed_by ?? a.userName).filter(Boolean))],
     [activities]
   );
 
   const uniqueEntities = useMemo(
-    () => [...new Set(activities.map((a) => a.entityType).filter(Boolean))],
+    () => [...new Set(activities.map((a) => a.entity_type ?? a.entityType).filter(Boolean))],
     [activities]
   );
 
   const filtered = useMemo(() => {
     const dateCutoff = getDateCutoff(dateRange);
     return activities.filter((a) => {
-      const projectMatch = filterProject === "all" || a.projectId === filterProject;
-      const userMatch = filterUser === "all" || a.userName === filterUser;
-      const entityMatch = filterEntity === "all" || a.entityType === filterEntity;
-      const dateMatch = !dateCutoff || new Date(a.timestamp) >= dateCutoff;
+      const pid = a.project_id ?? a.projectId;
+      const user = a.performed_by ?? a.userName;
+      const ent  = a.entity_type ?? a.entityType;
+      const ts   = a.timestamp ?? a.created_at;
+      const projectMatch = filterProject === "all" || pid === filterProject;
+      const userMatch    = filterUser === "all"    || user === filterUser;
+      const entityMatch  = filterEntity === "all"  || ent === filterEntity;
+      const dateMatch    = !dateCutoff || (ts && new Date(ts) >= dateCutoff);
       return projectMatch && userMatch && entityMatch && dateMatch;
     });
   }, [activities, filterProject, filterUser, filterEntity, dateRange]);
@@ -78,13 +89,15 @@ export default function ActivityPage() {
   const handleExportCSV = () => {
     const headers = ["Timestamp", "User", "Action", "Entity Type", "Entity", "Project", "Description"];
     const rows = filtered.map((a) => [
-      new Date(a.timestamp).toLocaleString(),
-      a.userName,
-      a.action,
-      a.entityType,
-      a.entityName,
-      a.projectName || "—",
-      a.description || "—",
+      // Same snake_case-first, camelCase-fallback pattern as the
+      // filter block above so CSV export stays in sync with the feed.
+      new Date(a.timestamp ?? a.created_at).toLocaleString(),
+      a.performed_by ?? a.userName ?? "",
+      a.action ?? "",
+      a.entity_type ?? a.entityType ?? "",
+      a.entity_name ?? a.entityName ?? "",
+      a.project_name ?? a.projectName ?? "—",
+      a.description ?? "—",
     ]);
 
     const csv = [headers, ...rows].map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");

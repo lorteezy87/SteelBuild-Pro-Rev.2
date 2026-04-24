@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const emptyForm = {
   project_id: "",
@@ -62,8 +63,20 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
   });
 
   const handleSubmit = () => {
-    if (isSaving || !formData.project_id || !formData.incident_date || !formData.description?.trim()) return;
-    onSave?.(formData);
+    if (isSaving) return;
+    // Explicit toasts instead of a silent bail — the button remains
+    // disabled for the same rules, but in case the user hits the
+    // keyboard or dev tools trigger the click we want a clear reason
+    // rather than "nothing happens".
+    if (!formData.project_id)          { toast.error("Select a project first."); return; }
+    if (!formData.incident_date)       { toast.error("Incident date is required."); return; }
+    if (!formData.description?.trim()) { toast.error("Describe what happened."); return; }
+    const {
+      created_date, updated_date, created_at, updated_at,
+      is_deleted, deleted_at,
+      ...clean
+    } = formData;
+    onSave?.(clean);
   };
 
   const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
