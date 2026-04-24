@@ -31,6 +31,77 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 
 const STALE_TIME = 60_000;
 
+// ── Role presets ──────────────────────────────────────────────────────
+//
+// Different people in a steel shop care about wildly different pieces of
+// the Command Center. The PM wants RFIs + COs + budget drift; the super
+// wants today's deliveries + blockers; the fab manager wants WP
+// bottlenecks + drawing releases; the exec wants portfolio health.
+// Rather than build 4 separate pages, we let the user pick a role and
+// filter which TILES and SECTIONS show.
+//
+// Persisted per-user via localStorage. Default is "pm" — same
+// experience as before, so existing users see no behaviour change
+// until they switch roles.
+const ROLE_STORAGE_KEY = "sbp-cc-role-v1";
+const TILE_KEYS = {
+  needsAction:   "needsAction",
+  overdue:       "overdue",
+  dueToday:      "dueToday",
+  arrivingToday: "arrivingToday",
+  waitingOthers: "waitingOthers",
+};
+const SECTION_KEYS = {
+  todayAgenda:    "todayAgenda",
+  weekAhead:      "weekAhead",
+  upcomingWindow: "upcomingWindow",
+  actionFeed:     "actionFeed",
+};
+const ROLE_PRESETS = [
+  {
+    id: "pm",
+    label: "PM",
+    description: "RFIs, COs, budget drift, submittal calls.",
+    color: "var(--accent)",
+    tiles: ["needsAction", "overdue", "dueToday", "arrivingToday", "waitingOthers"],
+    sections: ["todayAgenda", "weekAhead", "upcomingWindow", "actionFeed"],
+  },
+  {
+    id: "super",
+    label: "Superintendent",
+    description: "Today's deliveries, crew constraints, blockers.",
+    color: "var(--phase-delivery, #F59E0B)",
+    tiles: ["dueToday", "arrivingToday", "overdue", "needsAction"],
+    sections: ["todayAgenda", "upcomingWindow", "weekAhead"],
+  },
+  {
+    id: "fab",
+    label: "Fab Manager",
+    description: "WP bottlenecks, drawing release, ship dates.",
+    color: "#0EA5E9",
+    tiles: ["overdue", "dueToday", "needsAction", "arrivingToday"],
+    sections: ["todayAgenda", "upcomingWindow", "actionFeed"],
+  },
+  {
+    id: "exec",
+    label: "Executive",
+    description: "Forecast, job health, margin-at-risk.",
+    color: "#8B5CF6",
+    tiles: ["overdue", "needsAction", "waitingOthers"],
+    sections: ["upcomingWindow", "actionFeed"],
+  },
+];
+function loadRole() {
+  try {
+    const saved = typeof window !== "undefined" && window.localStorage?.getItem(ROLE_STORAGE_KEY);
+    if (saved && ROLE_PRESETS.some((r) => r.id === saved)) return saved;
+  } catch { /* ignore */ }
+  return "pm";
+}
+function saveRole(id) {
+  try { window.localStorage?.setItem(ROLE_STORAGE_KEY, id); } catch { /* ignore */ }
+}
+
 export default function CommandCenter() {
   // ── State ───────────────────────────────────────────────────────────
   const [snapshotFilter, setSnapshotFilter] = useState(null); // one of snapshot keys
@@ -44,6 +115,10 @@ export default function CommandCenter() {
   const [detailItem, setDetailItem] = useState(null);
   const [forwardLookOpen, setForwardLookOpen] = useState(false);
   const [feedExpanded, setFeedExpanded] = useState(false);
+  const [roleId, setRoleId] = useState(loadRole);
+  const activeRole = ROLE_PRESETS.find((r) => r.id === roleId) || ROLE_PRESETS[0];
+  const tileVisible = (key) => activeRole.tiles.includes(key);
+  const sectionVisible = (key) => activeRole.sections.includes(key);
 
   // ── Data queries ────────────────────────────────────────────────────
   const { data: projects = [], isLoading: projLoading } = useQuery({
@@ -323,6 +398,73 @@ export default function CommandCenter() {
         </button>
       </CommandBar>
 
+      {/* Role selector — switches the Command Center's default layout so
+          PMs, supers, fab managers and execs each see what they actually
+          care about. Persisted to localStorage per-user. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 10px",
+          background: "var(--bg-surface-low)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-card)",
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--text-muted)",
+            marginRight: 4,
+          }}
+        >
+          View as
+        </span>
+        {ROLE_PRESETS.map((r) => {
+          const isActive = r.id === activeRole.id;
+          return (
+            <button
+              key={r.id}
+              onClick={() => { setRoleId(r.id); saveRole(r.id); }}
+              title={r.description}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                padding: "5px 10px",
+                borderRadius: 3,
+                border: `1px solid ${isActive ? r.color : "var(--divider)"}`,
+                background: isActive ? `color-mix(in srgb, ${r.color} 14%, transparent)` : "transparent",
+                color: isActive ? r.color : "var(--text-muted)",
+                cursor: "pointer",
+                transition: "all 0.12s",
+              }}
+            >
+              {r.label}
+            </button>
+          );
+        })}
+        <span
+          style={{
+            marginLeft: "auto",
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            color: "var(--text-muted)",
+            fontStyle: "italic",
+          }}
+        >
+          {activeRole.description}
+        </span>
+      </div>
+
       {/* Critical banner — only when blocking items exist */}
       {view.blocking.length > 0 && (
         <div
@@ -379,82 +521,73 @@ export default function CommandCenter() {
         </div>
       )}
 
-      {/* Snapshot tiles — wired with source + updatedAt so PMs can see
-          where each count came from and how fresh it is. feedUpdatedAt
-          pulses whenever rawFeed recomputes (i.e. any of the 9 entity
-          queries refetched), which is the closest we can get to "when
-          did these numbers actually change?". */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-        <KpiTile
-          compact
-          label="Needs You"
-          value={snapshot.needsAction}
-          color="var(--accent)"
-          active={activeFilter("needsAction")}
-          onClick={() => toggleFilter("needsAction")}
-          source="action feed"
-          updatedAt={feedUpdatedAt}
-        />
-        <KpiTile
-          compact
-          label="Overdue"
-          value={snapshot.overdue}
-          color="var(--status-error)"
-          active={activeFilter("overdue")}
-          onClick={() => toggleFilter("overdue")}
-          source="rfis + drawings + tasks"
-          updatedAt={feedUpdatedAt}
-        />
-        <KpiTile
-          compact
-          label="Due Today"
-          value={snapshot.dueToday}
-          color="var(--status-warning)"
-          active={activeFilter("dueToday")}
-          onClick={() => toggleFilter("dueToday")}
-          source="due-date rollup"
-          updatedAt={feedUpdatedAt}
-        />
-        <KpiTile
-          compact
-          label="Arriving Today"
-          value={snapshot.arrivingToday}
-          color="var(--phase-delivery)"
-          active={activeFilter("arrivingToday")}
-          onClick={() => toggleFilter("arrivingToday")}
-          source="deliveries"
-          updatedAt={feedUpdatedAt}
-        />
-        <KpiTile
-          compact
-          label="Waiting Others"
-          value={snapshot.waitingOthers}
-          color="var(--text-muted)"
-          active={activeFilter("waitingOthers")}
-          onClick={() => toggleFilter("waitingOthers")}
-          source="ball-in-court"
-          updatedAt={feedUpdatedAt}
-        />
-      </div>
+      {/* Snapshot tiles — rendered in the order dictated by the active
+          role preset. Each tile is opted in/out by the role's `tiles`
+          array; trust footer (source + updatedAt) carries through so
+          the numbers stay auditable regardless of which role is
+          driving the layout. */}
+      {(() => {
+        const tileSpecs = {
+          needsAction:   { label: "Needs You",     value: snapshot.needsAction,   color: "var(--accent)",           source: "action feed" },
+          overdue:       { label: "Overdue",       value: snapshot.overdue,       color: "var(--status-error)",     source: "rfis + drawings + tasks" },
+          dueToday:      { label: "Due Today",     value: snapshot.dueToday,      color: "var(--status-warning)",   source: "due-date rollup" },
+          arrivingToday: { label: "Arriving Today",value: snapshot.arrivingToday, color: "var(--phase-delivery)",   source: "deliveries" },
+          waitingOthers: { label: "Waiting Others",value: snapshot.waitingOthers, color: "var(--text-muted)",       source: "ball-in-court" },
+        };
+        const visibleTiles = activeRole.tiles.filter((k) => tileSpecs[k]);
+        if (visibleTiles.length === 0) return null;
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+            {visibleTiles.map((key) => {
+              const spec = tileSpecs[key];
+              return (
+                <KpiTile
+                  key={key}
+                  compact
+                  label={spec.label}
+                  value={spec.value}
+                  color={spec.color}
+                  active={activeFilter(key)}
+                  onClick={() => toggleFilter(key)}
+                  source={spec.source}
+                  updatedAt={feedUpdatedAt}
+                />
+              );
+            })}
+          </div>
+        );
+      })()}
 
-      {/* Main grid: Today (3fr) / Week Ahead (2fr) */}
-      <div
-        className="cc-main-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
-          gap: 14,
-          alignItems: "start",
-        }}
-      >
-        <TodayAgenda buckets={view} onOpenDetail={setDetailItem} />
-        <WeekAhead weekByDay={view.weekByDay} onForwardLookClick={() => setForwardLookOpen(true)} />
-      </div>
+      {/* Main grid: Today (3fr) / Week Ahead (2fr). Either half can be
+          hidden by role preset — layout collapses to single-column if
+          only one is visible. */}
+      {(sectionVisible("todayAgenda") || sectionVisible("weekAhead")) && (
+        <div
+          className="cc-main-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              sectionVisible("todayAgenda") && sectionVisible("weekAhead")
+                ? "minmax(0, 3fr) minmax(0, 2fr)"
+                : "minmax(0, 1fr)",
+            gap: 14,
+            alignItems: "start",
+          }}
+        >
+          {sectionVisible("todayAgenda") && <TodayAgenda buckets={view} onOpenDetail={setDetailItem} />}
+          {sectionVisible("weekAhead") && <WeekAhead weekByDay={view.weekByDay} onForwardLookClick={() => setForwardLookOpen(true)} />}
+        </div>
+      )}
 
       {/* Two-window upcoming queue: 48h imminent / 10-day near-term */}
-      <UpcomingWindows feed={rawFeed} onOpenDetail={setDetailItem} />
+      {sectionVisible("upcomingWindow") && (
+        <UpcomingWindows feed={rawFeed} onOpenDetail={setDetailItem} />
+      )}
 
-      {/* Collapsible full action feed */}
+      {/* Collapsible full action feed — visible only for roles that
+          include it in their preset (all roles except the lean Super
+          view today). */}
+      {sectionVisible("actionFeed") && (
       <div
         style={{
           background: "var(--bg-surface)",
@@ -536,6 +669,7 @@ export default function CommandCenter() {
           </div>
         )}
       </div>
+      )}
 
       <ItemDetailDrawer item={detailItem} onClose={() => setDetailItem(null)} />
 
