@@ -51,8 +51,12 @@ async function invokeProxyWithDetail(body) {
 
 const STORAGE_BUCKET = "app-files";
 const MAX_PDF_BYTES  = 32 * 1024 * 1024;
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_MODEL    = "gpt-4o-mini";
+// Switched from gpt-4o-mini to Claude for the same reason importRfiLog
+// did — OpenAI's Chat Completions PDF handling was unreliable on
+// shipping tickets with many line items; Claude Sonnet 4.5 reliably
+// emits the full tool_use block on multi-page tickets.
+const DEFAULT_PROVIDER = "anthropic";
+const DEFAULT_MODEL    = "claude-sonnet-4-5";
 
 const SYSTEM_PROMPT = `You are parsing a structural-steel shipping ticket (also called a load list
 or bill of lading). Every ticket has a header block with load-level
@@ -190,7 +194,17 @@ export async function extractShippingTicket({
 
   const tool = data?.tool_use?.input;
   if (!tool || typeof tool !== "object") {
-    throw new Error("AI did not return structured data. Check the PDF is a readable shipping ticket.");
+    // Same diagnostic treatment as importRfiLog — bubble up what the
+    // model actually said so the user can tell the difference between
+    // "scanned PDF, needs OCR" and "wrong document type".
+    const hint = (data?.text || "").trim().slice(0, 280);
+    const detail = hint
+      ? ` Model said: "${hint}${hint.length >= 280 ? "…" : ""}"`
+      : " Model returned no text or tool output (likely a scanned / image-only PDF that would need OCR first).";
+    throw new Error(
+      `AI did not return structured data from this PDF.${detail} ` +
+      `Check the file is a text-readable shipping ticket, not a scanned image.`
+    );
   }
   return {
     header: tool.header || {},
