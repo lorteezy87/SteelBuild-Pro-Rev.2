@@ -198,8 +198,12 @@ function LaborTab({ workPackages, dailyLogs }) {
   }, [workPackages]);
 
   const laborCols = [
-    { key: "work_package_number", label: "WP#", width: "70px", bold: true },
-    { key: "description", label: "Description", width: "2fr", mono: false, fontSize: 11, render: (r) => r.description || "—" },
+    // DB column is `wp_number`, not `work_package_number` — the old
+    // key made every WP# cell render blank because row[col.key] was
+    // undefined. Same story for description → name (the work_packages
+    // table has a `name` column, not `description`).
+    { key: "wp_number", label: "WP#", width: "70px", bold: true, render: (r) => r.wp_number || "—" },
+    { key: "name",      label: "Description", width: "2fr", mono: false, fontSize: 11, render: (r) => r.name || r.description || "—" },
     { key: "status", label: "Status", width: "100px", render: (r) => <StatusPill label={r.status || "—"} size="xs" /> },
     { key: "bShop", label: "Budget Shop", width: "100px", right: true, render: (r) => fmt(r.bShop) },
     { key: "aShop", label: "Actual Shop", width: "100px", right: true, render: (r) => fmt(r.aShop) },
