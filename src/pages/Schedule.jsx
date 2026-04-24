@@ -18,6 +18,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { exportGanttToPdf } from "@/lib/exportGanttPdf";
+import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 
 /**
  * Auto-generate a WBS code for a task based on its phase and the
@@ -94,6 +95,19 @@ export default function Schedule() {
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
   const hasProject = !!(projectId || activeProject?.id);
+
+  // Weather risk for the project's address. Open-Meteo is free + keyless
+  // so no credit spend; the lib caches geocoding + forecast so repeated
+  // Gantt renders don't spam the API. Returns null when the project has
+  // no address or the API is unreachable — the Gantt treats that as
+  // "unknown, no warnings" rather than an error.
+  const { data: weatherRisk = null } = useQuery({
+    queryKey: ["weather-risk", projectId, selectedProject?.address],
+    queryFn: () => selectedProject ? getWeatherRiskForProject(selectedProject) : null,
+    enabled: !!selectedProject?.address,
+    staleTime: 30 * 60 * 1000, // 30 min — matches the lib's in-memory cache
+    retry: false,
+  });
 
   /* ── Auto-assign WBS codes to tasks that don't have one ────────── */
   const enrichedTasks = useMemo(() => {
@@ -685,6 +699,7 @@ export default function Schedule() {
               tasks={enrichedTasks}
               submittals={submittals}
               deliveries={ganttDeliveries}
+              weatherRisk={weatherRisk}
               expandedTask={expandedTask}
               setExpandedTask={setExpandedTask}
               onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
