@@ -1,6 +1,7 @@
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import ResourceFormModal from "@/components/resources/ResourceFormModal";
@@ -28,6 +29,10 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
     @keyframes fadeSlideUp {
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
     }
   `;
   document.head.appendChild(style);
@@ -122,6 +127,89 @@ export default function ResourceManagement() {
     else toast.error("Unexpected save path — use form modal");
   };
 
+  // ── Company resource sync ────────────────────────────────────────
+  //
+  // The `resources` table's RLS policy allows reads+writes on rows
+  // with project_id = null ("project_member_access" has an explicit
+  // `project_id IS NULL OR …` branch), so those rows act as a
+  // shared company-wide library. Sync Company copies every library
+  // resource into the currently-active project, skipping anything
+  // the project already has (matched by name + resource_type).
+  //
+  // No-op when the library is empty or when no project is selected —
+  // both surface a gentle toast explaining next steps rather than a
+  // bare error.
+  const syncMut = useMutation({
+    mutationFn: async () => {
+      if (!projectId) throw new Error("Pick a project first — Sync Company copies the library into one specific project.");
+      const { data: library, error: libErr } = await supabase
+        .from("resources")
+        .select("*")
+        .is("project_id", null);
+      if (libErr) throw libErr;
+      if (!library || library.length === 0) {
+        return { inserted: 0, skipped: 0, libraryEmpty: true };
+      }
+      // Dedup key: (name|resource_type) lowercased — good enough for
+      // MVP given there's no explicit library_resource_id. Two "Welder
+      // Crew A" labor rows would collide, which is arguably correct
+      // (don't double-add the same crew).
+      const keyOf = (r) => `${(r.name || "").toLowerCase().trim()}|${(r.resource_type || "").toLowerCase().trim()}`;
+      const existing = new Set((resources || []).map(keyOf));
+
+      const projectName = selectedProject?.name || null;
+      const toInsert = library
+        .filter((r) => r.name && !existing.has(keyOf(r)))
+        .map((src) => {
+          // Strip id/created_at so the insert gets fresh ones; drop
+          // parent_resource_id too (library hierarchy shouldn't pollute
+          // the project copy). Carry name/role/capacity/etc. through
+          // verbatim; stash a breadcrumb in metadata so we can later
+          // tell which project rows came from the library and which
+          // library row they came from.
+          const {
+            id, created_at, updated_at,
+            project_id: _oldProject, project_name: _oldProjectName,
+            parent_resource_id,
+            metadata,
+            ...rest
+          } = src;
+          return {
+            ...rest,
+            project_id:   projectId,
+            project_name: projectName,
+            metadata: {
+              ...(metadata || {}),
+              synced_from_library: true,
+              source_library_resource_id: id,
+              synced_at: new Date().toISOString(),
+            },
+          };
+        });
+      if (toInsert.length === 0) {
+        return { inserted: 0, skipped: library.length, libraryEmpty: false };
+      }
+      const { error: insErr } = await supabase.from("resources").insert(toInsert);
+      if (insErr) throw insErr;
+      return { inserted: toInsert.length, skipped: library.length - toInsert.length, libraryEmpty: false };
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["resources"] });
+      if (res.libraryEmpty) {
+        toast.info(
+          "No company library yet.",
+          { description: "Create a resource and leave its project empty — those rows become your company library for future syncs." },
+        );
+        return;
+      }
+      const parts = [];
+      parts.push(`${res.inserted} added`);
+      if (res.skipped > 0) parts.push(`${res.skipped} already in project`);
+      toast.success(`Company library synced — ${parts.join(", ")}`);
+    },
+    onError: (e) => toast.error(`Sync failed: ${e?.message || "Unknown error"}`),
+  });
+
   const types = ["Labor", "Equipment", "Subcontractor", "Material"];
   const statuses = ["Available", "Allocated", "Over-Allocated", "On Leave"];
 
@@ -137,10 +225,29 @@ export default function ResourceManagement() {
         subtitle={`Labor · Equipment · Subcontractors${stats.overAllocated > 0 ? ` · ${stats.overAllocated} over-allocated` : ""}`}
       >
         <button
-          onClick={() => toast.info("Company resource sync coming soon")}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onClick={() => syncMut.mutate()}
+          disabled={syncMut.isPending || !projectId}
+          title={projectId
+            ? "Copy every resource from the company library (project_id=null rows) into this project, skipping ones already here."
+            : "Pick a project first — Sync Company adds library resources to a specific project."}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 12px",
+            color: "var(--text-secondary)",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            cursor: (syncMut.isPending || !projectId) ? "not-allowed" : "pointer",
+            opacity: (syncMut.isPending || !projectId) ? 0.55 : 1,
+            textTransform: "uppercase",
+          }}
         >
-          <RefreshCw size={12} /> Sync Company
+          <RefreshCw
+            size={12}
+            style={{ animation: syncMut.isPending ? "spin 0.8s linear infinite" : "none" }}
+          />
+          {syncMut.isPending ? "Syncing…" : "Sync Company"}
         </button>
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
