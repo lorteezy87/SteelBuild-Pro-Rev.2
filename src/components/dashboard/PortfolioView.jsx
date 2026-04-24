@@ -769,10 +769,27 @@ export default function PortfolioView({
 
     const cashAtRisk = pendingCOValue + overBudgetExposure;
 
+    // Portfolio-level Forecast at Completion (FAC):
+    //   FAC = sum of per-project estimatedCostAtCompletion, where each
+    //         project's estimate = max(budget, actual + pending CO
+    //         exposure). Answers the exec question "if everything
+    //         pending lands the way we expect, what will these jobs
+    //         actually cost us?"
+    //
+    // Forecast Variance = FAC - Total Budget. Positive = we're
+    // forecasting more cost than we budgeted (margin fade); negative
+    // = we're forecasting below budget (margin gain).
+    const forecastAtCompletion = (enrichedMetrics || []).reduce(
+      (sum, p) => sum + (Number(p.estimatedCostAtCompletion) || 0),
+      0,
+    );
+    const forecastVariance = forecastAtCompletion - totalBudget;
+
     return {
       portfolioValue, totalBudget, totalSpend,
       overdueRFIs, openRFIs, pendingCOs, lateDeliveries, atRisk, activeWPs, staleRFIs30,
       cashAtRisk, pendingCOValue, overBudgetExposure,
+      forecastAtCompletion, forecastVariance,
     };
   }, [projects, allRFIs, allCOs, allCodes, allWPs, allExpenses, allDeliveries, enrichedMetrics]);
 
@@ -1383,6 +1400,57 @@ export default function PortfolioView({
           bordered
           color={portfolioKPIs.totalSpend > (portfolioKPIs.totalBudget || 0) ? "var(--status-error)" : "var(--status-success)"}
         />
+        {/* Forecast at Completion (FAC) — portfolio-wide estimated final
+            cost. Green when below budget (margin gain), red when above
+            (margin fade). Sub-label surfaces the delta so the exec sees
+            direction and magnitude without hovering. */}
+        {portfolioKPIs.forecastAtCompletion > 0 && (
+          <div
+            title={[
+              `Forecast at Completion: ${formatCurrency(portfolioKPIs.forecastAtCompletion)}`,
+              `Total Budget: ${formatCurrency(portfolioKPIs.totalBudget)}`,
+              `${portfolioKPIs.forecastVariance > 0 ? "Margin fade" : portfolioKPIs.forecastVariance < 0 ? "Margin gain" : "On budget"}: ${(portfolioKPIs.forecastVariance >= 0 ? "+" : "−")}${formatCurrency(Math.abs(portfolioKPIs.forecastVariance))}`,
+              "",
+              "FAC = Σ max(budget, actual + pending COs) across active projects",
+            ].join("\n")}
+            style={{
+              padding: "12px 20px",
+              borderRight: "1px solid var(--divider)",
+              borderTop: `3px solid ${
+                portfolioKPIs.forecastVariance > 0
+                  ? "var(--status-error)"
+                  : "var(--status-success)"
+              }`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              minWidth: 160,
+            }}
+          >
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+              Forecast at Completion
+            </span>
+            <span style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 20,
+              fontWeight: 800,
+              lineHeight: 1,
+              color: portfolioKPIs.forecastVariance > 0
+                ? "var(--status-error)"
+                : "var(--status-success)",
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {formatCurrency(portfolioKPIs.forecastAtCompletion).replace(/\.\d+/, "")}
+            </span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+              {portfolioKPIs.forecastVariance === 0
+                ? "ON BUDGET"
+                : portfolioKPIs.forecastVariance > 0
+                  ? `MARGIN FADE · ${formatCurrency(portfolioKPIs.forecastVariance).replace(/\.\d+/, "")}`
+                  : `MARGIN GAIN · ${formatCurrency(Math.abs(portfolioKPIs.forecastVariance)).replace(/\.\d+/, "")}`}
+            </span>
+          </div>
+        )}
         {/* Open RFIs — clickable filter with sparkline */}
         {[
           { key: "openRFIs",       label: "Open RFIs",       val: portfolioKPIs.openRFIs,       warn: portfolioKPIs.openRFIs > 3,       color: "var(--status-warning)", sparkField: "openRFIs" },

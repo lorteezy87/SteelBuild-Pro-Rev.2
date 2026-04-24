@@ -1,5 +1,37 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { SEVERITY_COLOR, timeAgo } from "@/config/moduleRegistry";
+
+// Group alert types into 5 short labels so the dropdown header shows
+// a compact "RFI 3 · CO 1 · DWG 15" strip instead of a single number
+// that doesn't tell you where the noise is coming from. The regex
+// approach tolerates minor variation in alert_type strings across
+// entities (e.g. "RFI Overdue" vs "RFI_Overdue" vs "rfi_overdue").
+function bucketForAlertType(t) {
+  const s = String(t || "").toLowerCase();
+  if (s.includes("rfi"))                         return "rfi";
+  if (s.includes("co") || s.includes("change"))  return "co";
+  if (s.includes("draw") || s.includes("sheet")) return "dwg";
+  if (s.includes("deliver") || s.includes("ship")) return "del";
+  return "other";
+}
+const BUCKET_LABELS = { rfi: "RFI", co: "CO", dwg: "DWG", del: "DEL", other: "OTR" };
+const BUCKET_COLORS = {
+  rfi:   "var(--status-warning)",
+  co:    "var(--status-info)",
+  dwg:   "var(--accent)",
+  del:   "var(--status-error)",
+  other: "var(--text-muted)",
+};
+
+// Compact the badge number past 20 — 99+ hid useful detail without
+// changing the user's behaviour (they're already in "pile is big"
+// territory by 20). At >= 500 it flattens to "500+" to cap width.
+function formatBadge(n) {
+  if (n < 20)  return String(n);
+  if (n < 100) return `${Math.floor(n / 10) * 10}+`;   // 20+, 30+, 40+
+  if (n < 500) return `${Math.floor(n / 50) * 50}+`;   // 100+, 150+
+  return "500+";
+}
 
 export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onViewAll }) {
   const [open, setOpen] = useState(false);
@@ -13,6 +45,17 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
   }, [open]);
 
   const recent = alerts.slice(0, 8);
+
+  // Derive per-bucket counts for the grouped summary strip. Runs over
+  // ALL unread alerts the parent passed in (not just the 8 shown).
+  const grouped = useMemo(() => {
+    const acc = { rfi: 0, co: 0, dwg: 0, del: 0, other: 0 };
+    for (const a of alerts || []) {
+      acc[bucketForAlertType(a.alert_type)] += 1;
+    }
+    return acc;
+  }, [alerts]);
+  const groupEntries = Object.entries(grouped).filter(([, n]) => n > 0);
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -30,16 +73,21 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
           <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
         </svg>
         {unreadCount > 0 && (
-          <span style={{
-            position: "absolute", top: 3, right: 3,
-            background: "var(--status-error)", borderRadius: 8,
-            minWidth: 14, height: 14,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-            color: "white", padding: "0 3px",
-            boxShadow: "0 0 6px var(--status-error)80", lineHeight: 1,
-          }}>
-            {unreadCount > 99 ? "99+" : unreadCount}
+          <span
+            title={groupEntries.length > 1
+              ? groupEntries.map(([k, n]) => `${BUCKET_LABELS[k]} ${n}`).join(" · ")
+              : `${unreadCount} unread`}
+            style={{
+              position: "absolute", top: 3, right: 3,
+              background: "var(--status-error)", borderRadius: 8,
+              minWidth: 14, height: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+              color: "white", padding: "0 3px",
+              boxShadow: "0 0 6px var(--status-error)80", lineHeight: 1,
+            }}
+          >
+            {formatBadge(unreadCount)}
           </span>
         )}
       </div>
@@ -75,6 +123,49 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
               </button>
             )}
           </div>
+
+          {/* Grouped summary strip — only rendered when we have at
+              least two distinct types, because a single-type pile
+              ("3 RFI") is already clear from the list below. Breaks
+              a large number into categorised chips so the user knows
+              what kind of noise they're looking at before scrolling. */}
+          {groupEntries.length > 1 && (
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "8px 14px",
+              borderBottom: "1px solid var(--divider)",
+              background: "var(--bg-surface-low)",
+            }}>
+              {groupEntries.map(([key, count]) => {
+                const color = BUCKET_COLORS[key];
+                return (
+                  <span
+                    key={key}
+                    title={`${count} alert${count !== 1 ? "s" : ""} of type ${BUCKET_LABELS[key]}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "2px 7px",
+                      borderRadius: 10,
+                      border: `1px solid ${color}44`,
+                      background: `color-mix(in srgb, ${color} 10%, transparent)`,
+                      color,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    {BUCKET_LABELS[key]}
+                    <span style={{ color: "var(--text-primary)" }}>{count}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           {/* Alert list */}
           <div style={{ maxHeight: 320, overflowY: "auto" }}>
