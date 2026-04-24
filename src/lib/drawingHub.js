@@ -146,24 +146,74 @@ export async function nextZoneKey(revisionId) {
 }
 
 /**
- * Create a zone. Geometry is normalized [0,1] viewer coordinates
- * (x_min, y_min, x_max, y_max) — independent of PDF pixel size so
- * the zone re-places correctly at any zoom.
+ * Compute the axis-aligned bounding box of a polygon-points array.
+ * Points are [x,y] pairs in normalized [0,1] viewer space. Returns
+ * null if the input is empty or malformed — callers should guard on
+ * that before relying on the result.
+ */
+export function bboxFromPolygonPoints(points) {
+  if (!Array.isArray(points) || points.length === 0) return null;
+  let xMin =  Infinity, yMin =  Infinity;
+  let xMax = -Infinity, yMax = -Infinity;
+  for (const p of points) {
+    if (!Array.isArray(p) || p.length !== 2) return null;
+    const x = Number(p[0]);
+    const y = Number(p[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x < xMin) xMin = x;
+    if (y < yMin) yMin = y;
+    if (x > xMax) xMax = x;
+    if (y > yMax) yMax = y;
+  }
+  return { xMin, yMin, xMax, yMax };
+}
+
+/**
+ * Create a zone. Geometry can be either a rectangle (xMin/yMin/xMax/
+ * yMax, the original MVP shape) or a polygon (polygonPoints — array
+ * of [x,y] pairs in normalized [0,1] space, length >= 3). For polygons
+ * we compute the bbox from the points here so list queries + the
+ * status-index filter still have their columns populated.
  */
 export async function createZone({
   projectId, drawingId, revisionId, userId,
   label, zoneKey, description,
   zoneType = "area",
+  shapeType,       // optional — inferred from presence of polygonPoints if omitted
   xMin, yMin, xMax, yMax,
+  polygonPoints,   // optional — array of [x,y] pairs
   levelRef, gridRef, detailRef, disciplineCode, sequenceRef,
   status = "neutral",
 }) {
   if (!projectId || !drawingId || !revisionId) {
     throw new Error("createZone: projectId, drawingId, revisionId required");
   }
-  if ([xMin, yMin, xMax, yMax].some((v) => typeof v !== "number" || !Number.isFinite(v))) {
-    throw new Error("createZone: bbox must be four finite numbers");
+
+  // Resolve geometry. Polygon wins if points were supplied; otherwise
+  // fall back to the rectangle branch. Whichever we land in, we end up
+  // with a consistent {shape, bbox, points} tuple so the payload below
+  // stays straightforward.
+  let resolvedShape = shapeType || (Array.isArray(polygonPoints) ? "polygon" : "rect");
+  let bbox = null;
+  let pointsPayload = null;
+
+  if (resolvedShape === "polygon") {
+    if (!Array.isArray(polygonPoints) || polygonPoints.length < 3) {
+      throw new Error("createZone: polygonPoints must be an array of at least 3 [x,y] pairs");
+    }
+    bbox = bboxFromPolygonPoints(polygonPoints);
+    if (!bbox) throw new Error("createZone: polygonPoints must contain numeric [x,y] pairs");
+    if (bbox.xMax <= bbox.xMin || bbox.yMax <= bbox.yMin) {
+      throw new Error("createZone: polygon is degenerate (zero width or height)");
+    }
+    pointsPayload = polygonPoints;
+  } else {
+    if ([xMin, yMin, xMax, yMax].some((v) => typeof v !== "number" || !Number.isFinite(v))) {
+      throw new Error("createZone: rectangle bbox must be four finite numbers");
+    }
+    bbox = { xMin, yMin, xMax, yMax };
   }
+
   const key = zoneKey || (await nextZoneKey(revisionId));
   const payload = {
     project_id:           projectId,
@@ -173,8 +223,9 @@ export async function createZone({
     label:                label || key,
     description:          description || null,
     zone_type:            zoneType,
-    shape_type:           "rect",
-    x_min: xMin, y_min: yMin, x_max: xMax, y_max: yMax,
+    shape_type:           resolvedShape,
+    x_min: bbox.xMin, y_min: bbox.yMin, x_max: bbox.xMax, y_max: bbox.yMax,
+    polygon_points:       pointsPayload,
     level_ref:            levelRef || null,
     grid_ref:             gridRef || null,
     detail_ref:           detailRef || null,
@@ -650,6 +701,10 @@ export async function carryZonesForward({
     zone_type:            z.zone_type,
     shape_type:           z.shape_type,
     x_min: z.x_min, y_min: z.y_min, x_max: z.x_max, y_max: z.y_max,
+    // V2: polygon vertices ride along so irregular zones survive
+    // revision carry-forward. Null for rectangles — matches the
+    // polygon_points shape-consistency CHECK.
+    polygon_points:       z.polygon_points ?? null,
     level_ref:            z.level_ref,
     grid_ref:             z.grid_ref,
     detail_ref:           z.detail_ref,
