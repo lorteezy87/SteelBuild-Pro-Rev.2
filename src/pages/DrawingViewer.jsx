@@ -34,6 +34,7 @@ import {
   summarizeLinks,
   computeZoneStatus,
   recomputeAndPersistZoneStatus,
+  createNewRevisionAndCarryZones,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -375,6 +376,41 @@ export default function DrawingViewer() {
       return true;
     });
   }, [zonesWithComputed, zoneFilter]);
+
+  // Handler: user clicked "+ Rev" — mint a new revision, carry
+  // zones + links over, flip is_current, and force a refetch so
+  // the viewer lands on the fresh revision immediately.
+  const handleNewRevision = useCallback(async () => {
+    if (!activeDrawing) return;
+    const newCode = window.prompt(
+      `New revision code for sheet ${activeDrawing.sheet_number || activeDrawing.drawing_number || "—"}\n(e.g. "B", "1", "IFC-2"):`,
+      "",
+    );
+    if (!newCode || !newCode.trim()) return;
+    const carryLinks = window.confirm(
+      "Carry the current zone links (RFIs, work packages, etc.) forward too?\n\nOK = yes, copy every active link.\nCancel = no, start fresh on the new revision.",
+    );
+    try {
+      const res = await createNewRevisionAndCarryZones({
+        drawing: activeDrawing,
+        newCode: newCode.trim(),
+        newName: null,
+        includeLinks: carryLinks,
+      });
+      toast.success(
+        `Revision ${res.revision.revision_code} created — ${res.zonesCloned} zones${
+          res.linksCloned ? ` + ${res.linksCloned} links` : ""
+        } carried forward`,
+      );
+      // Invalidate every drawing-hub query so the viewer repaints
+      // against the new current revision immediately.
+      qc.invalidateQueries({ queryKey: ["drawing-revision-current"] });
+      qc.invalidateQueries({ queryKey: ["drawing-zones"] });
+      qc.invalidateQueries({ queryKey: ["drawing-zones-summaries"] });
+    } catch (err) {
+      toast.error(`Couldn't create revision: ${err?.message || "unknown error"}`);
+    }
+  }, [activeDrawing, qc]);
 
   // Handler: user drag-created a new zone. Mint it with a default
   // label = its zone_key so the user sees something immediately; they
@@ -1122,6 +1158,30 @@ export default function DrawingViewer() {
                   </button>
                 );
               })}
+              {/* Revision carry-forward — only offered when there's at
+                  least one zone to carry. Invisible on a brand-new
+                  sheet so the chrome stays quiet. */}
+              {currentRevision && zones.length > 0 && (
+                <button
+                  onClick={handleNewRevision}
+                  title={`Create a new revision of ${activeDrawing?.sheet_number || "this sheet"} — zones will be copied forward.`}
+                  style={{
+                    padding: "5px 10px",
+                    border: "1px dashed var(--accent)",
+                    background: "transparent",
+                    color: "var(--accent)",
+                    borderRadius: 3,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.10em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    marginLeft: 4,
+                  }}
+                >
+                  + Rev
+                </button>
+              )}
             </div>
           )}
 
