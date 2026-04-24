@@ -153,6 +153,150 @@ const PHASE_DOT = {
   Closeout: "var(--status-success)",
 };
 
+// ── Mini-Gantt support ─────────────────────────────────────────────
+//
+// The portfolio "Timeline" column shows a compact horizontal strip of
+// each project's phase bars on a shared (per-project) time axis.
+// Computed entirely from schedule_tasks — we don't need a separate
+// phase-spans table.
+//
+// Canonical phase order + colors. Matches utils/phases.js.
+const TIMELINE_PHASES = [
+  "Pre-Construction",
+  "Detailing",
+  "Procurement",
+  "Fabrication",
+  "Delivery",
+  "Installation",
+  "Closeout",
+];
+const TIMELINE_PHASE_COLOR = {
+  "Pre-Construction": "#8B5CF6",
+  Detailing:          "#0EA5E9",
+  Procurement:        "#F97316",
+  Fabrication:        "#C89B20",
+  Delivery:           "#F59E0B",
+  Installation:       "#0D9488",
+  Closeout:           "#10B981",
+};
+
+// Year clamp matches what ScheduleGantt uses — one rogue typo'd year
+// can't poison the min/max of the whole portfolio timeline.
+const TIMELINE_MIN_YEAR = 1900;
+const TIMELINE_MAX_YEAR = 2200;
+function parseTaskDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00Z` : s;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  if (y < TIMELINE_MIN_YEAR || y > TIMELINE_MAX_YEAR) return null;
+  return d;
+}
+
+/**
+ * Summarise a project's schedule_tasks into per-phase spans: for each
+ * phase that has tasks, returns { start, end } = (earliest task start,
+ * latest task end) inside that phase. Also returns the overall min/max
+ * for the project so the mini-Gantt knows its X-axis.
+ */
+function summarizeProjectSchedule(tasks = []) {
+  const phaseMap = {};
+  let projectMin = null;
+  let projectMax = null;
+  for (const t of tasks) {
+    const ph = t.phase;
+    if (!ph) continue;
+    const s = parseTaskDate(t.start_date);
+    const e = parseTaskDate(t.end_date);
+    if (!s || !e) continue;
+    const cur = phaseMap[ph] || { start: s, end: e };
+    if (s < cur.start) cur.start = s;
+    if (e > cur.end)   cur.end = e;
+    phaseMap[ph] = cur;
+    if (!projectMin || s < projectMin) projectMin = s;
+    if (!projectMax || e > projectMax) projectMax = e;
+  }
+  const phases = TIMELINE_PHASES
+    .map((key) => (phaseMap[key] ? { key, start: phaseMap[key].start, end: phaseMap[key].end } : null))
+    .filter(Boolean);
+  return { phases, min: projectMin, max: projectMax };
+}
+
+/**
+ * MiniProjectTimeline — ~170px strip showing phase bars + today marker.
+ * Pure visual, no data-fetching. Takes the pre-computed summary from
+ * summarizeProjectSchedule() so the parent can memoise once per render.
+ */
+function MiniProjectTimeline({ summary, width = 170, height = 22 }) {
+  if (!summary || !summary.phases.length || !summary.min || !summary.max) {
+    return (
+      <div style={{
+        width, height,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
+        border: "1px dashed var(--divider)", borderRadius: 3,
+        letterSpacing: "0.1em",
+      }}>
+        NO SCHEDULE
+      </div>
+    );
+  }
+  const { phases, min, max } = summary;
+  const total = max - min || 1;
+  const todayMs = Date.now();
+  const todayInRange = todayMs >= min.getTime() && todayMs <= max.getTime();
+  const todayX = ((todayMs - min.getTime()) / total) * width;
+
+  return (
+    <div
+      style={{
+        width, height,
+        position: "relative",
+        background: "var(--bg-page)",
+        border: "1px solid var(--divider)",
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+      title={`${min.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} → ${max.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" })} · click to open schedule`}
+    >
+      {phases.map((p) => {
+        const leftPct  = ((p.start - min) / total) * 100;
+        const widthPct = Math.max(2, ((p.end - p.start) / total) * 100);
+        const color = TIMELINE_PHASE_COLOR[p.key] || "var(--text-muted)";
+        return (
+          <div
+            key={p.key}
+            title={`${p.key}: ${p.start.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} → ${p.end.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`}
+            style={{
+              position: "absolute",
+              top: 3,
+              bottom: 3,
+              left: `${leftPct}%`,
+              width: `${widthPct}%`,
+              background: color,
+              opacity: 0.85,
+              borderRadius: 2,
+            }}
+          />
+        );
+      })}
+      {todayInRange && (
+        <div style={{
+          position: "absolute",
+          top: 0, bottom: 0,
+          left: Math.max(0, Math.min(width - 1, todayX)),
+          width: 1.5,
+          background: "#FF6B00",
+          boxShadow: "0 0 0 1px rgba(255,107,0,0.35)",
+          pointerEvents: "none",
+        }} />
+      )}
+    </div>
+  );
+}
+
 function healthColor(status) {
   switch (status) {
     case "On Track": return "var(--status-success)";
@@ -296,7 +440,23 @@ export default function PortfolioView({
   allDeliveries = [],
   allActionItems = [],
   allExpenses = [],
+  allScheduleTasks = [],
 }) {
+  // Per-project schedule summary → keyed by project_id so each row can
+  // look its own up in O(1). Recomputed when schedule_tasks change.
+  const projectScheduleSummaries = useMemo(() => {
+    const byProject = {};
+    for (const t of allScheduleTasks || []) {
+      if (!t.project_id) continue;
+      if (!byProject[t.project_id]) byProject[t.project_id] = [];
+      byProject[t.project_id].push(t);
+    }
+    const out = {};
+    for (const [pid, tasks] of Object.entries(byProject)) {
+      out[pid] = summarizeProjectSchedule(tasks);
+    }
+    return out;
+  }, [allScheduleTasks]);
   const navigate = useNavigate();
   const { setActiveProject } = useProjectContext();
   const [sortMode, setSortMode] = useState("health");
@@ -1337,7 +1497,7 @@ export default function PortfolioView({
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--bg-surface-low)" }}>
-                  {["#", "Project", "Phase", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
+                  {["#", "Project", "Phase", "Timeline", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
                       style={{
@@ -1392,6 +1552,20 @@ export default function PortfolioView({
                       <td style={{ padding: "6px 8px", fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: PHASE_DOT[p.phase] || "var(--text-muted)", display: "inline-block", marginRight: 6 }} />
                         {p.phase || "—"}
+                      </td>
+                      {/* Timeline — compact per-project mini-Gantt. Clicking
+                          any row already opens the project dashboard, so
+                          the strip inherits that behaviour without its own
+                          onClick — we just stop stray drags from bubbling. */}
+                      <td
+                        style={{ padding: "6px 8px", textAlign: "center" }}
+                        onClick={(e) => {
+                          // Allow the outer row onClick to navigate; nothing
+                          // here needs to stop propagation. Left intact so
+                          // future interactive tooltips can hook in cleanly.
+                        }}
+                      >
+                        <MiniProjectTimeline summary={projectScheduleSummaries[p.id]} />
                       </td>
                       <td style={{ padding: "6px 8px", textAlign: "center" }}>
                         <HealthPill status={hStatus} score={p.healthScore} reasons={p.healthReasons} />
@@ -1551,7 +1725,7 @@ export default function PortfolioView({
                       </td>
                     </tr>
                     <tr style={{ height: 3, padding: 0 }}>
-                      <td colSpan={14} style={{ padding: 0, border: "none" }}>
+                      <td colSpan={15} style={{ padding: 0, border: "none" }}>
                         <div style={{ width: "100%", height: 3, background: "var(--bg-surface-low)" }}>
                           <div style={{ width: `${Math.min(p.avgProgress || 0, 100)}%`, height: 3, background: hColor, transition: "width 0.3s ease" }} />
                         </div>
@@ -1562,7 +1736,7 @@ export default function PortfolioView({
                 })}
                 {displayMetrics.length === 0 && (
                   <tr>
-                    <td colSpan={14} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    <td colSpan={15} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexDirection: "column" }}>
                         {kpiFilter ? (
                           <>
