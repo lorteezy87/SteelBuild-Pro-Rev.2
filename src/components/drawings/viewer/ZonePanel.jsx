@@ -31,6 +31,7 @@ import {
   hydrateLinks,
   createLink as createLinkSvc,
   removeLink as removeLinkSvc,
+  listZoneActivity,
   LINKABLE_TYPE_LABELS,
   ALL_STATUSES,
   computeZoneStatus,
@@ -673,21 +674,156 @@ function OverviewTab({ zone, items, counts, computed, onApplyComputed }) {
   );
 }
 
+// ── Activity tab ─────────────────────────────────────────────────────
+// Reverse-chrono stream of zone + link events backed by the
+// drawing_zone_activity table. Triggers on drawing_zones and
+// drawing_links feed it automatically — no client-side writes needed.
+//
+// Each entry shows:
+//   - vertical timeline rail with color-coded dot keyed to event type
+//   - short human-readable phrase ("Linked RFI-012", "Status: green →
+//     amber", "Renamed from Z-001 to Stair 2")
+//   - optional secondary line ("by Rule Engine", "created from zone")
+//   - relative + absolute timestamp
 function ActivityTab({ zone }) {
+  const { data: rows = [], isFetching } = useQuery({
+    queryKey: ["drawing-zone-activity", zone?.id],
+    queryFn: () => listZoneActivity(zone.id),
+    enabled: !!zone?.id,
+    staleTime: 10 * 1000,
+  });
+
+  if (isFetching && rows.length === 0) {
+    return <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>Loading activity…</div>;
+  }
+  if (!rows.length) {
+    return (
+      <div style={{ padding: "24px 4px", textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>
+        No activity yet — actions you take on this zone will show up here.
+      </div>
+    );
+  }
+
   return (
-    <div style={{ padding: "24px 4px", textAlign: "center" }}>
-      <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-        Activity timeline
-      </div>
-      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.5 }}>
-        Lands in V1.5. We'll record who linked/removed each record + status changes here
-        so trust can be audited before the rule engine + AI suggestions come online.
-      </div>
-      <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 12 }}>
-        Zone created {new Date(zone.created_at).toLocaleString()}.
+    <div style={{ position: "relative", paddingLeft: 18 }}>
+      {/* Vertical rail */}
+      <div style={{
+        position: "absolute",
+        left: 5, top: 6, bottom: 6,
+        width: 1,
+        background: "var(--divider)",
+      }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {rows.map((r) => {
+          const { color, title, subtitle } = describeActivity(r);
+          return (
+            <div key={r.id} style={{ position: "relative" }}>
+              {/* Dot */}
+              <div style={{
+                position: "absolute",
+                left: -18,
+                top: 3,
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                background: color,
+                border: "2px solid var(--bg-surface-secondary)",
+                boxShadow: `0 0 0 1px ${color}`,
+              }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                  {title}
+                </div>
+                {subtitle && (
+                  <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.02em" }}>
+                    {subtitle}
+                  </div>
+                )}
+                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                  {formatRelative(r.created_at)} · {new Date(r.created_at).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+const ACTIVITY_COLOR = {
+  zone_created:    "#3B82F6",
+  zone_renamed:    "#8B5CF6",
+  status_changed:  "#F59E0B",
+  zone_deleted:    "#EF4444",
+  link_added:      "#22C55E",
+  link_removed:    "#94A3B8",
+};
+const STATUS_DOT = {
+  red: "#EF4444", amber: "#F59E0B", purple: "#8B5CF6",
+  blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
+};
+function describeActivity(r) {
+  const color = ACTIVITY_COLOR[r.event_type] || "#94A3B8";
+  const meta  = r.metadata || {};
+  switch (r.event_type) {
+    case "zone_created":
+      return { color, title: `Zone created as ${meta.zone_key || r.to_value || ""}`, subtitle: meta.zone_type && meta.zone_type !== "area" ? `Type: ${meta.zone_type}` : null };
+    case "zone_renamed":
+      return {
+        color,
+        title: `Renamed ${r.from_value ? `from "${r.from_value}"` : ""} to "${r.to_value || "(blank)"}"`.trim(),
+        subtitle: null,
+      };
+    case "status_changed": {
+      const fromC = STATUS_DOT[r.from_value] || "#94A3B8";
+      const toC   = STATUS_DOT[r.to_value]   || "#94A3B8";
+      const by    = meta.computed_by === "rule_engine" ? "by rule engine" : "by user";
+      return {
+        color,
+        title: (
+          <span>
+            Status{" "}
+            <span style={{ color: fromC, fontWeight: 700 }}>{r.from_value || "—"}</span>
+            {" → "}
+            <span style={{ color: toC, fontWeight: 700 }}>{r.to_value || "—"}</span>
+          </span>
+        ),
+        subtitle: meta.reason ? `${by} · ${meta.reason}` : by,
+      };
+    }
+    case "zone_deleted":
+      return { color, title: "Zone soft-deleted", subtitle: "Links are preserved but hidden from overlay" };
+    case "link_added": {
+      const type = LINKABLE_TYPE_LABELS[meta.linked_record_type] || meta.linked_record_type || "record";
+      const src  = meta.link_source && meta.link_source !== "manual" ? ` (${meta.link_source})` : "";
+      const fromZone = meta.created_from_zone === "true" || meta.created_from_zone === true;
+      return {
+        color,
+        title: `Linked ${type}${src}`,
+        subtitle: fromZone ? "Created from this zone" : (meta.link_role && meta.link_role !== "related" ? `Role: ${meta.link_role}` : null),
+      };
+    }
+    case "link_removed": {
+      const type = LINKABLE_TYPE_LABELS[meta.linked_record_type] || meta.linked_record_type || "record";
+      return { color, title: `Unlinked ${type}`, subtitle: null };
+    }
+    default:
+      return { color, title: r.event_type, subtitle: null };
+  }
+}
+// Small relative-time helper, bounded to 30 days before falling back
+// to the absolute timestamp. Intentionally inline — this lives with
+// its one consumer.
+function formatRelative(iso) {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const ms = Date.now() - t;
+  if (ms < 30_000) return "just now";
+  const m = Math.floor(ms / 60_000); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);      if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);      if (d <= 30) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // ── Linked list (shared by RFI / WP / Delivery / Photo tabs) ────────
