@@ -8,6 +8,7 @@ import {
   resolveProjectForRfiLog,
   commitRfiLog,
 } from "@/lib/importRfiLog";
+import { readRfiCsvFile } from "@/lib/importRfiCsv";
 
 const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
@@ -38,15 +39,28 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
     setMatched(null); setChosen(projectId || null); setLastResult(null); setErr(null);
   };
 
+  // Files we accept: PDF (AI path) or CSV/TSV/TXT (plain parser, no AI).
+  // The CSV path is much more reliable and requires zero API credits —
+  // most GC tools (Procore, PlanGrid, Bluebeam) can export the RFI log
+  // directly as CSV.
+  const fileKind = (f) => {
+    if (!f) return null;
+    if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") return "pdf";
+    if (/\.(csv|tsv|txt)$/i.test(f.name) || f.type === "text/csv" || f.type === "application/csv" || f.type === "text/plain") return "csv";
+    return null;
+  };
+
   const acceptFile = (f) => {
     setErr(null);
     if (!f) return;
-    if (!/\.pdf$/i.test(f.name) && f.type !== "application/pdf") {
-      setErr("File must be a PDF.");
+    const kind = fileKind(f);
+    if (!kind) {
+      setErr("File must be a PDF or CSV.");
       return;
     }
-    if (f.size > 32 * 1024 * 1024) {
-      setErr("PDF exceeds 32 MB limit.");
+    const limit = kind === "pdf" ? 32 : 8;
+    if (f.size > limit * 1024 * 1024) {
+      setErr(`File exceeds ${limit} MB limit.`);
       return;
     }
     setFile(f);
@@ -56,9 +70,29 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
     if (!file) return;
     setStep("extracting"); setErr(null);
     try {
-      const up = await uploadRfiLog(file);
-      setUploaded(up);
-      const res = await extractRfiLog(up);
+      const kind = fileKind(file);
+      let res;
+      if (kind === "csv") {
+        // Plain-CSV path: parse client-side, no AI, no network except
+        // the eventual commit. Warnings are bubbled up so the user can
+        // see "we couldn't find a Subject column" etc.
+        res = await readRfiCsvFile(file);
+        setUploaded(null); // no upload needed for CSV
+        if (res.warnings?.length) {
+          console.warn("[RfiLogImport] CSV warnings:", res.warnings);
+        }
+        if (!res.rfis || res.rfis.length === 0) {
+          const detail = res.warnings?.length
+            ? ` ${res.warnings.join(" ")}`
+            : "";
+          throw new Error(`No RFI rows found in the CSV.${detail}`);
+        }
+      } else {
+        // PDF path: upload + AI extraction (legacy, requires API credits).
+        const up = await uploadRfiLog(file);
+        setUploaded(up);
+        res = await extractRfiLog(up);
+      }
       setParsed(res);
       const match = await resolveProjectForRfiLog(res.header?.job_number);
       if (match) {
@@ -161,7 +195,9 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                   background: "var(--bg-page)",
                 }}
               >
-                <input ref={fileInput} type="file" accept="application/pdf,.pdf" style={{ display: "none" }}
+                <input ref={fileInput} type="file"
+                       accept=".csv,.tsv,.txt,text/csv,application/csv,text/plain,application/pdf,.pdf"
+                       style={{ display: "none" }}
                        onChange={(e) => acceptFile(e.target.files?.[0])} />
                 {file ? (
                   <div>
@@ -170,15 +206,18 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                     <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
                       {(file.size / 1e6).toFixed(1)} MB — click to replace
                     </div>
+                    <div style={{ ...mono, fontSize: 9, color: fileKind(file) === "csv" ? "var(--status-success)" : AI, marginTop: 6, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                      {fileKind(file) === "csv" ? "CSV — parsed locally, no AI needed" : "PDF — will use AI extraction"}
+                    </div>
                   </div>
                 ) : (
                   <div>
                     <Upload size={24} color="var(--text-muted)" style={{ marginBottom: 8 }} />
                     <div style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                      Drop RFI log PDF here
+                      Drop RFI log CSV or PDF here
                     </div>
                     <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
-                      Any standard RFI-log format (SteelBuild Pro export, GC log, architect log). Max 32 MB.
+                      CSV is preferred — parsed instantly, no AI needed. Export from Procore, PlanGrid, Bluebeam, or "Save As CSV" from Excel. PDF also accepted (AI extraction, 32 MB max).
                     </div>
                   </div>
                 )}
@@ -192,7 +231,9 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                 ● READING LOG…
               </div>
               <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>
-                gpt-4o-mini pulls the header + every RFI row. Usually 5–15 seconds.
+                {fileKind(file) === "csv"
+                  ? "Parsing CSV locally — should be instant."
+                  : "AI pulls the header + every RFI row. Usually 5–15 seconds."}
               </div>
             </div>
           )}
