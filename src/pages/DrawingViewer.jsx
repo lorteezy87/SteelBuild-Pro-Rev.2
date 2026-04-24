@@ -250,8 +250,12 @@ export default function DrawingViewer() {
   // Three modes for the overlay:
   //   "off"  — hidden (default; viewer behaves as it always has)
   //   "view" — render saved zones; click → select, dbl-click → panel
-  //   "draw" — drag-create a new rectangle zone
+  //   "draw" — create a new zone; drawShape picks geometry
   const [zoneMode, setZoneMode] = useState("off");
+  // V2: drawShape picks rect (default, MVP behaviour) vs polygon
+  // (V2 irregular-area geometry). Lives at viewer level so it survives
+  // switches between draw ↔ view without being reset.
+  const [drawShape, setDrawShape] = useState("rect"); // "rect" | "polygon"
   const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [panelZoneId, setPanelZoneId] = useState(null);  // open in right-side ZonePanel
   // Filter state for the zone overlay (V1.5). statusSet=empty means
@@ -412,20 +416,33 @@ export default function DrawingViewer() {
     }
   }, [activeDrawing, qc]);
 
-  // Handler: user drag-created a new zone. Mint it with a default
-  // label = its zone_key so the user sees something immediately; they
-  // can rename in the detail panel (or later we'll prompt here).
-  const handleZoneDrawComplete = useCallback(async (bbox) => {
+  // Handler: user finished drawing a new zone. Payload carries the
+  // shape discriminator — "rect" with a bbox (MVP) or "polygon" with
+  // a points array (V2). Mint it with an auto zone_key; the detail
+  // panel lets the user rename afterwards.
+  const handleZoneDrawComplete = useCallback(async (payload) => {
     if (!currentRevision || !activeDrawing) return;
     try {
-      const created = await createZoneSvc({
-        projectId:  activeDrawing.project_id,
-        drawingId:  activeDrawing.id,
-        revisionId: currentRevision.id,
-        label:      "",  // service auto-names with zone_key when empty
-        xMin: bbox.xMin, yMin: bbox.yMin,
-        xMax: bbox.xMax, yMax: bbox.yMax,
-      });
+      let created;
+      if (payload?.shape === "polygon") {
+        created = await createZoneSvc({
+          projectId:  activeDrawing.project_id,
+          drawingId:  activeDrawing.id,
+          revisionId: currentRevision.id,
+          label:      "",
+          shapeType:  "polygon",
+          polygonPoints: payload.points,
+        });
+      } else {
+        created = await createZoneSvc({
+          projectId:  activeDrawing.project_id,
+          drawingId:  activeDrawing.id,
+          revisionId: currentRevision.id,
+          label:      "",
+          xMin: payload.xMin, yMin: payload.yMin,
+          xMax: payload.xMax, yMax: payload.yMax,
+        });
+      }
       toast.success(`Zone ${created.zone_key} created`);
       setSelectedZoneId(created.id);
       // Drop back to view mode so the user can see their new zone.
@@ -1158,6 +1175,53 @@ export default function DrawingViewer() {
                   </button>
                 );
               })}
+              {/* Shape chooser — only relevant while DRAW is active.
+                  Rectangle is fastest (drag) and polygon is for
+                  irregular zones like erection bays or stair cores.
+                  Hidden outside of DRAW mode to keep the toolbar quiet. */}
+              {zoneMode === "draw" && (
+                <div
+                  role="group"
+                  aria-label="Zone shape"
+                  style={{
+                    display: "flex",
+                    gap: 4,
+                    marginLeft: 4,
+                    paddingLeft: 6,
+                    borderLeft: "1px solid var(--border-default)",
+                  }}
+                  title="Shape to draw"
+                >
+                  {[
+                    { id: "rect",    label: "▭", desc: "Rectangle — drag to create" },
+                    { id: "polygon", label: "⬠", desc: "Polygon — click to add vertices, Enter/double-click to finish, Esc to cancel" },
+                  ].map((s) => {
+                    const isActive = drawShape === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setDrawShape(s.id)}
+                        title={s.desc}
+                        style={{
+                          padding: "5px 8px",
+                          border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
+                          background: isActive
+                            ? "rgba(0,229,255,0.14)"
+                            : "transparent",
+                          color: isActive ? "#00E5FF" : "var(--text-muted)",
+                          borderRadius: 3,
+                          fontSize: 12,
+                          lineHeight: 1,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Revision carry-forward — only offered when there's at
                   least one zone to carry. Invisible on a brand-new
                   sheet so the chrome stays quiet. */}
@@ -1365,6 +1429,7 @@ export default function DrawingViewer() {
                     drawingHub.createZone and snaps back to "view". */}
                 <ZoneLayer
                   mode={zoneMode}
+                  drawShape={drawShape}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
                   zones={filteredZones}
