@@ -329,6 +329,14 @@ export const entities = {
   },
   ChangeOrder:           createEntityClient('change_orders'),
   ChangeRequest:         createEntityClient('change_requests'),
+  // ── Drawing-centered execution (MVP Slice 0) ────────────────────
+  // Three tables that turn the Drawing Viewer into a coordination hub:
+  // every rectangular zone on a sheet revision can link to RFIs, work
+  // packages, deliveries, photos, inspections, etc. via a polymorphic
+  // join. RLS gates all three on user_has_project_access(project_id).
+  DrawingRevision:       createEntityClient('drawing_revisions'),
+  DrawingZone:           createEntityClient('drawing_zones'),
+  DrawingLink:           createEntityClient('drawing_links'),
   ScheduleTask:          createEntityClient('schedule_tasks'),
   TaskDependency:        createEntityClient('task_dependencies'),
   Submittal:             createEntityClient('submittals'),
