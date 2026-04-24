@@ -616,6 +616,81 @@ function _hydratedToArray(h) {
   return [];
 }
 
+// ── Heatmap density (V2) ─────────────────────────────────────────────
+//
+// Each zone also carries a "density" score — a weighted sum of the
+// unresolved issues attached to it. The heatmap toggle on the Drawing
+// Viewer recolors every zone by this score instead of by status, so
+// a PM can see at a glance which part of the sheet is swallowing the
+// most coordination load.
+//
+// Weights reflect how painful each kind of issue usually is on a
+// steel project:
+//   overdue RFI            5   (waiting on info → blocks everything)
+//   failed inspection      4   (cannot proceed until resolved)
+//   blocked work package   4
+//   late delivery          3
+//   open RFI (in-window)   2
+//   pending delivery       1
+//   active WP              1
+//   any other link         0.25 (photos, logs — adds texture, not pain)
+//
+// The numbers are intentionally small integers rather than floats so
+// the resulting density value is easy to reason about in the debugger.
+// Returns 0 for a zone with no links — the heatmap renders those as
+// fully transparent (cool).
+const HEATMAP_WEIGHTS = {
+  rfiOverdue:     5,
+  inspFailed:     4,
+  wpBlocked:      4,
+  delLate:        3,
+  rfiOpen:        2,
+  delPending:     1,
+  wpActive:       1,
+  otherActivity:  0.25,
+};
+
+export function computeZoneDensity(hydrated) {
+  const items = _hydratedToArray(hydrated).filter(
+    (x) => x.link && (x.link.is_confirmed === undefined || x.link.is_confirmed === true) && !x.link.removed_at,
+  );
+  let score = 0;
+  for (const { link, record } of items) {
+    if (!record) continue;
+    const status = String(record.status || "").trim();
+    switch (link.linked_record_type) {
+      case "rfi": {
+        if (IS_RFI_RESOLVED(status)) break;
+        const due = _daysUntil(record.date_required, new Date());
+        if (due !== null && due < 0) score += HEATMAP_WEIGHTS.rfiOverdue;
+        else score += HEATMAP_WEIGHTS.rfiOpen;
+        break;
+      }
+      case "inspection": {
+        if (IS_INSP_FAILED(status) && !record.resolved_at) score += HEATMAP_WEIGHTS.inspFailed;
+        else score += HEATMAP_WEIGHTS.otherActivity;
+        break;
+      }
+      case "work_package": {
+        if (IS_WP_BLOCKED(status)) score += HEATMAP_WEIGHTS.wpBlocked;
+        else if (IS_WP_ACTIVE(status)) score += HEATMAP_WEIGHTS.wpActive;
+        else score += HEATMAP_WEIGHTS.otherActivity;
+        break;
+      }
+      case "delivery": {
+        if (IS_DEL_DONE(status)) break;
+        if (IS_DEL_EXCEPTION(status)) score += HEATMAP_WEIGHTS.delLate;
+        else score += HEATMAP_WEIGHTS.delPending;
+        break;
+      }
+      default:
+        score += HEATMAP_WEIGHTS.otherActivity;
+        break;
+    }
+  }
+  return score;
+}
+
 // ── Readiness scoring (V2) ───────────────────────────────────────────
 //
 // Each zone carries three companion scores — Fabrication, Delivery,

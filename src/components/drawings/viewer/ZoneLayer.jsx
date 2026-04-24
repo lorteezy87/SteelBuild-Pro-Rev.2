@@ -49,6 +49,8 @@ const CLOSE_RADIUS = 10; // px tolerance for "click back on first vertex to clos
 export default function ZoneLayer({
   mode = "view",            // "off" | "view" | "draw"
   drawShape = "rect",       // "rect" | "polygon" — only consulted in draw mode
+  overlay = "status",       // "status" | "heatmap" — V2 render style for view mode
+  zoneDensities,            // Map<zone_id, number> — only consulted when overlay==="heatmap"
   canvasWidth,
   canvasHeight,
   zones = [],               // drawing_zone rows (active + current revision)
@@ -225,12 +227,65 @@ export default function ZoneLayer({
     return segs.join(" ");
   }, [polyDraft]);
 
+  // Heatmap normalization. Max density across the visible zones drives
+  // the top of the color ramp — that way an "everything cool" sheet
+  // doesn't render as all red just because its worst zone scored 3.
+  // Floor the max at HEATMAP_MIN so a sheet with density [0,0,1] still
+  // shows the one hot zone as clearly warm instead of max-red.
+  const HEATMAP_MIN = 5;
+  const maxDensity = useMemo(() => {
+    if (overlay !== "heatmap" || !zoneDensities) return 0;
+    let m = 0;
+    for (const z of zones) {
+      const d = zoneDensities.get?.(z.id) || 0;
+      if (d > m) m = d;
+    }
+    return Math.max(HEATMAP_MIN, m);
+  }, [overlay, zoneDensities, zones]);
+
+  // Heat ramp: cool-transparent at 0 → amber at mid → red at max.
+  // Returns { fill, border } that mirrors the STATUS_COLORS shape so
+  // the downstream render path doesn't need to branch on overlay mode.
+  const heatPalette = (density) => {
+    if (!density || density <= 0) {
+      return { fill: "rgba(148,163,184,0.05)", border: "rgba(148,163,184,0.35)" };
+    }
+    const t = Math.max(0, Math.min(1, density / (maxDensity || 1)));
+    // Interpolate: cool blue (low) → amber (mid) → red (high). Three
+    // stops keep the transition readable at a glance.
+    // Stops in RGB:
+    //   0.0: 59,130,246  (blue-500)
+    //   0.5: 245,158,11  (amber-500)
+    //   1.0: 239,68,68   (red-500)
+    let r, g, b;
+    if (t < 0.5) {
+      const k = t / 0.5;
+      r = Math.round(59  + (245 - 59)  * k);
+      g = Math.round(130 + (158 - 130) * k);
+      b = Math.round(246 + (11  - 246) * k);
+    } else {
+      const k = (t - 0.5) / 0.5;
+      r = Math.round(245 + (239 - 245) * k);
+      g = Math.round(158 + (68  - 158) * k);
+      b = Math.round(11  + (68  - 11)  * k);
+    }
+    const alphaFill   = 0.15 + 0.30 * t; // 0.15 → 0.45 so hot zones pop
+    const alphaBorder = 0.70 + 0.30 * t;
+    return {
+      fill:   `rgba(${r},${g},${b},${alphaFill})`,
+      border: `rgba(${r},${g},${b},${alphaBorder})`,
+    };
+  };
+
   // Pre-compute zone rendering payload so the JSX below isn't a maze.
   // For rectangles we emit a <rect>; for polygons we emit a <polygon>.
   // The label chip uses the bbox (x_min/y_min/x_max/y_max) either way
   // so positioning stays consistent.
   const zoneShapes = useMemo(() => zones.map((z) => {
-    const palette = STATUS_COLORS[z.status] || STATUS_COLORS.neutral;
+    const density = zoneDensities?.get?.(z.id) || 0;
+    const palette = overlay === "heatmap"
+      ? heatPalette(density)
+      : (STATUS_COLORS[z.status] || STATUS_COLORS.neutral);
     const xPx = z.x_min * canvasWidth;
     const yPx = z.y_min * canvasHeight;
     const wPx = (z.x_max - z.x_min) * canvasWidth;
@@ -242,8 +297,11 @@ export default function ZoneLayer({
     const polygonAttr = isPolygon
       ? z.polygon_points.map(([x, y]) => `${x * canvasWidth},${y * canvasHeight}`).join(" ")
       : null;
-    return { z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr };
-  }), [zones, canvasWidth, canvasHeight, selectedZoneId, zoneSummaries]);
+    return { z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr, density };
+    // maxDensity closes over heatPalette; adding it keeps the memo
+    // honest when densities shift under the component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [zones, canvasWidth, canvasHeight, selectedZoneId, zoneSummaries, overlay, zoneDensities, maxDensity]);
 
   if (!active) return null;
 
@@ -275,7 +333,7 @@ export default function ZoneLayer({
       onDoubleClick={onDoubleClick}
       onMouseLeave={onMouseUp /* commit rect draft on leave so a quick off-canvas drag doesn't leave a phantom */}
     >
-      {zoneShapes.map(({ z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr }) => (
+      {zoneShapes.map(({ z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr, density }) => (
         <g
           key={z.id}
           style={{ pointerEvents: shapePointerEvents, cursor: "pointer" }}
@@ -283,7 +341,7 @@ export default function ZoneLayer({
           onDoubleClick={(ev) => { ev.stopPropagation(); onOpenZone?.(z.id); }}
         >
           <title>
-            {`${z.zone_key} · ${z.label}${count ? ` — ${count} linked item${count !== 1 ? "s" : ""}` : " — no links yet"}`}
+            {`${z.zone_key} · ${z.label}${count ? ` — ${count} linked item${count !== 1 ? "s" : ""}` : " — no links yet"}${overlay === "heatmap" ? ` · density ${density.toFixed(1)}` : ""}`}
           </title>
           {isPolygon ? (
             <polygon
@@ -291,7 +349,7 @@ export default function ZoneLayer({
               fill={palette.fill}
               stroke={palette.border}
               strokeWidth={isSelected ? 3 : 1.75}
-              strokeDasharray={z.status === "neutral" ? "4 3" : undefined}
+              strokeDasharray={overlay !== "heatmap" && z.status === "neutral" ? "4 3" : undefined}
               style={{ transition: "stroke-width 0.1s" }}
             />
           ) : (
@@ -300,7 +358,7 @@ export default function ZoneLayer({
               fill={palette.fill}
               stroke={palette.border}
               strokeWidth={isSelected ? 3 : 1.75}
-              strokeDasharray={z.status === "neutral" ? "4 3" : undefined}
+              strokeDasharray={overlay !== "heatmap" && z.status === "neutral" ? "4 3" : undefined}
               rx={2}
               ry={2}
               style={{ transition: "stroke-width 0.1s" }}
