@@ -23,6 +23,8 @@ import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
+import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
+import { listZoneProposals } from "@/lib/drawingHub";
 import {
   ensureCurrentRevision,
   listZones,
@@ -267,6 +269,12 @@ export default function DrawingViewer() {
   // "no status filter" = show all; typeKey="all" = show all types.
   // Lives at viewer level so it survives mode flips and panel opens.
   const [zoneFilter, setZoneFilter] = useState({ statusSet: new Set(), typeKey: "all" });
+  // V3.0 — Drawing Hub Analyzer→Zones bridge. ProposalPanel is a
+  // separate right-side drawer (mutually exclusive with ZonePanel).
+  // hoveredProposal is the row the user is hovering in the panel —
+  // we surface its bbox on the canvas via ZoneLayer.proposalOverlays.
+  const [proposalPanelOpen, setProposalPanelOpen] = useState(false);
+  const [hoveredProposal, setHoveredProposal] = useState(null);
 
   // Resolve (or create) the drawing_revisions row that zones attach to.
   // MVP: every drawing gets a v1 revision the first time the user opens
@@ -287,6 +295,23 @@ export default function DrawingViewer() {
     enabled: !!currentRevision?.id,
     staleTime: 30 * 1000,
   });
+
+  // V3.0 — pending proposal count for the drawer-launcher badge.
+  // Quiet query (limit:1) just to read the total; the panel itself
+  // refetches the full list when it opens.
+  const { data: proposalCountData } = useQuery({
+    queryKey: ["drawing-zone-proposals-count", projectId, activeDrawing?.id, currentRevision?.id || null],
+    queryFn: () => listZoneProposals({
+      projectId,
+      drawingId:         activeDrawing.id,
+      drawingRevisionId: currentRevision?.id || undefined,
+      status:            "pending",
+      limit:             1,
+    }),
+    enabled: !!projectId && !!activeDrawing?.id,
+    staleTime: 30 * 1000,
+  });
+  const pendingProposalCount = proposalCountData?.total ?? 0;
 
   // Link-count summaries keyed by zone id — used by the label chip to
   // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
@@ -1261,6 +1286,49 @@ export default function DrawingViewer() {
                 </div>
               )}
 
+              {/* V3.0 — Proposals drawer launcher. Always visible in
+                  zone-mode so a PM can review AI-suggested zones without
+                  needing to draw any zones first. Badge shows pending
+                  count on this drawing. */}
+              {activeDrawing && (
+                <button
+                  onClick={() => setProposalPanelOpen((v) => !v)}
+                  title="Open the AI proposals drawer — zones suggested by clustering analyzer findings"
+                  style={{
+                    padding: "5px 10px",
+                    border: `1px solid ${proposalPanelOpen ? "#00E5FF" : "transparent"}`,
+                    background: proposalPanelOpen
+                      ? "rgba(0,229,255,0.14)"
+                      : pendingProposalCount > 0 ? "rgba(0,229,255,0.06)" : "transparent",
+                    color: proposalPanelOpen || pendingProposalCount > 0 ? "#00E5FF" : "var(--text-muted)",
+                    borderRadius: 3,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.10em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    marginLeft: 4,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  PROPOSALS
+                  {pendingProposalCount > 0 && (
+                    <span style={{
+                      ...mono,
+                      fontSize: 9,
+                      padding: "1px 5px",
+                      borderRadius: 8,
+                      background: "#00E5FF",
+                      color: "#0F1118",
+                    }}>
+                      {pendingProposalCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
               {/* Revision carry-forward — only offered when there's at
                   least one zone to carry. Invisible on a brand-new
                   sheet so the chrome stays quiet. */}
@@ -1479,6 +1547,15 @@ export default function DrawingViewer() {
                   onSelectZone={setSelectedZoneId}
                   onOpenZone={(zid) => { setSelectedZoneId(zid); setPanelZoneId(zid); }}
                   onDrawComplete={handleZoneDrawComplete}
+                  proposalOverlays={hoveredProposal ? [{
+                    id: hoveredProposal.id,
+                    x_min: Number(hoveredProposal.x_min),
+                    y_min: Number(hoveredProposal.y_min),
+                    x_max: Number(hoveredProposal.x_max),
+                    y_max: Number(hoveredProposal.y_max),
+                    status: hoveredProposal.status,
+                    label: hoveredProposal.suggested_label,
+                  }] : []}
                 />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
@@ -1590,6 +1667,26 @@ export default function DrawingViewer() {
           zone edits (rename, status change, delete) flow through here.
           Updates persist via drawingHub and invalidate the zone / link
           queries so the overlay count badges stay in sync. */}
+      {/* V3.0 — Drawing Hub Analyzer→Zones bridge drawer. Sits in the
+          same right-side slot as ZonePanel; the two are mutually
+          exclusive — opening one closes the other so the canvas isn't
+          covered by two stacked drawers. */}
+      <ProposalPanel
+        open={proposalPanelOpen && !panelZoneId}
+        onClose={() => { setProposalPanelOpen(false); setHoveredProposal(null); }}
+        projectId={projectId}
+        drawing={activeDrawing}
+        drawingRevisionId={currentRevision?.id}
+        analysisId={null /* viewer doesn't currently know which analysis is active; service falls back to "all findings on this drawing" */}
+        userId={null}
+        onHoverProposal={setHoveredProposal}
+        onProposalsChange={() => {
+          // Refetch zones so accept/merge results show on the canvas
+          // immediately. Counts query auto-invalidates via the mutation.
+          refetchZones();
+        }}
+      />
+
       <ZonePanel
         zone={panelZoneId ? zones.find((z) => z.id === panelZoneId) : null}
         sheet={currentRevision
