@@ -36,6 +36,7 @@ import {
   LINKABLE_TYPE_LABELS,
   ALL_STATUSES,
   computeZoneStatus,
+  computeZoneReadiness,
   recomputeAndPersistZoneStatus,
 } from "@/lib/drawingHub";
 
@@ -123,6 +124,15 @@ export default function ZonePanel({
   // the header when the rule engine disagrees with the stored status.
   const computed = useMemo(
     () => computeZoneStatus(linkedItems),
+    [linkedItems]
+  );
+
+  // V2 — readiness scoring. Three companion percentages (Fabrication /
+  // Delivery / Erection) that answer "can we proceed?" rather than "is
+  // something on fire?". Null when there's no upstream signal — the
+  // gauges render a dash in that case so we don't fake a 0% / 100%.
+  const readiness = useMemo(
+    () => computeZoneReadiness(linkedItems),
     [linkedItems]
   );
 
@@ -429,6 +439,7 @@ export default function ZonePanel({
               items={linkedItems}
               counts={counts}
               computed={computed}
+              readiness={readiness}
               onApplyComputed={async () => {
                 try {
                   await onZoneUpdate?.({
@@ -905,7 +916,91 @@ function buildRfiDrawingReference(zone, sheet) {
 }
 
 // ── Overview tab ─────────────────────────────────────────────────────
-function OverviewTab({ zone, items, counts, computed, onApplyComputed }) {
+// ── Readiness ring gauge ─────────────────────────────────────────────
+// Tiny SVG ring used by the Overview tab. Renders a background track
+// + foreground arc filled in proportion to `pct` (0–100). Null pct
+// shows a dashed placeholder so "no data" is visually distinct from
+// "0%". Color threshold buckets roughly track the zone status palette
+// so a low-readiness gauge visually agrees with a red/amber status.
+function ReadinessRing({ pct, label, drivers = [] }) {
+  const SIZE = 56;
+  const STROKE = 6;
+  const R = (SIZE - STROKE) / 2;
+  const C = 2 * Math.PI * R;
+  const hasData = pct !== null && pct !== undefined;
+  const safe = hasData ? Math.max(0, Math.min(100, pct)) : 0;
+  const color =
+    !hasData ? "#94A3B8" :
+    safe >= 80 ? "#22C55E" :
+    safe >= 50 ? "#F59E0B" :
+                 "#EF4444";
+  const title = drivers.length > 0
+    ? `${label}: ${hasData ? `${safe}%` : "no data"}\n· ${drivers.join("\n· ")}`
+    : `${label}: ${hasData ? `${safe}%` : "no data"}`;
+  return (
+    <div
+      title={title}
+      style={{
+        padding: "10px 10px 8px",
+        background: "var(--bg-page)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 3,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+      }}
+    >
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ display: "block" }}>
+        <circle
+          cx={SIZE / 2} cy={SIZE / 2} r={R}
+          fill="none"
+          stroke="var(--divider)"
+          strokeWidth={STROKE}
+          strokeDasharray={hasData ? undefined : "3 3"}
+        />
+        {hasData && (
+          <circle
+            cx={SIZE / 2} cy={SIZE / 2} r={R}
+            fill="none"
+            stroke={color}
+            strokeWidth={STROKE}
+            strokeDasharray={`${(safe / 100) * C} ${C}`}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            style={{ transition: "stroke-dasharray 0.25s ease" }}
+          />
+        )}
+        <text
+          x={SIZE / 2} y={SIZE / 2 + 4}
+          textAnchor="middle"
+          fontFamily="var(--font-mono, monospace)"
+          fontSize={hasData ? 13 : 10}
+          fontWeight={800}
+          fill={hasData ? "var(--text-primary)" : "var(--text-muted)"}
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {hasData ? `${safe}%` : "—"}
+        </text>
+      </svg>
+      <div
+        style={{
+          ...mono,
+          fontSize: 9,
+          fontWeight: 700,
+          color: "var(--text-muted)",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          textAlign: "center",
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({ zone, items, counts, computed, readiness, onApplyComputed }) {
   const rfiOpen = items.filter((i) => i.link.linked_record_type === "rfi" && i.record && !/^(answered|closed|void)$/i.test(i.record.status || "")).length;
   const wpActive = items.filter((i) => i.link.linked_record_type === "work_package" && i.record && /In Progress|Active|Fabrication|Erection|Installation/i.test(i.record.status || "")).length;
   const delPending = items.filter((i) => i.link.linked_record_type === "delivery" && i.record && !/Delivered|Received/i.test(i.record.status || "")).length;
@@ -928,8 +1023,41 @@ function OverviewTab({ zone, items, counts, computed, onApplyComputed }) {
     blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
   }[computed?.status] || "#94A3B8";
 
+  // Show the readiness block only when at least one of the three scores
+  // has an actual value — if every gauge would be a dash, the block is
+  // noise and we hide it entirely.
+  const hasAnyReadiness = readiness && (
+    readiness.fabrication !== null ||
+    readiness.delivery !== null ||
+    readiness.erection !== null
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {hasAnyReadiness && (
+        <>
+          <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Readiness
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <ReadinessRing
+              pct={readiness.fabrication}
+              label="Fabrication"
+              drivers={readiness.drivers?.fabrication || []}
+            />
+            <ReadinessRing
+              pct={readiness.delivery}
+              label="Delivery"
+              drivers={readiness.drivers?.delivery || []}
+            />
+            <ReadinessRing
+              pct={readiness.erection}
+              label="Erection"
+              drivers={readiness.drivers?.erection || []}
+            />
+          </div>
+        </>
+      )}
       <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
         Linked activity
       </div>
