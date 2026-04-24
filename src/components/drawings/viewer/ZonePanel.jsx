@@ -22,8 +22,10 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, Search, ExternalLink, Trash2 } from "lucide-react";
+import { X, Search, ExternalLink, Trash2, FilePlus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import RFIFormModal from "@/components/rfis/RFIFormModal";
+import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import {
   listLinksForZones,
   hydrateLinks,
@@ -69,6 +71,7 @@ const PICKER_TYPES = [
 
 export default function ZonePanel({
   zone,
+  sheet,          // { sheet_number, sheet_title, revision_code } — from DrawingViewer
   open,
   onClose,
   onZoneUpdate,   // (patch) => Promise — parent handles DB update + refetch
@@ -77,6 +80,8 @@ export default function ZonePanel({
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [linkerOpen, setLinkerOpen] = useState(false);
+  const [rfiFormOpen, setRfiFormOpen] = useState(false);
+  const [rfiSaving, setRfiSaving] = useState(false);
   const [editingLabel, setEditingLabel] = useState(false);
   const [labelDraft, setLabelDraft] = useState("");
 
@@ -295,6 +300,28 @@ export default function ZonePanel({
             >
               + Link Record
             </button>
+            {/* Create a fresh RFI pre-filled with this zone's sheet +
+                zone_key as the drawing_reference, then auto-link the
+                new RFI to this zone on save. Core "create from area"
+                action — the whole point of the V1.5 slice. */}
+            <button
+              onClick={() => setRfiFormOpen(true)}
+              title={`Create a new RFI referencing ${zone.zone_key}${sheet?.sheet_number ? ` on sheet ${sheet.sheet_number}` : ""}`}
+              style={{
+                ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                padding: "4px 10px",
+                background: "transparent",
+                color: "var(--accent)",
+                border: "1px solid var(--accent)",
+                borderRadius: 3,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <FilePlus size={11} /> New RFI
+            </button>
             <button
               onClick={async () => {
                 if (!window.confirm(`Delete zone ${zone.zone_key}? Links will be preserved but hidden.`)) return;
@@ -418,9 +445,115 @@ export default function ZonePanel({
             }}
           />
         )}
+
+        {/* Create-RFI-from-zone modal. The RFIFormModal is a shared
+            component used elsewhere in the app; we wrap it with a
+            custom onSave that handles the "mint RFI + link it to this
+            zone" sequence so the user never has to drill across pages. */}
+        {rfiFormOpen && (
+          <RFIFormModal
+            projectId={zone.project_id}
+            saving={rfiSaving}
+            rfi={null}
+            initialDrawingReference={buildRfiDrawingReference(zone, sheet)}
+            onClose={() => setRfiFormOpen(false)}
+            onSave={async (formData) => {
+              setRfiSaving(true);
+              try {
+                // Mint a project-scoped RFI number — mirrors the
+                // existing RFIFormModal internal path so numbering
+                // stays consistent whether the RFI was created from
+                // the zone panel or the main RFIs page.
+                let rfiNumber;
+                try {
+                  rfiNumber = await getNextFormattedNumber({
+                    projectId: zone.project_id,
+                    recordType: "RFI",
+                    entityName: "RFI",
+                    fieldName: "rfi_number",
+                    prefix: "RFI #",
+                  });
+                } catch (err) {
+                  console.warn("[ZonePanel] rfi_number sequence failed:", err?.message);
+                  rfiNumber = `RFI #${String(Date.now()).slice(-6)}`;
+                }
+
+                // Coerce optional numeric fields the same way
+                // RFIFormModal's internal mutation does.
+                const payload = {
+                  ...formData,
+                  project_id: zone.project_id,
+                  rfi_number: rfiNumber,
+                  cost_impact_amount:
+                    formData.cost_impact_amount === "" ? null
+                      : formData.cost_impact_amount !== undefined ? Number(formData.cost_impact_amount) : null,
+                  schedule_impact_days:
+                    formData.schedule_impact_days === "" ? null
+                      : formData.schedule_impact_days !== undefined ? Number(formData.schedule_impact_days) : null,
+                };
+                const newRfi = await base44.entities.RFI.create(payload);
+
+                // Link it to the zone (manual source, related role).
+                // If this fails we surface a toast but don't roll back
+                // the RFI itself — the user still has a valid record,
+                // they can manually link it from the Linker later.
+                try {
+                  await createLinkSvc({
+                    projectId:  zone.project_id,
+                    zone,
+                    recordType: "rfi",
+                    recordId:   newRfi.id,
+                    linkRole:   "related",
+                    linkSource: "manual",
+                    metadata:   { created_from_zone: true },
+                  });
+                } catch (err) {
+                  toast.warning(`RFI ${rfiNumber} created, but auto-link failed: ${err?.message || "unknown"}`);
+                }
+
+                toast.success(`${rfiNumber} created and linked to ${zone.zone_key}`);
+                qc.invalidateQueries({ queryKey: ["rfis"] });
+                qc.invalidateQueries({ queryKey: ["rfis", zone.project_id] });
+                await afterLinksChanged();
+                setRfiFormOpen(false);
+              } catch (err) {
+                toast.error(`Failed to create RFI: ${err?.message || "unknown error"}`);
+              } finally {
+                setRfiSaving(false);
+              }
+            }}
+          />
+        )}
       </aside>
     </>
   );
+}
+
+/**
+ * Compose the drawing_reference string that pre-fills the RFI form.
+ * Format: "S-402 Rev A · Z-003 Level 2 / Grid C-5"
+ * Caller passes whichever of sheet_number / sheet_title / revision_code
+ * are known; missing pieces are skipped cleanly.
+ */
+function buildRfiDrawingReference(zone, sheet) {
+  if (!zone) return "";
+  const parts = [];
+  if (sheet?.sheet_number) {
+    parts.push(
+      sheet.revision_code
+        ? `${sheet.sheet_number} Rev ${sheet.revision_code}`
+        : sheet.sheet_number,
+    );
+  }
+  const zoneParts = [zone.zone_key, zone.label && zone.label !== zone.zone_key ? zone.label : null].filter(Boolean).join(" ");
+  if (zoneParts) parts.push(zoneParts);
+  const refs = [
+    zone.level_ref ? `Level ${zone.level_ref}` : null,
+    zone.grid_ref  ? `Grid ${zone.grid_ref}`   : null,
+    zone.detail_ref ? `Detail ${zone.detail_ref}` : null,
+  ].filter(Boolean).join(" / ");
+  if (refs) parts.push(refs);
+  return parts.join(" · ");
 }
 
 // ── Overview tab ─────────────────────────────────────────────────────
