@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
+import {
+  DETAILING_STAGE_GATES,
+  DETAILING_STAGE_META,
+  getStageDates,
+  applyStageDatesToTask,
+  usesStageDates,
+} from '../../lib/stageDates';
 
 /**
  * Parse the `dependencies` TEXT column.
@@ -18,18 +25,31 @@ function parseDeps(raw) {
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
+  // Local editable copy of the detailing stage-gate dates. Mirrors
+  // formData.metadata.stage_dates but lives in its own state so the
+  // 4-field panel can update one gate at a time without round-tripping
+  // through the whole metadata object on every keystroke.
+  const [stageDates, setStageDates] = useState(() => getStageDates(task));
 
   useEffect(() => {
     setFormData(task || {});
+    setStageDates(getStageDates(task));
   }, [task]);
 
   if (!open || !task) return null;
 
+  const isDetailing = usesStageDates(formData);
+
   const handleSave = () => {
     if (!onUpdate) return;
+    // For Detailing tasks we derive start_date, end_date, and
+    // metadata.detailing_stage from the stage-gate dates so the
+    // rest of the Gantt (overdue logic, bar placement, stage chip)
+    // keeps working without per-phase branches downstream.
+    const patch = isDetailing ? applyStageDatesToTask(formData, stageDates) : {};
     // Build clean payload with only DB-valid fields
     const { id, created_at, updated_at, created_date, updated_date, ...rest } = formData;
-    onUpdate({ ...rest, id: task.id });
+    onUpdate({ ...rest, ...patch, id: task.id });
   };
 
   const duration = calculateTaskDuration(formData.start_date, formData.end_date);
@@ -201,11 +221,26 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
               </div>
 
-              {/* Right column */}
+              {/* Right column — Detailing tasks swap the single
+                  start/end date pair for four stage-gate dates
+                  (OFA / BFA / FFF / Released). The Gantt bar still
+                  renders from start_date/end_date, which we derive
+                  from the filled gates at save time. */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
-                <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
-                <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
+                {isDetailing ? (
+                  <StageGateDates
+                    stageDates={stageDates}
+                    onChange={setStageDates}
+                    derivedStart={formData.start_date}
+                    derivedEnd={formData.end_date}
+                  />
+                ) : (
+                  <>
+                    <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
+                    <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
+                    <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
+                  </>
+                )}
                 <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
                 <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
               </div>
@@ -417,6 +452,142 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Detailing stage-gate date panel ───────────────────────────────────
+//
+// Four date pickers, one per gate (OFA → BFA → FFF → Released), plus a
+// read-only derived Start/Finish line so the user can see the Gantt
+// bar anchors that will land on save. Each gate row shows its caption
+// ("Back from Approval") so new PMs don't have to memorise the
+// acronyms. A "Clear" affordance per row wipes that single gate
+// without disturbing the others.
+function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
+  const setGate = (gate, iso) => {
+    const next = { ...stageDates };
+    if (iso) next[gate] = iso;
+    else delete next[gate];
+    onChange(next);
+  };
+  const filled = DETAILING_STAGE_GATES.filter((g) => stageDates[g]);
+  // Derived preview: earliest filled = bar start, latest = bar end.
+  // Mirrors applyStageDatesToTask's logic; shown live so the user
+  // doesn't have to save-and-look to understand the effect.
+  const sorted = [...filled].sort((a, b) => (stageDates[a] || '').localeCompare(stageDates[b] || ''));
+  const previewStart = sorted[0] ? stageDates[sorted[0]] : null;
+  const previewEnd   = sorted.length ? stageDates[sorted[sorted.length - 1]] : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.14em',
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+      }}>
+        Detailing Stage Dates
+      </div>
+      {DETAILING_STAGE_GATES.map((gate) => {
+        const meta = DETAILING_STAGE_META[gate];
+        const value = stageDates[gate] || '';
+        return (
+          <div
+            key={gate}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '88px 1fr auto',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              background: value
+                ? `color-mix(in srgb, ${meta.color} 8%, var(--bg-surface-low))`
+                : 'var(--bg-surface-low)',
+              border: `1px solid ${value ? meta.color : 'var(--border-default)'}`,
+              borderRadius: 6,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                fontWeight: 800,
+                color: meta.color,
+                letterSpacing: '0.08em',
+              }}>
+                {meta.label}
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 9,
+                color: 'var(--text-muted)',
+                lineHeight: 1.2,
+              }}>
+                {meta.caption}
+              </span>
+            </div>
+            <input
+              type="date"
+              value={value}
+              onChange={(e) => setGate(gate, e.target.value)}
+              style={{
+                width: '100%',
+                background: 'var(--bg-surface-low)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 4,
+                padding: '5px 8px',
+                fontFamily: 'var(--font-body)',
+                fontSize: 11,
+                color: 'var(--text-primary)',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setGate(gate, null)}
+              disabled={!value}
+              aria-label={`Clear ${gate}`}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: value ? 'var(--text-muted)' : 'var(--divider)',
+                cursor: value ? 'pointer' : 'not-allowed',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                padding: '2px 6px',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      {/* Derived anchors — helps the user understand how the Gantt bar
+          will be placed without saving first. Prefers the live preview
+          (which reflects unsaved edits) over the persisted derivedStart
+          / derivedEnd props, so the hint stays in sync with what they
+          just typed. */}
+      <div
+        style={{
+          marginTop: 2,
+          padding: '6px 8px',
+          background: 'var(--bg-page)',
+          border: '1px dashed var(--divider)',
+          borderRadius: 4,
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--text-muted)',
+          letterSpacing: '0.04em',
+        }}
+      >
+        <span>Bar start {previewStart || derivedStart || '—'}</span>
+        <span>Bar end {previewEnd || derivedEnd || '—'}</span>
+      </div>
     </div>
   );
 }
