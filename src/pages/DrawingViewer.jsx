@@ -22,6 +22,7 @@ import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
+import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import {
   ensureCurrentRevision,
   listZones,
@@ -252,6 +253,10 @@ export default function DrawingViewer() {
   const [zoneMode, setZoneMode] = useState("off");
   const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [panelZoneId, setPanelZoneId] = useState(null);  // open in right-side ZonePanel
+  // Filter state for the zone overlay (V1.5). statusSet=empty means
+  // "no status filter" = show all; typeKey="all" = show all types.
+  // Lives at viewer level so it survives mode flips and panel opens.
+  const [zoneFilter, setZoneFilter] = useState({ statusSet: new Set(), typeKey: "all" });
 
   // Resolve (or create) the drawing_revisions row that zones attach to.
   // MVP: every drawing gets a v1 revision the first time the user opens
@@ -347,6 +352,29 @@ export default function DrawingViewer() {
       return { ...z, status: c.status };
     });
   }, [zones, zoneComputed]);
+
+  // Status counts over the live (post-compute) zones — feeds the
+  // filter bar chips ("red · 3") and the summary "X/Y visible" label.
+  const zoneStatusCounts = useMemo(() => {
+    const out = {};
+    for (const z of zonesWithComputed) {
+      out[z.status] = (out[z.status] || 0) + 1;
+    }
+    return out;
+  }, [zonesWithComputed]);
+
+  // Apply the filter bar's choices. Empty statusSet = "no filter".
+  const filteredZones = useMemo(() => {
+    const { statusSet, typeKey } = zoneFilter;
+    const statusActive = statusSet && statusSet.size > 0;
+    const typeActive   = typeKey && typeKey !== "all";
+    if (!statusActive && !typeActive) return zonesWithComputed;
+    return zonesWithComputed.filter((z) => {
+      if (statusActive && !statusSet.has(z.status)) return false;
+      if (typeActive && z.zone_type !== typeKey) return false;
+      return true;
+    });
+  }, [zonesWithComputed, zoneFilter]);
 
   // Handler: user drag-created a new zone. Mint it with a default
   // label = its zone_key so the user sees something immediately; they
@@ -1066,7 +1094,7 @@ export default function DrawingViewer() {
             >
               {[
                 { id: "off",  label: "OFF",   desc: "Hide zone overlay" },
-                { id: "view", label: `VIEW${zones.length ? ` · ${zones.length}` : ""}`, desc: "Show zones · click to select" },
+                { id: "view", label: `VIEW${filteredZones.length ? ` · ${filteredZones.length}` : ""}`, desc: "Show zones · click to select" },
                 { id: "draw", label: "DRAW",  desc: "Drag-create a new zone" },
               ].map((btn) => {
                 const isActive = zoneMode === btn.id;
@@ -1095,6 +1123,19 @@ export default function DrawingViewer() {
                 );
               })}
             </div>
+          )}
+
+          {/* Zone filter bar — only useful when the overlay is
+              actually rendering (VIEW / DRAW). Hidden in OFF mode to
+              keep the viewer chrome quiet. */}
+          {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && zoneMode !== "off" && zones.length > 0 && (
+            <ZoneFilterBar
+              filter={zoneFilter}
+              onChange={setZoneFilter}
+              statusCounts={zoneStatusCounts}
+              totalVisible={filteredZones.length}
+              totalAll={zonesWithComputed.length}
+            />
           )}
         <div
           onWheel={handleCanvasWheel}
@@ -1266,7 +1307,7 @@ export default function DrawingViewer() {
                   mode={zoneMode}
                   canvasWidth={canvasSize.width}
                   canvasHeight={canvasSize.height}
-                  zones={zonesWithComputed}
+                  zones={filteredZones}
                   zoneSummaries={zoneSummaries}
                   selectedZoneId={selectedZoneId}
                   onSelectZone={setSelectedZoneId}
