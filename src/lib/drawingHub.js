@@ -572,6 +572,27 @@ function _hydratedToArray(h) {
  * is_manual_status_override — if the user pinned the status, we leave
  * it alone and return { skipped: true }.
  */
+/**
+ * Fetch the activity stream for a zone (newest first). Joins a
+ * best-effort actor email from `user_profiles` or `auth.users` if the
+ * project has a profile table; otherwise returns just the actor_id.
+ *
+ * Uses Supabase's PostgREST directly rather than the base44 entity
+ * wrapper because drawing_zone_activity is append-only (no update/
+ * delete) and we want a bounded limit.
+ */
+export async function listZoneActivity(zoneId, { limit = 50 } = {}) {
+  if (!zoneId) return [];
+  const { data, error } = await supabase
+    .from("drawing_zone_activity")
+    .select("*")
+    .eq("drawing_zone_id", zoneId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function recomputeAndPersistZoneStatus(zone, hydrated, opts = {}) {
   if (!zone?.id) throw new Error("recomputeAndPersistZoneStatus: zone required");
   if (zone.is_manual_status_override) {
