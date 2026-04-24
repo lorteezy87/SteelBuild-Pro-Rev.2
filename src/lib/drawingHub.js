@@ -593,6 +593,205 @@ export async function listZoneActivity(zoneId, { limit = 50 } = {}) {
   return data || [];
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Revision carry-forward (V1.5)
+//
+// When a drawing gets a new revision (Rev A → Rev B), we want the
+// zones + their linked records to survive the version bump rather
+// than disappearing. carryZonesForward clones every active zone
+// from one revision onto another, preserving geometry + label +
+// status, and optionally clones the live drawing_links onto each
+// cloned zone so coordination work carries over.
+//
+// Zone keys are preserved — Z-001 on Rev A becomes Z-001 on Rev B —
+// because the unique index on drawing_zones is (drawing_revision_id,
+// zone_key), not (drawing_id, zone_key). Users recognise the zone
+// they just drew last week at the same label.
+//
+// Links are cloned with link_source = 'inherited' so the audit trail
+// can distinguish carried-over links from ones that were manually
+// created against the new revision.
+// ────────────────────────────────────────────────────────────────────
+
+export async function carryZonesForward({
+  fromRevisionId,
+  toRevisionId,
+  userId,
+  includeLinks = true,
+}) {
+  if (!fromRevisionId || !toRevisionId) {
+    throw new Error("carryZonesForward: fromRevisionId + toRevisionId required");
+  }
+  // Load source zones + their target revision so we can stamp project
+  // + drawing ids on the clones without trusting the caller.
+  const [{ data: sourceZones, error: srcErr }, { data: toRev, error: toErr }] = await Promise.all([
+    supabase.from("drawing_zones").select("*").eq("drawing_revision_id", fromRevisionId).eq("is_active", true).is("deleted_at", null),
+    supabase.from("drawing_revisions").select("*").eq("id", toRevisionId).single(),
+  ]);
+  if (srcErr) throw srcErr;
+  if (toErr)  throw toErr;
+  if (!toRev) throw new Error("carryZonesForward: target revision not found");
+  if (!sourceZones || sourceZones.length === 0) {
+    return { zonesCloned: 0, linksCloned: 0 };
+  }
+
+  // Insert cloned zones in a single round trip. We preserve the
+  // bbox + metadata but drop any manual status-override so the rule
+  // engine recomputes on the new revision — carried zones start
+  // fresh, not pinned to yesterday's answer.
+  const zonePayload = sourceZones.map((z) => ({
+    project_id:           toRev.project_id,
+    drawing_id:           toRev.drawing_id,
+    drawing_revision_id:  toRev.id,
+    parent_zone_id:       z.id, // breadcrumb back to the source rev
+    zone_key:             z.zone_key,
+    label:                z.label,
+    description:          z.description,
+    zone_type:            z.zone_type,
+    shape_type:           z.shape_type,
+    x_min: z.x_min, y_min: z.y_min, x_max: z.x_max, y_max: z.y_max,
+    level_ref:            z.level_ref,
+    grid_ref:             z.grid_ref,
+    detail_ref:           z.detail_ref,
+    discipline_code:      z.discipline_code,
+    sequence_ref:         z.sequence_ref,
+    sort_order:           z.sort_order,
+    status:               "neutral",
+    status_reason:        null,
+    is_manual_status_override: false,
+    source_kind:          "manual",
+    is_active:            true,
+    created_by:           userId || null,
+  }));
+  const { data: newZones, error: insErr } = await supabase
+    .from("drawing_zones")
+    .insert(zonePayload)
+    .select();
+  if (insErr) throw insErr;
+
+  // Map source zone id → new zone (by id) so we can clone links.
+  const idMap = new Map();
+  for (let i = 0; i < sourceZones.length; i++) {
+    idMap.set(sourceZones[i].id, newZones[i]);
+  }
+
+  let linksCloned = 0;
+  if (includeLinks) {
+    const { data: sourceLinks, error: linkErr } = await supabase
+      .from("drawing_links")
+      .select("*")
+      .in("drawing_zone_id", sourceZones.map((z) => z.id))
+      .is("removed_at", null);
+    if (linkErr) throw linkErr;
+    if (sourceLinks && sourceLinks.length > 0) {
+      const linkPayload = sourceLinks.map((l) => {
+        const dest = idMap.get(l.drawing_zone_id);
+        return {
+          project_id:           toRev.project_id,
+          drawing_zone_id:      dest.id,
+          drawing_id:           toRev.drawing_id,
+          drawing_revision_id:  toRev.id,
+          linked_record_type:   l.linked_record_type,
+          linked_record_id:     l.linked_record_id,
+          link_role:            l.link_role,
+          link_source:          "inherited",
+          confidence_score:     l.confidence_score,
+          is_confirmed:         l.is_confirmed,
+          metadata:             { ...(l.metadata || {}), inherited_from_link_id: l.id, inherited_from_revision_id: fromRevisionId },
+          created_by:           userId || null,
+        };
+      });
+      const { error: linkInsErr } = await supabase.from("drawing_links").insert(linkPayload);
+      if (linkInsErr) throw linkInsErr;
+      linksCloned = linkPayload.length;
+    }
+  }
+
+  return { zonesCloned: newZones.length, linksCloned };
+}
+
+/**
+ * Create a brand-new revision for a drawing and carry the current
+ * revision's zones (+ links by default) forward onto it. Atomic from
+ * the caller's perspective even though it's three statements — if
+ * carry-forward fails after the new revision is minted, the caller
+ * still has a fresh revision to work with, and retrying
+ * carryZonesForward is idempotent as long as the target is still empty.
+ *
+ * If includeLinks is false, the user ends up with empty-zone
+ * clones and has to re-link; typical workflow is true.
+ */
+export async function createNewRevisionAndCarryZones({
+  drawing,
+  newCode,
+  newName,
+  userId,
+  includeLinks = true,
+}) {
+  if (!drawing?.id || !drawing?.project_id) {
+    throw new Error("createNewRevisionAndCarryZones: drawing required");
+  }
+  if (!newCode) throw new Error("createNewRevisionAndCarryZones: newCode required");
+
+  // Resolve the current revision (creates a v1 if none yet).
+  const current = await ensureCurrentRevision({ drawing, userId });
+
+  // Confirm the new code is actually new for this drawing.
+  const { data: clash } = await supabase
+    .from("drawing_revisions")
+    .select("id")
+    .eq("drawing_id", drawing.id)
+    .eq("revision_code", newCode)
+    .maybeSingle();
+  if (clash) throw new Error(`Revision "${newCode}" already exists for this drawing`);
+
+  // Flip current off, then insert the new revision as current.
+  // Done in two statements because the partial unique index
+  // ux_drawing_revisions_one_current forbids two rows with is_current=true.
+  {
+    const { error } = await supabase
+      .from("drawing_revisions")
+      .update({ is_current: false, updated_by: userId || null })
+      .eq("id", current.id);
+    if (error) throw error;
+  }
+  const { data: newRev, error: insErr } = await supabase
+    .from("drawing_revisions")
+    .insert({
+      project_id:             drawing.project_id,
+      drawing_id:             drawing.id,
+      revision_code:          newCode,
+      revision_name:          newName || null,
+      sheet_number:           current.sheet_number,
+      sheet_title:            current.sheet_title,
+      version_number:         (current.version_number || 1) + 1,
+      is_current:             true,
+      supersedes_revision_id: current.id,
+      created_by:             userId || null,
+    })
+    .select()
+    .single();
+  if (insErr) {
+    // Roll the current flag back so we don't leave the drawing
+    // without a "current" pointer.
+    await supabase.from("drawing_revisions").update({ is_current: true }).eq("id", current.id);
+    throw insErr;
+  }
+
+  const carry = await carryZonesForward({
+    fromRevisionId: current.id,
+    toRevisionId:   newRev.id,
+    userId,
+    includeLinks,
+  });
+
+  return {
+    revision: newRev,
+    supersededId: current.id,
+    ...carry,
+  };
+}
+
 export async function recomputeAndPersistZoneStatus(zone, hydrated, opts = {}) {
   if (!zone?.id) throw new Error("recomputeAndPersistZoneStatus: zone required");
   if (zone.is_manual_status_override) {
