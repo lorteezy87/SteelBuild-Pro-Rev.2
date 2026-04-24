@@ -36,20 +36,54 @@ const mono    = { fontFamily: "var(--font-mono)" };
 const display = { fontFamily: "'Space Grotesk', var(--font-display)" };
 const AI      = "var(--ai-accent, #22D3EE)";
 
-// Small quick-pick sentences so the user has a starter that matches
-// typical steel-shop scopes. Clicking any chip prefills the textarea.
+// Quick-pick scope starters. The first two show the bid-style format
+// (numbered, drawing-refs preserved) — that's the richer of the two
+// input modes. The short category list still works and is kept for
+// users who just want a quick scope-to-schedule mapping.
 const EXAMPLES = [
   {
-    label: "Typical garage",
+    label: "Bid-style base bid",
+    text:  [
+      "1. SC1 columns per P-S1.010 and P-S1.011",
+      "2. W27x84 beams per P-S1.012 and P-S1.013",
+      "3. Canopy per P-S1.012 and P-S1.013 ref detail 308",
+      "4. Ledger at canopies ref detail 305",
+      "5. Elevator spreader beams per P-S1.015",
+      "6. Elevator spreader columns full height per keynote 107/P-S1.015",
+      "7. Elevator hoist beams per 4/P-S1.015",
+      "8. North Stair A and B per PA6.001A and PA6.003 ref P-S6.001",
+      "8a. Railing per details on PA8.005A",
+      "9. Moment Frame - Grid Line A per detail S1/P-S2.005",
+      "10. X-Brace at North Bay per detail 301/P-S2.006",
+      "11. Bollards per detail 5/PA8.002",
+      "12. Bike Racks per keynote 7/PA1.101A",
+      "13. Shear Studs - Level 2 Composite Beams per detail 704/P-S3.005",
+      "14. Floor Deck - Level 2 Composite Deck per detail 701/P-S3.003",
+      "15. RTU Dunnage Framing - Roof Level per detail 603/P-S5.004",
+    ].join("\n"),
+  },
+  {
+    label: "Two-building school (bid-style)",
+    text:  [
+      "1. Anchor Bolts - Bldg. 1 & 2",
+      "2. Embed Plates - Bldg. 1",
+      "3. Embed Plates - Bldg. 2",
+      "4. Main Steel Frame - Bldg. 1",
+      "5. Main Steel Frame - Bldg. 2",
+      "6. North Stair A - Bldg. 1 ref P-S6.001",
+      "6a. Railing per PA8.005A",
+      "7. South Stair B - Bldg. 2 ref P-S6.001",
+      "7a. Railing per PA8.005A",
+      "8. Site Misc - Bldg. 1 & 2",
+    ].join("\n"),
+  },
+  {
+    label: "Short category list",
     text:  "Anchor Bolts - Bldg. 1\nPanel Embeds - Bldg. 1\nMain Steel - Bldg. 1\nStairs - Bldg. 1\nRailings - Bldg. 1\nJoists / Deck - Bldg. 1\nLadders - Bldg. 1\nSite Misc - Bldg. 1",
   },
   {
-    label: "Two-building school",
-    text:  "Anchor Bolts - Bldg. 1 & 2\nPanel Embeds - Bldg. 1\nPanel Embeds - Bldg. 2\nMain Steel - Bldg. 1\nMain Steel - Bldg. 2\nStairs & Railings - Bldg. 1\nStairs & Railings - Bldg. 2\nSite Misc",
-  },
-  {
     label: "Canopy retrofit",
-    text:  "Entry Canopy\nRailings\nMisc Steel",
+    text:  "1. Entry Canopy\n2. Railings\n3. Misc Steel",
   },
 ];
 
@@ -106,7 +140,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
 
   const handleBuild = () => {
     setErr(null);
-    if (parsed.hits.length === 0) {
+    if (parsed.items.length === 0) {
       setErr("Nothing recognized yet — try listing items like “Anchor Bolts - Bldg. 1”, “Main Steel - Bldg. 2”, “Stairs”, etc.");
       return;
     }
@@ -138,17 +172,31 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
       // `dependencies` column to [predecessor_id]. PostgREST doesn't
       // defer FKs, and task_dependencies live elsewhere, so the
       // simplest reliable path is inserts-then-update.
-      const payload = kept.map((t) => ({
-        project_id:       projectId,
-        task_name:        t.task_name,
-        phase:            t.phase,
-        wbs_code:         t.wbs_code,
-        start_date:       t.start_date,
-        end_date:         t.end_date,
-        duration:         t.duration,
-        status:           "Not Started",
-        percent_complete: 0,
-      }));
+      const payload = kept.map((t) => {
+        // Preserve the scope source + drawing/detail refs in metadata
+        // so the Task Detail Drawer can surface them later and auto-
+        // extracted refs aren't lost if the user edits the task_name.
+        const drawingRefs = t._drawingRefs || [];
+        const detailRefs  = t._detailRefs  || [];
+        const sourceText  = t._sourceText  || null;
+        const meta = {};
+        if (drawingRefs.length) meta.drawing_refs = drawingRefs;
+        if (detailRefs.length)  meta.detail_refs  = detailRefs;
+        if (sourceText)         meta.scope_source = sourceText;
+        if (t._scopeTypeKey)    meta.scope_type   = t._scopeTypeKey;
+        return {
+          project_id:       projectId,
+          task_name:        t.task_name,
+          phase:            t.phase,
+          wbs_code:         t.wbs_code,
+          start_date:       t.start_date,
+          end_date:         t.end_date,
+          duration:         t.duration,
+          status:           "Not Started",
+          percent_complete: 0,
+          ...(Object.keys(meta).length ? { metadata: meta } : {}),
+        };
+      });
       // Insert sequentially via the entity client — bulk is nicer but
       // the entity-client abstracts it per-row and we already use the
       // same pattern in BulkAddTaskModal.
@@ -190,8 +238,13 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
   };
 
   // ── Render ────────────────────────────────────────────────────────
-  const scopeItemCount = parsed.hits.length;
-  const unmatchedCount = parsed.unmatched.length;
+  const scopeItemCount = parsed.items.length;
+  // Generics are classified but not recognized as a specific type —
+  // we surface them so the user can refine ambiguous lines. The old
+  // `unmatched` list is no longer produced by the parser (every line
+  // classifies into SOMETHING via the classifier fallback).
+  const genericLines = parsed.items.filter((i) => i.typeKey === "generic");
+  const unmatchedCount = genericLines.length;
 
   return (
     <>
@@ -315,7 +368,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                 {unmatchedCount > 0 && (
                   <span style={{ ...mono, fontSize: 10, color: "var(--status-warning)" }}>
                     <AlertTriangle size={10} style={{ verticalAlign: "text-bottom", marginRight: 4 }} />
-                    {unmatchedCount} line{unmatchedCount === 1 ? "" : "s"} not recognized — will be skipped
+                    {unmatchedCount} line{unmatchedCount === 1 ? "" : "s"} classified as generic — review below
                   </span>
                 )}
               </div>
@@ -330,11 +383,11 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                   }}
                 >
                   <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--status-warning)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-                    Unrecognized lines
+                    Generic items (no specific type matched)
                   </div>
-                  {parsed.unmatched.map((l, i) => (
+                  {genericLines.map((it, i) => (
                     <div key={i} style={{ ...mono, fontSize: 11, color: "var(--text-muted)" }}>
-                      · {l}
+                      · {it.label}
                     </div>
                   ))}
                 </div>
@@ -387,25 +440,52 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((t) => (
-                          <tr key={t.wbs_code} style={{ borderBottom: "1px solid var(--divider)" }}>
-                            <td style={{ ...mono, fontSize: 10, color, padding: "5px 8px", whiteSpace: "nowrap" }}>{t.wbs_code}</td>
-                            <td style={{ padding: "5px 8px" }}>{t.task_name}</td>
-                            <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap" }}>{t.start_date}</td>
-                            <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap" }}>{t.end_date}</td>
-                            <td style={{ ...mono, fontSize: 10, padding: "5px 8px", whiteSpace: "nowrap" }}>{t.duration}d</td>
-                            <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap" }}>{t.depends_on_wbs || "—"}</td>
-                            <td style={{ padding: "5px 8px", textAlign: "right" }}>
-                              <button
-                                onClick={() => toggleRow(t.wbs_code)}
-                                title="Exclude this row"
-                                style={{ ...mono, fontSize: 9, padding: "2px 6px", background: "transparent", border: "1px solid var(--divider)", borderRadius: 2, color: "var(--text-muted)", cursor: "pointer" }}
-                              >
-                                REMOVE
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {rows.map((t) => {
+                          const refs = [...(t._drawingRefs || []), ...(t._detailRefs || [])];
+                          return (
+                            <tr key={t.wbs_code} style={{ borderBottom: "1px solid var(--divider)" }}>
+                              <td style={{ ...mono, fontSize: 10, color, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.wbs_code}</td>
+                              <td style={{ padding: "5px 8px", verticalAlign: "top" }}>
+                                <div>{t.task_name}</div>
+                                {refs.length > 0 && (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+                                    {refs.map((r, i) => (
+                                      <span
+                                        key={i}
+                                        title="Drawing / detail reference extracted from the scope line"
+                                        style={{
+                                          ...mono,
+                                          fontSize: 9,
+                                          padding: "1px 5px",
+                                          background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                                          color: "var(--accent)",
+                                          border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+                                          borderRadius: 2,
+                                          letterSpacing: "0.04em",
+                                        }}
+                                      >
+                                        {r}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.start_date}</td>
+                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.end_date}</td>
+                              <td style={{ ...mono, fontSize: 10, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.duration}d</td>
+                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.depends_on_wbs || "—"}</td>
+                              <td style={{ padding: "5px 8px", textAlign: "right", verticalAlign: "top" }}>
+                                <button
+                                  onClick={() => toggleRow(t.wbs_code)}
+                                  title="Exclude this row"
+                                  style={{ ...mono, fontSize: 9, padding: "2px 6px", background: "transparent", border: "1px solid var(--divider)", borderRadius: 2, color: "var(--text-muted)", cursor: "pointer" }}
+                                >
+                                  REMOVE
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
