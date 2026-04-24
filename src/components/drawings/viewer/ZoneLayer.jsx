@@ -59,6 +59,12 @@ export default function ZoneLayer({
   onSelectZone,             // (zoneId) => void
   onOpenZone,               // (zoneId) => void — double-click / Enter
   onDrawComplete,           // see "Interaction modes" above
+  // V3.0: Drawing Hub Analyzer→Zones bridge. Proposal bboxes are
+  // rendered with a distinct dashed style so they don't masquerade
+  // as real zones. Each entry: { id, x_min, y_min, x_max, y_max,
+  // status, label? }. The parent owns hover state — pass an array
+  // containing only the hovered proposal to focus it on the canvas.
+  proposalOverlays = [],
 }) {
   const svgRef = useRef(null);
   // Rectangle draft (one drag): { x0, y0, x1, y1 } in canvas px.
@@ -406,6 +412,67 @@ export default function ZoneLayer({
           ry={2}
           pointerEvents="none"
         />
+      )}
+
+      {/* ── V3.0 Proposal overlays — distinct dashed cyan/amber so they
+          don't look like real zones. Rendered above zone shapes but
+          ignore pointer events; the ProposalPanel handles selection. */}
+      {Array.isArray(proposalOverlays) && proposalOverlays.length > 0 && (
+        <g pointerEvents="none">
+          {proposalOverlays.map((p) => {
+            if (
+              p == null ||
+              typeof p.x_min !== "number" || typeof p.y_min !== "number" ||
+              typeof p.x_max !== "number" || typeof p.y_max !== "number"
+            ) return null;
+            const x = p.x_min * canvasWidth;
+            const y = p.y_min * canvasHeight;
+            const w = Math.max(0, (p.x_max - p.x_min)) * canvasWidth;
+            const h = Math.max(0, (p.y_max - p.y_min)) * canvasHeight;
+            const colorByStatus = {
+              pending:  { fill: "rgba(0,229,255,0.10)",  border: "#00E5FF" },
+              accepted: { fill: "rgba(34,197,94,0.10)",  border: "#22C55E" },
+              rejected: { fill: "rgba(148,163,184,0.08)", border: "#94A3B8" },
+              merged:   { fill: "rgba(139,92,246,0.10)", border: "#8B5CF6" },
+            };
+            const palette = colorByStatus[p.status] || colorByStatus.pending;
+            return (
+              <g key={`proposal-${p.id}`}>
+                <rect
+                  x={x} y={y} width={w} height={h}
+                  fill={palette.fill}
+                  stroke={palette.border}
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  rx={2} ry={2}
+                />
+                {p.label && w >= 60 && h >= 18 && (
+                  <g transform={`translate(${x + 4}, ${y + 4})`}>
+                    <rect
+                      width={Math.min(w - 8, 120)}
+                      height={14}
+                      fill="rgba(15,17,24,0.78)"
+                      stroke={palette.border}
+                      strokeWidth={0.75}
+                      strokeDasharray="3 2"
+                      rx={2} ry={2}
+                    />
+                    <text
+                      x={5} y={10}
+                      fontFamily="var(--font-mono, monospace)"
+                      fontSize={9}
+                      fontWeight={700}
+                      fill="#FFFFFF"
+                      style={{ letterSpacing: "0.04em" }}
+                    >
+                      {String(p.label).slice(0, 24)}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </g>
       )}
 
       {/* Live polygon draft — in-progress ring + hover preview segment
