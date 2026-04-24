@@ -17,8 +17,13 @@ import { base44 } from "@/api/base44Client";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_MODEL    = "gpt-4o-mini";
+// Anthropic Claude natively ingests PDFs and reliably emits tool_use
+// blocks — the previous gpt-4o-mini default was silently returning plain
+// text on multi-page RFI logs, which tripped the "AI did not return
+// structured data" error downstream. Sonnet 4.5 handles 100+ RFI rows
+// without drifting; swap to haiku-4-5 if cost becomes a concern.
+const DEFAULT_PROVIDER = "anthropic";
+const DEFAULT_MODEL    = "claude-sonnet-4-5";
 
 const SYSTEM_PROMPT = `You are parsing a structural-steel RFI log PDF. The header has a
 job number + project name + location. The body is a table of RFIs,
@@ -149,7 +154,10 @@ export async function extractRfiLog({
   const { data } = await invokeProxyWithDetail({
     provider,
     model,
-    maxTokens: 4000,
+    // RFI logs can have 100+ rows; 4k tokens was easily hitting ceiling
+    // on real-world logs and causing truncated/invalid tool output. 8k
+    // comfortably covers a typical construction-project log.
+    maxTokens: 8000,
     system: SYSTEM_PROMPT,
     tools: [RFI_TOOL],
     tool_choice: { type: "tool", name: "submit_rfi_log" },
@@ -166,7 +174,19 @@ export async function extractRfiLog({
 
   const tool = data?.tool_use?.input;
   if (!tool || typeof tool !== "object") {
-    throw new Error("AI did not return structured data. Check the PDF is a readable RFI log.");
+    // Surface whatever the model actually said so the user can triage —
+    // "did not return structured data" alone is a dead-end message.
+    // Common culprits: scanned PDF without OCR (model sees blank page),
+    // password-protected PDF, or the tool output hit the token ceiling
+    // mid-stream and was dropped.
+    const hint = (data?.text || "").trim().slice(0, 280);
+    const detail = hint
+      ? ` Model said: "${hint}${hint.length >= 280 ? "…" : ""}"`
+      : " Model returned no text or tool output (likely a scanned / image-only PDF that would need OCR first).";
+    throw new Error(
+      `AI did not return structured data from this PDF.${detail} ` +
+      `Check the file is a text-readable RFI log, not a scanned image.`
+    );
   }
   return {
     header: tool.header || {},
