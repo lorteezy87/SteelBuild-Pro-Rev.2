@@ -372,3 +372,227 @@ export function summarizeLinks(links) {
   }
   return out;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Status rule engine (V1.5)
+//
+// Pure function: takes a zone's active links + the hydrated source
+// records and returns {status, reason, drivers}. No I/O, no queries,
+// easy to unit test and reuse from anywhere (viewer overlay, portfolio
+// heatmap later, etc.).
+//
+// Priority order (per spec): red > amber > purple > blue > green >
+// neutral. The first matching bucket wins — we DON'T sum severities;
+// one blocker is enough to make the zone red.
+//
+// "Drivers" is an ordered list of short strings explaining WHY a
+// given status triggered. The ZonePanel surfaces these verbatim so
+// the user can see "RFI-012 overdue 3 days" next to the red chip
+// instead of just a bare color.
+// ────────────────────────────────────────────────────────────────────
+
+const STATUS_THRESHOLDS = {
+  RFI_DUE_SOON_DAYS:       3,
+  DELIVERY_DUE_SOON_DAYS:  2,
+  AI_WARN_CONFIDENCE:      0.80,
+};
+
+// Match whatever set of status strings your existing RFI / WP /
+// Inspection / Delivery models use. Stay permissive — string comparison
+// is case-insensitive so "In Progress" and "in progress" both count.
+const IS_RFI_RESOLVED  = (s) => /^(answered|closed|void)$/i.test(s || "");
+const IS_DEL_DONE      = (s) => /^(delivered|received|complete)$/i.test(s || "");
+const IS_INSP_FAILED   = (s) => /^(failed|blocked|rejected)$/i.test(s || "");
+const IS_INSP_INPROG   = (s) => /^(in progress|started|ongoing)$/i.test(s || "");
+const IS_WP_BLOCKED    = (s) => /^(blocked|on hold|on-hold)$/i.test(s || "");
+const IS_WP_WAITING    = (s) => /^(waiting|pending approval|pending release|submitted)$/i.test(s || "");
+const IS_WP_ACTIVE     = (s) => /^(active|in progress|fabrication|erection|installation|fabricating|erecting|installing)$/i.test(s || "");
+const IS_DEL_TRANSIT   = (s) => /^(in transit|dispatched|en route)$/i.test(s || "");
+const IS_DEL_SCHED     = (s) => /^(scheduled|planned|pending)$/i.test(s || "");
+const IS_DEL_EXCEPTION = (s) => /^(late|delayed|exception|rejected)$/i.test(s || "");
+
+function _daysUntil(dateStr, today = new Date()) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const ms = d.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
+  return Math.round(ms / 86400000);
+}
+
+function _shortNum(record) {
+  return (
+    record?.rfi_number ||
+    record?.wp_number ||
+    record?.delivery_number ||
+    record?.co_number ||
+    record?.inspection_number ||
+    record?.document_number ||
+    null
+  );
+}
+
+/**
+ * Compute status + drivers for a single zone given its hydrated link
+ * records. `hydrated` is the same shape hydrateLinks() returns —
+ * Map<linkId, {link, record}> OR an array of those entries.
+ *
+ * Treats links with is_confirmed=false as advisory (shown in UI but
+ * excluded from the engine), so AI suggestions can't spook the status
+ * until a human confirms them.
+ */
+export function computeZoneStatus(hydrated, { today = new Date(), thresholds = STATUS_THRESHOLDS } = {}) {
+  const items = _hydratedToArray(hydrated).filter(
+    (x) => x.link && (x.link.is_confirmed === undefined || x.link.is_confirmed === true) && !x.link.removed_at,
+  );
+
+  if (items.length === 0) {
+    return { status: "neutral", drivers: [], reason: "No confirmed links yet." };
+  }
+
+  const drivers = { red: [], amber: [], purple: [], blue: [] };
+
+  for (const { link, record } of items) {
+    if (!record) continue; // orphaned link — ignored here, surfaced separately in UI
+    const role = link.link_role;
+    const type = link.linked_record_type;
+    const status = String(record.status || "").trim();
+    const num = _shortNum(record);
+    const label = num ? `${type.toUpperCase()} ${num}` : type.toUpperCase();
+
+    // Explicit "blocks" role always wins → red.
+    if (role === "blocks") {
+      drivers.red.push(`${label} flagged as blocker`);
+      continue;
+    }
+
+    switch (type) {
+      case "rfi": {
+        if (IS_RFI_RESOLVED(status)) break;
+        const due = _daysUntil(record.date_required, new Date(today));
+        if (due !== null && due < 0) {
+          drivers.red.push(`${label} overdue ${Math.abs(due)}d`);
+        } else if (due !== null && due <= thresholds.RFI_DUE_SOON_DAYS) {
+          drivers.amber.push(due === 0 ? `${label} due today` : `${label} due in ${due}d`);
+        }
+        break;
+      }
+      case "inspection": {
+        if (IS_INSP_FAILED(status) && !record.resolved_at) {
+          drivers.red.push(`${label} ${status.toLowerCase()}`);
+        } else if (IS_INSP_INPROG(status)) {
+          drivers.blue.push(`${label} in progress`);
+        }
+        break;
+      }
+      case "work_package": {
+        if (IS_WP_BLOCKED(status)) drivers.red.push(`${label} ${status.toLowerCase()}`);
+        else if (IS_WP_WAITING(status)) drivers.amber.push(`${label} ${status.toLowerCase()}`);
+        else if (IS_WP_ACTIVE(status)) drivers.blue.push(`${label} ${status.toLowerCase()}`);
+        break;
+      }
+      case "delivery": {
+        if (IS_DEL_DONE(status)) break;
+        if (IS_DEL_EXCEPTION(status)) {
+          // Only escalate to red when the link role explicitly gates the zone.
+          const gates = role === "delivers_to" || link.metadata?.required_for_zone === true;
+          if (gates) drivers.red.push(`${label} ${status.toLowerCase()}`);
+          else drivers.amber.push(`${label} ${status.toLowerCase()}`);
+          break;
+        }
+        const sch = _daysUntil(record.scheduled_date, new Date(today));
+        if (sch !== null && sch <= thresholds.DELIVERY_DUE_SOON_DAYS) {
+          drivers.amber.push(sch === 0 ? `${label} arrives today` : `${label} arrives in ${sch}d`);
+        } else if (IS_DEL_TRANSIT(status) || IS_DEL_SCHED(status)) {
+          drivers.blue.push(`${label} ${status.toLowerCase() || "scheduled"}`);
+        }
+        break;
+      }
+      case "ai_insight": {
+        if (record.resolved_at) break;
+        const severity = record.severity || "info";
+        const conf = Number(record.confidence_score || 0);
+        if (severity === "warning" && conf >= thresholds.AI_WARN_CONFIDENCE) {
+          drivers.amber.push(`${label} warning (${Math.round(conf * 100)}% confidence)`);
+        }
+        break;
+      }
+      case "change_order": {
+        // COs don't block a zone on their own; just surface activity.
+        const open = !/^(approved|rejected|void)$/i.test(status);
+        if (open) drivers.blue.push(`${label} ${status.toLowerCase() || "open"}`);
+        break;
+      }
+      default:
+        // Photos / documents / daily logs count as activity but don't
+        // drive color on their own.
+        break;
+    }
+  }
+
+  // Purple: zone's been revised. Surfaced via link metadata or zone
+  // flags — left as a hook for V2; today the engine only infers it
+  // from explicit `revision_impact: true` metadata on any link.
+  for (const { link } of items) {
+    if (link.metadata?.revision_impact === true) {
+      drivers.purple.push("Revision impact on linked record");
+    }
+  }
+
+  // Priority resolution — pick the highest-priority bucket that has
+  // at least one driver.
+  const order = ["red", "amber", "purple", "blue"];
+  for (const bucket of order) {
+    if (drivers[bucket].length > 0) {
+      return {
+        status: bucket,
+        drivers: drivers[bucket].slice(0, 5),
+        reason: drivers[bucket][0],
+      };
+    }
+  }
+  // Some activity exists but nothing urgent → green.
+  return {
+    status: "green",
+    drivers: [`${items.length} linked record${items.length !== 1 ? "s" : ""}, nothing urgent`],
+    reason: "Clear",
+  };
+}
+
+function _hydratedToArray(h) {
+  if (!h) return [];
+  if (h instanceof Map) return Array.from(h.values());
+  if (Array.isArray(h)) return h;
+  return [];
+}
+
+/**
+ * Recompute + persist a zone's status from its current hydrated link
+ * records. Writes back only when the computed value differs from the
+ * stored one, so we don't churn updated_at on every render. Honours
+ * is_manual_status_override — if the user pinned the status, we leave
+ * it alone and return { skipped: true }.
+ */
+export async function recomputeAndPersistZoneStatus(zone, hydrated, opts = {}) {
+  if (!zone?.id) throw new Error("recomputeAndPersistZoneStatus: zone required");
+  if (zone.is_manual_status_override) {
+    return { skipped: true, reason: "manual_override" };
+  }
+  const { status, reason } = computeZoneStatus(hydrated, opts);
+  if (status === zone.status) return { skipped: true, reason: "unchanged" };
+
+  // Import-on-demand to avoid a circular when tests pull just the
+  // pure engine. Browser bundler will tree-shake this inline.
+  const { data, error } = await supabase
+    .from("drawing_zones")
+    .update({
+      status,
+      status_reason: reason || null,
+      status_computed_at: new Date().toISOString(),
+      status_computed_by: "rule_engine",
+    })
+    .eq("id", zone.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return { skipped: false, status, reason, zone: data };
+}
