@@ -21,11 +21,14 @@ import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/A
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
+import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import {
   ensureCurrentRevision,
   listZones,
   listLinksForZones,
   createZone as createZoneSvc,
+  updateZone as updateZoneSvc,
+  deleteZone as deleteZoneSvc,
   summarizeLinks,
 } from "@/lib/drawingHub";
 
@@ -245,6 +248,7 @@ export default function DrawingViewer() {
   //   "draw" — drag-create a new rectangle zone
   const [zoneMode, setZoneMode] = useState("off");
   const [selectedZoneId, setSelectedZoneId] = useState(null);
+  const [panelZoneId, setPanelZoneId] = useState(null);  // open in right-side ZonePanel
 
   // Resolve (or create) the drawing_revisions row that zones attach to.
   // MVP: every drawing gets a v1 revision the first time the user opens
@@ -1207,14 +1211,7 @@ export default function DrawingViewer() {
                   zoneSummaries={zoneSummaries}
                   selectedZoneId={selectedZoneId}
                   onSelectZone={setSelectedZoneId}
-                  onOpenZone={(zid) => {
-                    setSelectedZoneId(zid);
-                    // Right-panel handler lands in the next slice; for
-                    // MVP the selection state + toast is the visible
-                    // feedback that the zone was picked.
-                    const z = zones.find((x) => x.id === zid);
-                    if (z) toast.info(`Zone ${z.zone_key} — detail panel lands next`);
-                  }}
+                  onOpenZone={(zid) => { setSelectedZoneId(zid); setPanelZoneId(zid); }}
                   onDrawComplete={handleZoneDrawComplete}
                 />
 
@@ -1322,6 +1319,28 @@ export default function DrawingViewer() {
       )}
 
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Zone coordination panel — opens on double-click of a zone. All
+          zone edits (rename, status change, delete) flow through here.
+          Updates persist via drawingHub and invalidate the zone / link
+          queries so the overlay count badges stay in sync. */}
+      <ZonePanel
+        zone={panelZoneId ? zones.find((z) => z.id === panelZoneId) : null}
+        open={!!panelZoneId}
+        onClose={() => setPanelZoneId(null)}
+        onZoneUpdate={async (patch) => {
+          if (!panelZoneId) return;
+          await updateZoneSvc(panelZoneId, patch);
+          await refetchZones();
+        }}
+        onZoneDelete={async () => {
+          if (!panelZoneId) return;
+          await deleteZoneSvc(panelZoneId);
+          setPanelZoneId(null);
+          setSelectedZoneId(null);
+          await refetchZones();
+        }}
+      />
     </div>
   );
 }
