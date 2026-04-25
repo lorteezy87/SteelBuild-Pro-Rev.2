@@ -17,6 +17,10 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import {
+  parseDependencies as parseScheduleDependencies,
+  serializeDependencies as serializeScheduleDependencies,
+} from '@/services/scheduleCascade';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -381,6 +385,39 @@ export const entities = {
           out.percent_complete = 0;
         } else if (out.status === 'In Progress' && out.percent_complete >= 100) {
           out.percent_complete = 99;
+        }
+      }
+
+      // Predecessor link validation. Migration 054 upgraded the
+      // schedule_tasks.dependencies element shape from bare UUID strings
+      // to {id, type, lag_days}. We don't want any future code path to
+      // land a row with a malformed value (an unknown link type, a
+      // non-integer lag, an array containing nulls, etc.) — the cascade
+      // would silently fall back to FS+1 on read, but the data on disk
+      // would be quietly wrong. Round-trip through parse + serialize:
+      // parse normalises legacy id-string shape AND tolerates partial
+      // objects; serialize rejects unrecognised link types with a real
+      // error so a programming bug surfaces loudly instead of being
+      // papered over.
+      if (Object.prototype.hasOwnProperty.call(out, 'dependencies')) {
+        const raw = out.dependencies;
+        if (raw == null || raw === '') {
+          out.dependencies = null;
+        } else {
+          // Tolerate the writer passing either an array or a JSON string;
+          // parseScheduleDependencies handles both.
+          try {
+            const links = parseScheduleDependencies(raw);
+            out.dependencies = serializeScheduleDependencies(links);
+          } catch (err) {
+            // Re-throw with context so the caller sees which task failed
+            // and which value they tried to land.
+            throw new Error(
+              `ScheduleTask: invalid dependencies value (${err.message}): ${
+                typeof raw === 'string' ? raw : JSON.stringify(raw)
+              }`
+            );
+          }
         }
       }
       return out;

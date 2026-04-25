@@ -9,17 +9,21 @@ import {
   applyStageDatesToTask,
   usesStageDates,
 } from '../../lib/stageDates';
+import {
+  parseDependencies,
+  serializeDependencies,
+  LINK_TYPES,
+} from '../../services/scheduleCascade';
 
 /**
- * Parse the `dependencies` TEXT column.
- * Stored as JSON array of task IDs: ["uuid1","uuid2"]
- * Returns an array of ID strings.
+ * Parse the upgraded `dependencies` TEXT column. Each element is now a
+ * link object — `{ id, type: 'FS'|'SS'|'FF'|'SF', lag_days: int }`. The
+ * shared parseDependencies utility also handles the legacy id-string
+ * shape so a row that hasn't been migrated yet still loads cleanly,
+ * defaulting to FS + 1 day.
  */
 function parseDeps(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
-  catch { return []; }
+  return parseDependencies(raw);
 }
 
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
@@ -53,37 +57,43 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
   };
 
   const duration = calculateTaskDuration(formData.start_date, formData.end_date);
-  const predecessorIds = parseDeps(formData.dependencies);
+  // Predecessor links are now link objects: { id, type, lag_days }. The
+  // legacy id-string shape is silently upgraded to FS+1 by parseDeps so
+  // the editor can mix-and-match while a partial migration is in flight.
+  const predecessorLinks = parseDeps(formData.dependencies);
+  const predecessorIds = predecessorLinks.map((l) => l.id);
   const predecessorTasks = allTasks.filter(t => predecessorIds.includes(t.id));
   const successorTasks = allTasks.filter(t => {
-    const deps = parseDeps(t.dependencies);
-    return deps.includes(task.id);
+    const links = parseDeps(t.dependencies);
+    return links.some((l) => l.id === task.id);
   });
 
   // Dependency management
   //
-  // Adding a predecessor auto-shifts start/end so the task lines up
-  // behind the LATEST predecessor's finish (FS + 1 day), preserving
-  // this task's current duration. The suggestion is written into
-  // formData — the user can still edit start_date or end_date in the
-  // Details tab before hitting Save, without removing the dependency.
-  // We only pull dates FORWARD; if the user's current start already
-  // satisfies the constraint, nothing is changed.
+  // Adding a predecessor defaults to FS + 1 day, which mirrors the
+  // hardcoded behaviour the cascade applied before SS/FF/SF support
+  // existed. The user can change link type and lag inline once the
+  // predecessor is added (see the type select + lag input on each row).
+  // Auto-shift only fires for the FS default — non-FS links require
+  // smarter date math we don't replicate here, since the cascade
+  // recomputes effective dates on every render anyway.
   const addPredecessor = (predId) => {
     const current = parseDeps(formData.dependencies);
-    if (current.includes(predId)) return;
-    const updated = [...current, predId];
+    if (current.some((l) => l.id === predId)) return;
+    const newLink = { id: predId, type: 'FS', lag_days: 1 };
+    const updated = [...current, newLink];
 
-    // Compute auto-shift using every predecessor (existing + the new one),
-    // so adding a predecessor that finishes before the current ones
-    // doesn't pull the task backwards.
-    const allPredTasks = allTasks.filter(t => updated.includes(t.id));
-    const shift = computeAutoScheduledDates(formData, allPredTasks);
+    // Compute auto-shift using every FS predecessor (existing + the new one)
+    // — the shift hint only handles FS semantics, so we filter to those.
+    const fsIds = updated.filter((l) => l.type === 'FS').map((l) => l.id);
+    const fsPredTasks = allTasks.filter((t) => fsIds.includes(t.id));
+    const shift = newLink.type === 'FS' ? computeAutoScheduledDates(formData, fsPredTasks) : null;
 
+    const serialized = serializeDependencies(updated);
     if (shift) {
       setFormData({
         ...formData,
-        dependencies: JSON.stringify(updated),
+        dependencies: serialized,
         start_date: shift.start_date,
         end_date: shift.end_date,
       });
@@ -96,14 +106,26 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         { description: 'Guideline only — edit dates in the Details tab if needed.' }
       );
     } else {
-      setFormData({ ...formData, dependencies: JSON.stringify(updated) });
+      setFormData({ ...formData, dependencies: serialized });
     }
   };
 
   const removePredecessor = (predId) => {
     const current = parseDeps(formData.dependencies);
-    const updated = current.filter(id => id !== predId);
-    setFormData({ ...formData, dependencies: updated.length > 0 ? JSON.stringify(updated) : null });
+    const updated = current.filter((l) => l.id !== predId);
+    setFormData({
+      ...formData,
+      dependencies: updated.length > 0 ? serializeDependencies(updated) : null,
+    });
+  };
+
+  // Update a single predecessor link's type or lag in place.
+  const updatePredecessor = (predId, patchObj) => {
+    const current = parseDeps(formData.dependencies);
+    const updated = current.map((l) =>
+      l.id === predId ? { ...l, ...patchObj } : l
+    );
+    setFormData({ ...formData, dependencies: serializeDependencies(updated) });
   };
 
   // Available tasks to add as predecessors (not self, not already a predecessor)
@@ -256,13 +278,53 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 </div>
                 {predecessorTasks.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {predecessorTasks.map(pred => (
-                      <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
-                        <button onClick={() => removePredecessor(pred.id)} style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', fontSize: 12, padding: 2 }}>✕</button>
-                      </div>
-                    ))}
+                    {predecessorTasks.map(pred => {
+                      // The link object for this predecessor row — the
+                      // editor lets users change link type (FS / SS /
+                      // FF / SF) and lag_days inline. Defaults remain
+                      // FS + 1 day so adding a predecessor without
+                      // touching these controls preserves the previous
+                      // hardcoded behaviour exactly.
+                      const link = predecessorLinks.find((l) => l.id === pred.id) || { type: 'FS', lag_days: 1 };
+                      return (
+                        <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
+                          <select
+                            value={link.type}
+                            onChange={(e) => updatePredecessor(pred.id, { type: e.target.value })}
+                            title="Link type — FS=finish→start, SS=start→start, FF=finish→finish, SF=start→finish"
+                            style={{
+                              background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
+                              borderRadius: 4, padding: '2px 4px',
+                              fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-primary)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {LINK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                          <input
+                            type="number"
+                            step="1"
+                            value={link.lag_days ?? 0}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              updatePredecessor(pred.id, { lag_days: Number.isFinite(n) ? n : 0 });
+                            }}
+                            title="Lag in days — negative values fast-track (allow successor to begin before predecessor finishes)"
+                            style={{
+                              background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
+                              borderRadius: 4, padding: '2px 4px',
+                              fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-primary)',
+                              width: 48, textAlign: 'right', flexShrink: 0,
+                            }}
+                            aria-label="Lag in days"
+                          />
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', flexShrink: 0 }}>d</span>
+                          <button onClick={() => removePredecessor(pred.id)} style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', fontSize: 12, padding: 2 }}>✕</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No predecessors</div>

@@ -20,6 +20,7 @@ import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
+import { applyEffectiveDates } from "@/services/scheduleCascade";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -200,6 +201,24 @@ export default function Schedule() {
     }
     return result;
   }, [scheduleTasks, projectId, qc]);
+
+  // ── Effective-date overlay ─────────────────────────────────────────────
+  // Single source of truth: the shared cascade utility runs once over the
+  // enriched task list and produces a parallel array where start_date /
+  // end_date are the *effective* values (after FS/SS/FF/SF + lag links
+  // have been followed). The original stored values are preserved on
+  // `_stored_start_date` / `_stored_end_date` for any consumer that needs
+  // them. ScheduleGantt keeps the raw `enrichedTasks` because its bar
+  // renderer + arrow renderer needs both stored AND effective values to
+  // draw the "*" shifted indicator and connect arrows correctly; every
+  // other consumer (Task List, Lookahead, ICS export) only ever needs to
+  // know "where is this task effectively scheduled?", so feeding them the
+  // overlaid array is simpler and removes the prior bug where those views
+  // showed dates that didn't match the Gantt bars.
+  const tasksWithEffective = useMemo(
+    () => applyEffectiveDates(enrichedTasks),
+    [enrichedTasks]
+  );
 
   const updateTaskMut = useMutation({
     mutationFn: (data) => {
@@ -514,22 +533,40 @@ export default function Schedule() {
         uidToDbId[t.uid] = record.id;
       }
 
-      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs
+      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs.
+      // MS Project encodes link type as Type (0=FF, 1=FS, 2=SF, 3=SS) and
+      // LinkLag as tenths of minutes (positive = lag, negative = lead).
+      // We now persist the full link object — { id, type, lag_days } —
+      // so the cascade picks up the right semantics on first render
+      // instead of assuming FS+1 for everything imported.
+      const MS_LINK_TYPE = { "0": "FF", "1": "FS", "2": "SF", "3": "SS" };
+      const TENTHS_PER_DAY = 10 * 60 * 8; // tenths of minutes in an 8h workday
       const depItems = [];
       allParsed.forEach((t) => {
         if (t.preds && t.preds.length > 0) {
           const dbId = uidToDbId[t.uid];
-          const predDbIds = t.preds.map(p => uidToDbId[p.predUid]).filter(Boolean);
-          if (dbId && predDbIds.length > 0) {
-            depItems.push({ dbId, predDbIds });
+          const predLinks = t.preds
+            .map((p) => {
+              const id = uidToDbId[p.predUid];
+              if (!id) return null;
+              const type = MS_LINK_TYPE[p.linkType] || "FS";
+              // Convert tenths-of-minutes to whole days; round so a
+              // typical 1-day lag (4800 tenths) lands on lag_days=1.
+              const lagTenths = Number(p.lagDuration) || 0;
+              const lag_days = Math.round(lagTenths / TENTHS_PER_DAY);
+              return { id, type, lag_days };
+            })
+            .filter(Boolean);
+          if (dbId && predLinks.length > 0) {
+            depItems.push({ dbId, predLinks });
           }
         }
       });
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
-          ({ dbId, predDbIds }) => base44.entities.ScheduleTask.update(dbId, {
-            dependencies: JSON.stringify(predDbIds),
+          ({ dbId, predLinks }) => base44.entities.ScheduleTask.update(dbId, {
+            dependencies: JSON.stringify(predLinks),
           }),
         );
       }
@@ -603,7 +640,11 @@ export default function Schedule() {
             icon="calendar"
             disabled={!hasProject || scheduleTasks.length === 0}
             onClick={() => {
-              const events = scheduleTasks
+              // Use the effective-date overlay so calendar entries match
+              // where the Gantt actually places each task — exporting
+              // stored dates would put events on the wrong week for any
+              // task pulled forward by a predecessor cascade.
+              const events = tasksWithEffective
                 .map((t) => scheduleTaskToEvent(t, selectedProject?.project_number || ""))
                 .filter(Boolean);
               if (events.length === 0) { toast.info("No tasks with dates to export."); return; }
@@ -775,15 +816,30 @@ export default function Schedule() {
 
         {view === "lookahead" && (
           <ErrorBoundary label="Lookahead Planner">
-            <LookaheadPlanner tasks={enrichedTasks} />
+            {/* Lookahead's week-bucket date predicates run against the
+                effective dates so cascaded tasks land in the correct
+                week — previously a Detailing task whose predecessor
+                slipped two weeks would still appear in the original
+                week's bucket. */}
+            <LookaheadPlanner tasks={tasksWithEffective} />
           </ErrorBoundary>
         )}
 
         {view === "list" && (
           <ErrorBoundary label="Task List">
             <ScheduleTaskList
-              tasks={enrichedTasks}
-              onEdit={(task) => { setSelectedTask(task); setShowDrawer(true); }}
+              tasks={tasksWithEffective}
+              onEdit={(task) => {
+                // The Task List receives the effective-date overlay so its
+                // rows show the cascaded dates. The TaskDetailDrawer must
+                // edit STORED dates — opening it with overlaid dates would
+                // let the user "save" effective dates as new stored values
+                // and silently destroy their original entry. Look the row
+                // up in the unmodified enrichedTasks list before opening.
+                const original = enrichedTasks.find((t) => t.id === task.id) || task;
+                setSelectedTask(original);
+                setShowDrawer(true);
+              }}
               onDelete={(task) => setDeleteTarget(task)}
               onSave={async (data) => {
                 const { id, ...fields } = data;
