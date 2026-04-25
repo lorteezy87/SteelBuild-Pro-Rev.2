@@ -51,6 +51,31 @@ const addAliases = (record) => {
 const addAliasesToList = (rows) => (rows || []).map(addAliases);
 
 /**
+ * Coerce a JSONB id-array value into a clean string[]. Postgres can return
+ * JSONB columns as either parsed arrays or stringified JSON depending on the
+ * driver path / supabase-js version. This mirrors the inline asArray helper
+ * used by DailyLogForm but lives at the entity boundary so wrappers can
+ * normalise on write without forcing every UI to repeat the dance.
+ *
+ * Returns [] for any unparseable input — old rows that were never touched
+ * are well-formed via DEFAULT '[]'::jsonb, so [] is the right empty-state.
+ */
+const normalizeIdArray = (v) => {
+  if (Array.isArray(v)) {
+    return v.filter((id) => typeof id === 'string' && id.length > 0);
+  }
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((id) => typeof id === 'string' && id.length > 0);
+      }
+    } catch { /* fall through */ }
+  }
+  return [];
+};
+
+/**
  * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
  */
 const parseSortBy = (sortBy) => {
@@ -388,6 +413,22 @@ export const entities = {
         }
       }
 
+      // Cross-module link arrays (migration 055). Each is an optional
+      // array of UUID strings pointing at rfis / change_orders / action_items.
+      // Normalise to a clean array on write so a bad value (null, undefined,
+      // a stringified JSON blob, an array with nulls) lands as a well-formed
+      // JSONB array — matches the dependencies-array round-trip pattern.
+      const ID_ARRAY_FIELDS = [
+        'related_rfi_ids',
+        'related_change_order_ids',
+        'related_action_item_ids',
+      ];
+      for (const field of ID_ARRAY_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(out, field)) {
+          out[field] = normalizeIdArray(out[field]);
+        }
+      }
+
       // Predecessor link validation. Migration 054 upgraded the
       // schedule_tasks.dependencies element shape from bare UUID strings
       // to {id, type, lag_days}. We don't want any future code path to
@@ -422,8 +463,25 @@ export const entities = {
       }
       return out;
     };
+    // Read-side coercion. Postgres returns JSONB as a parsed array in the
+    // happy path, but defensive normalisation here means the TaskDetailDrawer
+    // and any cross-link query can treat these fields as `string[]` without
+    // each caller defending against a stringified/null value. Mirrors the
+    // dependencies-array tolerance pattern.
+    const normalizeReadRow = (row) => {
+      if (!row || typeof row !== 'object') return row;
+      const out = { ...row };
+      if ('related_rfi_ids' in out)          out.related_rfi_ids          = normalizeIdArray(out.related_rfi_ids);
+      if ('related_change_order_ids' in out) out.related_change_order_ids = normalizeIdArray(out.related_change_order_ids);
+      if ('related_action_item_ids' in out)  out.related_action_item_ids  = normalizeIdArray(out.related_action_item_ids);
+      return out;
+    };
+    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
     return {
       ...base,
+      list:       async (...args)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
+      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
       create:     (record)         => base.create(normalizeFields(record)),
       update:     (id, updates)    => base.update(id, normalizeFields(updates)),
       bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
