@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
+import MultiSelectChips from "@/components/shared/MultiSelectChips";
 
 const inputStyle = {
   width: "100%",
@@ -23,6 +27,20 @@ const labelStyle = {
   marginBottom: "4px",
 };
 
+// Coerce JSONB values that may come back from Postgres as strings or null.
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving }) {
   const isEditing = !!log;
 
@@ -43,13 +61,62 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     delay_hours: "",
     safety_incidents: 0,
     safety_notes: "",
+    photos: [],
+    related_action_item_ids: [],
+    related_rfi_ids: [],
   });
 
   useEffect(() => {
     if (log) {
-      setFormData({ ...log });
+      setFormData({
+        ...log,
+        photos: asArray(log.photos),
+        related_action_item_ids: asArray(log.related_action_item_ids),
+        related_rfi_ids: asArray(log.related_rfi_ids),
+      });
     }
   }, [log]);
+
+  // ── Action Items + RFIs for cross-link multi-selects (project-scoped) ──
+  const { data: actionItems = [] } = useQuery({
+    queryKey: ["action-items-for-link", formData.project_id],
+    queryFn: () =>
+      formData.project_id
+        ? base44.entities.ActionItem.filter({ project_id: formData.project_id })
+        : Promise.resolve([]),
+    enabled: !!formData.project_id,
+    staleTime: 60 * 1000,
+  });
+
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis-for-link", formData.project_id],
+    queryFn: () =>
+      formData.project_id
+        ? base44.entities.RFI.filter({ project_id: formData.project_id })
+        : Promise.resolve([]),
+    enabled: !!formData.project_id,
+    staleTime: 60 * 1000,
+  });
+
+  const actionItemOptions = useMemo(
+    () =>
+      actionItems.map((a) => ({
+        id: a.id,
+        label: a.title || a.description?.slice(0, 40) || `Item ${a.id?.slice(0, 6)}`,
+        sublabel: a.status || "",
+      })),
+    [actionItems]
+  );
+
+  const rfiOptions = useMemo(
+    () =>
+      rfis.map((r) => ({
+        id: r.id,
+        label: r.rfi_number || r.title || `RFI ${r.id?.slice(0, 6)}`,
+        sublabel: r.title && r.rfi_number ? r.title : r.status || "",
+      })),
+    [rfis]
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -67,10 +134,14 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
       wind_speed: formData.wind_speed === "" || formData.wind_speed == null ? null : String(formData.wind_speed),
       delay_hours: parseFloat(formData.delay_hours) || 0,
       safety_incidents: parseInt(formData.safety_incidents) || 0,
+      photos: asArray(formData.photos),
+      related_action_item_ids: asArray(formData.related_action_item_ids),
+      related_rfi_ids: asArray(formData.related_rfi_ids),
     });
   };
 
   const set = (field) => (e) => setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  const setField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
 
   return (
     <div
@@ -192,6 +263,32 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
             <input type="text" value={formData.safety_notes} onChange={set("safety_notes")} style={inputStyle} />
           </div>
         </div>
+
+        {/* Related links — Action Items + RFIs */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <MultiSelectChips
+            label="Related Action Items"
+            value={formData.related_action_item_ids}
+            options={actionItemOptions}
+            onChange={(v) => setField("related_action_item_ids", v)}
+            placeholder={actionItemOptions.length === 0 ? "No items in project" : "Add action item..."}
+          />
+          <MultiSelectChips
+            label="Related RFIs"
+            value={formData.related_rfi_ids}
+            options={rfiOptions}
+            onChange={(v) => setField("related_rfi_ids", v)}
+            placeholder={rfiOptions.length === 0 ? "No RFIs in project" : "Add RFI..."}
+          />
+        </div>
+
+        {/* Photos */}
+        <PhotoStripUploader
+          label="Photos"
+          value={formData.photos}
+          onChange={(v) => setField("photos", v)}
+          disabled={isSaving}
+        />
 
         {/* Actions */}
         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>

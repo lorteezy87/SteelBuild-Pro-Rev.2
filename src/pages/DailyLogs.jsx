@@ -10,6 +10,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Copy } from "lucide-react";
+import { logActivity } from "@/services/auditLogger";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -121,22 +122,31 @@ export default function DailyLogs() {
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.DailyLog.create(data),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
       toast.success("Daily log created");
       setShowForm(false);
       setEditing(null);
+      // Audit trail — fire-and-forget
+      logActivity("daily_log", "created", created, {
+        projectId,
+        description: `Daily log for ${created?.date || "today"}`,
+      });
     },
     onError: (err) => toast.error(err.message),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.DailyLog.update(id, data),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ["daily-logs", projectId] });
       toast.success("Daily log updated");
       setShowForm(false);
       setEditing(null);
+      logActivity("daily_log", "updated", updated, {
+        projectId,
+        description: `Daily log for ${updated?.date || ""}`,
+      });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -151,6 +161,7 @@ export default function DailyLogs() {
       }
       toast.success("Daily log deleted");
       setDeleteTarget(null);
+      logActivity("daily_log", "deleted", { id: deletedId }, { projectId });
     },
     onError: (err) => toast.error(err.message),
   });

@@ -9,6 +9,7 @@ import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar } from "@/components/design-system";
 import { Plus } from "lucide-react";
+import { logActivity } from "@/services/auditLogger";
 
 export default function Punchlist() {
   const [searchParams] = useSearchParams();
@@ -43,22 +44,46 @@ export default function Punchlist() {
   const createMut = useMutation({
     mutationFn: (data) =>
       base44.entities.PunchlistItem.create({ ...data, project_id: data.project_id || projectId }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Item created");
+      logActivity("punchlist_item", "created", created, {
+        projectId,
+        description: created?.description?.slice(0, 80) || "",
+      });
     },
     onError: (err) => toast.error(err.message),
   });
 
+  // Update mutation receives { ...data, id, _prevStatus } so we can fire a
+  // status_changed activity (and a "Completed" close event) deterministically
+  // from the page rather than guessing on the backend.
   const updateMut = useMutation({
-    mutationFn: (data) => base44.entities.PunchlistItem.update(data.id, data),
-    onSuccess: () => {
+    mutationFn: ({ _prevStatus, ...data }) => base44.entities.PunchlistItem.update(data.id, data),
+    onSuccess: (updated, vars) => {
       qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
       setShowForm(false);
       setEditing(null);
       toast.success("Item updated");
+
+      const prev = vars?._prevStatus;
+      const next = updated?.status;
+      if (prev && next && prev !== next) {
+        logActivity("punchlist_item", "status_changed", updated, {
+          projectId,
+          description: `${prev} → ${next}`,
+        });
+        if (next === "Completed") {
+          logActivity("punchlist_item", "updated", updated, {
+            projectId,
+            description: `Closed (was ${prev})`,
+          });
+        }
+      } else {
+        logActivity("punchlist_item", "updated", updated, { projectId });
+      }
     },
     onError: (err) => toast.error(err.message),
   });
@@ -73,13 +98,14 @@ export default function Punchlist() {
       }
       setDeleteTarget(null);
       toast.success("Item deleted");
+      logActivity("punchlist_item", "deleted", { id: deletedId }, { projectId });
     },
     onError: () => toast.error("Delete failed"),
   });
 
   const handleSave = (data) => {
     if (editing) {
-      updateMut.mutate({ ...data, id: editing.id });
+      updateMut.mutate({ ...data, id: editing.id, _prevStatus: editing.status });
     } else {
       createMut.mutate(data);
     }
