@@ -38,6 +38,8 @@ import {
   computeZoneStatus,
   recomputeAndPersistZoneStatus,
   createNewRevisionAndCarryZones,
+  // V3.1 — zone-to-zone dependency graph
+  listZoneDependencies,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -275,6 +277,10 @@ export default function DrawingViewer() {
   // we surface its bbox on the canvas via ZoneLayer.proposalOverlays.
   const [proposalPanelOpen, setProposalPanelOpen] = useState(false);
   const [hoveredProposal, setHoveredProposal] = useState(null);
+  // V3.1 — Drawing Hub zone-to-zone dependency graph. DEPS toggle in
+  // the toolbar surfaces directed edges between zones as arrows on
+  // the canvas. Default OFF so the layer doesn't surprise V3.0 users.
+  const [showDeps, setShowDeps] = useState(false);
 
   // Resolve (or create) the drawing_revisions row that zones attach to.
   // MVP: every drawing gets a v1 revision the first time the user opens
@@ -312,6 +318,81 @@ export default function DrawingViewer() {
     staleTime: 30 * 1000,
   });
   const pendingProposalCount = proposalCountData?.total ?? 0;
+
+  // V3.1 — pull every active dependency edge incident to this drawing
+  // (either source or target zone lives on the current sheet). Used
+  // for the canvas DEPS overlay; cross-sheet edges still come back so
+  // we can render their "→ Sheet X" pills.
+  const { data: depsData = { rows: [], total: 0 } } = useQuery({
+    queryKey: ["drawing-zone-dependencies-sheet", projectId, activeDrawing?.id],
+    queryFn: () => listZoneDependencies({
+      projectId,
+      drawingId: activeDrawing.id,
+    }),
+    enabled: !!projectId && !!activeDrawing?.id && showDeps,
+    staleTime: 30 * 1000,
+  });
+  const sheetDependencies = depsData.rows || [];
+
+  // Build the dependencyEdges payload ZoneLayer wants. For each row:
+  //   - resolve source/target centroid from the hydrated bbox
+  //   - flag cross-sheet when one endpoint isn't on the active drawing
+  //   - hand the relationship + propagation_weight through verbatim
+  // Centroid math uses the hydrated bbox (mid-x, mid-y) so the arrow
+  // endpoints land in the visual middle of the zone, not its corner.
+  const dependencyEdges = useMemo(() => {
+    if (!showDeps || sheetDependencies.length === 0) return [];
+    const out = [];
+    for (const d of sheetDependencies) {
+      if (!d.__source || !d.__target) continue;
+      const src = d.__source;
+      const tgt = d.__target;
+      const srcOnSheet = src.drawing_id === activeDrawing?.id;
+      const tgtOnSheet = tgt.drawing_id === activeDrawing?.id;
+      const srcCenter = srcOnSheet
+        ? [(Number(src.x_min) + Number(src.x_max)) / 2, (Number(src.y_min) + Number(src.y_max)) / 2]
+        : null;
+      const tgtCenter = tgtOnSheet
+        ? [(Number(tgt.x_min) + Number(tgt.x_max)) / 2, (Number(tgt.y_min) + Number(tgt.y_max)) / 2]
+        : null;
+      // Anchor cross-sheet pills at whichever endpoint IS on this sheet.
+      if (!srcOnSheet && !tgtOnSheet) continue;
+      if (srcOnSheet && tgtOnSheet) {
+        out.push({
+          id:                d.id,
+          sourceCenter:      srcCenter,
+          targetCenter:      tgtCenter,
+          relationship:      d.relationship,
+          propagationWeight: Number(d.propagation_weight ?? 1),
+          isCrossSheet:      false,
+          crossSheetLabel:   null,
+        });
+      } else if (srcOnSheet) {
+        // Outbound to another sheet — pill at source.
+        out.push({
+          id:                d.id,
+          sourceCenter:      srcCenter,
+          targetCenter:      null,
+          relationship:      d.relationship,
+          propagationWeight: Number(d.propagation_weight ?? 1),
+          isCrossSheet:      true,
+          crossSheetLabel:   tgt.sheet_number || "other sheet",
+        });
+      } else {
+        // Inbound from another sheet — pill at target (which IS on this sheet).
+        out.push({
+          id:                d.id,
+          sourceCenter:      tgtCenter, // anchor at the on-sheet endpoint
+          targetCenter:      null,
+          relationship:      d.relationship,
+          propagationWeight: Number(d.propagation_weight ?? 1),
+          isCrossSheet:      true,
+          crossSheetLabel:   `from ${src.sheet_number || "other sheet"}`,
+        });
+      }
+    }
+    return out;
+  }, [showDeps, sheetDependencies, activeDrawing?.id]);
 
   // Link-count summaries keyed by zone id — used by the label chip to
   // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
@@ -1239,6 +1320,38 @@ export default function DrawingViewer() {
                 </button>
               )}
 
+              {/* V3.1 — DEPS overlay toggle. Renders directed dependency
+                  arrows between zones (red=blocks, amber=depends_on,
+                  gray dashed=relates_to). Cross-sheet edges show as a
+                  "→ Sheet X" pill instead of an arrow. Hidden in OFF
+                  mode because there are no zone shapes to anchor
+                  arrows to. */}
+              {zoneMode !== "off" && (
+                <button
+                  onClick={() => setShowDeps((v) => !v)}
+                  title={showDeps
+                    ? "Hide dependency arrows"
+                    : "Show directed dependency arrows between zones (V3.1)"}
+                  style={{
+                    padding: "5px 10px",
+                    border: `1px solid ${showDeps ? "#F59E0B" : "transparent"}`,
+                    background: showDeps
+                      ? "rgba(245,158,11,0.14)"
+                      : "transparent",
+                    color: showDeps ? "#F59E0B" : "var(--text-muted)",
+                    borderRadius: 3,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.10em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    marginLeft: 4,
+                  }}
+                >
+                  DEPS
+                </button>
+              )}
+
               {/* Shape chooser — only relevant while DRAW is active.
                   Rectangle is fastest (drag) and polygon is for
                   irregular zones like erection bays or stair cores.
@@ -1556,6 +1669,8 @@ export default function DrawingViewer() {
                     status: hoveredProposal.status,
                     label: hoveredProposal.suggested_label,
                   }] : []}
+                  dependencyEdges={dependencyEdges}
+                  showDependencies={showDeps}
                 />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
@@ -1707,6 +1822,16 @@ export default function DrawingViewer() {
           setPanelZoneId(null);
           setSelectedZoneId(null);
           await refetchZones();
+        }}
+        // V3.1 — cross-sheet dependency rows in the panel deep-link to
+        // the target drawing. Closing the panel keeps the navigation
+        // feeling instant; the user can re-open the equivalent zone on
+        // the destination sheet.
+        onSheetNavigate={(drawingId) => {
+          if (!drawingId) return;
+          setPanelZoneId(null);
+          setSelectedZoneId(null);
+          setActiveId(drawingId);
         }}
       />
     </div>
