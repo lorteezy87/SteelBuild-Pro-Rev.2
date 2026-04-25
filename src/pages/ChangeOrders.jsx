@@ -526,7 +526,7 @@ export default function ChangeOrders() {
       />
       <ChangeOrderImportModal
         open={importOpen}
-        projectId={projectId}
+        projectId={activeProject?.id}
         projectName={projectName}
         projects={projects}
         onClose={() => setImportOpen(false)}
