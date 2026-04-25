@@ -30,7 +30,12 @@ import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import QuickAddFAB from "./components/shared/QuickAddFAB";
-import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
+// AiAssistantLauncher intentionally not imported — the floating "Ask AI"
+// launcher and its Cmd/Ctrl+K shortcut were hidden site-wide because the
+// schedule-assistant edge function isn't reliably returning answers yet.
+// The component, drawer, hook, and edge-function call site are all still
+// in the repo — uncomment this import + its render below to re-enable.
+// import AiAssistantLauncher from "./components/ai-assistant/AiAssistantLauncher";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
@@ -444,7 +449,9 @@ export default function Layout({ children, currentPageName }) {
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
         <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
         <QuickAddFAB />
-        <AiAssistantLauncher />
+        {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
+            edge function returns reliable answers. Underlying code kept
+            in src/components/ai-assistant/* for re-enable. */}
         <Toaster
           position="bottom-right"
           toastOptions={{
