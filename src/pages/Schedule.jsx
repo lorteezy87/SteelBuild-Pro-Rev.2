@@ -533,22 +533,40 @@ export default function Schedule() {
         uidToDbId[t.uid] = record.id;
       }
 
-      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs
+      // Second pass: set dependencies (predecessors) now that all tasks have DB IDs.
+      // MS Project encodes link type as Type (0=FF, 1=FS, 2=SF, 3=SS) and
+      // LinkLag as tenths of minutes (positive = lag, negative = lead).
+      // We now persist the full link object — { id, type, lag_days } —
+      // so the cascade picks up the right semantics on first render
+      // instead of assuming FS+1 for everything imported.
+      const MS_LINK_TYPE = { "0": "FF", "1": "FS", "2": "SF", "3": "SS" };
+      const TENTHS_PER_DAY = 10 * 60 * 8; // tenths of minutes in an 8h workday
       const depItems = [];
       allParsed.forEach((t) => {
         if (t.preds && t.preds.length > 0) {
           const dbId = uidToDbId[t.uid];
-          const predDbIds = t.preds.map(p => uidToDbId[p.predUid]).filter(Boolean);
-          if (dbId && predDbIds.length > 0) {
-            depItems.push({ dbId, predDbIds });
+          const predLinks = t.preds
+            .map((p) => {
+              const id = uidToDbId[p.predUid];
+              if (!id) return null;
+              const type = MS_LINK_TYPE[p.linkType] || "FS";
+              // Convert tenths-of-minutes to whole days; round so a
+              // typical 1-day lag (4800 tenths) lands on lag_days=1.
+              const lagTenths = Number(p.lagDuration) || 0;
+              const lag_days = Math.round(lagTenths / TENTHS_PER_DAY);
+              return { id, type, lag_days };
+            })
+            .filter(Boolean);
+          if (dbId && predLinks.length > 0) {
+            depItems.push({ dbId, predLinks });
           }
         }
       });
       if (depItems.length > 0) {
         await batchProcess(
           depItems,
-          ({ dbId, predDbIds }) => base44.entities.ScheduleTask.update(dbId, {
-            dependencies: JSON.stringify(predDbIds),
+          ({ dbId, predLinks }) => base44.entities.ScheduleTask.update(dbId, {
+            dependencies: JSON.stringify(predLinks),
           }),
         );
       }
