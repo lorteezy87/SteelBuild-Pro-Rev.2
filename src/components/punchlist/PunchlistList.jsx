@@ -1,5 +1,18 @@
 import React, { useState } from "react";
 
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 const STATUS_COLORS = {
   Open: "var(--status-error)",
   "In Progress": "var(--status-warning)",
@@ -39,7 +52,9 @@ export default function PunchlistList({ items = [] }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {items.map((item) => (
+      {items.map((item) => {
+        const photos = asArray(item.photos);
+        return (
         <div key={item.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "10px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
           {/* Header */}
           <div onClick={() => setExpanded(expanded === item.id ? null : item.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === item.id ? "1px solid var(--divider)" : "none" }}>
@@ -47,7 +62,12 @@ export default function PunchlistList({ items = [] }) {
 
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{item.description}</div>
-              {item.location && <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>📍 {item.location}</div>}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "2px", fontSize: "10px", color: "var(--text-muted)", flexWrap: "wrap" }}>
+                {item.location && <span>📍 {item.location}</span>}
+                {photos.length > 0 && (
+                  <span style={{ color: "var(--accent)" }}>📷 {photos.length}</span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -98,10 +118,49 @@ export default function PunchlistList({ items = [] }) {
                   </div>
                 </div>
               )}
+
+              {photos.length > 0 && (
+                <div style={{ marginTop: "12px" }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Photos ({photos.length})</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {photos.map((p, idx) => {
+                      const url = p.file_url || p.path || p.url || "";
+                      return (
+                        <a
+                          key={idx}
+                          href={url || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={p.name || `photo-${idx}`}
+                          style={{
+                            display: "block",
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            border: "1px solid var(--border-default)",
+                            overflow: "hidden",
+                            background: "var(--bg-input)",
+                          }}
+                        >
+                          {url ? (
+                            <img
+                              src={url}
+                              alt={p.name || `photo-${idx}`}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                          ) : null}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
