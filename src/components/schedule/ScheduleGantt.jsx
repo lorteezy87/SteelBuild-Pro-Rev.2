@@ -1495,9 +1495,14 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     </span>
                   </span>
                 )}
-                {/* Duration */}
+                {/* Duration — always derive from start/end so a stale stored
+                    `duration` from an old MS Project import (or a manual edit
+                    that touched dates without touching the duration column)
+                    can't display "1d" on a 140-day task. The schedule_tasks
+                    table still has a `duration` column, but it is no longer
+                    a source of truth for display. */}
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
-                  {task.duration ? `${task.duration}d` : calcDuration(task.start_date, task.end_date)}
+                  {calcDuration(task.start_date, task.end_date)}
                 </span>
                 {/* Start */}
                 {isEditing ? (

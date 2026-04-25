@@ -337,7 +337,61 @@ export const entities = {
   DrawingRevision:       createEntityClient('drawing_revisions'),
   DrawingZone:           createEntityClient('drawing_zones'),
   DrawingLink:           createEntityClient('drawing_links'),
-  ScheduleTask:          createEntityClient('schedule_tasks'),
+  ScheduleTask:          (() => {
+    // Schedule audit fix (bug class 3): keep status and percent_complete in
+    // lock-step on every create/update so no future code path can land a row
+    // where status='Complete' & percent_complete<100, or status='Not Started'
+    // & percent_complete>0. The DB also has a CHECK constraint enforcing this
+    // (migration: schedule_status_pct_consistency), but normalising here gives
+    // friendlier UX (a slider drag to 100% silently flips status to Complete)
+    // and avoids round-trip 400 errors. Existing bad rows are NOT auto-fixed.
+    const base = createEntityClient('schedule_tasks');
+    const STATUS_VALUES = new Set([
+      'Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold', 'Cancelled',
+    ]);
+    const normalizeFields = (fields = {}) => {
+      const out = { ...fields };
+      const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
+      const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
+
+      if (hasPct) {
+        const n = Number(out.percent_complete);
+        if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));
+      }
+      if (hasStatus && !STATUS_VALUES.has(out.status)) {
+        // Unrecognised status — leave it alone, server CHECK will reject.
+      }
+
+      // Reconciliation rules — explicit caller intent wins; we only fill
+      // gaps where the caller set ONE side of the pair without the other.
+      if (hasStatus && !hasPct) {
+        if (out.status === 'Complete')    out.percent_complete = 100;
+        if (out.status === 'Not Started') out.percent_complete = 0;
+        // 'In Progress' / 'Delayed' / 'On Hold' don't pin a value — keep DB current
+      } else if (hasPct && !hasStatus) {
+        if (out.percent_complete >= 100)      out.status = 'Complete';
+        else if (out.percent_complete > 0)    out.status = 'In Progress';
+        else                                  out.status = 'Not Started';
+      } else if (hasStatus && hasPct) {
+        // Both supplied — coerce contradictions into the canonical pair so
+        // bad inputs land cleanly instead of failing the CHECK constraint.
+        if (out.status === 'Complete' && out.percent_complete < 100) {
+          out.percent_complete = 100;
+        } else if (out.status === 'Not Started' && out.percent_complete > 0) {
+          out.percent_complete = 0;
+        } else if (out.status === 'In Progress' && out.percent_complete >= 100) {
+          out.percent_complete = 99;
+        }
+      }
+      return out;
+    };
+    return {
+      ...base,
+      create:     (record)         => base.create(normalizeFields(record)),
+      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
+      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+    };
+  })(),
   TaskDependency:        createEntityClient('task_dependencies'),
   Submittal:             createEntityClient('submittals'),
   Comment:               createEntityClient('comments'),
