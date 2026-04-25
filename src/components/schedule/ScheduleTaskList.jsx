@@ -73,10 +73,16 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     if (e?.target?.closest("button,input[type='checkbox'],select")) return;
     if (editingId === task.id) return;
     setEditingId(task.id);
+    // Seed inline-edit drafts from STORED values, not the effective
+    // overlay. If `applyEffectiveDates` overwrote start_date / end_date
+    // with cascade results, _stored_* holds the user-entered values —
+    // which is what we want them to edit. Falling back to the visible
+    // dates handles the case where no overlay was applied (legacy code
+    // paths or tests).
     setEditDraft({
       task_name:   task.task_name   || "",
-      start_date:  task.start_date  || "",
-      end_date:    task.end_date    || "",
+      start_date:  task._stored_start_date ?? task.start_date ?? "",
+      end_date:    task._stored_end_date   ?? task.end_date   ?? "",
       assigned_to: task.assigned_to || "",
       priority:    task.priority    || "Normal",
       status:      task.status      || "Not Started",
@@ -274,7 +280,11 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       )}
                     </div>
 
-                    {/* Start Date */}
+                    {/* Start Date — when editing, the user types stored
+                        values, not effective. _stored_start_date is the
+                        as-entered date; if no overlay was applied it
+                        will be undefined and we fall back to the visible
+                        start_date (which is the same value). */}
                     <div>
                       {isEditing ? (
                         <input
@@ -285,8 +295,12 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                           style={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
                         />
                       ) : (
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.start_date ? "var(--text-secondary)" : "var(--text-muted)" }}>
+                        <span
+                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.start_date ? "var(--text-secondary)" : "var(--text-muted)" }}
+                          title={task._shifted ? `Stored: ${task._stored_start_date || "—"}\nShifted ${task._shifted_by || 0}d by predecessors` : undefined}
+                        >
                           {task.start_date ? fmtDate(task.start_date) : "—"}
+                          {task._shifted ? <span style={{ color: "var(--accent)", marginLeft: 2 }} aria-hidden>*</span> : null}
                         </span>
                       )}
                     </div>
@@ -302,8 +316,12 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                           style={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
                         />
                       ) : (
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.end_date ? "var(--text-secondary)" : "var(--text-muted)" }}>
+                        <span
+                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.end_date ? "var(--text-secondary)" : "var(--text-muted)" }}
+                          title={task._shifted ? `Stored: ${task._stored_end_date || "—"}\nShifted ${task._shifted_by || 0}d by predecessors` : undefined}
+                        >
                           {task.end_date ? fmtDate(task.end_date) : "—"}
+                          {task._shifted ? <span style={{ color: "var(--accent)", marginLeft: 2 }} aria-hidden>*</span> : null}
                         </span>
                       )}
                     </div>
