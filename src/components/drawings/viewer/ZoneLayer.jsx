@@ -65,6 +65,22 @@ export default function ZoneLayer({
   // status, label? }. The parent owns hover state — pass an array
   // containing only the hovered proposal to focus it on the canvas.
   proposalOverlays = [],
+  // V3.1: Drawing Hub Zone-to-Zone Dependency Graph. Directed edges
+  // between zones drawn as arrows on the canvas. Each entry:
+  //   {
+  //     id,
+  //     sourceCenter: [x_norm, y_norm],
+  //     targetCenter: [x_norm, y_norm] | null,
+  //     relationship: "blocks" | "depends_on" | "relates_to",
+  //     propagationWeight: number,
+  //     isCrossSheet: boolean,
+  //     crossSheetLabel: string | null,
+  //   }
+  // Same-sheet edges render as curved arrows; cross-sheet edges
+  // render as a small "→ Sheet X" pill anchored at sourceCenter.
+  // Pointer-events:none so clicks fall through to zones underneath.
+  dependencyEdges = [],
+  showDependencies = false,
 }) {
   const svgRef = useRef(null);
   // Rectangle draft (one drag): { x0, y0, x1, y1 } in canvas px.
@@ -339,6 +355,21 @@ export default function ZoneLayer({
       onDoubleClick={onDoubleClick}
       onMouseLeave={onMouseUp /* commit rect draft on leave so a quick off-canvas drag doesn't leave a phantom */}
     >
+      {/* V3.1: arrowhead markers for dependency edges, defined once
+          per relationship color so SVG can reference them by id. */}
+      {showDependencies && Array.isArray(dependencyEdges) && dependencyEdges.length > 0 && (
+        <defs>
+          <marker id="dep-arrow-blocks"     viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#EF4444" />
+          </marker>
+          <marker id="dep-arrow-depends_on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#F59E0B" />
+          </marker>
+          <marker id="dep-arrow-relates_to" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94A3B8" />
+          </marker>
+        </defs>
+      )}
       {zoneShapes.map(({ z, palette, xPx, yPx, wPx, hPx, isSelected, count, isPolygon, polygonAttr, density }) => (
         <g
           key={z.id}
@@ -470,6 +501,91 @@ export default function ZoneLayer({
                   </g>
                 )}
               </g>
+            );
+          })}
+        </g>
+      )}
+
+      {/* V3.1: dependency edges. Same-sheet edges render as a curved
+          bezier arrow from source centroid to target centroid; cross-
+          sheet edges render as a "→ Sheet N" pill at the source. The
+          whole layer is non-interactive so clicks fall through to the
+          underlying zone shapes. */}
+      {showDependencies && Array.isArray(dependencyEdges) && dependencyEdges.length > 0 && (
+        <g pointerEvents="none">
+          {dependencyEdges.map((e) => {
+            if (!e || !Array.isArray(e.sourceCenter)) return null;
+            const sx = Number(e.sourceCenter[0]) * canvasWidth;
+            const sy = Number(e.sourceCenter[1]) * canvasHeight;
+            const color =
+              e.relationship === "blocks"     ? "#EF4444" :
+              e.relationship === "depends_on" ? "#F59E0B" :
+                                                "#94A3B8";
+            // Stroke width scales with propagation_weight: 1.0 →
+            // baseline 1.75 px; capped at 4 px so a hot blocker
+            // doesn't drown the sheet. relates_to has no propagation
+            // weight in the engine but still renders at baseline.
+            const w = Math.max(0.4, Math.min(2, Number(e.propagationWeight ?? 1)));
+            const strokeWidth = e.relationship === "relates_to" ? 1.25 : 1.25 + 1.4 * w;
+            const dash = e.relationship === "relates_to" ? "5 4" : undefined;
+
+            // Cross-sheet: anchor a pill at the source. Doesn't draw an
+            // arrow because there's nowhere to land it on this sheet.
+            if (e.isCrossSheet || !Array.isArray(e.targetCenter)) {
+              const pillText = `→ ${e.crossSheetLabel || "other sheet"}`;
+              const pillW = Math.min(160, 8 + pillText.length * 6.2);
+              return (
+                <g key={`dep-${e.id}`} transform={`translate(${sx + 6}, ${sy - 18})`}>
+                  <rect
+                    width={pillW}
+                    height={16}
+                    rx={3} ry={3}
+                    fill="rgba(15,17,24,0.86)"
+                    stroke={color}
+                    strokeWidth={1}
+                    strokeDasharray={dash}
+                  />
+                  <text
+                    x={6} y={11}
+                    fontFamily="var(--font-mono, monospace)"
+                    fontSize={9}
+                    fontWeight={700}
+                    fill={color}
+                    style={{ letterSpacing: "0.04em" }}
+                  >
+                    {pillText.slice(0, 22)}
+                  </text>
+                </g>
+              );
+            }
+
+            const tx = Number(e.targetCenter[0]) * canvasWidth;
+            const ty = Number(e.targetCenter[1]) * canvasHeight;
+            // Curved bezier: control point pushed perpendicular to the
+            // segment so multiple parallel edges fan out instead of
+            // overlapping. Curvature scales with chord length so very
+            // short edges don't loop back on themselves.
+            const dx = tx - sx;
+            const dy = ty - sy;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny =  dx / len;
+            const bow = Math.min(40, len * 0.18);
+            const cx = (sx + tx) / 2 + nx * bow;
+            const cy = (sy + ty) / 2 + ny * bow;
+            const path = `M ${sx} ${sy} Q ${cx} ${cy} ${tx} ${ty}`;
+            return (
+              <path
+                key={`dep-${e.id}`}
+                d={path}
+                fill="none"
+                stroke={color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={dash}
+                strokeLinecap="round"
+                markerEnd={`url(#dep-arrow-${e.relationship})`}
+                opacity={0.85}
+              />
             );
           })}
         </g>
