@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 
 const emptyForm = {
   project_id: "",
@@ -13,7 +14,21 @@ const emptyForm = {
   target_completion_date: "",
   percent_complete: "0",
   notes: "",
+  photos: [],
 };
+
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 const inputStyle = {
   width: "100%",
@@ -45,7 +60,12 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
   useEffect(() => {
     setFormData(
       item
-        ? { ...emptyForm, ...item, percent_complete: String(item.percent_complete ?? "0") }
+        ? {
+            ...emptyForm,
+            ...item,
+            percent_complete: String(item.percent_complete ?? "0"),
+            photos: asArray(item.photos),
+          }
         : { ...emptyForm, project_id: projectId || "" }
     );
   }, [item, projectId]);
@@ -62,6 +82,7 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
     onSave?.({
       ...formData,
       percent_complete: parseInt(formData.percent_complete) || 0,
+      photos: asArray(formData.photos),
     });
   };
 
@@ -141,6 +162,13 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
             <label style={labelStyle}>Notes</label>
             <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
           </div>
+
+          <PhotoStripUploader
+            label="Photos"
+            value={formData.photos}
+            onChange={(v) => setFormData({ ...formData, photos: v })}
+            disabled={isSaving}
+          />
 
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
             <button type="button" onClick={onClose} disabled={isSaving} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, cursor: isSaving ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: isSaving ? 0.5 : 1 }}>Cancel</button>

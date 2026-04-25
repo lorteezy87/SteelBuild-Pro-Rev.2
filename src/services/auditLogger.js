@@ -15,17 +15,19 @@ import { base44 } from "@/api/base44Client";
 
 // ─── Entity display names ──────────────────────────────────────────────
 const ENTITY_LABELS = {
-  drawing:       "Drawing",
-  delivery:      "Delivery",
-  rfi:           "RFI",
-  change_order:  "ChangeOrder",
-  expense:       "Expense",
-  cost_code:     "CostCode",
-  work_package:  "WorkPackage",
-  schedule_task: "ScheduleTask",
-  sov_item:      "SOVItem",
-  alert:         "Alert",
-  project:       "Project",
+  drawing:        "Drawing",
+  delivery:       "Delivery",
+  rfi:            "RFI",
+  change_order:   "ChangeOrder",
+  expense:        "Expense",
+  cost_code:      "CostCode",
+  work_package:   "WorkPackage",
+  schedule_task:  "ScheduleTask",
+  sov_item:       "SOVItem",
+  alert:          "Alert",
+  project:        "Project",
+  daily_log:      "DailyLog",
+  punchlist_item: "PunchlistItem",
 };
 
 // ─── Extract a human-readable name from a record ───────────────────────
@@ -43,6 +45,7 @@ function getEntityName(entityType, record) {
     record.wp_number ||
     record.cost_code_number ||
     record.task_name ||
+    record.date ||
     record.description ||
     `${entityType} #${record.id || "?"}`
   );
