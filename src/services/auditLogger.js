@@ -28,6 +28,7 @@ const ENTITY_LABELS = {
   project:        "Project",
   daily_log:      "DailyLog",
   punchlist_item: "PunchlistItem",
+  production_note: "ProductionNote",
 };
 
 // ─── Extract a human-readable name from a record ───────────────────────
