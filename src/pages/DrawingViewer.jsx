@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { supabase } from "@/lib/supabase";
 import * as pdfjsLib from "pdfjs-dist";
 // Bundle the pdf.js worker with Vite so versions always match the installed
 // pdfjs-dist package. Previously we loaded `.min.js` from cdnjs, but pdfjs-dist
@@ -74,6 +75,11 @@ export default function DrawingViewer() {
   const projectId = activeProject?.id;
 
   const initialId = searchParams.get("id") || searchParams.get("drawingId") || searchParams.get("docId");
+
+  const [userId, setUserId] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id || null));
+  }, []);
 
   const [activeId, setActiveId] = useState(initialId || null);
   const [search, setSearch] = useState("");
@@ -1793,7 +1799,7 @@ export default function DrawingViewer() {
         drawing={activeDrawing}
         drawingRevisionId={currentRevision?.id}
         analysisId={null /* viewer doesn't currently know which analysis is active; service falls back to "all findings on this drawing" */}
-        userId={null}
+        userId={userId}
         onHoverProposal={setHoveredProposal}
         onProposalsChange={() => {
           // Refetch zones so accept/merge results show on the canvas
@@ -1811,6 +1817,7 @@ export default function DrawingViewer() {
             : null}
         open={!!panelZoneId}
         onClose={() => setPanelZoneId(null)}
+        userId={userId}
         onZoneUpdate={async (patch) => {
           if (!panelZoneId) return;
           await updateZoneSvc(panelZoneId, patch);

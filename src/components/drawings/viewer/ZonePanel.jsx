@@ -101,6 +101,7 @@ export default function ZonePanel({
   onClose,
   onZoneUpdate,   // (patch) => Promise — parent handles DB update + refetch
   onZoneDelete,   // () => Promise
+  userId,         // auth.users.id — stamped into audit fields on all mutations
   // V3.1: cross-sheet dependency rows can deep-link to the target
   // sheet via this callback. Parent (DrawingViewer) passes a setter
   // that flips activeId. Optional — when missing, cross-sheet rows
@@ -239,6 +240,7 @@ export default function ZonePanel({
         zone,
         recordType,
         recordId,
+        userId:     userId || null,
         linkRole:   "related",
         linkSource: "manual",
       });
@@ -251,7 +253,7 @@ export default function ZonePanel({
   });
 
   const removeMut = useMutation({
-    mutationFn: async (linkId) => removeLinkSvc({ linkId }),
+    mutationFn: async (linkId) => removeLinkSvc({ linkId, userId: userId || null }),
     onSuccess: async () => {
       toast.success("Unlinked");
       await afterLinksChanged();
@@ -532,6 +534,7 @@ export default function ZonePanel({
               currentSheetDrawingId={zone?.drawing_id}
               dependencies={dependencies}
               dependencyImpact={dependencyImpact}
+              userId={userId || null}
               onSheetNavigate={onSheetNavigate}
               onAdded={async () => {
                 await refetchDeps();
@@ -588,6 +591,7 @@ export default function ZonePanel({
                 zone,
                 recordType: suggestion.recordType,
                 recordId:   suggestion.recordId,
+                userId:     userId || null,
                 linkRole:   "related",
                 linkSource: "ai_suggested",
                 confidenceScore: suggestion.confidence,
@@ -656,6 +660,7 @@ export default function ZonePanel({
                     zone,
                     recordType: "rfi",
                     recordId:   newRfi.id,
+                    userId:     userId || null,
                     linkRole:   "related",
                     linkSource: "manual",
                     metadata:   { created_from_zone: true },
@@ -1698,6 +1703,7 @@ function DependenciesTab({
   currentSheetDrawingId,
   dependencies,
   dependencyImpact,
+  userId,
   onSheetNavigate,
   onAdded,
   onRemoved,
@@ -1736,7 +1742,7 @@ function DependenciesTab({
   const handleRemove = async (depId) => {
     if (!window.confirm("Remove this dependency? Activity history is preserved.")) return;
     try {
-      await removeZoneDependency(depId);
+      await removeZoneDependency(depId, { userId: userId || null });
       toast.success("Dependency removed");
       await onRemoved?.();
     } catch (err) {
@@ -1825,6 +1831,7 @@ function DependenciesTab({
         <AddDependencyModal
           zone={zone}
           existingDependencies={dependencies}
+          userId={userId || null}
           onClose={() => setAddOpen(false)}
           onSaved={async () => {
             setAddOpen(false);
@@ -2016,7 +2023,7 @@ function DependencyRow({
 // Picker for a target zone (anywhere in the same project, with sheet
 // labels), relationship select, propagation weight slider, optional
 // note. Submits via addZoneDependency() and closes on success.
-function AddDependencyModal({ zone, existingDependencies, onClose, onSaved }) {
+function AddDependencyModal({ zone, existingDependencies, userId, onClose, onSaved }) {
   const [relationship, setRelationship] = useState("blocks");
   const [weight, setWeight]             = useState(1.0);
   const [note, setNote]                 = useState("");
@@ -2111,6 +2118,7 @@ function AddDependencyModal({ zone, existingDependencies, onClose, onSaved }) {
         relationship,
         propagationWeight: Number(weight),
         note:              note.trim() || null,
+        userId:            userId || null,
       });
       toast.success("Dependency added");
       await onSaved?.();
