@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
+import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 /** @type {import('react').CSSProperties} */
 const iStyle = {
@@ -302,6 +303,18 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
           </div>
 
+          {/* Inbound chips — schedule tasks that link to this RFI. Read-only;
+              edit the link from the schedule task's LINKS tab. Only renders
+              when we're editing an existing RFI (new RFIs have no id yet). */}
+          {rfi?.id && formData.project_id && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)" }}>
+              <RelatedScheduleTasksChips
+                projectId={formData.project_id}
+                relatedField="related_rfi_ids"
+                targetId={rfi.id}
+              />
+            </div>
+          )}
         </form>
         {/* Footer */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", padding: "12px 24px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface)", flexShrink: 0 }}>
