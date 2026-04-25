@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { calculateTaskDuration, computeAutoScheduledDates } from './scheduleUtils';
 import { PHASES } from '../../utils/phases';
 import {
@@ -14,6 +16,35 @@ import {
   serializeDependencies,
   LINK_TYPES,
 } from '../../services/scheduleCascade';
+import MultiSelectChips from '@/components/shared/MultiSelectChips';
+import { logActivity } from '@/services/auditLogger';
+
+// Coerce JSONB values that may come back from Postgres as strings or null.
+// Mirrors the helper in DailyLogForm — the entity wrapper also normalises,
+// but defending in the editor lets us tolerate stale cached rows that were
+// fetched before the wrapper coercion landed.
+function asIdArray(v) {
+  if (Array.isArray(v)) return v.filter((id) => typeof id === 'string' && id.length > 0);
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string' && id.length > 0) : [];
+    } catch { return []; }
+  }
+  return [];
+}
+
+// Compare two id-arrays for equality (order-insensitive). Used to detect
+// whether the related-* fields actually changed on save so we only emit a
+// single audit-log entry when something is different.
+function sameIdSet(a, b) {
+  const aa = Array.isArray(a) ? a : [];
+  const bb = Array.isArray(b) ? b : [];
+  if (aa.length !== bb.length) return false;
+  const sa = new Set(aa);
+  for (const id of bb) if (!sa.has(id)) return false;
+  return true;
+}
 
 /**
  * Parse the upgraded `dependencies` TEXT column. Each element is now a
@@ -40,6 +71,62 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     setStageDates(getStageDates(task));
   }, [task]);
 
+  // ── Project-scoped option lists for the LINKS tab. Cache for a minute
+  //    so toggling tabs doesn't refetch. Same idiom as DailyLogForm. ─────
+  const linkProjectId = task?.project_id;
+  const { data: rfis = [] } = useQuery({
+    queryKey: ['rfis-for-task-link', linkProjectId],
+    queryFn: () =>
+      linkProjectId
+        ? base44.entities.RFI.filter({ project_id: linkProjectId })
+        : Promise.resolve([]),
+    enabled: !!linkProjectId && !!open,
+    staleTime: 60 * 1000,
+  });
+  const { data: changeOrders = [] } = useQuery({
+    queryKey: ['change-orders-for-task-link', linkProjectId],
+    queryFn: () =>
+      linkProjectId
+        ? base44.entities.ChangeOrder.filter({ project_id: linkProjectId })
+        : Promise.resolve([]),
+    enabled: !!linkProjectId && !!open,
+    staleTime: 60 * 1000,
+  });
+  const { data: actionItems = [] } = useQuery({
+    queryKey: ['action-items-for-task-link', linkProjectId],
+    queryFn: () =>
+      linkProjectId
+        ? base44.entities.ActionItem.filter({ project_id: linkProjectId })
+        : Promise.resolve([]),
+    enabled: !!linkProjectId && !!open,
+    staleTime: 60 * 1000,
+  });
+
+  const rfiOptions = useMemo(
+    () => rfis.map((r) => ({
+      id: r.id,
+      label: r.rfi_number || r.title || `RFI ${r.id?.slice(0, 6)}`,
+      sublabel: r.title && r.rfi_number ? r.title : (r.status || ''),
+    })),
+    [rfis]
+  );
+  const changeOrderOptions = useMemo(
+    () => changeOrders.map((c) => ({
+      id: c.id,
+      label: c.co_number || c.title || `CO ${c.id?.slice(0, 6)}`,
+      sublabel: c.title && c.co_number ? c.title : (c.status || ''),
+    })),
+    [changeOrders]
+  );
+  const actionItemOptions = useMemo(
+    () => actionItems.map((a) => ({
+      id: a.id,
+      label: a.title || a.description?.slice(0, 40) || `Item ${a.id?.slice(0, 6)}`,
+      sublabel: a.status || '',
+    })),
+    [actionItems]
+  );
+
   if (!open || !task) return null;
 
   const isDetailing = usesStageDates(formData);
@@ -53,6 +140,26 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     const patch = isDetailing ? applyStageDatesToTask(formData, stageDates) : {};
     // Build clean payload with only DB-valid fields
     const { id, created_at, updated_at, created_date, updated_date, ...rest } = formData;
+
+    // One audit-log entry per save when any of the cross-link arrays
+    // changed — matches DailyLogs / Punchlist (one entry per save, not
+    // one per chip add/remove). Fire-and-forget; never blocks the save.
+    const linkFieldsChanged =
+      !sameIdSet(asIdArray(task.related_rfi_ids),          asIdArray(rest.related_rfi_ids)) ||
+      !sameIdSet(asIdArray(task.related_change_order_ids), asIdArray(rest.related_change_order_ids)) ||
+      !sameIdSet(asIdArray(task.related_action_item_ids),  asIdArray(rest.related_action_item_ids));
+    if (linkFieldsChanged) {
+      const counts = [
+        `${asIdArray(rest.related_rfi_ids).length} RFI`,
+        `${asIdArray(rest.related_change_order_ids).length} CO`,
+        `${asIdArray(rest.related_action_item_ids).length} AI`,
+      ].join(' / ');
+      logActivity('schedule_task', 'updated', { ...rest, id: task.id }, {
+        projectId: task.project_id,
+        description: `Cross-links updated (${counts})`,
+      });
+    }
+
     onUpdate({ ...rest, ...patch, id: task.id });
   };
 
@@ -207,7 +314,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--divider)', background: 'var(--bg-surface-low)' }}>
-          {['DETAILS', 'DEPENDENCIES', 'NOTES', 'HISTORY'].map(tab => (
+          {['DETAILS', 'DEPENDENCIES', 'LINKS', 'NOTES', 'HISTORY'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab.toLowerCase())}
@@ -368,6 +475,42 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No successors</div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'links' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                lineHeight: 1.4,
+              }}>
+                Link this task to RFIs, Change Orders, or Action Items so the
+                source of any schedule slip is one click away — and so those
+                modules can show which tasks they're affecting.
+              </div>
+              <MultiSelectChips
+                label="Related RFIs"
+                value={asIdArray(formData.related_rfi_ids)}
+                options={rfiOptions}
+                onChange={(v) => setFormData({ ...formData, related_rfi_ids: v })}
+                placeholder={rfiOptions.length === 0 ? 'No RFIs in project' : 'Add RFI...'}
+              />
+              <MultiSelectChips
+                label="Related Change Orders"
+                value={asIdArray(formData.related_change_order_ids)}
+                options={changeOrderOptions}
+                onChange={(v) => setFormData({ ...formData, related_change_order_ids: v })}
+                placeholder={changeOrderOptions.length === 0 ? 'No COs in project' : 'Add change order...'}
+              />
+              <MultiSelectChips
+                label="Related Action Items"
+                value={asIdArray(formData.related_action_item_ids)}
+                options={actionItemOptions}
+                onChange={(v) => setFormData({ ...formData, related_action_item_ids: v })}
+                placeholder={actionItemOptions.length === 0 ? 'No action items in project' : 'Add action item...'}
+              />
             </div>
           )}
 

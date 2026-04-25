@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "../shared/formatters";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const empty = {
   project_id: "", project_name: "", title: "", description: "",
@@ -135,6 +136,18 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
           <input style={inputStyle} value={form.attachments} onChange={e => set("attachments", e.target.value)} placeholder="file1.pdf, file2.pdf" />
         </FormField>
       </div>
+      {/* Inbound chips — schedule tasks that link to this CO. Read-only;
+          edit the link from the schedule task's LINKS tab. Only renders
+          when we're editing an existing CO. */}
+      {co?.id && form.project_id && (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--divider)" }}>
+          <RelatedScheduleTasksChips
+            projectId={form.project_id}
+            relatedField="related_change_order_ids"
+            targetId={co.id}
+          />
+        </div>
+      )}
     </PhoenixModal>
   );
 }
