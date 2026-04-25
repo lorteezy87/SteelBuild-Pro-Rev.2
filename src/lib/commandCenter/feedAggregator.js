@@ -19,6 +19,38 @@ import {
   productionNoteUrgency,
   scheduleTaskUrgency,
 } from "./urgencyEngine";
+import { applyEffectiveDates } from "@/services/scheduleCascade";
+
+// ── Effective-date overlay for schedule tasks ───────────────────────────
+//
+// Schedule tasks pass through the same effective-date cascade that the
+// Gantt / Task List / Lookahead / ICS export use, so the urgency engine
+// (overdue / due-soon classification) sees the *effective* start/end
+// dates after FS/SS/FF/SF + lag predecessor links have been resolved —
+// not the raw stored dates that pre-date any cascade shift.
+//
+// Cascade is project-scoped — a predecessor link only applies inside the
+// same project's task graph — so we group by project_id, run
+// applyEffectiveDates() once per project, then flatten back. Cross-project
+// tasks would never share dependencies; computing them in one big pass
+// would be wrong (and slower) because cycle detection + memoisation
+// expects a single connected graph.
+function overlayScheduleTaskEffectiveDates(tasks) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return [];
+  const byProject = new Map();
+  for (const t of tasks) {
+    if (!t) continue;
+    const pid = t.project_id || "__noproject__";
+    if (!byProject.has(pid)) byProject.set(pid, []);
+    byProject.get(pid).push(t);
+  }
+  const out = [];
+  for (const [, group] of byProject) {
+    const overlaid = applyEffectiveDates(group);
+    for (const t of overlaid) out.push(t);
+  }
+  return out;
+}
 
 // ── Drawing aggregation (sheet → set) ───────────────────────────────────
 //
@@ -279,7 +311,15 @@ export function buildFeed(entities, projectMap = {}) {
   // in the 48h / 10d windows and the main feed. Gated inside
   // scheduleTaskUrgency itself (horizon + status check) so we don't
   // flood the feed with far-future tasks.
-  for (const t of scheduleTasks) {
+  //
+  // Run the cascade FIRST so urgency classification sees effective
+  // dates (after FS/SS/FF/SF + lag links), not raw stored dates. Without
+  // this overlay, a task whose stored start_date is 5 days ago but whose
+  // predecessor pushed it 10 days into the future would still be flagged
+  // overdue here even though the Gantt and Task List render it as future.
+  // Same source of truth as Schedule.jsx — see scheduleCascade.js.
+  const tasksWithEffective = overlayScheduleTaskEffectiveDates(scheduleTasks);
+  for (const t of tasksWithEffective) {
     const item = scheduleTaskUrgency(t, projectMap);
     if (item) feed.push(item);
   }
