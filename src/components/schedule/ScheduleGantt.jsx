@@ -8,6 +8,10 @@ import {
   getStageDates,
   usesStageDates,
 } from "@/lib/stageDates";
+import {
+  parseDependencies,
+  computeEffectiveDates,
+} from "@/services/scheduleCascade";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 const PHASES = [
@@ -82,11 +86,14 @@ function buildTreeOrder(tasks) {
 }
 
 // ── Dependency parsing ───────────────────────────────────────────────────
+// Local helper that flattens predecessor IDs out of the new link-object
+// shape `{ id, type, lag_days }`. Arrow rendering and the dependency
+// label below only care about the predecessor ID, not the link type or
+// lag — those are handled by the shared cascade utility. parseDependencies
+// also accepts the legacy id-string array shape, so this stays
+// back-compat through a partial deploy.
 function parseDeps(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
-  catch { return []; }
+  return parseDependencies(raw).map((l) => l.id);
 }
 
 // ── Display helpers ──────────────────────────────────────────────────────
@@ -793,69 +800,36 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   // automatically shifts its successors forward in the gantt view. The
   // underlying task.start_date / task.end_date in the DB are NEVER mutated;
   // this only affects how the bars are positioned visually.
-  const effectiveDates = useMemo(() => {
-    const out = {};
-    const taskById = Object.fromEntries(allTasks.map(t => [t.id, t]));
+  //
+  // Delegates to the shared `computeEffectiveDates` utility (see
+  // `src/services/scheduleCascade.js`) so every schedule consumer — the
+  // Gantt, Task List, 6-Week Lookahead, ICS export — agrees on where each
+  // task sits on the calendar once predecessor links are followed. The
+  // utility supports FS / SS / FF / SF + lag; for the legacy "id only"
+  // dep shape it defaults to FS + 1 day to preserve the regression-test
+  // bar set by the previous inline cascade.
+  const effectiveDates = useMemo(() => computeEffectiveDates(allTasks), [allTasks]);
 
-    const dayMs = 86400000;
-    const addDays = (iso, n) => {
-      const d = parseDateUTC(iso);
-      if (!d) return null; // unparsable input — bail rather than throw downstream
-      d.setUTCDate(d.getUTCDate() + n);
-      return d.toISOString().slice(0, 10);
-    };
-    const diffDays = (a, b) => {
-      const da = parseDateUTC(a);
-      const db = parseDateUTC(b);
-      if (!da || !db) return 0;
-      return Math.round((db - da) / dayMs);
-    };
-
-    const resolve = (taskId, visiting) => {
-      if (out[taskId]) return out[taskId];
-      if (visiting.has(taskId)) return null; // dependency cycle — bail out
-      visiting.add(taskId);
-
-      const task = taskById[taskId];
-      if (!task) { visiting.delete(taskId); return null; }
-      // Normalize to YYYY-MM-DD up front so string comparisons below are safe
-      // even when upstream data arrives as a full ISO timestamp or a Date.
-      const startOnly = toDateOnly(task.start_date);
-      const endOnly   = toDateOnly(task.end_date);
-      if (!startOnly || !endOnly) {
-        out[taskId] = { start: startOnly, end: endOnly, shifted: false };
-        visiting.delete(taskId);
-        return out[taskId];
-      }
-
-      // Skip self-references — a task that lists itself as a predecessor
-      // (data-entry bug) would otherwise short-circuit cycle detection on
-      // the first hop and leave its bar undefined.
-      const deps = parseDeps(task.dependencies).filter(depId => depId && depId !== taskId);
-      let earliestStart = startOnly;
-      let shifted = false;
-      for (const depId of deps) {
-        const depResolved = resolve(depId, visiting);
-        if (depResolved?.end) {
-          const candidate = addDays(depResolved.end, 1);
-          if (candidate && candidate > earliestStart) {
-            earliestStart = candidate;
-            shifted = true;
-          }
-        }
-      }
-
-      const dur = Math.max(0, diffDays(startOnly, endOnly));
-      const newEndRaw = dur === 0 ? earliestStart : addDays(earliestStart, dur);
-      const newEnd = newEndRaw || endOnly; // fall back rather than storing null
-      out[taskId] = { start: earliestStart, end: newEnd, shifted };
-      visiting.delete(taskId);
-      return out[taskId];
-    };
-
-    for (const t of allTasks) resolve(t.id, new Set());
-    return out;
-  }, [allTasks]);
+  // ── Cycle observability ─────────────────────────────────────────────
+  // The cascade flags every task in a predecessor cycle with `cycle:
+  // true`. We surface a single toast when cycles are present so a user
+  // looking at the Gantt knows their schedule has a circular dependency
+  // they need to break — without it, the cycle members silently fall
+  // back to their stored dates and the user just sees "the cascade
+  // didn't shift this row" with no explanation. We dedupe by the set of
+  // cycle-affected task IDs so the toast doesn't fire on every render.
+  const cycleTaskIdsKey = useMemo(() => {
+    const ids = Object.keys(effectiveDates).filter((id) => effectiveDates[id]?.cycle);
+    return ids.sort().join("|");
+  }, [effectiveDates]);
+  useEffect(() => {
+    if (!cycleTaskIdsKey) return;
+    const count = cycleTaskIdsKey.split("|").filter(Boolean).length;
+    toast.warning(
+      `${count} task${count === 1 ? "" : "s"} in a predecessor cycle — falling back to stored dates`,
+      { description: "Open the Dependencies tab on each affected row to break the loop." }
+    );
+  }, [cycleTaskIdsKey]);
 
   const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
   const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
