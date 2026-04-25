@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const PRIORITY_OPTIONS = [
   { value: "Low",      label: "Low",      color: "var(--text-muted)",     bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.3)" },
@@ -207,6 +208,19 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
             <label style={labelStyle}>Meeting Reference</label>
             <input type="text" value={formData.meeting_reference} onChange={e => field("meeting_reference", e.target.value)} placeholder="e.g., MTG-001" style={inputStyle} />
           </div>
+
+          {/* Inbound chips — schedule tasks that link to this Action Item.
+              Read-only; edit the link from the schedule task's LINKS tab.
+              Only renders when we're editing an existing item. */}
+          {actionItem?.id && formData.project_id && (
+            <div style={{ paddingTop: 8, borderTop: "1px solid var(--divider)" }}>
+              <RelatedScheduleTasksChips
+                projectId={formData.project_id}
+                relatedField="related_action_item_ids"
+                targetId={actionItem.id}
+              />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
