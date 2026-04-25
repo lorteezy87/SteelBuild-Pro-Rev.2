@@ -810,6 +810,27 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   // bar set by the previous inline cascade.
   const effectiveDates = useMemo(() => computeEffectiveDates(allTasks), [allTasks]);
 
+  // ── Cycle observability ─────────────────────────────────────────────
+  // The cascade flags every task in a predecessor cycle with `cycle:
+  // true`. We surface a single toast when cycles are present so a user
+  // looking at the Gantt knows their schedule has a circular dependency
+  // they need to break — without it, the cycle members silently fall
+  // back to their stored dates and the user just sees "the cascade
+  // didn't shift this row" with no explanation. We dedupe by the set of
+  // cycle-affected task IDs so the toast doesn't fire on every render.
+  const cycleTaskIdsKey = useMemo(() => {
+    const ids = Object.keys(effectiveDates).filter((id) => effectiveDates[id]?.cycle);
+    return ids.sort().join("|");
+  }, [effectiveDates]);
+  useEffect(() => {
+    if (!cycleTaskIdsKey) return;
+    const count = cycleTaskIdsKey.split("|").filter(Boolean).length;
+    toast.warning(
+      `${count} task${count === 1 ? "" : "s"} in a predecessor cycle — falling back to stored dates`,
+      { description: "Open the Dependencies tab on each affected row to break the loop." }
+    );
+  }, [cycleTaskIdsKey]);
+
   const effStart = (task) => effectiveDates[task.id]?.start || task.start_date;
   const effEnd   = (task) => effectiveDates[task.id]?.end   || task.end_date;
 
