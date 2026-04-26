@@ -109,21 +109,67 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
       {/* 2. Item type badge */}
       <Pill label={item.itemType} color={typeCfg.color} bg={typeCfg.bg} />
 
-      {/* 3. Project tag */}
-      {item.projectNumber && (
+      {/* 3. Project tag — number pill + name label so a glance tells the
+          user *which job* an item belongs to. The user explicitly asked
+          for project names: a stripped 8-char job number alone made it
+          hard to triage portfolio-wide. Falls back to "—" when neither is
+          known so the column stays visually aligned. */}
+      {(item.projectNumber || item.projectName) ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+            maxWidth: 220,
+            minWidth: 0,
+          }}
+          title={item.projectName || item.projectNumber || ""}
+        >
+          {item.projectNumber && (
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 600,
+                color: "var(--text-muted)",
+                background: "var(--bg-surface-high)",
+                padding: "2px 6px",
+                borderRadius: 2,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {item.projectNumber}
+            </span>
+          )}
+          {item.projectName && (
+            <span
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 11,
+                fontWeight: 500,
+                color: "var(--text-secondary)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}
+            >
+              {item.projectName}
+            </span>
+          )}
+        </div>
+      ) : (
         <span
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,
-            fontWeight: 600,
             color: "var(--text-muted)",
-            background: "var(--bg-surface-high)",
-            padding: "2px 6px",
-            borderRadius: 2,
-            whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
-          {item.projectNumber}
+          —
         </span>
       )}
 

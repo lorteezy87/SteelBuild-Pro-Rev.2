@@ -51,6 +51,74 @@ function Pill({ label, color }) {
   );
 }
 
+// Shared project tag used by every row type. Number pill + name label
+// (truncated). User reported portfolio-wide triage was hard with only the
+// 8-char job number visible; the name resolves the ambiguity. Falls back
+// to "—" to keep column alignment consistent across rows.
+function ProjectTag({ projectNumber, projectName }) {
+  if (!projectNumber && !projectName) {
+    return (
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          color: "var(--text-muted)",
+          flexShrink: 0,
+        }}
+      >
+        —
+      </span>
+    );
+  }
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        flexShrink: 0,
+        maxWidth: 200,
+        minWidth: 0,
+      }}
+      title={projectName || projectNumber || ""}
+    >
+      {projectNumber && (
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-muted)",
+            background: "var(--bg-surface-high)",
+            padding: "2px 6px",
+            borderRadius: 3,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          {projectNumber}
+        </span>
+      )}
+      {projectName && (
+        <span
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 11,
+            fontWeight: 500,
+            color: "var(--text-secondary)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            minWidth: 0,
+          }}
+        >
+          {projectName}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Section({ title, icon, accent, items, empty, renderRow, onOpenDetail }) {
   const hasItems = items && items.length > 0;
   return (
@@ -167,23 +235,7 @@ function FeedItemRow({ item }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <Pill label={item.itemType} color={typeColor} />
-      {item.projectNumber && (
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            background: "var(--bg-surface-high)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-          }}
-        >
-          {item.projectNumber}
-        </span>
-      )}
+      <ProjectTag projectNumber={item.projectNumber} projectName={item.projectName} />
       <span
         style={{
           flex: 1,
@@ -242,22 +294,7 @@ function DeliveryRow({ item, navigate }) {
       style={{ display: "flex", alignItems: "center", gap: 10 }}
     >
       <Pill label="DEL" color={TYPE_COLOR.DEL} />
-      {item.projectNumber && (
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            background: "var(--bg-surface-high)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {item.projectNumber}
-        </span>
-      )}
+      <ProjectTag projectNumber={item.projectNumber} projectName={item.projectName} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -298,22 +335,7 @@ function WorkPackageRow({ item, navigate }) {
       style={{ display: "flex", alignItems: "center", gap: 10 }}
     >
       <Pill label="WP" color={TYPE_COLOR.WP} />
-      {item.projectNumber && (
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "var(--text-muted)",
-            background: "var(--bg-surface-high)",
-            padding: "2px 6px",
-            borderRadius: 3,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {item.projectNumber}
-        </span>
-      )}
+      <ProjectTag projectNumber={item.projectNumber} projectName={item.projectName} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
