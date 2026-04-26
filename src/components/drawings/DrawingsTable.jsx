@@ -368,9 +368,15 @@ function GroupRow({
 }) {
   const a = group.aggregates;
   const accent = group.isUngrouped ? "var(--text-muted)" : "var(--accent)";
-  const rowBg = group.isUngrouped
-    ? "rgba(255,255,255,0.015)"
-    : "linear-gradient(90deg, rgba(200,155,32,0.08), rgba(200,155,32,0.02) 65%, transparent)";
+  // Overdue sets get a red-tinted gradient + a red left-border strip so the
+  // row reads as "needs attention" at a glance, even before the user parses
+  // the small "X OVERDUE — MAX Yd LATE" text.
+  const isGroupOverdue = a.overdueCount > 0 && !group.isUngrouped;
+  const rowBg = isGroupOverdue
+    ? "linear-gradient(90deg, rgba(239,68,68,0.14), rgba(239,68,68,0.04) 65%, transparent)"
+    : group.isUngrouped
+      ? "rgba(255,255,255,0.015)"
+      : "linear-gradient(90deg, rgba(200,155,32,0.08), rgba(200,155,32,0.02) 65%, transparent)";
 
   return (
     <tr
@@ -378,6 +384,7 @@ function GroupRow({
         background: rowBg,
         borderTop: "1px solid var(--border-default)",
         borderBottom: "1px solid var(--border-default)",
+        borderLeft: isGroupOverdue ? "4px solid var(--status-error)" : "4px solid transparent",
         cursor: "default",
       }}
     >
@@ -741,7 +748,10 @@ function SheetRow({
       className={urgency}
       onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, drawing: d }); }}
       style={{
-        background: isSel ? "rgba(200,155,32,0.06)" : overdue ? "rgba(239,68,68,0.04)" : "none",
+        // Selection wins over overdue tint; otherwise a clearly-red wash for
+        // overdue sheets so the row reads as urgent at a glance instead of
+        // relying on the small red badges in cells.
+        background: isSel ? "rgba(200,155,32,0.06)" : overdue ? "rgba(239,68,68,0.10)" : "none",
         cursor: "default",
         borderLeft: overdue ? "4px solid var(--status-error)" : "4px solid transparent",
       }}
