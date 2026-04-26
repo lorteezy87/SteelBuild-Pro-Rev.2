@@ -41,11 +41,14 @@ const badgeMap = {
   "Progress":       { color: "var(--status-info)", bg: "var(--info-muted)",  border: "var(--info-border)" },
 
   // ── Danger / Overdue / Rejected ──
-  "Critical":       { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)", glow: "0 0 12px var(--status-error)33" },
-  "At Risk":        { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
-  "Rejected":       { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
-  "Delayed":        { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
-  "Over-Allocated": { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
+  "Critical":            { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)", glow: "0 0 12px var(--status-error)33" },
+  "At Risk":             { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
+  "Rejected":            { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
+  "Delayed":             { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
+  "Over-Allocated":      { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
+  // RFI: GC replied but the response was incomplete — needs another round.
+  // Treated as still-open by closed-state filters.
+  "Incomplete Response": { color: "var(--status-error)", bg: "var(--danger-muted)",  border: "var(--danger-border)" },
 
   // ── Amber Warning ──
   "Watch":          { color: "var(--status-warning)", bg: "var(--warning-muted)",  border: "var(--warning-border)" },

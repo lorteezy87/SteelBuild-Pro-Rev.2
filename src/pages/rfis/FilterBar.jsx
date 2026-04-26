@@ -53,7 +53,7 @@ export default function FilterBar({
         onChange={(e) => setSearch(e.target.value)}
         style={{ flex: 1, maxWidth: 280, background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)" }}
       />
-      {["all", "Open", "Under Review", "Answered", "Closed"].map((s) => (
+      {["all", "Open", "Under Review", "Incomplete Response", "Answered", "Closed"].map((s) => (
         <button key={s} onClick={() => setFilterStatus(s)} style={chip(filterStatus === s)}>
           {s === "all" ? "All" : s}
         </button>

@@ -15,13 +15,17 @@ import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
 
-const STAGE_INDEX = { Open: 0, "Under Review": 1, Answered: 2, Closed: 3 };
+// "Incomplete Response" = GC replied but response was insufficient; sits
+// between REVIEW and ANSWERED in the pipeline. Treated as still-open by
+// downstream closed-state filters.
+const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
 const STAGES = [
-  { id: "open", label: "OPEN",     color: "var(--status-warning)" },
-  { id: "rev",  label: "REVIEW",   color: "var(--status-review)"  },
-  { id: "ans",  label: "ANSWERED", color: "var(--status-success)" },
-  { id: "cls",  label: "CLOSED",   color: "var(--text-muted)"     },
+  { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
+  { id: "rev",   label: "REVIEW",     color: "var(--status-review)"  },
+  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)"   },
+  { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
+  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)"     },
 ];
 
 export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge }) {
