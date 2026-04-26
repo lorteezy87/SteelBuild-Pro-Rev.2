@@ -76,6 +76,28 @@ const normalizeIdArray = (v) => {
 };
 
 /**
+ * Coerce a JSONB array of arbitrary objects into a clean array — same
+ * tolerance as normalizeIdArray (parsed array OR stringified JSON OR
+ * unparseable → []) but does NOT element-validate, since the elements
+ * here are object shapes (e.g. photo objects {file_url, name, uploaded_at})
+ * that vary across modules. Drops only nullish entries.
+ */
+const normalizeJsonbArray = (v) => {
+  if (Array.isArray(v)) {
+    return v.filter((el) => el != null);
+  }
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((el) => el != null);
+      }
+    } catch { /* fall through */ }
+  }
+  return [];
+};
+
+/**
  * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
  */
 const parseSortBy = (sortBy) => {
@@ -496,12 +518,93 @@ export const entities = {
   SOVItem:               createEntityClient('sov_items'),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),
-  DailyLog:              createEntityClient('daily_logs'),
+  DailyLog:              (() => {
+    // Migration 053 added two id-array JSONB columns
+    // (related_action_item_ids, related_rfi_ids) for cross-module linking.
+    // The pre-existing `photos` column (migration 001) is also a JSONB
+    // array — but of {file_url, name, uploaded_at} objects, not id strings,
+    // so it goes through normalizeJsonbArray (no element-validation) instead
+    // of normalizeIdArray. Mirrors the ScheduleTask wrapper shape so all
+    // consumers can treat these fields as arrays without the inline asArray
+    // dance every form / list does today.
+    const base = createEntityClient('daily_logs');
+    const ID_ARRAY_FIELDS = ['related_action_item_ids', 'related_rfi_ids'];
+    const OBJECT_ARRAY_FIELDS = ['photos'];
+    const normalizeFields = (fields = {}) => {
+      const out = { ...fields };
+      for (const field of ID_ARRAY_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(out, field)) {
+          out[field] = normalizeIdArray(out[field]);
+        }
+      }
+      for (const field of OBJECT_ARRAY_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(out, field)) {
+          out[field] = normalizeJsonbArray(out[field]);
+        }
+      }
+      return out;
+    };
+    const normalizeReadRow = (row) => {
+      if (!row || typeof row !== 'object') return row;
+      const out = { ...row };
+      for (const field of ID_ARRAY_FIELDS) {
+        if (field in out) out[field] = normalizeIdArray(out[field]);
+      }
+      for (const field of OBJECT_ARRAY_FIELDS) {
+        if (field in out) out[field] = normalizeJsonbArray(out[field]);
+      }
+      return out;
+    };
+    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
+    return {
+      ...base,
+      list:       async (...args)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
+      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
+      create:     (record)         => base.create(normalizeFields(record)),
+      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
+      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+    };
+  })(),
   Meeting:               createEntityClient('meetings'),
   ActionItem:            createEntityClient('action_items'),
   Inspection:            createEntityClient('inspections'),
   Photo:                 createEntityClient('photos'),
-  PunchlistItem:         createEntityClient('punchlist_items'),
+  PunchlistItem:         (() => {
+    // Migration 053 added a JSONB `photos` column (array of
+    // {file_url, name, uploaded_at} objects, matching daily_logs.photos
+    // shape). Normalise on the entity boundary so the form / list don't
+    // need to defend with inline asArray — same pattern as DailyLog.
+    const base = createEntityClient('punchlist_items');
+    const OBJECT_ARRAY_FIELDS = ['photos'];
+    const normalizeFields = (fields = {}) => {
+      const out = { ...fields };
+      for (const field of OBJECT_ARRAY_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(out, field)) {
+          out[field] = normalizeJsonbArray(out[field]);
+        }
+      }
+      return out;
+    };
+    const normalizeReadRow = (row) => {
+      if (!row || typeof row !== 'object') return row;
+      const out = { ...row };
+      for (const field of OBJECT_ARRAY_FIELDS) {
+        if (field in out) out[field] = normalizeJsonbArray(out[field]);
+      }
+      return out;
+    };
+    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
+    return {
+      ...base,
+      list:       async (...args)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
+      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
+      create:     (record)         => base.create(normalizeFields(record)),
+      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
+      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+    };
+  })(),
   QualityControlRecord:  createEntityClient('quality_control_records'),
   SafetyIncident:        createEntityClient('safety_incidents'),
   ProductionNote:        createEntityClient('production_notes'),
