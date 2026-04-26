@@ -9,15 +9,16 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Upload, Search } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
+import { CONTACT_TYPE } from "@/lib/enums";
 
 const TYPE_COLORS = {
-  Owner: "var(--status-error)",
-  GC: "var(--status-info)",
-  Engineer: "var(--accent)",
-  Subcontractor: "var(--status-warning)",
-  Supplier: "var(--status-success)",
-  Inspector: "var(--text-muted)",
-  Internal: "var(--secondary)",
+  [CONTACT_TYPE.OWNER]: "var(--status-error)",
+  [CONTACT_TYPE.GC]: "var(--status-info)",
+  [CONTACT_TYPE.ENGINEER]: "var(--accent)",
+  [CONTACT_TYPE.SUBCONTRACTOR]: "var(--status-warning)",
+  [CONTACT_TYPE.SUPPLIER]: "var(--status-success)",
+  [CONTACT_TYPE.INSPECTOR]: "var(--text-muted)",
+  [CONTACT_TYPE.INTERNAL]: "var(--secondary)",
 };
 
 const StatCard = ({ label, value, color, active, onClick }) => (
@@ -137,16 +138,16 @@ export default function Contacts() {
 
   const stats = useMemo(() => ({
     total: contacts.length,
-    owner: contacts.filter((c) => c.contact_type === "Owner").length,
-    gc: contacts.filter((c) => c.contact_type === "GC").length,
-    engineer: contacts.filter((c) => c.contact_type === "Engineer").length,
-    subcontractor: contacts.filter((c) => c.contact_type === "Subcontractor").length,
-    supplier: contacts.filter((c) => c.contact_type === "Supplier").length,
-    inspector: contacts.filter((c) => c.contact_type === "Inspector").length,
-    internal: contacts.filter((c) => c.contact_type === "Internal").length,
+    owner: contacts.filter((c) => c.contact_type === CONTACT_TYPE.OWNER).length,
+    gc: contacts.filter((c) => c.contact_type === CONTACT_TYPE.GC).length,
+    engineer: contacts.filter((c) => c.contact_type === CONTACT_TYPE.ENGINEER).length,
+    subcontractor: contacts.filter((c) => c.contact_type === CONTACT_TYPE.SUBCONTRACTOR).length,
+    supplier: contacts.filter((c) => c.contact_type === CONTACT_TYPE.SUPPLIER).length,
+    inspector: contacts.filter((c) => c.contact_type === CONTACT_TYPE.INSPECTOR).length,
+    internal: contacts.filter((c) => c.contact_type === CONTACT_TYPE.INTERNAL).length,
   }), [contacts]);
 
-  const typeOptions = ["all", "Owner", "GC", "Engineer", "Subcontractor", "Supplier", "Inspector", "Internal"];
+  const typeOptions = ["all", ...Object.values(CONTACT_TYPE)];
 
   if (isLoading) {
     return (

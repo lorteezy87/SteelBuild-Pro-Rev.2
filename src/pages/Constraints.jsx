@@ -32,8 +32,7 @@ import ConstraintFormModal from "./constraints/ConstraintFormModal";
 import { CONSTRAINT_TYPES, TYPE_COLORS } from "./constraints/constants";
 import { CommandBar } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
-
-const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 
 export default function Constraints() {
   const qc = useQueryClient();
@@ -112,12 +111,12 @@ export default function Constraints() {
 
   // ── Derived data ───────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const open = items.filter((c) => !["Resolved", "Closed"].includes(c.status));
-    const resolved = items.filter((c) => c.status === "Resolved");
-    const closed = items.filter((c) => c.status === "Closed");
+    const open = items.filter((c) => !RESOLVED_STATUSES.includes(c.status));
+    const resolved = items.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
+    const closed = items.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
     const overdue = open.filter(isOverdue);
-    const critical = open.filter((c) => c.priority === "Critical");
-    const inProg = items.filter((c) => c.status === "In Progress");
+    const critical = open.filter((c) => c.priority === PRIORITY.CRITICAL);
+    const inProg = items.filter((c) => c.status === CONSTRAINT_STATUS.IN_PROGRESS);
 
     const oldestOpen = open.reduce((oldest, c) => {
       const d = new Date(c.created_date || c.due_date || Date.now());
@@ -133,7 +132,7 @@ export default function Constraints() {
       .filter((t) => t.count > 0)
       .sort((a, b) => b.count - a.count);
 
-    const byPriority = ["Critical", "High", "Medium", "Low"].map((p) => ({
+    const byPriority = Object.values(PRIORITY).map((p) => ({
       priority: p,
       count: open.filter((c) => c.priority === p).length,
     }));
@@ -146,7 +145,7 @@ export default function Constraints() {
     return items
       .filter((c) => {
         if (filterType !== "all" && c.constraint_type !== filterType) return false;
-        if (filterStatus === "open" && ["Resolved", "Closed"].includes(c.status)) return false;
+        if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
         if (filterStatus !== "all" && filterStatus !== "open" && c.status !== filterStatus) return false;
         if (filterPriority !== "all" && c.priority !== filterPriority) return false;
         if (
@@ -161,8 +160,8 @@ export default function Constraints() {
         return true;
       })
       .sort((a, b) => {
-        const aResolved = ["Resolved", "Closed"].includes(a.status);
-        const bResolved = ["Resolved", "Closed"].includes(b.status);
+        const aResolved = RESOLVED_STATUSES.includes(a.status);
+        const bResolved = RESOLVED_STATUSES.includes(b.status);
         if (aResolved !== bResolved) return aResolved ? 1 : -1;
         const aP = PRIORITY_ORDER[a.priority] ?? 2;
         const bP = PRIORITY_ORDER[b.priority] ?? 2;
@@ -186,7 +185,7 @@ export default function Constraints() {
       source_entity_id: c.id,
       title: c.title,
       identified_date: new Date().toISOString().split("T")[0],
-      status: "Open",
+      status: CONSTRAINT_STATUS.OPEN,
     }));
     navigate("/Mitigations");
   };

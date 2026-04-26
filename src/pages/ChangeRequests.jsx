@@ -11,6 +11,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { formatCurrency } from "@/components/shared/formatters";
 import { Plus } from "lucide-react";
+import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
 
 export default function ChangeRequests() {
   const [searchParams] = useSearchParams();
@@ -49,9 +50,9 @@ export default function ChangeRequests() {
 
   const stats = {
     total: changeRequests.length,
-    submitted: changeRequests.filter((c) => c.status === "Submitted").length,
-    approved: changeRequests.filter((c) => c.status === "Approved").length,
-    rejected: changeRequests.filter((c) => c.status === "Rejected").length,
+    submitted: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.SUBMITTED).length,
+    approved: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.APPROVED).length,
+    rejected: changeRequests.filter((c) => c.status === CHANGE_REQUEST_STATUS.REJECTED).length,
     totalCostImpact: changeRequests.reduce((sum, c) => sum + (c.estimated_cost_impact || 0), 0),
   };
 
@@ -99,8 +100,8 @@ export default function ChangeRequests() {
     }
   };
 
-  const statuses = ["Submitted", "Under Review", "Awaiting Approval", "Approved", "Rejected", "Approved with Conditions", "On Hold"];
-  const priorities = ["Critical", "High", "Medium", "Low"];
+  const statuses = Object.values(CHANGE_REQUEST_STATUS);
+  const priorities = Object.values(PRIORITY);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
