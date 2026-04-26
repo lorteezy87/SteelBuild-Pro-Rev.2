@@ -13,6 +13,7 @@
 import React, { useMemo, useState } from "react";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -265,13 +266,10 @@ export default function WorkPackages() {
   };
 
   // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
-  React.useEffect(() => {
-    if (searchParams.get("new") === "1" && projectId && !wpModalOpen) {
-      handleWPCreate();
-    }
-    // Only trigger on initial arrival.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  // Gated on projectId because handleWPCreate needs a project to derive
+  // the next WP number and stamp the row's project_id; without it the
+  // create modal would open with project_id: undefined and fail to save.
+  useAutoOpenCreate(handleWPCreate, { enabled: !!projectId });
 
   /* ── Loading ── */
   if (wpLoading) {

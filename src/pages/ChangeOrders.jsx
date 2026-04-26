@@ -18,6 +18,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useSearchParams } from "react-router-dom";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
@@ -68,13 +69,10 @@ export default function ChangeOrders() {
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
-  useEffect(() => {
-    if (searchParams.get("new") === "1" && !modalOpen) {
-      setEditing(null);
-      setModalOpen(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setModalOpen(true);
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250);
