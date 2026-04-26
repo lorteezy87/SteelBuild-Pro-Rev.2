@@ -10,12 +10,13 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
+import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
 const PRIORITY_COLORS = {
-  Critical: "var(--status-error)",
-  High:     "var(--status-warning)",
-  Medium:   "var(--status-info)",
-  Low:      "var(--text-muted)",
+  [PRIORITY.CRITICAL]: "var(--status-error)",
+  [PRIORITY.HIGH]:     "var(--status-warning)",
+  [PRIORITY.MEDIUM]:   "var(--status-info)",
+  [PRIORITY.LOW]:      "var(--text-muted)",
 };
 
 export default function ActionItems() {
@@ -82,11 +83,11 @@ export default function ActionItems() {
 
   const stats = useMemo(() => ({
     total:      actionItems.length,
-    open:       actionItems.filter((ai) => ai.status === "Open").length,
-    inProgress: actionItems.filter((ai) => ai.status === "In Progress").length,
-    complete:   actionItems.filter((ai) => ai.status === "Complete").length,
-    cancelled:  actionItems.filter((ai) => ai.status === "Cancelled").length,
-    critical:   actionItems.filter((ai) => ai.priority === "Critical").length,
+    open:       actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.OPEN).length,
+    inProgress: actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.IN_PROGRESS).length,
+    complete:   actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.COMPLETE).length,
+    cancelled:  actionItems.filter((ai) => ai.status === ACTION_ITEM_STATUS.CANCELLED).length,
+    critical:   actionItems.filter((ai) => ai.priority === PRIORITY.CRITICAL).length,
   }), [actionItems]);
 
   const filtered = useMemo(() => actionItems.filter((ai) => {
@@ -100,25 +101,25 @@ export default function ActionItems() {
   }), [actionItems, filterStatus, filterPriority, search]);
 
   const handleResolve = (item) => {
-    const isComplete = item.status === "Complete";
+    const isComplete = item.status === ACTION_ITEM_STATUS.COMPLETE;
     updateMut.mutate({
       id: item.id,
       data: {
-        status: isComplete ? "Open" : "Complete",
+        status: isComplete ? ACTION_ITEM_STATUS.OPEN : ACTION_ITEM_STATUS.COMPLETE,
       },
     });
   };
 
   const statCards = [
-    { label: "Total",       value: stats.total,      color: "var(--accent)",         filterKey: null },
-    { label: "Open",        value: stats.open,        color: "var(--status-warning)", filterKey: "Open" },
-    { label: "In Progress", value: stats.inProgress,  color: "var(--status-info)",    filterKey: "In Progress" },
-    { label: "Complete",    value: stats.complete,    color: "var(--status-success)", filterKey: "Complete" },
-    { label: "Cancelled",   value: stats.cancelled,   color: "var(--text-muted)",     filterKey: "Cancelled" },
-    { label: "Critical",    value: stats.critical,    color: "var(--status-error)",   filterKey: null, priorityKey: "Critical" },
+    { label: "Total",       value: stats.total,       color: "var(--accent)",         filterKey: null },
+    { label: "Open",        value: stats.open,        color: "var(--status-warning)", filterKey: ACTION_ITEM_STATUS.OPEN },
+    { label: "In Progress", value: stats.inProgress,  color: "var(--status-info)",    filterKey: ACTION_ITEM_STATUS.IN_PROGRESS },
+    { label: "Complete",    value: stats.complete,    color: "var(--status-success)", filterKey: ACTION_ITEM_STATUS.COMPLETE },
+    { label: "Cancelled",   value: stats.cancelled,   color: "var(--text-muted)",     filterKey: ACTION_ITEM_STATUS.CANCELLED },
+    { label: "Critical",    value: stats.critical,    color: "var(--status-error)",   filterKey: null, priorityKey: PRIORITY.CRITICAL },
   ];
 
-  const priorities = ["Critical", "High", "Medium", "Low"];
+  const priorities = Object.values(PRIORITY);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

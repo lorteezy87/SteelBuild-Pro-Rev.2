@@ -14,6 +14,7 @@ import SearchFilter from "../components/shared/SearchFilter";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { formatCurrency } from "../components/shared/formatters";
 import { Plus, RefreshCw } from "lucide-react";
+import { VENDOR_STATUS } from "@/lib/enums";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -166,7 +167,7 @@ export default function Vendors() {
   }), [vendors, search, statusFilter, typeFilter]);
 
   // ── Stats ──
-  const activeCount = vendors.filter(v => v.status === "Active").length;
+  const activeCount = vendors.filter(v => v.status === VENDOR_STATUS.ACTIVE).length;
   const preferredCount = vendors.filter(v => v.is_preferred).length;
   const totalSpend = Object.values(vendorStats).reduce((s, v) => s + (v.totalSpend || 0), 0);
   const totalDeliveries = Object.values(vendorStats).reduce((s, v) => s + (v.deliveryCount || 0), 0);
@@ -175,7 +176,7 @@ export default function Vendors() {
   const riskVendors = useMemo(() => {
     const now = new Date();
     return vendors.filter(v => {
-      if (v.status === "Probation" || v.status === "Suspended") return true;
+      if (v.status === VENDOR_STATUS.PROBATION || v.status === VENDOR_STATUS.SUSPENDED) return true;
       if (v.certifications_expiry && new Date(v.certifications_expiry) < now) return true;
       if (v.insurance_expiry && new Date(v.insurance_expiry) < now) return true;
       const stats = vendorStats[v.company_name];
@@ -270,8 +271,8 @@ export default function Vendors() {
               const reasons = [];
               if (v.certifications_expiry && new Date(v.certifications_expiry) < now) reasons.push("Cert expired");
               if (v.insurance_expiry && new Date(v.insurance_expiry) < now) reasons.push("Insurance expired");
-              if (v.status === "Probation") reasons.push("On probation");
-              if (v.status === "Suspended") reasons.push("Suspended");
+              if (v.status === VENDOR_STATUS.PROBATION) reasons.push("On probation");
+              if (v.status === VENDOR_STATUS.SUSPENDED) reasons.push("Suspended");
               const stats = vendorStats[v.company_name];
               if (stats?.onTimeRate !== null && stats?.onTimeRate < 70) reasons.push(`${stats.onTimeRate}% on-time`);
 
@@ -307,7 +308,7 @@ export default function Vendors() {
       <div className="filter-bar-responsive" style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
         <div style={{ flex: 1 }}>
           <SearchFilter search={search} onSearchChange={setSearch} filters={[
-            { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: ["Active", "Inactive", "Probation", "Suspended"] },
+            { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: Object.values(VENDOR_STATUS) },
             ...(types.length > 1 ? [{ key: "type", value: typeFilter, onChange: setTypeFilter, placeholder: "Type", options: types }] : []),
           ]} />
         </div>
