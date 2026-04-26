@@ -1,5 +1,5 @@
 /**
- * useDrawings.js — Single source of truth for Drawing CRUD.
+ * useDrawings.ts — Single source of truth for Drawing CRUD.
  *
  * Replaces scattered mutations in Drawings.jsx, DrawingSetUploadModal, RevisionUploadModal.
  * ONE query. ONE invalidation path. NO silent fallbacks.
@@ -23,20 +23,25 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
+import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload } from "@/lib/drawingEnums";
 
+export type Drawing = RowWithAliases<'drawings'>;
+
 // ─── Normalize set name ─────────────────────────────────────────────────
-function normalizeSetName(name) {
+function normalizeSetName(name: unknown): string {
   if (!name || typeof name !== "string") return "";
   return name.trim().replace(/\s+/g, " ");
 }
 
+type BulkResult = { succeeded: number; failed: Array<{ id: string; sheet_number?: string | null; error: string }> };
+
 // ─── Hook ───────────────────────────────────────────────────────────────
 
-export function useDrawings(projectId) {
+export function useDrawings(projectId: string | null | undefined) {
   const qc = useQueryClient();
   const queryKey = getQueryKey("drawing", projectId);
 
@@ -46,7 +51,7 @@ export function useDrawings(projectId) {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<Drawing[]>({
     queryKey,
     queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -55,8 +60,8 @@ export function useDrawings(projectId) {
 
   // ── Derived: group by set name ──────────────────────────────────────
   const { drawingSets, orphanedDrawings } = useMemo(() => {
-    const sets = {};
-    const orphans = [];
+    const sets: Record<string, Drawing[]> = {};
+    const orphans: Drawing[] = [];
 
     for (const d of drawings) {
       const setName = normalizeSetName(d.drawing_set_name);
@@ -77,7 +82,8 @@ export function useDrawings(projectId) {
   };
 
   // ── CREATE single drawing ───────────────────────────────────────────
-  const createMut = useMutation({
+  type CreateInput = Record<string, unknown> & { drawing_set_name?: unknown };
+  const createMut = useMutation<Drawing, Error, CreateInput>({
     mutationFn: async (data) => {
       // Enforce set name normalization
       const normalized = {
@@ -88,7 +94,7 @@ export function useDrawings(projectId) {
 
       const errors = validate("drawing", normalized, "create");
       if (errors.length > 0) {
-        throw new Error(errors.map((e) => e.message).join(" "));
+        throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
       }
 
       // Defensive enum coercion: any stage / upload_status /
@@ -100,7 +106,7 @@ export function useDrawings(projectId) {
       if (warnings.length) {
         console.warn("[useDrawings.create] payload coerced:", warnings);
       }
-      return await base44.entities.Drawing.create(record);
+      return await base44.entities.Drawing.create(record as Insert<'drawings'>);
     },
     onSuccess: async (created) => {
       await invalidateAll();
@@ -109,7 +115,7 @@ export function useDrawings(projectId) {
       // Side effect: auto-create matching Detailing / Submittal schedule task.
       // Dates are optional — the schedule view tolerates nulls (shows "—").
       if (created?.id) {
-        const { created: n, skipped, failed } = await autoCreateDetailingTasks(
+        const { created: n, skipped: _skipped, failed } = await autoCreateDetailingTasks(
           [created],
           { projectName: created.project_name }
         );
@@ -124,7 +130,8 @@ export function useDrawings(projectId) {
   });
 
   // ── UPDATE single drawing ───────────────────────────────────────────
-  const updateMut = useMutation({
+  type UpdateInput = { id: string } & Record<string, unknown>;
+  const updateMut = useMutation<Drawing, Error, UpdateInput>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
       if (data.drawing_set_name !== undefined) {
@@ -134,7 +141,7 @@ export function useDrawings(projectId) {
       if (warnings.length) {
         console.warn("[useDrawings.update] payload coerced:", warnings);
       }
-      return await base44.entities.Drawing.update(id, record);
+      return await base44.entities.Drawing.update(id, record as Update<'drawings'>);
     },
     onSuccess: async () => {
       await invalidateAll();
@@ -146,7 +153,7 @@ export function useDrawings(projectId) {
   });
 
   // ── DELETE single drawing ───────────────────────────────────────────
-  const deleteMut = useMutation({
+  const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
       await base44.entities.Drawing.delete(id);
@@ -162,15 +169,17 @@ export function useDrawings(projectId) {
   });
 
   // ── BULK stage update ───────────────────────────────────────────────
-  const bulkUpdateStageMut = useMutation({
+  type BulkStageVars = { ids: string[]; stage: string };
+  const bulkUpdateStageMut = useMutation<BulkResult, Error, BulkStageVars>({
     mutationFn: async ({ ids, stage }) => {
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
-          await base44.entities.Drawing.update(id, { stage });
+          await base44.entities.Drawing.update(id, { stage } as Update<'drawings'>);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id, error: msg });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -193,15 +202,16 @@ export function useDrawings(projectId) {
   });
 
   // ── BULK delete ─────────────────────────────────────────────────────
-  const bulkDeleteMut = useMutation({
+  const bulkDeleteMut = useMutation<BulkResult, Error, string[]>({
     mutationFn: async (ids) => {
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
           await base44.entities.Drawing.delete(id);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id, error: msg });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -224,23 +234,26 @@ export function useDrawings(projectId) {
   });
 
   // ── SET APPROVAL (workflow-controlled) ──────────────────────────────
-  const approveSetMut = useMutation({
-    mutationFn: async ({ setName, sheets, user, notes, revisionNumber }) => {
-      const results = { succeeded: 0, failed: [] };
+  type SheetRef = { id: string; sheet_number?: string | null };
+  type ApproveVars = { setName?: string; sheets: SheetRef[]; user?: unknown; notes?: string; revisionNumber?: string | number };
+  const approveSetMut = useMutation<BulkResult, Error, ApproveVars>({
+    mutationFn: async ({ sheets, notes, revisionNumber }) => {
+      const results: BulkResult = { succeeded: 0, failed: [] };
 
       for (const sheet of sheets) {
         try {
-          const updateData = {
+          const updateData: Record<string, unknown> = {
             set_approval_status: "approved",
             set_approved_date: new Date().toISOString().split("T")[0],
           };
           if (revisionNumber) updateData.revision_number = revisionNumber;
           if (notes) updateData.notes = notes;
 
-          await base44.entities.Drawing.update(sheet.id, updateData);
+          await base44.entities.Drawing.update(sheet.id, updateData as Update<'drawings'>);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id: sheet.id, sheet_number: sheet.sheet_number, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id: sheet.id, sheet_number: sheet.sheet_number, error: msg });
         }
       }
 
@@ -266,19 +279,21 @@ export function useDrawings(projectId) {
   });
 
   // ── SET REJECTION ───────────────────────────────────────────────────
-  const rejectSetMut = useMutation({
-    mutationFn: async ({ setName, sheets, notes }) => {
+  type RejectVars = { setName?: string; sheets: SheetRef[]; notes: string };
+  const rejectSetMut = useMutation<BulkResult, Error, RejectVars>({
+    mutationFn: async ({ sheets, notes }) => {
       if (!notes?.trim()) throw new Error("Notes are required when rejecting a set.");
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const sheet of sheets) {
         try {
           await base44.entities.Drawing.update(sheet.id, {
             set_approval_status: "rejected",
             notes: notes.trim(),
-          });
+          } as Update<'drawings'>);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id: sheet.id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id: sheet.id, error: msg });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -297,18 +312,20 @@ export function useDrawings(projectId) {
   });
 
   // ── SUPERSEDE SET ───────────────────────────────────────────────────
-  const supersedeSetMut = useMutation({
+  type SupersedeVars = { sheets: SheetRef[] };
+  const supersedeSetMut = useMutation<BulkResult, Error, SupersedeVars>({
     mutationFn: async ({ sheets }) => {
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const sheet of sheets) {
         try {
           await base44.entities.Drawing.update(sheet.id, {
             is_superseded: true,
             set_approval_status: "superseded",
-          });
+          } as Update<'drawings'>);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id: sheet.id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id: sheet.id, error: msg });
         }
       }
       return results;
