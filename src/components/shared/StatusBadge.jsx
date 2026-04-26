@@ -117,7 +117,7 @@ const StatusBadge = React.memo(function StatusBadge({ status, variant, glow }) {
       {(isPill || isIncompleteResponse) && (
         <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", display: "inline-block", flexShrink: 0, opacity: 0.7 }} />
       )}
-      {status || "—"}
+      {isIncompleteResponse ? "INCOMPLETE" : (status || "—")}
     </span>
   );
 });
