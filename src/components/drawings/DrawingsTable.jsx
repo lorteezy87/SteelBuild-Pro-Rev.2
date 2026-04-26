@@ -5,6 +5,7 @@ import StageChip from "./StageChip";
 import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue, daysLate, urgencyClass } from "./drawingsUtils";
+import { hasTitleblockTemplate } from "@/lib/titleblock";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
 //
@@ -364,8 +365,12 @@ function StageBar({ stageCounts, total }) {
 function GroupRow({
   group, expanded, onToggleExpand,
   groupSelected, groupIndeterminate, onToggleGroupSelect,
-  onSetApproval, onDeleteSet, onRenameSet, hideOnCompact,
+  onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, hideOnCompact,
 }) {
+  // Whether the parent drawing_sets row already has both title + sheet-#
+  // rectangles saved. Drives the button label ("Mark" vs "Update") and
+  // colour cue on the row.
+  const hasTemplate = group.parent ? hasTitleblockTemplate(group.parent) : false;
   const a = group.aggregates;
   const accent = group.isUngrouped ? "var(--text-muted)" : "var(--accent)";
   // Overdue sets get a red-tinted gradient + a red left-border strip so the
@@ -605,12 +610,22 @@ function GroupRow({
         )}
       </td>
 
-      {/* Actions cell — set-level rename + delete. Offered for all named
-          sets (with or without child sheets). UNGROUPED sheets don't belong
-          to a drawing_sets row so there's nothing to rename/delete. */}
+      {/* Actions cell — set-level rename + delete + mark-titleblock.
+          Offered for all named sets (with or without child sheets).
+          UNGROUPED sheets don't belong to a drawing_sets row so there's
+          nothing to rename/delete/template. */}
       <td style={tdBase}>
-        {!group.isUngrouped && (onRenameSet || onDeleteSet) && (
+        {!group.isUngrouped && (onRenameSet || onDeleteSet || onMarkTitleblock) && (
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+            {onMarkTitleblock && (
+              <ActionBtn
+                label={hasTemplate ? "✓ Titleblock" : "Mark Titleblock"}
+                title={hasTemplate
+                  ? `Update title + sheet# rectangles for set "${group.name}"`
+                  : `Mark where title and sheet number live in this set's titleblock — pulled directly from there on every new sheet`}
+                onClick={() => onMarkTitleblock(group)}
+              />
+            )}
             {onRenameSet && (
               <ActionBtn
                 label="Rename"
@@ -905,7 +920,7 @@ const COMPACT_WIDTH_PX = 1200;
 export default function DrawingsTable({
   drawings, selected, onToggleSelect, onToggleAll,
   onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, onDeleteSet, onRenameSet, rfiMap,
+  setContextMenu, onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, rfiMap,
   drawingSetMap = {},
 }) {
   // F20: sort state. null means "use the default by-sheet-number order
@@ -1095,6 +1110,7 @@ export default function DrawingsTable({
                   onSetApproval={onSetApproval}
                   onDeleteSet={onDeleteSet}
                   onRenameSet={onRenameSet}
+                  onMarkTitleblock={onMarkTitleblock}
                   hideOnCompact={hideOnCompact}
                 />
                 {isExpanded && group.setOnly && (
