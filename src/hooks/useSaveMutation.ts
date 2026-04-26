@@ -1,6 +1,13 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryKey, type UseMutationResult } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getCrudErrorMessage } from '@/components/shared/crudFeedback';
+
+export type UseSaveMutationOptions<TData> = {
+  invalidateKeys?: QueryKey[];
+  successMsg?: string;
+  errorMsg?: string;
+  onDone?: (data: TData) => void;
+};
 
 /**
  * Standard mutation wrapper used across all CRUD operations.
@@ -21,15 +28,18 @@ import { getCrudErrorMessage } from '@/components/shared/crudFeedback';
  *   );
  *   saveMut.mutate(formData);
  */
-export function useSaveMutation(mutationFn, {
-  invalidateKeys = [],
-  successMsg = 'Saved',
-  errorMsg = 'Save failed',
-  onDone,
-} = {}) {
+export function useSaveMutation<TData = unknown, TVars = unknown>(
+  mutationFn: (vars: TVars) => Promise<TData>,
+  {
+    invalidateKeys = [],
+    successMsg = 'Saved',
+    errorMsg = 'Save failed',
+    onDone,
+  }: UseSaveMutationOptions<TData> = {}
+): UseMutationResult<TData, Error, TVars> {
   const qc = useQueryClient();
 
-  return useMutation({
+  return useMutation<TData, Error, TVars>({
     mutationFn,
     onSuccess: async (data) => {
       if (invalidateKeys.length > 0) {

@@ -6,14 +6,24 @@ import { useProjectContext } from "@/components/shared/useProjectContext";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
 
+// Loose Alert shape — base44Client is still untyped (Phase 3). Once the entity
+// boundary is typed, this will be replaced with the generated Database row type.
+export type Alert = {
+  id: string;
+  is_read?: boolean | null;
+  is_dismissed?: boolean | null;
+  dismissed_at?: string | null;
+  [key: string]: unknown;
+};
+
 export function useAlerts() {
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId: string | null = searchParams.get("project") || activeProject?.id || null;
   const [generating, setGenerating] = useState(false);
 
-  const { data: alerts = [], isLoading, refetch } = useQuery({
+  const { data: alerts = [], isLoading, refetch } = useQuery<Alert[]>({
     queryKey: ["alerts", projectId],
     queryFn: () =>
       projectId
@@ -24,16 +34,17 @@ export function useAlerts() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      base44.entities.Alert.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", projectId] }),
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id) => base44.entities.Alert.delete(id),
+    mutationFn: (id: string) => base44.entities.Alert.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", projectId] }),
   });
 
-  const markRead = (alert) => {
+  const markRead = (alert: Alert) => {
     // Try is_read first; if column doesn't exist yet, fail silently
     updateMut.mutate(
       { id: alert.id, data: { is_read: true } },
@@ -45,7 +56,7 @@ export function useAlerts() {
     const unread = alerts.filter((a) => !a.is_read);
     if (unread.length === 0) return;
     try {
-      const { succeeded, failed } = await batchProcess(unread, (a) =>
+      const { succeeded, failed } = await batchProcess(unread, (a: Alert) =>
         base44.entities.Alert.update(a.id, { is_read: true })
       );
       qc.invalidateQueries({ queryKey: ["alerts", projectId] });
@@ -60,7 +71,7 @@ export function useAlerts() {
     }
   };
 
-  const dismiss = (alert) => {
+  const dismiss = (alert: Alert) => {
     // Use dismissed_at (original schema column) as the primary dismiss mechanism.
     // Also try is_dismissed for when the migration has been applied.
     updateMut.mutate(
@@ -75,8 +86,9 @@ export function useAlerts() {
       await base44.functions.invoke("generateAlerts", {});
       await refetch();
       toast.success("Alerts refreshed");
-    } catch (err) {
-      toast.error("Failed to generate alerts: " + (err?.message || "Unknown error"));
+    } catch (err: unknown) {
+      const msg = (err as { message?: string } | undefined)?.message || "Unknown error";
+      toast.error("Failed to generate alerts: " + msg);
     } finally {
       setGenerating(false);
     }
