@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import ScopeItemFormModal from "@/components/scope/ScopeItemFormModal";
 import ScopeItemList from "@/components/scope/ScopeItemList";
 import BulkScopeModal from "@/components/scope/BulkScopeModal";
@@ -20,7 +21,7 @@ const TYPE_META = {
 export default function ScopeExclusions() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [showBulk, setShowBulk] = useState(false);

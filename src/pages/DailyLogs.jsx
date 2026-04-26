@@ -11,6 +11,7 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
+import { useProjectId } from "@/hooks/useProjectId";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -37,7 +38,7 @@ function getDateCutoff(preset) {
 export default function DailyLogs() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);

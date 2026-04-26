@@ -8,6 +8,7 @@ import ContactList from "@/components/contacts/ContactList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Upload, Search } from "lucide-react";
+import { useProjectId } from "@/hooks/useProjectId";
 
 const TYPE_COLORS = {
   Owner: "var(--status-error)",
@@ -63,7 +64,7 @@ const StatCard = ({ label, value, color, active, onClick }) => (
 
 export default function Contacts() {
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("project");
+  const projectId = useProjectId();
   const qc = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
