@@ -1,5 +1,5 @@
 /**
- * useDeliveries.js — Single source of truth for Delivery CRUD.
+ * useDeliveries.ts — Single source of truth for Delivery CRUD.
  *
  * ONE query. ONE invalidation path (hits ALL 10+ delivery query keys).
  * Status transitions validated via workflowEngine.
@@ -20,15 +20,40 @@ import { base44 } from "@/api/base44Client";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 
-const STATUS_ORDER = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
-const ADVANCE_MAP = {
+// Loose Delivery shape — base44Client is still untyped (Phase 3). The DB row
+// type from src/types/supabase.ts will replace this once the entity boundary
+// is converted.
+export type Delivery = {
+  id: string;
+  status?: string | null;
+  description?: string | null;
+  vendor?: string | null;
+  po_number?: string | null;
+  project_name?: string | null;
+  carrier?: string | null;
+  tracking_number?: string | null;
+  scheduled_date?: string | null;
+  actual_date?: string | null;
+  weight_tons?: number | string | null;
+  pieces?: number | string | null;
+  [key: string]: unknown;
+};
+
+export type DeliveryFilters = {
+  status?: string;
+  search?: string;
+  sortBy?: "DUE" | "PROJECT" | "VENDOR" | "TONNAGE";
+  overdueFirst?: boolean;
+};
+
+const ADVANCE_MAP: Record<string, string> = {
   Scheduled: "In Transit",
   "In Transit": "Delivered",
   Delayed: "In Transit",
   Partial: "Delivered",
 };
 
-export function useDeliveries(projectId, filters = {}) {
+export function useDeliveries(projectId: string | null | undefined, filters: DeliveryFilters = {}) {
   const qc = useQueryClient();
   const queryKey = getQueryKey("delivery", projectId);
 
@@ -38,7 +63,7 @@ export function useDeliveries(projectId, filters = {}) {
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<Delivery[]>({
     queryKey,
     queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -99,7 +124,7 @@ export function useDeliveries(projectId, filters = {}) {
     const scheduled = deliveries.filter((d) => d.status === "Scheduled").length;
     const inTransit = deliveries.filter((d) => d.status === "In Transit").length;
     const delivered = deliveries.filter((d) => d.status === "Delivered").length;
-    const partial = deliveries.filter((d) => ["Partial", "Rejected"].includes(d.status)).length;
+    const partial = deliveries.filter((d) => ["Partial", "Rejected"].includes(d.status as string)).length;
     const overdue = deliveries.filter(
       (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
     ).length;
@@ -127,17 +152,22 @@ export function useDeliveries(projectId, filters = {}) {
   };
 
   // ── CREATE ──────────────────────────────────────────────────────────
-  const createMut = useMutation({
+  type CreateInput = Record<string, unknown> & {
+    description?: string;
+    pieces?: number | string;
+    weight_tons?: number | string;
+  };
+  const createMut = useMutation<Delivery, Error, CreateInput>({
     mutationFn: async (data) => {
       const errors = validate("delivery", data, "create");
       if (errors.length > 0) {
-        throw new Error(errors.map((e) => e.message).join(" "));
+        throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
       }
       return await base44.entities.Delivery.create({
         ...data,
         description: data.description?.trim(),
-        pieces: parseInt(data.pieces) || 0,
-        weight_tons: parseFloat(data.weight_tons) || 0,
+        pieces: parseInt(String(data.pieces ?? "")) || 0,
+        weight_tons: parseFloat(String(data.weight_tons ?? "")) || 0,
       });
     },
     onSuccess: async () => {
@@ -148,11 +178,12 @@ export function useDeliveries(projectId, filters = {}) {
   });
 
   // ── UPDATE ──────────────────────────────────────────────────────────
-  const updateMut = useMutation({
+  type UpdateInput = { id: string } & Record<string, unknown>;
+  const updateMut = useMutation<Delivery, Error, UpdateInput>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      if (data.pieces !== undefined) data.pieces = parseInt(data.pieces) || 0;
-      if (data.weight_tons !== undefined) data.weight_tons = parseFloat(data.weight_tons) || 0;
+      if (data.pieces !== undefined) data.pieces = parseInt(String(data.pieces)) || 0;
+      if (data.weight_tons !== undefined) data.weight_tons = parseFloat(String(data.weight_tons)) || 0;
       return await base44.entities.Delivery.update(id, data);
     },
     onSuccess: async () => {
@@ -163,7 +194,7 @@ export function useDeliveries(projectId, filters = {}) {
   });
 
   // ── DELETE ──────────────────────────────────────────────────────────
-  const deleteMut = useMutation({
+  const deleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
       await base44.entities.Delivery.delete(id);
@@ -177,14 +208,15 @@ export function useDeliveries(projectId, filters = {}) {
   });
 
   // ── ADVANCE STATUS (workflow-controlled) ────────────────────────────
-  const advanceStatusMut = useMutation({
-    mutationFn: async ({ id, currentStatus, user }) => {
+  type AdvanceVars = { id: string; currentStatus: string; user?: unknown };
+  const advanceStatusMut = useMutation<Delivery, Error, AdvanceVars>({
+    mutationFn: async ({ id, currentStatus }) => {
       const nextStatus = ADVANCE_MAP[currentStatus];
       if (!nextStatus) {
         throw new Error(`No automatic next status for "${currentStatus}". Use the edit form.`);
       }
       // Workflow validation is advisory here (field users can advance)
-      const updateData = { status: nextStatus };
+      const updateData: Record<string, unknown> = { status: nextStatus };
       if (nextStatus === "Delivered") {
         updateData.actual_date = new Date().toISOString().split("T")[0];
       }
@@ -198,15 +230,18 @@ export function useDeliveries(projectId, filters = {}) {
   });
 
   // ── BULK UPDATE ─────────────────────────────────────────────────────
-  const bulkUpdateMut = useMutation({
+  type BulkResult = { succeeded: number; failed: Array<{ id: string; error: string }> };
+  type BulkUpdateVars = { ids: string[]; data: Record<string, unknown> };
+  const bulkUpdateMut = useMutation<BulkResult, Error, BulkUpdateVars>({
     mutationFn: async ({ ids, data }) => {
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
           await base44.entities.Delivery.update(id, data);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id, error: msg });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
@@ -229,15 +264,16 @@ export function useDeliveries(projectId, filters = {}) {
   });
 
   // ── BULK DELETE ─────────────────────────────────────────────────────
-  const bulkDeleteMut = useMutation({
+  const bulkDeleteMut = useMutation<BulkResult, Error, string[]>({
     mutationFn: async (ids) => {
-      const results = { succeeded: 0, failed: [] };
+      const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
         try {
           await base44.entities.Delivery.delete(id);
           results.succeeded++;
-        } catch (err) {
-          results.failed.push({ id, error: err.message });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string } | undefined)?.message ?? String(err);
+          results.failed.push({ id, error: msg });
         }
       }
       if (results.failed.length > 0 && results.succeeded === 0) {
