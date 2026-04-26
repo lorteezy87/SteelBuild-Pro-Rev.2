@@ -1,5 +1,5 @@
 /**
- * supabaseClient.js
+ * supabaseClient.ts
  *
  * Drop-in replacement for the Base44 client — enterprise-hardened.
  * Exports a `base44` object with the same API shape:
@@ -17,10 +17,30 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/supabase';
 import {
   parseDependencies as parseScheduleDependencies,
   serializeDependencies as serializeScheduleDependencies,
 } from '@/services/scheduleCascade';
+
+// ─── Type helpers (DB row shapes) ─────────────────────────────────────────────
+
+type Tables = Database['public']['Tables'];
+export type TableName = keyof Tables;
+export type Row<T extends TableName> = Tables[T]['Row'];
+export type Insert<T extends TableName> = Tables[T]['Insert'];
+export type Update<T extends TableName> = Tables[T]['Update'];
+
+/**
+ * Reads pass through addAliases() which injects created_date / updated_date
+ * mirrors of created_at / updated_at. The DB schema does not expose those
+ * columns, but every call site reads them, so the public row type widens
+ * to include them.
+ */
+export type RowWithAliases<T extends TableName> = Row<T> & {
+  created_date?: string | null;
+  updated_date?: string | null;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,26 +49,26 @@ import {
  * Our Postgres schema uses the standard `created_at` / `updated_at`.
  * Map them transparently so all existing code continues to work.
  */
-const COLUMN_MAP = {
+const COLUMN_MAP: Record<string, string> = {
   created_date: 'created_at',
   updated_date: 'updated_at',
 };
 
-const mapColumn = (col) => COLUMN_MAP[col] || col;
+const mapColumn = (col: string): string => COLUMN_MAP[col] || col;
 
 /**
  * After fetching, add Base44-style aliases to each record so UI code
  * reading `record.created_date` still works.
  */
-const addAliases = (record) => {
+const addAliases = <R>(record: R): R => {
   if (!record || typeof record !== 'object') return record;
-  const out = { ...record };
+  const out: Record<string, unknown> = { ...(record as Record<string, unknown>) };
   if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
   if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
-  return out;
+  return out as R;
 };
 
-const addAliasesToList = (rows) => (rows || []).map(addAliases);
+const addAliasesToList = <R>(rows: R[] | null | undefined): R[] => (rows || []).map(addAliases);
 
 /**
  * Coerce a JSONB id-array value into a clean string[]. Postgres can return
@@ -60,15 +80,15 @@ const addAliasesToList = (rows) => (rows || []).map(addAliases);
  * Returns [] for any unparseable input — old rows that were never touched
  * are well-formed via DEFAULT '[]'::jsonb, so [] is the right empty-state.
  */
-const normalizeIdArray = (v) => {
+const normalizeIdArray = (v: unknown): string[] => {
   if (Array.isArray(v)) {
-    return v.filter((id) => typeof id === 'string' && id.length > 0);
+    return v.filter((id): id is string => typeof id === 'string' && id.length > 0);
   }
   if (typeof v === 'string') {
     try {
       const parsed = JSON.parse(v);
       if (Array.isArray(parsed)) {
-        return parsed.filter((id) => typeof id === 'string' && id.length > 0);
+        return parsed.filter((id): id is string => typeof id === 'string' && id.length > 0);
       }
     } catch { /* fall through */ }
   }
@@ -82,7 +102,7 @@ const normalizeIdArray = (v) => {
  * here are object shapes (e.g. photo objects {file_url, name, uploaded_at})
  * that vary across modules. Drops only nullish entries.
  */
-const normalizeJsonbArray = (v) => {
+const normalizeJsonbArray = (v: unknown): unknown[] => {
   if (Array.isArray(v)) {
     return v.filter((el) => el != null);
   }
@@ -100,7 +120,7 @@ const normalizeJsonbArray = (v) => {
 /**
  * Parse Base44-style sort string ("-column" = descending, "column" = ascending)
  */
-const parseSortBy = (sortBy) => {
+const parseSortBy = (sortBy?: string | null): { column: string; ascending: boolean } | null => {
   if (!sortBy) return null;
   const desc = sortBy.startsWith('-');
   const column = mapColumn(desc ? sortBy.slice(1) : sortBy);
@@ -115,9 +135,28 @@ const parseSortBy = (sortBy) => {
  *   - Range operators: { 'scheduled_date.gte': '2024-01-01' }
  *   - NULL checks:     { assigned_to: null } → .is('assigned_to', null)
  */
-const RANGE_OPS = { gte: 'gte', gt: 'gt', lte: 'lte', lt: 'lt', neq: 'neq', like: 'like', ilike: 'ilike' };
+const RANGE_OPS: Record<string, string> = {
+  gte: 'gte', gt: 'gt', lte: 'lte', lt: 'lt', neq: 'neq', like: 'like', ilike: 'ilike',
+};
 
-const applyConditions = (query, conditions = {}) => {
+export type Conditions = Record<string, unknown>;
+
+// The Postgrest filter-builder type is structural and parameterised by every
+// table generic. Typing it cleanly here would force every helper to thread
+// 5 generics for zero runtime benefit — `any` for the builder is the
+// pragmatic choice; the public surface (createEntityClient) is fully typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryBuilder = any;
+
+// Calling supabase.from() inside a function generic over `T extends TableName`
+// trips the table-literal overload (TS won't propagate the constraint cleanly
+// through the union of 57 string literals). We re-type from() through an
+// untyped shim and rely on createEntityClient's surface to enforce shape.
+const sbFrom = (table: string): QueryBuilder =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (supabase.from as unknown as (t: string) => any)(table);
+
+const applyConditions = (query: QueryBuilder, conditions: Conditions = {}): QueryBuilder => {
   for (const [key, value] of Object.entries(conditions)) {
     if (value === undefined) continue;
 
@@ -144,23 +183,39 @@ const applyConditions = (query, conditions = {}) => {
   return query;
 };
 
+type SupabaseErrorLike = {
+  message?: string;
+  details?: string;
+  code?: string;
+  hint?: string;
+  status?: number;
+};
+
 /**
  * Wrap a Supabase error with context about which table/operation failed.
  */
 class SupabaseOperationError extends Error {
-  constructor(table, operation, originalError) {
-    const msg = originalError?.message || originalError?.details || String(originalError);
+  table: string;
+  operation: string;
+  code: string | undefined;
+  details: string | undefined;
+  hint: string | undefined;
+  status: number | null;
+
+  constructor(table: string, operation: string, originalError: SupabaseErrorLike | unknown) {
+    const orig = (originalError ?? {}) as SupabaseErrorLike;
+    const msg = orig.message || orig.details || String(originalError);
     super(`[${table}.${operation}] ${msg}`);
     this.name = 'SupabaseOperationError';
     this.table = table;
     this.operation = operation;
-    this.code = originalError?.code;
-    this.details = originalError?.details;
-    this.hint = originalError?.hint;
+    this.code = orig.code;
+    this.details = orig.details;
+    this.hint = orig.hint;
     // Propagate HTTP status for smart retry logic (400 = bad column, 404 = missing table)
-    this.status = originalError?.code === 'PGRST204' ? 404
+    this.status = orig.code === 'PGRST204' ? 404
       : msg.includes('does not exist') ? 400
-      : originalError?.status || null;
+      : orig.status ?? null;
   }
 }
 
@@ -170,7 +225,7 @@ class SupabaseOperationError extends Error {
  * Tables that have soft-delete columns (is_deleted, deleted_at).
  * list() and filter() will auto-exclude deleted rows unless explicitly included.
  */
-const SOFT_DELETE_TABLES = new Set([
+const SOFT_DELETE_TABLES = new Set<string>([
   'rfis', 'change_orders', 'deliveries', 'work_packages',
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
@@ -185,7 +240,7 @@ const SOFT_DELETE_TABLES = new Set([
  * a PostgREST "column not found" error if sent back on update/create.
  */
 const VIRTUAL_FIELDS = new Set(['created_date', 'updated_date']);
-const cleanRecord = (record) =>
+const cleanRecord = (record: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(record)
       .filter(
@@ -194,15 +249,25 @@ const cleanRecord = (record) =>
       .map(([k, v]) => [k, v === '' ? null : v])
   );
 
-const createEntityClient = (tableName) => ({
+export type EntityClient<T extends TableName> = {
+  list: (sortBy?: string) => Promise<Array<RowWithAliases<T>>>;
+  filter: (conditions?: Conditions, sortBy?: string, limit?: number) => Promise<Array<RowWithAliases<T>>>;
+  get: (id: string) => Promise<RowWithAliases<T>>;
+  create: (record: Insert<T>) => Promise<RowWithAliases<T>>;
+  update: (id: string, updates: Update<T>) => Promise<RowWithAliases<T>>;
+  delete: (id: string) => Promise<{ success: true }>;
+  bulkCreate: (records: Insert<T>[]) => Promise<Array<RowWithAliases<T>>>;
+};
+
+const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> => ({
   /**
    * List all records, optionally sorted.
    * Auto-excludes soft-deleted rows.
    */
   list: async (sortBy) => {
-    let q = supabase.from(tableName).select('*');
+    let q: QueryBuilder = (sbFrom(tableName)).select('*');
     // Soft-delete filter
-    if (SOFT_DELETE_TABLES.has(tableName)) {
+    if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
     }
     const sort = parseSortBy(sortBy);
@@ -212,20 +277,17 @@ const createEntityClient = (tableName) => ({
       q = q.order('created_at', { ascending: false });
     }
     const { data, error } = await q;
-    if (error) throw new SupabaseOperationError(tableName, 'list', error);
-    return addAliasesToList(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'list', error);
+    return addAliasesToList<RowWithAliases<T>>(data);
   },
 
   /**
    * Filter records by conditions.
-   * @param {object} conditions  - { field: value } equality map, supports operators
-   * @param {string} [sortBy]    - "-column" descending or "column" ascending
-   * @param {number} [limit]     - max records to return
    */
   filter: async (conditions = {}, sortBy, limit) => {
-    let q = supabase.from(tableName).select('*');
+    let q: QueryBuilder = (sbFrom(tableName)).select('*');
     // Soft-delete filter (unless caller explicitly filters is_deleted)
-    if (SOFT_DELETE_TABLES.has(tableName) && !('is_deleted' in conditions)) {
+    if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
       q = q.eq('is_deleted', false);
     }
     q = applyConditions(q, conditions);
@@ -237,8 +299,8 @@ const createEntityClient = (tableName) => ({
     }
     if (limit) q = q.limit(limit);
     const { data, error } = await q;
-    if (error) throw new SupabaseOperationError(tableName, 'filter', error);
-    return addAliasesToList(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'filter', error);
+    return addAliasesToList<RowWithAliases<T>>(data);
   },
 
   /**
@@ -252,13 +314,13 @@ const createEntityClient = (tableName) => ({
    * SupabaseOperationError, so no call-site changes are needed.
    */
   get: async (id) => {
-    let q = supabase.from(tableName).select('*').eq('id', id);
-    if (SOFT_DELETE_TABLES.has(tableName)) {
+    let q: QueryBuilder = (sbFrom(tableName)).select('*').eq('id', id);
+    if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
     }
     const { data, error } = await q.single();
-    if (error) throw new SupabaseOperationError(tableName, 'get', error);
-    return addAliases(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'get', error);
+    return addAliases<RowWithAliases<T>>(data);
   },
 
   /**
@@ -270,55 +332,51 @@ const createEntityClient = (tableName) => ({
    * collision. The DB assigns id/timestamps via its defaults.
    */
   create: async (record) => {
-    const clean = cleanRecord(record);
+    const clean = cleanRecord(record as Record<string, unknown>);
     delete clean.id;
     delete clean.created_at;
     delete clean.updated_at;
-    const { data, error } = await supabase
-      .from(tableName)
+    const { data, error } = await (sbFrom(tableName))
       .insert(clean)
       .select()
       .single();
-    if (error) throw new SupabaseOperationError(tableName, 'create', error);
-    return addAliases(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'create', error);
+    return addAliases<RowWithAliases<T>>(data);
   },
 
   /**
    * Update an existing record by id.
    */
   update: async (id, updates) => {
-    const clean = cleanRecord(updates);
+    const clean = cleanRecord(updates as Record<string, unknown>);
     // Never send primary key or server timestamps in the update body
     delete clean.id;
     delete clean.created_at;
     // updated_at is now handled by the DB trigger (trg_updated_at),
     // but we keep the client-side set for backwards compat
-    const { data, error } = await supabase
-      .from(tableName)
+    const { data, error } = await (sbFrom(tableName))
       .update({ ...clean, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
-    if (error) throw new SupabaseOperationError(tableName, 'update', error);
-    return addAliases(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'update', error);
+    return addAliases<RowWithAliases<T>>(data);
   },
 
   /**
    * Soft-delete a record if supported, otherwise hard-delete.
    */
   delete: async (id) => {
-    if (SOFT_DELETE_TABLES.has(tableName)) {
-      const { error } = await supabase
-        .from(tableName)
+    if (SOFT_DELETE_TABLES.has(tableName as string)) {
+      const { error } = await (sbFrom(tableName))
         .update({ is_deleted: true, deleted_at: new Date().toISOString() })
         .eq('id', id);
-      if (error) throw new SupabaseOperationError(tableName, 'delete', error);
+      if (error) throw new SupabaseOperationError(tableName as string, 'delete', error);
     } else {
-      const { error } = await supabase
-        .from(tableName)
+      const { error } = await (sbFrom(tableName))
         .delete()
         .eq('id', id);
-      if (error) throw new SupabaseOperationError(tableName, 'delete', error);
+      if (error) throw new SupabaseOperationError(tableName as string, 'delete', error);
     }
     return { success: true };
   },
@@ -328,18 +386,17 @@ const createEntityClient = (tableName) => ({
    */
   bulkCreate: async (records) => {
     const cleaned = records.map((r) => {
-      const c = cleanRecord(r);
+      const c = cleanRecord(r as Record<string, unknown>);
       delete c.id;
       delete c.created_at;
       delete c.updated_at;
       return c;
     });
-    const { data, error } = await supabase
-      .from(tableName)
+    const { data, error } = await (sbFrom(tableName))
       .insert(cleaned)
       .select();
-    if (error) throw new SupabaseOperationError(tableName, 'bulkCreate', error);
-    return addAliasesToList(data);
+    if (error) throw new SupabaseOperationError(tableName as string, 'bulkCreate', error);
+    return addAliasesToList<RowWithAliases<T>>(data);
   },
 });
 
@@ -351,15 +408,15 @@ export const entities = {
   // bypassing the RLS bootstrap problem with the AFTER trigger approach.
   Project: {
     ...createEntityClient('projects'),
-    create: async (record) => {
+    create: async (record: Insert<'projects'>): Promise<RowWithAliases<'projects'>> => {
       const clean = Object.fromEntries(
-        Object.entries(record).filter(([, v]) => v !== undefined)
+        Object.entries(record as Record<string, unknown>).filter(([, v]) => v !== undefined)
       );
       const { data, error } = await supabase.rpc('create_project', {
-        project_data: clean,
+        project_data: clean as never,
       });
       if (error) throw new SupabaseOperationError('projects', 'create', error);
-      return addAliases(data);
+      return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>);
     },
   },
   RFI:                   createEntityClient('rfis'),
@@ -372,10 +429,10 @@ export const entities = {
      * transaction. Returns the number of child sheets that were deleted.
      * Uses the `delete_drawing_set(p_set_id)` RPC shipped in migration 022.
      */
-    deleteCascade: async (id) => {
+    deleteCascade: async (id: string): Promise<{ success: true; deletedChildCount: number }> => {
       const { data, error } = await supabase.rpc('delete_drawing_set', { p_set_id: id });
       if (error) throw new SupabaseOperationError('drawing_sets', 'deleteCascade', error);
-      return { success: true, deletedChildCount: data ?? 0 };
+      return { success: true, deletedChildCount: (data as number | null) ?? 0 };
     },
   },
   ChangeOrder:           createEntityClient('change_orders'),
@@ -400,8 +457,8 @@ export const entities = {
     const STATUS_VALUES = new Set([
       'Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold', 'Cancelled',
     ]);
-    const normalizeFields = (fields = {}) => {
-      const out = { ...fields };
+    const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...fields };
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
       const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
 
@@ -409,7 +466,7 @@ export const entities = {
         const n = Number(out.percent_complete);
         if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));
       }
-      if (hasStatus && !STATUS_VALUES.has(out.status)) {
+      if (hasStatus && !STATUS_VALUES.has(out.status as string)) {
         // Unrecognised status — leave it alone, server CHECK will reject.
       }
 
@@ -420,17 +477,19 @@ export const entities = {
         if (out.status === 'Not Started') out.percent_complete = 0;
         // 'In Progress' / 'Delayed' / 'On Hold' don't pin a value — keep DB current
       } else if (hasPct && !hasStatus) {
-        if (out.percent_complete >= 100)      out.status = 'Complete';
-        else if (out.percent_complete > 0)    out.status = 'In Progress';
-        else                                  out.status = 'Not Started';
+        const pct = out.percent_complete as number;
+        if (pct >= 100)      out.status = 'Complete';
+        else if (pct > 0)    out.status = 'In Progress';
+        else                 out.status = 'Not Started';
       } else if (hasStatus && hasPct) {
         // Both supplied — coerce contradictions into the canonical pair so
         // bad inputs land cleanly instead of failing the CHECK constraint.
-        if (out.status === 'Complete' && out.percent_complete < 100) {
+        const pct = out.percent_complete as number;
+        if (out.status === 'Complete' && pct < 100) {
           out.percent_complete = 100;
-        } else if (out.status === 'Not Started' && out.percent_complete > 0) {
+        } else if (out.status === 'Not Started' && pct > 0) {
           out.percent_complete = 0;
-        } else if (out.status === 'In Progress' && out.percent_complete >= 100) {
+        } else if (out.status === 'In Progress' && pct >= 100) {
           out.percent_complete = 99;
         }
       }
@@ -472,11 +531,12 @@ export const entities = {
           try {
             const links = parseScheduleDependencies(raw);
             out.dependencies = serializeScheduleDependencies(links);
-          } catch (err) {
+          } catch (err: unknown) {
+            const msg = (err as { message?: string } | undefined)?.message ?? String(err);
             // Re-throw with context so the caller sees which task failed
             // and which value they tried to land.
             throw new Error(
-              `ScheduleTask: invalid dependencies value (${err.message}): ${
+              `ScheduleTask: invalid dependencies value (${msg}): ${
                 typeof raw === 'string' ? raw : JSON.stringify(raw)
               }`
             );
@@ -490,23 +550,28 @@ export const entities = {
     // and any cross-link query can treat these fields as `string[]` without
     // each caller defending against a stringified/null value. Mirrors the
     // dependencies-array tolerance pattern.
-    const normalizeReadRow = (row) => {
+    const normalizeReadRow = <R>(row: R): R => {
       if (!row || typeof row !== 'object') return row;
-      const out = { ...row };
+      const out = { ...(row as Record<string, unknown>) };
       if ('related_rfi_ids' in out)          out.related_rfi_ids          = normalizeIdArray(out.related_rfi_ids);
       if ('related_change_order_ids' in out) out.related_change_order_ids = normalizeIdArray(out.related_change_order_ids);
       if ('related_action_item_ids' in out)  out.related_action_item_ids  = normalizeIdArray(out.related_action_item_ids);
-      return out;
+      return out as R;
     };
-    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
+    const normalizeReadList = <R>(rows: R[] | null | undefined): R[] => (rows || []).map(normalizeReadRow);
     return {
       ...base,
-      list:       async (...args)  => normalizeReadList(await base.list(...args)),
-      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
-      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
-      create:     (record)         => base.create(normalizeFields(record)),
-      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
-      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+      list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
+      get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
+      create:     (record: Insert<'schedule_tasks'>) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'schedule_tasks'>),
+      update:     (id: string, updates: Update<'schedule_tasks'>) =>
+        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'schedule_tasks'>),
+      bulkCreate: (records: Insert<'schedule_tasks'>[]) =>
+        base.bulkCreate(
+          (records || []).map((r) => normalizeFields(r as Record<string, unknown>) as Insert<'schedule_tasks'>)
+        ),
     };
   })(),
   TaskDependency:        createEntityClient('task_dependencies'),
@@ -530,8 +595,8 @@ export const entities = {
     const base = createEntityClient('daily_logs');
     const ID_ARRAY_FIELDS = ['related_action_item_ids', 'related_rfi_ids'];
     const OBJECT_ARRAY_FIELDS = ['photos'];
-    const normalizeFields = (fields = {}) => {
-      const out = { ...fields };
+    const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...fields };
       for (const field of ID_ARRAY_FIELDS) {
         if (Object.prototype.hasOwnProperty.call(out, field)) {
           out[field] = normalizeIdArray(out[field]);
@@ -544,26 +609,31 @@ export const entities = {
       }
       return out;
     };
-    const normalizeReadRow = (row) => {
+    const normalizeReadRow = <R>(row: R): R => {
       if (!row || typeof row !== 'object') return row;
-      const out = { ...row };
+      const out = { ...(row as Record<string, unknown>) };
       for (const field of ID_ARRAY_FIELDS) {
         if (field in out) out[field] = normalizeIdArray(out[field]);
       }
       for (const field of OBJECT_ARRAY_FIELDS) {
         if (field in out) out[field] = normalizeJsonbArray(out[field]);
       }
-      return out;
+      return out as R;
     };
-    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
+    const normalizeReadList = <R>(rows: R[] | null | undefined): R[] => (rows || []).map(normalizeReadRow);
     return {
       ...base,
-      list:       async (...args)  => normalizeReadList(await base.list(...args)),
-      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
-      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
-      create:     (record)         => base.create(normalizeFields(record)),
-      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
-      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+      list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
+      get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
+      create:     (record: Insert<'daily_logs'>) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'daily_logs'>),
+      update:     (id: string, updates: Update<'daily_logs'>) =>
+        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'daily_logs'>),
+      bulkCreate: (records: Insert<'daily_logs'>[]) =>
+        base.bulkCreate(
+          (records || []).map((r) => normalizeFields(r as Record<string, unknown>) as Insert<'daily_logs'>)
+        ),
     };
   })(),
   Meeting:               createEntityClient('meetings'),
@@ -577,8 +647,8 @@ export const entities = {
     // need to defend with inline asArray — same pattern as DailyLog.
     const base = createEntityClient('punchlist_items');
     const OBJECT_ARRAY_FIELDS = ['photos'];
-    const normalizeFields = (fields = {}) => {
-      const out = { ...fields };
+    const normalizeFields = (fields: Record<string, unknown> = {}): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...fields };
       for (const field of OBJECT_ARRAY_FIELDS) {
         if (Object.prototype.hasOwnProperty.call(out, field)) {
           out[field] = normalizeJsonbArray(out[field]);
@@ -586,23 +656,28 @@ export const entities = {
       }
       return out;
     };
-    const normalizeReadRow = (row) => {
+    const normalizeReadRow = <R>(row: R): R => {
       if (!row || typeof row !== 'object') return row;
-      const out = { ...row };
+      const out = { ...(row as Record<string, unknown>) };
       for (const field of OBJECT_ARRAY_FIELDS) {
         if (field in out) out[field] = normalizeJsonbArray(out[field]);
       }
-      return out;
+      return out as R;
     };
-    const normalizeReadList = (rows) => (rows || []).map(normalizeReadRow);
+    const normalizeReadList = <R>(rows: R[] | null | undefined): R[] => (rows || []).map(normalizeReadRow);
     return {
       ...base,
-      list:       async (...args)  => normalizeReadList(await base.list(...args)),
-      filter:     async (...args)  => normalizeReadList(await base.filter(...args)),
-      get:        async (...args)  => normalizeReadRow(await base.get(...args)),
-      create:     (record)         => base.create(normalizeFields(record)),
-      update:     (id, updates)    => base.update(id, normalizeFields(updates)),
-      bulkCreate: (records)        => base.bulkCreate((records || []).map(normalizeFields)),
+      list:       async (...args: Parameters<typeof base.list>)  => normalizeReadList(await base.list(...args)),
+      filter:     async (...args: Parameters<typeof base.filter>) => normalizeReadList(await base.filter(...args)),
+      get:        async (...args: Parameters<typeof base.get>)    => normalizeReadRow(await base.get(...args)),
+      create:     (record: Insert<'punchlist_items'>) =>
+        base.create(normalizeFields(record as Record<string, unknown>) as Insert<'punchlist_items'>),
+      update:     (id: string, updates: Update<'punchlist_items'>) =>
+        base.update(id, normalizeFields(updates as Record<string, unknown>) as Update<'punchlist_items'>),
+      bulkCreate: (records: Insert<'punchlist_items'>[]) =>
+        base.bulkCreate(
+          (records || []).map((r) => normalizeFields(r as Record<string, unknown>) as Insert<'punchlist_items'>)
+        ),
     };
   })(),
   QualityControlRecord:  createEntityClient('quality_control_records'),
@@ -627,39 +702,60 @@ export const entities = {
   MitigationAction:      createEntityClient('mitigation_actions'),
 };
 
+export type Entities = typeof entities;
+export type EntityKey = keyof Entities;
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export type AuthMeResult = {
+  id: string;
+  email: string | undefined;
+  full_name: string;
+  role: string;
+  [key: string]: unknown;
+};
 
 export const auth = {
   /**
    * Get the currently authenticated user.
    * Returns a user object compatible with what Base44 returned.
    */
-  me: async () => {
+  me: async (): Promise<AuthMeResult> => {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
     if (!user) throw new Error('Not authenticated');
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const fullName =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      (typeof meta.name === 'string' && meta.name) ||
+      user.email ||
+      '';
     return {
       id: user.id,
       email: user.email,
-      full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
-      role: user.user_metadata?.role || 'user',
-      ...user.user_metadata,
+      full_name: fullName,
+      role: (typeof meta.role === 'string' && meta.role) || 'user',
+      ...meta,
     };
   },
 
   /**
    * Sign in with email and password.
    */
-  loginViaEmailPassword: async (email, password) => {
+  loginViaEmailPassword: async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { const e = new Error(error.message); e.status = error.status; throw e; }
+    if (error) {
+      const e = new Error(error.message) as Error & { status?: number };
+      e.status = error.status;
+      throw e;
+    }
     return data;
   },
 
   /**
    * Sign out the current user.
    */
-  logout: async () => {
+  logout: async (): Promise<void> => {
     await supabase.auth.signOut();
   },
 
@@ -667,7 +763,7 @@ export const auth = {
    * Redirect to login page.
    * In Supabase apps this is an internal route, not an external auth server.
    */
-  redirectToLogin: (url) => {
+  redirectToLogin: (url?: string): void => {
     const redirect = url ? `?redirect=${encodeURIComponent(url)}` : '';
     window.location.href = `/login${redirect}`;
   },
@@ -675,14 +771,20 @@ export const auth = {
   /**
    * Update the current user's metadata.
    */
-  updateMe: async (updates) => {
+  updateMe: async (updates: Record<string, unknown>): Promise<AuthMeResult> => {
     const { data, error } = await supabase.auth.updateUser({ data: updates });
     if (error) throw error;
+    const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+    const fullName =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      data.user.email ||
+      '';
     return {
       id: data.user.id,
       email: data.user.email,
-      full_name: data.user.user_metadata?.full_name || data.user.email,
-      ...data.user.user_metadata,
+      full_name: fullName,
+      role: (typeof meta.role === 'string' && meta.role) || 'user',
+      ...meta,
     };
   },
 };
@@ -696,7 +798,7 @@ const SIGNED_URL_EXPIRY_SECONDS = 60 * 60;
  * Get a short-lived signed URL for a stored file path.
  * Use this whenever displaying a file that was uploaded to the private bucket.
  */
-export const getSignedUrl = async (storagePath) => {
+export const getSignedUrl = async (storagePath: string): Promise<string> => {
   const { data, error } = await supabase.storage
     .from('app-files')
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS);
@@ -709,10 +811,38 @@ export const getSignedUrl = async (storagePath) => {
  * If the value looks like a storage path (no protocol), generate a signed URL.
  * If it's already a full URL, return as-is.
  */
-export const resolveFileUrl = async (fileUrl) => {
+export const resolveFileUrl = async (fileUrl: string | null | undefined): Promise<string | null> => {
   if (!fileUrl) return null;
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
   return getSignedUrl(fileUrl);
+};
+
+export type UploadFileArgs = { file: File };
+export type UploadFileResult = { file_url: string; file_name: string; path: string };
+
+export type InvokeLLMArgs = {
+  prompt?: string;
+  system?: string;
+  messages?: Array<{ role: string; content: unknown }>;
+  response_json_schema?: unknown;
+  input_variables?: Record<string, unknown>;
+  maxTokens?: number;
+  model?: string;
+  file_urls?: string[];
+  files?: unknown[];
+  tools?: Array<{ name: string; [key: string]: unknown }>;
+  tool_choice?: unknown;
+  temperature?: number;
+  provider?: string;
+};
+
+export type InvokeLLMResult = {
+  text?: string;
+  content?: string | unknown;
+  tool_use?: { name: string; input: unknown } | null;
+  raw?: unknown;
+  protocol_version?: number;
+  error?: string;
 };
 
 export const integrations = {
@@ -723,14 +853,14 @@ export const integrations = {
      * file_url is a signed URL valid for 1 hour. For long-term storage,
      * persist `path` to the database and call getSignedUrl(path) on demand.
      */
-    UploadFile: async ({ file }) => {
+    UploadFile: async ({ file }: UploadFileArgs): Promise<UploadFileResult> => {
       if (!file) throw new Error('No file provided');
       const ext = (file.name.split('.').pop() || '').toLowerCase();
       const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
       // Browsers report application/octet-stream for many construction file types.
       // Map extensions → proper MIME types so Supabase storage accepts them.
-      const MIME_MAP = {
+      const MIME_MAP: Record<string, string> = {
         pdf: 'application/pdf',
         ifc: 'application/x-step',
         dwg: 'application/acad',
@@ -785,7 +915,7 @@ export const integrations = {
      * clean message on the fallback row instead of falling through to a
      * generic "AI response was not valid JSON" path.
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature, provider = 'openai' }) => {
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature, provider = 'openai' }: InvokeLLMArgs): Promise<InvokeLLMResult> => {
       // The client expects this protocol version from the edge function. If the
       // function returns a lower version (or no version field), the deployed
       // edge function is older than the codebase and needs to be redeployed:
@@ -800,7 +930,7 @@ export const integrations = {
 
       // We track the FIRST real failure we see so that if every tier fails we
       // can surface a precise diagnosis instead of a generic "AI unavailable".
-      let firstFailure = null;
+      let firstFailure: string | null = null;
 
       // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
       try {
@@ -810,8 +940,9 @@ export const integrations = {
         if (error) {
           let detail = error?.message || String(error);
           try {
-            if (error?.context && typeof error.context.text === 'function') {
-              const body = await error.context.text();
+            const ctx = (error as { context?: { text?: () => Promise<string> } })?.context;
+            if (ctx && typeof ctx.text === 'function') {
+              const body = await ctx.text();
               if (body) {
                 try { detail = JSON.parse(body)?.error || body; } catch { detail = body; }
               }
@@ -819,8 +950,8 @@ export const integrations = {
           } catch { /* ignore */ }
           firstFailure = `llm-proxy edge function failed: ${detail}`;
           console.warn('[llm-proxy]', firstFailure);
-        } else if (data && typeof data === 'object' && data.error) {
-          firstFailure = `llm-proxy returned error: ${data.error}`;
+        } else if (data && typeof data === 'object' && (data as { error?: unknown }).error) {
+          firstFailure = `llm-proxy returned error: ${(data as { error?: unknown }).error}`;
           console.warn('[llm-proxy]', firstFailure);
         } else if (data && typeof data === 'object') {
           // Detect a stale edge-function deployment. If the caller wants
@@ -828,8 +959,9 @@ export const integrations = {
           // tool_use AND no protocol_version, the deployed function is
           // pre-tool-use and must be redeployed.
           const usedTools = Array.isArray(tools) && tools.length > 0;
-          const gotToolUse = data.tool_use && typeof data.tool_use === 'object';
-          const reportedVersion = Number(data.protocol_version) || 0;
+          const d = data as { tool_use?: unknown; protocol_version?: unknown };
+          const gotToolUse = d.tool_use && typeof d.tool_use === 'object';
+          const reportedVersion = Number(d.protocol_version) || 0;
           if (usedTools && !gotToolUse && reportedVersion < EXPECTED_PROTOCOL_VERSION) {
             firstFailure =
               `llm-proxy deployed version is too old (got v${reportedVersion}, need v${EXPECTED_PROTOCOL_VERSION}). ` +
@@ -838,24 +970,25 @@ export const integrations = {
             console.warn('[llm-proxy]', firstFailure);
             // fall through to direct API — it might have tools support
           } else {
-            return data;
+            return data as InvokeLLMResult;
           }
         } else {
           firstFailure = 'llm-proxy returned no data';
           console.warn('[llm-proxy]', firstFailure);
         }
-      } catch (proxyErr) {
-        firstFailure = `llm-proxy threw: ${proxyErr?.message || String(proxyErr)}`;
+      } catch (proxyErr: unknown) {
+        const msg = (proxyErr as { message?: string } | undefined)?.message ?? String(proxyErr);
+        firstFailure = `llm-proxy threw: ${msg}`;
         console.warn('[llm-proxy]', firstFailure);
       }
 
       // ── 2. Direct Anthropic API (requires VITE_ANTHROPIC_API_KEY in .env.local) ─
       // This path mirrors what the edge function does so it can serve as a
       // genuine fallback for tool-use callers, not just plain chat.
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
       if (apiKey) {
         try {
-          const body = {
+          const body: Record<string, unknown> = {
             model: model || 'claude-sonnet-4-5',
             max_tokens: Number(maxTokens) || 1000,
             messages: messages || [{ role: 'user', content: prompt || '' }],
@@ -886,16 +1019,16 @@ export const integrations = {
             body: JSON.stringify(body),
           });
           if (resp.ok) {
-            const result = await resp.json();
+            const result = await resp.json() as { content?: unknown };
             // Walk the content blocks for the first text and first tool_use,
             // matching the edge function's response normalization.
             let firstText = '';
-            let firstToolUse = null;
+            let firstToolUse: { name: string; input: unknown } | null = null;
             if (Array.isArray(result?.content)) {
-              for (const block of result.content) {
+              for (const block of result.content as Array<{ type?: string; text?: string; name?: string; input?: unknown }>) {
                 if (!block || typeof block !== 'object') continue;
                 if (block.type === 'tool_use' && !firstToolUse) {
-                  firstToolUse = { name: block.name, input: block.input };
+                  firstToolUse = { name: block.name as string, input: block.input };
                 } else if (block.type === 'text' && !firstText && typeof block.text === 'string') {
                   firstText = block.text;
                 }
@@ -916,8 +1049,9 @@ export const integrations = {
           const directDetail = `Anthropic API ${resp.status}: ${errText}`;
           console.error('[llm-direct]', directDetail);
           if (!firstFailure) firstFailure = directDetail;
-        } catch (directErr) {
-          const directDetail = `direct Anthropic call threw: ${directErr?.message || String(directErr)}`;
+        } catch (directErr: unknown) {
+          const msg = (directErr as { message?: string } | undefined)?.message ?? String(directErr);
+          const directDetail = `direct Anthropic call threw: ${msg}`;
           console.error('[llm-direct]', directDetail);
           if (!firstFailure) firstFailure = directDetail;
         }
@@ -940,18 +1074,20 @@ export const integrations = {
 
 // ─── Backend functions ────────────────────────────────────────────────────────
 
+export type FunctionInvokeResult = { data: unknown };
+
 export const functions = {
   /**
    * Invoke a named backend function.
    * Implements client-side versions of critical functions; others fall back gracefully.
    */
-  invoke: async (name, params = {}) => {
+  invoke: async (name: string, params: Record<string, unknown> = {}): Promise<FunctionInvokeResult> => {
     switch (name) {
       // Atomic number sequencing via Postgres RPC — no race conditions.
       // The DB function uses INSERT...ON CONFLICT with RETURNING for atomicity.
       case 'secureNumberSequence':
       case 'numberSequence': {
-        const { project_id, record_type } = params;
+        const { project_id, record_type } = params as { project_id?: string; record_type?: string };
         if (!project_id || !record_type) return { data: { number: 1 } };
         try {
           const { data, error } = await supabase.rpc('get_next_sequence_number', {
@@ -1037,3 +1173,4 @@ export const functions = {
 // ─── Main export (matches Base44 client API) ─────────────────────────────────
 
 export const base44 = { entities, auth, integrations, functions, getSignedUrl, resolveFileUrl };
+export type Base44Client = typeof base44;
