@@ -12,39 +12,15 @@
  *   3. Add navigation entries in src/config/moduleRegistry.js
  */
 
-import { lazy } from "react";
 import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
+import { lazyWithRetry } from "@/lib/lazyRetry";
 
-// ── Retry wrapper for lazy imports ──────────────────────────────────
-// After a Vercel deployment, old chunk filenames no longer exist on the
-// CDN.  Browsers that cached the previous index.html will request stale
-// chunk URLs and get 404s, causing "Failed to fetch dynamically imported
-// module" errors.  This wrapper catches those failures and reloads the
-// page once to fetch fresh chunk URLs from the new index.html.
-const SESSION_RELOAD_KEY = "__steelbuild_chunk_reload";
-
-function lazyWithRetry(importFn) {
-  return lazy(() =>
-    importFn().catch((err) => {
-      // Only auto-reload once per session to avoid infinite reload loops
-      const hasReloaded = sessionStorage.getItem(SESSION_RELOAD_KEY);
-      if (!hasReloaded) {
-        sessionStorage.setItem(SESSION_RELOAD_KEY, "1");
-        console.warn("[lazyWithRetry] Chunk load failed, reloading page for fresh assets:", err?.message);
-        window.location.reload();
-        // Return a never-resolving promise so React doesn't render an error
-        // while the page reloads
-        return new Promise(() => {});
-      }
-      // Already reloaded once — throw so the error boundary catches it
-      throw err;
-    })
-  );
-}
-
-// Clear the reload flag on successful page load so future deploys
-// can trigger a fresh reload
-sessionStorage.removeItem(SESSION_RELOAD_KEY);
+// `lazyWithRetry` lives in @/lib/lazyRetry — single shared implementation that
+// (a) clears its sessionStorage sentinel only on a SUCCESSFUL import (which
+//     prevents reload loops on a chunk that's truly gone), and (b) ignores
+// non-stale-chunk errors so real bugs surface to the error boundary.
+// The eager top-level `sessionStorage.removeItem(...)` that used to live here
+// was the source of the reload-loop bug; do not re-introduce it.
 
 // ── Domain-grouped lazy page imports ─────────────────────────────────
 const ROUTE_DOMAINS = {
