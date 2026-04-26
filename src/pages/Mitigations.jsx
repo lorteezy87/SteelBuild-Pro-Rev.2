@@ -14,6 +14,7 @@ import DonutChart from "@/components/shared/DonutChart";
 import { createPageUrl } from "@/utils";
 import { CommandBar } from "@/components/design-system";
 import { Plus, Download } from "lucide-react";
+import { setDraft, takeDraft } from "@/lib/draftStorage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATUS_COLORS = {
@@ -257,19 +258,15 @@ export default function Mitigations() {
   const [prefill, setPrefill] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  // Check for pre-populated mitigation from external pages
+  // Check for pre-populated mitigation handed off from another page
+  // (Constraint promotion, Alert escalation). takeDraft() consumes the
+  // draft on read so a refresh of /Mitigations doesn't rehydrate it.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sbp-new-mitigation");
-      if (raw) {
-        const data = JSON.parse(raw);
-        localStorage.removeItem("sbp-new-mitigation");
-        setPrefill(data);
-        setEditing(null);
-        setShowForm(true);
-      }
-    } catch {
-      localStorage.removeItem("sbp-new-mitigation");
+    const data = takeDraft("new-mitigation");
+    if (data) {
+      setPrefill(data);
+      setEditing(null);
+      setShowForm(true);
     }
   }, []);
 
@@ -547,14 +544,18 @@ export default function Mitigations() {
   };
 
   // ── CO Candidate auto-linking ──────────────────────────────────────────
+  // NB: ChangeOrders doesn't currently consume this draft (no takeDraft
+  // call there), so today this write is a no-op handoff. Routed through
+  // setDraft anyway so the day someone wires it up they get auto-clear
+  // semantics for free, and the previous localStorage version doesn't
+  // accumulate stale entries every time a user clicks the action.
   const handleCreateCOFromMitigation = (m) => {
-    // Store the data and navigate to Change Orders page
-    localStorage.setItem("sbp-new-co-from-mitigation", JSON.stringify({
+    setDraft("new-co-from-mitigation", {
       title: `CO from ${m.mitigation_number || "Mitigation"}: ${m.title}`,
       description: `Auto-generated from mitigation ${m.mitigation_number}.\nRoot cause: ${m.root_cause_category || "N/A"}\nOriginal exposure: $${(Number(m.cost_exposure) || 0).toLocaleString()}`,
       estimated_amount: Number(m.cost_exposure) || 0,
       project_id: m.project_id,
-    }));
+    });
     navigate(createPageUrl("ChangeOrders"));
   };
 
