@@ -15,8 +15,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { base44 } from "@/api/base44Client";
 import { Toaster } from "sonner";
 
 // Nav components (extracted from Layout)
@@ -26,6 +24,7 @@ import SidebarNav from "./components/nav/SidebarNav";
 import MobileDrawer, { HamburgerMenu } from "./components/nav/MobileDrawer";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
+import { useLayoutNavData } from "./components/nav/useLayoutNavData";
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
@@ -43,7 +42,6 @@ import { useProjectContext } from "./components/shared/useProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
 
 // Utilities
-import { batchProcess } from "@/utils/batchProcess";
 import useDocumentTitle from "@/hooks/useDocumentTitle";
 import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
 import { viewportWidth, shortcutKeyLabel } from "@/lib/browser";
@@ -101,74 +99,15 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   // ── Nav badge data ───────────────────────────────────────────────
-  const qc = useQueryClient();
-
-  const { data: allAlerts = [] } = useQuery({
-    queryKey: ["alerts-nav", activeProjectId],
-    queryFn: async () => {
-      try {
-        // Fetch all alerts for this project, then filter client-side.
-        // This avoids 400 errors if is_dismissed column doesn't exist yet.
-        const raw = await base44.entities.Alert.filter({ project_id: activeProjectId });
-        return raw.filter((a) => !a.is_dismissed && !a.dismissed_at);
-      } catch (err) {
-        console.warn("[Layout] alerts query failed:", err?.message || err);
-        return [];
-      }
-    },
-    refetchInterval: 120000, staleTime: 60000, enabled: !!activeProjectId,
-    retry: false,
-  });
-
-  const { data: navRFIs = [] } = useQuery({
-    queryKey: ["rfis-nav-count", activeProjectId],
-    queryFn: () => base44.entities.RFI.filter({ project_id: activeProjectId }),
-    refetchInterval: 120000, staleTime: 60000, enabled: !!activeProjectId,
-  });
-
-  const { data: navDrawings = [] } = useQuery({
-    queryKey: ["drawings-nav-count", activeProjectId],
-    queryFn: () => base44.entities.Drawing.filter({ project_id: activeProjectId }),
-    refetchInterval: 120000, staleTime: 60000, enabled: !!activeProjectId,
-  });
-
-  const { data: navDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-nav-count", activeProjectId],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: activeProjectId }),
-    refetchInterval: 120000, staleTime: 60000, enabled: !!activeProjectId,
-  });
-
-  const overdueRFICount = navRFIs.filter((r) =>
-    r.date_required && new Date(r.date_required) < new Date() &&
-    !["Answered", "Closed"].includes(r.status)
-  ).length;
-
-  const overdueDrawingCount = navDrawings.filter((d) =>
-    d.due_date && new Date(d.due_date) < new Date() && d.stage !== "Released"
-  ).length;
-
-  const overdueDeliveryCount = navDeliveries.filter((d) =>
-    d.scheduled_date && new Date(d.scheduled_date) < new Date() && d.status !== "Delivered"
-  ).length;
-
-  const markAllReadMut = useMutation({
-    mutationFn: async () => {
-      const unread = allAlerts.filter((a) => !a.is_read);
-      try {
-        return await batchProcess(unread, (a) =>
-          base44.entities.Alert.update(a.id, { is_read: true })
-        );
-      } catch {
-        // is_read column may not exist yet — silently degrade
-        console.warn("[Layout] markAllRead failed — is_read column may not exist");
-        return { succeeded: [], failed: unread };
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts-nav"] }),
-  });
-
-  const unreadAlerts = allAlerts.filter((a) => !a.is_read && !a.is_dismissed);
-  const unreadCount = unreadAlerts.length;
+  // useLayoutNavData owns the four cross-module count queries, the
+  // overdue derivations, and the mark-all-read mutation. Keeping them
+  // out of this file lets the chrome JSX stay focused on rendering.
+  const {
+    unreadAlerts,
+    unreadCount,
+    alertCounts,
+    markAllRead,
+  } = useLayoutNavData(activeProjectId);
 
   // Page tracking (non-critical)
   useEffect(() => {
@@ -365,15 +304,7 @@ export default function Layout({ children, currentPageName }) {
                   onClose={() => setGridOpen(false)}
                   onNavigate={handleNavigate}
                   userRole={user?.role}
-                  alertCounts={{
-                    unread: unreadCount,
-                    rfi: allAlerts.filter((a) =>
-                      (a.alert_type === "RFI Overdue" || a.alert_type === "RFI_Overdue") && !a.is_dismissed
-                    ).length,
-                    co: allAlerts.filter((a) => a.alert_type === "CO Pending" && !a.is_dismissed).length,
-                    drawings: overdueDrawingCount,
-                    deliveries: overdueDeliveryCount,
-                  }}
+                  alertCounts={alertCounts}
                 />
               </div>
             )}
@@ -385,7 +316,7 @@ export default function Layout({ children, currentPageName }) {
             <BellDropdown
               alerts={unreadAlerts}
               unreadCount={unreadCount}
-              onMarkAllRead={() => markAllReadMut.mutate()}
+              onMarkAllRead={markAllRead}
               onViewAll={() => handleNavigate("AlertsCenter")}
             />
 
