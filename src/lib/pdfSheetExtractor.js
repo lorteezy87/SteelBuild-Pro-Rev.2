@@ -28,6 +28,8 @@
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { base44 } from "@/api/base44Client";
+import { extractTextFromRect } from "@/lib/pdfTitleblockText";
+import { parseTitleblockRect } from "@/lib/titleblock";
 
 // Set the worker once, idempotently — safe for multiple imports.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -89,11 +91,25 @@ function readFileAsArrayBuffer(file) {
  * column boundaries, which is the single biggest lever we have against the
  * "sheet number ended up in the title" class of bugs.
  */
-async function extractPdfText(file) {
+async function extractPdfText(file, options = {}) {
+  // Optional titleblock template (slice 3 of the marker feature). When the
+  // drawing set has rectangles saved on it, we run a tiny OCR pass on each
+  // page during this same loop and stash per-page title / number strings
+  // so the caller can override the LLM-extracted values for fields the
+  // template covers. Empty string means "no text in that rect on this
+  // page" — caller falls through to the LLM value.
+  const titleRect  = parseTitleblockRect(options.titleblockTemplate?.titleRect);
+  const numberRect = parseTitleblockRect(options.titleblockTemplate?.numberRect);
+  const useTemplate = Boolean(titleRect && numberRect);
+
   const buf = await readFileAsArrayBuffer(file);
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   const pageCount = pdf.numPages;
   const pages = [];
+  // Per-page extracted titleblock values. Indexed 0..pageCount-1, parallel
+  // to `pages` above. Empty string = no text in rect on this page.
+  const perPageTitle  = useTemplate ? new Array(pageCount).fill("") : null;
+  const perPageNumber = useTemplate ? new Array(pageCount).fill("") : null;
   let totalChars = 0;
 
   for (let p = 1; p <= pageCount; p++) {
@@ -102,6 +118,23 @@ async function extractPdfText(file) {
     try {
       const page    = await pdf.getPage(p);
       const content = await page.getTextContent();
+      // Run titleblock OCR on this page if a template is set. Done in
+      // parallel with the columnar text extraction below — single
+      // getTextContent call serves both, since extractTextFromRect
+      // re-reads it but pdfjs caches per-page so the cost is one pdf-js
+      // text walk per page regardless.
+      if (useTemplate) {
+        try {
+          const [titleStr, numberStr] = await Promise.all([
+            extractTextFromRect(page, titleRect),
+            extractTextFromRect(page, numberRect),
+          ]);
+          perPageTitle[p - 1]  = titleStr;
+          perPageNumber[p - 1] = numberStr;
+        } catch (rectErr) {
+          console.warn(`[pdfSheetExtractor] titleblock OCR failed for page ${p}:`, rectErr);
+        }
+      }
 
       // 1. Collect raw items with their positions.
       const rawItems = [];
@@ -169,6 +202,11 @@ async function extractPdfText(file) {
     totalChars,
     pageCount,
     scanned: totalChars < 50,
+    // null when no template was applied; otherwise pageCount-length arrays
+    // of strings (empty when the rect captured no text on that page).
+    perPageTitle,
+    perPageNumber,
+    titleblockApplied: useTemplate,
   };
 }
 
@@ -376,9 +414,12 @@ function dedupeSheets(sheets) {
  */
 export async function extractSheetsFromPdf(file, options = {}) {
   // 1. Client-side PDF text extraction.
+  //    Pass the titleblock template through so the per-page OCR pass
+  //    can run during the same getTextContent loop; we'll merge the
+  //    OCR'd title/number into the LLM result below.
   let extracted;
   try {
-    extracted = await extractPdfText(file);
+    extracted = await extractPdfText(file, options);
   } catch (pdfErr) {
     console.error("[pdfSheetExtractor] pdfjs failed:", pdfErr);
     return {
@@ -547,6 +588,47 @@ export async function extractSheetsFromPdf(file, options = {}) {
   const fixed = rawSheets.map(fixupSheet);
   let sheets = dedupeSheets(fixed);
 
+  // 4b. Titleblock template override (slice 3 of the marker feature).
+  //     When the drawing set has rectangles saved AND the LLM returned
+  //     one sheet per page (the common case for revision uploads), the
+  //     per-page OCR values from the user-marked rectangles are more
+  //     authoritative than anything the LLM inferred — that's the whole
+  //     point of marking them. We override field-by-field, only when the
+  //     OCR captured non-empty text. Fields with empty OCR fall through
+  //     to whatever the LLM produced.
+  //
+  //     Mismatched sheet/page count (e.g. drawing-index style PDFs where
+  //     page 1 lists every sheet) skips the override entirely — sheet
+  //     index N no longer corresponds to page N+1, so we'd misalign the
+  //     OCR output. Logged so PMs can see why the template didn't apply.
+  //     Tracks which sheets had OCR sheet-numbers applied so the filename
+  //     cross-check below doesn't clobber them.
+  const ocrAppliedSheetNumberIdx = new Set();
+  if (extracted.titleblockApplied) {
+    if (sheets.length === extracted.pageCount) {
+      sheets = sheets.map((s, i) => {
+        const ocrTitle  = (extracted.perPageTitle  || [])[i] || "";
+        const ocrNumber = (extracted.perPageNumber || [])[i] || "";
+        const out = { ...s };
+        if (ocrTitle)  out.sheetTitle  = ocrTitle;
+        if (ocrNumber) {
+          // Normalise to match how fixupSheet treats sheet numbers
+          // elsewhere (uppercase, strip whitespace).
+          out.sheetNumber = ocrNumber.toUpperCase().replace(/\s+/g, "");
+          ocrAppliedSheetNumberIdx.add(i);
+        }
+        return out;
+      });
+      console.info(
+        `[pdfSheetExtractor] Titleblock template applied to ${ocrAppliedSheetNumberIdx.size} of ${sheets.length} sheets (titles overridden where rect captured text).`,
+      );
+    } else {
+      console.info(
+        `[pdfSheetExtractor] Titleblock template not applied — sheet count (${sheets.length}) ≠ page count (${extracted.pageCount}). LLM-only extraction used.`,
+      );
+    }
+  }
+
   // 5. Filename cross-check — when the filename encodes a sheet number
   //    (e.g. 502E109-R1.pdf → E109), validate the AI result and correct
   //    common mis-extractions. Single-page PDFs are ONE sheet; if the AI
@@ -574,8 +656,13 @@ export async function extractSheetsFromPdf(file, options = {}) {
       // Single sheet returned — if the AI's sheet number doesn't match the
       // filename, the filename is more trustworthy (AI often picks up detail
       // section references like "S401" instead of the title-block number).
+      // EXCEPT when the titleblock OCR already produced a value for this
+      // sheet — the user's marked rect is more authoritative than either.
       const aiSn = (sheets[0].sheetNumber || "").toUpperCase().replace(/[-. ]/g, "");
-      if (aiSn && aiSn !== fnSn) {
+      const ocrLocked = ocrAppliedSheetNumberIdx.has(0);
+      if (ocrLocked) {
+        // Skip filename override — OCR wins.
+      } else if (aiSn && aiSn !== fnSn) {
         console.info(`[pdfSheetExtractor] AI returned "${sheets[0].sheetNumber}" but filename says "${filenameParsed.sheetNumber}" — using filename`);
         sheets[0] = { ...sheets[0], sheetNumber: filenameParsed.sheetNumber };
       } else if (!aiSn) {
