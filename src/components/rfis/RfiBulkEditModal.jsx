@@ -15,7 +15,7 @@ import React, { useState } from "react";
  */
 
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
-const STATUSES = ["Open", "Under Review", "Answered", "Closed"];
+const STATUSES = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
 const BIC_CHOICES = ["Contractor", "EOR", "Architect", "GC", "Owner"];
 
 export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {

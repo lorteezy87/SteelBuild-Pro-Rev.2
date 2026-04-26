@@ -61,16 +61,23 @@ export const WORKFLOWS = {
   },
 
   // ── RFI Status ──────────────────────────────────────────────────────
+  // "Incomplete Response" = GC sent an answer back, but the response doesn't
+  // fully address the question and the RFI needs another round. Sits between
+  // Under Review and Answered in the lifecycle. Treated as still-open by
+  // closed-state filters elsewhere in the app.
   rfi: {
     field: "status",
-    states: ["Open", "Under Review", "Answered", "Closed"],
+    states: ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"],
     initial: "Open",
     transitions: {
-      "Open→Under Review":       { requiredFields: ["assigned_to"],           minRole: "field", label: "Submit for Review" },
-      "Under Review→Answered":   { requiredFields: ["response"],             minRole: "pm",    label: "Answer" },
-      "Answered→Closed":         { requiredFields: [],                        minRole: "pm",    label: "Close" },
-      "Under Review→Open":       { requiredFields: [],                        minRole: "pm",    label: "Return to Open" },
-      "Closed→Open":             { requiredFields: [],                        minRole: "admin", label: "Reopen" },
+      "Open→Under Review":                    { requiredFields: ["assigned_to"], minRole: "field", label: "Submit for Review" },
+      "Under Review→Answered":                { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
+      "Under Review→Incomplete Response":     { requiredFields: ["response"],    minRole: "pm",    label: "Mark Response Incomplete" },
+      "Incomplete Response→Under Review":     { requiredFields: [],              minRole: "pm",    label: "Re-route for Review" },
+      "Incomplete Response→Answered":         { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
+      "Answered→Closed":                      { requiredFields: [],              minRole: "pm",    label: "Close" },
+      "Under Review→Open":                    { requiredFields: [],              minRole: "pm",    label: "Return to Open" },
+      "Closed→Open":                          { requiredFields: [],              minRole: "admin", label: "Reopen" },
     },
   },
 
