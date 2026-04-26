@@ -24,13 +24,18 @@ export const PRIORITY_CFG = {
 };
 
 export const STATUS_CFG = {
-  Open:            { color: "var(--status-warning)", bg: "var(--warning-muted)" },
-  "Under Review":  { color: "var(--status-info)",    bg: "var(--info-muted)"    },
-  Answered:        { color: "var(--status-success)", bg: "var(--success-muted)" },
-  Closed:          { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
+  Open:                  { color: "var(--status-warning)", bg: "var(--warning-muted)" },
+  "Under Review":        { color: "var(--status-info)",    bg: "var(--info-muted)"    },
+  // "Incomplete Response" — GC replied but the response doesn't fully address
+  // the question; another round is required. Treated as still-open (not in
+  // ["Answered","Closed"]). Uses the danger palette to flag "needs another
+  // round" without overlapping the in-progress amber of Open.
+  "Incomplete Response": { color: "var(--status-error)",   bg: "var(--danger-muted)"  },
+  Answered:              { color: "var(--status-success)", bg: "var(--success-muted)" },
+  Closed:                { color: "var(--text-muted)",     bg: "var(--hover-bg)"      },
 };
 
-export const statusColumns = ["Open", "Under Review", "Answered", "Closed"];
+export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
 
 export const RFI_NUMBER_PATTERN = /^RFI #(\d+)$/i;
 

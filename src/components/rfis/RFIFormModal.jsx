@@ -165,7 +165,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>{title}</h2>
           {rfi && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["Open", "Under Review", "Answered", "Closed"].map((s) => (
+              {["Open", "Under Review", "Incomplete Response", "Answered", "Closed"].map((s) => (
                 <button key={s} style={statusBtnStyle(s)} onClick={() => quickStatusMut.mutate(s)}>
                   {s}
                 </button>
@@ -230,7 +230,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             </Field>
             <Field label="Status">
               <select style={iStyle} value={formData.status} onChange={(e) => set("status", e.target.value)}>
-                {["Open", "Under Review", "Answered", "Closed"].map((o) => <option key={o} value={o}>{o}</option>)}
+                {["Open", "Under Review", "Incomplete Response", "Answered", "Closed"].map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
             <Field label="Ball in Court">

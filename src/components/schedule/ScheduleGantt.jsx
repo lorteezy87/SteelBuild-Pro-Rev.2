@@ -147,6 +147,44 @@ const STATUS_COLOR = {
 
 function statusColor(s) { return STATUS_COLOR[s] || "var(--text-muted)"; }
 
+// Compact status chip used in the left-panel STATUS column. Replaces a
+// plain colored text label with a tinted pill so the four primary states
+// (Not Started, In Progress, Complete, Delayed/Overdue) are visually
+// distinct at a glance — the audit called the previous text-only render
+// "easy to scan but not visually strong".
+function StatusChip({ status, overdue }) {
+  // An overdue, not-yet-complete row should read as Delayed regardless of
+  // the stored status — that matches how the Gantt bar already marks it.
+  const effective = overdue && status !== "Complete" ? "Delayed" : (status || "Not Started");
+  const c = statusColor(effective);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "1px 6px",
+        borderRadius: 3,
+        background: `color-mix(in srgb, ${c} 18%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${c} 45%, transparent)`,
+        fontFamily: "var(--font-mono)",
+        fontSize: 8,
+        fontWeight: 700,
+        color: c,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: c, flexShrink: 0 }} />
+      {effective}
+    </span>
+  );
+}
+
 // ── Formatting helpers ────────────────────────────────────────────────────
 //
 // A single robust parser for date-like inputs. Schedule tasks *should* all
@@ -1207,8 +1245,16 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
           <div style={{ display: "flex", width: totalW, height: HEAD_H }}>
             {dateRange.weeks.map((week, i) => {
               const cur = isCurrentWeek(week);
+              // Match the body's alternating-week tint on the header so
+              // the bands read as one continuous stripe top-to-bottom.
+              const banded = i % 2 === 1 && !cur;
+              const headerBg = cur
+                ? "rgba(200,155,32,0.10)"
+                : banded
+                  ? "var(--bg-surface)"
+                  : "transparent";
               return (
-                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: cur ? "rgba(200,155,32,0.06)" : "transparent" }}>
+                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: headerBg }}>
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
                     {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
@@ -1232,7 +1278,20 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
               const { phase, tasks, pctComplete } = row;
               const isOpen = !collapsed[phase.key];
               return (
-                <div key={`sum-${phase.key}`} onClick={() => togglePhase(phase.key)} style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none" }}>
+                <div
+                  key={`sum-${phase.key}`}
+                  onClick={() => togglePhase(phase.key)}
+                  // Whole row is the click target (chevron + label + count
+                  // + percent), with a subtle background-shift on hover so
+                  // it's obviously interactive — the audit flagged the
+                  // previous render as ambiguous about the hit area.
+                  onMouseEnter={(e) => { e.currentTarget.style.background = `${phase.color}1f`; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = `${phase.color}12`; }}
+                  title={`${isOpen ? "Collapse" : "Expand"} ${phase.label}`}
+                  role="button"
+                  aria-expanded={isOpen}
+                  style={{ height: SUM_H, display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", padding: "0 12px", gap: 8, borderBottom: `1px solid var(--divider)`, background: `${phase.color}12`, cursor: "pointer", userSelect: "none", transition: "background 0.12s" }}
+                >
                   <span style={{ color: phase.color, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
@@ -1464,7 +1523,27 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                         </span>
                       );
                     })()}
-                    <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: task._hasChildren ? 700 : 500, color: overdue ? "#EF4444" : task._hasChildren ? "var(--accent-light, var(--text-primary))" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{
+                      fontFamily: "var(--font-body)",
+                      // Slight WBS-level type ramp: parent tasks read as
+                      // headers, leaf rows stay at the base weight. Depth
+                      // also drops the size by 0.5px per level (max 2)
+                      // so a glance can tell parent from grandchild.
+                      fontSize: task._hasChildren ? 11.5 : Math.max(10, 11 - Math.min(task._depth || 0, 2) * 0.5),
+                      fontWeight: task._hasChildren ? 800 : 500,
+                      letterSpacing: task._hasChildren ? "0.01em" : 0,
+                      textTransform: task._hasChildren ? "uppercase" : "none",
+                      color: overdue
+                        ? "#EF4444"
+                        : task._hasChildren
+                          ? "var(--text-primary)"
+                          : (task._depth || 0) > 0
+                            ? "var(--text-secondary)"
+                            : "var(--text-primary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
                       {sanitizeTaskName(task)}
                     </span>
                   </span>
@@ -1504,13 +1583,18 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 <span title={depLabels || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{depLabels || "—"}</span>
                 {/* Resources */}
                 <span title={task.resource_names || task.assigned_to || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: task.resource_names || task.assigned_to ? "var(--text-secondary)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.resource_names || task.assigned_to || "—"}</span>
-                {/* Status */}
+                {/* Status — chip rendering, tinted background + dot for
+                    quick visual scan. Overdue rows promote to the
+                    Delayed palette so an "Overdue" row visually
+                    matches its red border-left strip. */}
                 {isEditing ? (
                   <select value={editDraft.status} onChange={e => setEditDraft(d => ({ ...d, status: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px" }}>
                     {["Not Started","In Progress","Complete","Delayed","On Hold"].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: statusColor(task.status), textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "0.06em" }}>{task.status || "—"}</span>
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
+                    <StatusChip status={task.status} overdue={overdue} />
+                  </div>
                 )}
                 {/* Stage — only rendered with a picker on Detailing-phase
                     rows. `phase` here is the PHASES config object from the
@@ -1574,10 +1658,32 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
         <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: "var(--bg-page)", position: "relative" }}>
           <div style={{ width: totalW, height: totalHeight, position: "relative" }}>
 
-            {/* Today line */}
+            {/* Alternating week bands — subtle background tint on every
+                other week so the eye can track horizontal weeks across a
+                long timeline. Sits behind everything (zIndex 0); the
+                divider lines, today marker, and bars all paint on top. */}
+            {dateRange.weeks.map((w, i) => (
+              i % 2 === 1 ? (
+                <div key={`band-${i}`} style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: i * WEEK_PX,
+                  width: WEEK_PX,
+                  background: "var(--bg-surface-low)",
+                  opacity: 0.45,
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }} />
+              ) : null
+            ))}
+
+            {/* Today line — accent-colored 3px stripe with a faint full-
+                height glow so it reads even when crossing dense bars. Pill
+                label sits at the very top edge so it doesn't get clipped. */}
             {showToday && (
-              <div style={{ position: "absolute", top: 0, bottom: 0, left: todayPx, width: 2, background: "#FF6B00", zIndex: 10 }}>
-                <div style={{ position: "absolute", top: 0, left: -18, background: "#FF6B00", borderRadius: 2, padding: "1px 4px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#fff", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>TODAY</div>
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: todayPx - 1, width: 3, background: "#FF6B00", zIndex: 12, boxShadow: "0 0 6px rgba(255,107,0,0.55)" }}>
+                <div style={{ position: "absolute", top: 0, left: -22, background: "#FF6B00", borderRadius: "2px 2px 2px 0", padding: "2px 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: "0.10em", whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(0,0,0,0.35)" }}>TODAY</div>
               </div>
             )}
 
@@ -1588,6 +1694,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 <div key={i} style={{
                   position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
                   background: isMonthStart ? "var(--border-strong)" : "var(--divider)",
+                  zIndex: 1,
                 }} />
               );
             })}
