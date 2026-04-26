@@ -7,6 +7,7 @@ import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
 import { useAlerts } from "@/hooks/useAlerts";
 import { CommandBar } from "@/components/design-system";
+import { setDraft } from "@/lib/draftStorage";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -145,14 +146,14 @@ export default function AlertsCenter() {
                     <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
                     <button
                       onClick={() => {
-                        localStorage.setItem("sbp-new-mitigation", JSON.stringify({
+                        setDraft("new-mitigation", {
                           issue_source: "Alert",
                           source_entity_ref: alert.title,
                           source_entity_id: alert.id,
                           title: alert.title,
                           identified_date: new Date().toISOString().split("T")[0],
                           status: "Open",
-                        }));
+                        });
                         navigate("/Mitigations");
                       }}
                       style={{

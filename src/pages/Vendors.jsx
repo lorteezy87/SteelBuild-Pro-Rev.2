@@ -15,6 +15,7 @@ import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { formatCurrency } from "../components/shared/formatters";
 import { Plus, RefreshCw } from "lucide-react";
 import { VENDOR_STATUS } from "@/lib/enums";
+import { exportToCSV } from "@/lib/csv";
 
 export default function Vendors() {
   const qc = useQueryClient();
@@ -207,10 +208,7 @@ export default function Vendors() {
         stats.coCount || 0, stats.totalSpend || 0,
       ];
     });
-    const csv = [headers, ...rows].map(r => r.map(cell => `"${cell ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "vendors.csv"; a.click(); URL.revokeObjectURL(url);
+    exportToCSV({ filename: "vendors.csv", headers, rows });
   };
 
   return (
