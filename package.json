@@ -8,7 +8,9 @@
     "build": "node ./node_modules/vite/bin/vite.js build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc -p ./jsconfig.json",
+    "typecheck": "tsc -p ./tsconfig.json",
+    "typecheck:js": "tsc -p ./jsconfig.json",
+    "types:db": "supabase gen types typescript --project-id kjrwqagyeswwoxpjkcko > src/types/supabase.ts",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
     "test": "vitest run",
     "test:watch": "vitest"
