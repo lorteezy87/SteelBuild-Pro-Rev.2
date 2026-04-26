@@ -280,34 +280,32 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search trigger */}
+            {/* Search trigger \u2014 was a 180px-wide pill labeled "Search...
+                Ctrl+K" duplicating the SidebarNav search affordance. The
+                sidebar entry is the single source of truth for global
+                search now; we keep a compact icon-only button up here so
+                the action is reachable even with the sidebar collapsed
+                or on routes without it. The Cmd/Ctrl+K shortcut is still
+                wired in the effect above and stays unique app-wide. */}
             {!isMobile && (
-              <div
+              <button
                 onClick={() => setSearchOpen(true)}
-                title="Search (Cmd+K)"
+                title={`Search (${navigator.platform?.includes("Mac") ? "\u2318K" : "Ctrl+K"})`}
+                aria-label="Open global search"
                 style={{
-                  height: 32, borderRadius: 8,
+                  height: 32, width: 32, borderRadius: 8,
                   background: "var(--hover-bg)", border: "1px solid var(--border-default)",
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "0 10px", cursor: "pointer",
-                  color: "var(--text-muted)", transition: "all 0.15s", minWidth: 180,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", color: "var(--text-muted)", transition: "all 0.15s",
+                  padding: 0,
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.color = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
               >
-                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ flexShrink: 0, opacity: 0.6 }}>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                   <circle cx="8" cy="8" r="6" /><line x1="14" y1="14" x2="19" y2="19" />
                 </svg>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", flex: 1 }}>Search...</span>
-                <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                  color: "var(--text-muted)", background: "var(--bg-surface-high)",
-                  border: "1px solid var(--border-default)", borderRadius: 4,
-                  padding: "1px 5px", lineHeight: "16px",
-                }}>
-                  {navigator.platform?.includes("Mac") ? "\u2318K" : "Ctrl+K"}
-                </span>
-              </div>
+              </button>
             )}
 
             {/* Density toggle + Modules grid — desktop only */}
