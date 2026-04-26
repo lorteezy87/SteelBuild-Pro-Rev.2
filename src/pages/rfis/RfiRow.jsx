@@ -11,7 +11,7 @@
 
 import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
-import { daysOpen, isOverdue } from "./utils";
+import { daysOpen, isOverdue, rfiStatusShortLabel } from "./utils";
 
 export const RFI_ROW_GRID = "36px 78px 1fr 110px 100px 110px 70px 90px 110px 60px";
 
@@ -123,7 +123,7 @@ export default function RfiRow({ rfi, idx, selected, onToggle, onOpen }) {
         <BicPill bic={rfi.ball_in_court || "Contractor"} />
       </div>
       <div>
-        <StatusPill label={rfi.status || "Open"} />
+        <StatusPill label={rfiStatusShortLabel(rfi.status)} />
       </div>
       <div
         style={{

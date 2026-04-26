@@ -94,6 +94,29 @@ export const isClosed = (r) => ["Answered", "Closed"].includes(r.status);
 export const isOverdue = (r) =>
   !isClosed(r) && r.date_required && parseUTCDate(r.date_required) < new Date();
 
+/**
+ * Map a raw RFI status to the short label shown in the row pipeline /
+ * status pill. The lifecycle pipeline at the top of the page uses these
+ * short labels ("INCOMPLETE" instead of "Incomplete Response", "REVIEW"
+ * instead of "Under Review"); the row used to render the raw status text
+ * which overflowed the 110-px status column for the longer values.
+ *
+ * Unknown statuses pass through unchanged so a future status value
+ * (e.g. "On Hold") still renders something — just at full length.
+ */
+const RFI_STATUS_SHORT = {
+  "Open": "OPEN",
+  "Submitted": "OPEN",
+  "Under Review": "REVIEW",
+  "Incomplete Response": "INCOMPLETE",
+  "Answered": "ANSWERED",
+  "Closed": "CLOSED",
+  "Draft": "DRAFT",
+};
+
+export const rfiStatusShortLabel = (status) =>
+  RFI_STATUS_SHORT[status] || status || "OPEN";
+
 export const exportRFIsToCSV = (rows, filename = "rfi-log.csv") => {
   const headers = [
     "RFI #", "Project", "Title", "Priority", "Status", "Ball in Court",
