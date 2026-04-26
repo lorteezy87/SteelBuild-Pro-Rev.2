@@ -59,10 +59,13 @@ import RfiDetailModal from "./rfis/RfiDetailModal";
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
 const LIFECYCLE_STAGES_BASE = [
-  { id: "open",  label: "OPEN",     color: "var(--status-warning)" },
-  { id: "rev",   label: "REVIEW",   color: "var(--status-review)"  },
-  { id: "ans",   label: "ANSWERED", color: "var(--status-success)" },
-  { id: "cls",   label: "CLOSED",   color: "var(--text-muted)"     },
+  { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
+  { id: "rev",   label: "REVIEW",     color: "var(--status-review)"  },
+  // GC replied but the answer was incomplete — needs another round.
+  // Still treated as open by closed-state filters.
+  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)"   },
+  { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
+  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)"     },
 ];
 
 export default function RFIs() {
@@ -200,13 +203,14 @@ export default function RFIs() {
   const counts = useMemo(() => {
     const overdue = rfis.filter((r) => isOverdue(r));
     return {
-      all:      rfis.length,
-      open:     rfis.filter((r) => r.status === "Open").length,
-      review:   rfis.filter((r) => r.status === "Under Review").length,
-      answered: rfis.filter((r) => r.status === "Answered").length,
-      closed:   rfis.filter((r) => r.status === "Closed").length,
-      overdue:  overdue.length,
-      critical: rfis.filter((r) => r.priority === "Critical").length,
+      all:        rfis.length,
+      open:       rfis.filter((r) => r.status === "Open").length,
+      review:     rfis.filter((r) => r.status === "Under Review").length,
+      incomplete: rfis.filter((r) => r.status === "Incomplete Response").length,
+      answered:   rfis.filter((r) => r.status === "Answered").length,
+      closed:     rfis.filter((r) => r.status === "Closed").length,
+      overdue:    overdue.length,
+      critical:   rfis.filter((r) => r.priority === "Critical").length,
     };
   }, [rfis]);
 
@@ -214,12 +218,13 @@ export default function RFIs() {
     const q = search.trim().toLowerCase();
     return rfis
       .filter((r) => {
-        if (filter === "open")     return r.status === "Open";
-        if (filter === "review")   return r.status === "Under Review";
-        if (filter === "answered") return r.status === "Answered";
-        if (filter === "closed")   return r.status === "Closed";
-        if (filter === "overdue")  return isOverdue(r);
-        if (filter === "critical") return r.priority === "Critical";
+        if (filter === "open")       return r.status === "Open";
+        if (filter === "review")     return r.status === "Under Review";
+        if (filter === "incomplete") return r.status === "Incomplete Response";
+        if (filter === "answered")   return r.status === "Answered";
+        if (filter === "closed")     return r.status === "Closed";
+        if (filter === "overdue")    return isOverdue(r);
+        if (filter === "critical")   return r.priority === "Critical";
         return true;
       })
       .filter((r) => {
@@ -248,16 +253,20 @@ export default function RFIs() {
   const lifecycleStages = useMemo(() => [
     { ...LIFECYCLE_STAGES_BASE[0], count: counts.open },
     { ...LIFECYCLE_STAGES_BASE[1], count: counts.review },
-    { ...LIFECYCLE_STAGES_BASE[2], count: counts.answered },
-    { ...LIFECYCLE_STAGES_BASE[3], count: counts.closed },
+    { ...LIFECYCLE_STAGES_BASE[2], count: counts.incomplete },
+    { ...LIFECYCLE_STAGES_BASE[3], count: counts.answered },
+    { ...LIFECYCLE_STAGES_BASE[4], count: counts.closed },
   ], [counts]);
 
-  // Active stage = the first stage with open items, or ANSWERED if all flowing
+  // Active stage = the first non-empty stage walking the pipeline backwards from
+  // the action-needed end. Incomplete-response RFIs demand attention so they
+  // win over Open/Review.
   const activeStageIdx = useMemo(() => {
+    if (counts.incomplete > 0) return 2;
     if (counts.review > 0) return 1;
     if (counts.open > 0) return 0;
-    if (counts.answered > 0) return 2;
-    return 3;
+    if (counts.answered > 0) return 3;
+    return 4;
   }, [counts]);
 
   /* ── Overdue → Alert background effect ── */
@@ -356,13 +365,14 @@ export default function RFIs() {
       </CommandBar>
 
       {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
-        <KpiTile compact label="ALL"          value={counts.all}      color="var(--text-secondary)" active={filter === "all"}      onClick={() => setFilter("all")} />
-        <KpiTile compact label="OPEN"         value={counts.open}     color="var(--status-warning)" active={filter === "open"}     onClick={() => setFilter("open")} />
-        <KpiTile compact label="UNDER REVIEW" value={counts.review}   color="var(--status-review)"  active={filter === "review"}   onClick={() => setFilter("review")} />
-        <KpiTile compact label="ANSWERED"     value={counts.answered} color="var(--status-success)" active={filter === "answered"} onClick={() => setFilter("answered")} />
-        <KpiTile compact label="OVERDUE"      value={counts.overdue}  color="var(--status-error)"   active={filter === "overdue"}  onClick={() => setFilter("overdue")} />
-        <KpiTile compact label="CRITICAL"     value={counts.critical} color="#FF6B35"               active={filter === "critical"} onClick={() => setFilter("critical")} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+        <KpiTile compact label="ALL"          value={counts.all}        color="var(--text-secondary)" active={filter === "all"}        onClick={() => setFilter("all")} />
+        <KpiTile compact label="OPEN"         value={counts.open}       color="var(--status-warning)" active={filter === "open"}       onClick={() => setFilter("open")} />
+        <KpiTile compact label="UNDER REVIEW" value={counts.review}     color="var(--status-review)"  active={filter === "review"}     onClick={() => setFilter("review")} />
+        <KpiTile compact label="INCOMPLETE"   value={counts.incomplete} color="var(--status-error)"   active={filter === "incomplete"} onClick={() => setFilter("incomplete")} />
+        <KpiTile compact label="ANSWERED"     value={counts.answered}   color="var(--status-success)" active={filter === "answered"}   onClick={() => setFilter("answered")} />
+        <KpiTile compact label="OVERDUE"      value={counts.overdue}    color="var(--status-error)"   active={filter === "overdue"}    onClick={() => setFilter("overdue")} />
+        <KpiTile compact label="CRITICAL"     value={counts.critical}   color="#FF6B35"               active={filter === "critical"}   onClick={() => setFilter("critical")} />
       </div>
 
       {/* RFI Lifecycle Pipeline */}
