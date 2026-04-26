@@ -17,6 +17,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
+import type { Insert, Update } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 
@@ -168,7 +169,7 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
         description: data.description?.trim(),
         pieces: parseInt(String(data.pieces ?? "")) || 0,
         weight_tons: parseFloat(String(data.weight_tons ?? "")) || 0,
-      });
+      } as Insert<'deliveries'>);
     },
     onSuccess: async () => {
       await invalidateAll();
