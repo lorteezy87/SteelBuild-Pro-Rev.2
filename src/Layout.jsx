@@ -46,6 +46,7 @@ import { AuthContext } from "@/lib/AuthContext";
 import { batchProcess } from "@/utils/batchProcess";
 import useDocumentTitle from "@/hooks/useDocumentTitle";
 import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
+import { viewportWidth, shortcutKeyLabel } from "@/lib/browser";
 
 // Config
 import { PRIMARY_TABS, TAB_DEFAULT_PAGE } from "@/config/moduleRegistry";
@@ -63,7 +64,10 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  // Lazy initial state — viewportWidth() falls back to 0 when window is not
+  // defined (vitest node env, SSR), so the first render is "not mobile" and
+  // the effect below corrects it on the first client tick.
+  const [isMobile, setIsMobile] = useState(() => viewportWidth() < 900);
 
   // Density preference
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function Layout({ children, currentPageName }) {
 
   // Responsive breakpoint
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 900);
+    const handler = () => setIsMobile(viewportWidth() < 900);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
@@ -290,7 +294,7 @@ export default function Layout({ children, currentPageName }) {
             {!isMobile && (
               <button
                 onClick={() => setSearchOpen(true)}
-                title={`Search (${navigator.platform?.includes("Mac") ? "\u2318K" : "Ctrl+K"})`}
+                title={`Search (${shortcutKeyLabel("K")})`}
                 aria-label="Open global search"
                 style={{
                   height: 32, width: 32, borderRadius: 8,
