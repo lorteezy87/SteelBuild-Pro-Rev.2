@@ -33,6 +33,7 @@ import { CONSTRAINT_TYPES, TYPE_COLORS } from "./constraints/constants";
 import { CommandBar } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
+import { setDraft } from "@/lib/draftStorage";
 
 export default function Constraints() {
   const qc = useQueryClient();
@@ -179,14 +180,14 @@ export default function Constraints() {
 
   // ── Handlers ───────────────────────────────────────────────────────
   const handleLogMitigation = (c) => {
-    localStorage.setItem("sbp-new-mitigation", JSON.stringify({
+    setDraft("new-mitigation", {
       issue_source: "Constraint",
       source_entity_ref: c.constraint_number || "Constraint",
       source_entity_id: c.id,
       title: c.title,
       identified_date: new Date().toISOString().split("T")[0],
       status: CONSTRAINT_STATUS.OPEN,
-    }));
+    });
     navigate("/Mitigations");
   };
 

@@ -13,20 +13,14 @@ import StatusBadge from "../components/shared/StatusBadge";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import { formatDate } from "../components/shared/formatters";
 import { toast } from "sonner";
+import { getInitials, getAvatarColor } from "@/lib/avatars";
 
-const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#0D9488', '#F97316', '#06B6D4'];
-
-function getInitials(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return parts[0][0].toUpperCase();
-}
-
-function getAvatarColor(user) {
-  const str = user.full_name || user.email || '';
-  return AVATAR_COLORS[str.length % AVATAR_COLORS.length];
-}
+// Local wrapper preserves the existing call-site shape (`getAvatarColor(user)`)
+// while delegating to the shared seed-based helper. The seed is the display
+// name with email as fallback so the color follows the user's display, not
+// their UUID.
+const getUserAvatarColor = (user) =>
+  getAvatarColor(user?.full_name || user?.email);
 
 function getActivityStatus(user) {
   if (user.status === "invited" || user.status === "pending") {
@@ -233,7 +227,7 @@ function UsersManagementContent() {
                         <div
                           style={{
                             width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                            background: getAvatarColor(user),
+                            background: getUserAvatarColor(user),
                             display: "flex", alignItems: "center", justifyContent: "center",
                             color: "#fff", fontSize: 11, fontWeight: 700,
                             lineHeight: 1, userSelect: "none",
