@@ -1,179 +1,264 @@
 /**
- * routes.js - Validated, domain-grouped route registry with lazy loading
+ * routes.js — single source of truth for the page registry.
  *
- * Replaces the auto-generated pages.config.js with:
- *  - React.lazy() for every page (code-splitting)
- *  - Domain grouping for maintainability
- *  - Build-time validation that nav references match registered routes
+ * Every page registered here gets:
+ *   - a lazy component (with stale-chunk retry via lazyWithRetry)
+ *   - a user-facing label (breadcrumbs, document title, sidebar)
+ *   - a `projectScoped` flag (does this page need an active project?)
+ *
+ * Derived exports (PAGES, PAGE_LABELS, PROJECT_SCOPED_PAGES, ALL_ROUTE_PATHS)
+ * are computed from this one registry, so adding a page means editing ONE
+ * place. The previous split between this file and src/routes.js is gone —
+ * src/routes.js is now a re-export shim for backward compatibility with the
+ * existing import paths.
  *
  * To add a new page:
- *   1. Create src/pages/MyPage.jsx with a default export
- *   2. Add it to the appropriate ROUTE_DOMAINS group below
- *   3. Add navigation entries in src/config/moduleRegistry.js
+ *   1. Create src/pages/MyPage.jsx with a default export.
+ *   2. Add an entry to the appropriate ROUTE_DOMAINS group below.
+ *   3. (If it shows up in nav) add it to src/config/moduleRegistry.js.
+ *      The validation block at the bottom of this file catches step (3)
+ *      if you forget.
  */
 
 import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 import { lazyWithRetry } from "@/lib/lazyRetry";
 
-// `lazyWithRetry` lives in @/lib/lazyRetry — single shared implementation that
-// (a) clears its sessionStorage sentinel only on a SUCCESSFUL import (which
-//     prevents reload loops on a chunk that's truly gone), and (b) ignores
-// non-stale-chunk errors so real bugs surface to the error boundary.
-// The eager top-level `sessionStorage.removeItem(...)` that used to live here
-// was the source of the reload-loop bug; do not re-introduce it.
+// ── Helper: build a registry entry ───────────────────────────────────
+/**
+ * @typedef {Object} RouteEntry
+ * @property {React.LazyExoticComponent<any>} component  Lazy page component.
+ * @property {string} label                              Breadcrumb / tab label.
+ * @property {boolean} [projectScoped]                   True if page genuinely
+ *                                                       depends on an active
+ *                                                       project; defaults false.
+ */
 
-// ── Domain-grouped lazy page imports ─────────────────────────────────
+/**
+ * Sugar so a page row stays one line:
+ *
+ *   r(lazyWithRetry(() => import("@/pages/Dashboard")), "Dashboard", { projectScoped: true })
+ *
+ * Caller passes the lazy component explicitly (instead of a name string)
+ * so the import path stays grep-friendly and Vite's bundle analyzer sees
+ * each page individually.
+ */
+function r(component, label, opts) {
+  return {
+    component,
+    label,
+    projectScoped: opts?.projectScoped === true,
+  };
+}
+
+// ── Domain-grouped registry ──────────────────────────────────────────
 const ROUTE_DOMAINS = {
   // ── Overview & Portfolio ──
   overview: {
-    Dashboard:              lazyWithRetry(() => import("@/pages/Dashboard")),
-    CommandCenter:          lazyWithRetry(() => import("@/pages/CommandCenter")),
-    ProjectControlCenter:   lazyWithRetry(() => import("@/pages/ProjectControlCenter")),
-    ExecutiveView:          lazyWithRetry(() => import("@/pages/ExecutiveView")),
-    Projects:               lazyWithRetry(() => import("@/pages/Projects")),
-    ProjectDetail:          lazyWithRetry(() => import("@/pages/ProjectDetail")),
-    AIInsights:             lazyWithRetry(() => import("@/pages/AIInsights")),
+    Dashboard:              r(lazyWithRetry(() => import("@/pages/Dashboard")),             "Dashboard",                 { projectScoped: true }),
+    CommandCenter:          r(lazyWithRetry(() => import("@/pages/CommandCenter")),         "Command Center"),
+    ProjectControlCenter:   r(lazyWithRetry(() => import("@/pages/ProjectControlCenter")),  "Project Control Center",    { projectScoped: true }),
+    ExecutiveView:          r(lazyWithRetry(() => import("@/pages/ExecutiveView")),         "Executive View"),
+    Projects:               r(lazyWithRetry(() => import("@/pages/Projects")),              "Projects"),
+    ProjectDetail:          r(lazyWithRetry(() => import("@/pages/ProjectDetail")),         "Project Detail"),
+    AIInsights:             r(lazyWithRetry(() => import("@/pages/AIInsights")),            "Portfolio Overview"),
   },
 
   // ── Communications ──
   communications: {
-    RFIs:             lazyWithRetry(() => import("@/pages/RFIs")),
-    RFIHub:           lazyWithRetry(() => import("@/pages/RFIHub")),
-    Meetings:         lazyWithRetry(() => import("@/pages/Meetings")),
-    ActionItems:      lazyWithRetry(() => import("@/pages/ActionItems")),
-    ProductionNotes:  lazyWithRetry(() => import("@/pages/ProductionNotes")),
+    RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),
+    RFIHub:           r(lazyWithRetry(() => import("@/pages/RFIHub")),           "RFI Command Center"),
+    Meetings:         r(lazyWithRetry(() => import("@/pages/Meetings")),         "Meetings",            { projectScoped: true }),
+    ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
+    ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
   },
 
   // ── Design & Documents ──
   documents: {
-    Drawings:         lazyWithRetry(() => import("@/pages/Drawings")),
-    DrawingAnalysis:  lazyWithRetry(() => import("@/pages/DrawingAnalysis")),
-    DrawingViewer:    lazyWithRetry(() => import("@/pages/DrawingViewer")),
-    Documents:        lazyWithRetry(() => import("@/pages/Documents")),
-    ModelViewer:      lazyWithRetry(() => import("@/pages/ModelViewer")),
-    Submittals:       lazyWithRetry(() => import("@/pages/Submittals")),
+    Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
+    DrawingAnalysis:  r(lazyWithRetry(() => import("@/pages/DrawingAnalysis")),  "Drawing Analysis",    { projectScoped: true }),
+    DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
+    Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents"),
+    ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),
+    Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittals",          { projectScoped: true }),
   },
 
   // ── Fabrication & Production ──
   fabrication: {
-    WorkPackages:       lazyWithRetry(() => import("@/pages/WorkPackages")),
-    Constraints:        lazyWithRetry(() => import("@/pages/Constraints")),
-    FabRelease:         lazyWithRetry(() => import("@/pages/FabRelease")),
-    Procurement:        lazyWithRetry(() => import("@/pages/Procurement")),
-    LookAheadSchedule:  lazyWithRetry(() => import("@/pages/LookAheadSchedule")),
+    WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),
+    Constraints:        r(lazyWithRetry(() => import("@/pages/Constraints")),        "Constraints",         { projectScoped: true }),
+    FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
+    Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
+    LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule"),
   },
 
   // ── Scheduling & Resources ──
   scheduling: {
-    Schedule:             lazyWithRetry(() => import("@/pages/Schedule")),
-    GanttChart:           lazyWithRetry(() => import("@/pages/GanttChart")),
-    FieldPlan:            lazyWithRetry(() => import("@/pages/FieldPlan")),
-    ResourceManagement:   lazyWithRetry(() => import("@/pages/ResourceManagement")),
-    ResourceScheduling:   lazyWithRetry(() => import("@/pages/ResourceScheduling")),
+    Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
+    GanttChart:           r(lazyWithRetry(() => import("@/pages/GanttChart")),          "Gantt Chart",          { projectScoped: true }),
+    FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan"),
+    ResourceManagement:   r(lazyWithRetry(() => import("@/pages/ResourceManagement")),  "Resource Management"),
+    ResourceScheduling:   r(lazyWithRetry(() => import("@/pages/ResourceScheduling")),  "Crew Scheduling"),
   },
 
   // ── Field Operations ──
   field: {
-    DailyLogs:       lazyWithRetry(() => import("@/pages/DailyLogs")),
-    Photos:          lazyWithRetry(() => import("@/pages/Photos")),
-    LEMs:            lazyWithRetry(() => import("@/pages/LEMs")),
-    Inspections:     lazyWithRetry(() => import("@/pages/Inspections")),
-    Safety:          lazyWithRetry(() => import("@/pages/Safety")),
-    Punchlist:       lazyWithRetry(() => import("@/pages/Punchlist")),
-    QualityControl:  lazyWithRetry(() => import("@/pages/QualityControl")),
+    DailyLogs:       r(lazyWithRetry(() => import("@/pages/DailyLogs")),       "Daily Logs",          { projectScoped: true }),
+    Photos:          r(lazyWithRetry(() => import("@/pages/Photos")),          "Photos",              { projectScoped: true }),
+    LEMs:            r(lazyWithRetry(() => import("@/pages/LEMs")),            "LEMs"),
+    Inspections:     r(lazyWithRetry(() => import("@/pages/Inspections")),     "Inspections",         { projectScoped: true }),
+    Safety:          r(lazyWithRetry(() => import("@/pages/Safety")),          "Safety",              { projectScoped: true }),
+    Punchlist:       r(lazyWithRetry(() => import("@/pages/Punchlist")),       "Punchlist",           { projectScoped: true }),
+    QualityControl:  r(lazyWithRetry(() => import("@/pages/QualityControl")),  "Quality Control",     { projectScoped: true }),
   },
 
   // ── Cost & Finance ──
   cost: {
-    Financials:          lazyWithRetry(() => import("@/pages/Financials")),
-    CostDashboard:       lazyWithRetry(() => import("@/pages/CostDashboard")),
-    ChangeOrders:        lazyWithRetry(() => import("@/pages/ChangeOrders")),
-    SOV:                 lazyWithRetry(() => import("@/pages/SOV")),
-    Expenses:            lazyWithRetry(() => import("@/pages/Expenses")),
-    ContractManagement:  lazyWithRetry(() => import("@/pages/ContractManagement")),
+    Financials:          r(lazyWithRetry(() => import("@/pages/Financials")),          "Budget Control",       { projectScoped: true }),
+    CostDashboard:       r(lazyWithRetry(() => import("@/pages/CostDashboard")),       "Cost Dashboard",       { projectScoped: true }),
+    ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
+    SOV:                 r(lazyWithRetry(() => import("@/pages/SOV")),                 "Schedule of Values",   { projectScoped: true }),
+    Expenses:            r(lazyWithRetry(() => import("@/pages/Expenses")),            "Expenses",             { projectScoped: true }),
+    ContractManagement:  r(lazyWithRetry(() => import("@/pages/ContractManagement")),  "Contract Management"),
   },
 
   // ── Logistics ──
   logistics: {
-    Deliveries: lazyWithRetry(() => import("@/pages/Deliveries")),
+    Deliveries: r(lazyWithRetry(() => import("@/pages/Deliveries")), "Deliveries", { projectScoped: true }),
   },
 
   // ── Risk & Compliance ──
   risk: {
-    Mitigations:     lazyWithRetry(() => import("@/pages/Mitigations")),
-    ChangeRequests:  lazyWithRetry(() => import("@/pages/ChangeRequests")),
-    DecisionLog:     lazyWithRetry(() => import("@/pages/DecisionLog")),
-    Alerts:          lazyWithRetry(() => import("@/pages/Alerts")),
-    AlertsCenter:    lazyWithRetry(() => import("@/pages/AlertsCenter")),
+    Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations"),
+    ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests"),
+    DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
+    Alerts:          r(lazyWithRetry(() => import("@/pages/Alerts")),          "Alerts"),
+    AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 
   // ── Closeout ──
   closeout: {
-    ProjectCloseout: lazyWithRetry(() => import("@/pages/ProjectCloseout")),
-    Warranty:        lazyWithRetry(() => import("@/pages/Warranty")),
+    ProjectCloseout: r(lazyWithRetry(() => import("@/pages/ProjectCloseout")), "Project Closeout"),
+    Warranty:        r(lazyWithRetry(() => import("@/pages/Warranty")),        "Warranty"),
   },
 
   // ── Admin & Setup ──
   admin: {
-    ScopeExclusions:  lazyWithRetry(() => import("@/pages/ScopeExclusions")),
-    Contacts:         lazyWithRetry(() => import("@/pages/Contacts")),
-    Vendors:          lazyWithRetry(() => import("@/pages/Vendors")),
-    Settings:         lazyWithRetry(() => import("@/pages/Settings")),
-    UsersManagement:  lazyWithRetry(() => import("@/pages/UsersManagement")),
-    AgentMemory:      lazyWithRetry(() => import("@/pages/AgentMemory")),
+    ScopeExclusions:  r(lazyWithRetry(() => import("@/pages/ScopeExclusions")),  "Scope & Exclusions"),
+    Contacts:         r(lazyWithRetry(() => import("@/pages/Contacts")),         "Contacts"),
+    Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
+    Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
+    UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
+    AgentMemory:      r(lazyWithRetry(() => import("@/pages/AgentMemory")),      "Agent Memory"),
   },
 
   // ── Tools ──
   tools: {
-    FeetInchesCalculator:       lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),
-    SteelWeightCalculator:      lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),
-    CranePickCalculator:        lazyWithRetry(() => import("@/pages/CranePickCalculator")),
-    DecimalFractionConverter:   lazyWithRetry(() => import("@/pages/DecimalFractionConverter")),
+    FeetInchesCalculator:       r(lazyWithRetry(() => import("@/pages/FeetInchesCalculator")),       "Feet & Inches Calculator"),
+    SteelWeightCalculator:      r(lazyWithRetry(() => import("@/pages/SteelWeightCalculator")),      "Steel Weight Calculator"),
+    CranePickCalculator:        r(lazyWithRetry(() => import("@/pages/CranePickCalculator")),        "Crane Pick Calculator"),
+    DecimalFractionConverter:   r(lazyWithRetry(() => import("@/pages/DecimalFractionConverter")),   "Decimal / Fraction Converter"),
   },
 
   // ── Reporting ──
   reporting: {
-    JobStatusReport: lazyWithRetry(() => import("@/pages/JobStatusReport")),
-    Reports:         lazyWithRetry(() => import("@/pages/Reports")),
-    Activity:        lazyWithRetry(() => import("@/pages/Activity")),
+    JobStatusReport: r(lazyWithRetry(() => import("@/pages/JobStatusReport")), "Job Status Report"),
+    Reports:         r(lazyWithRetry(() => import("@/pages/Reports")),         "Reports"),
+    Activity:        r(lazyWithRetry(() => import("@/pages/Activity")),        "Activity Log"),
   },
 };
 
-// ── Flat page map for router consumption ─────────────────────────────
-export const PAGES = Object.values(ROUTE_DOMAINS).reduce(
-  (acc, domain) => ({ ...acc, ...domain }),
-  {}
+// ── Flat registry: { [pageName]: RouteEntry } ────────────────────────
+const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
+  (acc, domain) => Object.assign(acc, domain),
+  /** @type {Record<string, RouteEntry>} */ ({})
 );
 
-// ── Route validation ─────────────────────────────────────────────────
+// ── Derived: page → component map (legacy router contract) ───────────
+export const PAGES = Object.fromEntries(
+  Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.component])
+);
+
+// ── Derived: page → label map ────────────────────────────────────────
+export const PAGE_LABELS = Object.fromEntries(
+  Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.label])
+);
+
+// ── Derived: pages whose UI depends on an active project ─────────────
+export const PROJECT_SCOPED_PAGES = new Set(
+  Object.entries(ROUTE_REGISTRY)
+    .filter(([, entry]) => entry.projectScoped)
+    .map(([key]) => key)
+);
+
+// ── Derived: full set of route paths the app actually serves ─────────
+// "/", "/Landing", "/RFIHub" are static mounts in App.jsx, not in the
+// registry, so they get spliced in explicitly.
+export const ALL_ROUTE_PATHS = Array.from(new Set([
+  "/",
+  "/Landing",
+  "/RFIHub",
+  ...Object.keys(PAGES).map((p) => `/${p}`),
+]));
+
 /**
- * Validates that every page referenced in navigation configs is registered
- * in ROUTE_DOMAINS. Logs warnings in development; silent in production.
- *
- * @returns {string[]} Array of unregistered page names (empty = all valid)
+ * Resolve a page key to a display label. Unknown keys get a best-effort
+ * spaced version (e.g. "FabRelease" → "Fab Release") so newly-introduced
+ * pages don't crash the breadcrumb before they're registered.
  */
-export function validateRoutes() {
-  const registered = new Set(Object.keys(PAGES));
-  const referenced = new Set();
-
-  // Collect all page references from navigation configs
-  NAV_GROUPS.flatMap((g) => g.items).forEach((item) => referenced.add(item.page));
-  SIDEBAR_GROUPS.flatMap((g) => g.items).forEach((item) => referenced.add(item.page));
-  PRIMARY_TABS.flatMap((t) => t.pages).forEach((page) => referenced.add(page));
-
-  const missing = [...referenced].filter((page) => !registered.has(page));
-
-  if (missing.length > 0 && import.meta.env.DEV) {
-    console.error(
-      `[RouteValidator] ${missing.length} page(s) referenced in navigation but not registered in routes.js:`,
-      missing
-    );
-  }
-
-  return missing;
+export function routeLabel(pageName) {
+  if (!pageName) return "Page";
+  if (PAGE_LABELS[pageName]) return PAGE_LABELS[pageName];
+  return String(pageName).replace(/([A-Z])/g, " $1").trim();
 }
 
-// Run validation at module load in dev
+// ── Validation ───────────────────────────────────────────────────────
+/**
+ * Validate the registry against the navigation configs. Catches three
+ * drift classes:
+ *
+ *   1. Navigation references a page that isn't in the registry.
+ *   2. A registry entry has no label (defensive — `r()` enforces this,
+ *      but a hand-edited entry might bypass it).
+ *   3. PROJECT_SCOPED_PAGES references a page that isn't registered.
+ *
+ * In dev, logs each issue. Returns the list so tests / CI can assert
+ * an empty result.
+ */
+export function validateRoutes() {
+  const registered = new Set(Object.keys(ROUTE_REGISTRY));
+  const referenced = new Set();
+
+  NAV_GROUPS.flatMap((g) => g.items).forEach((item) => referenced.add(item.page));
+  SIDEBAR_GROUPS.flatMap((g) => g.items).forEach((item) => referenced.add(item.page));
+  PRIMARY_TABS.flatMap((t) => t.pages).forEach((p) => referenced.add(p));
+
+  const issues = [];
+
+  for (const p of referenced) {
+    if (!registered.has(p)) {
+      issues.push(`Navigation references unregistered page: ${p}`);
+    }
+  }
+  for (const [key, entry] of Object.entries(ROUTE_REGISTRY)) {
+    if (!entry.label) {
+      issues.push(`Registered page has no label: ${key}`);
+    }
+  }
+  for (const p of PROJECT_SCOPED_PAGES) {
+    if (!registered.has(p)) {
+      issues.push(`PROJECT_SCOPED_PAGES references unregistered page: ${p}`);
+    }
+  }
+
+  if (issues.length > 0 && import.meta.env.DEV) {
+    console.error(`[RouteValidator] ${issues.length} drift issue(s):`);
+    for (const msg of issues) console.error("  -", msg);
+  }
+
+  return issues;
+}
+
+// Run validation at module load in dev so drift surfaces on first refresh.
 if (import.meta.env.DEV) {
   validateRoutes();
 }
