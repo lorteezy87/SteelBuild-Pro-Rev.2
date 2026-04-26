@@ -172,7 +172,7 @@ function Row({ r, isSelected, isChecked, onSelect, onToggleSelect, onToggleStatu
       </div>
       <div><Pill label={r.priority} color={pr.color} bg={pr.bg} /></div>
       <div>
-        <Pill label={r.status} color={st.color} bg={st.bg} />
+        <Pill label={r.status === "Incomplete Response" ? "INCOMPLETE" : r.status} color={st.color} bg={st.bg} />
         <div style={{ ...mono, fontSize: 8, color: "var(--status-error)" }}>{r.cost_impact ? "$" : ""}</div>
         <div style={{ ...mono, fontSize: 8, color: "var(--status-warning)" }}>{r.schedule_impact ? "⏱" : ""}</div>
       </div>
