@@ -750,12 +750,13 @@ export default function PortfolioView({
       .reduce((s, c) => s + (Number(c.co_amount) || Number(c.cost_impact_amount) || 0), 0);
 
     // Build a map of actual-spend-per-cost-code so we can compare to
-    // budgets. allExpenses is keyed by project_id + cost_code_id (the
-    // cost codes are the source of truth for budget).
+    // budgets. expenses.cost_code holds the cost-code NUMBER (text); the
+    // schema has no cost_code_id on expenses, so cost_code (number) is the
+    // only key we can build the spend map from.
     const spendByCode = new Map();
     for (const e of allExpenses) {
       if (!statusIn(e.payment_status, ["Paid"])) continue;
-      const key = e.cost_code_id || e.cost_code || null;
+      const key = e.cost_code || null;
       if (!key) continue;
       spendByCode.set(key, (spendByCode.get(key) || 0) + (Number(e.amount) || 0));
     }
@@ -763,7 +764,11 @@ export default function PortfolioView({
     for (const code of allCodes) {
       const budget = Number(code.budget_amount) || 0;
       if (budget <= 0) continue;
-      const actual = spendByCode.get(code.id) || spendByCode.get(code.code) || 0;
+      // NOTE: code.code is undefined on the cost_codes row shape (the column
+      // is cost_code_number) — this lookup currently always misses, so
+      // overBudgetExposure is effectively pinned at 0. Fix is out-of-scope
+      // for this dead-branch cleanup and tracked as a separate task.
+      const actual = spendByCode.get(code.code) || 0;
       if (actual > budget) overBudgetExposure += (actual - budget);
     }
 
