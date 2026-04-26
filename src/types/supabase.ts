@@ -1598,6 +1598,8 @@ export type Database = {
           sheet_count: number | null
           stage_summary: string | null
           status: string | null
+          titleblock_number_rect: Json | null
+          titleblock_title_rect: Json | null
           updated_at: string | null
           upload_batch_id: string | null
         }
@@ -1629,6 +1631,8 @@ export type Database = {
           sheet_count?: number | null
           stage_summary?: string | null
           status?: string | null
+          titleblock_number_rect?: Json | null
+          titleblock_title_rect?: Json | null
           updated_at?: string | null
           upload_batch_id?: string | null
         }
@@ -1660,6 +1664,8 @@ export type Database = {
           sheet_count?: number | null
           stage_summary?: string | null
           status?: string | null
+          titleblock_number_rect?: Json | null
+          titleblock_title_rect?: Json | null
           updated_at?: string | null
           upload_batch_id?: string | null
         }
