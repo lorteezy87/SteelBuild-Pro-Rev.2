@@ -9,7 +9,7 @@ import { useEffect } from "react";
  */
 const BASE_TITLE = "SteelBuild Pro";
 
-export default function useDocumentTitle(title) {
+export default function useDocumentTitle(title: string | null | undefined): void {
   useEffect(() => {
     if (title == null) return;
     const previous = document.title;
