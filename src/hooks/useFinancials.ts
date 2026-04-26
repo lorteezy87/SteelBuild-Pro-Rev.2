@@ -1,5 +1,5 @@
 /**
- * useFinancials.js — Extracted financial calculations and CRUD.
+ * useFinancials.ts — Extracted financial calculations and CRUD.
  *
  * Moves ALL budget/cost/SOV calculations out of page components.
  * ONE place for financial math. ONE invalidation path.
@@ -17,23 +17,39 @@ import { useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
+import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { COST_CODES } from "@/components/shared/costCodes";
 import { calcEVM } from "@/utils/projectKpis";
 
+export type CostCode = RowWithAliases<'cost_codes'>;
+export type Expense = RowWithAliases<'expenses'>;
+export type SOVItem = RowWithAliases<'sov_items'>;
+export type ChangeOrder = RowWithAliases<'change_orders'>;
+export type WorkPackage = RowWithAliases<'work_packages'>;
+
+// Project is passed in by the caller, often from a join / view that exposes
+// derived fields like `revised_contract_value` not present on the raw row.
+// Keep the shape permissive to match real-world call sites.
+export type ProjectLike = Partial<RowWithAliases<'projects'>> & {
+  revised_contract_value?: number | null;
+  original_contract_value?: number | null;
+  scope_complete_pct_override?: number | null;
+};
+
 // ─── Safe number helper ─────────────────────────────────────────────────
-export function safeNumber(value) {
+export function safeNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
-export function formatCurrency(value) {
+export function formatCurrency(value: unknown): string {
   const n = safeNumber(value);
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-export function formatSigned(value) {
+export function formatSigned(value: unknown): string {
   if (value == null) return "—";
   const n = safeNumber(value);
   if (n === 0) return "$0";
@@ -41,45 +57,76 @@ export function formatSigned(value) {
   return prefix + formatCurrency(n);
 }
 
-export function varianceColor(value) {
+export function varianceColor(value: unknown): string {
   const n = safeNumber(value);
   if (n < 0) return "var(--status-error)";
   if (n > 0) return "var(--status-success)";
   return "var(--text-muted)";
 }
 
+export type CostCodeRow = CostCode & {
+  actual_cost: number;
+  committed_cost: number;
+  signed_extras: number;
+  revised_budget: number;
+  original_estimate: number;
+  exposure: number;
+  remaining_budget: number;
+  used_pct: number;
+  is_over: boolean;
+  expense_count: number;
+};
+
+export type FinancialSummary = {
+  contractValue: number;
+  sovTotal: number;
+  revisedBudget: number;
+  actual: number;
+  committed: number;
+  exposure: number;
+  marginAtRisk: number;
+  totalRemaining: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  pctUsed: number;
+  approvedCOTotal: number;
+  pendingCOTotal: number;
+};
+
+export type ReviewFlag = { tone: 'warning' | 'error'; message: string };
+
 // ─── Hook ───────────────────────────────────────────────────────────────
 
-export function useFinancials(projectId, project = null) {
+export function useFinancials(projectId: string | null | undefined, project: ProjectLike | null = null) {
   const qc = useQueryClient();
 
   // ── Queries ─────────────────────────────────────────────────────────
-  const { data: costCodes = [], isLoading: loadingCC } = useQuery({
+  const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
     queryKey: getQueryKey("cost_code", projectId),
     queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
-  const { data: expenses = [], isLoading: loadingExp } = useQuery({
+  const { data: expenses = [], isLoading: loadingExp } = useQuery<Expense[]>({
     queryKey: getQueryKey("expense", projectId),
     queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
-  const { data: sovItems = [], isLoading: loadingSOV } = useQuery({
+  const { data: sovItems = [], isLoading: loadingSOV } = useQuery<SOVItem[]>({
     queryKey: getQueryKey("sov_item", projectId),
     queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
-  const { data: changeOrders = [], isLoading: loadingCO } = useQuery({
+  const { data: changeOrders = [], isLoading: loadingCO } = useQuery<ChangeOrder[]>({
     queryKey: getQueryKey("change_order", projectId),
     queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 
   // Work packages — needed for EVM-derived scope % in Labor Utilization KPI
-  const { data: workPackages = [], isLoading: loadingWP } = useQuery({
+  const { data: workPackages = [], isLoading: loadingWP } = useQuery<WorkPackage[]>({
     queryKey: getQueryKey("work_package", projectId),
     queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
     enabled: !!projectId,
@@ -105,8 +152,8 @@ export function useFinancials(projectId, project = null) {
   );
 
   // ── Derived: CO amounts by cost_code_id ─────────────────────────────
-  const coByCostCodeId = useMemo(() => {
-    return approvedCOs.reduce((acc, co) => {
+  const coByCostCodeId = useMemo<Record<string, number>>(() => {
+    return approvedCOs.reduce<Record<string, number>>((acc, co) => {
       const key = co.cost_code_id || "__unmapped__";
       acc[key] = (acc[key] || 0) + safeNumber(co.co_amount);
       return acc;
@@ -114,10 +161,10 @@ export function useFinancials(projectId, project = null) {
   }, [approvedCOs]);
 
   // ── Derived: cost code rows with budget calculations ────────────────
-  const costCodeRows = useMemo(() => {
+  const costCodeRows = useMemo<CostCodeRow[]>(() => {
     return costCodes.map((cc) => {
       const relatedExpenses = activeExpenses.filter(
-        (e) => e.cost_code === cc.cost_code_number || e.cost_code_id === cc.id
+        (e) => e.cost_code === cc.cost_code_number || (e as { cost_code_id?: string | null }).cost_code_id === cc.id
       );
 
       const actualCost = relatedExpenses
@@ -150,7 +197,7 @@ export function useFinancials(projectId, project = null) {
   }, [costCodes, activeExpenses, coByCostCodeId]);
 
   // ── Derived: project-level summary ──────────────────────────────────
-  const summary = useMemo(() => {
+  const summary = useMemo<FinancialSummary>(() => {
     const contractValue = safeNumber(project?.revised_contract_value || project?.original_contract_value);
     const sovTotal = sovItems.reduce((s, item) => s + safeNumber(item.scheduled_value), 0);
     const revisedBudget = costCodeRows.reduce((s, r) => s + r.revised_budget, 0);
@@ -163,7 +210,7 @@ export function useFinancials(projectId, project = null) {
       .filter((e) => e.payment_status === "Paid")
       .reduce((s, e) => s + safeNumber(e.amount), 0);
     const totalOutstanding = activeExpenses
-      .filter((e) => ["Unpaid", "Pending Approval"].includes(e.payment_status))
+      .filter((e) => ["Unpaid", "Pending Approval"].includes(e.payment_status as string))
       .reduce((s, e) => s + safeNumber(e.amount), 0);
     const pctUsed = revisedBudget > 0 ? (committed / revisedBudget) * 100 : 0;
 
@@ -181,14 +228,14 @@ export function useFinancials(projectId, project = null) {
       pctUsed,
       approvedCOTotal,
       pendingCOTotal: changeOrders
-        .filter((co) => ["Submitted", "Under Review"].includes(co.status))
+        .filter((co) => ["Submitted", "Under Review"].includes(co.status as string))
         .reduce((s, co) => s + safeNumber(co.co_amount), 0),
     };
   }, [costCodeRows, sovItems, activeExpenses, changeOrders, approvedCOTotal, project]);
 
   // ── Derived: review flags ───────────────────────────────────────────
-  const reviewFlags = useMemo(() => {
-    const flags = [];
+  const reviewFlags = useMemo<ReviewFlag[]>(() => {
+    const flags: ReviewFlag[] = [];
 
     if (Math.abs(summary.sovTotal - summary.contractValue) > 1 && summary.contractValue > 0) {
       flags.push({ tone: "warning", message: "SOV total does not match contract value." });
@@ -198,8 +245,8 @@ export function useFinancials(projectId, project = null) {
     }
 
     const unmappedExpenses = activeExpenses.filter((e) => {
-      if (!e.cost_code && !e.cost_code_id) return true;
-      return !costCodes.some((cc) => cc.cost_code_number === e.cost_code || cc.id === e.cost_code_id);
+      if (!e.cost_code && !(e as { cost_code_id?: string | null }).cost_code_id) return true;
+      return !costCodes.some((cc) => cc.cost_code_number === e.cost_code || cc.id === (e as { cost_code_id?: string | null }).cost_code_id);
     });
     if (unmappedExpenses.length > 0) {
       flags.push({ tone: "warning", message: `${unmappedExpenses.length} expense(s) unmapped to cost codes.` });
@@ -224,26 +271,10 @@ export function useFinancials(projectId, project = null) {
   // ═══════════════════════════════════════════════════════════════════════
 
   // ── KPI 1: Change Order Impact ─────────────────────────────────────
-  //
-  // Measures contract growth from COs and whether margin is being captured.
-  //
-  // Formulas:
-  //   contractGrowthPercent  = approvedCOTotal / originalContractValue × 100
-  //   marginImpactOnContract = approved margin$ / currentContractValue × 100
-  //   avgMarginPercent       = weighted average: totalMarginDollars / totalValue × 100
-  //
-  // Health thresholds:
-  //   green: contractGrowth ≤ 5% AND avg approved margin ≥ 15%
-  //          (COs are small relative to contract AND well-margined)
-  //   red:   contractGrowth > 15% OR avg approved margin < 10%
-  //          (scope creep OR COs being given away at low margin)
-  //   amber: everything else
-  //   No COs at all → green (clean contract, no scope creep)
-  // ───────────────────────────────────────────────────────────────────
   const changeOrderImpact = useMemo(() => {
-    const approved = changeOrders.filter(co => co.status === "Approved");
-    const pending  = changeOrders.filter(co => ["Submitted", "Under Review"].includes(co.status));
-    const rejected = changeOrders.filter(co => ["Rejected", "Void"].includes(co.status));
+    const approved = changeOrders.filter((co) => co.status === "Approved");
+    const pending  = changeOrders.filter((co) => ["Submitted", "Under Review"].includes(co.status as string));
+    const rejected = changeOrders.filter((co) => ["Rejected", "Void"].includes(co.status as string));
 
     const approvedTotal        = approved.reduce((s, co) => s + safeNumber(co.co_amount), 0);
     const approvedMarginDollar = approved.reduce(
@@ -274,7 +305,7 @@ export function useFinancials(projectId, project = null) {
       ? (approvedMarginDollar / currentContractValue) * 100
       : 0;
 
-    let health = "amber";
+    let health: 'green' | 'amber' | 'red' = "amber";
     if (approved.length === 0) {
       health = "green";
     } else if (contractGrowthPercent > 15 || approvedAvgMargin < 10) {
@@ -304,33 +335,10 @@ export function useFinancials(projectId, project = null) {
   }, [changeOrders, project]);
 
   // ── KPI 2: Labor Cost Utilization ──────────────────────────────────
-  //
-  // Compares labor spend against scope progress to detect over/under-burn.
-  //
-  // Labor cost codes are identified by matching cost_code_number against the
-  // COST_CODES catalog where category === 'Labor' (codes 06, 07, 08, 10).
-  //
-  // Scope % complete uses a hybrid model:
-  //   effective = COALESCE(scope_complete_pct_override, evm_derived_pct)
-  //   - PM override: stored on projects.scope_complete_pct_override
-  //   - EVM derived: calcEVM(workPackages).ev / calcEVM(workPackages).bac × 100
-  //
-  // Formulas:
-  //   percentLaborConsumed   = laborActual / laborBudget × 100
-  //   utilizationRatio       = percentLaborConsumed / percentScopeComplete
-  //   projectedFinalLaborCost = laborActual / (scopeComplete / 100)
-  //   projectedOverrun       = projectedFinalLaborCost − laborBudget
-  //
-  // Health thresholds (based on utilizationRatio):
-  //   green:  ≤ 1.0 (labor spend ≤ scope progress — on or under budget)
-  //   amber:  1.0–1.1 (slight overburn, watch closely)
-  //   red:    > 1.1 (labor significantly outpacing progress)
-  //   null ratio (0% scope) → amber (insufficient data)
-  // ───────────────────────────────────────────────────────────────────
   const laborUtilization = useMemo(() => {
     // Filter cost code rows to Labor category using the canonical COST_CODES catalog
-    const laborRows = costCodeRows.filter(r => {
-      const def = COST_CODES.find(c => c.code === r.cost_code_number);
+    const laborRows = costCodeRows.filter((r) => {
+      const def = COST_CODES.find((c: { code: string; category: string }) => c.code === r.cost_code_number);
       return def?.category === "Labor";
     });
 
@@ -351,7 +359,7 @@ export function useFinancials(projectId, project = null) {
 
     // Effective: COALESCE(override, evm_derived)
     const percentScopeComplete = overridePct ?? evmDerivedPct;
-    const percentScopeCompleteSource = overridePct != null ? "override" : "derived";
+    const percentScopeCompleteSource: 'override' | 'derived' = overridePct != null ? "override" : "derived";
 
     // Guard: division by zero when scope is 0%
     const utilizationRatio = percentScopeComplete > 0
@@ -370,7 +378,7 @@ export function useFinancials(projectId, project = null) {
       ? projectedFinalLaborCost - laborBudget
       : null;
 
-    let health = "amber";
+    let health: 'green' | 'amber' | 'red' = "amber";
     if (utilizationRatio == null) {
       health = "amber"; // Insufficient data (0% scope)
     } else if (utilizationRatio <= 1.0) {
@@ -399,27 +407,6 @@ export function useFinancials(projectId, project = null) {
   }, [costCodeRows, workPackages, project]);
 
   // ── KPI 3: Billing vs. Cost Ratio ─────────────────────────────────
-  //
-  // Compares what's been billed to the GC/owner against actual costs incurred.
-  // Over-billing means cash-positive (billings ahead of cost) — generally good
-  // up to a point. Under-billing means the company is financing the project.
-  //
-  // Formulas:
-  //   cumulativeBillings = Σ(scheduled_value × current_percent_complete / 100)
-  //   cumulativeCost     = total paid expenses (summary.actual)
-  //   ratio              = cumulativeBillings / cumulativeCost
-  //
-  // Position labels:
-  //   ratio > 1.02 → 'over-billed'  (2% tolerance for rounding)
-  //   ratio < 0.98 → 'under-billed'
-  //   else         → 'balanced'
-  //
-  // Health thresholds (based on ratio):
-  //   green: 1.0–1.1 (billing slightly ahead of cost — ideal)
-  //   amber: 0.9–1.0 OR 1.1–1.2 (mild imbalance, monitor)
-  //   red:   < 0.9 OR > 1.2 (significant imbalance — cash flow risk)
-  //   null ratio (zero cost) → amber
-  // ───────────────────────────────────────────────────────────────────
   const billingVsCost = useMemo(() => {
     const cumulativeBillings = sovItems.reduce(
       (s, item) => s + safeNumber(item.scheduled_value) * safeNumber(item.current_percent_complete) / 100, 0
@@ -430,7 +417,7 @@ export function useFinancials(projectId, project = null) {
     // Guard: division by zero when no costs recorded yet
     const ratio = cumulativeCost > 0 ? cumulativeBillings / cumulativeCost : null;
 
-    let position = "balanced";
+    let position: 'balanced' | 'over-billed' | 'under-billed' = "balanced";
     if (ratio != null) {
       if (ratio > 1.02) position = "over-billed";
       else if (ratio < 0.98) position = "under-billed";
@@ -441,7 +428,7 @@ export function useFinancials(projectId, project = null) {
       ? (overUnderDollars / cumulativeCost) * 100
       : null;
 
-    let health = "amber";
+    let health: 'green' | 'amber' | 'red' = "amber";
     if (ratio == null) {
       health = "amber";
     } else if (ratio >= 1.0 && ratio <= 1.1) {
@@ -464,35 +451,18 @@ export function useFinancials(projectId, project = null) {
   }, [sovItems, summary]);
 
   // ── KPI 4: Days Sales Outstanding (DSO) ────────────────────────────
-  //
-  // Tracks how quickly pay applications convert to cash.
-  //
-  // Completed cycle: SOV item with both submitted_date and payment_received_date
-  //   DSO = payment_received_date − submitted_date (in calendar days)
-  //
-  // Outstanding: submitted but payment not yet received
-  //   daysOutstanding = today − submitted_date
-  //
-  // Health thresholds:
-  //   green: avgDSO ≤ 45 AND no invoice > 60 days outstanding
-  //          (healthy cash conversion within typical net-45 terms)
-  //   red:   avgDSO > 60 OR any invoice > 90 days outstanding
-  //          (cash flow strain — escalate collection efforts)
-  //   amber: everything else
-  //   No completed cycles AND no outstanding → amber (insufficient data)
-  // ───────────────────────────────────────────────────────────────────
   const daysSalesOutstanding = useMemo(() => {
     const today = new Date();
 
     // Completed payment cycles — both dates present
     const completedItems = sovItems.filter(
-      item => item.submitted_date && item.payment_received_date
+      (item) => item.submitted_date && item.payment_received_date
     );
 
-    const dsoValues = completedItems.map(item => {
-      const submitted = new Date(item.submitted_date);
-      const received  = new Date(item.payment_received_date);
-      return Math.max(0, Math.round((received - submitted) / 86400000));
+    const dsoValues = completedItems.map((item) => {
+      const submitted = new Date(item.submitted_date as string);
+      const received  = new Date(item.payment_received_date as string);
+      return Math.max(0, Math.round((received.getTime() - submitted.getTime()) / 86400000));
     });
 
     const avgDSO = dsoValues.length > 0
@@ -500,7 +470,7 @@ export function useFinancials(projectId, project = null) {
       : null;
 
     // Median DSO (more robust against outliers than mean)
-    let medianDSO = null;
+    let medianDSO: number | null = null;
     if (dsoValues.length > 0) {
       const sorted = [...dsoValues].sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
@@ -511,10 +481,10 @@ export function useFinancials(projectId, project = null) {
 
     // Outstanding invoices — submitted but not yet paid
     const outstandingInvoices = sovItems
-      .filter(item => item.submitted_date && !item.payment_received_date)
-      .map(item => {
-        const submitted = new Date(item.submitted_date);
-        const daysOutstanding = Math.max(0, Math.round((today - submitted) / 86400000));
+      .filter((item) => item.submitted_date && !item.payment_received_date)
+      .map((item) => {
+        const submitted = new Date(item.submitted_date as string);
+        const daysOutstanding = Math.max(0, Math.round((today.getTime() - submitted.getTime()) / 86400000));
         const currentBillingValue =
           safeNumber(item.scheduled_value) * safeNumber(item.current_percent_complete) / 100;
         return {
@@ -536,10 +506,10 @@ export function useFinancials(projectId, project = null) {
       ? outstandingInvoices[0].daysOutstanding
       : null;
 
-    const hasOverdue90 = outstandingInvoices.some(inv => inv.daysOutstanding > 90);
-    const hasOverdue60 = outstandingInvoices.some(inv => inv.daysOutstanding > 60);
+    const hasOverdue90 = outstandingInvoices.some((inv) => inv.daysOutstanding > 90);
+    const hasOverdue60 = outstandingInvoices.some((inv) => inv.daysOutstanding > 60);
 
-    let health = "amber";
+    let health: 'green' | 'amber' | 'red' = "amber";
     if (avgDSO == null && outstandingInvoices.length === 0) {
       health = "amber"; // No data — insufficient to assess
     } else if ((avgDSO != null && avgDSO > 60) || hasOverdue90) {
@@ -566,11 +536,12 @@ export function useFinancials(projectId, project = null) {
   }, [qc, projectId]);
 
   // ── Expense CRUD ────────────────────────────────────────────────────
-  const expenseCreateMut = useMutation({
+  type ExpenseCreate = Record<string, unknown>;
+  const expenseCreateMut = useMutation<Expense, Error, ExpenseCreate>({
     mutationFn: async (data) => {
       const errors = validate("expense", data, "create");
-      if (errors.length) throw new Error(errors.map((e) => e.message).join(" "));
-      return await base44.entities.Expense.create(data);
+      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
+      return await base44.entities.Expense.create(data as Insert<'expenses'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["expense"], projectId);
@@ -579,10 +550,11 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to create expense: ${err.message}`),
   });
 
-  const expenseUpdateMut = useMutation({
+  type ExpenseUpdate = { id: string } & Record<string, unknown>;
+  const expenseUpdateMut = useMutation<Expense, Error, ExpenseUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.Expense.update(id, data);
+      return await base44.entities.Expense.update(id, data as Update<'expenses'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["expense"], projectId);
@@ -591,7 +563,7 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to update expense: ${err.message}`),
   });
 
-  const expenseDeleteMut = useMutation({
+  const expenseDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
       await base44.entities.Expense.delete(id);
@@ -605,16 +577,17 @@ export function useFinancials(projectId, project = null) {
   });
 
   // ── Cost Code CRUD ──────────────────────────────────────────────────
-  const costCodeCreateMut = useMutation({
+  type CostCodeCreate = Record<string, unknown> & { cost_code_number?: string };
+  const costCodeCreateMut = useMutation<CostCode, Error, CostCodeCreate>({
     mutationFn: async (data) => {
       const errors = validate("cost_code", data, "create");
-      if (errors.length) throw new Error(errors.map((e) => e.message).join(" "));
+      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
       // Duplicate check
       const existing = costCodes.find(
         (cc) => cc.cost_code_number === data.cost_code_number
       );
       if (existing) throw new Error(`Cost code ${data.cost_code_number} already exists in this project.`);
-      return await base44.entities.CostCode.create(data);
+      return await base44.entities.CostCode.create(data as Insert<'cost_codes'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["cost_code"], projectId);
@@ -623,10 +596,11 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to create cost code: ${err.message}`),
   });
 
-  const costCodeUpdateMut = useMutation({
+  type CostCodeUpdate = { id: string } & Record<string, unknown>;
+  const costCodeUpdateMut = useMutation<CostCode, Error, CostCodeUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.CostCode.update(id, data);
+      return await base44.entities.CostCode.update(id, data as Update<'cost_codes'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["cost_code"], projectId);
@@ -635,7 +609,7 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to update cost code: ${err.message}`),
   });
 
-  const costCodeDeleteMut = useMutation({
+  const costCodeDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
       await base44.entities.CostCode.delete(id);
@@ -649,11 +623,12 @@ export function useFinancials(projectId, project = null) {
   });
 
   // ── Change Order CRUD ───────────────────────────────────────────────
-  const coCreateMut = useMutation({
+  type COCreate = Record<string, unknown>;
+  const coCreateMut = useMutation<ChangeOrder, Error, COCreate>({
     mutationFn: async (data) => {
       const errors = validate("change_order", data, "create");
-      if (errors.length) throw new Error(errors.map((e) => e.message).join(" "));
-      return await base44.entities.ChangeOrder.create(data);
+      if (errors.length) throw new Error(errors.map((e: { message: string }) => e.message).join(" "));
+      return await base44.entities.ChangeOrder.create(data as Insert<'change_orders'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["change_order", "project"], projectId);
@@ -662,10 +637,11 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to create change order: ${err.message}`),
   });
 
-  const coUpdateMut = useMutation({
+  type COUpdate = { id: string } & Record<string, unknown>;
+  const coUpdateMut = useMutation<ChangeOrder, Error, COUpdate>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.ChangeOrder.update(id, data);
+      return await base44.entities.ChangeOrder.update(id, data as Update<'change_orders'>);
     },
     onSuccess: async () => {
       await invalidateEntities(qc, ["change_order", "project"], projectId);
@@ -674,7 +650,7 @@ export function useFinancials(projectId, project = null) {
     onError: (err) => toast.error(`Failed to update change order: ${err.message}`),
   });
 
-  const coDeleteMut = useMutation({
+  const coDeleteMut = useMutation<string, Error, string>({
     mutationFn: async (id) => {
       if (!id) throw new Error("Delete requires an id.");
       await base44.entities.ChangeOrder.delete(id);
