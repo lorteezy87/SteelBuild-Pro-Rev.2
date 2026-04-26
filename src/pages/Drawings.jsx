@@ -42,6 +42,7 @@ import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
 import RenameSetModal from "@/components/drawings/RenameSetModal";
+import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
@@ -80,6 +81,10 @@ export default function Drawings() {
   const [savingApproval, setSavingApproval] = useState(false);
   const [renameSet, setRenameSet] = useState(null);   // { setId, setName, sheets }
   const [savingRename, setSavingRename] = useState(false);
+  // Titleblock marker modal target. Holds the merged set record (parent
+  // drawing_sets row + the group's sheets) so the modal can render the
+  // PDF preview and persist the rectangles via DrawingSet.update().
+  const [markerSet, setMarkerSet] = useState(null);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
@@ -572,6 +577,29 @@ export default function Drawings() {
     setRenameSet({ setId, setName: group.name, sheets: group.sheets || [] });
   };
 
+  const openMarkTitleblock = (group) => {
+    // Same shape resolution as openRenameSet — we need the setId so the
+    // modal can persist the rectangles to drawing_sets, plus the sheets
+    // and the parent's file_url so we can render a preview PDF.
+    if (!group || group.isUngrouped) return;
+    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
+    if (!setId) {
+      toast.error("This group has no parent drawing-set record yet — upload it as a set first.");
+      return;
+    }
+    setMarkerSet({
+      id: setId,
+      set_name: group.name,
+      // Carry across what the parent row stores so the modal can pre-seed
+      // existing rectangles + the source file URL.
+      file_url: group.parent?.file_url || (group.sheets || [])[0]?.file_url || null,
+      titleblock_title_rect:  group.parent?.titleblock_title_rect  ?? null,
+      titleblock_number_rect: group.parent?.titleblock_number_rect ?? null,
+      sheets: group.sheets || [],
+    });
+  };
+
   const handleRenameSet = async (newName) => {
     if (!renameSet) return;
     const { setId, setName: oldName, sheets } = renameSet;
@@ -797,6 +825,7 @@ export default function Drawings() {
             onSetApproval={openSetApproval}
             onDeleteSet={handleDeleteSet}
             onRenameSet={openRenameSet}
+            onMarkTitleblock={openMarkTitleblock}
             rfiMap={rfiMap}
             drawingSetMap={drawingSetMap}
           />
@@ -865,6 +894,18 @@ export default function Drawings() {
         onSave={handleRenameSet}
         saving={savingRename}
       />
+
+      {markerSet && (
+        <TitleblockMarkerModal
+          set={markerSet}
+          onClose={() => setMarkerSet(null)}
+          onSaved={() => {
+            // Pull fresh set rows so the templated indicator shows up
+            // immediately on the row that was just marked.
+            invalidate();
+          }}
+        />
+      )}
 
       <DrawingSetUploadModal
         open={uploadSetOpen}
