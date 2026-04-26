@@ -163,8 +163,11 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Derived: cost code rows with budget calculations ────────────────
   const costCodeRows = useMemo<CostCodeRow[]>(() => {
     return costCodes.map((cc) => {
+      // expenses.cost_code holds the cost-code NUMBER (text); the schema has
+      // no cost_code_id on expenses (only on change_orders / sov_items), so
+      // matching by cost_code_number is the only path.
       const relatedExpenses = activeExpenses.filter(
-        (e) => e.cost_code === cc.cost_code_number || (e as { cost_code_id?: string | null }).cost_code_id === cc.id
+        (e) => e.cost_code === cc.cost_code_number
       );
 
       const actualCost = relatedExpenses
@@ -245,8 +248,8 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
     }
 
     const unmappedExpenses = activeExpenses.filter((e) => {
-      if (!e.cost_code && !(e as { cost_code_id?: string | null }).cost_code_id) return true;
-      return !costCodes.some((cc) => cc.cost_code_number === e.cost_code || cc.id === (e as { cost_code_id?: string | null }).cost_code_id);
+      if (!e.cost_code) return true;
+      return !costCodes.some((cc) => cc.cost_code_number === e.cost_code);
     });
     if (unmappedExpenses.length > 0) {
       flags.push({ tone: "warning", message: `${unmappedExpenses.length} expense(s) unmapped to cost codes.` });

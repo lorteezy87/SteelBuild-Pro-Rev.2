@@ -140,7 +140,11 @@ export default function Financials() {
     }, {});
 
     return costCodes.map((costCode) => {
-      const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number || expense.cost_code_id === costCode.id);
+      // expenses.cost_code holds the cost-code NUMBER (text); the schema has
+      // no cost_code_id on expenses, so matching by cost_code_number is the
+      // only path. (change_orders / sov_items DO have cost_code_id — that is
+      // why byCostCodeId on line above is correct for COs.)
+      const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number);
       const actual = relatedExpenses
         .filter((expense) => expense.payment_status === "Paid")
         .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
