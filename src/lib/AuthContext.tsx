@@ -1,19 +1,53 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
+import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
-export const AuthContext = createContext();
+export type AppUser = {
+  id: string;
+  email: string | undefined;
+  full_name: string | undefined;
+  role: string;
+  // Spread of user_metadata — keep open for arbitrary keys
+  [key: string]: unknown;
+};
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+export type AuthError = {
+  type: 'auth_required';
+  message: string;
+};
+
+export type LoginResult =
+  | { success: true }
+  | { success: false; error: AuthError };
+
+export type AuthContextValue = {
+  user: AppUser | null;
+  isAuthenticated: boolean;
+  isLoadingAuth: boolean;
+  isLoadingPublicSettings: boolean;
+  authError: AuthError | null;
+  appPublicSettings: unknown;
+  logout: () => Promise<void>;
+  loginWithPassword: (creds: { email: string; password: string }) => Promise<LoginResult>;
+  navigateToLogin: () => void;
+  checkAppState: () => Promise<void>;
+};
+
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+type AuthProviderProps = { children: ReactNode };
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   // Kept for API compatibility with components that read this flag
   const [isLoadingPublicSettings] = useState(false);
-  const [authError, setAuthError] = useState(null);
+  const [authError, setAuthError] = useState<AuthError | null>(null);
   // Kept for API compatibility; no longer populated
-  const [appPublicSettings] = useState(null);
+  const [appPublicSettings] = useState<unknown>(null);
 
-  const mapSupabaseUser = async (sbUser) => {
+  const mapSupabaseUser = async (sbUser: SupabaseUser | null | undefined): Promise<AppUser | null> => {
     if (!sbUser) return null;
     // Fetch role from user_profiles (server-authoritative) rather than client-modifiable user_metadata
     let role = 'user';
@@ -27,18 +61,24 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // Fall back to 'user' if profile fetch fails
     }
+    const meta = (sbUser.user_metadata ?? {}) as Record<string, unknown>;
+    const fullName =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      (typeof meta.name === 'string' && meta.name) ||
+      sbUser.email ||
+      undefined;
     return {
       id: sbUser.id,
       email: sbUser.email,
-      full_name: sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email,
+      full_name: fullName,
       role,
-      ...sbUser.user_metadata,
+      ...meta,
     };
   };
 
   // Listen for Supabase auth state changes
   useEffect(() => {
-    const handleSession = async (session) => {
+    const handleSession = async (session: Session | null) => {
       try {
         if (session?.user) {
           setUser(await mapSupabaseUser(session.user));
@@ -87,7 +127,7 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const loginWithPassword = async ({ email, password }) => {
+  const loginWithPassword = async ({ email, password }: { email: string; password: string }): Promise<LoginResult> => {
     setAuthError(null);
     setIsLoadingAuth(true);
     try {
@@ -97,17 +137,18 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       return { success: true };
-    } catch (error) {
+    } catch (error: unknown) {
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       // Distinguish network/config errors from auth errors
-      let message = error.message || 'Login failed';
+      const err = error as { message?: string; status?: number } | undefined;
+      let message = err?.message || 'Login failed';
       if (error instanceof TypeError && /fetch/i.test(message)) {
         message = 'Unable to reach authentication server. Check your network connection or contact your administrator.';
-      } else if (error.status === 400) {
+      } else if (err?.status === 400) {
         message = 'Invalid email or password.';
       }
-      const authErr = { type: 'auth_required', message };
+      const authErr: AuthError = { type: 'auth_required', message };
       setAuthError(authErr);
       return { success: false, error: authErr };
     }
@@ -168,7 +209,7 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');

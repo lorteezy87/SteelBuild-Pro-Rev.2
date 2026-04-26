@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 
+type MaybeStatusError = { status?: number; response?: { status?: number } } | null | undefined;
 
 export const queryClientInstance = new QueryClient({
 	defaultOptions: {
@@ -7,7 +8,8 @@ export const queryClientInstance = new QueryClient({
 			refetchOnWindowFocus: false,
 			retry: (failureCount, error) => {
 				// Don't retry on 400 (bad column) or 404 (missing table) — they'll never succeed
-				const status = error?.status || error?.response?.status;
+				const e = error as MaybeStatusError;
+				const status = e?.status ?? e?.response?.status;
 				if (status === 400 || status === 404) return false;
 				return failureCount < 1; // 1 retry for transient network errors
 			},
@@ -26,9 +28,10 @@ export const queryClientInstance = new QueryClient({
 // ── Global project sorting ────────────────────────────────────────────────────
 // Every query with key ["projects"] gets its results sorted alphabetically
 // by project name, so dropdowns, cards, and tables are consistent app-wide.
-const sortProjectsByName = (data) =>
-	[...(data || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+type ProjectLike = { name?: string | null };
+const sortProjectsByName = <T extends ProjectLike>(data: readonly T[] | undefined): T[] =>
+	[...(data ?? [])].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
-queryClientInstance.setQueryDefaults(["projects"], {
-	select: sortProjectsByName,
+queryClientInstance.setQueryDefaults(['projects'], {
+	select: sortProjectsByName as (data: unknown) => unknown,
 });
