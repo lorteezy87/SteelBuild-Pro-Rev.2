@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "../shared/formatters";
 import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle, FormField } from "@/components/shared/PhoenixModal";
+// `inputDisabledStyle` is no longer used for CO Number — it stays imported for
+// the read-only Margin $ helper / Original Contract Value fields below.
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const empty = {
@@ -19,9 +21,13 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
 
   useEffect(() => {
     if (co) setForm({ ...empty, ...co });
-    else setForm({ ...empty, co_number: nextNumber || "" });
+    // For new COs, leave co_number BLANK so the "Auto-assigned …"
+    // placeholder is visible. The createMut on the parent page fills
+    // in a fresh "CO #NNN" via getNextFormattedNumber if the user
+    // saves without typing one in.
+    else setForm({ ...empty });
     setErrors({});
-  }, [co, open, nextNumber]);
+  }, [co, open]);
 
   const validate = () => {
     const e = {};
@@ -69,7 +75,26 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
     >
       <div style={grid}>
         <FormField label="CO Number">
-          <input style={inputDisabledStyle} value={form.co_number || nextNumber || ""} disabled readOnly />
+          {/* User-assignable, RFI-style. Edit mode shows the existing
+              number; new mode shows blank with "Auto-assigned if blank"
+              placeholder so the user can either type their own or leave
+              empty to let the createMut auto-format the next free
+              "CO #NNN" via getNextFormattedNumber. */}
+          {co ? (
+            <input
+              style={inputStyle}
+              value={form.co_number || ""}
+              onChange={(e) => set("co_number", e.target.value)}
+              placeholder="CO #001"
+            />
+          ) : (
+            <input
+              style={{ ...inputStyle, opacity: 0.7 }}
+              value={form.co_number || ""}
+              onChange={(e) => set("co_number", e.target.value)}
+              placeholder={nextNumber ? `Auto-assigned: ${nextNumber}` : "Auto-assigned if blank"}
+            />
+          )}
         </FormField>
         <FormField label="Project *" error={errors.project_id}>
           <Select value={form.project_id} onValueChange={v => set("project_id", v)} disabled={false}>
