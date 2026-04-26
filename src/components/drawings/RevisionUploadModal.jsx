@@ -94,8 +94,14 @@ const CHANGE_STYLE = {
 // Returns a flat `sheets` array so the comparison step can match on
 // sheetNumber; swallow `extractFailed` cases so the caller can show an
 // empty diff rather than crashing.
-async function extractRevisionSheets(file) {
-  const result = await extractSheetsFromPdf(file);
+//
+// `options.titleblockTemplate` (optional) lets the caller pass the
+// drawing-set's saved {titleRect, numberRect} so the extractor does the
+// per-page OCR override before falling back to the LLM. Coordinates are
+// parsed inside the extractor — pass the raw JSON columns straight from
+// the drawing_sets row.
+async function extractRevisionSheets(file, options = {}) {
+  const result = await extractSheetsFromPdf(file, options);
   if (result?.extractFailed) {
     // Surface the failure; let the caller decide how to react.
     const err = new Error(result.error || "AI extraction failed");
@@ -614,7 +620,17 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
-      const newSheets = await extractRevisionSheets(pdfFile);
+      // Forward the set's saved titleblock template (if any) so the
+      // extractor pulls title + sheet# from the user-marked rectangles
+      // instead of asking the LLM to guess. Sets without a template
+      // pass NULL on both sides; the extractor falls through to its
+      // existing LLM-only path.
+      const newSheets = await extractRevisionSheets(pdfFile, {
+        titleblockTemplate: {
+          titleRect:  selectedSet?.titleblock_title_rect  ?? null,
+          numberRect: selectedSet?.titleblock_number_rect ?? null,
+        },
+      });
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 
