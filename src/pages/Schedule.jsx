@@ -21,6 +21,7 @@ import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
+import { invalidateEntity } from "@/services/cacheRegistry";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -191,7 +192,7 @@ export default function Schedule() {
         toBackfill,
         ({ id, wbs }) => base44.entities.ScheduleTask.update(id, { wbs_code: wbs }).catch(() => {}),
       ).then(({ succeeded, failed }) => {
-        qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        invalidateEntity(qc, "schedule_task", projectId);
         if (failed.length > 0) {
           console.warn(`[Schedule] WBS backfill: ${succeeded.length} ok, ${failed.length} failed`);
         }
@@ -226,7 +227,7 @@ export default function Schedule() {
       return base44.entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setShowDrawer(false);
       setSelectedTask(null);
       toast.success("Task updated");
@@ -242,7 +243,7 @@ export default function Schedule() {
       return base44.entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setShowAddTask(false);
       toast.success("Task created");
     },
@@ -252,7 +253,7 @@ export default function Schedule() {
   const deleteTaskMut = useMutation({
     mutationFn: (id) => base44.entities.ScheduleTask.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setShowDrawer(false);
       setSelectedTask(null);
       setDeleteTarget(null);
@@ -281,7 +282,7 @@ export default function Schedule() {
       return results;
     },
     onSuccess: (results, variables) => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setSelectedIds(new Set());
       if (results.failed.length > 0) {
         toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
@@ -301,7 +302,7 @@ export default function Schedule() {
       return results;
     },
     onSuccess: (results, ids) => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setSelectedIds(new Set());
       if (selectedTask?.id && ids.includes(selectedTask.id)) {
         setSelectedTask(null);
@@ -328,7 +329,7 @@ export default function Schedule() {
       return results;
     },
     onSuccess: (results) => {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setSelectedIds(new Set());
       setShowBulkResource(false);
       setBulkResourceValue("");
@@ -354,7 +355,7 @@ export default function Schedule() {
         await base44.entities.ScheduleTask.create(task);
         snapshot.push(task); // include in snapshot for next WBS calculation
       }
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       setShowBulkAdd(false);
       toast.success(`Created ${rows.length} task${rows.length !== 1 ? "s" : ""}`);
     } catch (err) {
@@ -571,7 +572,7 @@ export default function Schedule() {
         );
       }
 
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+      invalidateEntity(qc, "schedule_task", projectId);
       toast.success(`Imported ${Object.keys(uidToDbId).length} tasks from ${file.name}`);
     } catch (e) {
       toast.error(e.message || "Import failed");
@@ -802,7 +803,7 @@ export default function Schedule() {
                 const { id, ...fields } = data;
                 try {
                   await base44.entities.ScheduleTask.update(id, fields);
-                  qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                  invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");
                 } catch (err) {
                   toast.error("Save failed: " + (err?.message || "unknown error"));
@@ -845,7 +846,7 @@ export default function Schedule() {
                 const { id, ...fields } = data;
                 try {
                   await base44.entities.ScheduleTask.update(id, fields);
-                  qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+                  invalidateEntity(qc, "schedule_task", projectId);
                   toast.success("Task saved");
                 } catch (err) {
                   toast.error("Save failed: " + (err?.message || "unknown error"));

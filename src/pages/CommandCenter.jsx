@@ -121,64 +121,77 @@ export default function CommandCenter() {
   const sectionVisible = (key) => activeRole.sections.includes(key);
 
   // ── Data queries ────────────────────────────────────────────────────
+  //
+  // Query keys deliberately mirror the registry's bare list-all family
+  // keys (see `src/services/cacheRegistry.js`). Earlier these were
+  // `cc-rfis` / `cc-schedule-tasks` / etc. — disjoint from the keys
+  // mutations invalidate (`["schedule-tasks", projectId]`,
+  // `["rfis", projectId]`, …). Result: edit a task on Schedule.jsx, and
+  // Command Center kept showing pre-edit dates until STALE_TIME ran out
+  // and a window-focus refetch fired.
+  //
+  // By aligning to the same family keys the rest of the app uses, any
+  // call to `invalidateEntity(qc, "schedule_task", projectId)` (or any
+  // matching prefix invalidation) wakes Command Center up immediately —
+  // no special wiring needed per-mutation site, no cache-key drift.
   const { data: projects = [], isLoading: projLoading } = useQuery({
-    queryKey: ["cc-projects"],
+    queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: rfis = [], isLoading: rfiLoading } = useQuery({
-    queryKey: ["cc-rfis"],
+    queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list("-submitted_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawings = [] } = useQuery({
-    queryKey: ["cc-drawings"],
+    queryKey: ["drawings"],
     queryFn: () => base44.entities.Drawing.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: drawingSets = [] } = useQuery({
-    queryKey: ["cc-drawing-sets"],
+    queryKey: ["drawing-sets"],
     queryFn: () => base44.entities.DrawingSet.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: changeOrders = [] } = useQuery({
-    queryKey: ["cc-cos"],
+    queryKey: ["change-orders"],
     queryFn: () => base44.entities.ChangeOrder.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: deliveries = [] } = useQuery({
-    queryKey: ["cc-deliveries"],
+    queryKey: ["deliveries"],
     queryFn: () => base44.entities.Delivery.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: workPackages = [] } = useQuery({
-    queryKey: ["cc-wps"],
+    queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: sovItems = [] } = useQuery({
-    queryKey: ["cc-sov"],
+    queryKey: ["sov-items"],
     queryFn: () => base44.entities.SOVItem.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
   const { data: productionNotes = [] } = useQuery({
-    queryKey: ["cc-notes"],
+    queryKey: ["production-notes"],
     queryFn: () => base44.entities.ProductionNote.list("-note_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
@@ -188,7 +201,7 @@ export default function CommandCenter() {
   // Detailing rows into the 48h + 10d windows so everything the user
   // sees on the Gantt also shows up here.
   const { data: scheduleTasks = [] } = useQuery({
-    queryKey: ["cc-schedule-tasks"],
+    queryKey: ["schedule-tasks"],
     queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,

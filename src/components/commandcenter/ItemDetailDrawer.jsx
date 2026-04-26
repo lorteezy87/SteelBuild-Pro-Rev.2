@@ -38,7 +38,13 @@ function extractDetails(item) {
   details.push({ label: "Status", value: item.displayStatus });
 
   if (item.owner) details.push({ label: "Owner / Ball-in-Court", value: item.owner });
-  if (item.projectNumber) details.push({ label: "Project", value: item.projectNumber });
+  if (item.projectNumber || item.projectName) {
+    // Show "#### — Project Name" when both are present so the user can
+    // confirm both the job code (used in folder paths / contracts) and
+    // the human-readable name in one line.
+    const projectLabel = [item.projectNumber, item.projectName].filter(Boolean).join(" — ");
+    details.push({ label: "Project", value: projectLabel });
+  }
   if (item.priority) details.push({ label: "Priority", value: item.priority });
 
   // Type-specific fields from raw data
