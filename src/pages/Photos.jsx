@@ -1,5 +1,6 @@
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -18,12 +19,7 @@ export default function Photos() {
   const [filterDate, setFilterDate] = useState("all");
 
   // Auto-open the upload modal when QuickAddFAB navigated here with ?new=1.
-  useEffect(() => {
-    if (searchParams.get("new") === "1" && !showUpload) {
-      setShowUpload(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useAutoOpenCreate(() => setShowUpload(true));
 
   const { data: photos = [] } = useQuery({
     queryKey: ["photos", projectId],

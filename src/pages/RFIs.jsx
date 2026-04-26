@@ -28,6 +28,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
@@ -105,7 +106,6 @@ export default function RFIs() {
   /* ── URL-driven selection (from cross-page deep links) ── */
   const urlRfiId = searchParams.get("id");
   const urlSearch = searchParams.get("search");
-  const urlNew = searchParams.get("new");
   useEffect(() => { if (urlSearch) setSearch(urlSearch); }, [urlSearch]);
   useEffect(() => {
     if (!urlRfiId || !rfis.length) return;
@@ -113,15 +113,13 @@ export default function RFIs() {
     if (found) setSelectedRFI(found);
   }, [urlRfiId, rfis]);
   // Auto-open the create modal when QuickAddFAB navigated here with ?new=1.
-  // Runs once on mount if the flag is present. The flag is intentionally
-  // NOT cleared from the URL so back-button behavior stays predictable.
-  useEffect(() => {
-    if (urlNew === "1" && !showForm && !editingRFI) {
-      setEditingRFI(null);
-      setShowForm(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // The hook strips the param via `replace: true`, so a refresh of the
+  // page doesn't re-open the modal and the back button still returns
+  // the user to wherever they came from.
+  useAutoOpenCreate(() => {
+    setEditingRFI(null);
+    setShowForm(true);
+  });
 
   /* ── Mutations ── */
   const createMut = useMutation({
