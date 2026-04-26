@@ -23,7 +23,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import COFormModal from "@/components/changeorders/COFormModal";
 import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
-import { getNextNumber } from "@/components/shared/numberSequencing";
+import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
 
@@ -98,17 +98,34 @@ export default function ChangeOrders() {
   /* ── Mutations ── */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      let coNumber;
-      try {
-        coNumber = activeProject?.id ? await getNextNumber(activeProject.id, "CO") : null;
-      } catch {
-        coNumber = null;
+      // RFI-style numbering: if the user typed a CO number in the form,
+      // honor it as-is. Only auto-generate when the field is blank.
+      // Format: "CO #NNN" with zero-padded 3-digit suffix, matching the
+      // RFI convention. Falls back to a project-scoped index if the
+      // sequence helper is unavailable.
+      const userTyped = (d.co_number || "").trim();
+      let coNumber = userTyped;
+      const targetProjectId = d.project_id || activeProject?.id || null;
+      if (!coNumber && targetProjectId) {
+        try {
+          coNumber = await getNextFormattedNumber({
+            projectId: targetProjectId,
+            recordType: "CO",
+            entityName: "ChangeOrder",
+            fieldName: "co_number",
+            prefix: "CO #",
+          });
+        } catch {
+          coNumber = null;
+        }
       }
-      if (!coNumber) coNumber = `CO-${String((cos.length || 0) + 1).padStart(3, "0")}`;
+      if (!coNumber) {
+        coNumber = `CO #${String((cos.length || 0) + 1).padStart(3, "0")}`;
+      }
       return base44.entities.ChangeOrder.create({
         ...d,
         co_number: coNumber,
-        project_id: d.project_id || activeProject?.id,
+        project_id: targetProjectId,
       });
     },
     onSuccess: () => {
@@ -185,7 +202,15 @@ export default function ChangeOrders() {
 
   const atRiskValue = totalPending + totalDraft;
 
-  const baseContract = Number(activeProject?.original_contract_value) || 0;
+  // Read original_contract_value from the FRESH projects query result
+  // rather than from ProjectContext. ProjectContext loads once on mount
+  // and only refreshes when the user re-picks the project, so editing
+  // the contract value via the project edit form left the REVISED
+  // CONTRACT tile here showing a stale baseContract until the next page
+  // load. The projects query has staleTime 5 min and is invalidated on
+  // every CO mutation below, so this picks up edits right away.
+  const liveProject = projects.find((p) => p.id === activeProject?.id) || activeProject;
+  const baseContract = Number(liveProject?.original_contract_value) || 0;
   const revisedContract = baseContract + totalApproved;
 
   /* ── Filtered list ── */
@@ -520,7 +545,11 @@ export default function ChangeOrders() {
         onSave={handleSave}
         co={editing}
         projects={projects}
-        nextNumber={`CO-${String((cos.length || 0) + 1).padStart(3, "0")}`}
+        // Heuristic preview of the auto-assigned number for the modal
+        // placeholder. The real auto-assignment runs in createMut and
+        // uses getNextFormattedNumber against the live project — this
+        // is just a hint shown when the user hasn't typed anything.
+        nextNumber={`CO #${String((cos.length || 0) + 1).padStart(3, "0")}`}
       />
       <ChangeOrderImportModal
         open={importOpen}
