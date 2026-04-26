@@ -22,6 +22,7 @@ import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { useProjectId } from "@/hooks/useProjectId";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -68,7 +69,7 @@ function generateWBS(phase, existingTasks) {
 export default function Schedule() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [view, setView] = useState("gantt");
   const [expandedTask, setExpandedTask] = useState(null);
   // Seed the phase filter from the URL if a caller (e.g. the Portfolio

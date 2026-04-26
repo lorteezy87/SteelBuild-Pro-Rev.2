@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import { CommandBar } from "@/components/design-system";
 import { GitCompare, RefreshCw } from "lucide-react";
 import DrawingUploadZone from "@/components/drawings/analysis/DrawingUploadZone";
@@ -29,7 +30,7 @@ import { toast } from "sonner";
 export default function DrawingAnalysis() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
 
   const qc = useQueryClient();
   const [openAnalysis, setOpenAnalysis] = useState(null);

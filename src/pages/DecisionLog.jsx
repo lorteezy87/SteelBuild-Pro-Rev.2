@@ -9,6 +9,7 @@ import { formatDate } from '@/components/shared/formatters';
 import { toast } from 'sonner';
 import { CommandBar } from '@/components/design-system';
 import { Plus } from 'lucide-react';
+import { useProjectId } from "@/hooks/useProjectId";
 
 // Local aliases so the surviving filter-bar callers keep compiling without
 // edits. Both now delegate to the shared PhoenixModal style constants.
@@ -34,7 +35,7 @@ const fmtDate = (d) => {
 export default function DecisionLog() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get('project') || activeProject?.id || null;
+  const projectId = useProjectId();
 
   const [activeTab, setActiveTab] = useState('decisions');
   const [showDecisionForm, setShowDecisionForm] = useState(false);
