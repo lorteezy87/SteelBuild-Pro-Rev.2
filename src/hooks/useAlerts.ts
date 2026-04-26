@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
 
@@ -20,7 +21,7 @@ export function useAlerts() {
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId: string | null = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [generating, setGenerating] = useState(false);
 
   const { data: alerts = [], isLoading, refetch } = useQuery<Alert[]>({

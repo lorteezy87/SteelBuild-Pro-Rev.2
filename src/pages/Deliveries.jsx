@@ -12,6 +12,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -42,7 +43,7 @@ const PIPELINE_STAGES = [
 export default function Deliveries() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
 
   const [filter, setFilter] = useState("all");

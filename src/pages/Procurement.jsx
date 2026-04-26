@@ -8,6 +8,7 @@ import DeleteDialog from '@/components/shared/DeleteDialog';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { CommandBar, KpiTile } from '@/components/design-system';
 import { Plus } from 'lucide-react';
+import { useProjectId } from "@/hooks/useProjectId";
 
 const PROCUREMENT_CATEGORIES = [
   'Structural Steel — Mill Order',
@@ -66,7 +67,7 @@ const labelStyle = {
 export default function Procurement() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get('project') || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);

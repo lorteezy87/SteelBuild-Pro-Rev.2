@@ -1,4 +1,5 @@
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import StatCard from "@/components/shared/StatCard";
 export default function Warranty() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");

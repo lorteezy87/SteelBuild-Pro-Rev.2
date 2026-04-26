@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
+import { useProjectId } from "@/hooks/useProjectId";
 
 const FAB_STAGES = [
   { id: "drawings_approved", label: "Drawings Approved", short: "DWG APRVD", color: "var(--accent)" },
@@ -57,7 +58,7 @@ const formatDateUTC = (d) =>
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
 
   const [view, setView] = useState("pipeline");
   const [stageFilter, setStageFilter] = useState("all");

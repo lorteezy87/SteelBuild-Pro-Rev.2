@@ -9,6 +9,7 @@ import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
+import { useProjectId } from "@/hooks/useProjectId";
 
 /* ── Meeting type templates for Quick Start empty state ── */
 const MEETING_TEMPLATES = [
@@ -75,7 +76,7 @@ const STAT_STATUS_MAP = {
 export default function Meetings() {
   const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
