@@ -41,6 +41,7 @@ export const LINKABLE_TYPES = [
   "change_order",
   "submittal",
   "drawing",
+  "finding",
 ];
 
 // Friendly labels for UI chips + tabs.
@@ -55,6 +56,7 @@ export const LINKABLE_TYPE_LABELS = {
   change_order:  "Change Order",
   submittal:     "Submittal",
   drawing:       "Drawing",
+  finding:       "Finding",
 };
 
 // Status priority order used when multiple zones overlap visually or
@@ -365,16 +367,17 @@ export async function removeLink({ linkId, userId }) {
  * "orphaned link".
  */
 const TYPE_TO_ENTITY = {
-  rfi:          { table: "rfis",           accessor: base44.entities.RFI },
-  work_package: { table: "work_packages",  accessor: base44.entities.WorkPackage },
-  delivery:     { table: "deliveries",     accessor: base44.entities.Delivery },
-  photo:        { table: "documents",      accessor: base44.entities.Document },
-  inspection:   { table: "inspections",    accessor: base44.entities.Inspection },
-  daily_log:    { table: "daily_logs",     accessor: base44.entities.DailyLog },
-  document:     { table: "documents",      accessor: base44.entities.Document },
-  change_order: { table: "change_orders",  accessor: base44.entities.ChangeOrder },
-  submittal:    { table: "documents",      accessor: base44.entities.Document },
-  drawing:      { table: "drawings",       accessor: base44.entities.Drawing },
+  rfi:          { table: "rfis",             accessor: base44.entities.RFI },
+  work_package: { table: "work_packages",    accessor: base44.entities.WorkPackage },
+  delivery:     { table: "deliveries",       accessor: base44.entities.Delivery },
+  photo:        { table: "documents",        accessor: base44.entities.Document },
+  inspection:   { table: "inspections",      accessor: base44.entities.Inspection },
+  daily_log:    { table: "daily_logs",       accessor: base44.entities.DailyLog },
+  document:     { table: "documents",        accessor: base44.entities.Document },
+  change_order: { table: "change_orders",    accessor: base44.entities.ChangeOrder },
+  submittal:    { table: "documents",        accessor: base44.entities.Document },
+  drawing:      { table: "drawings",         accessor: base44.entities.Drawing },
+  finding:      { table: "drawing_findings", accessor: null },
 };
 
 export async function hydrateLinks(links) {
@@ -1399,12 +1402,8 @@ export async function recomputeAndPersistZoneStatus(zone, hydrated, opts = {}) {
 //   - Allowed drawing_zones.zone_type values are exposed via
 //     ZONE_TYPES below; acceptZoneProposal validates user overrides
 //     against this list.
-//   - Linking rule: drawing_links.linked_record_type CHECK currently
-//     does not include 'finding'. We use 'document' with metadata
-//     `{ kind: 'finding', finding_id: <uuid> }` so the audit trail
-//     still resolves back to the source finding without expanding
-//     the enum. Adding a dedicated 'finding' enum value would be
-//     cleaner long-term — flagged as a follow-up.
+//   - Findings are linked via linked_record_type='finding' (migration 056
+//     extended the CHECK constraint and validate_drawing_link_target()).
 // ────────────────────────────────────────────────────────────────────
 
 // Mirrors drawing_zones.zone_type CHECK constraint exactly.
@@ -1804,14 +1803,10 @@ export async function listZoneProposals({
 
 /**
  * Internal helper: link an array of finding ids into a target zone
- * via drawing_links. We use linked_record_type='document' with
- * metadata.kind='finding' because the drawing_links CHECK constraint
- * doesn't yet include a 'finding' enum value (flagged as a future
- * migration).
+ * via drawing_links using the native 'finding' record type
+ * (migration 056 extended the CHECK constraint and the FK validator).
  *
- * Returns the count of inserted link rows. Callers handle the
- * surrounding transaction-like sequence (insert zone → link findings →
- * update proposal).
+ * Returns the count of inserted link rows.
  */
 async function _linkFindingsToZone({ projectId, zone, findingIds, userId, source = "ai_confirmed" }) {
   if (!findingIds || findingIds.length === 0) return 0;
@@ -1820,22 +1815,14 @@ async function _linkFindingsToZone({ projectId, zone, findingIds, userId, source
     drawing_zone_id:     zone.id,
     drawing_id:          zone.drawing_id,
     drawing_revision_id: zone.drawing_revision_id,
-    linked_record_type:  "document",
-    // We use the finding id as linked_record_id; the trigger
-    // validate_drawing_link_target() enforces the FK exists in the
-    // referenced table. Since drawing_findings is not in the trigger's
-    // allowed-tables map, this would fail. Instead we point at the
-    // drawing itself (a record we know exists in the same project) and
-    // store the real finding id in metadata. The audit trail still
-    // resolves cleanly via metadata.finding_id; rule engine ignores
-    // these because record_type='document' has no engine rules.
-    linked_record_id:    zone.drawing_id,
+    linked_record_type:  "finding",
+    linked_record_id:    fid,
     link_role:           "documents",
     link_source:         source,
     is_confirmed:        true,
     confirmed_by:        userId || null,
     confirmed_at:        new Date().toISOString(),
-    metadata:            { kind: "finding", finding_id: fid },
+    metadata:            {},
     created_by:          userId || null,
   }));
   const { error } = await supabase.from("drawing_links").insert(payload);
