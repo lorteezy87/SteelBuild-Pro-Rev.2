@@ -18,6 +18,7 @@ import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 
+import { useProjectId } from "@/hooks/useProjectId";
 import { inputStyle } from "./constraints/constants";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
@@ -38,7 +39,7 @@ export default function Constraints() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
   const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("projectId") || searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const navigate = useNavigate();
 
   const [view, setView] = useState("list");
