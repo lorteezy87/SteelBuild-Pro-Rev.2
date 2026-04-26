@@ -89,6 +89,7 @@ function aggregateDrawingsBySet(drawings, projectMap) {
         setName,
         projectId: d.project_id,
         projectNumber: projectMap[d.project_id]?.project_number || null,
+        projectName: projectMap[d.project_id]?.name || null,
         sheets: [],
         items: [],
         worstUrgency: "normal",
@@ -177,6 +178,7 @@ function aggregateDrawingsBySet(drawings, projectMap) {
       owner: g.owners.size === 1 ? [...g.owners][0] : null,
       projectId: g.projectId,
       projectNumber: g.projectNumber,
+      projectName: g.projectName,
       sourceId: `dset:${g.projectId}:${g.setName}`,
       raw: {
         drawing_set_name: g.setName,

@@ -127,6 +127,7 @@ export function rfiUrgency(rfi, projectMap = {}) {
     owner: bic,
     projectId: rfi.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: rfi.id,
     priority: rfi.priority || null,
     raw: rfi,
@@ -173,6 +174,7 @@ export function drawingUrgency(drawing, projectMap = {}) {
     owner: drawing.reviewer || null,
     projectId: drawing.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: drawing.id,
     raw: drawing,
   };
@@ -214,6 +216,7 @@ export function drawingSetUrgency(ds, projectMap = {}) {
     owner: null,
     projectId: ds.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: ds.id,
     raw: ds,
   };
@@ -258,6 +261,7 @@ export function changeOrderUrgency(co, projectMap = {}) {
     owner: status === "Submitted" ? "GC" : null,
     projectId: co.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: co.id,
     raw: co,
   };
@@ -305,6 +309,7 @@ export function deliveryUrgency(del, projectMap = {}) {
     owner: del.vendor || del.carrier || null,
     projectId: del.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: del.id,
     raw: del,
   };
@@ -358,6 +363,7 @@ export function workPackageUrgency(wp, projectMap = {}) {
     owner: wp.crew || null,
     projectId: wp.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: wp.id,
     raw: wp,
   };
@@ -393,6 +399,7 @@ export function sovUrgency(sovGroup, projectMap = {}) {
     owner: null,
     projectId: sovGroup.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: `sov-${sovGroup.project_id}-${sovGroup.application_number}`,
     raw: sovGroup,
   };
@@ -494,6 +501,7 @@ export function scheduleTaskUrgency(task, projectMap = {}) {
     owner,
     projectId: task.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: task.id,
     raw: {
       ...task,
@@ -536,6 +544,7 @@ export function productionNoteUrgency(note, projectMap = {}) {
     owner: note.author || null,
     projectId: note.project_id,
     projectNumber: project.project_number || null,
+    projectName: project.name || null,
     sourceId: note.id,
     raw: note,
   };

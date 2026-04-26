@@ -24,6 +24,7 @@ import { X, Sparkles, Play, Check, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
+import { invalidateEntity } from "@/services/cacheRegistry";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import {
   parseScope,
@@ -225,8 +226,10 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
       }
 
       setSavedCount(created.length);
-      qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
-      qc.invalidateQueries({ queryKey: ["schedule-tasks-all"] });
+      // Use the registry so every cache that reads schedule tasks
+       // (Schedule, GanttChart, LookAhead, Command Center, etc.) lights
+       // up at once instead of just the project-scoped key.
+      invalidateEntity(qc, "schedule_task", projectId);
       toast.success(`WBS created — ${created.length} tasks added to the schedule`);
       setStep("done");
       onSaved?.(created.length);
