@@ -31,6 +31,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { formatCurrency } from "@/components/shared/formatters";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
 export default function InlineEditField({
   project,
@@ -49,6 +50,7 @@ export default function InlineEditField({
   width = "100%",
 }) {
   const qc = useQueryClient();
+  const { updateActiveProject } = useProjectContext();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(toEditableString(value, type));
   const inputRef = useRef(null);
@@ -72,9 +74,15 @@ export default function InlineEditField({
       await base44.entities.Project.update(project.id, patch);
       return patch;
     },
-    onSuccess: () => {
-      // Invalidate everywhere a project record might be cached so the
-      // dashboard, project pill, and Projects table all refresh.
+    onSuccess: (patch) => {
+      // Update the active-project state in ProjectContext so every
+      // dashboard panel reading `project?.[field]` re-renders with
+      // the new value immediately (the React-Query keys aren't bound
+      // to ProjectContext, so invalidating them alone wasn't enough
+      // — the form would visually revert until a hard refresh).
+      updateActiveProject?.(patch);
+      // Still invalidate query keys for any place that does subscribe
+      // (Projects table, project pill in chrome, etc).
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project", project.id] });
       qc.invalidateQueries({ queryKey: ["projects-summary"] });
