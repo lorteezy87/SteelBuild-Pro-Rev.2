@@ -26,7 +26,7 @@
 import React, { useMemo } from "react";
 import { FileText, ChevronRight } from "lucide-react";
 import SectionCard from "./SectionCard";
-import { rfiStatusRollup, submittalPipelineRollup, ballInCourtRollup, openRFICount } from "../projectMetrics";
+import { rfiStatusRollup, submittalPipelineRollup, ballInCourtRollup, openRFICount, recentActivityFeed } from "../projectMetrics";
 
 const RFI_STATUS_COLOR = {
   Draft:     "var(--text-muted)",
@@ -61,11 +61,24 @@ export default function DocumentHubSection({
   rfis = [],
   submittals = [],
   drawings = [],
-  recentActivity = [],
+  drawingActivity = [],
   onNavigate,
 }) {
+  const recentActivity = useMemo(
+    () => recentActivityFeed(drawingActivity, 8),
+    [drawingActivity],
+  );
   const rfiBuckets = useMemo(() => rfiStatusRollup(rfis), [rfis]);
-  const submittalRollup = useMemo(() => submittalPipelineRollup(submittals), [submittals]);
+  // Submittals are tracked via the drawings table in this app — the
+  // dedicated `submittals` table is currently empty everywhere. The
+  // rollup keys off `stage` (CHECK-constrained to OFA/BFA/OFS/BFS/FFF/
+  // Released on drawings), so passing drawings here surfaces real
+  // counts. We still concat any submittals rows that exist as a
+  // safety net for migrated/legacy data.
+  const submittalRollup = useMemo(
+    () => submittalPipelineRollup([...drawings, ...submittals]),
+    [drawings, submittals],
+  );
   const bic = useMemo(() => ballInCourtRollup(rfis), [rfis]);
   const openRFIs = useMemo(() => openRFICount(rfis), [rfis]);
 
@@ -149,7 +162,9 @@ export default function DocumentHubSection({
         </div>
       </div>
 
-      {/* Recent Activity placeholder */}
+      {/* Recent Activity — pulls from drawing_activity (the only
+          activity surface that's actually populated). Each row shows
+          the event kind + summary + relative time. */}
       <div>
         <PaneHeader title="Recent Activity" />
         {recentActivity.length === 0 ? (
@@ -158,20 +173,38 @@ export default function DocumentHubSection({
             color: "var(--text-muted)", fontStyle: "italic",
             padding: "12px 0",
           }}>
-            No recent activity yet — RFI / submittal / drawing actions will appear here.
+            No recent activity yet — drawing uploads / stage changes / approvals will appear here.
           </div>
         ) : (
-          recentActivity.slice(0, 5).map((entry) => (
+          recentActivity.slice(0, 8).map((entry) => (
             <div
               key={entry.id}
               style={{
+                display: "flex", alignItems: "center", gap: 10,
                 fontFamily: "var(--font-body)", fontSize: 12,
                 color: "var(--text-secondary)",
                 padding: "6px 0",
                 borderBottom: "1px solid var(--divider)",
               }}
             >
-              {entry.summary}
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                letterSpacing: "0.08em", textTransform: "uppercase",
+                color: kindColor(entry.kind),
+                minWidth: 90,
+              }}>
+                {kindLabel(entry.kind)}
+              </span>
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {entry.summary}
+              </span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: 9,
+                color: "var(--text-muted)",
+                flexShrink: 0,
+              }}>
+                {formatRelative(entry.when)}
+              </span>
             </div>
           ))
         )}
@@ -280,4 +313,46 @@ function BicCell({ label, count, highlighted, onClick }) {
       </div>
     </button>
   );
+}
+
+// ── Activity-feed helpers ─────────────────────────────────────────────
+function kindLabel(kind) {
+  switch (kind) {
+    case "stage_changed":    return "STAGE";
+    case "approval_changed": return "APPROVAL";
+    case "revision_changed": return "REVISION";
+    case "superseded":       return "SUPERSEDED";
+    case "deleted":          return "DELETED";
+    case "created":          return "ADDED";
+    default: return String(kind || "EVENT").toUpperCase();
+  }
+}
+function kindColor(kind) {
+  switch (kind) {
+    case "stage_changed":    return "var(--status-info)";
+    case "approval_changed": return "var(--status-success-bright)";
+    case "revision_changed": return "var(--status-warning)";
+    case "superseded":       return "var(--text-muted)";
+    case "deleted":          return "var(--status-error)";
+    case "created":          return "var(--accent)";
+    default: return "var(--text-muted)";
+  }
+}
+function formatRelative(ts) {
+  if (!ts) return "";
+  const t = new Date(ts);
+  if (Number.isNaN(t.getTime())) return "";
+  const now = new Date();
+  const diffMs = now - t;
+  const min = Math.round(diffMs / 60000);
+  if (min < 1)   return "just now";
+  if (min < 60)  return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24)   return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 30)  return `${day}d ago`;
+  const mo = Math.round(day / 30);
+  if (mo < 12)   return `${mo}mo ago`;
+  const yr = Math.round(mo / 12);
+  return `${yr}y ago`;
 }
