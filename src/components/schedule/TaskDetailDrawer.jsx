@@ -389,6 +389,36 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                   <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
                 </div>
               )}
+
+              {/* Schedule flags — keeps the dashboard's Critical Path
+                  panel and Milestones panel in sync. Both ride on
+                  metadata so we don't need a schema migration. */}
+              <div style={{
+                display: 'flex', gap: 12, flexWrap: 'wrap',
+                padding: '10px 12px',
+                background: 'var(--bg-page)',
+                border: '1px solid var(--divider)',
+                borderRadius: 6,
+              }}>
+                <ScheduleFlag
+                  label="Mark as Milestone"
+                  checked={formData.task_type === 'Milestone'}
+                  onChange={(v) => setFormData({
+                    ...formData,
+                    task_type: v ? 'Milestone' : (formData.task_type === 'Milestone' ? 'Task' : formData.task_type),
+                  })}
+                  hint="Surfaces this task on the dashboard's Key Milestones panel."
+                />
+                <ScheduleFlag
+                  label="Mark as Critical Path"
+                  checked={!!formData.metadata?.is_critical}
+                  onChange={(v) => setFormData({
+                    ...formData,
+                    metadata: { ...(formData.metadata || {}), is_critical: !!v },
+                  })}
+                  hint="Surfaces this task on the dashboard's Critical Path panel."
+                />
+              </div>
             </div>
           )}
 
@@ -674,6 +704,36 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
         />
       )}
     </div>
+  );
+}
+
+// ── Schedule flag toggle (Milestone / Critical Path) ─────────────────
+function ScheduleFlag({ label, checked, onChange, hint }) {
+  return (
+    <label
+      title={hint}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        userSelect: 'none',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        color: checked ? 'var(--accent)' : 'var(--text-muted)',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={!!checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ accentColor: 'var(--accent)' }}
+      />
+      {label}
+    </label>
   );
 }
 
