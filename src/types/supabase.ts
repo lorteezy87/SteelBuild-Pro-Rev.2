@@ -902,6 +902,57 @@ export type Database = {
           },
         ]
       }
+      document_folders: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          is_deleted: boolean
+          name: string
+          parent_folder_id: string | null
+          project_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_deleted?: boolean
+          name: string
+          parent_folder_id?: string | null
+          project_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_deleted?: boolean
+          name?: string
+          parent_folder_id?: string | null
+          project_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "document_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_folders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           category: string | null
@@ -921,6 +972,7 @@ export type Database = {
           file_size_kb: number | null
           file_type: string | null
           file_url: string | null
+          folder_id: string | null
           id: string
           is_current: boolean | null
           is_deleted: boolean
@@ -964,6 +1016,7 @@ export type Database = {
           file_size_kb?: number | null
           file_type?: string | null
           file_url?: string | null
+          folder_id?: string | null
           id?: string
           is_current?: boolean | null
           is_deleted?: boolean
@@ -1007,6 +1060,7 @@ export type Database = {
           file_size_kb?: number | null
           file_type?: string | null
           file_url?: string | null
+          folder_id?: string | null
           id?: string
           is_current?: boolean | null
           is_deleted?: boolean
@@ -1033,6 +1087,13 @@ export type Database = {
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "documents_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "document_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documents_linked_wp_id_fkey"
             columns: ["linked_wp_id"]
