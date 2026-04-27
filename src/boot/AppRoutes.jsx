@@ -53,7 +53,10 @@ export default function AppRoutes() {
         {Object.entries(PAGES).map(([path, Page]) => (
           <Route
             key={path}
-            path={path}
+            // Reports owns nested routes (`/Reports/<slug>`) for the
+            // report-hub framework, so it has to match wildcards.
+            // Every other registered page is a single-leaf route.
+            path={path === "Reports" ? "Reports/*" : path}
             element={
               <LazyRoute label={path}>
                 <Page />
