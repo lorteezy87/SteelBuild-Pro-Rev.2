@@ -70,6 +70,24 @@ export default function Dashboard() {
     queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
     staleTime: 60 * 1000,
   });
+  // Used by the Document Hub submittal pipeline + Drawings count tile.
+  const { data: allSubmittals = [] } = useQuery({
+    queryKey: ["submittals-all"],
+    queryFn: () => base44.entities.Submittal.list(),
+    staleTime: 30 * 1000,
+  });
+  const { data: allDrawings = [] } = useQuery({
+    queryKey: ["drawings-all"],
+    queryFn: () => base44.entities.Drawing.list(),
+    staleTime: 30 * 1000,
+  });
+  // Cash-flow figures (total billed / collected / pending payment /
+  // retention) on the Financial Controls section come from SOV items.
+  const { data: allSovItems = [] } = useQuery({
+    queryKey: ["sov-items-all"],
+    queryFn: () => base44.entities.SOVItem.list(),
+    staleTime: 60 * 1000,
+  });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
   const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
@@ -81,6 +99,13 @@ export default function Dashboard() {
   const actionItems = useMemo(
     () => (pid ? allActionItems.filter((a) => a.project_id === pid) : []),
     [allActionItems, pid]
+  );
+  const submittals    = useMemo(() => (pid ? allSubmittals.filter((s) => s.project_id === pid) : []), [allSubmittals, pid]);
+  const drawings      = useMemo(() => (pid ? allDrawings.filter((d) => d.project_id === pid && !d.is_deleted) : []), [allDrawings, pid]);
+  const sovItems      = useMemo(() => (pid ? allSovItems.filter((s) => s.project_id === pid) : []), [allSovItems, pid]);
+  const scheduleTasks = useMemo(
+    () => (pid ? allScheduleTasks.filter((t) => t.project_id === pid) : []),
+    [allScheduleTasks, pid],
   );
 
   const isLoading = projectsLoading || rfisLoading;
@@ -118,15 +143,29 @@ export default function Dashboard() {
         deliveries={deliveries}
         actionItems={actionItems}
         expenses={expenses}
+        submittals={submittals}
+        drawings={drawings}
+        sovItems={sovItems}
+        scheduleTasks={scheduleTasks}
         onClearProject={() => setActiveProject(null)}
-        onNavigate={(target) => {
+        onNavigate={(target, opts = {}) => {
+          // The 4-section dashboard fires onNavigate for every clickable
+          // surface (pipeline cells, RFI rows, quick-action buttons,
+          // etc.). The 2nd arg can carry `{ create: true }` so the
+          // destination page auto-opens its create modal via the
+          // useAutoOpenCreate hook (?new=1 on the URL).
           const paths = {
             rfis:            "/RFIs",
+            submittals:      "/Submittals",
             "work-packages": "/WorkPackages",
             deliveries:      "/Deliveries",
+            "change-orders": "/ChangeOrders",
+            "field-reports": "/DailyLogs",
+            schedule:        "/Schedule",
           };
           const path = paths[target];
-          if (path) navigate(path);
+          if (!path) return;
+          navigate(opts.create ? `${path}?new=1` : path);
         }}
       />
     </ErrorBoundary>
