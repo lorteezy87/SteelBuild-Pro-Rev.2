@@ -4,6 +4,12 @@ import { base44 } from "@/api/base44Client";
 export const ProjectContext = createContext({
   activeProject: null,
   setActiveProject: () => {},
+  // Apply a shallow patch to the currently-active project (and to its
+  // entry in `projects` + the localStorage cache). Inline editors
+  // call this after a successful Project.update so the dashboard's
+  // `project` prop reflects the new value without waiting on a
+  // refetch. Returns the merged project so callers can react to it.
+  updateActiveProject: () => null,
   projects: [],
   loading: false,
   projectLoadError: null,
@@ -98,8 +104,35 @@ export function ProjectProvider({ children }) {
     localStorage.setItem("activeProjectId", project.id);
   };
 
+  // Shallow-merge a patch into the active project AND the project
+  // record inside `projects` AND the localStorage cache, so every
+  // consumer of useProjectContext sees the new value immediately
+  // (no need to wait on a Supabase refetch). Idempotent — passing
+  // the same patch twice is a no-op.
+  const updateActiveProject = (patch) => {
+    if (!patch || typeof patch !== "object") return activeProject;
+    const id = activeProject?.id;
+    if (!id) return activeProject;
+    const merged = { ...activeProject, ...patch };
+    setActiveProject(merged);
+    setProjects((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    try {
+      const cache = readProjectsCache();
+      const next = cache.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(next));
+    } catch {}
+    return merged;
+  };
+
   return (
-    <ProjectContext.Provider value={{ activeProject, setActiveProject: handleProjectSelect, projects, loading, projectLoadError }}>
+    <ProjectContext.Provider value={{
+      activeProject,
+      setActiveProject: handleProjectSelect,
+      updateActiveProject,
+      projects,
+      loading,
+      projectLoadError,
+    }}>
       {children}
     </ProjectContext.Provider>
   );

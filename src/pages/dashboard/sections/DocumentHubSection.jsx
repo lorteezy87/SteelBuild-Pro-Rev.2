@@ -91,7 +91,10 @@ export default function DocumentHubSection({
 
   const stats = [
     { value: openRFIs, label: "Open RFIs", color: openRFIs > 0 ? "warning" : "muted" },
-    { value: submittalRollup.total, label: "Submittals", color: "info" },
+    // submittalRollup now counts drawing SETS (one row per set, not
+    // per individual sheet), so the label says "Sets" to keep the
+    // semantics legible at a glance.
+    { value: submittalRollup.total, label: "Submittal Sets", color: "info" },
     { value: drawings.length, label: "Drawings", color: "accent" },
   ];
 
