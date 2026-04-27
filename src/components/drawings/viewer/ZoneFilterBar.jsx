@@ -19,10 +19,15 @@
 
 import React from "react";
 
+// "purple" / "amber" / etc. are categorical KEYS used by the zone-status
+// pipeline (drawingHub.js → STATUS_PRIORITY). The KEYS are stable for the
+// data layer; the rendered colours below stay inside the project's
+// no-purple/no-pink industrial palette — "purple" therefore renders as
+// teal.
 const STATUS_COLOR = {
   red:     "#EF4444",
   amber:   "#F59E0B",
-  purple:  "#8B5CF6",
+  purple:  "#0d9488",
   blue:    "#3B82F6",
   green:   "#22C55E",
   neutral: "#94A3B8",

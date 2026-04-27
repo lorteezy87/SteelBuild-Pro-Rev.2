@@ -86,7 +86,7 @@ const ROLE_PRESETS = [
     id: "exec",
     label: "Executive",
     description: "Forecast, job health, margin-at-risk.",
-    color: "#8B5CF6",
+    color: "#0d9488",
     tiles: ["overdue", "needsAction", "waitingOthers"],
     sections: ["upcomingWindow", "actionFeed"],
   },

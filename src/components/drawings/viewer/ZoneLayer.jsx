@@ -33,12 +33,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 // Matches drawing_zones status CHECK constraint. Key colors tuned to
 // be visible on both a white sheet and the dark viewport padding —
 // semi-transparent fill + solid border mirrors the spec's UX states.
+// "purple" is a stable categorical key for the data layer (drawingHub →
+// STATUS_PRIORITY); the rendered colour is teal so we stay inside the
+// project's no-purple/no-pink industrial palette.
 const STATUS_COLORS = {
   green:   { fill: "rgba(34,197,94,0.14)",   border: "#22C55E" },
   blue:    { fill: "rgba(59,130,246,0.14)",  border: "#3B82F6" },
   amber:   { fill: "rgba(245,158,11,0.16)",  border: "#F59E0B" },
   red:     { fill: "rgba(239,68,68,0.16)",   border: "#EF4444" },
-  purple:  { fill: "rgba(139,92,246,0.14)",  border: "#8B5CF6" },
+  purple:  { fill: "rgba(13,148,136,0.14)",  border: "#0d9488" },
   neutral: { fill: "rgba(148,163,184,0.12)", border: "#94A3B8" },
 };
 const DRAFT_COLOR = { fill: "rgba(0,229,255,0.14)", border: "#00E5FF" };
@@ -464,7 +467,7 @@ export default function ZoneLayer({
               pending:  { fill: "rgba(0,229,255,0.10)",  border: "#00E5FF" },
               accepted: { fill: "rgba(34,197,94,0.10)",  border: "#22C55E" },
               rejected: { fill: "rgba(148,163,184,0.08)", border: "#94A3B8" },
-              merged:   { fill: "rgba(139,92,246,0.10)", border: "#8B5CF6" },
+              merged:   { fill: "rgba(13,148,136,0.10)", border: "#0d9488" },
             };
             const palette = colorByStatus[p.status] || colorByStatus.pending;
             return (
