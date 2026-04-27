@@ -298,10 +298,52 @@ export default function FeetInchesCalculator() {
     catch { toast.error("Copy failed"); }
   };
 
-  // Keyboard: Enter = equals, Esc = clear entry, +-*/ start ops
+  // Keyboard support — handles ops even while typing in the entry
+  // input. Operator keys (+, -, *, /) commit the current entry as the
+  // LHS and queue the op, mirroring how a desktop calculator works
+  // ("12'-6 + " advances to "Enter RHS"). Plain - is allowed inside
+  // the entry as a separator (12-6-1/2) so we only treat it as the
+  // subtraction op when the entry already parses to a length AND the
+  // last character isn't itself a separator.
   const onKey = (e) => {
-    if (e.key === "Enter") { e.preventDefault(); equals(); }
-    else if (e.key === "Escape") { clearEntry(); }
+    if (e.key === "Enter" || e.key === "=") { e.preventDefault(); equals(); return; }
+    if (e.key === "Escape") { e.preventDefault(); clearEntry(); return; }
+
+    // Op shortcuts. Each commits the current entry then queues the op.
+    if (e.key === "+") {
+      // Plus inside fraction sums shouldn't ever happen — '+' isn't a
+      // valid character inside a length token. Treat as op.
+      e.preventDefault(); commit(OPS.ADD); return;
+    }
+    if (e.key === "*" || e.key === "x" || e.key === "X") {
+      e.preventDefault(); commit(OPS.MUL); return;
+    }
+    if (e.key === "/") {
+      // Slash is part of fractions ("1/2"). If the entry already has a
+      // digit and a slash IS being typed mid-fraction, we want to keep
+      // it. So only fire ÷ when the user holds Shift or the entry
+      // looks like a finished length already (parses cleanly + no
+      // trailing fraction char).
+      const looksLikeFinishedLength = !mulDivMode && parseLength(entry.trim()) != null;
+      const trailingPartial = /\d\/?$/.test(entry.trim()); // ends in digit or "12/"
+      if (e.shiftKey || (looksLikeFinishedLength && !trailingPartial)) {
+        e.preventDefault(); commit(OPS.DIV); return;
+      }
+    }
+    if (e.key === "-") {
+      // Same treatment — '-' is a valid in-token separator ("12-6-1/2").
+      // Treat as op only when Shift is held OR the existing entry looks
+      // like a finished length.
+      const looksLikeFinishedLength = !mulDivMode && parseLength(entry.trim()) != null;
+      if (e.shiftKey || looksLikeFinishedLength) {
+        e.preventDefault(); commit(OPS.SUB); return;
+      }
+    }
+    // Memory shortcuts (Alt/Meta + key, mirrors RegularCalculator).
+    if ((e.metaKey || e.altKey) && (e.key === "p" || e.key === "P")) { e.preventDefault(); mPlus();  return; }
+    if ((e.metaKey || e.altKey) && (e.key === "m" || e.key === "M")) { e.preventDefault(); mMinus(); return; }
+    if ((e.metaKey || e.altKey) && (e.key === "r" || e.key === "R")) { e.preventDefault(); mRecall();return; }
+    if ((e.metaKey || e.altKey) && (e.key === "c" || e.key === "C")) { e.preventDefault(); mClear(); return; }
   };
 
   return (

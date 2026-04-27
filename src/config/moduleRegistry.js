@@ -93,7 +93,8 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDEE1", name: "Warranty",           group: "Closeout",      page: "Warranty" },
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
-  { icon: "\uD83D\uDCD0", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
+  { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
+  { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
   { icon: "\u2194",       name: "Decimal / Fraction Converter", group: "Tools", page: "DecimalFractionConverter" },
@@ -198,6 +199,7 @@ export const NAV_GROUPS = [
   {
     label: "TOOLS",
     items: [
+      { label: "Calculator",                   icon: "🧮", page: "Calculator" },
       { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
       { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
       { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
@@ -302,6 +304,7 @@ export const SIDEBAR_GROUPS = [
     label: "TOOLS",
     collapsible: true,
     items: [
+      { label: "Calculator",                   icon: "🧮", page: "Calculator" },
       { label: "Ft/In Calculator",             icon: "\uD83D\uDCD0", page: "FeetInchesCalculator" },
       { label: "Steel Weight Calculator",      icon: "\u2696",       page: "SteelWeightCalculator" },
       { label: "Crane Pick Calculator",        icon: "\uD83C\uDFD7", page: "CranePickCalculator" },
