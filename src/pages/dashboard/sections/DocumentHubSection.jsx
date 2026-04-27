@@ -45,11 +45,14 @@ const STAGE_COLOR = {
   Released: "var(--status-success-bright)",
 };
 
+// Canonical steel-detailing pipeline. "Sealing" = EOR stamp on the
+// shop-drawing package; FFF is the approved-as-noted package ready
+// for the shop floor; Released = on the shop schedule.
 const STAGE_CAPTION = {
   OFA:      "Out for Approval",
-  BFA:      "Back for Approval",
-  OFS:      "Out for Shop",
-  BFS:      "Back for Shop",
+  BFA:      "Back from Approval",
+  OFS:      "Out for Sealing",
+  BFS:      "Back from Sealing",
   FFF:      "Final for Fab",
   Released: "Released",
 };
