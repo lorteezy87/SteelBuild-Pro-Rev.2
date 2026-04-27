@@ -61,7 +61,7 @@ function btnStyle(bg, border, color) {
   };
 }
 
-export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, onDelete }) {
+export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, onMove, onDelete }) {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -142,6 +142,9 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
           <button onClick={(e) => { e.stopPropagation(); onDownload?.(doc); }} style={btnStyle()}>DL</button>
           <button onClick={(e) => { e.stopPropagation(); onEdit?.(doc); }} style={btnStyle()}>EDIT</button>
           <button onClick={(e) => { e.stopPropagation(); onLink?.(doc); }} style={btnStyle()}>LINK</button>
+          {onMove && (
+            <button onClick={(e) => { e.stopPropagation(); onMove(doc); }} style={btnStyle()}>MOVE</button>
+          )}
           <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }} style={btnStyle("rgba(255,61,61,0.08)", "rgba(255,61,61,0.25)", "var(--status-error-bright)")}>DEL</button>
         </div>
       )}

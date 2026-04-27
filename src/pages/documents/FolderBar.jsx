@@ -2,19 +2,26 @@
  * FolderBar — sits above the documents list and renders:
  *   - Breadcrumb showing the path from "All Documents" → … → current folder
  *   - Grid of child folders inside the current folder (click to enter)
- *   - "+ New Folder" / "Rename" / "Delete" controls
+ *   - "+ New Folder" / "Bulk Create" / "Rename" / "Delete" / "Move To" controls
  *
  * Folders live on the `document_folders` table (migration 060). NULL
  * parent_folder_id = root folder; documents whose `folder_id` is NULL
  * sit at the project root alongside top-level folders.
  *
+ * Selection: each child folder card carries a checkbox; selecting one or
+ * more reveals a bulk-action strip with Delete / Move To. Single-folder
+ * actions live in a per-card ⋯ menu (Rename / Delete).
+ *
  * Parent (Documents.jsx) owns the folder query + currentFolderId state
- * and supplies the create/rename/delete handlers. This component is
- * presentational + orchestration only.
+ * and supplies the create/rename/delete/move/bulk-create handlers. This
+ * component is presentational + orchestration only.
  */
 
-import React, { useMemo, useState } from "react";
-import { ChevronRight, FolderPlus, Folder, MoreHorizontal } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import {
+  ChevronRight, FolderPlus, Folder, MoreHorizontal,
+  CheckSquare, XCircle, Trash2, FolderInput, FolderTree,
+} from "lucide-react";
 
 const PILL_BTN = {
   display: "inline-flex", alignItems: "center", gap: 6,
@@ -81,8 +88,19 @@ export default function FolderBar({
   onCreate,                 // (name, parentFolderId|null) => void
   onRename,                 // (folder, newName) => void
   onDelete,                 // (folder) => void
+
+  // Bulk operations on folders. Parent supplies the handlers; we surface
+  // the controls only when at least one folder is selected.
+  onBulkDelete,             // (folderIds[]) => void
+  onBulkMove,               // (folderIds[]) => void   — opens parent's FolderPicker
+  onOpenBulkCreate,         // () => void              — opens BulkCreateFoldersModal
 }) {
   const [menuFolderId, setMenuFolderId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
+  // Drop selection when the user navigates between folders so the bulk
+  // strip doesn't carry stale ids from the previous view.
+  useEffect(() => { setSelectedIds(new Set()); }, [currentFolderId]);
 
   const childFolders = useMemo(
     () => folders.filter((f) => (f.parent_folder_id ?? null) === (currentFolderId ?? null)),
@@ -119,6 +137,37 @@ export default function FolderBar({
     if (!ok) return;
     onDelete(folder);
   };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const ok = window.confirm(
+      `Delete ${ids.length} folder${ids.length === 1 ? "" : "s"}?\n\n` +
+      `Documents inside will be detached and fall back to the root view. ` +
+      `Sub-folders will also be removed.`
+    );
+    if (!ok) return;
+    onBulkDelete?.(ids);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkMove = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    onBulkMove?.(ids);
+    // Don't clear selection here — the parent closes the picker; if the
+    // user cancels, selection should stay so they can retry.
+  };
+
+  const someSelected = selectedIds.size > 0;
 
   return (
     <div style={{
@@ -158,6 +207,14 @@ export default function FolderBar({
         </div>
 
         <button
+          onClick={onOpenBulkCreate}
+          style={PILL_BTN}
+          title="Paste a list of folders to create them all at once"
+        >
+          <FolderTree size={12} />
+          Bulk Create
+        </button>
+        <button
           onClick={handleNewFolder}
           style={PRIMARY_BTN}
           title={currentFolderId ? "Create a sub-folder here" : "Create a top-level folder"}
@@ -166,6 +223,44 @@ export default function FolderBar({
           New Folder
         </button>
       </div>
+
+      {/* Bulk action strip — appears when ≥1 folder is selected */}
+      {someSelected && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+          padding: "8px 12px",
+          background: "rgba(168,85,247,0.06)",
+          border: "1px solid rgba(168,85,247,0.20)",
+          borderRadius: 8,
+        }}>
+          <CheckSquare size={14} style={{ color: "#a855f7" }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#a855f7", letterSpacing: "0.06em" }}>
+            {selectedIds.size} FOLDER{selectedIds.size === 1 ? "" : "S"} SELECTED
+          </span>
+          <div style={{ width: 1, height: 18, background: "var(--bg-surface-high)" }} />
+          <button
+            onClick={handleBulkMove}
+            style={{ ...PILL_BTN, color: "#a855f7", borderColor: "rgba(168,85,247,0.40)" }}
+            title="Move selected folders under a different parent"
+          >
+            <FolderInput size={12} /> Move To…
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            style={{ ...PILL_BTN, color: "var(--status-error-bright)", borderColor: "rgba(255,61,61,0.40)" }}
+            title="Delete all selected folders"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            style={PILL_BTN}
+            title="Clear selection"
+          >
+            <XCircle size={12} /> Clear
+          </button>
+        </div>
+      )}
 
       {/* Child folders grid */}
       {childFolders.length > 0 && (
@@ -176,20 +271,45 @@ export default function FolderBar({
         }}>
           {childFolders.map((folder) => {
             const isMenuOpen = menuFolderId === folder.id;
+            const isSelected = selectedIds.has(folder.id);
             return (
               <div
                 key={folder.id}
-                style={CARD_STYLE}
+                style={{
+                  ...CARD_STYLE,
+                  borderColor: isSelected ? "#a855f7" : "var(--border-default)",
+                  background: isSelected ? "rgba(168,85,247,0.06)" : "var(--bg-surface)",
+                }}
                 onClick={() => onNavigate(folder.id)}
                 onMouseEnter={(e) => {
+                  if (isSelected) return;
                   e.currentTarget.style.borderColor = "var(--accent)";
                   e.currentTarget.style.background = "var(--bg-surface-high)";
                 }}
                 onMouseLeave={(e) => {
+                  if (isSelected) return;
                   e.currentTarget.style.borderColor = "var(--border-default)";
                   e.currentTarget.style.background = "var(--bg-surface)";
                 }}
               >
+                {/* Selection checkbox */}
+                <div
+                  onClick={(e) => { e.stopPropagation(); toggleSelect(folder.id); }}
+                  style={{
+                    width: 16, height: 16, borderRadius: 3,
+                    border: `2px solid ${isSelected ? "#a855f7" : "var(--text-muted)"}`,
+                    background: isSelected ? "#a855f7" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                  title={isSelected ? "Unselect" : "Select"}
+                  aria-pressed={isSelected}
+                  role="checkbox"
+                >
+                  {isSelected && <span style={{ color: "white", fontSize: 10, lineHeight: 1 }}>{"✔"}</span>}
+                </div>
+
                 <Folder size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
                 <span style={{
                   flex: 1, minWidth: 0,

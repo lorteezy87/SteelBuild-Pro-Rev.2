@@ -25,12 +25,14 @@ import DocumentLeftPanel from "@/components/dms/DocumentLeftPanel";
 import DocumentDetailPanel from "@/components/dms/DocumentDetailPanel";
 import UploadModal from "@/components/dms/UploadModal";
 import DocumentEditModal from "@/components/dms/DocumentEditModal";
+import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import FolderSection from "./documents/FolderSection";
 import FolderBar from "./documents/FolderBar";
+import BulkCreateFoldersModal from "./documents/BulkCreateFoldersModal";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -69,6 +71,11 @@ export default function Documents() {
   // document_folders. Switching projects resets to root via the effect
   // below.
   const [currentFolderId, setCurrentFolderId]     = useState(null);
+  const [bulkCreateOpen, setBulkCreateOpen]       = useState(false);
+  // Move dialog state. `pickerFor` = either `{ kind: 'docs', ids: [] }`
+  // or `{ kind: 'folders', ids: [] }`. Drives a single FolderPicker
+  // instance that handles both cases.
+  const [pickerFor, setPickerFor]                 = useState(null);
   const dragCounter = useRef(0);
 
   // Reset folder navigation when the user switches projects so we never
@@ -153,6 +160,128 @@ export default function Documents() {
     },
     onError: (err) => toast.error(err?.message || "Failed to delete folder"),
   });
+
+  /**
+   * Move documents to a folder (or to root). The picker confirms the
+   * destination; we batch-update each doc's folder_id and surface
+   * partial-failure toasts so a single permission glitch doesn't
+   * silently lose the whole batch.
+   */
+  const moveDocsMut = useMutation({
+    mutationFn: async ({ docIds, destFolderId }) => {
+      const { succeeded, failed } = await batchProcess(docIds, (id) =>
+        base44.entities.Document.update(id, { folder_id: destFolderId }),
+      );
+      return { succeeded, failed };
+    },
+    onSuccess: ({ succeeded, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      setSelectedIds(new Set());
+      const total = succeeded.length + failed.length;
+      if (failed.length === 0) {
+        toast.success(`Moved ${succeeded.length} document${succeeded.length === 1 ? "" : "s"}`);
+      } else {
+        toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Move failed"),
+  });
+
+  /**
+   * Reparent a set of folders. Same semantics as moveDocsMut but on
+   * document_folders.parent_folder_id. Cycle prevention happens in the
+   * FolderPicker UI via collectFolderAndDescendants — destinations
+   * inside the moved sub-tree are disabled before the user can submit.
+   */
+  const moveFoldersMut = useMutation({
+    mutationFn: async ({ folderIds, destFolderId }) => {
+      const { succeeded, failed } = await batchProcess(folderIds, (id) =>
+        base44.entities.DocumentFolder.update(id, { parent_folder_id: destFolderId }),
+      );
+      return { succeeded, failed };
+    },
+    onSuccess: ({ succeeded, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+      const total = succeeded.length + failed.length;
+      if (failed.length === 0) {
+        toast.success(`Moved ${succeeded.length} folder${succeeded.length === 1 ? "" : "s"}`);
+      } else {
+        toast.warning(`Moved ${succeeded.length} of ${total} — ${failed.length} failed`);
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Folder move failed"),
+  });
+
+  /**
+   * Bulk-delete a set of folders. Mirrors deleteFolderMut but accepts
+   * an array. Documents inside detach to root visually because the
+   * filter won't match a hidden folder; cleanup pass to null
+   * folder_id is a follow-up.
+   */
+  const bulkDeleteFoldersMut = useMutation({
+    mutationFn: async (folderIds) => {
+      const { succeeded, failed } = await batchProcess(folderIds, (id) =>
+        base44.entities.DocumentFolder.delete(id),
+      );
+      return { succeeded, failed };
+    },
+    onSuccess: ({ succeeded, failed }) => {
+      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      const total = succeeded.length + failed.length;
+      if (failed.length === 0) {
+        toast.success(`Deleted ${succeeded.length} folder${succeeded.length === 1 ? "" : "s"}`);
+      } else {
+        toast.warning(`Deleted ${succeeded.length} of ${total} — ${failed.length} failed`);
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Bulk delete failed"),
+  });
+
+  /**
+   * Bulk-create folders from the textarea modal. The modal hands us a
+   * parsed list of `{ name, depth, lineIndex }`; we walk it sequentially
+   * (because children need their parent's id) and track a stack of
+   * recently-created ancestor ids by depth. The first line in the list
+   * with depth=0 becomes a child of `currentFolderId`.
+   */
+  const handleBulkCreateFolders = async (parsed) => {
+    const stack = []; // index = depth, value = parent id (or null for root)
+    let created = 0;
+    const failed = [];
+    for (const item of parsed) {
+      const parentId = item.depth === 0
+        ? (currentFolderId ?? null)
+        : (stack[item.depth - 1] ?? currentFolderId ?? null);
+      try {
+        const row = await base44.entities.DocumentFolder.create({
+          project_id: activeProject.id,
+          parent_folder_id: parentId,
+          name: item.name,
+        });
+        stack[item.depth] = row?.id ?? null;
+        // Truncate stack so deeper-level entries from a sibling don't
+        // leak into the next branch.
+        stack.length = item.depth + 1;
+        created++;
+      } catch (err) {
+        const msg = (err?.message || "").includes("document_folders_unique_name_per_parent")
+          ? "Duplicate name at this level."
+          : (err?.message || "Create failed");
+        failed.push({ ...item, error: msg });
+        // Don't push anything on the stack for failed creates so children
+        // of this line root to the same parent the failed line was going
+        // to use — best-effort recovery.
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+    if (failed.length === 0) {
+      toast.success(`Created ${created} folder${created === 1 ? "" : "s"}`);
+    } else {
+      toast.warning(`Created ${created}, failed ${failed.length}`);
+    }
+    return { created, failed };
+  };
 
   /* ── Filter + sort ── */
   const filteredDocs = useMemo(() => {
@@ -376,6 +505,7 @@ export default function Documents() {
         onSetStatus={(s) => bulkStatusMut.mutate(s)}
         isSettingStatus={bulkStatusMut.isPending}
         onBulkDownload={handleBulkDownload}
+        onBulkMove={() => setPickerFor({ kind: "docs", ids: [...selectedIds] })}
         onBulkDelete={() => setConfirmBulkDelete(true)}
         isBulkDeleting={bulkDeleteMut.isPending}
         confirmBulkDelete={confirmBulkDelete}
@@ -401,6 +531,9 @@ export default function Documents() {
               onCreate={(name, parentFolderId) => createFolderMut.mutate({ name, parentFolderId })}
               onRename={(folder, name) => renameFolderMut.mutate({ id: folder.id, name })}
               onDelete={(folder) => deleteFolderMut.mutate(folder.id)}
+              onBulkDelete={(ids) => bulkDeleteFoldersMut.mutate(ids)}
+              onBulkMove={(ids) => setPickerFor({ kind: "folders", ids })}
+              onOpenBulkCreate={() => setBulkCreateOpen(true)}
             />
           </div>
 
@@ -508,6 +641,7 @@ export default function Documents() {
                     onDownload={handleDownloadDoc}
                     onEdit={handleEditDoc}
                     onLink={handleLinkDoc}
+                    onMove={(d) => setPickerFor({ kind: "docs", ids: [d.id] })}
                     onDelete={handleDeleteDoc}
                   />
                 </div>
@@ -575,6 +709,53 @@ export default function Documents() {
           setTransmittalOpen(false);
           setTransmittalForm({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
           setSelectedIds(new Set());
+        }}
+      />
+
+      {/* Bulk-create folders dialog */}
+      <BulkCreateFoldersModal
+        open={bulkCreateOpen}
+        parentFolderId={currentFolderId}
+        parentLabel={
+          currentFolderId
+            ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"
+            : "(Root)"
+        }
+        onClose={() => setBulkCreateOpen(false)}
+        onSubmit={handleBulkCreateFolders}
+      />
+
+      {/* Folder picker — reused for both moving documents and folders.
+          When moving folders, the picker disables the moved folders +
+          their entire descendant sub-trees so the user can't create a
+          cycle (folder X → child of itself or one of its children). */}
+      <FolderPicker
+        open={!!pickerFor}
+        title={
+          pickerFor?.kind === "folders"
+            ? `Move ${pickerFor.ids.length} folder${pickerFor.ids.length === 1 ? "" : "s"} to…`
+            : `Move ${pickerFor?.ids?.length ?? 0} document${pickerFor?.ids?.length === 1 ? "" : "s"} to…`
+        }
+        folders={folders}
+        initialFolderId={currentFolderId}
+        disabledIds={
+          pickerFor?.kind === "folders"
+            // Disable the moved folders + every descendant of each.
+            ? new Set(
+                pickerFor.ids.flatMap((id) => [...collectFolderAndDescendants(folders, id)])
+              )
+            : new Set()
+        }
+        confirmLabel="Move"
+        onClose={() => setPickerFor(null)}
+        onConfirm={(destFolderId) => {
+          if (!pickerFor) return;
+          if (pickerFor.kind === "folders") {
+            moveFoldersMut.mutate({ folderIds: pickerFor.ids, destFolderId });
+          } else {
+            moveDocsMut.mutate({ docIds: pickerFor.ids, destFolderId });
+          }
+          setPickerFor(null);
         }}
       />
 
