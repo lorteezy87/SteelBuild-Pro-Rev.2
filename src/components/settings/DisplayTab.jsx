@@ -1,4 +1,23 @@
+/**
+ * DisplayTab — UI customisation surface.
+ *
+ * Anything that changes how the app LOOKS or FEELS (vs. anything that
+ * changes WHAT data appears, which lives on DashboardTab). Every value
+ * here also flows into ThemeContext so the visual change happens
+ * immediately, before the round-trip to Supabase finishes.
+ *
+ * Sections:
+ *   1. Theme (dark / light)                                    →  ThemeContext.setTheme
+ *   2. Accent colour preset                                    →  ThemeContext.setAccent
+ *   3. Font size scale (small / normal / large)                →  ThemeContext.setFontScale
+ *   4. Accessibility (high-contrast, reduced motion)           →  ThemeContext.setContrast / setMotion
+ *   5. Date / time / locale (date format, time format, week
+ *      start, units, currency, number format)                  →  saved as prefs only; consumers read on demand
+ *   6. Layout density + default view + tooltips toggles, etc.  →  saved as prefs only
+ */
+
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '@/components/shared/ThemeContext';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -24,42 +43,55 @@ const Toggle = ({ checked, onChange }) => (
   </div>
 );
 
-export default function DisplayTab({ preferences, onSave, isSaving }) {
-  const [prefs, setPrefs] = useState({
-    theme: preferences?.theme || 'dark',
-    default_view: preferences?.default_view || 'table',
-    compact_mode: preferences?.compact_mode || false,
-    show_tooltips: preferences?.show_tooltips !== false,
-    date_format: preferences?.date_format || 'MM/DD/YYYY',
-    currency_format: preferences?.currency_format || 'USD',
-    number_format: preferences?.number_format || 'comma',
-    default_landing: preferences?.default_landing || 'Dashboard',
-    table_density: preferences?.table_density || 'normal',
-    show_project_numbers: preferences?.show_project_numbers !== false,
-    sidebar_collapsed: preferences?.sidebar_collapsed || false,
-  });
+const ACCENT_PRESETS = [
+  { id: 'gold',  label: 'Gold',  swatch: '#C89B20' },
+  { id: 'teal',  label: 'Teal',  swatch: '#0D9488' },
+  { id: 'blue',  label: 'Blue',  swatch: '#2563EB' },
+  { id: 'amber', label: 'Amber', swatch: '#F59E0B' },
+  { id: 'slate', label: 'Slate', swatch: '#64748B' },
+];
 
+const FONT_SCALE_PRESETS = [
+  { id: 'sm', label: 'Small',  scale: '94%' },
+  { id: 'md', label: 'Normal', scale: '100%' },
+  { id: 'lg', label: 'Large',  scale: '112%' },
+];
+
+export default function DisplayTab({ preferences, onSave, isSaving }) {
+  const { theme, accent, fontScale, contrast, motion,
+          setTheme, setAccent, setFontScale, setContrast, setMotion,
+          applyPreferences } = useTheme();
+
+  const [prefs, setPrefs] = useState(() => buildPrefs(preferences, { theme, accent, fontScale, contrast, motion }));
+
+  // When preferences load from the server, apply them to ThemeContext
+  // (so a user signing in on a new device sees their saved look) and
+  // sync our local form state.
   useEffect(() => {
     if (!preferences || Object.keys(preferences).length === 0) return;
-    setPrefs({
-      theme: preferences.theme || 'dark',
-      default_view: preferences.default_view || 'table',
-      compact_mode: preferences.compact_mode || false,
-      show_tooltips: preferences.show_tooltips !== false,
-      date_format: preferences.date_format || 'MM/DD/YYYY',
-      currency_format: preferences.currency_format || 'USD',
-      number_format: preferences.number_format || 'comma',
-      default_landing: preferences.default_landing || 'Dashboard',
-      table_density: preferences.table_density || 'normal',
-      show_project_numbers: preferences.show_project_numbers !== false,
-      sidebar_collapsed: preferences.sidebar_collapsed || false,
-    });
+    applyPreferences(preferences);
+    setPrefs(buildPrefs(preferences, { theme, accent, fontScale, contrast, motion }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(preferences)]);
+
+  // Keep local form state in lockstep with ThemeContext so toggling a
+  // visual option from elsewhere (e.g. the future top-bar quick-switch)
+  // is reflected here too.
+  useEffect(() => {
+    setPrefs((p) => ({ ...p, theme, accent_color: accent, font_scale: fontScale, contrast_mode: contrast, motion_mode: motion }));
+  }, [theme, accent, fontScale, contrast, motion]);
 
   const handleChange = (key, value) => {
     const updated = { ...prefs, [key]: value };
     setPrefs(updated);
-    onSave(updated);
+    // Apply visual changes locally first so the UI is instant; the
+    // mutation in Settings.jsx persists them to the user-prefs row.
+    if (key === 'theme')           setTheme(value);
+    if (key === 'accent_color')    setAccent(value);
+    if (key === 'font_scale')      setFontScale(value);
+    if (key === 'contrast_mode')   setContrast(value);
+    if (key === 'motion_mode')     setMotion(value);
+    onSave({ [key]: value });
   };
 
   return (
@@ -82,6 +114,96 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
+      {/* Accent color */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Accent Color</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          {ACCENT_PRESETS.map((a) => {
+            const active = prefs.accent_color === a.id;
+            return (
+              <div
+                key={a.id}
+                onClick={() => handleChange('accent_color', a.id)}
+                style={{
+                  ...optionCard(active),
+                  padding: '14px 10px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: a.swatch,
+                    boxShadow: active ? `0 0 0 2px ${a.swatch}66, 0 0 0 4px var(--bg-surface)` : 'none',
+                  }}
+                />
+                <div style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                }}>
+                  {a.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
+          Changes the highlight color used across buttons, links, and selected rows. Status colors (green/red/etc.) are unaffected.
+        </div>
+      </div>
+
+      {/* Font size scale */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Font Size</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {FONT_SCALE_PRESETS.map((s) => {
+            const active = prefs.font_scale === s.id;
+            return (
+              <div key={s.id} onClick={() => handleChange('font_scale', s.id)} style={optionCard(active)}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: s.id === 'sm' ? 11 : s.id === 'lg' ? 16 : 13,
+                  fontWeight: 700,
+                  color: active ? 'var(--accent)' : 'var(--text-primary)',
+                }}>
+                  {s.label}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {s.scale}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Accessibility */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Accessibility</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>High Contrast</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Lifts text and border colors for AAA contrast targets.</div>
+          </div>
+          <Toggle
+            checked={prefs.contrast_mode === 'high'}
+            onChange={() => handleChange('contrast_mode', prefs.contrast_mode === 'high' ? 'normal' : 'high')}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Reduce Motion</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Disables transitions and animations across the app.</div>
+          </div>
+          <Toggle
+            checked={prefs.motion_mode === 'reduced'}
+            onChange={() => handleChange('motion_mode', prefs.motion_mode === 'reduced' ? 'auto' : 'reduced')}
+          />
+        </div>
+      </div>
+
       {/* Date Format */}
       <div style={{ marginBottom: 28 }}>
         <label style={labelStyle}>Date Format</label>
@@ -95,9 +217,37 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
+      {/* Time Format + Week Start + Units */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Locale</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Time Format</label>
+            <select value={prefs.time_format} onChange={e => handleChange('time_format', e.target.value)} style={selectStyle}>
+              <option value="12h">12-hour (3:45 PM)</option>
+              <option value="24h">24-hour (15:45)</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Week Starts On</label>
+            <select value={prefs.week_start} onChange={e => handleChange('week_start', e.target.value)} style={selectStyle}>
+              <option value="sunday">Sunday</option>
+              <option value="monday">Monday</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Units</label>
+            <select value={prefs.measurement_units} onChange={e => handleChange('measurement_units', e.target.value)} style={selectStyle}>
+              <option value="imperial">Imperial (ft, in, lbs)</option>
+              <option value="metric">Metric (m, mm, kg)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Currency & Numbers */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Currency & Numbers</label>
+        <label style={labelStyle}>Currency &amp; Numbers</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <label style={labelStyle}>Currency</label>
@@ -110,6 +260,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
             <select value={prefs.number_format} onChange={e => handleChange('number_format', e.target.value)} style={selectStyle}>
               <option value="comma">1,234,567 (US)</option>
               <option value="period">1.234.567 (EU)</option>
+              <option value="space">1 234 567 (intl)</option>
             </select>
           </div>
         </div>
@@ -153,6 +304,8 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
           { key: 'show_tooltips', label: 'Show Tooltips', desc: 'Display helpful hints on hover' },
           { key: 'show_project_numbers', label: 'Show Project Numbers', desc: 'Display project numbers in lists' },
           { key: 'sidebar_collapsed', label: 'Start Sidebar Collapsed', desc: 'Collapse navigation on load' },
+          { key: 'show_keyboard_hints', label: 'Show Keyboard Hints', desc: 'Reveal shortcut overlays in dialogs' },
+          { key: 'auto_open_drawers', label: 'Auto-Open Detail Drawers', desc: 'Open the detail panel on row click instead of single-line preview' },
         ].map(item => (
           <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
             <div>
@@ -167,4 +320,30 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
       {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
     </div>
   );
+}
+
+function buildPrefs(p, theme) {
+  const safe = p && typeof p === 'object' ? p : {};
+  return {
+    theme:                 safe.theme         || theme.theme         || 'dark',
+    accent_color:          safe.accent_color  || theme.accent        || 'gold',
+    font_scale:            safe.font_scale    || theme.fontScale     || 'md',
+    contrast_mode:         safe.contrast_mode || theme.contrast      || 'normal',
+    motion_mode:           safe.motion_mode   || theme.motion        || 'auto',
+    default_view:          safe.default_view          || 'table',
+    compact_mode:          !!safe.compact_mode,
+    show_tooltips:         safe.show_tooltips !== false,
+    date_format:           safe.date_format          || 'MM/DD/YYYY',
+    time_format:           safe.time_format          || '12h',
+    week_start:            safe.week_start           || 'sunday',
+    measurement_units:     safe.measurement_units    || 'imperial',
+    currency_format:       safe.currency_format      || 'USD',
+    number_format:         safe.number_format        || 'comma',
+    default_landing:       safe.default_landing      || 'Dashboard',
+    table_density:         safe.table_density        || 'normal',
+    show_project_numbers:  safe.show_project_numbers !== false,
+    sidebar_collapsed:     !!safe.sidebar_collapsed,
+    show_keyboard_hints:   safe.show_keyboard_hints !== false,
+    auto_open_drawers:     safe.auto_open_drawers !== false,
+  };
 }

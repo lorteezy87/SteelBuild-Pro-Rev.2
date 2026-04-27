@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Pin, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 
 const labelStyle = {
   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
@@ -57,8 +59,19 @@ const LANDING_PAGES = [
 ];
 
 export default function DashboardTab({ preferences, onSave, isSaving }) {
+  // Pull the project list once so the "Default project" dropdown
+  // reflects what's actually available. Cached for 5 min — same
+  // staleTime the rest of the app uses for the project list.
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-for-settings'],
+    queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const [prefs, setPrefs] = useState({
     default_landing:    preferences?.default_landing || 'Dashboard',
+    default_project_id: preferences?.default_project_id || '',
+    auto_refresh_secs:  preferences?.auto_refresh_secs ?? 0,
     pinned_modules:     preferences?.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
     visible_kpis:       preferences?.visible_kpis || AVAILABLE_KPIS.map(k => k.id),
     kpi_order:          preferences?.kpi_order || AVAILABLE_KPIS.map(k => k.id),
@@ -70,6 +83,8 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
     if (!preferences || Object.keys(preferences).length === 0) return;
     setPrefs({
       default_landing:    preferences.default_landing || 'Dashboard',
+      default_project_id: preferences.default_project_id || '',
+      auto_refresh_secs:  preferences.auto_refresh_secs ?? 0,
       pinned_modules:     preferences.pinned_modules || ['Projects', 'RFIs', 'Drawings'],
       visible_kpis:       preferences.visible_kpis || AVAILABLE_KPIS.map(k => k.id),
       kpi_order:          preferences.kpi_order || AVAILABLE_KPIS.map(k => k.id),
@@ -142,6 +157,61 @@ export default function DashboardTab({ preferences, onSave, isSaving }) {
         </select>
         <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
           This is the page you'll see when you open SteelBuild Pro each morning.
+        </div>
+      </div>
+
+      {/* Default project on load */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Default Project</label>
+        <select
+          value={prefs.default_project_id || ''}
+          onChange={e => handleChange('default_project_id', e.target.value)}
+          style={selectStyle}
+        >
+          <option value="">— None (open in Portfolio view) —</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.project_number ? `${p.project_number} · ` : ''}{p.name || 'Untitled'}
+            </option>
+          ))}
+        </select>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+          Auto-select this project on every page that has a project switcher. Leave blank to default to the portfolio.
+        </div>
+      </div>
+
+      {/* Auto-refresh interval */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>Auto-Refresh Live Data</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+          {[
+            { value: 0,    label: 'Off' },
+            { value: 30,   label: '30s' },
+            { value: 60,   label: '1 min' },
+            { value: 300,  label: '5 min' },
+            { value: 900,  label: '15 min' },
+          ].map((r) => {
+            const active = (prefs.auto_refresh_secs ?? 0) === r.value;
+            return (
+              <div
+                key={r.value}
+                onClick={() => handleChange('auto_refresh_secs', r.value)}
+                style={{
+                  padding: '10px 8px', textAlign: 'center', cursor: 'pointer',
+                  background: active ? 'var(--accent-muted)' : 'var(--bg-surface-low)',
+                  border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-default)'}`,
+                  borderRadius: 6,
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                }}
+              >
+                {r.label}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+          When set, the dashboard quietly refetches RFIs, deliveries, and the activity feed at this cadence so what you see on screen stays current.
         </div>
       </div>
 
