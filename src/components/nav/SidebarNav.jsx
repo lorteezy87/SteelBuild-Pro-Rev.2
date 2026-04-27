@@ -118,6 +118,7 @@ const PAGE_ICON = {
   ScopeExclusions:              FileText,
 
   // Tools
+  Calculator:                   Calculator,
   FeetInchesCalculator:         Ruler,
   SteelWeightCalculator:        Calculator,
   CranePickCalculator:          HardHat,
