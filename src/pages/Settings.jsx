@@ -10,6 +10,7 @@ import { CommandBar } from "@/components/design-system";
 import NotificationsTab from "@/components/settings/NotificationsTab.jsx";
 import DisplayTab from "@/components/settings/DisplayTab.jsx";
 import DashboardTab from "@/components/settings/DashboardTab.jsx";
+import ShortcutsTab from "@/components/settings/ShortcutsTab.jsx";
 import RolesTab from "@/components/settings/RolesTab.jsx";
 import SystemTab from "@/components/settings/SystemTab.jsx";
 
@@ -20,9 +21,10 @@ const TAB_GROUPS = [
     label: 'My Settings',
     tabs: [
       { id: 'profile',       label: 'Profile',       icon: '\u{1F464}', desc: 'Your account information' },
-      { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, layout, and format' },
-      { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules and KPI order' },
+      { id: 'display',       label: 'Display',       icon: '\u{1F3A8}', desc: 'Theme, accent, accessibility, locale' },
+      { id: 'dashboard',     label: 'Dashboard',     icon: '\u{1F4CA}', desc: 'Pinned modules, KPI order, default project' },
       { id: 'notifications', label: 'Notifications', icon: '\u{1F514}', desc: 'Alerts, digests, and quiet hours' },
+      { id: 'shortcuts',     label: 'Shortcuts',     icon: '⌨',    desc: 'Keyboard reference card' },
     ],
   },
   {
@@ -238,6 +240,7 @@ export default function Settings() {
         {activeTab === 'notifications' && <NotificationsTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'display' && <DisplayTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
         {activeTab === 'dashboard' && <DashboardTab preferences={userPrefs} onSave={handleSavePrefs} isSaving={updatePrefsMut.isPending} />}
+        {activeTab === 'shortcuts' && <ShortcutsTab />}
         {activeTab === 'roles' && <RolesTab user={user} />}
         {activeTab === 'system' && <SystemTab user={user} />}
       </div>
