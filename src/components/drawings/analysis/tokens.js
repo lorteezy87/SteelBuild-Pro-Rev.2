@@ -28,13 +28,23 @@ export const STATUS_COLORS = {
   error:      "var(--status-error)",
 };
 
+// Aligned with the STAGES palette in drawingsConfig.js so badges in
+// the analysis card match the rest of the Drawings UI. Each stage
+// gets a distinct hue (no two collapse to the same colour the way
+// the previous AI_ACCENT-spammed map did).
 export const STAGE_ACCENT = {
-  OFA: AI_ACCENT, BFA: AI_ACCENT,
-  OFS: AI_ACCENT, BFS: AI_ACCENT,
-  FFF: "var(--status-warning)",
-  Released: "var(--status-success)",
-  IFA: "var(--text-muted)", IFC: "var(--accent)",
-  Shop: "var(--accent)", Revision: "var(--status-warning)",
+  "Not Started": "#64748B", // slate
+  OFA:           "#2563EB", // blue
+  BFA:           "#F97316", // orange
+  OFS:           "#0D9488", // teal
+  BFS:           "#DC2626", // red
+  FFF:           "#EAB308", // yellow (a.k.a. IFC)
+  Released:      "#10B981", // emerald
+  // Auxiliary states still seen in some legacy analysis rows:
+  IFA:           "var(--text-muted)",
+  IFC:           "#EAB308",
+  Shop:          "var(--accent)",
+  Revision:      "#F97316",
 };
 
 export const surface = {

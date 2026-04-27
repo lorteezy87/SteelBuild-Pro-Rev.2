@@ -6,15 +6,30 @@
  */
 
 // ─── Stage Definitions ──────────────────────────────────────────────────────
-
+//
+// Palette tuned for maximum hue separation between adjacent stages so
+// the row badges and the stage-progress mini-bar read clearly at a
+// glance:
+//
+//   Not Started → slate    (neutral)
+//   OFA         → blue     (out, cool)
+//   BFA         → orange   (back, warm — needs attention in our court)
+//   OFS         → teal     (out for scrub, distinct cool)
+//   BFS         → red      (back from scrub, warm — needs attention)
+//   IFC (FFF)   → yellow   (final approval, distinct from greens)
+//   Released    → emerald  (done)
+//
+// Earlier scheme used adjacent blue→cyan, amber→orange, lime→emerald
+// pairs which were too close to distinguish quickly. Each stage now
+// picks a different family from the wheel.
 export const STAGES = [
-  { key: "Not Started", label: "NOT STARTED", color: "#6B7280", bg: "rgba(107,114,128,0.15)" },
-  { key: "OFA",         label: "OFA",         color: "#3B82F6", bg: "rgba(59,130,246,0.15)" },
-  { key: "BFA",         label: "BFA",         color: "#06B6D4", bg: "rgba(6,182,212,0.15)" },
-  { key: "OFS",         label: "OFS",         color: "#F59E0B", bg: "rgba(245,158,11,0.15)" },
-  { key: "BFS",         label: "BFS",         color: "#F97316", bg: "rgba(249,115,22,0.15)" },
-  { key: "FFF",         label: "IFC",         color: "#84CC16", bg: "rgba(132,204,22,0.15)" },
-  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.15)" },
+  { key: "Not Started", label: "NOT STARTED", color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
+  { key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
+  { key: "BFA",         label: "BFA",         color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange
+  { key: "OFS",         label: "OFS",         color: "#0D9488", bg: "rgba(13,148,136,0.18)"  }, // teal
+  { key: "BFS",         label: "BFS",         color: "#DC2626", bg: "rgba(220,38,38,0.18)"   }, // red
+  { key: "FFF",         label: "IFC",         color: "#EAB308", bg: "rgba(234,179,8,0.18)"   }, // yellow
+  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
 ];
 
 /** Map stage key → { key, label, color, bg } */
