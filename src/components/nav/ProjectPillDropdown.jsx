@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../shared/useProjectContext";
 
 export default function ProjectPillDropdown() {
   const { projects, activeProject, setActiveProject, loading } = useProjectContext();
+  // Pages resolve the project id via useProjectId() which checks the URL
+  // FIRST (?projectId= / ?project=), then falls back to the active project
+  // in context. Without stripping those params on a switch, picking a new
+  // project from the pill silently has no effect because the URL still
+  // pins the page to the previous one. We clear them on every selection.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -64,8 +71,19 @@ export default function ProjectPillDropdown() {
       setActiveProject(p);
       setOpen(false);
       setSearch("");
+      // Drop URL-pinned project ids so useProjectId() falls back to
+      // the new activeProject. `replace: true` keeps the back button
+      // returning to wherever the user came from, not to the same URL
+      // with the old `?project=` glued back on. We only mutate when at
+      // least one of the params is actually present.
+      if (searchParams.has("projectId") || searchParams.has("project")) {
+        const next = new URLSearchParams(searchParams);
+        next.delete("projectId");
+        next.delete("project");
+        setSearchParams(next, { replace: true });
+      }
     },
-    [setActiveProject]
+    [setActiveProject, searchParams, setSearchParams]
   );
 
   const label =
