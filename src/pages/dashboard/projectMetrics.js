@@ -197,10 +197,27 @@ export function oldestOpenRFIAgeDays(rfis = []) {
 
 /**
  * 6-stage Work-Package pipeline rollup. Drives the "Work Package
- * Pipeline" chevron strip on the new sectioned dashboard. Stages match
- * the prototype: Not Started → Detailing → Released → Fabrication →
- * Complete → Shipped. Falls back to phase-based bucketing when status
- * isn't populated, so legacy rows still appear somewhere.
+ * Pipeline" chevron strip on the new sectioned dashboard.
+ *
+ * The schema uses two columns: `phase ∈ {Detailing, Fabrication,
+ * Delivery, Erection}` and `status ∈ {Not Started, In Progress,
+ * Complete}`. The prototype's pipeline is a single linear flow that
+ * combines them, so we map the (phase, status) tuple to one of six
+ * display stages:
+ *
+ *   status="Not Started"                          → Not Started
+ *   phase="Detailing"   + status="In Progress"    → Detailing
+ *   phase="Detailing"   + status="Complete"       → Released   (detailed, ready for fab)
+ *   phase="Fabrication" + status="In Progress"    → Fabrication
+ *   phase="Fabrication" + status="Complete"       → Complete   (fabbed, ready to ship)
+ *   phase ∈ {Delivery, Erection} (any status)     → Shipped
+ *
+ * "Hold", "Cancelled", and unknown values fall through to "Not Started"
+ * so they're still visible (rather than silently dropped from the
+ * total). The previous version keyed the rollup off the prototype's
+ * stage names (`status === "Released"`, etc.) which never matched real
+ * data — every In-Progress + Erection row landed in "Complete", which
+ * was wrong.
  */
 export function wpPipelineRollup(wps = []) {
   const stages = [
@@ -210,17 +227,21 @@ export function wpPipelineRollup(wps = []) {
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
   for (const w of wps) {
     const status = w?.status;
-    if (status && counts[status] !== undefined) {
-      counts[status]++;
-      continue;
-    }
-    // Phase fallback so a row without an explicit status still surfaces.
     const phase = w?.phase;
-    if (phase === "Detailing")        counts["Detailing"]++;
-    else if (phase === "Fabrication") counts["Fabrication"]++;
-    else if (phase === "Delivery")    counts["Shipped"]++;
-    else if (phase === "Erection")    counts["Complete"]++;
-    else                              counts["Not Started"]++;
+    if (phase === "Delivery" || phase === "Erection") {
+      counts["Shipped"]++;
+    } else if (status === "Complete" && phase === "Fabrication") {
+      counts["Complete"]++;
+    } else if (status === "Complete" && phase === "Detailing") {
+      counts["Released"]++;
+    } else if (status === "In Progress" && phase === "Fabrication") {
+      counts["Fabrication"]++;
+    } else if (status === "In Progress" && phase === "Detailing") {
+      counts["Detailing"]++;
+    } else {
+      // Not Started / Hold / Cancelled / no-phase / unknown.
+      counts["Not Started"]++;
+    }
   }
   return { stages, counts, total: wps.length };
 }
@@ -250,20 +271,52 @@ export function rfiStatusRollup(rfis = []) {
 }
 
 /**
- * Submittal pipeline rollup — 6 detailing-stage buckets. Maps to the
- * `stage` column on submittals (OFA / BFA / OFS / BFS / FFF / Released)
- * and falls back to the legacy `status` column when stage isn't set.
+ * Submittal pipeline rollup — 6 detailing-stage buckets:
+ *   OFA = Out For Approval (with EOR/Architect)
+ *   BFA = Back From Approval (returned, needs revision)
+ *   OFS = Out For Sealing (revised package out for stamp)
+ *   BFS = Back From Sealing (stamped/sealed, returned)
+ *   FFF = Final For Fab (approved as noted, ready)
+ *   Released = Released to Shop
+ *
+ * The submittals table doesn't carry a dedicated `stage` column — only
+ * `status` (Draft / Submitted / Under Review / Approved / Approved as
+ * Noted / Revise and Resubmit / Rejected / Void) and `ball_in_court`
+ * (Contractor / EOR / Architect / GC / Owner). We derive the stage from
+ * those two fields. If a submittal carries an explicit stage column
+ * (legacy / migrated rows), prefer that.
  */
 export function submittalPipelineRollup(submittals = []) {
   const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
   for (const s of submittals) {
-    const stage = s?.stage || s?.current_stage;
-    if (stage && counts[stage] !== undefined) {
-      counts[stage]++;
+    // 1. Honour explicit stage if present.
+    const explicit = s?.stage || s?.current_stage;
+    if (explicit && counts[explicit] !== undefined) {
+      counts[explicit]++;
+      continue;
     }
+    // 2. Otherwise derive from status + ball_in_court.
+    const status = s?.status;
+    const bic    = s?.ball_in_court;
+
+    if (status === "Approved" && s?.approved_date) {
+      counts["Released"]++;
+    } else if (status === "Approved") {
+      counts["FFF"]++;
+    } else if (status === "Approved as Noted") {
+      counts["BFS"]++;
+    } else if (status === "Revise and Resubmit" || status === "Rejected") {
+      counts["BFA"]++;
+    } else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") {
+      counts["OFS"]++;
+    } else if (status === "Submitted" || status === "Under Review" || status === "Draft") {
+      counts["OFA"]++;
+    }
+    // Void / unknown → skipped (not part of the pipeline).
   }
-  return { stages, counts, total: submittals.length };
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  return { stages, counts, total };
 }
 
 /**
@@ -379,9 +432,24 @@ export function pendingPayment(sovItems = []) {
   return { count: items.length, total };
 }
 
-/** Retention held — sum of retention_held across SOV items. */
+/**
+ * Retention held — sum of retainage withheld across SOV items.
+ *
+ * Computed as: scheduled_value × current_percent_complete% × retainage_percent%
+ * The schema stores `retainage_percent` (e.g. 10 for 10%), not a precomputed
+ * dollar amount. Falls back to a literal `retention_held` column for any
+ * legacy rows that already carry the dollar value.
+ */
 export function retentionHeld(sovItems = []) {
-  return sovItems.reduce((s, i) => s + (Number(i.retention_held) || 0), 0);
+  return sovItems.reduce((s, i) => {
+    if (i?.retention_held != null) {
+      return s + (Number(i.retention_held) || 0);
+    }
+    const sched = Number(i?.scheduled_value) || 0;
+    const pct   = Number(i?.current_percent_complete) || 0;
+    const ret   = Number(i?.retainage_percent) || 0;
+    return s + (sched * pct * ret) / 10000;
+  }, 0);
 }
 
 /**
