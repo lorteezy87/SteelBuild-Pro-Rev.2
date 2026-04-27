@@ -22,6 +22,8 @@ import {
   wpProgressPct,
   wpPipelineRollup,
   overdueWPCount,
+  projectMilestones,
+  criticalPathTasks,
 } from "../projectMetrics";
 import InlineEditField from "@/components/shared/InlineEditField";
 
@@ -34,15 +36,28 @@ const STAGE_COLOR = {
   "Shipped":     "#0d9488",
 };
 
-export default function ScheduleTimelineSection({ project, wps = [], onNavigate }) {
+export default function ScheduleTimelineSection({ project, wps = [], scheduleTasks = [], onNavigate }) {
   const elapsedPct = useMemo(() => timelineElapsedPct(project), [project]);
   const completePct = useMemo(() => wpProgressPct(wps), [wps]);
   const daysLeft = useMemo(() => daysRemaining(project), [project]);
   const pipeline = useMemo(() => wpPipelineRollup(wps), [wps]);
   const overdue = useMemo(() => overdueWPCount(wps), [wps]);
 
-  const milestones = []; // milestone entity not modeled yet
-  const criticalPath = []; // schedule_tasks.critical_path flag not modeled yet
+  // Milestones come from schedule_tasks tagged task_type='Milestone'.
+  // When nothing's tagged yet we synthesise project start + target so
+  // the panel always shows something concrete; the synthetic flag lets
+  // the UI mark them differently from user-created milestones.
+  const milestones = useMemo(
+    () => projectMilestones(project, scheduleTasks),
+    [project, scheduleTasks],
+  );
+  // Critical path = schedule_tasks where metadata.is_critical=true.
+  // The drawer's "Mark as critical" toggle (added alongside this
+  // panel) writes that flag.
+  const criticalPath = useMemo(
+    () => criticalPathTasks(scheduleTasks),
+    [scheduleTasks],
+  );
 
   const start = project?.start_date;
   const target = project?.target_completion_date || project?.forecast_completion_date;
@@ -164,15 +179,57 @@ export default function ScheduleTimelineSection({ project, wps = [], onNavigate 
         gap: 14,
         marginBottom: 18,
       }}>
-        <SubPanel title="Key Milestones">
-          {milestones.length === 0
-            ? <Empty text="No milestones defined" />
-            : milestones.map((m) => <div key={m.id}>{m.name}</div>)}
+        <SubPanel
+          title="Key Milestones"
+          subtitle={milestones.length > 0
+            ? `${milestones.length} tracked`
+            : null}
+          rightAction={onNavigate ? {
+            label: "+ Add",
+            title: "Open Schedule with the New Task panel ready (set Type=Milestone)",
+            onClick: () => onNavigate("schedule", { create: true }),
+          } : null}
+        >
+          {milestones.length === 0 ? (
+            <Empty text="No milestones defined — open Schedule to add one" />
+          ) : (
+            milestones.map((m) => (
+              <MilestoneRow
+                key={m.id}
+                title={m.title}
+                date={m.date}
+                synthetic={m.synthetic}
+                status={m.status}
+                onClick={onNavigate ? () => onNavigate("schedule") : undefined}
+              />
+            ))
+          )}
         </SubPanel>
-        <SubPanel title="Critical Path">
-          {criticalPath.length === 0
-            ? <Empty text="No critical path tasks" />
-            : criticalPath.map((t) => <div key={t.id}>{t.title}</div>)}
+        <SubPanel
+          title="Critical Path"
+          subtitle={criticalPath.length > 0
+            ? `${criticalPath.length} task${criticalPath.length === 1 ? "" : "s"}`
+            : null}
+          rightAction={onNavigate ? {
+            label: "Manage →",
+            title: "Open Schedule and use a task drawer's 'Mark Critical' toggle",
+            onClick: () => onNavigate("schedule"),
+          } : null}
+        >
+          {criticalPath.length === 0 ? (
+            <Empty text="No critical path tasks — toggle Mark Critical in any task drawer" />
+          ) : (
+            criticalPath.map((t) => (
+              <CriticalRow
+                key={t.id}
+                title={t.title}
+                start={t.start}
+                end={t.end}
+                status={t.status}
+                onClick={onNavigate ? () => onNavigate("schedule") : undefined}
+              />
+            ))
+          )}
         </SubPanel>
       </div>
 
@@ -214,7 +271,7 @@ export default function ScheduleTimelineSection({ project, wps = [], onNavigate 
   );
 }
 
-function SubPanel({ title, children }) {
+function SubPanel({ title, subtitle, rightAction, children }) {
   return (
     <div style={{
       padding: "12px 14px",
@@ -223,15 +280,145 @@ function SubPanel({ title, children }) {
       borderRadius: 8,
     }}>
       <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-        letterSpacing: "0.10em", textTransform: "uppercase",
-        color: "var(--text-muted)", marginBottom: 8,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 8, marginBottom: 8,
       }}>
-        {title}
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.10em", textTransform: "uppercase",
+          color: "var(--text-muted)",
+        }}>
+          {title}
+          {subtitle ? (
+            <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>
+              · {subtitle}
+            </span>
+          ) : null}
+        </div>
+        {rightAction && (
+          <button
+            type="button"
+            onClick={rightAction.onClick}
+            title={rightAction.title || rightAction.label}
+            style={{
+              background: "none", border: "none", padding: 0,
+              color: "var(--accent)",
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            {rightAction.label}
+          </button>
+        )}
       </div>
       <div>{children}</div>
     </div>
   );
+}
+
+function MilestoneRow({ title, date, synthetic, status, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "6px 8px",
+        marginBottom: 4,
+        background: "var(--bg-page)",
+        border: "1px solid var(--divider)",
+        borderRadius: 6,
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      <span style={{
+        width: 8, height: 8,
+        background: synthetic ? "var(--text-muted)" : "var(--accent)",
+        transform: "rotate(45deg)",
+        flexShrink: 0,
+      }} />
+      <span style={{
+        flex: 1,
+        fontFamily: "var(--font-body)", fontSize: 12,
+        color: "var(--text-secondary)",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {title}{synthetic ? " · derived" : ""}
+      </span>
+      {status && (
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+          letterSpacing: "0.08em",
+          padding: "2px 5px", borderRadius: 3,
+          background: "var(--bg-surface-high)",
+          color: "var(--text-muted)",
+        }}>
+          {status}
+        </span>
+      )}
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 10,
+        color: "var(--text-muted)",
+        flexShrink: 0,
+      }}>
+        {formatShortDate(date)}
+      </span>
+    </div>
+  );
+}
+
+function CriticalRow({ title, start, end, status, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "6px 8px",
+        marginBottom: 4,
+        background: "var(--bg-page)",
+        border: "1px solid var(--divider)",
+        borderLeft: "3px solid var(--status-error)",
+        borderRadius: 6,
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      <span style={{
+        flex: 1,
+        fontFamily: "var(--font-body)", fontSize: 12,
+        color: "var(--text-secondary)",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {title}
+      </span>
+      {status && (
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+          letterSpacing: "0.08em",
+          padding: "2px 5px", borderRadius: 3,
+          background: "var(--bg-surface-high)",
+          color: "var(--text-muted)",
+        }}>
+          {status}
+        </span>
+      )}
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 10,
+        color: "var(--text-muted)",
+        flexShrink: 0,
+      }}>
+        {formatShortDate(start)}{end && start !== end ? ` → ${formatShortDate(end)}` : ""}
+      </span>
+    </div>
+  );
+}
+
+function formatShortDate(iso) {
+  if (!iso || typeof iso !== "string") return "—";
+  try {
+    const d = new Date(iso.slice(0, 10) + "T00:00:00Z");
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  } catch { return iso; }
 }
 
 function Empty({ text }) {
