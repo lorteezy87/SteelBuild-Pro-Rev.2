@@ -242,9 +242,13 @@ export default function RFIs() {
         );
       })
       .sort((a, b) => {
-        const numA = extractRfiSequence(a.rfi_number) ?? 0;
-        const numB = extractRfiSequence(b.rfi_number) ?? 0;
-        return numB - numA; // newest RFI # first
+        // Default sort is RFI # ascending (1, 2, 3, …) so the list reads
+        // chronologically by issue order. extractRfiSequence pulls the
+        // trailing numeric segment, so RFI-001 / RFI-2 / RFI-10 sort as
+        // 1, 2, 10 rather than the lexicographic 1, 10, 2.
+        const numA = extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER;
+        const numB = extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER;
+        return numA - numB;
       });
   }, [rfis, filter, disciplineFilter, search]);
 

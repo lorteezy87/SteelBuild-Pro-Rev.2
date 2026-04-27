@@ -57,3 +57,17 @@ export const DATE_RANGES = [
   { key: "ytd",     label: "YTD" },
   { key: "all",     label: "All Time" },
 ];
+
+/**
+ * Project-level health status colors. Distinct from HEALTH_COLORS above
+ * — that map keys off cost-variance buckets (good/watch/risk/neutral),
+ * this one keys off the user-set `project.health_status` field which
+ * uses the canonical "On Track / Watch / At Risk / On Hold" vocabulary.
+ */
+export const PROJECT_HEALTH_COLORS = {
+  "On Track": "var(--status-success)",
+  "Watch":    "var(--status-warning)",
+  "At Risk":  "var(--status-error)",
+  "On Hold":  "var(--text-muted)",
+};
+
