@@ -36,15 +36,20 @@ const TYPES = ["Shop Drawing","Product Data","Sample","Mock-up","Calculation","O
 
 const BIC_CHOICES = ["Contractor","EOR","Architect","GC","Owner"];
 
+// One-color-per-status palette so adjacent statuses don't blur into
+// each other. Earlier scheme collapsed eight statuses onto four
+// tokens — Approved / Approved as Noted both green, Revise and
+// Resubmit / Rejected both red, Draft / Void both gray — which made
+// the badges in the table impossible to distinguish at a glance.
 const STATUS_CFG = {
-  "Draft":               { color: "var(--text-muted)",      bg: "rgba(71,85,105,0.10)" },
-  "Submitted":           { color: "var(--status-info)",     bg: "var(--info-muted)" },
-  "Under Review":        { color: "var(--status-warning)",  bg: "var(--warning-muted)" },
-  "Approved":            { color: "var(--status-success)",  bg: "var(--success-muted)" },
-  "Approved as Noted":   { color: "var(--status-success)",  bg: "var(--success-muted)" },
-  "Revise and Resubmit": { color: "var(--status-error)",    bg: "var(--danger-muted)" },
-  "Rejected":            { color: "var(--status-error)",    bg: "var(--danger-muted)" },
-  "Void":                { color: "var(--text-muted)",      bg: "rgba(71,85,105,0.10)" },
+  "Draft":               { color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
+  "Submitted":           { color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
+  "Under Review":        { color: "#0D9488", bg: "rgba(13,148,136,0.18)"  }, // teal — distinct from blue
+  "Approved":            { color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
+  "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.18)"  }, // lime — yellow-green, related to Approved
+  "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange — action, warm
+  "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.18)"   }, // red — failure
+  "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" }, // cool gray — distinct from Draft slate
 };
 
 export default function Submittals() {
@@ -248,6 +253,9 @@ function SubmittalRow({ row, selected, onClick }) {
     !["Approved","Approved as Noted","Void"].includes(row.status) &&
     daysUntil(row.required_date) < 0;
 
+  // The list is dense — give each row a status-tinted left rail and a
+  // very faint status-tinted background wash so adjacent statuses
+  // separate visually before the user even reads the chip.
   return (
     <div
       onClick={onClick}
@@ -255,8 +263,20 @@ function SubmittalRow({ row, selected, onClick }) {
         padding: "10px 14px",
         borderBottom: "1px solid var(--divider)",
         cursor: "pointer",
-        background: selected ? "var(--accent-muted)" : "transparent",
-        borderLeft: selected ? "3px solid var(--accent)" : "3px solid transparent",
+        background: selected
+          ? "var(--accent-muted)"
+          : `linear-gradient(90deg, ${cfg.bg} 0%, transparent 22%)`,
+        borderLeft: `3px solid ${selected ? "var(--accent)" : cfg.color}`,
+      }}
+      onMouseEnter={(e) => {
+        if (selected) return;
+        e.currentTarget.style.background =
+          `linear-gradient(90deg, ${cfg.bg} 0%, var(--hover-bg) 30%)`;
+      }}
+      onMouseLeave={(e) => {
+        if (selected) return;
+        e.currentTarget.style.background =
+          `linear-gradient(90deg, ${cfg.bg} 0%, transparent 22%)`;
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
