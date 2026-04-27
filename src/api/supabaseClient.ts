@@ -687,6 +687,7 @@ export const entities = {
   Resource:              createEntityClient('resources'),
   LookAhead:             createEntityClient('look_ahead'),
   Document:              createEntityClient('documents'),
+  DocumentFolder:        createEntityClient('document_folders'),
   Activity:              createEntityClient('activities'),
   UploadedFile:          createEntityClient('uploaded_files'),
   ScopeItem:             createEntityClient('scope_items'),
