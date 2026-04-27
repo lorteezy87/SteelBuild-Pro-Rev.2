@@ -10,6 +10,8 @@ import {
   getStageDates,
   applyStageDatesToTask,
   usesStageDates,
+  getActiveStage,
+  getEffectiveDueDate,
 } from '../../lib/stageDates';
 import {
   parseDependencies,
@@ -663,56 +665,106 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
 
 // ── Detailing stage-gate date panel ───────────────────────────────────
 //
-// Four date pickers, one per gate (OFA → BFA → FFF → Released), plus a
-// read-only derived Start/Finish line so the user can see the Gantt
-// bar anchors that will land on save. Each gate row shows its caption
-// ("Back from Approval") so new PMs don't have to memorise the
-// acronyms. A "Clear" affordance per row wipes that single gate
+// Two date pickers per gate (Start + End), one row each for OFA → BFA →
+// FFF → Released, plus a read-only derived Bar-Start/Finish line so the
+// user can see the Gantt bar anchors that will land on save. Each gate
+// row shows its caption ("Back from Approval") so new PMs don't have to
+// memorise the acronyms. The currently-active gate (the one the
+// schedule "follows" for due-date tracking) gets a left rail in its
+// gate colour. A "Clear" affordance per row wipes that single gate
 // without disturbing the others.
 function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
-  const setGate = (gate, iso) => {
+  const setGateField = (gate, field, iso) => {
     const next = { ...stageDates };
-    if (iso) next[gate] = iso;
-    else delete next[gate];
+    const prev = next[gate] || { start: null, end: null };
+    next[gate] = { ...prev, [field]: iso || null };
+    // If both halves of a gate are now empty, leave the empty object —
+    // the apply helper drops it on save so we don't write `{}`.
     onChange(next);
   };
-  const filled = DETAILING_STAGE_GATES.filter((g) => stageDates[g]);
-  // Derived preview: earliest filled = bar start, latest = bar end.
-  // Mirrors applyStageDatesToTask's logic; shown live so the user
-  // doesn't have to save-and-look to understand the effect.
-  const sorted = [...filled].sort((a, b) => (stageDates[a] || '').localeCompare(stageDates[b] || ''));
-  const previewStart = sorted[0] ? stageDates[sorted[0]] : null;
-  const previewEnd   = sorted.length ? stageDates[sorted[sorted.length - 1]] : null;
+  const clearGate = (gate) => {
+    const next = { ...stageDates };
+    next[gate] = { start: null, end: null };
+    onChange(next);
+  };
+
+  // Derived preview: earliest filled start → latest filled end.
+  // Mirrors deriveStartEndFromStages on save so the user doesn't have
+  // to save-and-look to understand the effect.
+  const allDates = [];
+  for (const g of DETAILING_STAGE_GATES) {
+    const v = stageDates?.[g];
+    if (v?.start) allDates.push(v.start);
+    if (v?.end)   allDates.push(v.end);
+  }
+  const sortedAll = allDates.sort();
+  const previewStart = sortedAll[0] || null;
+  const previewEnd   = sortedAll[sortedAll.length - 1] || null;
+
+  // Which gate is the schedule currently tracking? Highlight it in the
+  // panel so the user can see at a glance which window drives the
+  // "due when" date.
+  const activeGate = getActiveStage(stageDates);
+  const dueDate    = getEffectiveDueDate(stageDates);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: '0.14em',
-        textTransform: 'uppercase',
-        color: 'var(--text-muted)',
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: 8,
       }}>
-        Detailing Stage Dates
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}>
+          Detailing Stage Dates
+        </div>
+        {activeGate && (
+          <div
+            title="The gate the schedule is currently tracking — its end date is the live due date."
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.10em',
+              color: DETAILING_STAGE_META[activeGate]?.color || 'var(--accent)',
+            }}
+          >
+            ACTIVE · {activeGate}
+            {dueDate ? ` · DUE ${dueDate}` : ''}
+          </div>
+        )}
       </div>
+
       {DETAILING_STAGE_GATES.map((gate) => {
-        const meta = DETAILING_STAGE_META[gate];
-        const value = stageDates[gate] || '';
+        const meta  = DETAILING_STAGE_META[gate];
+        const v     = stageDates?.[gate] || { start: null, end: null };
+        const start = v.start || '';
+        const end   = v.end || '';
+        const filled = !!(start || end);
+        const isActive = gate === activeGate;
         return (
           <div
             key={gate}
             style={{
               display: 'grid',
-              gridTemplateColumns: '88px 1fr auto',
+              gridTemplateColumns: '88px 1fr 1fr auto',
               alignItems: 'center',
               gap: 8,
               padding: '6px 8px',
-              background: value
+              background: filled
                 ? `color-mix(in srgb, ${meta.color} 8%, var(--bg-surface-low))`
                 : 'var(--bg-surface-low)',
-              border: `1px solid ${value ? meta.color : 'var(--border-default)'}`,
+              border: `1px solid ${filled ? meta.color : 'var(--border-default)'}`,
+              borderLeft: `3px solid ${isActive ? meta.color : (filled ? meta.color : 'var(--border-default)')}`,
               borderRadius: 6,
+              boxShadow: isActive
+                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 30%, transparent)`
+                : 'none',
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -734,32 +786,28 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
                 {meta.caption}
               </span>
             </div>
-            <input
-              type="date"
-              value={value}
-              onChange={(e) => setGate(gate, e.target.value)}
-              style={{
-                width: '100%',
-                background: 'var(--bg-surface-low)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 4,
-                padding: '5px 8px',
-                fontFamily: 'var(--font-body)',
-                fontSize: 11,
-                color: 'var(--text-primary)',
-                boxSizing: 'border-box',
-              }}
+            <DateInput
+              ariaLabel={`${gate} start date`}
+              placeholder="start"
+              value={start}
+              onChange={(iso) => setGateField(gate, 'start', iso)}
+            />
+            <DateInput
+              ariaLabel={`${gate} end date`}
+              placeholder="end"
+              value={end}
+              onChange={(iso) => setGateField(gate, 'end', iso)}
             />
             <button
               type="button"
-              onClick={() => setGate(gate, null)}
-              disabled={!value}
+              onClick={() => clearGate(gate)}
+              disabled={!filled}
               aria-label={`Clear ${gate}`}
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: value ? 'var(--text-muted)' : 'var(--divider)',
-                cursor: value ? 'pointer' : 'not-allowed',
+                color: filled ? 'var(--text-muted)' : 'var(--divider)',
+                cursor: filled ? 'pointer' : 'not-allowed',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
                 padding: '2px 6px',
@@ -770,11 +818,12 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
           </div>
         );
       })}
-      {/* Derived anchors — helps the user understand how the Gantt bar
-          will be placed without saving first. Prefers the live preview
-          (which reflects unsaved edits) over the persisted derivedStart
-          / derivedEnd props, so the hint stays in sync with what they
-          just typed. */}
+
+      {/* Derived bar anchors — helps the user understand how the Gantt
+          bar will be placed without saving first. Prefers the live
+          preview (which reflects unsaved edits) over the persisted
+          derivedStart / derivedEnd props, so the hint stays in sync
+          with what they just typed. */}
       <div
         style={{
           marginTop: 2,
@@ -794,5 +843,30 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
         <span>Bar end {previewEnd || derivedEnd || '—'}</span>
       </div>
     </div>
+  );
+}
+
+// Inline date input used by the per-gate rows. Kept tiny so we can fit
+// two of them side-by-side in a 480px drawer without crowding.
+function DateInput({ value, onChange, ariaLabel, placeholder }) {
+  return (
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      style={{
+        width: '100%',
+        background: 'var(--bg-surface-low)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 4,
+        padding: '5px 6px',
+        fontFamily: 'var(--font-body)',
+        fontSize: 10,
+        color: 'var(--text-primary)',
+        boxSizing: 'border-box',
+      }}
+    />
   );
 }
