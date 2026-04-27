@@ -56,7 +56,7 @@ const STATUS_COLOR = {
   blue:    "#3B82F6",
   amber:   "#F59E0B",
   red:     "#EF4444",
-  purple:  "#8B5CF6",
+  purple:  "#0d9488", /* legacy categorical key — renders teal (no-purple palette) */
   neutral: "#94A3B8",
 };
 
@@ -1134,7 +1134,7 @@ function OverviewTab({ zone, items, counts, computed, readiness, dependencyImpac
   // user can one-click adopt the rule-engine value.
   const suggestion = computed?.status && computed.status !== zone.status;
   const suggestionColor = {
-    red: "#EF4444", amber: "#F59E0B", purple: "#8B5CF6",
+    red: "#EF4444", amber: "#F59E0B", purple: "#0d9488",
     blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
   }[computed?.status] || "#94A3B8";
 
@@ -1346,7 +1346,7 @@ function ActivityTab({ zone }) {
 
 const ACTIVITY_COLOR = {
   zone_created:       "#3B82F6",
-  zone_renamed:       "#8B5CF6",
+  zone_renamed:       "#0d9488",
   status_changed:     "#F59E0B",
   zone_deleted:       "#EF4444",
   link_added:         "#22C55E",
@@ -1358,7 +1358,7 @@ const ACTIVITY_COLOR = {
   dependency_removed: "#94A3B8",
 };
 const STATUS_DOT = {
-  red: "#EF4444", amber: "#F59E0B", purple: "#8B5CF6",
+  red: "#EF4444", amber: "#F59E0B", purple: "#0d9488",
   blue: "#3B82F6", green: "#22C55E", neutral: "#94A3B8",
 };
 function describeActivity(r) {

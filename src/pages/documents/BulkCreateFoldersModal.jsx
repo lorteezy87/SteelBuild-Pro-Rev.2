@@ -222,8 +222,8 @@ export default function BulkCreateFoldersModal({
           {results && (
             <div style={{
               padding: "10px 12px",
-              background: results.failed.length === 0 ? "rgba(16,185,129,0.10)" : "rgba(239,68,68,0.08)",
-              border: `1px solid ${results.failed.length === 0 ? "rgba(16,185,129,0.30)" : "rgba(239,68,68,0.30)"}`,
+              background: results.failed.length === 0 ? "var(--success-muted)" : "var(--danger-muted)",
+              border: `1px solid ${results.failed.length === 0 ? "var(--success-border)" : "var(--danger-border)"}`,
               borderRadius: 6,
               fontFamily: "var(--font-mono)", fontSize: 10,
               color: results.failed.length === 0 ? "var(--status-success)" : "var(--status-error)",

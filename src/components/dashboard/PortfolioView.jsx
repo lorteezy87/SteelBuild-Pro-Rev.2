@@ -171,7 +171,7 @@ const TIMELINE_PHASES = [
   "Closeout",
 ];
 const TIMELINE_PHASE_COLOR = {
-  "Pre-Construction": "#8B5CF6",
+  "Pre-Construction": "#0d9488",
   Detailing:          "#0EA5E9",
   Procurement:        "#F97316",
   Fabrication:        "#C89B20",

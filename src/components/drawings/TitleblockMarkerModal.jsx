@@ -393,12 +393,12 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               >
                 {/* Persisted rects */}
                 {titleRect  && <div style={rectStyle(titleRect,  "var(--accent)")} />}
-                {numberRect && <div style={rectStyle(numberRect, "#10B981")} />}
+                {numberRect && <div style={rectStyle(numberRect, "var(--status-success-bright)")} />}
                 {/* In-progress drag */}
                 {dragRect && (
                   <div style={rectStyle(
                     dragRect,
-                    drawing === "title" ? "var(--accent)" : "#10B981"
+                    drawing === "title" ? "var(--accent)" : "var(--status-success-bright)"
                   )} />
                 )}
               </div>
@@ -414,7 +414,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               Title {titleRect ? "✓" : "—"}
             </span>
             <span>
-              <span style={{ display: "inline-block", width: 10, height: 10, background: "#10B981", marginRight: 6, verticalAlign: "middle" }} />
+              <span style={{ display: "inline-block", width: 10, height: 10, background: "var(--status-success-bright)", marginRight: 6, verticalAlign: "middle" }} />
               Sheet # {numberRect ? "✓" : "—"}
             </span>
           </div>
