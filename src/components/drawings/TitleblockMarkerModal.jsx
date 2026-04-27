@@ -25,6 +25,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { parseTitleblockRect } from "@/lib/titleblock";
+import { extractTextFromRect } from "@/lib/pdfTitleblockText";
 import { toast } from "sonner";
 
 // Set the worker once, idempotently. Same pattern as pdfSheetExtractor.js.
@@ -123,6 +124,10 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   // tracks the mouse as the user is dragging.
   const [dragRect, setDragRect] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Progress while we re-extract the existing sheets in the set after
+  // the rectangles save. Shape: null = not running; { done, total }
+  // = X of Y completed.
+  const [reExtractProgress, setReExtractProgress] = useState(null);
 
   // ── Load + render ───────────────────────────────────────────────────
   useEffect(() => {
@@ -239,24 +244,136 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
   };
 
   // ── Save ────────────────────────────────────────────────────────────
+  /**
+   * Re-extract title + sheet number for an existing drawing using the
+   * just-saved rectangles. Walks every page in the drawing's PDF and
+   * takes the first non-empty OCR result — handles cover-page-then-
+   * sheet PDFs and single-page sheets equally.
+   *
+   * Returns the patch object (only fields that actually have a value)
+   * or `null` when the OCR captured nothing usable.
+   */
+  const reextractOne = async (drawing) => {
+    if (!drawing?.file_url) return null;
+    if (!titleRect && !numberRect) return null;
+    let signed;
+    try {
+      signed = await resolveFileUrl(drawing.file_url);
+    } catch {
+      return null;
+    }
+    if (!signed) return null;
+    let pdf;
+    try {
+      const resp = await fetch(signed);
+      const buf = await resp.arrayBuffer();
+      pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    } catch {
+      return null;
+    }
+    let bestTitle = "";
+    let bestNumber = "";
+    try {
+      // Most sheets are single-page but some bundle a cover sheet —
+      // walk pages until we find content in the rect, capped to a few
+      // pages so a giant PDF doesn't stall the run.
+      const maxPages = Math.min(pdf.numPages, 5);
+      for (let p = 1; p <= maxPages; p++) {
+        const page = await pdf.getPage(p);
+        if (titleRect && !bestTitle) {
+          bestTitle = (await extractTextFromRect(page, titleRect)) || "";
+        }
+        if (numberRect && !bestNumber) {
+          bestNumber = (await extractTextFromRect(page, numberRect)) || "";
+        }
+        if (bestTitle && bestNumber) break;
+      }
+    } finally {
+      try { await pdf.destroy(); } catch { /* ignore */ }
+    }
+    const patch = {};
+    if (bestTitle) patch.title = bestTitle;
+    if (bestNumber) patch.sheet_number = bestNumber.toUpperCase().replace(/\s+/g, "");
+    return Object.keys(patch).length ? patch : null;
+  };
+
   const handleSave = async () => {
     if (!set?.id) {
       toast.error("This set has no ID — cannot save template.");
       return;
     }
     setSaving(true);
+    setReExtractProgress(null);
     try {
+      // 1. Persist the rectangles on the drawing_sets row.
       await base44.entities.DrawingSet.update(set.id, {
         titleblock_title_rect: titleRect,
         titleblock_number_rect: numberRect,
       });
-      toast.success("Titleblock template saved");
+
+      // 2. Apply the just-saved rectangles to every existing sheet in
+      //    the set so titles and sheet numbers extracted by the LLM
+      //    (which may be wrong, e.g. "For field use") get overwritten
+      //    with the deterministic OCR values from the marked regions.
+      //    This is the difference between "I marked the titleblock and
+      //    nothing happened" and the user-expected outcome.
+      let updated = 0;
+      let unchanged = 0;
+      let failed = 0;
+      let total = 0;
+      try {
+        const sheets = await base44.entities.Drawing.filter({
+          project_id: set.project_id,
+          drawing_set_id: set.id,
+        });
+        total = sheets.length;
+        if (total > 0) {
+          setReExtractProgress({ done: 0, total });
+          for (let i = 0; i < sheets.length; i++) {
+            const sheet = sheets[i];
+            try {
+              const patch = await reextractOne(sheet);
+              if (patch) {
+                await base44.entities.Drawing.update(sheet.id, patch);
+                updated++;
+              } else {
+                unchanged++;
+              }
+            } catch (err) {
+              failed++;
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}:`,
+                err,
+              );
+            }
+            setReExtractProgress({ done: i + 1, total });
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[TitleblockMarker] could not list sheets to re-extract:", err);
+      }
+
+      if (total === 0) {
+        toast.success("Titleblock template saved");
+      } else if (updated === total && failed === 0) {
+        toast.success(
+          `Titleblock saved + ${updated} sheet${updated === 1 ? "" : "s"} updated`,
+        );
+      } else {
+        toast.success(
+          `Titleblock saved · ${updated} updated, ${unchanged} unchanged${failed ? `, ${failed} failed` : ""}`,
+        );
+      }
+
       onSaved?.({ titleblock_title_rect: titleRect, titleblock_number_rect: numberRect });
       onClose?.();
     } catch (err) {
       toast.error(`Save failed: ${err?.message || "Unknown error"}`);
     } finally {
       setSaving(false);
+      setReExtractProgress(null);
     }
   };
 
@@ -435,7 +552,11 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               }}
               title={canSave ? "Save template to drawing set" : "Draw both rectangles first"}
             >
-              {saving ? "Saving…" : "Save Template"}
+              {saving
+                ? (reExtractProgress
+                    ? `Updating sheets… ${reExtractProgress.done}/${reExtractProgress.total}`
+                    : "Saving…")
+                : "Save Template"}
             </button>
           </div>
         </div>
