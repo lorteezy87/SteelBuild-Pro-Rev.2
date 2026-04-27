@@ -40,6 +40,7 @@ import InlineEditField from "@/components/shared/InlineEditField";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
 export default function TeamWorkflowSection({
   project,
@@ -282,6 +283,7 @@ function RoleCard({ project, icon: IconCmp, label, value, field }) {
  */
 function MetadataInlineEdit({ project, metaKey, value, placeholder, emptyText }) {
   const qc = useQueryClient();
+  const { updateActiveProject } = useProjectContext();
   const mutation = useMutation({
     mutationFn: async (newValue) => {
       const merged = {
@@ -289,8 +291,15 @@ function MetadataInlineEdit({ project, metaKey, value, placeholder, emptyText })
         [metaKey]: newValue,
       };
       await base44.entities.Project.update(project.id, { metadata: merged });
+      return merged;
     },
-    onSuccess: () => {
+    onSuccess: (mergedMetadata) => {
+      // Push the new metadata into ProjectContext so the parent
+      // dashboard re-renders with the saved value (rather than
+      // bouncing back to the placeholder while it waits for a
+      // refetch). React-Query query-key invalidation alone wasn't
+      // enough because ProjectContext maintains its own state.
+      updateActiveProject?.({ metadata: mergedMetadata });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project", project?.id] });
       qc.invalidateQueries({ queryKey: ["projects-summary"] });
