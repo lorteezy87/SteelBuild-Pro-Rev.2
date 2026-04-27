@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 
-export default function UploadModal({ projectId, onClose }) {
+export default function UploadModal({ projectId, folderId = null, onClose }) {
   const [files, setFiles] = useState([]);
   const [metadata, setMetadata] = useState({});
   const [scheduleLink, setScheduleLink] = useState({ linkedWpId: "", reviewLeadTime: 14, isSubmittal: false });
@@ -31,6 +31,9 @@ export default function UploadModal({ projectId, onClose }) {
 
         const doc = await base44.entities.Document.create({
           project_id: projectId,
+          // Drop the document into the folder the user is currently
+          // browsing in the Documents page. NULL = project root.
+          folder_id: folderId,
           display_name: meta.displayName || file.name,
           description: meta.description || "",
           file_name: file.name,
