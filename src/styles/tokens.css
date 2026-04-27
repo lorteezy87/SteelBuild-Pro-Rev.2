@@ -3,6 +3,84 @@
    Primary gold #C89B20 · Dark navy-black · Professional
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Per-user customisation hooks (set by ThemeContext) ──────────
+   Every preference flows through a CSS variable / data-attribute
+   toggle so the rest of the stylesheet doesn't need to know about
+   the user-prefs system at all. */
+
+/* Font-scale: sm 0.94 · md 1.00 · lg 1.12 — applied to html font-size
+   so every rem-sized control scales automatically. */
+html {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+/* Reduce motion: kills all transitions/animations regardless of OS
+   preference, for users who explicitly opt in. */
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High-contrast mode: lift text + borders one tier so AAA contrast
+   targets are met without overhauling the rest of the palette. */
+[data-contrast="high"] {
+  --text-primary:   #FFFFFF;
+  --text-secondary: #DCE3F0;
+  --text-muted:     #A8B4C8;
+  --border-default: #5A6677;
+  --divider:        rgba(120, 132, 150, 0.85);
+  --outline:        rgba(255, 255, 255, 0.65);
+}
+
+/* Accent color presets — override the gold/teal/blue/amber/slate
+   accent token. The rest of the accent-* tokens (muted, border,
+   hover) are recomputed from the new base hue. */
+[data-accent="teal"] {
+  --accent:        #0D9488;
+  --accent-light:  #14B8A6;
+  --accent-hover:  #14B8A6;
+  --accent-muted:  rgba(13, 148, 136, 0.12);
+  --accent-border: rgba(13, 148, 136, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="blue"] {
+  --accent:        #2563EB;
+  --accent-light:  #3B82F6;
+  --accent-hover:  #3B82F6;
+  --accent-muted:  rgba(37, 99, 235, 0.12);
+  --accent-border: rgba(37, 99, 235, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="amber"] {
+  --accent:        #F59E0B;
+  --accent-light:  #FBBF24;
+  --accent-hover:  #FBBF24;
+  --accent-muted:  rgba(245, 158, 11, 0.12);
+  --accent-border: rgba(245, 158, 11, 0.40);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+[data-accent="slate"] {
+  --accent:        #64748B;
+  --accent-light:  #94A3B8;
+  --accent-hover:  #94A3B8;
+  --accent-muted:  rgba(100, 116, 139, 0.14);
+  --accent-border: rgba(100, 116, 139, 0.45);
+  --secondary:        var(--accent);
+  --secondary-muted:  var(--accent-muted);
+  --secondary-border: var(--accent-border);
+}
+/* "gold" is the default already declared on :root; no override needed. */
+
 /* ── DARK THEME (default) ──────────────────────────────────── */
 :root,
 [data-theme="dark"] {
