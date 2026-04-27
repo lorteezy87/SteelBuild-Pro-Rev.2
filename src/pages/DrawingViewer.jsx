@@ -26,6 +26,7 @@ import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
 import { listZoneProposals } from "@/lib/drawingHub";
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import {
   ensureCurrentRevision,
   listZones,
@@ -56,15 +57,11 @@ function extractStoragePathFromSignedUrl(url) {
   }
 }
 
-const STAGES = {
-  "Not Started": { color: "#6B7280" },
-  "OFA":         { color: "#3B82F6" },
-  "BFA":         { color: "#06B6D4" },
-  "OFS":         { color: "#F59E0B" },
-  "BFS":         { color: "#F97316" },
-  "FFF":         { color: "#84CC16" },
-  "Released":    { color: "#10B981" },
-};
+// Stage colours pulled from the single source of truth in
+// drawingsConfig (STAGE_MAP) so this badge stays in sync with
+// StageChip and the stage progress mini-bar. Aliased to STAGES for
+// backward compatibility with existing STAGES[d.stage]?.color reads.
+const STAGES = STAGE_MAP;
 
 const mono = { fontFamily: "var(--font-mono)" };
 
