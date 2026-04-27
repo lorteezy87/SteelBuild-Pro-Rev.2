@@ -40,6 +40,7 @@ import {
   retentionHeld,
 } from "../projectMetrics";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
+import InlineEditField from "@/components/shared/InlineEditField";
 
 const ROW_STYLE = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -115,7 +116,19 @@ export default function FinancialControlsSection({
         gap: 8,
         marginBottom: 16,
       }}>
-        <Tile label="Original Contract" value={formatCurrency(baseContract)} />
+        <Tile
+          label="Original Contract"
+          value={
+            <InlineEditField
+              project={project}
+              field="original_contract_value"
+              value={baseContract}
+              type="currency"
+              display="value"
+              emptyText="Set value"
+            />
+          }
+        />
         <Tile
           label="Approved COs"
           value={`${approvedDelta >= 0 ? "+" : ""}${formatCurrency(approvedDelta)}`}
@@ -219,6 +232,10 @@ export default function FinancialControlsSection({
 }
 
 function Tile({ label, value, sub, color, tint }) {
+  // The value slot accepts either a string (the common case) or a
+  // React node (e.g. <InlineEditField>). When it's a node we drop the
+  // wrapping mono/bold styles since the node draws its own typography.
+  const isNode = React.isValidElement(value);
   return (
     <div style={{
       padding: "12px 14px",
@@ -233,13 +250,17 @@ function Tile({ label, value, sub, color, tint }) {
       }}>
         {label}
       </div>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700,
-        color: color || "var(--text-primary)",
-        fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </div>
+      {isNode ? (
+        value
+      ) : (
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700,
+          color: color || "var(--text-primary)",
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          {value}
+        </div>
+      )}
       {sub && (
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 9,

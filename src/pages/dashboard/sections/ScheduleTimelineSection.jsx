@@ -21,8 +21,9 @@ import {
   timelineElapsedPct,
   wpProgressPct,
   wpPipelineRollup,
+  overdueWPCount,
 } from "../projectMetrics";
-import { formatDate } from "@/components/shared/formatters";
+import InlineEditField from "@/components/shared/InlineEditField";
 
 const STAGE_COLOR = {
   "Not Started": "var(--text-muted)",
@@ -38,6 +39,7 @@ export default function ScheduleTimelineSection({ project, wps = [], onNavigate 
   const completePct = useMemo(() => wpProgressPct(wps), [wps]);
   const daysLeft = useMemo(() => daysRemaining(project), [project]);
   const pipeline = useMemo(() => wpPipelineRollup(wps), [wps]);
+  const overdue = useMemo(() => overdueWPCount(wps), [wps]);
 
   const milestones = []; // milestone entity not modeled yet
   const criticalPath = []; // schedule_tasks.critical_path flag not modeled yet
@@ -56,7 +58,7 @@ export default function ScheduleTimelineSection({ project, wps = [], onNavigate 
   const stats = [
     { value: pipeline.total, label: "PACKAGES", color: "accent" },
     { value: milestones.length, label: "MILESTONES", color: "info" },
-    { value: 0, label: "OVERDUE", color: "error" },
+    { value: overdue, label: "OVERDUE", color: overdue > 0 ? "error" : "muted" },
   ];
 
   return (
@@ -67,22 +69,55 @@ export default function ScheduleTimelineSection({ project, wps = [], onNavigate 
       subtitle="Work packages, milestones, and critical path"
       stats={stats}
     >
-      {/* Timeline bar */}
+      {/* Timeline bar — start and target dates are click-to-edit so
+          the PM can set them up from the dashboard without bouncing
+          to the Projects page. */}
       <div style={{ marginBottom: 18 }}>
         <div style={{
-          display: "flex", justifyContent: "space-between",
+          display: "grid",
+          gridTemplateColumns: "auto 1fr auto",
+          alignItems: "center",
+          gap: 12,
           fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
           letterSpacing: "0.10em", textTransform: "uppercase",
           color: "var(--text-muted)", marginBottom: 8,
         }}>
-          <span>Start{start ? ` · ${formatDate(start)}` : ""}</span>
-          <span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span>Start ·</span>
+            <InlineEditField
+              project={project}
+              field="start_date"
+              value={start}
+              type="date"
+              emptyText="Set start"
+              style={{
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.06em",
+              }}
+              width="auto"
+            />
+          </div>
+          <span style={{ textAlign: "center" }}>
             Schedule Progress: {elapsedPct}% elapsed
             {Number.isFinite(daysLeft) && daysLeft != null
               ? ` · ${daysLeft} days remaining`
               : ""}
           </span>
-          <span>Target{target ? ` · ${formatDate(target)}` : ""}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+            <span>Target ·</span>
+            <InlineEditField
+              project={project}
+              field="target_completion_date"
+              value={target}
+              type="date"
+              emptyText="Set target"
+              style={{
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.06em",
+              }}
+              width="auto"
+            />
+          </div>
         </div>
         <div style={{
           position: "relative",
