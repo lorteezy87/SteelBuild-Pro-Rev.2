@@ -7,6 +7,7 @@ import {
   DETAILING_STAGE_META,
   getStageDates,
   usesStageDates,
+  getActiveStage,
 } from "@/lib/stageDates";
 import {
   parseDependencies,
@@ -296,46 +297,112 @@ function MilestoneDiamond({ leftPx, task }) {
 }
 
 // ── Task gantt bar ────────────────────────────────────────────────────────
-// Detailing stage-gate milestones. Renders up to four small diamonds
-// on the right-panel task row at each filled stage-gate date
-// (OFA / BFA / FFF / Released). Purely decorative — bar placement
-// uses the derived start/end. Returns null for non-Detailing tasks or
-// when no gates are filled, so it's safe to mount on every row.
+// Detailing stage-gate visualisation. Each gate (OFA / BFA / FFF /
+// Released) now carries its own start AND end date, so we render a
+// thin coloured ribbon spanning [start, end] for each filled gate plus
+// small diamond markers at the start and end. The currently-active
+// gate (the one the schedule is "following" for due-date tracking) is
+// rendered brighter and slightly thicker so the PM can see at a glance
+// which window is live. Returns null for non-Detailing tasks.
 function StageGateMilestones({ task, px }) {
   if (!usesStageDates(task)) return null;
   const dates = getStageDates(task);
-  const hits = DETAILING_STAGE_GATES
-    .map((gate) => ({ gate, date: dates[gate] }))
-    .filter((h) => !!h.date);
-  if (hits.length === 0) return null;
+  const filled = DETAILING_STAGE_GATES
+    .map((gate) => ({ gate, ...dates[gate] }))
+    .filter((g) => g.start || g.end);
+  if (filled.length === 0) return null;
+
+  const activeGate = getActiveStage(dates);
+
   return (
     <>
-      {hits.map(({ gate, date }) => {
+      {filled.map(({ gate, start, end }) => {
         const meta = DETAILING_STAGE_META[gate] || {};
-        const left = px(date);
+        const isActive = gate === activeGate;
+        // A gate may have only one of {start, end} during data entry —
+        // in that case we still drop a single diamond at the filled
+        // date so the PM can see what's been entered, but no ribbon.
+        const ribbonFrom = start || end;
+        const ribbonTo   = end   || start;
+        const ribbonLeft  = px(ribbonFrom);
+        const ribbonRight = px(ribbonTo);
+        const ribbonWidth = Math.max(0, ribbonRight - ribbonLeft);
+        const tooltip = `${meta.label} — ${meta.caption || gate}` +
+          (start ? ` · start ${start}` : '') +
+          (end   ? ` · end ${end}`     : '') +
+          (isActive ? ' · active' : '');
         return (
-          <div
-            key={gate}
-            title={`${meta.label} — ${meta.caption || gate} · ${date}`}
-            style={{
-              position: "absolute",
-              left: left - 5,
-              top: "50%",
-              transform: "translateY(-50%) rotate(45deg)",
-              width: 10,
-              height: 10,
-              background: meta.color || "var(--accent)",
-              border: "1.5px solid #0F1118",
-              borderRadius: 2,
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.15)",
-              pointerEvents: "auto",
-              cursor: "default",
-              zIndex: 3,
-            }}
-          />
+          <React.Fragment key={gate}>
+            {start && end && ribbonWidth > 0 && (
+              <div
+                title={tooltip}
+                style={{
+                  position: "absolute",
+                  left: ribbonLeft,
+                  width: ribbonWidth,
+                  // Sit just below the main bar so the segment doesn't
+                  // hide the % complete fill. Shift up a few px and
+                  // make the active gate a touch taller.
+                  top: isActive ? "calc(50% + 11px)" : "calc(50% + 13px)",
+                  height: isActive ? 5 : 3,
+                  background: meta.color || "var(--accent)",
+                  opacity: isActive ? 1 : 0.7,
+                  borderRadius: 2,
+                  pointerEvents: "auto",
+                  zIndex: 2,
+                }}
+              />
+            )}
+            {start && (
+              <GateDiamond
+                kind="start"
+                left={px(start)}
+                color={meta.color}
+                active={isActive}
+                title={tooltip}
+              />
+            )}
+            {end && (
+              <GateDiamond
+                kind="end"
+                left={px(end)}
+                color={meta.color}
+                active={isActive}
+                title={tooltip}
+              />
+            )}
+          </React.Fragment>
         );
       })}
     </>
+  );
+}
+
+// Small diamond marker for a gate's start or end. End markers are
+// solid; start markers are outlined so the user can tell them apart
+// when both fall on the same row.
+function GateDiamond({ left, color, active, kind, title }) {
+  const size = active ? 11 : 9;
+  return (
+    <div
+      title={title}
+      style={{
+        position: "absolute",
+        left: left - size / 2,
+        top: "50%",
+        transform: "translateY(-50%) rotate(45deg)",
+        width: size,
+        height: size,
+        background: kind === "end" ? (color || "var(--accent)") : "transparent",
+        border: `1.5px solid ${color || "var(--accent)"}`,
+        outline: "1.5px solid #0F1118",
+        borderRadius: 2,
+        boxShadow: active ? "0 0 0 1px rgba(255,255,255,0.30)" : "0 0 0 1px rgba(255,255,255,0.12)",
+        pointerEvents: "auto",
+        cursor: "default",
+        zIndex: 3,
+      }}
+    />
   );
 }
 
