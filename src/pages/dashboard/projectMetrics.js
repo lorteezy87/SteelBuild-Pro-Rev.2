@@ -196,6 +196,221 @@ export function oldestOpenRFIAgeDays(rfis = []) {
 }
 
 /**
+ * 6-stage Work-Package pipeline rollup. Drives the "Work Package
+ * Pipeline" chevron strip on the new sectioned dashboard. Stages match
+ * the prototype: Not Started → Detailing → Released → Fabrication →
+ * Complete → Shipped. Falls back to phase-based bucketing when status
+ * isn't populated, so legacy rows still appear somewhere.
+ */
+export function wpPipelineRollup(wps = []) {
+  const stages = [
+    "Not Started", "Detailing", "Released",
+    "Fabrication", "Complete", "Shipped",
+  ];
+  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  for (const w of wps) {
+    const status = w?.status;
+    if (status && counts[status] !== undefined) {
+      counts[status]++;
+      continue;
+    }
+    // Phase fallback so a row without an explicit status still surfaces.
+    const phase = w?.phase;
+    if (phase === "Detailing")        counts["Detailing"]++;
+    else if (phase === "Fabrication") counts["Fabrication"]++;
+    else if (phase === "Delivery")    counts["Shipped"]++;
+    else if (phase === "Erection")    counts["Complete"]++;
+    else                              counts["Not Started"]++;
+  }
+  return { stages, counts, total: wps.length };
+}
+
+/**
+ * RFI status rollup — 5 buckets matching the prototype. "Pending"
+ * collapses Under Review + Incomplete Response (both wait on the
+ * BIC), "Responded" maps to the canonical "Answered" status.
+ */
+export function rfiStatusRollup(rfis = []) {
+  const buckets = {
+    Draft:     0,
+    Submitted: 0,
+    Pending:   0,
+    Responded: 0,
+    Closed:    0,
+  };
+  for (const r of rfis) {
+    const s = r?.status;
+    if (s === "Draft") buckets.Draft++;
+    else if (s === "Submitted") buckets.Submitted++;
+    else if (s === "Under Review" || s === "Incomplete Response") buckets.Pending++;
+    else if (s === "Answered") buckets.Responded++;
+    else if (s === "Closed") buckets.Closed++;
+  }
+  return buckets;
+}
+
+/**
+ * Submittal pipeline rollup — 6 detailing-stage buckets. Maps to the
+ * `stage` column on submittals (OFA / BFA / OFS / BFS / FFF / Released)
+ * and falls back to the legacy `status` column when stage isn't set.
+ */
+export function submittalPipelineRollup(submittals = []) {
+  const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  for (const s of submittals) {
+    const stage = s?.stage || s?.current_stage;
+    if (stage && counts[stage] !== undefined) {
+      counts[stage]++;
+    }
+  }
+  return { stages, counts, total: submittals.length };
+}
+
+/**
+ * Ball-in-court rollup for OPEN RFIs — counts of RFIs by who owes the
+ * next response. Five canonical categories used in the prototype:
+ * Architect / Engineer / GC / Owner / Internal.
+ */
+export function ballInCourtRollup(rfis = []) {
+  const buckets = { Architect: 0, Engineer: 0, GC: 0, Owner: 0, Internal: 0 };
+  const open = rfis.filter((r) => !["Answered", "Closed"].includes(r.status));
+  for (const r of open) {
+    const bic = String(r?.ball_in_court || "").trim();
+    if (bic === "Architect")    buckets.Architect++;
+    else if (bic === "Engineer" || bic === "EOR") buckets.Engineer++;
+    else if (bic === "GC" || bic === "Contractor") buckets.GC++;
+    else if (bic === "Owner")   buckets.Owner++;
+    else                        buckets.Internal++;
+  }
+  return buckets;
+}
+
+/** Sum of co_amount across pending COs (Submitted + Under Review). */
+export function pendingCOTotal(cos = []) {
+  return cos
+    .filter((c) => ["Submitted", "Under Review"].includes(c.status))
+    .reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
+}
+
+/**
+ * Effective $/ton: revised contract value divided by total work-package
+ * tonnage. Returns null when tonnage is zero so the UI can render "—"
+ * instead of an Infinity.
+ */
+export function pricePerTon(project, cos = [], wps = []) {
+  const value = revisedContractValue(project, cos);
+  const tons = totalTons(wps);
+  if (!tons || tons <= 0) return null;
+  return value / tons;
+}
+
+/**
+ * Daily burn rate — total paid spend / days since project start.
+ * Returns 0 when no paid expenses or no start date.
+ */
+export function burnRatePerDay(expenses = [], project) {
+  const paid = costToDate(expenses);
+  if (!paid) return 0;
+  const start = project?.start_date;
+  const elapsed = start ? Math.max(1, daysBetween(start, new Date()) || 1) : 1;
+  return paid / elapsed;
+}
+
+/**
+ * Projected final cost — extrapolate from the current burn rate
+ * forward to the project's target completion. Falls back to the
+ * already-committed total when there's no schedule.
+ */
+export function projectedFinalCost(expenses = [], project) {
+  const committed = committedCosts(expenses);
+  const start = project?.start_date;
+  const target = project?.target_completion_date;
+  if (!start || !target) return committed;
+  const totalDays = daysBetween(start, target);
+  const elapsed   = daysBetween(start, new Date());
+  if (!totalDays || totalDays <= 0) return committed;
+  if (!elapsed || elapsed <= 0) return committed;
+  const burn = burnRatePerDay(expenses, project);
+  return Math.max(committed, burn * totalDays);
+}
+
+/**
+ * Projected margin = (revised contract value − projected final cost)
+ * / revised contract value. Returns 0 when contract value is zero.
+ */
+export function projectedMargin(project, cos = [], expenses = []) {
+  const value = revisedContractValue(project, cos);
+  if (!value) return 0;
+  const proj = projectedFinalCost(expenses, project);
+  return ((value - proj) / value) * 100;
+}
+
+/**
+ * Total billed across SOV (cumulative billings = sum of scheduled_value
+ * × current_percent_complete / 100). Empty array → 0.
+ */
+export function totalBilled(sovItems = []) {
+  return sovItems.reduce(
+    (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
+    0,
+  );
+}
+
+/** Cash collected — sum of SOV items where payment_received_date is set. */
+export function cashCollected(sovItems = []) {
+  return sovItems
+    .filter((i) => i.payment_received_date)
+    .reduce(
+      (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
+      0,
+    );
+}
+
+/**
+ * Outstanding pay applications — submitted but not yet paid. Returns
+ * `{ count, total }` so the UI can show "($N apps) $X".
+ */
+export function pendingPayment(sovItems = []) {
+  const items = sovItems.filter((i) => i.submitted_date && !i.payment_received_date);
+  const total = items.reduce(
+    (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
+    0,
+  );
+  return { count: items.length, total };
+}
+
+/** Retention held — sum of retention_held across SOV items. */
+export function retentionHeld(sovItems = []) {
+  return sovItems.reduce((s, i) => s + (Number(i.retention_held) || 0), 0);
+}
+
+/**
+ * Task distribution by party — count assigned action items / schedule
+ * tasks per responsible party. Mirrors the prototype's 4-column
+ * layout (S&H / GC / EOR / Architect). Each bucket also tracks
+ * in-progress tasks.
+ */
+export function taskDistributionByParty(actionItems = [], scheduleTasks = []) {
+  const PARTIES = ["S&H", "GC", "EOR", "Architect"];
+  const result = PARTIES.reduce((acc, p) => {
+    acc[p] = { tasks: 0, inProgress: 0 };
+    return acc;
+  }, {});
+  const all = [...actionItems, ...scheduleTasks];
+  for (const t of all) {
+    const party = t?.assigned_party || t?.responsible_party || t?.assigned_to_role;
+    const matched = PARTIES.find((p) => p === party);
+    if (!matched) continue;
+    result[matched].tasks++;
+    const status = t?.status;
+    if (status === "In Progress" || status === "Open" || status === "Active") {
+      result[matched].inProgress++;
+    }
+  }
+  return result;
+}
+
+/**
  * Monthly spend breakdown for the last 6 months — returns
  * `[{ month, actual, committed }]` for the FinancialSnapshot mini
  * bar chart on the Dashboard.
