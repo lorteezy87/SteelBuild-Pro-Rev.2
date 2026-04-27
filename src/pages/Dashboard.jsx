@@ -88,6 +88,18 @@ export default function Dashboard() {
     queryFn: () => base44.entities.SOVItem.list(),
     staleTime: 60 * 1000,
   });
+  // Recent Activity feed pulls from drawing_activity (the only
+  // activity surface that's actually populated — the generic
+  // `activities` table is empty everywhere). Pull the latest 50
+  // events globally and project-scope them in the section.
+  const { data: allDrawingActivity = [] } = useQuery({
+    queryKey: ["drawing-activity-recent"],
+    queryFn: () =>
+      base44.entities.DrawingActivity
+        ? base44.entities.DrawingActivity.list("-created_at", 50)
+        : Promise.resolve([]),
+    staleTime: 30 * 1000,
+  });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
   const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
@@ -106,6 +118,10 @@ export default function Dashboard() {
   const scheduleTasks = useMemo(
     () => (pid ? allScheduleTasks.filter((t) => t.project_id === pid) : []),
     [allScheduleTasks, pid],
+  );
+  const drawingActivity = useMemo(
+    () => (pid ? allDrawingActivity.filter((a) => a.project_id === pid) : []),
+    [allDrawingActivity, pid],
   );
 
   const isLoading = projectsLoading || rfisLoading;
@@ -147,6 +163,7 @@ export default function Dashboard() {
         drawings={drawings}
         sovItems={sovItems}
         scheduleTasks={scheduleTasks}
+        drawingActivity={drawingActivity}
         onClearProject={() => setActiveProject(null)}
         onNavigate={(target, opts = {}) => {
           // The 4-section dashboard fires onNavigate for every clickable

@@ -287,35 +287,41 @@ export function rfiStatusRollup(rfis = []) {
 
 /**
  * Submittal pipeline rollup — 6 detailing-stage buckets:
- *   OFA = Out For Approval (with EOR/Architect)
- *   BFA = Back From Approval (returned, needs revision)
- *   OFS = Out For Sealing (revised package out for stamp)
- *   BFS = Back From Sealing (stamped/sealed, returned)
- *   FFF = Final For Fab (approved as noted, ready)
- *   Released = Released to Shop
+ *   OFA = Out For Approval     · with EOR/Architect
+ *   BFA = Back From Approval   · returned, needs revision
+ *   OFS = Out For Scrub        · in-house QA review
+ *   BFS = Back From Scrub      · QA returned, ready for next round
+ *   FFF = Final For Fab        · approved as noted, ready
+ *   Released = Released for Fabrication
  *
- * The submittals table doesn't carry a dedicated `stage` column — only
- * `status` (Draft / Submitted / Under Review / Approved / Approved as
- * Noted / Revise and Resubmit / Rejected / Void) and `ball_in_court`
- * (Contractor / EOR / Architect / GC / Owner). We derive the stage from
- * those two fields. If a submittal carries an explicit stage column
- * (legacy / migrated rows), prefer that.
+ * IMPORTANT: in this app submittals are tracked as **drawings** rows,
+ * not submittals rows — the `submittals` table is currently empty
+ * everywhere. The drawings table carries an explicit `stage` column
+ * (CHECK-constrained to OFA / BFA / OFS / BFS / FFF / Released) which
+ * is what the BFA workflow updates as a shop-drawing package round-trips
+ * between the EOR, the in-house scrub, and the fab shop. We bucket
+ * directly off that column.
+ *
+ * The function still tolerates a submittals-shaped input — if any rows
+ * carry only a `status` + `ball_in_court` (legacy submittals records),
+ * we fall through to the prior derivation logic — but the dashboard
+ * passes drawings here.
  */
-export function submittalPipelineRollup(submittals = []) {
+export function submittalPipelineRollup(rows = []) {
   const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
-  for (const s of submittals) {
-    // 1. Honour explicit stage if present.
-    const explicit = s?.stage || s?.current_stage;
+  for (const r of rows) {
+    if (r?.is_deleted) continue;
+    // 1. Explicit stage column (drawings + any migrated submittals).
+    const explicit = r?.stage || r?.current_stage;
     if (explicit && counts[explicit] !== undefined) {
       counts[explicit]++;
       continue;
     }
-    // 2. Otherwise derive from status + ball_in_court.
-    const status = s?.status;
-    const bic    = s?.ball_in_court;
-
-    if (status === "Approved" && s?.approved_date) {
+    // 2. Legacy submittals fallback — derive from status + ball_in_court.
+    const status = r?.status;
+    const bic    = r?.ball_in_court;
+    if (status === "Approved" && r?.approved_date) {
       counts["Released"]++;
     } else if (status === "Approved") {
       counts["FFF"]++;
@@ -328,7 +334,7 @@ export function submittalPipelineRollup(submittals = []) {
     } else if (status === "Submitted" || status === "Under Review" || status === "Draft") {
       counts["OFA"]++;
     }
-    // Void / unknown → skipped (not part of the pipeline).
+    // Void / unknown → skipped.
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { stages, counts, total };
@@ -468,29 +474,138 @@ export function retentionHeld(sovItems = []) {
 }
 
 /**
- * Task distribution by party — count assigned action items / schedule
- * tasks per responsible party. Mirrors the prototype's 4-column
- * layout (S&H / GC / EOR / Architect). Each bucket also tracks
- * in-progress tasks.
+ * Task distribution by type — counts of schedule tasks bucketed by
+ * `task_type`. The prototype originally split by responsible party
+ * (S&H / GC / EOR / Architect), but neither schedule_tasks nor
+ * action_items carries a `assigned_party` / `responsible_party`
+ * column — only `assigned_to` (a free-text name). Distributing by
+ * party therefore always read zero on real data.
+ *
+ * The actual column with useful breakdown is `task_type` (Task /
+ * Submittal / Install / Fabrication / Delivery / Milestone), which
+ * the rest of the schedule UI already drives off. Buckets default
+ * to that vocabulary; tasks of other types collapse into "Other"
+ * so the sum still equals the total number of tasks.
  */
-export function taskDistributionByParty(actionItems = [], scheduleTasks = []) {
-  const PARTIES = ["S&H", "GC", "EOR", "Architect"];
-  const result = PARTIES.reduce((acc, p) => {
-    acc[p] = { tasks: 0, inProgress: 0 };
+export function taskDistributionByType(scheduleTasks = []) {
+  const TYPES = ["Fabrication", "Delivery", "Install", "Submittal", "Task", "Milestone"];
+  const result = TYPES.reduce((acc, t) => {
+    acc[t] = { tasks: 0, inProgress: 0 };
     return acc;
   }, {});
-  const all = [...actionItems, ...scheduleTasks];
-  for (const t of all) {
-    const party = t?.assigned_party || t?.responsible_party || t?.assigned_to_role;
-    const matched = PARTIES.find((p) => p === party);
-    if (!matched) continue;
-    result[matched].tasks++;
+  for (const t of scheduleTasks) {
+    if (!t) continue;
+    const type = TYPES.includes(t.task_type) ? t.task_type : null;
+    if (!type) continue;
+    result[type].tasks++;
     const status = t?.status;
     if (status === "In Progress" || status === "Open" || status === "Active") {
-      result[matched].inProgress++;
+      result[type].inProgress++;
     }
   }
   return result;
+}
+
+/**
+ * Back-compat alias. Some legacy callers still import this name; the
+ * panel renamed itself "by Type" but we keep the export so any
+ * unexpected importer doesn't break.
+ */
+export const taskDistributionByParty = taskDistributionByType;
+
+/**
+ * Pick the top-N most-recent drawing-activity events for a project,
+ * formatted for the Recent Activity feed. Falls back to an empty list
+ * when the input is empty.
+ *
+ * Each input row has the shape from `drawing_activity`:
+ *   { id, project_id, drawing_id, event_type, from_value, to_value,
+ *     actor_id, metadata, created_at }
+ *
+ * The output is a stable shape the UI can render uniformly:
+ *   [{ id, summary, when, kind }]
+ */
+export function recentActivityFeed(drawingActivity = [], limit = 8) {
+  const rows = (drawingActivity || []).slice().sort((a, b) =>
+    String(b?.created_at || "").localeCompare(String(a?.created_at || ""))
+  );
+  return rows.slice(0, limit).map((r) => {
+    const ev = r?.event_type || "event";
+    const from = r?.from_value;
+    const to   = r?.to_value;
+    const meta = r?.metadata && typeof r.metadata === "object" ? r.metadata : {};
+    const sheet = meta.sheet_number || meta.set_name || meta.drawing_number || null;
+    let summary;
+    if (ev === "stage_changed")    summary = `Stage ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
+    else if (ev === "approval_changed") summary = `Approval ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
+    else if (ev === "revision_changed") summary = `Revision ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
+    else if (ev === "superseded")  summary = `Superseded${sheet ? ` · ${sheet}` : ""}`;
+    else if (ev === "deleted")     summary = `Drawing deleted${sheet ? ` · ${sheet}` : ""}`;
+    else if (ev === "created")     summary = `Drawing added${sheet ? ` · ${sheet}` : ""}`;
+    else summary = `${ev}${sheet ? ` · ${sheet}` : ""}`;
+    return {
+      id: r?.id,
+      summary,
+      when: r?.created_at,
+      kind: ev,
+    };
+  });
+}
+
+/**
+ * Surface a project's milestones from schedule_tasks (task_type =
+ * 'Milestone'). Sorted by start_date ascending; returns at most
+ * `limit` rows so the dashboard panel doesn't get unbounded.
+ *
+ * If no schedule_tasks rows are tagged Milestone, fall back to
+ * synthesising two synthetic milestones from the project's
+ * start_date and target_completion_date so the dashboard still
+ * shows something concrete to anchor the schedule against.
+ */
+export function projectMilestones(project, scheduleTasks = [], limit = 6) {
+  const explicit = (scheduleTasks || [])
+    .filter((t) => t?.task_type === "Milestone")
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")))
+    .slice(0, limit)
+    .map((t) => ({
+      id: t.id,
+      title: t.task_name || "Untitled milestone",
+      date: t.start_date || t.end_date || null,
+      status: t.status || null,
+      synthetic: false,
+    }));
+  if (explicit.length) return explicit;
+  // Fall back to project anchors when nothing's tagged.
+  const fallback = [];
+  if (project?.start_date) {
+    fallback.push({ id: "synthetic-start", title: "Project Start", date: project.start_date, status: null, synthetic: true });
+  }
+  if (project?.target_completion_date) {
+    fallback.push({ id: "synthetic-target", title: "Target Completion", date: project.target_completion_date, status: null, synthetic: true });
+  }
+  return fallback;
+}
+
+/**
+ * Surface schedule_tasks the user has flagged as critical (via
+ * `metadata.is_critical = true` on the row). The drawer's new
+ * "Mark as critical" toggle writes that flag.
+ */
+export function criticalPathTasks(scheduleTasks = [], limit = 8) {
+  return (scheduleTasks || [])
+    .filter((t) => {
+      const md = t?.metadata;
+      return md && typeof md === "object" && md.is_critical === true;
+    })
+    .sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")))
+    .slice(0, limit)
+    .map((t) => ({
+      id: t.id,
+      title: t.task_name || "Untitled task",
+      start: t.start_date || null,
+      end: t.end_date || null,
+      status: t.status || null,
+    }));
 }
 
 /**

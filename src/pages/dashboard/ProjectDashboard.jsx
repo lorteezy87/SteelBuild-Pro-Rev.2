@@ -44,7 +44,7 @@ export default function ProjectDashboard({
   drawings = [],
   sovItems = [],
   scheduleTasks = [],
-  recentActivity = [],
+  drawingActivity = [],
   onNavigate,
 }) {
   // codes / deliveries are accepted for forward compatibility (e.g. a
@@ -59,6 +59,7 @@ export default function ProjectDashboard({
       <ScheduleTimelineSection
         project={project}
         wps={wps}
+        scheduleTasks={scheduleTasks}
         onNavigate={onNavigate}
       />
       <FinancialControlsSection
@@ -72,7 +73,7 @@ export default function ProjectDashboard({
         rfis={rfis}
         submittals={submittals}
         drawings={drawings}
-        recentActivity={recentActivity}
+        drawingActivity={drawingActivity}
         onNavigate={onNavigate}
       />
       <TeamWorkflowSection

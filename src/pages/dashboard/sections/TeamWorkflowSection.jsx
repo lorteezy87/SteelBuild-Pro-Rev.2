@@ -12,8 +12,12 @@
  *      to surface gaps so PMs can fill them in without leaving the
  *      page.
  *
- *   2. Task Distribution by Party — 4-column count grid (S&H / GC /
- *      EOR / Architect) with `tasks` total and an `in progress` sub.
+ *   2. Task Distribution by Type — 6-column count grid keyed off
+ *      `task_type` (Fabrication / Delivery / Install / Submittal /
+ *      Task / Milestone) with `tasks` total and an `in progress`
+ *      sub-count. Replaced the prototype's "by Party" split because
+ *      neither schedule_tasks nor action_items carries a party
+ *      column in this schema.
  *
  *   3. In-Progress Tasks — list of up to 5 active items pulled from
  *      action_items + schedule_tasks. Empty state mirrors the prototype.
@@ -31,7 +35,7 @@ import {
   HardHat, UserRound, Briefcase, Compass,
 } from "lucide-react";
 import SectionCard from "./SectionCard";
-import { taskDistributionByParty } from "../projectMetrics";
+import { taskDistributionByType } from "../projectMetrics";
 import InlineEditField from "@/components/shared/InlineEditField";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
@@ -43,9 +47,13 @@ export default function TeamWorkflowSection({
   scheduleTasks = [],
   onNavigate,
 }) {
+  // Task distribution panel: distributes by `task_type` (the column
+  // that's actually populated). Previously distributed by responsible
+  // party, but no party column exists on schedule_tasks /
+  // action_items in this schema, so it always read zero.
   const distribution = useMemo(
-    () => taskDistributionByParty(actionItems, scheduleTasks),
-    [actionItems, scheduleTasks],
+    () => taskDistributionByType(scheduleTasks),
+    [scheduleTasks],
   );
 
   const inProgress = useMemo(() => {
@@ -121,14 +129,14 @@ export default function TeamWorkflowSection({
 
       {/* Distribution */}
       <div style={{ marginBottom: 16 }}>
-        <SubHeading>Task Distribution by Party</SubHeading>
+        <SubHeading>Task Distribution by Type</SubHeading>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(6, 1fr)",
           gap: 8,
         }}>
-          {Object.entries(distribution).map(([party, { tasks, inProgress }]) => (
-            <PartyCell key={party} party={party} tasks={tasks} inProgress={inProgress} />
+          {Object.entries(distribution).map(([type, { tasks, inProgress }]) => (
+            <PartyCell key={type} party={type} tasks={tasks} inProgress={inProgress} />
           ))}
         </div>
       </div>
