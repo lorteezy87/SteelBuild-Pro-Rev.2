@@ -87,3 +87,83 @@ export function exportReportCSV(rows, portfolioValue, openRFICount, pendingCOCou
 export function printReport() {
   window.print();
 }
+
+/**
+ * Generic CSV export. Takes the same column shape ReportTable uses
+ * (`{key, label, csvValue?(row)}`) and emits a CSV the user can open
+ * in Excel / Numbers / Sheets.
+ *
+ * `csvValue` overrides the rendered value when needed (e.g. a column
+ * renders a colored chip but the CSV should be a plain status string).
+ * Fallback is `row[col.key]`. Numbers and dates are stringified as-is.
+ */
+export function exportTableCSV({ filename, columns, rows, summary }) {
+  const headers = columns.map((c) => c.csvLabel || c.label);
+  const dataRows = rows.map((r) =>
+    columns.map((c) => {
+      const v = c.csvValue ? c.csvValue(r) : r?.[c.key];
+      if (v === null || v === undefined) return "";
+      return v;
+    })
+  );
+
+  const summaryRows = summary
+    ? [[], ...Object.entries(summary).map(([k, v]) => [k, v])]
+    : [];
+
+  const allRows = [headers, ...dataRows, ...summaryRows];
+  const csv = allRows
+    .map((row) =>
+      row
+        .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Format an ISO/JS date as MM/DD/YYYY (US). Returns "—" when input is missing. */
+export function formatDate(input) {
+  if (!input) return "—";
+  const d = input instanceof Date ? input : new Date(input);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/** Format a number with thousand-separators and at most `digits` fraction digits. */
+export function formatNumber(value, digits = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+}
+
+/** Currency with full precision (no $12.3M shorthand). For tables and totals. */
+export function formatCurrencyFull(value) {
+  const n = Number(value) || 0;
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+/** Format a percentage value (already 0–100, not 0–1). */
+export function formatPercent(value, digits = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${n.toFixed(digits)}%`;
+}
