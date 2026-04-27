@@ -30,6 +30,7 @@ import { batchProcess } from "@/utils/batchProcess";
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
 import FolderSection from "./documents/FolderSection";
+import FolderBar from "./documents/FolderBar";
 import Toolbar from "./documents/Toolbar";
 import BatchActionBar from "./documents/BatchActionBar";
 import ListView from "./documents/ListView";
@@ -64,7 +65,15 @@ export default function Documents() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [transmittalOpen, setTransmittalOpen]     = useState(false);
   const [transmittalForm, setTransmittalForm]     = useState({ issuedTo: "", issuedBy: "", purpose: "For Review", notes: "", number: "" });
+  // null = root of the project's repo. Folder IDs are uuid strings from
+  // document_folders. Switching projects resets to root via the effect
+  // below.
+  const [currentFolderId, setCurrentFolderId]     = useState(null);
   const dragCounter = useRef(0);
+
+  // Reset folder navigation when the user switches projects so we never
+  // accidentally show a folder from a different project.
+  React.useEffect(() => { setCurrentFolderId(null); }, [activeProject?.id]);
 
   /* ── Data ── */
   const { data: rawDocuments = [], isLoading } = useQuery({
@@ -78,9 +87,84 @@ export default function Documents() {
 
   const allDocuments = useMemo(() => (rawDocuments || []).map(normalizeDocument), [rawDocuments]);
 
+  /* ── Folders ── */
+  const { data: folders = [] } = useQuery({
+    queryKey: ["document-folders", activeProject?.id],
+    queryFn: () =>
+      activeProject?.id
+        ? base44.entities.DocumentFolder.filter({ project_id: activeProject.id })
+        : [],
+    enabled: !!activeProject?.id,
+  });
+
+  const createFolderMut = useMutation({
+    mutationFn: ({ name, parentFolderId }) =>
+      base44.entities.DocumentFolder.create({
+        project_id: activeProject.id,
+        parent_folder_id: parentFolderId,
+        name,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+      toast.success("Folder created");
+    },
+    onError: (err) => {
+      const msg = err?.message || "Failed to create folder";
+      // Surface the unique-name-per-parent collision in plain English.
+      if (/document_folders_unique_name_per_parent/.test(msg)) {
+        toast.error("A folder with that name already exists here.");
+      } else {
+        toast.error(msg);
+      }
+    },
+  });
+
+  const renameFolderMut = useMutation({
+    mutationFn: ({ id, name }) => base44.entities.DocumentFolder.update(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+      toast.success("Folder renamed");
+    },
+    onError: (err) => {
+      const msg = err?.message || "Failed to rename folder";
+      if (/document_folders_unique_name_per_parent/.test(msg)) {
+        toast.error("Another folder at this level already uses that name.");
+      } else {
+        toast.error(msg);
+      }
+    },
+  });
+
+  // Soft-delete the folder (is_deleted=true via the DrawingSet/Comment-style
+  // soft-delete pattern in supabaseClient). Documents inside keep their
+  // folder_id pointing at a now-hidden row, so they fall back to "root"
+  // visually because the active-folder filter won't match any visible
+  // folder. A future commit can either reparent docs to the deleted
+  // folder's parent OR null their folder_id; for now the simple path is
+  // good enough.
+  const deleteFolderMut = useMutation({
+    mutationFn: (id) => base44.entities.DocumentFolder.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document-folders", activeProject?.id] });
+      // Also invalidate documents so the list re-renders without the
+      // deleted folder's contents in case the user is browsing it.
+      queryClient.invalidateQueries({ queryKey: ["documents", activeProject?.id] });
+      toast.success("Folder deleted");
+    },
+    onError: (err) => toast.error(err?.message || "Failed to delete folder"),
+  });
+
   /* ── Filter + sort ── */
   const filteredDocs = useMemo(() => {
     let result = [...allDocuments];
+
+    // Folder scoping. We compare against the raw column (folder_id) which
+    // normalizeDocument carries through. Search overrides the folder
+    // filter so users don't have to remember which folder they were in
+    // when they search globally.
+    if (!searchQuery.trim()) {
+      result = result.filter((d) => (d.folder_id ?? null) === (currentFolderId ?? null));
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -104,7 +188,7 @@ export default function Documents() {
     if (fn) result.sort(fn);
 
     return result;
-  }, [allDocuments, searchQuery, activeFilters, statusTab, sortKey]);
+  }, [allDocuments, searchQuery, activeFilters, statusTab, sortKey, currentFolderId]);
 
   const reviewCount = useMemo(
     () => allDocuments.filter((d) => d.status === "Under Review" || d.status === "Revise & Resubmit").length,
@@ -308,7 +392,18 @@ export default function Documents() {
           onFilterChange={handleFilterChange}
         />
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div style={{ marginBottom: 12 }}>
+            <FolderBar
+              folders={folders}
+              currentFolderId={currentFolderId}
+              onNavigate={setCurrentFolderId}
+              onCreate={(name, parentFolderId) => createFolderMut.mutate({ name, parentFolderId })}
+              onRename={(folder, name) => renameFolderMut.mutate({ id: folder.id, name })}
+              onDelete={(folder) => deleteFolderMut.mutate(folder.id)}
+            />
+          </div>
+
           {/* Status tabs */}
           <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)", marginBottom: 12, flexShrink: 0 }}>
             {STATUS_TABS.map((tab) => {
@@ -464,6 +559,7 @@ export default function Documents() {
       {uploadOpen && (
         <UploadModal
           projectId={activeProject.id}
+          folderId={currentFolderId}
           onClose={() => setUploadOpen(false)}
         />
       )}
