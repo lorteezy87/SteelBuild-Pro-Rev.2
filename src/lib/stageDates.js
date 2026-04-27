@@ -38,7 +38,9 @@ export const DETAILING_STAGE_GATES = ["OFA", "BFA", "FFF", "Released"];
 export const DETAILING_STAGE_META = {
   OFA:      { label: "OFA",      caption: "Office for Approval",   color: "#0EA5E9" },
   BFA:      { label: "BFA",      caption: "Back from Approval",    color: "#F59E0B" },
-  FFF:      { label: "FFF",      caption: "Final for Fabrication", color: "#8B5CF6" },
+  // FFF gate previously rendered purple; swapped to teal to stay inside
+  // the project's no-purple/no-pink industrial palette.
+  FFF:      { label: "FFF",      caption: "Final for Fabrication", color: "#0d9488" },
   Released: { label: "Released", caption: "Issued for Construction (IFC)", color: "#22C55E" },
 };
 
