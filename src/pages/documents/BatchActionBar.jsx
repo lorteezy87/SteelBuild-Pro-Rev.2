@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from "react";
-import { CheckSquare, XCircle, Download, Trash2, ChevronDown } from "lucide-react";
+import { CheckSquare, XCircle, Download, Trash2, ChevronDown, FolderInput } from "lucide-react";
 import { BATCH_STATUS_OPTIONS, batchBtnStyle } from "./constants";
 
 export default function BatchActionBar({
@@ -17,6 +17,7 @@ export default function BatchActionBar({
   onSetStatus,
   isSettingStatus,
   onBulkDownload,
+  onBulkMove,
   onBulkDelete,
   isBulkDeleting,
   confirmBulkDelete,
@@ -106,6 +107,12 @@ export default function BatchActionBar({
       <button onClick={onBulkDownload} style={batchBtnStyle("rgba(13,148,136,0.10)", "rgba(13,148,136,0.25)", "#0d9488")}>
         <Download size={12} /> DOWNLOAD
       </button>
+
+      {onBulkMove && (
+        <button onClick={onBulkMove} style={batchBtnStyle("rgba(168,85,247,0.10)", "rgba(168,85,247,0.25)", "#a855f7")}>
+          <FolderInput size={12} /> MOVE TO…
+        </button>
+      )}
 
       {!confirmBulkDelete ? (
         <button onClick={onBulkDelete} style={batchBtnStyle("rgba(239,68,68,0.08)", "rgba(239,68,68,0.25)", "#ef4444")}>
