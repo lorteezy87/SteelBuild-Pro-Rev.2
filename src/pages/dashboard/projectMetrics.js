@@ -294,50 +294,99 @@ export function rfiStatusRollup(rfis = []) {
  *   FFF = Final For Fab        · approved as noted, ready
  *   Released = Released for Fabrication
  *
- * IMPORTANT: in this app submittals are tracked as **drawings** rows,
- * not submittals rows — the `submittals` table is currently empty
- * everywhere. The drawings table carries an explicit `stage` column
- * (CHECK-constrained to OFA / BFA / OFS / BFS / FFF / Released) which
- * is what the BFA workflow updates as a shop-drawing package round-trips
- * between the EOR, the in-house scrub, and the fab shop. We bucket
- * directly off that column.
+ * In this app submittals are tracked as **drawing sets**, not
+ * individual drawings. A set ("Anchor Bolts", "Stairs A & B", etc.)
+ * is what gets sent out for approval, scrub, and fab release — every
+ * drawing inside the set rides the same workflow stage. The
+ * dashboard panel shows ONE row per set, so a 36-sheet "Embeds &
+ * Lintels" set at OFA counts as 1 OFA, not 36.
  *
- * The function still tolerates a submittals-shaped input — if any rows
- * carry only a `status` + `ball_in_court` (legacy submittals records),
- * we fall through to the prior derivation logic — but the dashboard
- * passes drawings here.
+ * The function detects which kind of input it received:
+ *   - Rows with `drawing_set_id` are drawings → group by set, derive
+ *     the set's stage from its drawings (most-common; ties pick the
+ *     earliest stage in the canonical workflow order so a set that's
+ *     mid-transition lands in the upstream bucket).
+ *   - Rows with a `set_name` but no `drawing_set_id` are drawing_set
+ *     records → each row's `stage_summary` (or derived stage from
+ *     metadata) drives one bucket.
+ *   - Anything else falls through to the legacy submittals shape
+ *     (status + ball_in_court).
  */
 export function submittalPipelineRollup(rows = []) {
   const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+
+  // 1. If any rows look like drawings (have drawing_set_id), bucket
+  //    by set_id rather than per-drawing.
+  const drawings = rows.filter((r) => r && !r.is_deleted && r.drawing_set_id);
+  const setIdsSeen = new Set();
+  if (drawings.length) {
+    const bySet = new Map();
+    for (const d of drawings) {
+      const key = d.drawing_set_id;
+      if (!bySet.has(key)) bySet.set(key, []);
+      bySet.get(key).push(d);
+    }
+    for (const [setId, sheets] of bySet.entries()) {
+      setIdsSeen.add(setId);
+      const setStage = pickDominantStage(sheets.map((s) => s?.stage), stages);
+      if (setStage && counts[setStage] !== undefined) counts[setStage]++;
+    }
+  }
+
+  // 2. Legacy / non-drawing rows — submittals records, drawing_sets
+  //    rows passed directly, etc. Skip drawings rows already counted.
   for (const r of rows) {
-    if (r?.is_deleted) continue;
-    // 1. Explicit stage column (drawings + any migrated submittals).
+    if (!r || r.is_deleted) continue;
+    if (r.drawing_set_id) continue;             // already counted above
+    if (r.id && setIdsSeen.has(r.id)) continue; // a drawing_set we already saw via drawings
+
+    // a) drawing_sets table row — uses stage_summary
+    if (r.stage_summary && counts[r.stage_summary] !== undefined) {
+      counts[r.stage_summary]++;
+      continue;
+    }
+    // b) legacy submittals row with explicit stage
     const explicit = r?.stage || r?.current_stage;
     if (explicit && counts[explicit] !== undefined) {
       counts[explicit]++;
       continue;
     }
-    // 2. Legacy submittals fallback — derive from status + ball_in_court.
+    // c) legacy submittals fallback — derive from status + ball_in_court
     const status = r?.status;
     const bic    = r?.ball_in_court;
-    if (status === "Approved" && r?.approved_date) {
-      counts["Released"]++;
-    } else if (status === "Approved") {
-      counts["FFF"]++;
-    } else if (status === "Approved as Noted") {
-      counts["BFS"]++;
-    } else if (status === "Revise and Resubmit" || status === "Rejected") {
-      counts["BFA"]++;
-    } else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") {
-      counts["OFS"]++;
-    } else if (status === "Submitted" || status === "Under Review" || status === "Draft") {
-      counts["OFA"]++;
-    }
+    if (status === "Approved" && r?.approved_date) counts["Released"]++;
+    else if (status === "Approved") counts["FFF"]++;
+    else if (status === "Approved as Noted") counts["BFS"]++;
+    else if (status === "Revise and Resubmit" || status === "Rejected") counts["BFA"]++;
+    else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") counts["OFS"]++;
+    else if (status === "Submitted" || status === "Under Review" || status === "Draft") counts["OFA"]++;
     // Void / unknown → skipped.
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { stages, counts, total };
+}
+
+/**
+ * For a set whose sheets sit at varying stages, pick the canonical
+ * stage to display. Strategy: most-common; on ties, pick the EARLIEST
+ * stage in the canonical workflow order so a partially-progressed set
+ * shows up in the upstream bucket (better-PMs-want-to-finish-it
+ * principle than over-counting it as released).
+ */
+function pickDominantStage(stageList, canonicalOrder) {
+  const tally = {};
+  for (const s of stageList) {
+    if (!s) continue;
+    tally[s] = (tally[s] || 0) + 1;
+  }
+  const counts = Object.entries(tally);
+  if (!counts.length) return null;
+  const max = Math.max(...counts.map(([, n]) => n));
+  const top = counts.filter(([, n]) => n === max).map(([s]) => s);
+  // Tie-break by canonical workflow order (OFA earliest, Released latest).
+  top.sort((a, b) => canonicalOrder.indexOf(a) - canonicalOrder.indexOf(b));
+  return top[0];
 }
 
 /**
