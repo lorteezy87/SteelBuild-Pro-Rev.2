@@ -130,6 +130,16 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
     return out;
   }, [kept]);
 
+  // Forecast — one rollup row per source scope item (grouped by
+  // _scopeGroupIndex). For each item we surface the earliest start,
+  // the latest finish, and the working-day span across its four
+  // phase rows. The project-level summary picks the latest finish
+  // across all items. These numbers come from the builder's default
+  // per-scope-type durations; the wording in the UI calls them
+  // "rough estimates" so PMs treat them as a starting point rather
+  // than a contractual schedule.
+  const forecast = useMemo(() => buildForecast(kept), [kept]);
+
   if (!open) return null;
 
   const reset = () => {
@@ -400,6 +410,9 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
 
           {step === "preview" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {forecast.items.length > 0 && (
+                <ForecastBlock forecast={forecast} startDate={startDate} />
+              )}
               <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
                 Tasks will be filed under the canonical project phases only
               </div>
@@ -582,6 +595,176 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
         </div>
       </div>
     </>
+  );
+}
+
+// ── Forecast summary ──────────────────────────────────────────────────
+//
+// Roll the kept tasks back up to one row per source scope item so the
+// PM can see "Anchor Bolts - Bldg. 1 → done by ~MMM DD (X working
+// days)" without having to mentally sum the four phase rows. Project-
+// level completion = the latest end_date across all items.
+
+function buildForecast(tasks) {
+  const groups = new Map();
+  for (const t of tasks) {
+    const key = t._scopeGroupIndex ?? `wbs:${t.wbs_code}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        // Strip the trailing phase verb so the row reads as the source
+        // scope item rather than the last phase that fell into the
+        // group ("Anchor Bolts - Bldg. 1" rather than
+        // "Anchor Bolts - Bldg. 1 — Erection").
+        label: stripPhaseVerb(t.task_name),
+        scopeType: t._scopeLabel || null,
+        start: t.start_date,
+        end:   t.end_date,
+        durationDays: 0,
+      });
+    }
+    const g = groups.get(key);
+    if (!g.start || t.start_date < g.start) g.start = t.start_date;
+    if (!g.end   || t.end_date   > g.end)   g.end   = t.end_date;
+    g.durationDays += Number(t.duration) || 0;
+  }
+  const items = Array.from(groups.values()).sort((a, b) =>
+    String(a.start || "").localeCompare(String(b.start || ""))
+  );
+  // Project-level totals: span = first start → last end.
+  const allStarts = items.map((i) => i.start).filter(Boolean).sort();
+  const allEnds   = items.map((i) => i.end).filter(Boolean).sort();
+  const projectStart = allStarts[0] || null;
+  const projectEnd   = allEnds[allEnds.length - 1] || null;
+  const projectSpan  = (projectStart && projectEnd) ? daysSpan(projectStart, projectEnd) : 0;
+  return { items, projectStart, projectEnd, projectSpan };
+}
+
+function stripPhaseVerb(name) {
+  if (!name) return "";
+  // Builder format is "<base> — <verb>" with em-dash. Drop everything
+  // after the LAST em-dash so the rollup reads as the scope label.
+  const idx = name.lastIndexOf(" — ");
+  return idx > 0 ? name.slice(0, idx) : name;
+}
+
+function daysSpan(startIso, endIso) {
+  if (!startIso || !endIso) return 0;
+  const s = new Date(startIso + "T00:00:00Z");
+  const e = new Date(endIso + "T00:00:00Z");
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return 0;
+  return Math.round((e - s) / 86400000) + 1;
+}
+
+function formatPretty(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso + "T00:00:00Z");
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  } catch { return iso; }
+}
+
+function ForecastBlock({ forecast }) {
+  const { items, projectEnd, projectSpan } = forecast;
+  return (
+    <div
+      style={{
+        border: `1px solid ${AI}`,
+        borderLeft: `3px solid ${AI}`,
+        background: "color-mix(in srgb, var(--ai-accent, #22D3EE) 6%, transparent)",
+        borderRadius: 3,
+        padding: "12px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ ...mono, fontSize: 10, fontWeight: 800, color: AI, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+          ◆ Forecast · Rough Predicted Timeframe
+        </div>
+        <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+          Estimates only — based on default durations per scope type. Refine in the task drawer once the schedule is in place.
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+        <ForecastTile label="Scope Items" value={String(items.length)} />
+        <ForecastTile label="Project Span" value={`${projectSpan}d`} sub={projectSpan ? `${Math.ceil(projectSpan / 7)} wk` : null} />
+        <ForecastTile label="Predicted Completion" value={formatPretty(projectEnd)} sub={projectEnd ? "earliest finish, all phases" : null} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, marginTop: 4, border: "1px solid var(--divider)", borderRadius: 3, overflow: "hidden" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 100px 100px 70px",
+            gap: 0,
+            padding: "5px 8px",
+            background: "var(--bg-surface-low)",
+            ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)",
+            letterSpacing: "0.10em", textTransform: "uppercase",
+            borderBottom: "1px solid var(--divider)",
+          }}
+        >
+          <div>Item</div>
+          <div>Start</div>
+          <div>Done by</div>
+          <div style={{ textAlign: "right" }}>Span</div>
+        </div>
+        {items.map((g) => (
+          <div
+            key={g.key}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 100px 100px 70px",
+              gap: 0,
+              padding: "5px 8px",
+              borderBottom: "1px solid var(--divider)",
+              background: "transparent",
+            }}
+          >
+            <div style={{ ...mono, fontSize: 11, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={g.label}>
+              {g.label}
+              {g.scopeType && (
+                <span style={{ marginLeft: 6, ...mono, fontSize: 9, color: "var(--text-muted)" }}>
+                  · {g.scopeType}
+                </span>
+              )}
+            </div>
+            <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{formatPretty(g.start)}</div>
+            <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)" }}>{formatPretty(g.end)}</div>
+            <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", textAlign: "right" }}>
+              {daysSpan(g.start, g.end)}d
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ForecastTile({ label, value, sub }) {
+  return (
+    <div
+      style={{
+        padding: "8px 10px",
+        background: "var(--bg-page)",
+        border: "1px solid var(--divider)",
+        borderRadius: 3,
+      }}
+    >
+      <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ ...mono, fontSize: 16, fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
+          {sub}
+        </div>
+      )}
+    </div>
   );
 }
 
