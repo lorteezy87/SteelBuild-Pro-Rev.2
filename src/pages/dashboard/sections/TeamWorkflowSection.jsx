@@ -3,11 +3,14 @@
  *
  * Layout:
  *   1. Four role cards: Project Manager / Superintendent / GC / Detailer.
- *      Pulled from project columns (project_manager, superintendent_name,
- *      gc_company, detailer_company); falls back to "Unassigned" when
- *      blank so the card is still visible (the prototype hides empty
- *      cards but the user has explicitly asked for the dashboard to
- *      surface gaps so they can be filled in).
+ *      Pulled from canonical projects columns (project_manager,
+ *      superintendent, general_contractor) plus a metadata.detailer
+ *      slot since the projects table doesn't have a detailer column
+ *      yet. Each card falls back to "Unassigned" when blank and is
+ *      click-to-edit via InlineEditField — the original prototype
+ *      hid empty cards, but the user explicitly asked the dashboard
+ *      to surface gaps so PMs can fill them in without leaving the
+ *      page.
  *
  *   2. Task Distribution by Party — 4-column count grid (S&H / GC /
  *      EOR / Architect) with `tasks` total and an `in progress` sub.
@@ -29,6 +32,10 @@ import {
 } from "lucide-react";
 import SectionCard from "./SectionCard";
 import { taskDistributionByParty } from "../projectMetrics";
+import InlineEditField from "@/components/shared/InlineEditField";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 
 export default function TeamWorkflowSection({
   project,
@@ -69,11 +76,20 @@ export default function TeamWorkflowSection({
     { value: punchCount, label: "Punch", color: "muted" },
   ];
 
+  // Canonical project columns: project_manager, superintendent,
+  // general_contractor (NOT gc_company / superintendent_name —
+  // those names were holdovers from the prototype and never matched
+  // the schema). Detailer doesn't have its own column yet, so we
+  // store it under metadata.detailer until a migration adds one.
+  const detailerValue = project?.metadata?.detailer || null;
   const roles = [
-    { icon: UserRound, label: "Project Manager",     value: project?.project_manager || project?.pm || "Unassigned" },
-    { icon: HardHat,   label: "Superintendent",      value: project?.superintendent_name || project?.superintendent || "Unassigned" },
-    { icon: Briefcase, label: "General Contractor",  value: project?.gc_company || project?.contractor || "Unassigned" },
-    { icon: Compass,   label: "Detailer",            value: project?.detailer_company || project?.detailer || "Internal Team" },
+    { icon: UserRound, label: "Project Manager",    field: "project_manager",   value: project?.project_manager || null },
+    { icon: HardHat,   label: "Superintendent",     field: "superintendent",    value: project?.superintendent || null },
+    { icon: Briefcase, label: "General Contractor", field: "general_contractor",value: project?.general_contractor || null },
+    // Detailer rides on metadata until we get a column, so it routes
+    // through a special metadata-aware mutation rather than the
+    // generic InlineEditField.
+    { icon: Compass,   label: "Detailer",           field: "metadata.detailer", value: detailerValue },
   ];
 
   return (
@@ -84,7 +100,7 @@ export default function TeamWorkflowSection({
       subtitle="Task assignments and collaboration"
       stats={stats}
     >
-      {/* Role cards */}
+      {/* Role cards — click to edit */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(4, 1fr)",
@@ -92,7 +108,14 @@ export default function TeamWorkflowSection({
         marginBottom: 16,
       }}>
         {roles.map((r) => (
-          <RoleCard key={r.label} icon={r.icon} label={r.label} value={r.value} />
+          <RoleCard
+            key={r.label}
+            project={project}
+            icon={r.icon}
+            label={r.label}
+            value={r.value}
+            field={r.field}
+          />
         ))}
       </div>
 
@@ -198,8 +221,13 @@ export default function TeamWorkflowSection({
   );
 }
 
-function RoleCard({ icon: IconCmp, label, value }) {
-  const unassigned = value === "Unassigned";
+function RoleCard({ project, icon: IconCmp, label, value, field }) {
+  // Detailer is stored on metadata until the projects table grows a
+  // dedicated column. Route those edits through a small ad-hoc
+  // mutation instead of the generic InlineEditField so the metadata
+  // jsonb stays well-formed.
+  const isMetadata = field?.startsWith("metadata.");
+
   return (
     <div style={{
       padding: "12px 14px",
@@ -216,15 +244,129 @@ function RoleCard({ icon: IconCmp, label, value }) {
         <IconCmp size={12} />
         <span>{label}</span>
       </div>
-      <div style={{
-        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
-        color: unassigned ? "var(--text-muted)" : "var(--text-primary)",
-        fontStyle: unassigned ? "italic" : "normal",
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
-        {value}
-      </div>
+      {isMetadata ? (
+        <MetadataInlineEdit
+          project={project}
+          metaKey={field.replace(/^metadata\./, "")}
+          value={value}
+          placeholder={label === "Detailer" ? "Internal Team" : "Unassigned"}
+          emptyText={label === "Detailer" ? "Internal Team" : "Unassigned"}
+        />
+      ) : (
+        <InlineEditField
+          project={project}
+          field={field}
+          value={value}
+          type="text"
+          display="label"
+          placeholder="Unassigned"
+          emptyText="Unassigned"
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Tiny shim that mimics InlineEditField but writes to a JSONB key
+ * inside `metadata`. Used for fields without a dedicated column
+ * (currently just `metadata.detailer`).
+ */
+function MetadataInlineEdit({ project, metaKey, value, placeholder, emptyText }) {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (newValue) => {
+      const merged = {
+        ...(project?.metadata && typeof project.metadata === "object" ? project.metadata : {}),
+        [metaKey]: newValue,
+      };
+      await base44.entities.Project.update(project.id, { metadata: merged });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["project", project?.id] });
+      qc.invalidateQueries({ queryKey: ["projects-summary"] });
+    },
+    onError: (err) => toast.error(`Save failed: ${err.message || "unknown"}`),
+  });
+
+  // Re-use InlineEditField's UI by funnelling its onAfterSave hook
+  // through a synthetic project shape. We don't want a second copy of
+  // the editor markup; instead we render a one-off button + input.
+  // To avoid a parallel implementation, just render an InlineEditField
+  // with a "shadow" project where the field lives at top level, and
+  // intercept the value via onAfterSave is fragile — so we inline a
+  // tiny editor here.
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(value || "");
+  React.useEffect(() => setDraft(value || ""), [value]);
+
+  if (!editing) {
+    const isEmpty = !value;
+    return (
+      <button
+        type="button"
+        onClick={() => project?.id && setEditing(true)}
+        disabled={!project?.id}
+        title={project?.id ? "Click to edit" : "No project selected"}
+        style={{
+          width: "100%",
+          textAlign: "left",
+          background: "transparent",
+          border: "1px dashed transparent",
+          borderRadius: 4,
+          padding: "2px 6px",
+          cursor: project?.id ? "pointer" : "default",
+          fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
+          color: isEmpty ? "var(--text-muted)" : "var(--text-primary)",
+          fontStyle: isEmpty ? "italic" : "normal",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}
+        onMouseEnter={(e) => {
+          if (!project?.id) return;
+          e.currentTarget.style.borderColor = "var(--accent-border)";
+          e.currentTarget.style.background = "var(--hover-bg)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = "transparent";
+          e.currentTarget.style.background = "transparent";
+        }}
+      >
+        {value || emptyText || placeholder}
+      </button>
+    );
+  }
+
+  const commit = () => {
+    const next = (draft || "").trim() || null;
+    if (next !== (value || null)) mutation.mutate(next);
+    setEditing(false);
+  };
+
+  return (
+    <input
+      autoFocus
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { e.preventDefault(); setDraft(value || ""); setEditing(false); }
+      }}
+      placeholder={placeholder}
+      style={{
+        width: "100%",
+        background: "var(--bg-page)",
+        border: "1px solid var(--accent-border)",
+        borderRadius: 4,
+        padding: "2px 6px",
+        fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
+        color: "var(--text-primary)",
+        outline: "none",
+        boxShadow: "0 0 0 2px var(--accent-muted)",
+      }}
+    />
   );
 }
 

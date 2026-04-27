@@ -79,6 +79,21 @@ export function totalTons(wps = []) {
 }
 
 /**
+ * Count of work packages that are past their scheduled end date and
+ * not yet Complete. Drives the OVERDUE stat tile on the Schedule &
+ * Timeline panel — was previously hardcoded to 0.
+ */
+export function overdueWPCount(wps = []) {
+  const today = new Date();
+  return wps.filter((w) => {
+    if (!w?.scheduled_end_date) return false;
+    if (w.status === "Complete") return false;
+    const due = new Date(w.scheduled_end_date);
+    return Number.isFinite(due.getTime()) && due < today;
+  }).length;
+}
+
+/**
  * Phase rollup — counts of WPs in each phase + total count.
  * Drives the phase pipeline chevron on the Dashboard hero.
  */
