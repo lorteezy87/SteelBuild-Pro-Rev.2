@@ -109,7 +109,9 @@ export default function BatchActionBar({
       </button>
 
       {onBulkMove && (
-        <button onClick={onBulkMove} style={batchBtnStyle("rgba(168,85,247,0.10)", "rgba(168,85,247,0.25)", "#a855f7")}>
+        // Brand --accent (industrial gold) — stays inside the
+        // no-purple/no-pink palette the rest of the app uses.
+        <button onClick={onBulkMove} style={batchBtnStyle("var(--accent-muted)", "var(--accent-border)", "var(--accent)")}>
           <FolderInput size={12} /> MOVE TO…
         </button>
       )}

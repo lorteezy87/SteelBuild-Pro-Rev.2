@@ -42,7 +42,7 @@ const PROPOSAL_STATUS_COLORS = {
   pending:  { fg: "#00E5FF", bg: "rgba(0,229,255,0.12)",   border: "#00E5FF" },
   accepted: { fg: "#22C55E", bg: "rgba(34,197,94,0.14)",   border: "#22C55E" },
   rejected: { fg: "#94A3B8", bg: "rgba(148,163,184,0.12)", border: "#94A3B8" },
-  merged:   { fg: "#8B5CF6", bg: "rgba(139,92,246,0.14)",  border: "#8B5CF6" },
+  merged:   { fg: "#0d9488", bg: "rgba(13,148,136,0.14)",  border: "#0d9488" },
 };
 
 const SEVERITY_DOT = {
@@ -481,7 +481,7 @@ function ProposalRow({ proposal, onHover, onAccept, onReject, onMerge }) {
             <Check size={11} /> Accept
           </button>
           <button onClick={onMerge} title="Merge findings into an existing zone"
-            style={rowBtnStyle("#8B5CF6")}>
+            style={rowBtnStyle("#0d9488")}>
             <Layers size={11} /> Merge
           </button>
           <button onClick={onReject} title="Reject this proposal"
@@ -696,7 +696,7 @@ function MergeModal({ proposal, existingZones, onClose, onSubmit, loading }) {
             <button
               disabled={loading || !targetZoneId}
               onClick={() => onSubmit(targetZoneId)}
-              style={{ ...modalConfirmBtn, borderColor: "#8B5CF6", color: "#8B5CF6", opacity: (loading || !targetZoneId) ? 0.5 : 1 }}
+              style={{ ...modalConfirmBtn, borderColor: "#0d9488", color: "#0d9488", opacity: (loading || !targetZoneId) ? 0.5 : 1 }}
             >
               {loading ? "Merging…" : "Merge"}
             </button>

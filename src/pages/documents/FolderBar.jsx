@@ -224,30 +224,32 @@ export default function FolderBar({
         </button>
       </div>
 
-      {/* Bulk action strip — appears when ≥1 folder is selected */}
+      {/* Bulk action strip — appears when ≥1 folder is selected.
+          Uses the brand --accent (industrial gold) for selection state
+          to stay aligned with the project's no-purple/no-pink palette. */}
       {someSelected && (
         <div style={{
           display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
           padding: "8px 12px",
-          background: "rgba(168,85,247,0.06)",
-          border: "1px solid rgba(168,85,247,0.20)",
+          background: "var(--accent-muted)",
+          border: "1px solid var(--accent-border)",
           borderRadius: 8,
         }}>
-          <CheckSquare size={14} style={{ color: "#a855f7" }} />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#a855f7", letterSpacing: "0.06em" }}>
+          <CheckSquare size={14} style={{ color: "var(--accent)" }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em" }}>
             {selectedIds.size} FOLDER{selectedIds.size === 1 ? "" : "S"} SELECTED
           </span>
           <div style={{ width: 1, height: 18, background: "var(--bg-surface-high)" }} />
           <button
             onClick={handleBulkMove}
-            style={{ ...PILL_BTN, color: "#a855f7", borderColor: "rgba(168,85,247,0.40)" }}
+            style={{ ...PILL_BTN, color: "var(--accent)", borderColor: "var(--accent-border)" }}
             title="Move selected folders under a different parent"
           >
             <FolderInput size={12} /> Move To…
           </button>
           <button
             onClick={handleBulkDelete}
-            style={{ ...PILL_BTN, color: "var(--status-error-bright)", borderColor: "rgba(255,61,61,0.40)" }}
+            style={{ ...PILL_BTN, color: "var(--status-error-bright)", borderColor: "var(--danger-border)" }}
             title="Delete all selected folders"
           >
             <Trash2 size={12} /> Delete
@@ -277,8 +279,8 @@ export default function FolderBar({
                 key={folder.id}
                 style={{
                   ...CARD_STYLE,
-                  borderColor: isSelected ? "#a855f7" : "var(--border-default)",
-                  background: isSelected ? "rgba(168,85,247,0.06)" : "var(--bg-surface)",
+                  borderColor: isSelected ? "var(--accent)" : "var(--border-default)",
+                  background: isSelected ? "var(--accent-muted)" : "var(--bg-surface)",
                 }}
                 onClick={() => onNavigate(folder.id)}
                 onMouseEnter={(e) => {
@@ -297,8 +299,8 @@ export default function FolderBar({
                   onClick={(e) => { e.stopPropagation(); toggleSelect(folder.id); }}
                   style={{
                     width: 16, height: 16, borderRadius: 3,
-                    border: `2px solid ${isSelected ? "#a855f7" : "var(--text-muted)"}`,
-                    background: isSelected ? "#a855f7" : "transparent",
+                    border: `2px solid ${isSelected ? "var(--accent)" : "var(--text-muted)"}`,
+                    background: isSelected ? "var(--accent)" : "transparent",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     cursor: "pointer",
                     flexShrink: 0,
