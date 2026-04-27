@@ -341,40 +341,54 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         {/* Content */}
         <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
           {activeTab === 'details' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Left column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <FormField label="Task Name" value={formData.task_name} onChange={(v) => setFormData({ ...formData, task_name: v })} />
-                <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={['Fabrication', 'Delivery', 'Install', 'Submittal', 'RFI', 'Milestone', 'Task']} />
-                <FormField label="Phase" type="select" value={formData.phase} onChange={(v) => setFormData({ ...formData, phase: v })} options={PHASES} />
-                <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={['Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold']} />
-                <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
-                <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Two-column grid for the always-shown identity / status
+                  fields. On Detailing tasks the dates panel moves
+                  below this block so each gate row has the full
+                  drawer width to breathe (4 inputs + label + clear
+                  don't fit in a 220px half-column). */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Left column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <FormField label="Task Name" value={formData.task_name} onChange={(v) => setFormData({ ...formData, task_name: v })} />
+                  <FormField label="Task Type" type="select" value={formData.task_type} onChange={(v) => setFormData({ ...formData, task_type: v })} options={['Fabrication', 'Delivery', 'Install', 'Submittal', 'RFI', 'Milestone', 'Task']} />
+                  <FormField label="Phase" type="select" value={formData.phase} onChange={(v) => setFormData({ ...formData, phase: v })} options={PHASES} />
+                  <FormField label="Status" type="select" value={formData.status} onChange={(v) => setFormData({ ...formData, status: v })} options={['Not Started', 'In Progress', 'Complete', 'Delayed', 'On Hold']} />
+                </div>
+
+                {/* Right column */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+                  <FormField label="Assigned To / Resources" value={formData.resource_names || formData.assigned_to || ''} onChange={(v) => setFormData({ ...formData, resource_names: v, assigned_to: v })} />
+                  <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
+                  <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
+                </div>
               </div>
 
-              {/* Right column — Detailing tasks swap the single
-                  start/end date pair for four stage-gate dates
-                  (OFA / BFA / FFF / Released). The Gantt bar still
-                  renders from start_date/end_date, which we derive
-                  from the filled gates at save time. */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {isDetailing ? (
-                  <StageGateDates
-                    stageDates={stageDates}
-                    onChange={setStageDates}
-                    derivedStart={formData.start_date}
-                    derivedEnd={formData.end_date}
-                  />
-                ) : (
-                  <>
-                    <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
-                    <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
-                    <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
-                  </>
-                )}
-                <FormField label="% Complete" type="slider" value={formData.percent_complete || 0} onChange={(v) => setFormData({ ...formData, percent_complete: v })} />
-                <FormField label="WBS Code" value={formData.wbs_code || ''} onChange={(v) => setFormData({ ...formData, wbs_code: v })} />
-              </div>
+              {/* Dates section — full-width so date pickers don't get
+                  squished. Detailing tasks render the four-gate panel
+                  (OFA / BFA / FFF / Released, each with start + end);
+                  every other phase gets the simple Start / End / Duration
+                  trio. The Gantt bar still renders from start_date /
+                  end_date, derived from the filled gates at save time. */}
+              {isDetailing ? (
+                <StageGateDates
+                  stageDates={stageDates}
+                  onChange={setStageDates}
+                  derivedStart={formData.start_date}
+                  derivedEnd={formData.end_date}
+                />
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gap: 12,
+                }}>
+                  <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
+                  <FormField label="End Date"   type="date" value={formData.end_date}   onChange={(v) => setFormData({ ...formData, end_date: v })} />
+                  <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
+                </div>
+              )}
             </div>
           )}
 
@@ -752,10 +766,10 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
             key={gate}
             style={{
               display: 'grid',
-              gridTemplateColumns: '88px 1fr 1fr auto',
+              gridTemplateColumns: '140px 1fr 1fr 24px',
               alignItems: 'center',
-              gap: 8,
-              padding: '6px 8px',
+              gap: 10,
+              padding: '8px 10px',
               background: filled
                 ? `color-mix(in srgb, ${meta.color} 8%, var(--bg-surface-low))`
                 : 'var(--bg-surface-low)',
@@ -846,27 +860,37 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
   );
 }
 
-// Inline date input used by the per-gate rows. Kept tiny so we can fit
-// two of them side-by-side in a 480px drawer without crowding.
+// Inline date input used by the per-gate rows. The dates panel now
+// sits full-width below the 2-col grid in the drawer, so each input
+// has plenty of room — no need to compress font size or padding the
+// way the cramped half-column layout once required.
 function DateInput({ value, onChange, ariaLabel, placeholder }) {
   return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label={ariaLabel}
-      placeholder={placeholder}
-      style={{
-        width: '100%',
-        background: 'var(--bg-surface-low)',
-        border: '1px solid var(--border-default)',
-        borderRadius: 4,
-        padding: '5px 6px',
-        fontFamily: 'var(--font-body)',
-        fontSize: 10,
-        color: 'var(--text-primary)',
-        boxSizing: 'border-box',
-      }}
-    />
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
+        letterSpacing: '0.10em', textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+      }}>
+        {placeholder}
+      </span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        style={{
+          width: '100%',
+          background: 'var(--bg-surface-low)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 4,
+          padding: '6px 8px',
+          fontFamily: 'var(--font-body)',
+          fontSize: 11,
+          color: 'var(--text-primary)',
+          boxSizing: 'border-box',
+        }}
+      />
+    </label>
   );
 }
