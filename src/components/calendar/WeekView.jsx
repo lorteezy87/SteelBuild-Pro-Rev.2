@@ -18,8 +18,8 @@ import {
 } from "@/lib/calendarMath";
 import EventPill from "./EventPill";
 
-export default function WeekView({ focus, today, events, onDayClick, onEventClick }) {
-  const days = useMemo(() => buildWeekGrid(focus), [focus]);
+export default function WeekView({ focus, today, events, onDayClick, onEventClick, weekStart = "sunday" }) {
+  const days = useMemo(() => buildWeekGrid(focus, weekStart), [focus, weekStart]);
   const eventsByDay = useMemo(() => {
     const map = new Map();
     for (const d of days) {

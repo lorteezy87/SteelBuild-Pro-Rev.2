@@ -57,8 +57,31 @@ import {
 import { extractRfiSequence, buildRfiNumberRepairs, daysOpen, isClosed, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
+import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
+
+// Density presets persist in localStorage. "Compact" tightens the row
+// height + drops the submitter sub-line; "Comfortable" gives the row
+// 50px of breathing room. Density mutates the CSS variable that
+// RfiRow reads for its row height.
+const DENSITY_LS_KEY = "sbp-rfi-density";
+const DENSITY_PRESETS = {
+  compact:     { rowHeight: 28, label: "COMPACT" },
+  normal:      { rowHeight: 38, label: "NORMAL" },
+  comfortable: { rowHeight: 50, label: "COMFORTABLE" },
+};
+function loadDensity() {
+  try {
+    const v = localStorage.getItem(DENSITY_LS_KEY);
+    if (v && DENSITY_PRESETS[v]) return v;
+  } catch { /* noop */ }
+  return "normal";
+}
+const INSIGHTS_LS_KEY = "sbp-rfi-insights-collapsed";
+function loadInsightsCollapsed() {
+  try { return localStorage.getItem(INSIGHTS_LS_KEY) === "1"; } catch { return false; }
+}
 
 const LIFECYCLE_STAGES_BASE = [
   { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
@@ -88,6 +111,20 @@ export default function RFIs() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [density, setDensity] = useState(loadDensity);
+  const [insightsCollapsed, setInsightsCollapsed] = useState(loadInsightsCollapsed);
+  const handleDensityChange = (v) => {
+    setDensity(v);
+    try { localStorage.setItem(DENSITY_LS_KEY, v); } catch { /* noop */ }
+  };
+  const handleToggleInsights = () => {
+    setInsightsCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(INSIGHTS_LS_KEY, next ? "1" : "0"); } catch { /* noop */ }
+      return next;
+    });
+  };
+  const densityPreset = DENSITY_PRESETS[density] || DENSITY_PRESETS.normal;
 
   /* ── Data ── */
   const { data: projects = [] } = useQuery({
@@ -344,7 +381,17 @@ export default function RFIs() {
   const activeProjectName = projects.find((p) => p.id === projectId)?.name || "All Projects";
 
   return (
-    <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+    <div
+      style={{
+        padding: 18,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        // Density mutates the row height that RfiRow reads via
+        // var(--density-row-height, 38px). Set on the page wrapper
+        // so every RfiRow underneath inherits it without prop drilling.
+        "--density-row-height": `${densityPreset.rowHeight}px`,
+      }}>
       <CommandBar
         eyebrow={`PROJECT MANAGEMENT · ${activeProjectName.toUpperCase()}`}
         title="RFIs"
@@ -366,6 +413,15 @@ export default function RFIs() {
           NEW RFI
         </Button>
       </CommandBar>
+
+      {/* Insights strip — KPI tiles + aging buckets + ball-in-court
+          donut + monthly-volume bar chart. Collapsible so a list-first
+          PM can hide it after they've digested the health view. */}
+      <RfiInsightsStrip
+        rfis={rfis}
+        collapsed={insightsCollapsed}
+        onToggleCollapsed={handleToggleInsights}
+      />
 
       {/* KPI row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
@@ -401,7 +457,8 @@ export default function RFIs() {
         <PhaseChevron stages={lifecycleStages} activeIdx={activeStageIdx} showIcons={false} />
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — sticky so it stays anchored as the user scrolls
+          a long table. zIndex above row content but below modals. */}
       <div
         style={{
           display: "flex",
@@ -412,6 +469,9 @@ export default function RFIs() {
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card)",
           flexWrap: "wrap",
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
         }}
       >
         <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
@@ -472,6 +532,46 @@ export default function RFIs() {
           );
         })}
         <div style={{ flex: 1 }} />
+        {/* Density picker — three preset rows. Persists to
+            localStorage so the user's choice sticks across sessions. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 8,
+              color: "var(--text-muted)",
+              letterSpacing: "0.12em",
+              marginRight: 4,
+            }}
+          >
+            DENSITY
+          </span>
+          {Object.entries(DENSITY_PRESETS).map(([id, preset]) => {
+            const active = density === id;
+            return (
+              <button
+                key={id}
+                onClick={() => handleDensityChange(id)}
+                title={preset.label.toLowerCase()}
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "var(--radius-btn)",
+                  border: active ? "1px solid var(--accent)" : "1px solid transparent",
+                  background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
+                  color: active ? "var(--accent)" : "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  cursor: "pointer",
+                }}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />
         <span
           style={{
             fontFamily: "var(--font-mono)",
@@ -507,6 +607,11 @@ export default function RFIs() {
             color: "var(--text-muted)",
             letterSpacing: "0.14em",
             textTransform: "uppercase",
+            // Sticky column header — stays pinned beneath the filter
+            // bar (top: 44 leaves room for the filter bar's height).
+            position: "sticky",
+            top: 44,
+            zIndex: 4,
           }}
         >
           <div>
@@ -532,6 +637,7 @@ export default function RFIs() {
               key={r.id}
               rfi={r}
               idx={i}
+              density={density}
               selected={selectedIds.has(r.id)}
               onToggle={() => toggleSelect(r.id)}
               onOpen={() => setSelectedRFI(r)}
@@ -541,10 +647,10 @@ export default function RFIs() {
           <div style={{ padding: 24 }}>
             <EmptyState
               icon="rfi"
-              title={rfis.length === 0 ? "No RFIs yet" : "No RFIs match your filters"}
+              title={rfis.length === 0 ? "No RFIs yet — submit your first" : "No RFIs match your filters"}
               body={
                 rfis.length === 0
-                  ? "Create your first RFI to start tracking questions and clarifications from the field."
+                  ? "Click NEW RFI to start tracking field questions and clarifications. Use IMPORT LOG to bring an existing RFI log over from CSV in one shot."
                   : "Try clearing filters or adjusting the search query."
               }
             />

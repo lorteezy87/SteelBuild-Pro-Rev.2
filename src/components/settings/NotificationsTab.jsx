@@ -87,9 +87,39 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 24px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Notifications
       </h2>
+
+      {/* Honest audit banner — saved-but-inert. The app currently
+          surfaces alerts via in-page toasts (sonner) that fire on
+          mutation success/failure regardless of these toggles, plus
+          the Alerts table that the dashboard reads from directly.
+          There is no server-driven push, email digest, or scheduled
+          dispatcher consuming these prefs yet. We persist your choice
+          so when the dispatcher ships your settings come along. */}
+      <div
+        style={{
+          marginBottom: 24,
+          padding: '12px 14px',
+          background: 'var(--bg-surface-low)',
+          border: '1px solid var(--border-default)',
+          borderLeft: '3px solid var(--status-warning)',
+          borderRadius: 6,
+          fontFamily: 'var(--font-body)',
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ color: 'var(--text-primary)' }}>Saved-but-inert.</strong>{' '}
+        Notification toggles, urgency thresholds, and quiet hours are persisted
+        to your profile but have no consumer in the current architecture —
+        SteelBuild Pro fires in-page toasts on mutation success and surfaces
+        the Alerts table on the dashboard regardless of these settings. When
+        the email digest / push dispatcher ships, your saved choices will
+        already be in place.
+      </div>
 
       {categories.map(category => (
         <div key={category} style={{ marginBottom: 28 }}>

@@ -35,6 +35,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     title: "", description: "", question: "", answer: "",
     drawing_reference: "", spec_section: "",
     priority: "Medium", status: "Open",
+    // Discipline drives the RFIs page filter chips (All / Structural /
+    // Connections / Misc Metals / Anchor Bolts) and the row's
+    // discipline column. Field was missing from this form, so RFIs
+    // imported from CSV showed a discipline but the user couldn't
+    // change it — only fix it via the bulk-edit modal.
+    discipline: "",
     submitted_by: "", submitted_date: new Date().toISOString().split("T")[0],
     date_required: "", date_answered: "",
     assigned_to: "", answered_by: "",
@@ -213,6 +219,18 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             </Field>
             <Field label="Spec Section" span={1}>
               <input style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
+            </Field>
+            <Field label="Discipline" span={3}>
+              <select
+                style={iStyle}
+                value={formData.discipline || ""}
+                onChange={(e) => set("discipline", e.target.value)}
+              >
+                <option value="">— Unspecified —</option>
+                {["Structural", "Connections", "Misc Metals", "Anchor Bolts"].map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Description" span={3}>
               <textarea style={{ ...iStyle, minHeight: 70, resize: "vertical" }} value={formData.description} onChange={(e) => set("description", e.target.value)} />

@@ -25,10 +25,12 @@ import {
 import EventPill from "./EventPill";
 
 const MAX_VISIBLE = 3;
-const DAY_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const DAY_HEADERS_SUN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const DAY_HEADERS_MON = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
-export default function MonthView({ focus, today, events, onDayClick, onEventClick }) {
-  const days = useMemo(() => buildMonthGrid(focus), [focus]);
+export default function MonthView({ focus, today, events, onDayClick, onEventClick, weekStart = "sunday" }) {
+  const days = useMemo(() => buildMonthGrid(focus, weekStart), [focus, weekStart]);
+  const DAY_HEADERS = weekStart === "monday" ? DAY_HEADERS_MON : DAY_HEADERS_SUN;
 
   // Pre-bucket events by ISO date for fast lookup. A multi-day event
   // ends up in every day it spans — that's deliberate so it shows up on

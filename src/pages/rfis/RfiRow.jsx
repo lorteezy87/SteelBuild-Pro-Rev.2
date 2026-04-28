@@ -15,9 +15,17 @@ import { daysOpen, isOverdue, rfiStatusShortLabel } from "./utils";
 
 export const RFI_ROW_GRID = "36px 78px 1fr 110px 100px 110px 70px 90px 110px 60px";
 
-export default function RfiRow({ rfi, idx, selected, onToggle, onOpen }) {
+/**
+ * `density` controls the row height + whether the submitter sub-line
+ * renders. Three values: "compact" (28px, no sub-line), "normal"
+ * (38px, sub-line as before), "comfortable" (50px). The page sets
+ * `--density-row-height` and we read it here so the row also picks
+ * up overrides from any wrapping density-driven container.
+ */
+export default function RfiRow({ rfi, idx, selected, onToggle, onOpen, density = "normal" }) {
   const overdue = isOverdue(rfi);
   const age = daysOpen(rfi);
+  const showSubLine = density !== "compact";
   const priorityColor =
     rfi.priority === "Critical" ? "#FF6B35" :
     rfi.priority === "High"     ? "var(--status-warning)" :
@@ -90,7 +98,7 @@ export default function RfiRow({ rfi, idx, selected, onToggle, onOpen }) {
             {rfi.title || "—"}
           </span>
         </div>
-        {(rfi.submitted_by || rfi.submitted_date) && (
+        {showSubLine && (rfi.submitted_by || rfi.submitted_date) && (
           <div
             style={{
               fontFamily: "var(--font-mono)",
