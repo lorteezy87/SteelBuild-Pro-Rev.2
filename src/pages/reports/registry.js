@@ -1,12 +1,12 @@
 /**
- * Reports registry — single source of truth for the 10 live reports.
+ * Reports registry — single source of truth for the live reports.
  *
  * Each entry feeds:
  *   - the hub grid at /Reports
  *   - the nested route table at /Reports/:slug
  *   - the document title / breadcrumb
  *
- * Adding an 11th report means: drop a new module under `pages/reports/`,
+ * Adding a new report means: drop a new module under `pages/reports/`,
  * import its default component here, and append a row to `REPORTS`.
  * No other plumbing changes required.
  */
@@ -19,7 +19,7 @@ const Lazy = (loader) => lazyWithRetry(loader);
  *    slug: string,
  *    title: string,
  *    summary: string,
- *    category: 'Portfolio' | 'Schedule' | 'Cost',
+ *    category: 'Portfolio' | 'Risk' | 'Schedule' | 'Cost',
  *    component: any,
  * }} ReportEntry
  */
@@ -48,6 +48,49 @@ export const REPORTS = [
     component: Lazy(() => import("./ProjectStatus.jsx")),
   },
   {
+    slug: "project-details",
+    title: "Project Details",
+    summary: "Pick a project and drill into every entity: RFIs, COs, WPs, deliveries, expenses, actions.",
+    category: "Portfolio",
+    component: Lazy(() => import("./ProjectDetails.jsx")),
+  },
+
+  // ── Risk ───────────────────────────────────────────────────────────
+  // Four reports backed by the `risks` table (migration 064). All four
+  // share the same severity helpers (severity.js) and the RiskFormModal
+  // for create/edit so the column meaning stays in lockstep with the
+  // DB GENERATED column.
+  {
+    slug: "risks",
+    title: "Risks",
+    summary: "Flat sortable list of every risk on the project. Click a row to edit; “New Risk” to add.",
+    category: "Risk",
+    component: Lazy(() => import("./Risks.jsx")),
+  },
+  {
+    slug: "risks-dashboard",
+    title: "Risks Dashboard",
+    summary: "KPI strip, severity donut, category bar, and the top 5 open risks at a glance.",
+    category: "Risk",
+    component: Lazy(() => import("./RisksDashboard.jsx")),
+  },
+  {
+    slug: "risk-status",
+    title: "Risk Status",
+    summary: "Classic 5×5 probability × impact heat map. Click a cell to drill into the risks it contains.",
+    category: "Risk",
+    component: Lazy(() => import("./RiskStatus.jsx")),
+  },
+  {
+    slug: "top-risks",
+    title: "Top Risks",
+    summary: "Top 10 risks by score, rendered as severity-banded cards for the weekly review.",
+    category: "Risk",
+    component: Lazy(() => import("./TopRisks.jsx")),
+  },
+
+  // ── Schedule ──
+  {
     slug: "project-status-gantt",
     title: "Project Status (Gantt)",
     summary: "Timeline view: one bar per project (start → target completion), colored by health.",
@@ -75,6 +118,8 @@ export const REPORTS = [
     category: "Schedule",
     component: Lazy(() => import("./ScheduleReport.jsx")),
   },
+
+  // ── Cost ──
   {
     slug: "profit",
     title: "Profit",
@@ -89,13 +134,6 @@ export const REPORTS = [
     category: "Cost",
     component: Lazy(() => import("./RevenueDashboard.jsx")),
   },
-  {
-    slug: "project-details",
-    title: "Project Details",
-    summary: "Pick a project and drill into every entity: RFIs, COs, WPs, deliveries, expenses, actions.",
-    category: "Portfolio",
-    component: Lazy(() => import("./ProjectDetails.jsx")),
-  },
 ];
 
 export const REPORTS_BY_SLUG = Object.fromEntries(
@@ -103,4 +141,4 @@ export const REPORTS_BY_SLUG = Object.fromEntries(
 );
 
 /** Categories for the hub grouping, in display order. */
-export const REPORT_CATEGORIES = ["Portfolio", "Schedule", "Cost"];
+export const REPORT_CATEGORIES = ["Portfolio", "Risk", "Schedule", "Cost"];
