@@ -33,6 +33,7 @@ import {
   Users,
   FileText, FilePlus, FileEdit, ClipboardList,
   HardHat, UserRound, Briefcase, Compass,
+  Layers, Grid3x3, Wrench,
 } from "lucide-react";
 import SectionCard from "./SectionCard";
 import { taskDistributionByType } from "../projectMetrics";
@@ -90,15 +91,23 @@ export default function TeamWorkflowSection({
   // those names were holdovers from the prototype and never matched
   // the schema). Detailer doesn't have its own column yet, so we
   // store it under metadata.detailer until a migration adds one.
+  //
+  // Joist / deck columns shipped with the kickoff-fields migration
+  // (063_project_kickoff_fields.sql). They surface here as four
+  // additional contact tiles so the project's full vendor stack is
+  // visible on the dashboard without diving into the project profile.
   const detailerValue = project?.metadata?.detailer || null;
   const roles = [
-    { icon: UserRound, label: "Project Manager",    field: "project_manager",   value: project?.project_manager || null },
-    { icon: HardHat,   label: "Superintendent",     field: "superintendent",    value: project?.superintendent || null },
-    { icon: Briefcase, label: "General Contractor", field: "general_contractor",value: project?.general_contractor || null },
+    { icon: UserRound, label: "Project Manager",     field: "project_manager",      value: project?.project_manager || null },
+    { icon: HardHat,   label: "Superintendent",      field: "superintendent",       value: project?.superintendent || null },
+    { icon: Briefcase, label: "General Contractor",  field: "general_contractor",   value: project?.general_contractor || null },
     // Detailer rides on metadata until we get a column, so it routes
     // through a special metadata-aware mutation rather than the
     // generic InlineEditField.
-    { icon: Compass,   label: "Detailer",           field: "metadata.detailer", value: detailerValue },
+    { icon: Compass,   label: "Detailer",            field: "metadata.detailer",    value: detailerValue },
+    { icon: Layers,    label: "Joist Mfr",           field: "joist_manufacturer",   value: project?.joist_manufacturer || null },
+    { icon: Grid3x3,   label: "Deck Mfr",            field: "deck_manufacturer",    value: project?.deck_manufacturer || null },
+    { icon: Wrench,    label: "Deck Installer",      field: "deck_installer",       value: project?.deck_installer || null },
   ];
 
   return (
@@ -109,10 +118,14 @@ export default function TeamWorkflowSection({
       subtitle="Task assignments and collaboration"
       stats={stats}
     >
-      {/* Role cards — click to edit */}
+      {/* Role cards — click to edit. Auto-fit lets the grid wrap to
+          two rows on narrower viewports rather than crushing all 7
+          cards into a single row. minmax floor of 150px keeps each
+          tile comfortable for the longer labels (e.g. "General
+          Contractor", "Deck Installer"). */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
         gap: 8,
         marginBottom: 16,
       }}>

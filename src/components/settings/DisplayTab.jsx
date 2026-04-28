@@ -6,14 +6,21 @@
  * here also flows into ThemeContext so the visual change happens
  * immediately, before the round-trip to Supabase finishes.
  *
- * Sections:
- *   1. Theme (dark / light)                                    →  ThemeContext.setTheme
- *   2. Accent colour preset                                    →  ThemeContext.setAccent
- *   3. Font size scale (small / normal / large)                →  ThemeContext.setFontScale
- *   4. Accessibility (high-contrast, reduced motion)           →  ThemeContext.setContrast / setMotion
- *   5. Date / time / locale (date format, time format, week
- *      start, units, currency, number format)                  →  saved as prefs only; consumers read on demand
- *   6. Layout density + default view + tooltips toggles, etc.  →  saved as prefs only
+ * Wiring status (audit, 2026-04):
+ *   1. Theme (dark / light)                              →  WIRED via ThemeContext.setTheme
+ *   2. Accent colour preset                              →  WIRED via ThemeContext.setAccent
+ *   3. Font size scale                                   →  WIRED via ThemeContext.setFontScale
+ *   4. Accessibility (high-contrast, reduced motion)     →  WIRED via ThemeContext.setContrast / setMotion
+ *   5. Week starts on (sunday / monday)                  →  WIRED — read by ProjectCalendar via useUserPrefs
+ *   6. Date format / time format / units / currency /
+ *      number format                                     →  PERSISTED ONLY — formatter retrofit pending
+ *      (formatDate / formatCurrency hardcode locales)
+ *   7. Default view / table density / tooltips / project
+ *      numbers / sidebar collapse / keyboard hints /
+ *      auto-open drawers                                 →  PERSISTED ONLY — no consumer in current architecture
+ *
+ * Unwired prefs are tagged "(not yet active)" in the UI so the user
+ * knows what's saved-but-inert versus actually take-effect.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -206,7 +213,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Date Format */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Date Format</label>
+        <label style={labelStyle}>Date Format <NotYetActive /></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'].map(format => (
             <div key={format} onClick={() => handleChange('date_format', format)} style={optionCard(prefs.date_format === format)}>
@@ -222,7 +229,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
         <label style={labelStyle}>Locale</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div>
-            <label style={labelStyle}>Time Format</label>
+            <label style={labelStyle}>Time Format <NotYetActive /></label>
             <select value={prefs.time_format} onChange={e => handleChange('time_format', e.target.value)} style={selectStyle}>
               <option value="12h">12-hour (3:45 PM)</option>
               <option value="24h">24-hour (15:45)</option>
@@ -236,7 +243,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
             </select>
           </div>
           <div>
-            <label style={labelStyle}>Units</label>
+            <label style={labelStyle}>Units <NotYetActive /></label>
             <select value={prefs.measurement_units} onChange={e => handleChange('measurement_units', e.target.value)} style={selectStyle}>
               <option value="imperial">Imperial (ft, in, lbs)</option>
               <option value="metric">Metric (m, mm, kg)</option>
@@ -247,7 +254,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Currency & Numbers */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Currency &amp; Numbers</label>
+        <label style={labelStyle}>Currency &amp; Numbers <NotYetActive /></label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <label style={labelStyle}>Currency</label>
@@ -268,7 +275,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Table Density */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Table Density</label>
+        <label style={labelStyle}>Table Density <NotYetActive note="The RFIs page has its own per-page density toggle in the filter bar; this global preference doesn't yet feed other tables." /></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {[
             { id: 'compact', label: 'Compact', desc: '10px rows' },
@@ -285,7 +292,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Default View */}
       <div style={{ marginBottom: 28 }}>
-        <label style={labelStyle}>Default View</label>
+        <label style={labelStyle}>Default View <NotYetActive /></label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {[{ id: 'table', icon: '📋' }, { id: 'board', icon: '📇' }, { id: 'gantt', icon: '📊' }, { id: 'list', icon: '📝' }].map(v => (
             <div key={v.id} onClick={() => handleChange('default_view', v.id)} style={optionCard(prefs.default_view === v.id)}>
@@ -298,7 +305,7 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {/* Toggles */}
       <div>
-        <label style={labelStyle}>Additional Options</label>
+        <label style={labelStyle}>Additional Options <NotYetActive /></label>
         {[
           { key: 'compact_mode', label: 'Compact Mode', desc: 'Reduce spacing and padding' },
           { key: 'show_tooltips', label: 'Show Tooltips', desc: 'Display helpful hints on hover' },
@@ -319,6 +326,36 @@ export default function DisplayTab({ preferences, onSave, isSaving }) {
 
       {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
     </div>
+  );
+}
+
+/**
+ * Inline pill that flags a pref the Settings UI saves but no consumer
+ * reads yet. Sits inline next to the section label so the user can
+ * tell what's wired vs. what's only persisted.
+ */
+function NotYetActive({ note }) {
+  return (
+    <span
+      title={note || "Saved to your profile, but no consumer reads this preference yet. We'll wire it up in a future release."}
+      style={{
+        display: 'inline-block',
+        marginLeft: 8,
+        padding: '1px 6px',
+        borderRadius: 3,
+        background: 'var(--bg-surface-high)',
+        color: 'var(--text-muted)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: '0.10em',
+        textTransform: 'uppercase',
+        verticalAlign: 'middle',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      Not yet active
+    </span>
   );
 }
 
