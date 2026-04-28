@@ -42,6 +42,55 @@ export function revisedContractValue(project, cos = []) {
   return base + approvedDelta;
 }
 
+/**
+ * Budget-hours variance — sums shop & field budget vs actual across
+ * the budget_hour_items rows for a project, mirroring the rollup
+ * shown on the Budget Hours page so the Financial Controls panel can
+ * render a one-glance "Hours Variance" tile.
+ *
+ * Returns null fields when there's no budget set (so callers can
+ * render "—" rather than 0 / 0). When a row carries
+ * `metadata.linked_work_package_ids[]`, the actuals roll up from
+ * those WPs' shop/field actuals — same logic as BudgetHours.jsx so
+ * the dashboard can't drift from the page that owns the data.
+ */
+export function budgetHoursVariance(items = [], wps = []) {
+  const wpsById = new Map();
+  for (const w of wps) if (w?.id) wpsById.set(w.id, w);
+  let sb = 0, sa = 0, fb = 0, fa = 0;
+  for (const r of items) {
+    if (!r || r.is_deleted) continue;
+    if (r.category === "Misses") continue;
+    sb += Number(r.shop_hours_budget) || 0;
+    fb += Number(r.field_hours_budget) || 0;
+    const linked = r?.metadata?.linked_work_package_ids;
+    if (Array.isArray(linked) && linked.length) {
+      for (const id of linked) {
+        const wp = wpsById.get(id);
+        if (!wp) continue;
+        sa += Number(wp.shop_hours_actual) || 0;
+        fa += Number(wp.field_hours_actual) || 0;
+      }
+    } else {
+      sa += Number(r.shop_hours_actual) || 0;
+      fa += Number(r.field_hours_actual) || 0;
+    }
+  }
+  const pct = (b, a) => (b > 0 ? ((a - b) / b) * 100 : a > 0 ? 100 : 0);
+  return {
+    shopBudget: sb,
+    shopActual: sa,
+    shopVariancePct: pct(sb, sa),
+    fieldBudget: fb,
+    fieldActual: fa,
+    fieldVariancePct: pct(fb, fa),
+    totalBudget: sb + fb,
+    totalActual: sa + fa,
+    totalVariancePct: pct(sb + fb, sa + fa),
+    hasBudget: sb + fb > 0,
+  };
+}
+
 /** Sum of cost-code budget_amount — the budgeted spend. */
 export function budgetCommitted(costCodes = []) {
   return costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);

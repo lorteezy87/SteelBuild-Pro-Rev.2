@@ -250,6 +250,71 @@ export type Database = {
           },
         ]
       }
+      budget_hour_items: {
+        Row: {
+          category: string
+          created_at: string | null
+          deleted_at: string | null
+          field_hours_actual: number | null
+          field_hours_budget: number | null
+          id: string
+          is_deleted: boolean | null
+          is_specialty: boolean | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          scope_item: string
+          shop_hours_actual: number | null
+          shop_hours_budget: number | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          deleted_at?: string | null
+          field_hours_actual?: number | null
+          field_hours_budget?: number | null
+          id?: string
+          is_deleted?: boolean | null
+          is_specialty?: boolean | null
+          metadata?: Json | null
+          notes?: string | null
+          project_id: string
+          scope_item: string
+          shop_hours_actual?: number | null
+          shop_hours_budget?: number | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          field_hours_actual?: number | null
+          field_hours_budget?: number | null
+          id?: string
+          is_deleted?: boolean | null
+          is_specialty?: boolean | null
+          metadata?: Json | null
+          notes?: string | null
+          project_id?: string
+          scope_item?: string
+          shop_hours_actual?: number | null
+          shop_hours_budget?: number | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_hour_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       change_orders: {
         Row: {
           approved_by: string | null
@@ -3263,11 +3328,23 @@ export type Database = {
           contingency_amount: number | null
           contract_type: string | null
           created_at: string | null
+          deck_installer: string | null
+          deck_manufacturer: string | null
+          detailer_contact_id: string | null
+          drawing_date: string | null
           engineer_of_record: string | null
+          engineering_firm: string | null
           forecast_completion_date: string | null
+          gc_contract_present: boolean | null
           general_contractor: string | null
           health_status: string
           id: string
+          job_type: string | null
+          joist_manufacturer: string | null
+          kickoff_complete: boolean | null
+          kickoff_completed_at: string | null
+          liquidated_damages: boolean | null
+          loi_received_date: string | null
           metadata: Json | null
           name: string
           notes: string | null
@@ -3278,6 +3355,7 @@ export type Database = {
           retainage_percent: number | null
           scope_complete_pct_override: number | null
           scope_complete_pct_override_date: string | null
+          special_coatings: string | null
           start_date: string | null
           superintendent: string | null
           target_completion_date: string | null
@@ -3289,11 +3367,23 @@ export type Database = {
           contingency_amount?: number | null
           contract_type?: string | null
           created_at?: string | null
+          deck_installer?: string | null
+          deck_manufacturer?: string | null
+          detailer_contact_id?: string | null
+          drawing_date?: string | null
           engineer_of_record?: string | null
+          engineering_firm?: string | null
           forecast_completion_date?: string | null
+          gc_contract_present?: boolean | null
           general_contractor?: string | null
           health_status?: string
           id?: string
+          job_type?: string | null
+          joist_manufacturer?: string | null
+          kickoff_complete?: boolean | null
+          kickoff_completed_at?: string | null
+          liquidated_damages?: boolean | null
+          loi_received_date?: string | null
           metadata?: Json | null
           name: string
           notes?: string | null
@@ -3304,6 +3394,7 @@ export type Database = {
           retainage_percent?: number | null
           scope_complete_pct_override?: number | null
           scope_complete_pct_override_date?: string | null
+          special_coatings?: string | null
           start_date?: string | null
           superintendent?: string | null
           target_completion_date?: string | null
@@ -3315,11 +3406,23 @@ export type Database = {
           contingency_amount?: number | null
           contract_type?: string | null
           created_at?: string | null
+          deck_installer?: string | null
+          deck_manufacturer?: string | null
+          detailer_contact_id?: string | null
+          drawing_date?: string | null
           engineer_of_record?: string | null
+          engineering_firm?: string | null
           forecast_completion_date?: string | null
+          gc_contract_present?: boolean | null
           general_contractor?: string | null
           health_status?: string
           id?: string
+          job_type?: string | null
+          joist_manufacturer?: string | null
+          kickoff_complete?: boolean | null
+          kickoff_completed_at?: string | null
+          liquidated_damages?: boolean | null
+          loi_received_date?: string | null
           metadata?: Json | null
           name?: string
           notes?: string | null
@@ -3330,12 +3433,21 @@ export type Database = {
           retainage_percent?: number | null
           scope_complete_pct_override?: number | null
           scope_complete_pct_override_date?: string | null
+          special_coatings?: string | null
           start_date?: string | null
           superintendent?: string | null
           target_completion_date?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_detailer_contact_id_fkey"
+            columns: ["detailer_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       punchlist_items: {
         Row: {
