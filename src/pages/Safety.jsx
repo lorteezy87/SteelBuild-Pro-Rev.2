@@ -20,13 +20,15 @@ export default function Safety() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: incidents = [] } = useQuery({
+  const { data: rawIncidents = [] } = useQuery({
     queryKey: ["safety-incidents", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.SafetyIncident.filter({ project_id: projectId })
         : base44.entities.SafetyIncident.list("-incident_date"),
   });
+  // Defensive soft-delete filter (entity layer also does this at fetch).
+  const incidents = React.useMemo(() => rawIncidents.filter((r) => !r.is_deleted), [rawIncidents]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

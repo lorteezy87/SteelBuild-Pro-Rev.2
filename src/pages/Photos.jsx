@@ -21,13 +21,15 @@ export default function Photos() {
   // Auto-open the upload modal when QuickAddFAB navigated here with ?new=1.
   useAutoOpenCreate(() => setShowUpload(true));
 
-  const { data: photos = [] } = useQuery({
+  const { data: rawPhotos = [] } = useQuery({
     queryKey: ["photos", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.Photo.filter({ project_id: projectId })
         : base44.entities.Photo.list("-taken_date"),
   });
+  // Defensive soft-delete filter (matches DailyLogs / Procurement pattern).
+  const photos = React.useMemo(() => rawPhotos.filter((r) => !r.is_deleted), [rawPhotos]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

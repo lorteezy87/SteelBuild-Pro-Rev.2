@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile, ProgressBar } from "@/components/design-system";
+import { CommandBar, KpiTile, ProgressBar, BulkActionBar } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 
@@ -23,14 +23,25 @@ export default function Punchlist() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  // C4 — multi-select + signed close-out
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [closeoutOpen, setCloseoutOpen] = useState(false);
+  const [closeoutSignature, setCloseoutSignature] = useState("");
 
-  const { data: punchlist = [] } = useQuery({
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+  const clearSelection = () => setSelectedIds([]);
+
+  const { data: rawPunchlist = [] } = useQuery({
     queryKey: ["punchlist", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.PunchlistItem.filter({ project_id: projectId })
         : base44.entities.PunchlistItem.list(),
   });
+  // Defensive soft-delete filter (entity layer also does this at fetch).
+  const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -102,6 +113,50 @@ export default function Punchlist() {
       logActivity("punchlist_item", "deleted", { id: deletedId }, { projectId });
     },
     onError: () => toast.error("Delete failed"),
+  });
+
+  // C4 — Batch close-out with text signature.
+  // Stamps each selected row with status=Completed, percent_complete=100,
+  // closed_by + closed_at, and metadata.close_signature so the audit
+  // trail captures *who* signed off (text, not a drawn signature — per
+  // brief explicit guidance "keep it simple").
+  const closeoutMut = useMutation({
+    mutationFn: async ({ ids, signature }) => {
+      if (!signature || !signature.trim()) throw new Error("Signature required");
+      const stamp = new Date().toISOString();
+      const updated = [];
+      for (const id of ids) {
+        const row = await base44.entities.PunchlistItem.update(id, {
+          status: "Completed",
+          percent_complete: 100,
+          closed_by: signature.trim(),
+          closed_at: stamp,
+          metadata: {
+            close_signature: {
+              by: signature.trim(),
+              at: stamp,
+              method: "text",
+            },
+          },
+        });
+        updated.push(row);
+        logActivity("punchlist_item", "status_changed", row, {
+          projectId,
+          description: `Closed via batch · signature: ${signature.trim()}`,
+        });
+      }
+      return updated;
+    },
+    onSuccess: (rows) => {
+      qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      qc.invalidateQueries({ queryKey: ["punchlist-all"] });
+      qc.invalidateQueries({ queryKey: ["field-hub-punchlist", projectId] });
+      toast.success(`Closed ${rows.length} item${rows.length === 1 ? "" : "s"}`);
+      setCloseoutOpen(false);
+      setCloseoutSignature("");
+      setSelectedIds([]);
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   const handleSave = (data) => {
@@ -220,10 +275,148 @@ export default function Punchlist() {
       {showForm && <PunchlistFormModal projectId={projectId} item={editing} onClose={() => {setShowForm(false); setEditing(null);}} onSave={handleSave} isSaving={createMut.isPending || updateMut.isPending} />}
 
       {/* Punchlist */}
-      <PunchlistList items={filtered} onEdit={(item) => {setEditing(item); setShowForm(true);}} onDelete={setDeleteTarget} />
+      <PunchlistList
+        items={filtered}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onEdit={(item) => { setEditing(item); setShowForm(true); }}
+        onDelete={setDeleteTarget}
+      />
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Item" description="Delete this record? This cannot be undone." />
+
+      {/* C4 — Bulk action bar (only renders with selection) */}
+      <BulkActionBar
+        count={selectedIds.length}
+        onClear={clearSelection}
+        actions={[
+          {
+            label: "Close Selected",
+            icon: "check",
+            variant: "primary",
+            onClick: () => setCloseoutOpen(true),
+            disabled: closeoutMut.isPending,
+          },
+        ]}
+      />
+
+      {/* C4 — Signature confirm modal */}
+      {closeoutOpen && (
+        <CloseoutSignatureModal
+          count={selectedIds.length}
+          signature={closeoutSignature}
+          onSignatureChange={setCloseoutSignature}
+          onCancel={() => { setCloseoutOpen(false); setCloseoutSignature(""); }}
+          onConfirm={() => closeoutMut.mutate({ ids: selectedIds, signature: closeoutSignature })}
+          isSaving={closeoutMut.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Close-out signature modal (C4) ─────────────────────────────────
+// Plain text signature line — explicit per the brief ("keep it simple
+// — text-based name, not actual signature capture"). Records the typed
+// name into `closed_by` + metadata.close_signature so the audit trail
+// shows who batch-closed which items when.
+function CloseoutSignatureModal({ count, signature, onSignatureChange, onCancel, onConfirm, isSaving }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onCancel(); }}
+    >
+      <div style={{
+        background: "var(--bg-surface-secondary)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 16,
+        padding: 24,
+        maxWidth: 480,
+        width: "92%",
+      }}>
+        <h3 style={{
+          fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700,
+          margin: "0 0 14px", color: "var(--text-primary)",
+          textTransform: "uppercase", letterSpacing: "0.10em",
+        }}>
+          Close {count} Item{count === 1 ? "" : "s"}
+        </h3>
+        <p style={{
+          fontFamily: "var(--font-body)", fontSize: 12,
+          color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.5,
+        }}>
+          This will mark all {count} selected item{count === 1 ? "" : "s"} as Completed (100%) and stamp
+          your typed name as the close-out signature. Type your name to confirm.
+        </p>
+        <input
+          type="text"
+          autoFocus
+          value={signature}
+          onChange={(e) => onSignatureChange(e.target.value)}
+          placeholder="Your name (text signature)"
+          style={{
+            width: "100%",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 8,
+            padding: "10px 12px",
+            color: "var(--text-primary)",
+            fontFamily: "var(--font-body)",
+            fontSize: 13,
+            outline: "none",
+            boxSizing: "border-box",
+            marginBottom: 16,
+          }}
+          disabled={isSaving}
+        />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSaving}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 8,
+              padding: "8px 16px",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: isSaving ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSaving || !signature.trim()}
+            style={{
+              background: "var(--accent)",
+              color: "var(--bg-base)",
+              border: "none",
+              borderRadius: 8,
+              padding: "8px 16px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: isSaving || !signature.trim() ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              opacity: isSaving || !signature.trim() ? 0.5 : 1,
+            }}
+          >
+            {isSaving ? "Closing…" : "Sign & Close"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
