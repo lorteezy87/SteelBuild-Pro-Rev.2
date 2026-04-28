@@ -522,11 +522,17 @@ export default function BudgetHours() {
   const [presetOpen, setPresetOpen] = useState(false);
 
   /* ── Data ── */
-  const { data: rows = [], isLoading } = useQuery({
+  // The entity wrapper doesn't auto-filter soft-deletes, so the query
+  // returns rows even after `is_deleted=true`. We strip them here so
+  // every downstream consumer (the Standard / Specialty buckets, the
+  // Misses sub-table, totals) sees an "active rows only" view and the
+  // user actually sees the row disappear after they click Remove.
+  const { data: rawRows = [], isLoading } = useQuery({
     queryKey: ["budget-hour-items", projectId],
     queryFn: () => (projectId ? base44.entities.BudgetHourItem.filter({ project_id: projectId }, "sort_order") : []),
     enabled: !!projectId,
   });
+  const rows = useMemo(() => rawRows.filter((r) => !r?.is_deleted), [rawRows]);
   const { data: wps = [] } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: () => (projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : []),
