@@ -289,7 +289,7 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Documents",     icon: "\uD83D\uDCC1", page: "Documents" },
-      { label: "Reports",       icon: "\uD83D\uDCCB", page: "JobStatusReport" },
+      { label: "Reports",       icon: "\uD83D\uDCCB", page: "Reports" },
       { label: "Activity Log",  icon: "\uD83D\uDCCA", page: "Activity" },
     ],
   },
