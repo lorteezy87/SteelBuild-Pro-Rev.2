@@ -772,32 +772,115 @@ export const taskDistributionByParty = taskDistributionByType;
  *   { id, project_id, drawing_id, event_type, from_value, to_value,
  *     actor_id, metadata, created_at }
  *
+ * Behaviour notes (from the dashboard audit):
+ *   - Clustered bursts. When the same project moves a whole drawing
+ *     SET in one go (e.g. dragging 40 sheets from BFA → OFS), the
+ *     feed previously surfaced 40 near-duplicate "Stage BFA → OFS · X"
+ *     rows that crowded out everything else. We now group consecutive
+ *     events that share (event_type, from_value, to_value, set_name)
+ *     within a 5-minute sliding window into a single row labelled
+ *     "Stage BFA → OFS · Set Foo · 40 sheets".
+ *   - Drawing-deletion events are demoted out of the feed by default
+ *     (kept on the underlying table for audit, but they're not
+ *     "activity worth surfacing" once the row is already gone).
+ *   - Missing labels use "—" rather than "?" so a row without a
+ *     from_value reads as "Stage — → OFS" instead of the original
+ *     "Stage ? → ?" which the user reported as confusing.
+ *
  * The output is a stable shape the UI can render uniformly:
- *   [{ id, summary, when, kind }]
+ *   [{ id, summary, when, kind, count }]
  */
 export function recentActivityFeed(drawingActivity = [], limit = 8) {
-  const rows = (drawingActivity || []).slice().sort((a, b) =>
+  const NOISY_KINDS = new Set(["deleted"]);
+  const CLUSTER_WINDOW_MS = 5 * 60 * 1000;
+
+  // Newest-first chronological order.
+  const sorted = (drawingActivity || []).slice().sort((a, b) =>
     String(b?.created_at || "").localeCompare(String(a?.created_at || ""))
   );
-  return rows.slice(0, limit).map((r) => {
-    const ev = r?.event_type || "event";
-    const from = r?.from_value;
-    const to   = r?.to_value;
+
+  // Drop noisy event types from the feed proper. They still live in
+  // the underlying drawing_activity table for audit / forensic work.
+  const surfaced = sorted.filter((r) => !NOISY_KINDS.has(r?.event_type));
+
+  // Cluster consecutive bursts that share (kind, from→to, set name).
+  // Walking newest-first means each new cluster's `when` is the most
+  // recent event in the burst — which is the right anchor to show in
+  // the relative-time column.
+  const clusters = [];
+  for (const r of surfaced) {
+    const ev   = r?.event_type || "event";
+    const from = r?.from_value ?? null;
+    const to   = r?.to_value ?? null;
     const meta = r?.metadata && typeof r.metadata === "object" ? r.metadata : {};
-    const sheet = meta.sheet_number || meta.set_name || meta.drawing_number || null;
+    const setName = meta.set_name || null;
+    const sheet   = meta.sheet_number || meta.drawing_number || null;
+    const tsMs    = r?.created_at ? new Date(r.created_at).getTime() : NaN;
+    const clusterKey = `${ev}|${from}|${to}|${setName || ""}`;
+
+    const last = clusters[clusters.length - 1];
+    const sameBurst =
+      last &&
+      last.key === clusterKey &&
+      Number.isFinite(tsMs) &&
+      Number.isFinite(last.firstTsMs) &&
+      Math.abs(last.firstTsMs - tsMs) <= CLUSTER_WINDOW_MS;
+
+    if (sameBurst) {
+      last.count += 1;
+      // Track distinct sheet labels so a single-sheet burst still
+      // surfaces the sheet number rather than collapsing to "N sheets".
+      if (sheet) last.sheets.add(sheet);
+      // Keep the oldest-in-cluster timestamp as the cluster anchor so
+      // the 5-minute window stays anchored to the burst's first event.
+      if (Number.isFinite(tsMs)) last.firstTsMs = Math.min(last.firstTsMs, tsMs);
+    } else {
+      clusters.push({
+        id: r?.id,
+        key: clusterKey,
+        kind: ev,
+        from,
+        to,
+        setName,
+        sheets: new Set(sheet ? [sheet] : []),
+        count: 1,
+        when: r?.created_at,
+        firstTsMs: Number.isFinite(tsMs) ? tsMs : Number.POSITIVE_INFINITY,
+      });
+    }
+  }
+
+  // Render each cluster into the public feed row shape.
+  const dash = (v) => (v == null || v === "" ? "—" : String(v));
+  return clusters.slice(0, limit).map((c) => {
+    const sheetList = [...c.sheets];
+    // Pick a context label: a single sheet, or the set, or just the
+    // total count if nothing was tagged.
+    let context;
+    if (c.count === 1 && sheetList.length === 1) {
+      context = sheetList[0];
+    } else if (c.setName) {
+      context = `${c.setName} · ${c.count} sheet${c.count === 1 ? "" : "s"}`;
+    } else if (sheetList.length === 1 && c.count > 1) {
+      context = `${sheetList[0]} · ${c.count} updates`;
+    } else {
+      context = `${c.count} sheet${c.count === 1 ? "" : "s"}`;
+    }
+
     let summary;
-    if (ev === "stage_changed")    summary = `Stage ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
-    else if (ev === "approval_changed") summary = `Approval ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
-    else if (ev === "revision_changed") summary = `Revision ${from || "?"} → ${to || "?"}` + (sheet ? ` · ${sheet}` : "");
-    else if (ev === "superseded")  summary = `Superseded${sheet ? ` · ${sheet}` : ""}`;
-    else if (ev === "deleted")     summary = `Drawing deleted${sheet ? ` · ${sheet}` : ""}`;
-    else if (ev === "created")     summary = `Drawing added${sheet ? ` · ${sheet}` : ""}`;
-    else summary = `${ev}${sheet ? ` · ${sheet}` : ""}`;
+    if      (c.kind === "stage_changed")    summary = `Stage ${dash(c.from)} → ${dash(c.to)} · ${context}`;
+    else if (c.kind === "approval_changed") summary = `Approval ${dash(c.from)} → ${dash(c.to)} · ${context}`;
+    else if (c.kind === "revision_changed") summary = `Rev ${dash(c.from)} → ${dash(c.to)} · ${context}`;
+    else if (c.kind === "superseded")       summary = `Superseded · ${context}`;
+    else if (c.kind === "created")          summary = `Drawing added · ${context}`;
+    else                                    summary = `${c.kind} · ${context}`;
+
     return {
-      id: r?.id,
+      id: c.id,
       summary,
-      when: r?.created_at,
-      kind: ev,
+      when: c.when,
+      kind: c.kind,
+      count: c.count,
     };
   });
 }

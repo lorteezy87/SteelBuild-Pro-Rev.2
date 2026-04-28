@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import ActionFeed from "./ActionFeed";
-import { daysUntil } from "@/lib/dateMath";
+import { daysUntil, todayLocalISO } from "@/lib/dateMath";
 
 /**
  * UpcomingWindows — two side-by-side panels surfacing feed items by horizon:
@@ -14,6 +14,17 @@ import { daysUntil } from "@/lib/dateMath";
  * The two windows are disjoint by design so the same item doesn't appear in
  * both panels — 48h shows what's imminent, 10-day shows the near-term queue
  * behind it.
+ *
+ * Pay-app items (itemType === "PAY") are filtered out — they're tracked
+ * on their own SOV / Pay App schedule and the user doesn't want them
+ * mixed into the field-side deadlines panel.
+ *
+ * Date-rollover safety: the bucket math is anchored to "today" via
+ * daysUntil(). If the user leaves Command Center open overnight, the
+ * `feed` prop's identity may not change, so we'd memoize against a
+ * stale "today". A 60-second tick (`midnightTick`) re-runs the
+ * bucket pass with today's ISO included in the dep list — so when
+ * the local date flips, the windows refresh on the next tick.
  */
 
 function dueDaysFor(item) {
@@ -29,10 +40,27 @@ function dueDaysFor(item) {
 }
 
 export default function UpcomingWindows({ feed = [], onOpenDetail }) {
+  // 60-second tick that forces the bucket-by-day useMemo to re-run.
+  // Starts at the current local-date string, updates whenever the
+  // local date changes. Avoids a setInterval just to bump state once
+  // per minute when the underlying date is stable.
+  const [todayIso, setTodayIso] = useState(() => todayLocalISO());
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = todayLocalISO();
+      setTodayIso((cur) => (cur === next ? cur : next));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const { next48, next10 } = useMemo(() => {
     const a = [];
     const b = [];
     for (const item of feed) {
+      // Pay-app deadlines live in their own surface (SOV / Pay App
+      // submissions). Excluding them here keeps the Command Center
+      // "Next 48 / Next 10" panels focused on field-side work.
+      if (item?.itemType === "PAY") continue;
       const d = dueDaysFor(item);
       if (d === null) continue;
       if (d >= 0 && d <= 2) a.push({ item, d });
@@ -42,7 +70,9 @@ export default function UpcomingWindows({ feed = [], onOpenDetail }) {
     a.sort((x, y) => x.d - y.d);
     b.sort((x, y) => x.d - y.d);
     return { next48: a.map((x) => x.item), next10: b.map((x) => x.item) };
-  }, [feed]);
+    // todayIso is read transitively via daysUntil(); list it as a
+    // dep so re-bucket fires when the local date rolls over.
+  }, [feed, todayIso]);
 
   return (
     <div className="cc-upcoming-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { useProjectContext } from "../components/shared/useProjectContext";
+import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import PortfolioView from "../components/dashboard/PortfolioView";
@@ -27,6 +28,14 @@ export default function Dashboard() {
   const { activeProject, setActiveProject } = useProjectContext();
   const pid = activeProject?.id;
 
+  // Honour the Settings → Dashboard → "Auto-Refresh Live Data" pref
+  // on the most-volatile queries. The pref is saved per-user as
+  // auto_refresh_secs (0/30/60/300/900); 0 disables. We keep the
+  // existing staleTime so when the pref is off, react-query still
+  // dedupes during the short window after a mutation.
+  const { auto_refresh_secs } = useUserPrefs();
+  const refetchMs = refetchIntervalFromPref(auto_refresh_secs);
+
   /* ── Portfolio-wide queries (always loaded) ── */
   const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["projects"],
@@ -36,6 +45,7 @@ export default function Dashboard() {
   const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list(),
+    refetchInterval: refetchMs,
   });
   const { data: allCOs = [] } = useQuery({
     queryKey: ["cos-all"],
@@ -53,10 +63,12 @@ export default function Dashboard() {
   const { data: allDeliveries = [] } = useQuery({
     queryKey: ["deliveries-all"],
     queryFn: () => base44.entities.Delivery.list(),
+    refetchInterval: refetchMs,
   });
   const { data: allActionItems = [] } = useQuery({
     queryKey: ["action-items-all"],
     queryFn: () => base44.entities.ActionItem.list(),
+    refetchInterval: refetchMs,
   });
   const { data: allExpenses = [] } = useQuery({
     queryKey: ["expenses-all"],
@@ -107,6 +119,7 @@ export default function Dashboard() {
         ? base44.entities.DrawingActivity.list("-created_at", 50)
         : Promise.resolve([]),
     staleTime: 30 * 1000,
+    refetchInterval: refetchMs,
   });
   // ── Field activity rollup (added with the Field overhaul) ──
   // Each field surface (Daily Logs / Photos / Punchlist / Inspections /

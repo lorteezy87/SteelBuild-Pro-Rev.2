@@ -30,6 +30,7 @@ import { ChevronLeft, ChevronRight, Printer, Download, CalendarDays } from "luci
 import { base44 } from "@/api/base44Client";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useUserPrefs } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { CommandBar, EmptyState, Button } from "@/components/design-system";
 
@@ -93,6 +94,10 @@ export default function ProjectCalendar() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectId = useProjectId();
   const { activeProject } = useProjectContext();
+  // Honour the user's "Week Starts On" pref. Passed into the grid
+  // helpers below (and into the row-rendering child views) so a
+  // PM who works on Monday-start ISO weeks sees Mon as column 1.
+  const { week_start: weekStart } = useUserPrefs();
 
   // ── View state (persisted via URL) ────────────────────────────────
   const initialView = (() => {
@@ -216,20 +221,20 @@ export default function ProjectCalendar() {
   const visibleRange = useMemo(() => {
     if (view === "day") return { start: focus, end: focus };
     if (view === "week") {
-      const s = startOfWeek(focus);
+      const s = startOfWeek(focus, weekStart);
       return { start: s, end: addDays(s, 6) };
     }
     // month: extend to the full visible 6-week grid
-    const gridStart = startOfWeek(new Date(focus.getFullYear(), focus.getMonth(), 1));
+    const gridStart = startOfWeek(new Date(focus.getFullYear(), focus.getMonth(), 1), weekStart);
     return { start: gridStart, end: addDays(gridStart, 41) };
-  }, [view, focus]);
+  }, [view, focus, weekStart]);
 
   // ── Header label + nav handlers ───────────────────────────────────
   const headerLabel = useMemo(() => {
     if (view === "month") return formatMonthYear(focus);
-    if (view === "week")  return formatWeekRange(focus);
+    if (view === "week")  return formatWeekRange(focus, weekStart);
     return formatLongDate(focus);
-  }, [view, focus]);
+  }, [view, focus, weekStart]);
 
   const goPrev = () => {
     if (view === "month") setFocus((d) => addMonths(d, -1));
@@ -489,6 +494,7 @@ export default function ProjectCalendar() {
               focus={focus}
               today={todayLocal()}
               events={events}
+              weekStart={weekStart}
               onDayClick={handleDayClick}
               onEventClick={handleEventClick}
             />
@@ -498,6 +504,7 @@ export default function ProjectCalendar() {
               focus={focus}
               today={todayLocal()}
               events={events}
+              weekStart={weekStart}
               onDayClick={handleDayClick}
               onEventClick={handleEventClick}
             />
