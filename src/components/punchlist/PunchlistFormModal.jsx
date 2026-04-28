@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
+import { MapPin } from "lucide-react";
 
 const emptyForm = {
   project_id: "",
@@ -15,6 +16,8 @@ const emptyForm = {
   percent_complete: "0",
   notes: "",
   photos: [],
+  drawing_id: "",
+  inspection_id: "",
 };
 
 function asArray(v) {
@@ -65,6 +68,8 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
             ...item,
             percent_complete: String(item.percent_complete ?? "0"),
             photos: asArray(item.photos),
+            drawing_id: item.drawing_id || "",
+            inspection_id: item.inspection_id || "",
           }
         : { ...emptyForm, project_id: projectId || "" }
     );
@@ -77,12 +82,28 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
     staleTime: 5 * 60 * 1000,
   });
 
+  // Drawings list for the optional drawing_id selector (C2 — floor-plan
+  // markup data model). Per-project, soft-delete-filtered by the entity
+  // client. Empty when no project picked yet.
+  const { data: drawings = [] } = useQuery({
+    queryKey: ["drawings-for-punchlist", formData.project_id],
+    queryFn: () =>
+      formData.project_id
+        ? base44.entities.Drawing.filter({ project_id: formData.project_id }, "-updated_at", 200)
+        : Promise.resolve([]),
+    enabled: !!formData.project_id,
+    staleTime: 60 * 1000,
+  });
+
   const handleSubmit = () => {
     if (isSaving || !formData.project_id || !formData.description?.trim()) return;
     onSave?.({
       ...formData,
       percent_complete: parseInt(formData.percent_complete) || 0,
       photos: asArray(formData.photos),
+      // Empty strings → null so PostgREST doesn't reject the FK columns
+      drawing_id: formData.drawing_id || null,
+      inspection_id: formData.inspection_id || null,
     });
   };
 
@@ -162,6 +183,66 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
             <label style={labelStyle}>Notes</label>
             <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
           </div>
+
+          {/* Optional drawing pin (C2 data model) — surfaced as a
+              non-blocking optional field. The actual pin-drop UI in
+              the Drawing Viewer is deferred (see Field overhaul brief
+              C2 flag), but the link itself + a "Mark on drawing"
+              hand-off button are wired so once the AnnotationLayer
+              modal lands the round-trip is one keystroke away. */}
+          {drawings.length > 0 && (
+            <div>
+              <label style={labelStyle}>Linked Drawing (optional)</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={formData.drawing_id || ""}
+                  onChange={(e) => setFormData({ ...formData, drawing_id: e.target.value })}
+                  style={{ ...inputStyle, flex: 1 }}
+                >
+                  <option value="">— No drawing —</option>
+                  {drawings.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.sheet_number || d.drawing_number || ""} {d.title ? `· ${d.title}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {formData.drawing_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // FLAG: Per the Field overhaul brief C2, the
+                      // pin-drop UI in the Drawing Viewer is deferred.
+                      // For now this opens the drawing in viewer with
+                      // a hint param so the deferred pin-mode work can
+                      // recognise the entry-point without re-plumbing.
+                      const url = `/DrawingViewer?drawingId=${formData.drawing_id}&pinTarget=punchlist${item?.id ? `&punchlistId=${item.id}` : ""}`;
+                      window.open(url, "_blank");
+                    }}
+                    title="Open drawing in viewer (pin-drop UI is deferred — see brief)"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "var(--bg-surface)",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      borderRadius: 8,
+                      padding: "0 12px",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <MapPin size={11} /> Mark on drawing
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <PhotoStripUploader
             label="Photos"

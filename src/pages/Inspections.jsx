@@ -48,13 +48,15 @@ export default function Inspections() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: inspections = [], isLoading } = useQuery({
+  const { data: rawInspections = [], isLoading } = useQuery({
     queryKey: ["inspections", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.Inspection.filter({ project_id: projectId })
         : base44.entities.Inspection.list("-inspection_date"),
   });
+  // Defensive soft-delete filter (entity layer also does this at fetch).
+  const inspections = React.useMemo(() => rawInspections.filter((r) => !r.is_deleted), [rawInspections]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -104,6 +106,63 @@ export default function Inspections() {
       toast.success("Inspection deleted");
     },
     onError: () => toast.error("Delete failed"),
+  });
+
+  // C3 — Convert inspection deficiencies into punchlist items.
+  // Creates one punchlist row per deficiency (count from deficiencies_count),
+  // FK-linked back via punchlist_items.inspection_id and metadata trail.
+  // Stamps inspection.metadata.punchlist_converted so the button hides
+  // after conversion (idempotent — clicking again is a no-op).
+  const convertMut = useMutation({
+    mutationFn: async (inspection) => {
+      const count = Math.max(1, parseInt(inspection.deficiencies_count, 10) || 1);
+      const baseDescription = inspection.findings || inspection.corrective_actions || inspection.description || "Deficiency from inspection";
+      const inspNumber = inspection.id ? `INSP-${String(inspection.id).slice(0, 8)}` : "Inspection";
+      const items = [];
+      for (let i = 0; i < count; i++) {
+        const desc = count > 1
+          ? `[${inspNumber} #${i + 1}/${count}] ${baseDescription}`
+          : `[${inspNumber}] ${baseDescription}`;
+        items.push(await base44.entities.PunchlistItem.create({
+          project_id: inspection.project_id,
+          description: desc,
+          category: "Other",
+          location: inspection.location || "",
+          assigned_to: "",
+          priority: inspection.sign_off_status === "Rejected" ? "High" : "Medium",
+          status: "Open",
+          percent_complete: 0,
+          notes: inspection.corrective_actions || "",
+          inspection_id: inspection.id,
+          metadata: {
+            inspection_id: inspection.id,
+            inspection_number: inspNumber,
+            inspection_type: inspection.inspection_type,
+            deficiency_index: i + 1,
+            deficiency_count: count,
+          },
+        }));
+      }
+      // Stamp the inspection so the convert button hides on re-render
+      await base44.entities.Inspection.update(inspection.id, {
+        metadata: {
+          ...(inspection.metadata || {}),
+          punchlist_converted: {
+            count,
+            at: new Date().toISOString(),
+            ids: items.map((i) => i.id),
+          },
+        },
+      });
+      return { count };
+    },
+    onSuccess: ({ count }) => {
+      qc.invalidateQueries({ queryKey: ["inspections", projectId] });
+      qc.invalidateQueries({ queryKey: ["punchlist"] });
+      qc.invalidateQueries({ queryKey: ["punchlist", projectId] });
+      toast.success(`Created ${count} punchlist item${count === 1 ? "" : "s"} from inspection`);
+    },
+    onError: (err) => toast.error(`Convert failed: ${err.message}`),
   });
 
   const handleSave = (data) => {
@@ -372,6 +431,7 @@ export default function Inspections() {
           inspections={filtered}
           onEdit={(inspection) => { setEditing(inspection); setShowForm(true); }}
           onDelete={setDeleteTarget}
+          onConvertToPunchlist={(inspection) => convertMut.mutate(inspection)}
         />
       )}
 

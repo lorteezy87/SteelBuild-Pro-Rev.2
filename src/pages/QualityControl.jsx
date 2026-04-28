@@ -48,13 +48,15 @@ export default function QualityControl() {
     else createMut.mutate({ ...data, project_id: projectId });
   };
 
-  const { data: qcRecords = [], isLoading } = useQuery({
+  const { data: rawQcRecords = [], isLoading } = useQuery({
     queryKey: ["qc-records", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.QualityControlRecord.filter({ project_id: projectId })
         : base44.entities.QualityControlRecord.list("-test_date"),
   });
+  // Defensive soft-delete filter (entity layer also does this at fetch).
+  const qcRecords = useMemo(() => rawQcRecords.filter((r) => !r.is_deleted), [rawQcRecords]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

@@ -231,6 +231,11 @@ const SOFT_DELETE_TABLES = new Set<string>([
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings',
   'submittals', 'comments',
+  // Field overhaul (migration field_overhaul_soft_delete_and_fks)
+  // added is_deleted/deleted_at to these three. Once registered here
+  // the entity client auto-filters list/filter/get and turns delete()
+  // into a soft-delete — matching the Procurement/Budget Hours pattern.
+  'daily_logs', 'photos', 'quality_control_records',
 ]);
 
 /**

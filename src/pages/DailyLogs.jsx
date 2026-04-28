@@ -55,13 +55,17 @@ export default function DailyLogs() {
 
   const qc = useQueryClient();
 
-  const { data: logs = [], isLoading } = useQuery({
+  const { data: rawLogs = [], isLoading } = useQuery({
     queryKey: ["daily-logs", projectId],
     queryFn: () =>
       projectId
         ? base44.entities.DailyLog.filter({ project_id: projectId })
         : base44.entities.DailyLog.list("-date"),
   });
+  // Defensive in-memory soft-delete filter — the entity client does this
+  // at fetch time, but a stale cache from before the migration could still
+  // surface deleted rows. Mirrors the BudgetHours / Procurement pattern.
+  const logs = useMemo(() => rawLogs.filter((r) => !r.is_deleted), [rawLogs]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
