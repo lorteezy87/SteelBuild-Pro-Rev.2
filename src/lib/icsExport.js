@@ -251,23 +251,111 @@ export function submittalToEvent(sub, projectNumber = "") {
 }
 
 export function deliveryToEvent(del, projectNumber = "") {
-  if (!del?.scheduled_date) return null;
+  // deliveries.scheduled_date is the planned arrival; fall back to the
+  // contractor-stated required_date if scheduled hasn't been set yet so
+  // the calendar still shows the constraint.
+  const date = del?.scheduled_date || del?.required_date;
+  if (!date) return null;
   return {
     uid:         `delivery-${del.id}`,
     title:       projectNumber
-      ? `[${projectNumber}] Delivery: ${del.description || del.po_number || "Load"}`
-      : `Delivery: ${del.description || del.po_number || "Load"}`,
-    start:       del.scheduled_date,
+      ? `[${projectNumber}] Delivery: ${del.description || del.delivery_title || del.po_number || "Load"}`
+      : `Delivery: ${del.description || del.delivery_title || del.po_number || "Load"}`,
+    start:       date,
     allDay:      true,
     description: [
       del.vendor ? `Vendor: ${del.vendor}` : "",
       del.po_number ? `PO: ${del.po_number}` : "",
       del.pieces ? `Pieces: ${del.pieces}` : "",
       del.weight_tons ? `Weight: ${del.weight_tons}t` : "",
+      del.procurement_category ? `Type: ${del.procurement_category}` : "",
       del.is_long_lead ? `⚠ Long-lead item` : "",
     ].filter(Boolean).join("\n"),
     location:    del.receiving_location || "",
     category:    "DELIVERY",
     reminderDaysBefore: del.is_long_lead ? 14 : 2,
+  };
+}
+
+export function actionItemToEvent(item, projectNumber = "") {
+  if (!item?.due_date) return null;
+  return {
+    uid:         `action-${item.id}`,
+    title:       projectNumber
+      ? `[${projectNumber}] Action: ${item.title || "Item"}`
+      : `Action: ${item.title || "Item"}`,
+    start:       item.due_date,
+    allDay:      true,
+    description: [
+      item.status ? `Status: ${item.status}` : "",
+      item.category ? `Category: ${item.category}` : "",
+      item.description || "",
+    ].filter(Boolean).join("\n"),
+    category:    "ACTION",
+    reminderDaysBefore: 1,
+  };
+}
+
+export function inspectionToEvent(insp, projectNumber = "") {
+  if (!insp?.inspection_date) return null;
+  return {
+    uid:         `inspection-${insp.id}`,
+    title:       projectNumber
+      ? `[${projectNumber}] Inspection: ${insp.description || "Scheduled"}`
+      : `Inspection: ${insp.description || "Scheduled"}`,
+    start:       insp.inspection_date,
+    allDay:      true,
+    description: [
+      insp.inspector_name ? `Inspector: ${insp.inspector_name}` : "",
+      insp.status ? `Status: ${insp.status}` : "",
+      insp.sign_off_status ? `Sign-off: ${insp.sign_off_status}` : "",
+    ].filter(Boolean).join("\n"),
+    category:    "INSPECTION",
+    reminderDaysBefore: 1,
+  };
+}
+
+export function changeOrderToEvent(co, projectNumber = "") {
+  // Surface COs on the calendar at their most-recent meaningful date:
+  // approved → submitted → created. Helps PMs see "the day this CO was
+  // signed" alongside the rest of the schedule.
+  const date = co?.approved_date || co?.submitted_date || co?.created_at;
+  if (!date) return null;
+  const dateOnly = String(date).slice(0, 10);
+  const label = co?.approved_date ? "Approved" : co?.submitted_date ? "Submitted" : "Filed";
+  return {
+    uid:         `co-${co.id}`,
+    title:       projectNumber
+      ? `[${projectNumber}] CO ${co.co_number || ""} ${label}`.trim()
+      : `CO ${co.co_number || ""} ${label}`.trim(),
+    start:       dateOnly,
+    allDay:      true,
+    description: [
+      co.title ? co.title : "",
+      co.status ? `Status: ${co.status}` : "",
+      co.description || "",
+    ].filter(Boolean).join("\n"),
+    category:    "CHANGE_ORDER",
+    reminderDaysBefore: 0,
+  };
+}
+
+export function dailyLogToEvent(log, projectNumber = "") {
+  if (!log?.date) return null;
+  return {
+    uid:         `dailylog-${log.id}`,
+    title:       projectNumber
+      ? `[${projectNumber}] Daily Log Filed`
+      : `Daily Log Filed`,
+    start:       log.date,
+    allDay:      true,
+    description: [
+      log.crew_name ? `Crew: ${log.crew_name}` : "",
+      log.weather_description ? `Weather: ${log.weather_description}` : "",
+      Number.isFinite(log.safety_incidents) && log.safety_incidents > 0
+        ? `Safety incidents: ${log.safety_incidents}` : "",
+    ].filter(Boolean).join("\n"),
+    category:    "DAILY_LOG",
+    reminderDaysBefore: 0,
   };
 }

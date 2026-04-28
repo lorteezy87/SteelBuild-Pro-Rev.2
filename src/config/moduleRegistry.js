@@ -21,7 +21,7 @@ export const PRIMARY_TABS = [
   { label: "DRAWINGS",    pages: ["Drawings", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
-  { label: "SCHEDULE",    pages: ["Schedule", "GanttChart"] },
+  { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
   { label: "FIELD",       pages: ["DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "RESOURCES",   pages: ["ResourceScheduling", "ResourceManagement"] },
@@ -71,6 +71,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCE6", name: "Procurement",        group: "Fabrication",   page: "Procurement" },
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
   { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
+  { icon: "📅", name: "Project Calendar",         group: "Field",         page: "ProjectCalendar" },
   { icon: "\u2699", name: "LEMs",                     group: "Field",         page: "LEMs" },
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
@@ -173,6 +174,7 @@ export const NAV_GROUPS = [
   {
     label: "SCHEDULING",
     items: [
+      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Gantt Schedule",  icon: "\u25A5", page: "Schedule" },
       { label: "Resource Board",  icon: "\uD83D\uDC65", page: "ResourceManagement" },
       { label: "Weekly Look-Ahead", icon: "\uD83D\uDCC5", page: "LookAheadSchedule" },
@@ -236,6 +238,7 @@ export const SIDEBAR_GROUPS = [
     label: "PROJECT MANAGEMENT",
     collapsible: true,
     items: [
+      { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
       { label: "RFIs",           icon: "\u2691", page: "RFIs" },

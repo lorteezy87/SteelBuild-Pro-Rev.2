@@ -60,6 +60,8 @@ export default function ProjectDashboard({
         wps={wps}
         scheduleTasks={scheduleTasks}
         deliveries={deliveries}
+        rfis={rfis}
+        actionItems={actionItems}
         onNavigate={onNavigate}
       />
       <FinancialControlsSection
