@@ -707,14 +707,12 @@ export function pendingPayment(sovItems = []) {
  *
  * Computed as: scheduled_value × current_percent_complete% × retainage_percent%
  * The schema stores `retainage_percent` (e.g. 10 for 10%), not a precomputed
- * dollar amount. Falls back to a literal `retention_held` column for any
- * legacy rows that already carry the dollar value.
+ * dollar amount. (An earlier version of this helper had a fallback for a
+ * literal `retention_held` column, but that column never shipped — dropped
+ * the dead branch.)
  */
 export function retentionHeld(sovItems = []) {
   return sovItems.reduce((s, i) => {
-    if (i?.retention_held != null) {
-      return s + (Number(i.retention_held) || 0);
-    }
     const sched = Number(i?.scheduled_value) || 0;
     const pct   = Number(i?.current_percent_complete) || 0;
     const ret   = Number(i?.retainage_percent) || 0;
@@ -737,15 +735,18 @@ export function retentionHeld(sovItems = []) {
  * so the sum still equals the total number of tasks.
  */
 export function taskDistributionByType(scheduleTasks = []) {
-  const TYPES = ["Fabrication", "Delivery", "Install", "Submittal", "Task", "Milestone"];
+  const TYPES = ["Fabrication", "Delivery", "Install", "Submittal", "Task", "Milestone", "Other"];
   const result = TYPES.reduce((acc, t) => {
     acc[t] = { tasks: 0, inProgress: 0 };
     return acc;
   }, {});
   for (const t of scheduleTasks) {
     if (!t) continue;
-    const type = TYPES.includes(t.task_type) ? t.task_type : null;
-    if (!type) continue;
+    // Tasks with an unknown / missing task_type land in the "Other"
+    // bucket so the panel total matches scheduleTasks.length and a
+    // mis-tagged row still shows up somewhere instead of silently
+    // disappearing from the rollup.
+    const type = TYPES.includes(t.task_type) ? t.task_type : "Other";
     result[type].tasks++;
     const status = t?.status;
     if (status === "In Progress" || status === "Open" || status === "Active") {
