@@ -58,6 +58,18 @@ function fmtHours(n) {
   return v.toFixed(1);
 }
 
+/**
+ * Display helper for cells where 0 should read as "blank" so the user
+ * doesn't have to delete the placeholder zero before typing. Used by
+ * HourCell's read-mode rendering only — the underlying DB value stays
+ * 0 (column default) so sums and rollups work normally.
+ */
+function fmtHoursOrBlank(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v === 0) return "—";
+  return v.toFixed(1);
+}
+
 /* ─────────────────────────────────────────────
    Roll up actual hours from linked work packages.
    Pure helper — null/missing arrays return the manual value.
@@ -86,12 +98,24 @@ function effectiveActuals(row, wpsById) {
 ───────────────────────────────────────────── */
 function HourCell({ value, locked, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(value ?? ""));
-  React.useEffect(() => { setDraft(String(value ?? "")); }, [value]);
+  // Treat null AND 0 as "blank" in the input so the user can land on
+  // a freshly-templated row and start typing immediately, no need to
+  // delete a placeholder zero each time. The cell's read-mode display
+  // also renders an em-dash for zero (see fmtHoursOrBlank). The DB
+  // value stays 0 on commit when the input is left empty so the
+  // rollup math doesn't break.
+  const toDraft = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n === 0) return "";
+    return String(n);
+  };
+  const [draft, setDraft] = useState(() => toDraft(value));
+  React.useEffect(() => { setDraft(toDraft(value)); }, [value]);
 
   const commit = () => {
     setEditing(false);
-    const next = Number(draft) || 0;
+    const trimmed = String(draft || "").trim();
+    const next = trimmed === "" ? 0 : (Number(trimmed) || 0);
     if (next !== Number(value)) onSave(next);
   };
 
@@ -112,16 +136,19 @@ function HourCell({ value, locked, onSave }) {
   }
 
   if (!editing) {
+    const isZero = !Number.isFinite(Number(value)) || Number(value) === 0;
     return (
       <button
         onClick={() => setEditing(true)}
+        title={isZero ? "Click to enter hours" : undefined}
         style={{
           background: "transparent",
           border: "1px dashed transparent",
           borderRadius: 3,
           padding: "2px 6px",
           fontFamily: "var(--font-mono)", fontSize: 11,
-          color: "var(--text-primary)", fontVariantNumeric: "tabular-nums",
+          color: isZero ? "var(--text-muted)" : "var(--text-primary)",
+          fontVariantNumeric: "tabular-nums",
           cursor: "pointer",
           width: "100%",
           textAlign: "right",
@@ -129,7 +156,7 @@ function HourCell({ value, locked, onSave }) {
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-border)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}
       >
-        {fmtHours(value)}
+        {fmtHoursOrBlank(value)}
       </button>
     );
   }
@@ -139,12 +166,14 @@ function HourCell({ value, locked, onSave }) {
       autoFocus
       type="number"
       step="0.25"
+      placeholder="—"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => { try { e.target.select(); } catch {} }}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit();
-        else if (e.key === "Escape") { setEditing(false); setDraft(String(value ?? "")); }
+        else if (e.key === "Escape") { setEditing(false); setDraft(toDraft(value)); }
       }}
       style={{
         width: "100%",
