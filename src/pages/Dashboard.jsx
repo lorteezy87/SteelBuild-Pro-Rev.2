@@ -179,10 +179,18 @@ export default function Dashboard() {
             "change-orders": "/ChangeOrders",
             "field-reports": "/DailyLogs",
             schedule:        "/Schedule",
+            "fab-release":   "/FabRelease",
           };
           const path = paths[target];
           if (!path) return;
-          navigate(opts.create ? `${path}?new=1` : path);
+          // `opts.stage` lets the WP pipeline cells deep-link into
+          // FabRelease pre-filtered by stage (e.g. ?stage=in_fabrication).
+          // `opts.create` auto-opens the create modal via useAutoOpenCreate.
+          const params = [];
+          if (opts.create) params.push("new=1");
+          if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
+          if (opts.view) params.push(`view=${encodeURIComponent(opts.view)}`);
+          navigate(params.length ? `${path}?${params.join("&")}` : path);
         }}
       />
     </ErrorBoundary>
