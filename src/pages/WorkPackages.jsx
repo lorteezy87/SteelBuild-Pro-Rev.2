@@ -86,6 +86,32 @@ export default function WorkPackages() {
     staleTime: 30 * 1000,
   });
 
+  // Procurement deliveries linked to WPs — drives the small "Procurement
+  // linked" indicator on each row when at least one procurement-categorized
+  // delivery references that WP. Fetching the project's deliveries here
+  // is cheap (one round-trip per page-mount) and lets the indicator stay
+  // accurate without a per-row query.
+  const { data: projectDeliveries = [] } = useQuery({
+    queryKey: ["deliveries-for-wps", projectId],
+    queryFn: () => projectId
+      ? base44.entities.Delivery.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 30 * 1000,
+  });
+
+  const procurementByWp = useMemo(() => {
+    const m = new Map();
+    for (const d of projectDeliveries) {
+      if (!d || d.is_deleted || !d.procurement_category) continue;
+      if (!d.work_package_id) continue;
+      const arr = m.get(d.work_package_id) || [];
+      arr.push(d);
+      m.set(d.work_package_id, arr);
+    }
+    return m;
+  }, [projectDeliveries]);
+
   /* ── Mutations ── */
   const updateWPMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.WorkPackage.update(id, data),
@@ -403,6 +429,7 @@ export default function WorkPackages() {
                 onEdit={handleWPEdit}
                 onOpen={() => setSelectedBoardWP(w)}
                 onDelete={(wp) => setDeleteTarget(wp)}
+                procurementCount={procurementByWp.get(w.id)?.length || 0}
               />
             ))
           ) : (

@@ -48,12 +48,10 @@ export default function ProjectDashboard({
   budgetHourItems = [],
   onNavigate,
 }) {
-  // codes / deliveries are accepted for forward compatibility (e.g. a
-  // future Procurement panel) but aren't read by any current section.
-  // Reference them once so eslint's unused-args check stays quiet
-  // without hiding the prop in the destructure.
+  // `codes` is accepted for forward compatibility but isn't read by any
+  // current section. Reference it once so eslint's unused-args check
+  // stays quiet without hiding the prop in the destructure.
   void codes;
-  void deliveries;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -61,6 +59,7 @@ export default function ProjectDashboard({
         project={project}
         wps={wps}
         scheduleTasks={scheduleTasks}
+        deliveries={deliveries}
         onNavigate={onNavigate}
       />
       <FinancialControlsSection

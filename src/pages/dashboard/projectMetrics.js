@@ -189,6 +189,96 @@ function deriveFabStage(wp) {
 }
 
 /**
+ * Procurement status rollup — buckets non-deleted procurement
+ * deliveries (anything with a non-null procurement_category) by their
+ * 7-stage workflow status. Mirrors the Procurement page's PIPELINE_STATUSES
+ * order so the dashboard chevron strip can deep-link directly into
+ * `/Procurement?status=<stage>`.
+ *
+ * Cancelled is intentionally excluded from the chevron (it's a
+ * sidebar/filter on the page itself, not a pipeline column) but still
+ * counted in `cancelled` so callers can surface a separate badge if
+ * they want to.
+ *
+ * Each row's "long lead" status comes from the boolean `is_long_lead`
+ * column, NOT the legacy "Long-Lead Item" category — that was the bug
+ * the rebuild fixed so this helper matches the page's KPI logic.
+ */
+export function procurementStatusRollup(deliveries = []) {
+  const stages = [
+    "Identified", "Quoted", "PO Issued", "Confirmed",
+    "In Production", "Shipped", "Received",
+  ];
+  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  let total = 0;
+  let totalWeight = 0;
+  let longLead = 0;
+  let longLeadSlipping = 0;
+  let cancelled = 0;
+  const today = new Date();
+
+  for (const d of deliveries) {
+    if (!d || d.is_deleted) continue;
+    if (!d.procurement_category) continue;
+    total++;
+    totalWeight += Number(d.weight_tons) || 0;
+    if (d.is_long_lead) {
+      longLead++;
+      // Implied ship date = order_placed_date + lead_time_weeks*7,
+      // unless the user already entered an expected_ship_date.
+      const lead = Number(d.lead_time_weeks) || 0;
+      let implied = d.expected_ship_date || null;
+      if (!implied && d.order_placed_date && lead > 0) {
+        const dt = new Date(d.order_placed_date);
+        if (!Number.isNaN(dt.getTime())) {
+          dt.setDate(dt.getDate() + Math.round(lead * 7));
+          implied = dt.toISOString().slice(0, 10);
+        }
+      }
+      if (implied && d.required_date
+        && new Date(implied) > new Date(d.required_date)
+        && d.status !== "Received" && d.status !== "Cancelled") {
+        longLeadSlipping++;
+      }
+    }
+    if (d.status === "Cancelled") {
+      cancelled++;
+      continue;
+    }
+    if (counts[d.status] !== undefined) counts[d.status]++;
+  }
+
+  // Active stage = the latest stage in pipeline order that has rows.
+  // Falls back to "Identified" when nothing's started yet so the UI
+  // anchor always points somewhere.
+  let activeIdx = 0;
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if (counts[stages[i]] > 0) { activeIdx = i; break; }
+  }
+
+  // Overdue = required_date in the past and not yet Received/Cancelled.
+  let overdue = 0;
+  for (const d of deliveries) {
+    if (!d || d.is_deleted || !d.procurement_category) continue;
+    if (d.status === "Received" || d.status === "Cancelled") continue;
+    if (!d.required_date) continue;
+    if (new Date(d.required_date) < today) overdue++;
+  }
+
+  return {
+    stages,
+    counts,
+    total,
+    totalWeight,
+    longLead,
+    longLeadSlipping,
+    cancelled,
+    overdue,
+    activeStage: stages[activeIdx],
+  };
+}
+
+/**
  * Count of work packages that are past their scheduled end date and
  * not yet Complete. Drives the OVERDUE stat tile on the Schedule &
  * Timeline panel — was previously hardcoded to 0.
