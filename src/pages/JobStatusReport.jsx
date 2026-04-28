@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44, resolveFileUrl } from "@/api/base44Client";
-import {
-  FileText, Download, Loader2, CheckCircle2,
-  AlertCircle, Building2, Calendar, RefreshCw, Search, X,
+import { Download, Loader2, CheckCircle2,
+  AlertCircle, Building2, RefreshCw, Search, X,
   Eye, Filter, Clock, AlertTriangle,
 } from "lucide-react";
 import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";

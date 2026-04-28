@@ -14,6 +14,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+**/.next
+.claude
+steelbuild-pro
 *.local
 
 # Editor directories and files

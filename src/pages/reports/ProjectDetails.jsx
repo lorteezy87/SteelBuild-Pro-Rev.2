@@ -26,7 +26,6 @@ import { SelectFilter, FilterBar } from "./ReportFilters";
 import {
   formatCurrencyFull,
   formatDate,
-  exportTableCSV,
   formatPercent,
 } from "./utils";
 import { mono, body, CARD, CARD_TITLE, PROJECT_HEALTH_COLORS } from "./constants";

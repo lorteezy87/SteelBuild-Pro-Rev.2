@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
 import DeleteDialog from '@/components/shared/DeleteDialog';
-import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle, labelStyle } from '@/components/shared/PhoenixModal';
+import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle } from '@/components/shared/PhoenixModal';
 import { formatDate } from '@/components/shared/formatters';
 import { toast } from 'sonner';
 import { CommandBar } from '@/components/design-system';

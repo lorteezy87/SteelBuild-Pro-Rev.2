@@ -54,7 +54,7 @@ import {
   Icon,
 } from "@/components/design-system";
 
-import { extractRfiSequence, buildRfiNumberRepairs, daysOpen, isClosed, isOverdue, exportRFIsToCSV } from "./rfis/utils";
+import { extractRfiSequence, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";

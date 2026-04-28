@@ -29,7 +29,7 @@ import { base44 } from "@/api/base44Client";
 import { CommandBar } from "@/components/design-system";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/useProjectContext";
-import { PRESET_LIST, PRESETS } from "@/lib/budgetHourPresets";
+import { PRESET_LIST } from "@/lib/budgetHourPresets";
 
 /* ─────────────────────────────────────────────
    Variance helpers

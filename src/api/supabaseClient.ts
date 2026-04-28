@@ -999,11 +999,11 @@ export const integrations = {
         console.warn('[llm-proxy]', firstFailure);
       }
 
-      // ── 2. Direct Anthropic API (requires VITE_ANTHROPIC_API_KEY in .env.local) ─
-      // This path mirrors what the edge function does so it can serve as a
-      // genuine fallback for tool-use callers, not just plain chat.
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
-      if (apiKey) {
+      // ── 2. Direct browser LLM fallback is disabled ─
+      // This dead branch is kept only as a temporary rollback marker; the
+      // browser must never read or send provider API keys directly.
+      const directBrowserFallbackEnabled = false;
+      if (directBrowserFallbackEnabled) {
         try {
           const body: Record<string, unknown> = {
             model: model || 'claude-sonnet-4-5',
@@ -1030,7 +1030,6 @@ export const integrations = {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': apiKey,
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify(body),
@@ -1080,9 +1079,9 @@ export const integrations = {
       // error, schema problem, stale deployment) is far more actionable than
       // "deploy an edge function" advice.
       const finalMsg = firstFailure
-        || (apiKey
-            ? 'Anthropic API call failed — check VITE_ANTHROPIC_API_KEY and network access.'
-            : 'AI unavailable. Deploy a Supabase Edge Function named "llm-proxy" or add VITE_ANTHROPIC_API_KEY to .env.local.');
+        || (directBrowserFallbackEnabled
+            ? 'Direct browser LLM fallback is disabled.'
+            : 'AI unavailable. Deploy and configure the authenticated Supabase Edge Function named "llm-proxy".');
       console.warn('[InvokeLLM]', finalMsg);
       return { error: finalMsg };
     },
