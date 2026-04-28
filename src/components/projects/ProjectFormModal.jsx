@@ -8,7 +8,21 @@ const empty = {
   original_contract_value: 0, start_date: null, target_completion_date: null,
   forecast_completion_date: null, phase: "Detailing", health_status: "On Track",
   retainage_percent: 10, contingency_amount: 0, address: "", notes: "",
+  job_type: null,
 };
+
+// Kept in sync with the projects_job_type_check constraint added in
+// migration 063 — adding a value here without updating the migration
+// will fail at insert time.
+const JOB_TYPES = [
+  "Beams/Deck",
+  "Beams/Joists/Deck",
+  "Joist Deck",
+  "Tilt",
+  "Tilt Hybrid",
+  "Misc.",
+  "Other",
+];
 
 export default function ProjectFormModal({ open, onClose, onSave, project }) {
   const [form, setForm] = useState(empty);
@@ -43,6 +57,7 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
       start_date: form.start_date || null,
       target_completion_date: form.target_completion_date || null,
       forecast_completion_date: form.forecast_completion_date || null,
+      job_type: form.job_type || null,
     });
   };
 
@@ -85,6 +100,15 @@ export default function ProjectFormModal({ open, onClose, onSave, project }) {
           <Select value={form.contract_type} onValueChange={v => set("contract_type", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{["Lump Sum","T&M","GMP"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+          </Select>
+        </FormField>
+        <FormField label="Job Type">
+          <Select value={form.job_type || "__unset__"} onValueChange={v => set("job_type", v === "__unset__" ? null : v)}>
+            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__unset__">—</SelectItem>
+              {JOB_TYPES.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
           </Select>
         </FormField>
         <FormField label="Original Contract Value ($)">

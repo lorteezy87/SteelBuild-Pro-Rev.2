@@ -127,6 +127,7 @@ export default function ProjectStatus() {
         number: p.project_number || `P-${p.id}`,
         phase: p.phase || "",
         health: p.health_status || "",
+        jobType: p.job_type || "",
         startDate: p.start_date || null,
         targetDate: p.target_completion_date || null,
         revised,
@@ -191,6 +192,17 @@ export default function ProjectStatus() {
         label: "Phase",
         width: "minmax(130px, 1fr)",
         render: (r) => <PhaseChip phase={r.phase} />,
+      },
+      {
+        key: "jobType",
+        label: "Job Type",
+        width: "minmax(130px, 1fr)",
+        render: (r) => (
+          <span style={{ ...mono, fontSize: 10, color: r.jobType ? "var(--text-secondary)" : "var(--text-muted)" }}>
+            {r.jobType || "—"}
+          </span>
+        ),
+        csvValue: (r) => r.jobType || "",
       },
       {
         key: "health",

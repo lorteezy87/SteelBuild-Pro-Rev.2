@@ -1,4 +1,4 @@
-/**
+﻿/**
  * moduleRegistry.js - Central navigation and module configuration
  *
  * Single source of truth for:
@@ -19,7 +19,7 @@ export const PRIMARY_TABS = [
   { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs", "RFIHub"] },
   { label: "DRAWINGS",    pages: ["Drawings", "DrawingAnalysis", "DrawingViewer", "Documents"] },
-  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "Procurement", "LookAheadSchedule"] },
+  { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart"] },
   { label: "FIELD",       pages: ["DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
@@ -67,6 +67,7 @@ export const ALL_MODULES = [
   { icon: "\u25A6", name: "Work Packages",            group: "Fab",           page: "WorkPackages" },
   { icon: "\uD83D\uDEA7", name: "Constraints",        group: "Fab",           page: "Constraints" },
   { icon: "\uD83C\uDFED", name: "Fab Release",        group: "Fabrication",   page: "FabRelease" },
+  { icon: "⏱", name: "Budget Hours",            group: "Fabrication",   page: "BudgetHours" },
   { icon: "\uD83D\uDCE6", name: "Procurement",        group: "Fabrication",   page: "Procurement" },
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
   { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
@@ -150,6 +151,7 @@ export const NAV_GROUPS = [
       { label: "Work Packages", icon: "\u25A6", page: "WorkPackages" },
       { label: "Constraints",   icon: "\uD83D\uDEA7", page: "Constraints" },
       { label: "Fab Release",   icon: "\uD83C\uDFED", page: "FabRelease" },
+      { label: "Budget Hours",  icon: "\u23F1", page: "BudgetHours" },
       { label: "Procurement",   icon: "\uD83D\uDCE6", page: "Procurement" },
       { label: "Look-Ahead",    icon: "\uD83D\uDC41", page: "LookAheadSchedule" },
     ],
@@ -258,6 +260,7 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Work Packages",        icon: "\u25A6", page: "WorkPackages" },
       { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
+      { label: "Budget Hours",         icon: "⏱",  page: "BudgetHours" },
       { label: "Constraints",          icon: "🚧", page: "Constraints" },
       { label: "Procurement",          icon: "📦", page: "Procurement" },
       { label: "Look-Ahead Schedule",  icon: "👁", page: "LookAheadSchedule" },
