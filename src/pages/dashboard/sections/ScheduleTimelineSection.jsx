@@ -25,6 +25,7 @@ import {
   projectMilestones,
   criticalPathTasks,
   fabStatusRollup,
+  procurementStatusRollup,
 } from "../projectMetrics";
 import InlineEditField from "@/components/shared/InlineEditField";
 
@@ -37,13 +38,17 @@ const STAGE_COLOR = {
   "Shipped":     "#0d9488",
 };
 
-export default function ScheduleTimelineSection({ project, wps = [], scheduleTasks = [], onNavigate }) {
+export default function ScheduleTimelineSection({ project, wps = [], scheduleTasks = [], deliveries = [], onNavigate }) {
   const elapsedPct = useMemo(() => timelineElapsedPct(project), [project]);
   const completePct = useMemo(() => wpProgressPct(wps), [wps]);
   const daysLeft = useMemo(() => daysRemaining(project), [project]);
   const pipeline = useMemo(() => wpPipelineRollup(wps), [wps]);
   const overdue = useMemo(() => overdueWPCount(wps), [wps]);
   const fab = useMemo(() => fabStatusRollup(wps), [wps]);
+  // Procurement rollup uses the procurement subset of `deliveries`
+  // (anything with a non-null procurement_category). When no rows
+  // qualify, the panel renders nothing — same UX as Fab below.
+  const proc = useMemo(() => procurementStatusRollup(deliveries), [deliveries]);
 
   // Milestones come from schedule_tasks tagged task_type='Milestone'.
   // When nothing's tagged yet we synthesise project start + target so
@@ -315,9 +320,85 @@ export default function ScheduleTimelineSection({ project, wps = [], scheduleTas
           </div>
         </div>
       )}
+
+      {/* Procurement status pipeline — surfaces the 7-stage workflow
+          (Identified → Quoted → PO Issued → Confirmed → In Production
+          → Shipped → Received). Hidden when the project has no
+          procurement-categorized deliveries. Each cell deep-links to
+          /Procurement?status=<stage>. */}
+      {proc.total > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.10em", textTransform: "uppercase",
+            color: "var(--text-muted)", marginBottom: 8,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span>
+              Procurement Status
+              <span style={{ marginLeft: 8, color: "var(--text-muted)", fontWeight: 400 }}>
+                {proc.total} item{proc.total === 1 ? "" : "s"}
+                {proc.totalWeight > 0 ? ` · ${proc.totalWeight.toFixed(1)}T` : ""}
+                {proc.longLead > 0 ? ` · ${proc.longLead} long-lead` : ""}
+                {proc.longLeadSlipping > 0
+                  ? ` · `
+                  : ""}
+                {proc.longLeadSlipping > 0 && (
+                  <span style={{ color: "var(--status-error)", fontWeight: 700 }}>
+                    {proc.longLeadSlipping} slipping
+                  </span>
+                )}
+              </span>
+            </span>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate("procurement")}
+                style={LINK_BTN}
+              >
+                Open Procurement →
+              </button>
+            )}
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${proc.stages.length}, 1fr)`,
+            gap: 4,
+          }}>
+            {proc.stages.map((stage) => (
+              <PipelineCell
+                key={stage}
+                label={PROC_STAGE_LABEL[stage]}
+                count={proc.counts[stage]}
+                color={PROC_STAGE_COLOR[stage]}
+                onClick={onNavigate ? () => onNavigate("procurement", { status: stage }) : undefined}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </SectionCard>
   );
 }
+
+const PROC_STAGE_LABEL = {
+  "Identified":    "IDENT",
+  "Quoted":        "QUOTED",
+  "PO Issued":     "PO",
+  "Confirmed":     "CONFIRM",
+  "In Production": "IN PROD",
+  "Shipped":       "SHIPPED",
+  "Received":      "RECEIVED",
+};
+
+const PROC_STAGE_COLOR = {
+  "Identified":    "var(--text-muted)",
+  "Quoted":        "var(--status-info)",
+  "PO Issued":     "var(--accent)",
+  "Confirmed":     "var(--phase-detailing)",
+  "In Production": "var(--status-warning)",
+  "Shipped":       "#0d9488",
+  "Received":      "var(--status-success)",
+};
 
 const FAB_STAGE_LABEL = {
   drawings_approved: "DWG APRVD",

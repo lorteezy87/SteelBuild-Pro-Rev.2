@@ -190,15 +190,18 @@ export default function Dashboard() {
             schedule:        "/Schedule",
             "fab-release":   "/FabRelease",
             "budget-hours":  "/BudgetHours",
+            procurement:     "/Procurement",
           };
           const path = paths[target];
           if (!path) return;
           // `opts.stage` lets the WP pipeline cells deep-link into
           // FabRelease pre-filtered by stage (e.g. ?stage=in_fabrication).
+          // `opts.status` does the same for the Procurement chevron strip.
           // `opts.create` auto-opens the create modal via useAutoOpenCreate.
           const params = [];
           if (opts.create) params.push("new=1");
           if (opts.stage) params.push(`stage=${encodeURIComponent(opts.stage)}`);
+          if (opts.status) params.push(`status=${encodeURIComponent(opts.status)}`);
           if (opts.view) params.push(`view=${encodeURIComponent(opts.view)}`);
           navigate(params.length ? `${path}?${params.join("&")}` : path);
         }}

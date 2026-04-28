@@ -10,7 +10,8 @@
  */
 
 import React from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Pencil, Trash2, Package } from "lucide-react";
 import { PhaseChevron, ProgressBar, StatusPill, BicPill } from "@/components/design-system";
 import { PHASE_COLOR, PHASE_HEX } from "@/components/design-system/tokens";
 
@@ -26,7 +27,8 @@ const STAGES = [
   { id: "Erection",    label: "ERECT",  color: PHASE_HEX.Erection    },
 ];
 
-export default function WpRow({ wp, selected, onToggle, onEdit, onOpen, onDelete }) {
+export default function WpRow({ wp, selected, onToggle, onEdit, onOpen, onDelete, procurementCount = 0 }) {
+  const navigate = useNavigate();
   const activeIdx = PHASE_IDX[wp.phase] ?? 0;
 
   return (
@@ -101,6 +103,38 @@ export default function WpRow({ wp, selected, onToggle, onEdit, onOpen, onDelete
             </span>
           )}
           {wp.crew && <BicPill bic={wp.crew} />}
+          {procurementCount > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Deep-link into Procurement; the page reads search params
+                // on mount but doesn't yet filter by WP, so we just open
+                // the page — the user can spot their items via the WP-#
+                // pill on each row. Acceptable until a WP-scoped filter
+                // lands.
+                navigate("/Procurement");
+              }}
+              title={`${procurementCount} procurement item${procurementCount === 1 ? "" : "s"} linked`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                background: "var(--accent-muted)",
+                border: "1px solid var(--accent-border, var(--accent))",
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                padding: "2px 5px",
+                borderRadius: 3,
+                cursor: "pointer",
+              }}
+            >
+              <Package size={9} /> {procurementCount} PROC
+            </button>
+          )}
         </div>
       </div>
       <div>
