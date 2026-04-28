@@ -67,7 +67,10 @@ export default function FabRelease() {
   const [showHours, setShowHours] = useState(false);
   const qc = useQueryClient();
 
-  // restore persisted view/filter prefs
+  // restore persisted view/filter prefs, then let URL search params
+  // override (so deep-links from the project dashboard / Work Packages
+  // page can target a specific stage or view without losing the user's
+  // saved defaults across cold-loads).
   useEffect(() => {
     const savedView = localStorage.getItem("fabView");
     const savedStage = localStorage.getItem("fabStageFilter");
@@ -75,6 +78,22 @@ export default function FabRelease() {
     if (savedView) setView(savedView);
     if (savedStage) setStageFilter(savedStage);
     if (savedHours) setShowHours(savedHours === "true");
+
+    const urlView = searchParams.get("view");
+    const urlStage = searchParams.get("stage");
+    if (urlView && ["pipeline", "list", "board"].includes(urlView)) {
+      setView(urlView);
+    }
+    if (urlStage) {
+      // Accept the canonical id ("in_fabrication"), the short label
+      // ("IN FAB"), or "all" — anything else is silently ignored so a
+      // typo'd URL doesn't blank the list.
+      const matched =
+        urlStage === "all" ? "all"
+        : FAB_STAGES.find((s) => s.id === urlStage || s.short.toLowerCase() === urlStage.toLowerCase())?.id;
+      if (matched) setStageFilter(matched);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { data: wps = [], isLoading } = useQuery({

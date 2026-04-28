@@ -24,6 +24,7 @@ import {
   overdueWPCount,
   projectMilestones,
   criticalPathTasks,
+  fabStatusRollup,
 } from "../projectMetrics";
 import InlineEditField from "@/components/shared/InlineEditField";
 
@@ -42,6 +43,7 @@ export default function ScheduleTimelineSection({ project, wps = [], scheduleTas
   const daysLeft = useMemo(() => daysRemaining(project), [project]);
   const pipeline = useMemo(() => wpPipelineRollup(wps), [wps]);
   const overdue = useMemo(() => overdueWPCount(wps), [wps]);
+  const fab = useMemo(() => fabStatusRollup(wps), [wps]);
 
   // Milestones come from schedule_tasks tagged task_type='Milestone'.
   // When nothing's tagged yet we synthesise project start + target so
@@ -234,7 +236,7 @@ export default function ScheduleTimelineSection({ project, wps = [], scheduleTas
       </div>
 
       {/* WP Pipeline */}
-      <div>
+      <div style={{ marginBottom: 14 }}>
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
           letterSpacing: "0.10em", textTransform: "uppercase",
@@ -267,9 +269,75 @@ export default function ScheduleTimelineSection({ project, wps = [], scheduleTas
           ))}
         </div>
       </div>
+
+      {/* Fab Release shop pipeline — surfaces the 7-stage shop floor
+          progress so the dashboard tells a continuous story across
+          Detailing → Fab → RTS without forcing a click into a
+          separate page. Each cell deep-links to /FabRelease pre-
+          filtered to that stage. */}
+      {fab.total > 0 && (
+        <div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.10em", textTransform: "uppercase",
+            color: "var(--text-muted)", marginBottom: 8,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span>
+              Fab Release · Shop Pipeline
+              <span style={{ marginLeft: 8, color: "var(--text-muted)", fontWeight: 400 }}>
+                {fab.totalTons.toFixed(1)}T total · {fab.shippedTons.toFixed(1)}T shipped
+              </span>
+            </span>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate("fab-release")}
+                style={LINK_BTN}
+              >
+                Open Fab Release →
+              </button>
+            )}
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${fab.stages.length}, 1fr)`,
+            gap: 4,
+          }}>
+            {fab.stages.map((stage) => (
+              <PipelineCell
+                key={stage}
+                label={FAB_STAGE_LABEL[stage]}
+                count={fab.counts[stage]}
+                color={FAB_STAGE_COLOR[stage]}
+                onClick={onNavigate ? () => onNavigate("fab-release", { stage }) : undefined}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </SectionCard>
   );
 }
+
+const FAB_STAGE_LABEL = {
+  drawings_approved: "DWG APRVD",
+  material_on_hand:  "MATERIAL",
+  shop_released:     "RELEASED",
+  in_fabrication:    "IN FAB",
+  fabricated:        "FABRICATED",
+  finish_treatment:  "FINISH",
+  ready_to_ship:     "RTS",
+};
+
+const FAB_STAGE_COLOR = {
+  drawings_approved: "var(--accent)",
+  material_on_hand:  "var(--secondary)",
+  shop_released:     "var(--status-warning)",
+  in_fabrication:    "var(--tertiary)",
+  fabricated:        "var(--status-info)",
+  finish_treatment:  "#B45309",
+  ready_to_ship:     "var(--status-success)",
+};
 
 function SubPanel({ title, subtitle, rightAction, children }) {
   return (
