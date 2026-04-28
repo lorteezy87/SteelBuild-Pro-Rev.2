@@ -66,6 +66,77 @@ export function BarChartSVG({ data, width = 400, height = 200 }) {
   );
 }
 
+/**
+ * LineChartSVG — simple x/y line chart for revenue + revenue forecast.
+ *
+ * `data` shape: [{ label, value, forecast?: boolean }]. Points where
+ * `forecast === true` are drawn with a dashed segment so callers can
+ * mix historical (solid) and forecast (dashed) without two charts.
+ */
+export function LineChartSVG({ data, width = 560, height = 220, valueFormatter }) {
+  if (!data || data.length === 0) return null;
+  const padding = { top: 16, right: 16, bottom: 32, left: 56 };
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+  const maxVal = Math.max(...data.map((d) => Number(d.value) || 0), 1);
+  const stepX = data.length > 1 ? chartW / (data.length - 1) : 0;
+  const fmt = valueFormatter || formatCurrency;
+
+  const points = data.map((d, i) => ({
+    x: padding.left + i * stepX,
+    y: padding.top + chartH - ((Number(d.value) || 0) / maxVal) * chartH,
+    forecast: !!d.forecast,
+    label: d.label,
+    value: d.value,
+  }));
+
+  // Build path segments: solid for historical contiguous run, dashed
+  // when subsequent point is forecast. We render two paths (solid, dashed)
+  // by emitting M/L commands per segment.
+  let solidPath = "";
+  let dashedPath = "";
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const seg = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+    if (b.forecast) dashedPath += " " + seg;
+    else solidPath += " " + seg;
+  }
+
+  const gridLines = 4;
+  const gridStep = maxVal / gridLines;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }}>
+      {Array.from({ length: gridLines + 1 }, (_, i) => {
+        const y = padding.top + chartH - (chartH * (gridStep * i)) / maxVal;
+        return (
+          <g key={i}>
+            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="var(--divider)" strokeDasharray="3 3" />
+            <text x={padding.left - 8} y={y + 3} textAnchor="end" style={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }}>
+              {fmt(gridStep * i)}
+            </text>
+          </g>
+        );
+      })}
+      {solidPath && <path d={solidPath} fill="none" stroke="var(--accent)" strokeWidth={2} />}
+      {dashedPath && <path d={dashedPath} fill="none" stroke="var(--accent)" strokeWidth={2} strokeDasharray="5 4" opacity={0.7} />}
+      {points.map((pt, i) => (
+        <g key={i}>
+          <circle cx={pt.x} cy={pt.y} r={3} fill={pt.forecast ? "var(--bg-surface)" : "var(--accent)"} stroke="var(--accent)" strokeWidth={1.5}>
+            <title>{`${pt.label}: ${fmt(pt.value)}${pt.forecast ? " (forecast)" : ""}`}</title>
+          </circle>
+          {i % Math.ceil(points.length / 8 || 1) === 0 && (
+            <text x={pt.x} y={height - padding.bottom + 14} textAnchor="middle" style={{ ...mono, fontSize: 8, fill: "var(--text-muted)" }}>
+              {pt.label}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export function DonutChartSVG({ segments, size = 180, innerRadius = 50, outerRadius = 72 }) {
   if (!segments || segments.length === 0) return null;
   const total = segments.reduce((s, seg) => s + seg.value, 0);
