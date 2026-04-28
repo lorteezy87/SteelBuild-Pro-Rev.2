@@ -45,6 +45,7 @@ export default function ProjectDashboard({
   sovItems = [],
   scheduleTasks = [],
   drawingActivity = [],
+  budgetHourItems = [],
   onNavigate,
 }) {
   // codes / deliveries are accepted for forward compatibility (e.g. a
@@ -68,6 +69,8 @@ export default function ProjectDashboard({
         expenses={expenses}
         wps={wps}
         sovItems={sovItems}
+        budgetHourItems={budgetHourItems}
+        onNavigate={onNavigate}
       />
       <DocumentHubSection
         rfis={rfis}

@@ -103,6 +103,7 @@ export default function PortfolioTracker() {
   const [search, setSearch] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
+  const [jobTypeFilter, setJobTypeFilter] = useState("all");
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -138,6 +139,7 @@ export default function PortfolioTracker() {
         client: p.general_contractor || p.client || "",
         phase: p.phase || "",
         health: p.health_status || "",
+        jobType: p.job_type || "",
         startDate: p.start_date || null,
         targetDate: p.target_completion_date || null,
         contractValue: Number(p.original_contract_value) || 0,
@@ -162,8 +164,10 @@ export default function PortfolioTracker() {
     if (phaseFilter !== "all") out = out.filter((r) => r.phase === phaseFilter);
     if (healthFilter !== "all")
       out = out.filter((r) => r.health === healthFilter);
+    if (jobTypeFilter !== "all")
+      out = out.filter((r) => r.jobType === jobTypeFilter);
     return out;
-  }, [rows, search, phaseFilter, healthFilter]);
+  }, [rows, search, phaseFilter, healthFilter, jobTypeFilter]);
 
   const columns = useMemo(
     () => [
@@ -211,6 +215,17 @@ export default function PortfolioTracker() {
         label: "Phase",
         width: "minmax(130px, 1fr)",
         render: (r) => <PhaseChip phase={r.phase} />,
+      },
+      {
+        key: "jobType",
+        label: "Job Type",
+        width: "minmax(130px, 1fr)",
+        render: (r) => (
+          <span style={{ ...mono, fontSize: 10, color: r.jobType ? "var(--text-secondary)" : "var(--text-muted)" }}>
+            {r.jobType || "—"}
+          </span>
+        ),
+        csvValue: (r) => r.jobType || "",
       },
       {
         key: "health",
@@ -330,6 +345,21 @@ export default function PortfolioTracker() {
               { key: "Watch", label: "Watch" },
               { key: "At Risk", label: "At Risk" },
               { key: "On Hold", label: "On Hold" },
+            ]}
+          />
+          <SelectFilter
+            label="Job Type"
+            value={jobTypeFilter}
+            onChange={setJobTypeFilter}
+            options={[
+              { key: "all", label: "All" },
+              { key: "Beams/Deck", label: "Beams/Deck" },
+              { key: "Beams/Joists/Deck", label: "Beams/Joists/Deck" },
+              { key: "Joist Deck", label: "Joist Deck" },
+              { key: "Tilt", label: "Tilt" },
+              { key: "Tilt Hybrid", label: "Tilt Hybrid" },
+              { key: "Misc.", label: "Misc." },
+              { key: "Other", label: "Other" },
             ]}
           />
         </FilterBar>

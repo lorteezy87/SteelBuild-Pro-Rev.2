@@ -87,6 +87,7 @@ const ROUTE_DOMAINS = {
     WorkPackages:       r(lazyWithRetry(() => import("@/pages/WorkPackages")),       "Work Packages",       { projectScoped: true }),
     Constraints:        r(lazyWithRetry(() => import("@/pages/Constraints")),        "Constraints",         { projectScoped: true }),
     FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
+    BudgetHours:        r(lazyWithRetry(() => import("@/pages/BudgetHours")),        "Budget Hours",        { projectScoped: true }),
     Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
     LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule"),
   },

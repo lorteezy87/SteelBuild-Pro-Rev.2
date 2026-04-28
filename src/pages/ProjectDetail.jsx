@@ -7,6 +7,7 @@ import { formatCurrency, formatPercent } from "@/components/shared/formatters";
 import { CommandBar } from "@/components/design-system";
 import { ArrowLeft } from "lucide-react";
 import ProjectHandoffChecklist from "@/components/projects/ProjectHandoffChecklist";
+import ProjectKickoffChecklist, { KickoffPill } from "@/components/projects/ProjectKickoffChecklist";
 
 const HEALTH_COLORS = {
   "On Track": "var(--status-success)",
@@ -16,6 +17,7 @@ const HEALTH_COLORS = {
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "kickoff", label: "Kickoff" },
   { id: "handoff", label: "Handoff" },
   { id: "schedule", label: "Schedule" },
   { id: "documents", label: "Documents" },
@@ -137,6 +139,10 @@ export default function ProjectDetail() {
               {project.health_status}
             </span>
           </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "flex-end" }}>
+          <KickoffPill complete={!!project.kickoff_complete} />
         </div>
       </CommandBar>
 
@@ -360,6 +366,10 @@ export default function ProjectDetail() {
           </div>
         )}
 
+        {activeTab === "kickoff" && (
+          <ProjectKickoffChecklist project={project} />
+        )}
+
         {activeTab === "handoff" && (
           <ProjectHandoffChecklist projectId={projectId} />
         )}
@@ -520,7 +530,7 @@ export default function ProjectDetail() {
           </div>
         )}
 
-        {!["overview", "handoff", "rfis", "materials"].includes(activeTab) && (
+        {!["overview", "kickoff", "handoff", "rfis", "materials"].includes(activeTab) && (
           <p style={{ color: "var(--text-muted)" }}>
             {tabs.find((t) => t.id === activeTab)?.label} content coming soon.
           </p>
