@@ -133,7 +133,7 @@ export default function TeamWorkflowSection({
         <SubHeading>Task Distribution by Type</SubHeading>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
+          gridTemplateColumns: "repeat(7, 1fr)",
           gap: 8,
         }}>
           {Object.entries(distribution).map(([type, { tasks, inProgress }]) => (

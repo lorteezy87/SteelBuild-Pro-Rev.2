@@ -36,13 +36,18 @@ const RFI_STATUS_COLOR = {
   Closed:    "var(--text-muted)",
 };
 
+// Stage colours mirror the canonical drawingsConfig.STAGES palette so
+// the dashboard's mini-pipeline reads consistently with the Drawings
+// page chips. Adjacent stages alternate cool/warm so no two collide
+// at a glance: BFA (orange) and BFS (red) are now properly distinct
+// — both previously rendered as the same warning-yellow.
 const STAGE_COLOR = {
-  OFA:      "var(--status-info)",
-  BFA:      "var(--status-warning)",
-  OFS:      "var(--status-review)",
-  BFS:      "var(--status-warning)",
-  FFF:      "#0d9488",
-  Released: "var(--status-success-bright)",
+  OFA:      "#2563EB", // blue
+  BFA:      "#F97316", // orange
+  OFS:      "#0D9488", // teal
+  BFS:      "#DC2626", // red
+  FFF:      "#EAB308", // yellow (a.k.a. IFC)
+  Released: "#10B981", // emerald
 };
 
 // Canonical steel-detailing pipeline. "Scrub" is the in-house QA review
