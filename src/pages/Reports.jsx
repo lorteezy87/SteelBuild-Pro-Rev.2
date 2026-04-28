@@ -21,6 +21,7 @@ import { ChevronRight } from "lucide-react";
 
 const CATEGORY_ACCENT = {
   Portfolio: "var(--status-info)",
+  Risk: "var(--status-error)",
   Schedule: "var(--accent)",
   Cost: "var(--status-success)",
 };

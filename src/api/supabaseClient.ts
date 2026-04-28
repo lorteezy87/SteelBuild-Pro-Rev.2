@@ -236,6 +236,10 @@ const SOFT_DELETE_TABLES = new Set<string>([
   // the entity client auto-filters list/filter/get and turns delete()
   // into a soft-delete — matching the Procurement/Budget Hours pattern.
   'daily_logs', 'photos', 'quality_control_records',
+  // 062 / 064: project-scoped tables that ship with soft-delete columns
+  // by default. Registering here makes list/filter/get auto-skip
+  // tombstoned rows and routes delete() through the is_deleted flag.
+  'budget_hour_items', 'risks',
 ]);
 
 /**
@@ -587,6 +591,11 @@ export const entities = {
   WorkPackage:           createEntityClient('work_packages'),
   // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
   BudgetHourItem:        createEntityClient('budget_hour_items'),
+  // 064: per-project risk register backing the four Risk reports
+  // (list, dashboard, 5x5 matrix, top-10). Severity is a stored
+  // generated column on the row — callers can sort/filter it without
+  // re-deriving the probability * impact band in three places.
+  Risk:                  createEntityClient('risks'),
   SOVItem:               createEntityClient('sov_items'),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),
