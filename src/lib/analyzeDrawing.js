@@ -95,8 +95,18 @@ const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB (Anthropic), tighter on OpenAI
 // Override per-call by passing { model, provider } to analyzeDrawing()
 // — e.g. bulk-reprocessing cold storage could still use gpt-4o-mini
 // if the quality hit is acceptable for that use case.
-const DEFAULT_PROVIDER = "anthropic";
-const DEFAULT_MODEL    = "claude-sonnet-4-5";
+// Fallback while Anthropic credits are exhausted (since 2026-04-23).
+// gpt-4o-mini is meaningfully weaker on the visual reasoning that
+// structural-drawing analysis requires — sheet enumeration tends to
+// miss pages and findings drift toward unanchored / generic phrasing.
+// Quality gates downstream (hasLocationAnchor, knownSheetNumbers,
+// 40-char description floor) catch most of the slop, but the user-
+// visible result is fewer, vaguer findings than the Sonnet baseline.
+//
+// Switch back to "anthropic" / "claude-sonnet-4-5" the moment credits
+// are restored. Per-call override via { model, provider } still works.
+const DEFAULT_PROVIDER = "openai";
+const DEFAULT_MODEL    = "gpt-4o-mini";
 const STORAGE_BUCKET   = "app-files";
 
 // Kept in lockstep with the CHECK constraint on drawing_findings.finding_type
