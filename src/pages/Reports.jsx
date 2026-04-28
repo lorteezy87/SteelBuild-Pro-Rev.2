@@ -24,6 +24,11 @@ const CATEGORY_ACCENT = {
   Risk: "var(--status-error)",
   Schedule: "var(--accent)",
   Cost: "var(--status-success)",
+  // Team uses a fixed teal so it's visually distinct from --accent and
+  // --status-info regardless of which theme is active. (--secondary
+  // aliases to --accent in tokens.css, so it would collide with
+  // Schedule.) No purple/pink per CLAUDE.md.
+  Team: "#14B8A6",
 };
 
 function ReportCard({ entry, onClick }) {
