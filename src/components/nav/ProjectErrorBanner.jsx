@@ -15,7 +15,7 @@ export default function ProjectErrorBanner() {
     }}>
       <strong>{"\u26A0"} Project data unavailable:</strong> {projectLoadError}
       <span style={{ color: "var(--text-muted)", marginLeft: 12 }}>
-        &mdash; Verify the Project entity schema exists in the Base44 app admin.
+        &mdash; Verify Supabase grants, RLS policies, and your project membership.
       </span>
     </div>
   );

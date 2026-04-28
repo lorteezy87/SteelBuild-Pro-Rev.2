@@ -1,6 +1,5 @@
 import React, { useRef, useState } from "react";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {

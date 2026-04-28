@@ -28,7 +28,7 @@
  *   - TanStack Query + base44 entities + inline style objects
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";

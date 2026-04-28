@@ -33,7 +33,7 @@ Optional — falls back to direct Anthropic calls if the `llm-proxy` edge
 function is unavailable:
 
 ```env
-VITE_ANTHROPIC_API_KEY=sk-ant-...
+Do not put provider API keys in VITE_* browser environment variables.
 ```
 
 ## Scripts
