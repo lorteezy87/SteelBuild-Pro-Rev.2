@@ -79,6 +79,67 @@ export function totalTons(wps = []) {
 }
 
 /**
+ * Fabrication status rollup — maps each work package to the Fab
+ * Release page's 7-stage shop pipeline so the project dashboard can
+ * surface "X packages in fab, Y ready to ship" without re-implementing
+ * the staging logic in two places. Mirrors getFabStage in
+ * src/pages/FabRelease.jsx.
+ */
+export function fabStatusRollup(wps = []) {
+  const stages = [
+    "drawings_approved", "material_on_hand", "shop_released",
+    "in_fabrication", "fabricated", "finish_treatment", "ready_to_ship",
+  ];
+  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  let totalTons = 0;
+  let shippedTons = 0;
+  for (const w of wps) {
+    if (!w) continue;
+    const stage = deriveFabStage(w);
+    if (counts[stage] !== undefined) counts[stage]++;
+    const tons = Number(w.tonnage) || 0;
+    totalTons += tons;
+    if (stage === "ready_to_ship") shippedTons += tons;
+  }
+  // Active stage = the latest stage (in pipeline order) that has any
+  // packages; ties at zero default to drawings_approved.
+  let activeIdx = 0;
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if (counts[stages[i]] > 0) { activeIdx = i; break; }
+  }
+  return {
+    stages,
+    counts,
+    total: wps.length,
+    totalTons,
+    shippedTons,
+    activeStage: stages[activeIdx],
+  };
+}
+
+/** Mirror of FabRelease's getFabStage. Kept here so the dashboard
+ *  doesn't need to import the page module just for this. */
+function deriveFabStage(wp) {
+  const phase = wp?.phase || "";
+  const status = wp?.status || "";
+  const pct = Number(wp?.percent_complete) || 0;
+  if (["Delivery", "Installation", "Closeout"].includes(phase)) return "ready_to_ship";
+  if (phase === "Fabrication") {
+    if (status === "Complete" || pct === 100) return "ready_to_ship";
+    if (pct >= 75) return "finish_treatment";
+    if (pct >= 25 || status === "In Progress") return "in_fabrication";
+    if (wp?.released_date) return "shop_released";
+    if (wp?.vif_confirmed && wp?.load_list_complete) return "material_on_hand";
+    return "drawings_approved";
+  }
+  if (phase === "Detailing") {
+    if (status === "Complete") return "material_on_hand";
+    return "drawings_approved";
+  }
+  return "drawings_approved";
+}
+
+/**
  * Count of work packages that are past their scheduled end date and
  * not yet Complete. Drives the OVERDUE stat tile on the Schedule &
  * Timeline panel — was previously hardcoded to 0.

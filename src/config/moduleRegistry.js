@@ -257,6 +257,10 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Work Packages",        icon: "\u25A6", page: "WorkPackages" },
+      { label: "Fab Release",          icon: "🏭", page: "FabRelease" },
+      { label: "Constraints",          icon: "🚧", page: "Constraints" },
+      { label: "Procurement",          icon: "📦", page: "Procurement" },
+      { label: "Look-Ahead Schedule",  icon: "👁", page: "LookAheadSchedule" },
       { label: "Crew Scheduling",      icon: "\u25A8", page: "ResourceScheduling" },
       { label: "Resource Management",   icon: "\uD83D\uDC65", page: "ResourceManagement" },
       { label: "Deliveries",           icon: "\uD83D\uDCE6", page: "Deliveries" },
