@@ -27,6 +27,7 @@
 
 import React from "react";
 import ScheduleTimelineSection from "./sections/ScheduleTimelineSection";
+import FieldActivitySection from "./sections/FieldActivitySection";
 import FinancialControlsSection from "./sections/FinancialControlsSection";
 import DocumentHubSection from "./sections/DocumentHubSection";
 import TeamWorkflowSection from "./sections/TeamWorkflowSection";
@@ -46,6 +47,13 @@ export default function ProjectDashboard({
   scheduleTasks = [],
   drawingActivity = [],
   budgetHourItems = [],
+  // Field Activity rollup (added with the Field overhaul)
+  dailyLogs = [],
+  photos = [],
+  punchlistItems = [],
+  inspections = [],
+  safetyIncidents = [],
+  qualityRecords = [],
   onNavigate,
 }) {
   // `codes` is accepted for forward compatibility but isn't read by any
@@ -62,6 +70,15 @@ export default function ProjectDashboard({
         deliveries={deliveries}
         rfis={rfis}
         actionItems={actionItems}
+        onNavigate={onNavigate}
+      />
+      <FieldActivitySection
+        dailyLogs={dailyLogs}
+        photos={photos}
+        punchlistItems={punchlistItems}
+        inspections={inspections}
+        safetyIncidents={safetyIncidents}
+        qualityRecords={qualityRecords}
         onNavigate={onNavigate}
       />
       <FinancialControlsSection

@@ -22,7 +22,7 @@ export const PRIMARY_TABS = [
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },
   { label: "SCHEDULE",    pages: ["Schedule", "GanttChart", "ProjectCalendar"] },
-  { label: "FIELD",       pages: ["DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
+  { label: "FIELD",       pages: ["Field", "DailyLogs", "Photos", "ProductionNotes", "LEMs"] },
   { label: "COST",        pages: ["Financials", "CostDashboard", "ChangeOrders", "SOV", "ContractManagement"] },
   { label: "RESOURCES",   pages: ["ResourceScheduling", "ResourceManagement"] },
   { label: "REPORTS",     pages: ["AIInsights", "JobStatusReport", "AlertsCenter", "Activity", "Mitigations"] },
@@ -39,7 +39,7 @@ export const TAB_DEFAULT_PAGE = {
   FABRICATION: "WorkPackages",
   DELIVERIES:  "Deliveries",
   SCHEDULE:    "Schedule",
-  FIELD:       "DailyLogs",
+  FIELD:       "Field",
   COST:        "Financials",
   RESOURCES:   "ResourceScheduling",
   REPORTS:     "AIInsights",
@@ -72,6 +72,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDC41", name: "Look-Ahead",         group: "Fab",           page: "LookAheadSchedule" },
   { icon: "\u25A5", name: "Gantt Chart",              group: "Fab",           page: "GanttChart" },
   { icon: "📅", name: "Project Calendar",         group: "Field",         page: "ProjectCalendar" },
+  { icon: "\ud83c\udfd7", name: "Field Hub",                    group: "Field",         page: "Field" },
   { icon: "\u2699", name: "LEMs",                     group: "Field",         page: "LEMs" },
   { icon: "\uD83D\uDCCB", name: "Contract Management", group: "Cost",         page: "ContractManagement" },
   { icon: "\uD83D\uDCE6", name: "Deliveries",         group: "Logistics",     page: "Deliveries" },
@@ -166,9 +167,11 @@ export const NAV_GROUPS = [
   {
     label: "FIELD",
     items: [
+      { label: "Field Hub",  icon: "\uD83C\uDFD7", page: "Field" },
       { label: "Daily Logs", icon: "\uD83D\uDCCB", page: "DailyLogs" },
       { label: "LEMs",       icon: "\u2699", page: "LEMs" },
       { label: "Photos",     icon: "\uD83D\uDCF7", page: "Photos" },
+      { label: "Punchlist",  icon: "\u2713", page: "Punchlist" },
     ],
   },
   {
@@ -294,10 +297,14 @@ export const SIDEBAR_GROUPS = [
     label: "FIELD",
     collapsible: true,
     items: [
+      { label: "Field Hub",        icon: "\uD83C\uDFD7", page: "Field" },
       { label: "Daily Logs",       icon: "\uD83D\uDCCB", page: "DailyLogs" },
+      { label: "Photos",           icon: "\uD83D\uDCF7", page: "Photos" },
       { label: "Inspections",      icon: "\uD83D\uDD0D", page: "Inspections" },
       { label: "Safety",           icon: "\u26A0", page: "Safety" },
       { label: "Quality Control",  icon: "\uD83E\uDDEA", page: "QualityControl" },
+      { label: "Punchlist",        icon: "\u2713", page: "Punchlist" },
+      { label: "LEMs",             icon: "\u2699", page: "LEMs" },
     ],
   },
   {
