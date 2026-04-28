@@ -58,17 +58,95 @@ const DEFAULT_OPENAI_MODEL    = "gpt-4o-mini";
 //        OpenAI Chat Completions shape.
 const PROTOCOL_VERSION = 7;
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+function allowedOrigins(): string[] {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") || "";
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
 
-function json(body: unknown, status = 200): Response {
+function corsHeaders(req?: Request): Record<string, string> {
+  const configured = allowedOrigins();
+  if (!req || configured.length === 0 || configured.includes("*")) {
+    return {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+    };
+  }
+
+  const origin = req?.headers.get("Origin") || "";
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const allowOrigin = configured.includes(origin) || isLocalhost ? origin : "null";
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function json(body: unknown, status = 200, req?: Request): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
   });
+}
+
+async function authenticateRequest(req: Request): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return {
+      ok: false,
+      response: json({ error: "Unauthorized - valid Bearer JWT required", protocol_version: PROTOCOL_VERSION }, 401, req),
+    };
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !supabaseAnon) {
+    console.error("[llm-proxy] Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+    return {
+      ok: false,
+      response: json({ error: "Edge function auth is not configured", protocol_version: PROTOCOL_VERSION }, 500, req),
+    };
+  }
+
+  const token = authHeader.slice("Bearer ".length).trim();
+  try {
+    const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "apikey": supabaseAnon,
+      },
+    });
+
+    if (!userResp.ok) {
+      const errBody = await userResp.text();
+      console.error(`[llm-proxy] Auth /user returned ${userResp.status}: ${errBody.slice(0, 200)}`);
+      return {
+        ok: false,
+        response: json({ error: "Invalid or expired session", protocol_version: PROTOCOL_VERSION }, 401, req),
+      };
+    }
+
+    const user = await userResp.json();
+    if (!user?.id) {
+      return {
+        ok: false,
+        response: json({ error: "Invalid session - no user returned", protocol_version: PROTOCOL_VERSION }, 401, req),
+      };
+    }
+    return { ok: true, userId: user.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[llm-proxy] Auth /user fetch threw:", msg);
+    return {
+      ok: false,
+      response: json({ error: `Auth service unreachable: ${msg}`, protocol_version: PROTOCOL_VERSION }, 502, req),
+    };
+  }
 }
 
 // ─── OpenAI adapters ─────────────────────────────────────────────────────────
@@ -402,8 +480,11 @@ async function callAnthropic(body: any): Promise<Response> {
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
 
 async function handle(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
-  if (req.method !== "POST")    return json({ error: "Method not allowed", protocol_version: PROTOCOL_VERSION }, 405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
+  if (req.method !== "POST")    return json({ error: "Method not allowed", protocol_version: PROTOCOL_VERSION }, 405, req);
+
+  const auth = await authenticateRequest(req);
+  if (!auth.ok) return auth.response;
 
   let body: any;
   try {

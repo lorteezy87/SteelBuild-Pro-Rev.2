@@ -6,10 +6,23 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 
 export default [
   {
+    ignores: [
+      "**/.claude/**",
+      "**/.next/**",
+      "dist/**",
+      "steelbuild-pro/**",
+      "node_modules/**",
+    ],
+  },
+  {
     files: [
       "src/**/*.{js,mjs,cjs,jsx}",
     ],
     ignores: [
+      "**/.claude/**",
+      "**/.next/**",
+      "dist/**",
+      "steelbuild-pro/**",
       "src/lib/**/*",
       "src/api/**/*",
       "src/components/ui/**/*",
@@ -59,6 +72,7 @@ export default [
         { ignore: ["cmdk-input-wrapper", "toast-close"] },
       ],
       "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 ];

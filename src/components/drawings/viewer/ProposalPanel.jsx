@@ -19,10 +19,10 @@
  * onHoverProposal so the parent can build the overlay list.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, Sparkles, Check, XCircle, Layers, ChevronDown } from "lucide-react";
+import { X, Sparkles, Check, XCircle, Layers } from "lucide-react";
 import {
   listZoneProposals,
   proposeZonesFromFindings,

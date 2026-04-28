@@ -29,7 +29,6 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import {
   parseScope,
   buildWbs,
-  describeScopeItem,
   validateWbsPhases,
 } from "@/lib/wbsBuilder";
 

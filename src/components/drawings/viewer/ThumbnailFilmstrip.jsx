@@ -17,7 +17,7 @@
  *   signed URLs get re-resolved in one place.
  */
 
-import React, { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import React, { useEffect, useRef, useState, useCallback, memo } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 const mono = { fontFamily: "var(--font-mono)" };

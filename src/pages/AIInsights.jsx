@@ -1,411 +1,736 @@
-import React, { useMemo } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { formatCurrency, formatDate, isOverdue } from "../components/shared/formatters";
-import StatusBadge from "../components/shared/StatusBadge";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  Radar,
+  RadarChart,
+  PolarAngleAxis,
+  PolarGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
+import { AlertTriangle, ArrowUpRight, Building2, DollarSign, Filter, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { base44 } from "@/api/base44Client";
+import { createPageUrl } from "@/utils";
+import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
+import PortfolioBimViewer from "@/components/portfolio/PortfolioBimViewer";
 import { CommandBar } from "@/components/design-system";
+import { useProjectContext } from "@/components/shared/useProjectContext";
 
-const M = {
-  card: "var(--bg-surface)", border: "var(--border-default)", text: "var(--text-primary)",
-  muted: "var(--text-muted)", mono: "var(--font-mono)",
-  body: "var(--font-body)", display: "var(--font-body)"
+const CLOSED_RFI = ["Answered", "Closed", "Void"];
+const CLOSED_ACTION = ["Complete", "Cancelled", "Closed"];
+const RISK_COLORS = {
+  healthy: "#22c55e",
+  watch: "#f59e0b",
+  risk: "#ef4444",
+  accent: "#3b82f6",
+  steel: "#94a3b8",
 };
 
-const PHASE_COLORS = { Detailing: "var(--accent)", Fabrication: "var(--status-warning)", Erection: "var(--status-success)", Closeout: "var(--chart-4)" };
-const HEALTH_COLORS = { "On Track": "var(--status-success)", "Watch": "var(--status-warning)", "At Risk": "var(--status-error)" };
-const PIE_COLORS = ["var(--status-success)", "var(--status-warning)", "var(--status-error)", "var(--chart-4)", "var(--accent)"];
+const tooltipStyle = {
+  contentStyle: {
+    background: "var(--bg-surface-high)",
+    border: "1px solid var(--border-default)",
+    borderRadius: 8,
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
+  },
+  labelStyle: { color: "var(--text-muted)" },
+};
 
-function KPICard({ label, value, sub, color, urgent }) {
-  const c = color || "var(--accent)";
-  return (
-    <div style={{
-      background: urgent ? "var(--danger-muted)" : M.card,
-      border: `1px solid ${urgent ? "var(--danger-border)" : M.border}`,
-      borderTop: `2px solid ${c}`,
-      borderRadius: 12,
-      padding: "14px 16px",
-      display: "flex", flexDirection: "column", gap: 4
-    }}>
-      <div style={{ fontFamily: M.mono, fontSize: 9, letterSpacing: "0.14em", color: M.muted, textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontFamily: M.display, fontSize: 28, fontWeight: 800, color: c, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>{sub}</div>}
-    </div>
-  );
+const cardStyle = {
+  background: "var(--bg-surface)",
+  border: "1px solid var(--border-default)",
+  borderRadius: "var(--radius-card)",
+  boxShadow: "var(--shadow-card)",
+  overflow: "hidden",
+};
+
+function n(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
 }
 
-function SectionTitle({ title, sub }) {
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ fontFamily: M.display, fontSize: 13, fontWeight: 700, color: M.text, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</div>
-      {sub && <div style={{ fontFamily: M.mono, fontSize: 8, color: M.muted, letterSpacing: "0.10em", marginTop: 2 }}>{sub}</div>}
-    </div>
-  );
+function dateValue(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function daysUntil(value) {
+  const d = dateValue(value);
+  if (!d) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return Math.round((d - today) / 86400000);
+}
+
+function statusColor(label) {
+  if (label === "At Risk") return RISK_COLORS.risk;
+  if (label === "Watch") return RISK_COLORS.watch;
+  return RISK_COLORS.healthy;
+}
+
+function fileExtension(name) {
+  return String(name || "").split(".").pop()?.toLowerCase() || "";
+}
+
+function isModelDocument(doc) {
+  if (!doc || doc.is_deleted) return false;
+  const ext = fileExtension(doc.file_name || doc.display_name || doc.file_url);
+  if (["ifc", "glb", "gltf"].includes(ext)) return true;
+  const descriptor = `${doc.category || ""} ${doc.document_type || ""} ${doc.file_type || ""} ${doc.mime_type || ""}`.toLowerCase();
+  return descriptor.includes("ifc model") || descriptor.includes("3d model") || descriptor.includes("model/gltf");
+}
+
+function computeProjectModel(project, data) {
+  const {
+    rfis,
+    cos,
+    codes,
+    wps,
+    deliveries,
+    actionItems,
+    scheduleTasks,
+  } = data;
+
+  const projectRfis = rfis.filter((r) => r.project_id === project.id);
+  const projectCos = cos.filter((c) => c.project_id === project.id);
+  const projectCodes = codes.filter((c) => c.project_id === project.id);
+  const projectWps = wps.filter((w) => w.project_id === project.id);
+  const projectDeliveries = deliveries.filter((d) => d.project_id === project.id);
+  const projectActions = actionItems.filter((a) => a.project_id === project.id);
+  const projectTasks = scheduleTasks.filter((t) => t.project_id === project.id);
+
+  const budget = projectCodes.reduce((sum, c) => sum + n(c.budget_amount), 0);
+  const actual = projectCodes.reduce((sum, c) => sum + n(c.actual_cost), 0);
+  const committed = projectCodes.reduce((sum, c) => sum + Math.max(n(c.committed_cost), n(c.actual_cost)), 0);
+  const contract = n(project.original_contract_value);
+  const approvedCo = projectCos.filter((c) => c.status === "Approved").reduce((sum, c) => sum + n(c.co_amount), 0);
+  const pendingCo = projectCos.filter((c) => ["Draft", "Submitted", "Under Review"].includes(c.status)).reduce((sum, c) => sum + n(c.co_amount), 0);
+
+  const openRfis = projectRfis.filter((r) => !statusIn(r.status, CLOSED_RFI));
+  const overdueRfis = projectRfis.filter((r) => isOverdue(r.due_date || r.date_required, r.status, CLOSED_RFI));
+  const criticalRfis = openRfis.filter((r) => ["Critical", "High"].includes(r.priority));
+  const lateDeliveries = projectDeliveries.filter((d) => {
+    const scheduled = dateValue(d.scheduled_date || d.delivery_date);
+    return scheduled && scheduled < new Date() && !String(d.status || "").toLowerCase().includes("delivered");
+  });
+  const upcomingDeliveries = projectDeliveries.filter((d) => {
+    const days = daysUntil(d.scheduled_date || d.delivery_date);
+    return days != null && days >= 0 && days <= 14 && !String(d.status || "").toLowerCase().includes("delivered");
+  });
+  const overdueActions = projectActions.filter((a) => !statusIn(a.status, CLOSED_ACTION) && isOverdue(a.due_date, a.status, CLOSED_ACTION));
+  const delayedTasks = projectTasks.filter((t) => String(t.status || "").toLowerCase().includes("delay"));
+
+  const totalTons = projectWps.reduce((sum, w) => sum + n(w.tonnage), 0);
+  const completedTons = projectWps.reduce((sum, w) => sum + (String(w.status || "").toLowerCase().includes("complete") ? n(w.tonnage) : 0), 0);
+  const avgProgress = projectWps.length
+    ? projectWps.reduce((sum, w) => sum + n(w.percent_complete), 0) / projectWps.length
+    : 0;
+
+  let score = 100;
+  const reasons = [];
+  if (overdueRfis.length) { score -= Math.min(28, overdueRfis.length * 9); reasons.push(`${overdueRfis.length} overdue RFI${overdueRfis.length === 1 ? "" : "s"}`); }
+  if (criticalRfis.length) { score -= Math.min(16, criticalRfis.length * 5); reasons.push(`${criticalRfis.length} high-priority RFI${criticalRfis.length === 1 ? "" : "s"}`); }
+  if (lateDeliveries.length) { score -= Math.min(24, lateDeliveries.length * 8); reasons.push(`${lateDeliveries.length} late deliver${lateDeliveries.length === 1 ? "y" : "ies"}`); }
+  if (overdueActions.length) { score -= Math.min(14, overdueActions.length * 4); reasons.push(`${overdueActions.length} overdue action${overdueActions.length === 1 ? "" : "s"}`); }
+  if (delayedTasks.length) { score -= Math.min(18, delayedTasks.length * 6); reasons.push(`${delayedTasks.length} delayed task${delayedTasks.length === 1 ? "" : "s"}`); }
+  if (budget > 0 && committed > budget) { score -= Math.min(22, Math.ceil(((committed - budget) / budget) * 100)); reasons.push("Cost exposure over budget"); }
+  if (budget === 0 && contract > 0) { score -= 8; reasons.push("Budget not fully set up"); }
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const health = score >= 76 ? "On Track" : score >= 52 ? "Watch" : "At Risk";
+  const targetDays = daysUntil(project.target_completion_date || project.forecast_completion_date);
+  const forecastDays = project.forecast_completion_date && project.target_completion_date
+    ? Math.round((dateValue(project.forecast_completion_date) - dateValue(project.target_completion_date)) / 86400000)
+    : null;
+
+  return {
+    ...project,
+    contract,
+    revisedContract: contract + approvedCo,
+    approvedCo,
+    pendingCo,
+    budget,
+    actual,
+    committed,
+    margin: contract + approvedCo - committed,
+    openRfis: openRfis.length,
+    overdueRfis: overdueRfis.length,
+    criticalRfis: criticalRfis.length,
+    lateDeliveries: lateDeliveries.length,
+    upcomingDeliveries: upcomingDeliveries.length,
+    overdueActions: overdueActions.length,
+    delayedTasks: delayedTasks.length,
+    totalTons,
+    completedTons,
+    avgProgress,
+    score,
+    health,
+    reasons,
+    targetDays,
+    forecastDays,
+    projectRfis,
+    projectCos,
+    projectCodes,
+    projectWps,
+    projectDeliveries,
+    projectActions,
+    projectTasks,
+  };
 }
 
 export default function PortfolioOverview() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { activeProject } = useProjectContext();
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [healthFilter, setHealthFilter] = useState("All");
+  const [search, setSearch] = useState("");
 
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
-  const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list() });
-  const { data: allCOs = [] } = useQuery({ queryKey: ["all-cos-portfolio"], queryFn: () => base44.entities.ChangeOrder.list() });
-  const { data: allWPs = [] } = useQuery({ queryKey: ["all-wps-portfolio"], queryFn: () => base44.entities.WorkPackage.list() });
-  const { data: allCodes = [] } = useQuery({ queryKey: ["all-codes-portfolio"], queryFn: () => base44.entities.CostCode.list() });
-  const { data: allLogs = [] } = useQuery({ queryKey: ["all-logs-portfolio"], queryFn: () => base44.entities.DailyLog.list() });
-  const { data: allDeliveries = [] } = useQuery({ queryKey: ["all-deliveries-portfolio"], queryFn: () => base44.entities.Delivery.list() });
-  const { data: allActionItems = [] } = useQuery({ queryKey: ["all-action-items-portfolio"], queryFn: () => base44.entities.ActionItem.list() });
+  const { data: rfis = [] } = useQuery({ queryKey: ["portfolio-rfis"], queryFn: () => base44.entities.RFI.list(), staleTime: 30 * 1000 });
+  const { data: cos = [] } = useQuery({ queryKey: ["portfolio-cos"], queryFn: () => base44.entities.ChangeOrder.list(), staleTime: 60 * 1000 });
+  const { data: codes = [] } = useQuery({ queryKey: ["portfolio-codes"], queryFn: () => base44.entities.CostCode.list(), staleTime: 60 * 1000 });
+  const { data: wps = [] } = useQuery({ queryKey: ["portfolio-wps"], queryFn: () => base44.entities.WorkPackage.list(), staleTime: 30 * 1000 });
+  const { data: deliveries = [] } = useQuery({ queryKey: ["portfolio-deliveries"], queryFn: () => base44.entities.Delivery.list(), staleTime: 30 * 1000 });
+  const { data: actionItems = [] } = useQuery({ queryKey: ["portfolio-action-items"], queryFn: () => base44.entities.ActionItem.list(), staleTime: 30 * 1000 });
+  const { data: scheduleTasks = [] } = useQuery({ queryKey: ["portfolio-schedule-tasks"], queryFn: () => base44.entities.ScheduleTask.list("-start_date"), staleTime: 60 * 1000 });
+  const { data: documents = [] } = useQuery({ queryKey: ["portfolio-model-documents"], queryFn: () => base44.entities.Document.list("-uploaded_date"), staleTime: 60 * 1000 });
 
-  const stats = useMemo(() => {
-    const today = new Date();
+  useEffect(() => {
+    if (selectedProjectId || !activeProject?.id || projects.length === 0) return;
+    if (projects.some((project) => project.id === activeProject.id)) {
+      setSelectedProjectId(activeProject.id);
+    }
+  }, [activeProject?.id, projects, selectedProjectId]);
 
-    const totalContractValue = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
-    const approvedCOsValue = allCOs.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-    const revisedTotal = totalContractValue + approvedCOsValue;
+  const portfolio = useMemo(() => {
+    const data = { rfis, cos, codes, wps, deliveries, actionItems, scheduleTasks };
+    const rows = projects.map((project) => computeProjectModel(project, data));
+    const sorted = [...rows].sort((a, b) => a.score - b.score || b.revisedContract - a.revisedContract);
+    const selected = rows.find((p) => p.id === selectedProjectId) || sorted[0] || null;
 
-    const openRFIs = allRFIs.filter(r => !["Answered", "Closed"].includes(r.status));
-    const overdueRFIs = allRFIs.filter(r => isOverdue(r.due_date, r.status, ["Answered", "Closed"]));
-    const criticalRFIs = allRFIs.filter(r => r.priority === "Critical" && !["Answered", "Closed"].includes(r.status));
+    const totals = rows.reduce((acc, p) => {
+      acc.value += p.revisedContract;
+      acc.budget += p.budget;
+      acc.committed += p.committed;
+      acc.margin += p.margin;
+      acc.openRfis += p.openRfis;
+      acc.overdueRfis += p.overdueRfis;
+      acc.lateDeliveries += p.lateDeliveries;
+      acc.overdueActions += p.overdueActions;
+      acc.tons += p.totalTons;
+      acc.completedTons += p.completedTons;
+      return acc;
+    }, { value: 0, budget: 0, committed: 0, margin: 0, openRfis: 0, overdueRfis: 0, lateDeliveries: 0, overdueActions: 0, tons: 0, completedTons: 0 });
 
-    const pendingCOs = allCOs.filter(c => ["Submitted", "Under Review"].includes(c.status));
-    const pendingCOValue = pendingCOs.reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-
-    const totalBudget = allCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-    const totalActual = allCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-    // Exposure = max(committed, actual) — committed includes paid amounts
-    const overBudgetCodes = allCodes.filter(c => {
-      const b = Number(c.budget_amount) || 0;
-      const exposure = Math.max(Number(c.committed_cost) || 0, Number(c.actual_cost) || 0);
-      return b > 0 && exposure > b;
-    });
-
-    const safetyIncidents = allLogs.reduce((s, l) => s + (Number(l.safety_incidents) || 0), 0);
-
-    const lateDeliveries = allDeliveries.filter(d =>
-      d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
-    );
-    const upcomingDeliveries = allDeliveries.filter(d => {
-      if (!d.scheduled_date || d.status === "Delivered") return false;
-      const dt = new Date(d.scheduled_date);
-      const next7 = new Date(today.getTime() + 7 * 86400000);
-      return dt >= today && dt <= next7;
-    });
-
-    const overdueActions = allActionItems.filter(a =>
-      !["Complete", "Cancelled"].includes(a.status) && a.due_date && new Date(a.due_date) < today
-    );
-
-    const wpComplete = allWPs.filter(w => w.status === "Complete").length;
-    const wpInProgress = allWPs.filter(w => w.status === "In Progress").length;
-    const totalTonnage = allWPs.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-
-    // By-project health breakdown
-    const byProject = projects.map(p => {
-      const pRFIs = allRFIs.filter(r => r.project_id === p.id);
-      const pCOs = allCOs.filter(c => c.project_id === p.id);
-      const pCodes = allCodes.filter(c => c.project_id === p.id);
-      const pBudget = pCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-      const pActual = pCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
-      const pApproved = pCOs.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
-      const pOpen = pRFIs.filter(r => !["Answered", "Closed"].includes(r.status)).length;
-      const pOverdue = pRFIs.filter(r => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).length;
-      const scheduleDiff = p.forecast_completion_date && p.target_completion_date
-        ? Math.round((new Date(p.forecast_completion_date) - new Date(p.target_completion_date)) / 86400000)
-        : null;
-      return { ...p, pBudget, pActual, pOpen, pOverdue, scheduleDiff, pApproved };
-    });
-
-    // Phase distribution
-    const phaseCount = {};
-    projects.forEach(p => { phaseCount[p.phase || "Unknown"] = (phaseCount[p.phase || "Unknown"] || 0) + 1; });
-
-    // Health distribution
-    const healthCount = {};
-    projects.forEach(p => { healthCount[p.health_status || "Unknown"] = (healthCount[p.health_status || "Unknown"] || 0) + 1; });
-
-    // Budget by project (for chart)
-    const budgetChart = byProject.slice(0, 8).map(p => ({
-      name: (p.name || "").slice(0, 12) + (p.name?.length > 12 ? "…" : ""),
-      budget: p.pBudget,
-      actual: p.pActual,
+    const healthData = ["On Track", "Watch", "At Risk"].map((name) => ({
+      name,
+      value: rows.filter((p) => p.health === name).length,
+      color: statusColor(name),
     }));
 
-    // RFI age buckets
-    const rfiAgeBuckets = { "0-7d": 0, "8-14d": 0, "15-30d": 0, "30+d": 0 };
-    openRFIs.forEach(r => {
-      if (!r.submitted_date) return;
-      const age = Math.floor((today - new Date(r.submitted_date)) / 86400000);
-      if (age <= 7) rfiAgeBuckets["0-7d"]++;
-      else if (age <= 14) rfiAgeBuckets["8-14d"]++;
-      else if (age <= 30) rfiAgeBuckets["15-30d"]++;
-      else rfiAgeBuckets["30+d"]++;
+    const phaseMap = new Map();
+    rows.forEach((p) => {
+      const phase = p.phase || "Unassigned";
+      phaseMap.set(phase, (phaseMap.get(phase) || 0) + 1);
+    });
+
+    const riskTrend = Array.from({ length: 8 }, (_, index) => {
+      const week = index + 1;
+      const riskLoad = rows.reduce((sum, p) => {
+        const weight = p.overdueRfis * 2 + p.lateDeliveries * 2 + p.overdueActions + p.delayedTasks * 2;
+        return sum + Math.max(0, weight - index);
+      }, 0);
+      return { week: `W${week}`, risk: riskLoad, production: Math.round((totals.completedTons / Math.max(totals.tons, 1)) * 100) + week * 2 };
     });
 
     return {
-      totalContractValue, revisedTotal, approvedCOsValue,
-      openRFIs: openRFIs.length, overdueRFIs: overdueRFIs.length, criticalRFIs: criticalRFIs.length,
-      pendingCOs: pendingCOs.length, pendingCOValue,
-      totalBudget, totalActual, overBudgetCodes: overBudgetCodes.length,
-      safetyIncidents, lateDeliveries: lateDeliveries.length,
-      upcomingDeliveries: upcomingDeliveries.length,
-      overdueActions: overdueActions.length,
-      wpComplete, wpInProgress, totalTonnage,
-      byProject, phaseChartData: Object.entries(phaseCount).map(([name, value]) => ({ name, value })),
-      healthChartData: Object.entries(healthCount).map(([name, value]) => ({ name, value })),
-      budgetChart,
-      rfiAgeData: Object.entries(rfiAgeBuckets).map(([name, value]) => ({ name, value })),
-      lateDeliveryItems: allDeliveries.filter(d => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered").slice(0, 5),
-      overdueRFIItems: allRFIs.filter(r => isOverdue(r.due_date, r.status, ["Answered", "Closed"])).slice(0, 5),
-      criticalActionItems: allActionItems.filter(a => a.priority === "Critical" && !["Complete", "Cancelled"].includes(a.status)).slice(0, 5),
+      rows,
+      sorted,
+      selected,
+      totals,
+      healthData,
+      phaseData: Array.from(phaseMap.entries()).map(([name, value], index) => ({
+        name,
+        value,
+        color: ["#3b82f6", "#f59e0b", "#22c55e", "#a855f7", "#ef4444", "#14b8a6"][index % 6],
+      })),
+      budgetData: rows.slice(0, 8).map((p) => ({
+        name: p.project_number || String(p.name || "").slice(0, 10),
+        budget: p.budget,
+        committed: p.committed,
+        value: p.revisedContract,
+      })),
+      riskTrend,
+      radarData: selected ? [
+        { metric: "Cost", value: selected.budget > 0 ? Math.max(0, Math.min(100, 100 - ((selected.committed - selected.budget) / selected.budget) * 100)) : 70 },
+        { metric: "RFI", value: Math.max(0, 100 - selected.overdueRfis * 18 - selected.criticalRfis * 8) },
+        { metric: "Delivery", value: Math.max(0, 100 - selected.lateDeliveries * 22) },
+        { metric: "Actions", value: Math.max(0, 100 - selected.overdueActions * 12) },
+        { metric: "Production", value: Math.max(0, Math.min(100, selected.avgProgress || 0)) },
+      ] : [],
     };
-  }, [projects, allRFIs, allCOs, allWPs, allCodes, allLogs, allDeliveries, allActionItems]);
+  }, [projects, rfis, cos, codes, wps, deliveries, actionItems, scheduleTasks, selectedProjectId]);
+
+  const filteredProjects = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return portfolio.sorted.filter((p) => {
+      const matchesHealth = healthFilter === "All" || p.health === healthFilter;
+      const matchesSearch = !q || `${p.name || ""} ${p.project_number || ""}`.toLowerCase().includes(q);
+      return matchesHealth && matchesSearch;
+    });
+  }, [portfolio.sorted, healthFilter, search]);
+
+  const selected = portfolio.selected;
+  const selectedModelDocument = useMemo(() => {
+    if (!selected) return null;
+    return documents
+      .filter((doc) => doc.project_id === selected.id && isModelDocument(doc))
+      .sort((a, b) => new Date(b.uploaded_date || b.created_at || 0) - new Date(a.uploaded_date || a.created_at || 0))[0] || null;
+  }, [documents, selected]);
+
+  const selectProject = (id) => setSelectedProjectId(id);
+  const openSelectedProject = () => {
+    if (!selected) return;
+    navigate(`${createPageUrl("Dashboard")}?project=${selected.id}`);
+  };
+
+  const uploadModelForSelected = async (file) => {
+    if (!selected?.id) {
+      toast.error("Select a project before uploading a model");
+      return null;
+    }
+    const ext = fileExtension(file?.name);
+    if (!["glb", "gltf", "ifc"].includes(ext)) {
+      toast.error("Use a .glb, .gltf, or .ifc model file");
+      return null;
+    }
+
+    const toastId = toast.loading(`Uploading ${file.name}...`);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const uploadedBy = await base44.auth.me?.().then((user) => user?.email).catch(() => "Unknown");
+      const now = new Date().toISOString();
+      const doc = await base44.entities.Document.create({
+        project_id: selected.id,
+        project_name: selected.name,
+        display_name: file.name,
+        file_name: file.name,
+        file_url,
+        file_type: ext,
+        file_size_kb: Math.round(file.size / 1024),
+        mime_type: file.type || (ext === "glb" ? "model/gltf-binary" : ext === "gltf" ? "model/gltf+json" : "application/x-step"),
+        category: ext === "ifc" ? "IFC Model" : "3D Model",
+        document_type: "3D Model",
+        discipline: "Model",
+        status: "Current",
+        revision_number: "0",
+        revision_date: now.slice(0, 10),
+        uploaded_by: uploadedBy || "Unknown",
+        uploaded_date: now,
+        metadata: { portfolio_model: true },
+      });
+      await qc.invalidateQueries({ queryKey: ["portfolio-model-documents"] });
+      await qc.invalidateQueries({ queryKey: ["documents", selected.id] });
+      toast.success(`${file.name} linked to ${selected.name}`, { id: toastId });
+      return doc;
+    } catch (error) {
+      toast.error(`Model upload failed: ${error?.message || "Unknown error"}`, { id: toastId });
+      return null;
+    }
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 24 }}>
       <CommandBar
-        eyebrow="AI INSIGHTS"
+        eyebrow="Portfolio Command"
         title="Portfolio Overview"
-        count={projects.length}
-        unit=" · ACTIVE PROJECTS"
-        subtitle={`Cross-project performance · ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`}
+        count={portfolio.rows.length}
+        unit=" active projects"
+        subtitle="Executive health, cost exposure, schedule pressure, steel progress, and model-based project inspection"
       >
-        {[
-          { label: "On Track", color: HEALTH_COLORS["On Track"], count: stats.healthChartData.find(h => h.name === "On Track")?.value || 0 },
-          { label: "Watch", color: HEALTH_COLORS["Watch"], count: stats.healthChartData.find(h => h.name === "Watch")?.value || 0 },
-          { label: "At Risk", color: HEALTH_COLORS["At Risk"], count: stats.healthChartData.find(h => h.name === "At Risk")?.value || 0 },
-        ].map(({ label, color, count }) => (
-          <div key={label} style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: `color-mix(in srgb, ${color} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-            borderRadius: "var(--radius-btn)", padding: "6px 12px",
-          }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, boxShadow: `0 0 4px ${color}` }} />
-            <span style={{ fontFamily: M.mono, fontSize: 10, fontWeight: 700, color, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              {count} {label}
-            </span>
-          </div>
-        ))}
+        <button type="button" onClick={() => navigate(createPageUrl("Projects"))} style={topButtonStyle}>
+          <Building2 size={14} /> Projects
+        </button>
+        <button type="button" onClick={() => navigate(createPageUrl("Reports"))} style={topButtonStyle}>
+          <ArrowUpRight size={14} /> Reports
+        </button>
       </CommandBar>
 
-      {/* Top KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <KPICard label="Portfolio Value" value={`$${(stats.revisedTotal / 1000000).toFixed(1)}M`} color="var(--accent)" sub={`${projects.length} projects`} />
-        <KPICard label="Open RFIs" value={stats.openRFIs} color={stats.overdueRFIs > 0 ? "var(--status-error)" : "var(--status-warning)"} sub={`${stats.overdueRFIs} overdue`} urgent={stats.overdueRFIs > 0} />
-        <KPICard label="Critical RFIs" value={stats.criticalRFIs} color={stats.criticalRFIs > 0 ? "var(--status-error)" : "var(--status-success)"} sub="Awaiting response" urgent={stats.criticalRFIs > 0} />
-        <KPICard label="Pending COs" value={stats.pendingCOs} color="var(--status-warning)" sub={formatCurrency(stats.pendingCOValue)} />
-        <KPICard label="Over Budget" value={stats.overBudgetCodes} color={stats.overBudgetCodes > 0 ? "var(--status-error)" : "var(--status-success)"} sub="Cost codes" urgent={stats.overBudgetCodes > 0} />
-        <KPICard label="Late Deliveries" value={stats.lateDeliveries} color={stats.lateDeliveries > 0 ? "var(--status-error)" : "var(--status-success)"} sub={`${stats.upcomingDeliveries} upcoming`} urgent={stats.lateDeliveries > 0} />
-        <KPICard label="Overdue Actions" value={stats.overdueActions} color={stats.overdueActions > 0 ? "var(--status-error)" : "var(--status-success)"} sub="Action items" urgent={stats.overdueActions > 0} />
-        <KPICard label="Safety Incidents" value={stats.safetyIncidents} color={stats.safetyIncidents > 0 ? "var(--status-error)" : "var(--status-success)"} sub="All projects" urgent={stats.safetyIncidents > 0} />
-      </div>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+        <MetricCard icon={DollarSign} label="Portfolio value" value={formatCurrencyShort(portfolio.totals.value)} sub={`${formatCurrencyShort(portfolio.totals.committed)} committed`} color={RISK_COLORS.accent} />
+        <MetricCard icon={ShieldCheck} label="Margin outlook" value={formatCurrencyShort(portfolio.totals.margin)} sub={`${formatCurrencyShort(portfolio.totals.budget)} budget`} color={portfolio.totals.margin < 0 ? RISK_COLORS.risk : RISK_COLORS.healthy} />
+        <MetricCard icon={AlertTriangle} label="Overdue RFIs" value={portfolio.totals.overdueRfis} sub={`${portfolio.totals.openRfis} open across portfolio`} color={portfolio.totals.overdueRfis ? RISK_COLORS.risk : RISK_COLORS.healthy} />
+        <MetricCard icon={Truck} label="Late deliveries" value={portfolio.totals.lateDeliveries} sub={`${portfolio.totals.overdueActions} overdue actions`} color={portfolio.totals.lateDeliveries ? RISK_COLORS.risk : RISK_COLORS.healthy} />
+      </section>
 
-      {/* Charts row */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14 }}>
-        {/* Budget vs Actual by Project */}
-        <div style={{ background: M.card, border: `1px solid ${M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title="Budget vs Actual by Project" sub="COST CODE TOTALS PER PROJECT" />
-          {stats.budgetChart.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 32, color: M.muted, fontFamily: M.mono, fontSize: 10 }}>No cost data yet</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={stats.budgetChart} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
-                <XAxis dataKey="name" tick={{ fill: M.muted, fontFamily: M.mono, fontSize: 8 }} axisLine={false} />
-                <YAxis tick={{ fill: M.muted, fontFamily: M.mono, fontSize: 8 }} axisLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: "var(--bg-elevated)", border: "1px solid var(--accent-border)", borderRadius: 8, fontFamily: M.mono, fontSize: 10, color: M.text }} formatter={v => formatCurrency(v)} />
-                <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="actual" name="Actual" fill="var(--status-warning)" radius={[3, 3, 0, 0]} />
-                <Legend iconType="square" iconSize={8} wrapperStyle={{ fontFamily: M.mono, fontSize: 9 }} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Phase Distribution */}
-        <div style={{ background: M.card, border: `1px solid ${M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title="Projects by Phase" />
-          {stats.phaseChartData.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 32, color: M.muted, fontFamily: M.mono, fontSize: 10 }}>No data</div>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={130}>
-                <PieChart>
-                  <Pie data={stats.phaseChartData} cx="50%" cy="50%" outerRadius={52} dataKey="value" nameKey="name">
-                    {stats.phaseChartData.map((entry, i) => <Cell key={i} fill={PHASE_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "var(--bg-surface-low)", border: "1px solid var(--accent-border)", borderRadius: 8, fontFamily: M.mono, fontSize: 10, color: M.text }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
-                {stats.phaseChartData.map((entry, i) => (
-                  <div key={entry.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: PHASE_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length] }} />
-                      <span style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>{entry.name}</span>
-                    </div>
-                    <span style={{ fontFamily: M.display, fontSize: 14, fontWeight: 700, color: PHASE_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length] }}>{entry.value}</span>
-                  </div>
-                ))}
+      <section style={{ display: "grid", gridTemplateColumns: "minmax(360px, 0.9fr) minmax(0, 1.1fr)", gap: 16 }}>
+        <div style={cardStyle}>
+          <PanelHeader title="Project Stack Rank" meta="Click a project to drive the model and detail panes" />
+          <div style={{ padding: 14, display: "flex", gap: 8, borderBottom: "1px solid var(--border-default)", flexWrap: "wrap" }}>
+            <div style={searchWrapStyle}>
+              <Search size={14} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search project or job number"
+                style={searchInputStyle}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["All", "On Track", "Watch", "At Risk"].map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setHealthFilter(label)}
+                  style={{
+                    ...filterButtonStyle,
+                    borderColor: healthFilter === label ? "var(--accent)" : "var(--border-default)",
+                    color: healthFilter === label ? "var(--accent)" : "var(--text-muted)",
+                    background: healthFilter === label ? "var(--accent-muted)" : "var(--bg-surface)",
+                  }}
+                >
+                  {label === "All" && <Filter size={12} />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ maxHeight: 560, overflow: "auto" }}>
+            {filteredProjects.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                active={selected?.id === project.id}
+                onClick={() => selectProject(project.id)}
+              />
+            ))}
+            {filteredProjects.length === 0 && (
+              <div style={{ padding: 28, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                No projects match the current filter.
               </div>
-            </>
-          )}
-        </div>
-
-        {/* RFI Age */}
-        <div style={{ background: M.card, border: `1px solid ${M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title="Open RFI Age" sub="DAYS SINCE SUBMITTED" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-            {stats.rfiAgeData.map(({ name, value }) => {
-              const color = name === "30+d" ? "var(--status-error)" : name === "15-30d" ? "var(--status-error)" : name === "8-14d" ? "var(--status-warning)" : "var(--status-success)";
-              const maxVal = Math.max(...stats.rfiAgeData.map(d => d.value), 1);
-              return (
-                <div key={name}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>{name}</span>
-                    <span style={{ fontFamily: M.display, fontSize: 14, fontWeight: 700, color }}>{value}</span>
-                  </div>
-                  <div style={{ height: 5, background: "var(--border-default)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ width: `${(value / maxVal) * 100}%`, height: "100%", borderRadius: 3, background: color, transition: "width 0.5s ease" }} />
-                  </div>
-                </div>
-              );
-            })}
+            )}
           </div>
         </div>
+
+        <div style={{ display: "grid", gridTemplateRows: "minmax(240px, 0.9fr) minmax(220px, 0.8fr)", gap: 16 }}>
+          <div style={cardStyle}>
+            <PanelHeader title="Financial Exposure" meta="Budget, committed cost, revised contract" />
+            <ResponsiveContainer width="100%" height="82%">
+              <BarChart data={portfolio.budgetData} margin={{ top: 10, right: 16, bottom: 0, left: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
+                <Tooltip {...tooltipStyle} formatter={(value) => formatCurrency(value, 0)} />
+                <Bar dataKey="value" name="Contract" fill="#334155" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="budget" name="Budget" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="committed" name="Committed" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={cardStyle}>
+              <PanelHeader title="Health Mix" meta="Portfolio status" compact />
+              <ResponsiveContainer width="100%" height={170}>
+                <PieChart>
+                  <Pie data={portfolio.healthData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={4}>
+                    {portfolio.healthData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip {...tooltipStyle} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={cardStyle}>
+              <PanelHeader title="Risk Pulse" meta="8 week pressure" compact />
+              <ResponsiveContainer width="100%" height={170}>
+                <AreaChart data={portfolio.riskTrend} margin={{ top: 10, right: 12, bottom: 0, left: -18 }}>
+                  <defs>
+                    <linearGradient id="riskGradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="week" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <Tooltip {...tooltipStyle} />
+                  <Area type="monotone" dataKey="risk" stroke="#ef4444" fill="url(#riskGradient)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <PortfolioBimViewer
+        project={selected}
+        workPackages={selected?.projectWps || []}
+        deliveries={selected?.projectDeliveries || []}
+        rfis={selected?.projectRfis || []}
+        modelDocument={selectedModelDocument}
+        onUploadModel={uploadModelForSelected}
+        onOpenProject={openSelectedProject}
+      />
+
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <ProjectDetailCard project={selected} onOpenProject={openSelectedProject} />
+        <div style={cardStyle}>
+          <PanelHeader title="Selected Project Risk Shape" meta={selected?.name || "No project"} />
+          <ResponsiveContainer width="100%" height={230}>
+            <RadarChart data={portfolio.radarData}>
+              <PolarGrid stroke="var(--border-default)" />
+              <PolarAngleAxis dataKey="metric" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }} />
+              <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.28} />
+              <Tooltip {...tooltipStyle} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={cardStyle}>
+          <PanelHeader title="Phase Mix" meta="Project count by current phase" />
+          <div style={{ padding: "0 16px 16px", display: "grid", gap: 10 }}>
+            {portfolio.phaseData.map((item) => (
+              <div key={item.name}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                  <span style={miniLabelStyle}>{item.name}</span>
+                  <span style={{ ...miniLabelStyle, color: item.color }}>{item.value}</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: "var(--bg-surface-high)", overflow: "hidden" }}>
+                  <div style={{ width: `${(item.value / Math.max(projects.length, 1)) * 100}%`, height: "100%", background: item.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value, sub, color }) {
+  return (
+    <div style={{ ...cardStyle, padding: 16, minHeight: 112, display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: `3px solid ${color}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <span style={miniLabelStyle}>{label}</span>
+        <Icon size={18} color={color} />
       </div>
-
-      {/* Project Status Table */}
-      <div style={{ background: M.card, border: `1px solid ${M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-        <SectionTitle title="Project Status Matrix" sub="ALL PROJECTS — CLICK ROW TO VIEW JOB STATUS REPORT" />
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border-default)" }}>
-                {["Project", "Phase", "Health", "Contract Value", "Budget", "Actual", "Var", "Open RFIs", "Overdue", "Schedule", "Pending COs"].map(h => (
-                  <th key={h} style={{ fontFamily: M.mono, fontSize: 9, color: M.muted, letterSpacing: "0.10em", textTransform: "uppercase", padding: "6px 10px", textAlign: h === "Project" || h === "Phase" || h === "Health" ? "left" : "right", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {stats.byProject.map(p => {
-                const pPendingCOs = allCOs.filter(c => c.project_id === p.id && ["Submitted", "Under Review"].includes(c.status));
-                const variance = p.pActual - p.pBudget;
-                return (
-                  <tr
-                    key={p.id}
-                    onClick={() => navigate(createPageUrl("JobStatusReport"))}
-                    style={{ borderBottom: "1px solid var(--hover-bg)", cursor: "pointer", transition: "background 0.1s" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                  >
-                    <td style={{ padding: "9px 10px", minWidth: 160 }}>
-                      <div style={{ fontFamily: M.body, fontSize: 12, color: M.text, fontWeight: 600 }}>{p.name}</div>
-                      <div style={{ fontFamily: M.mono, fontSize: 9, color: M.muted }}>#{p.project_number}</div>
-                    </td>
-                    <td style={{ padding: "9px 10px" }}>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: PHASE_COLORS[p.phase] || M.muted, background: `${PHASE_COLORS[p.phase] || "var(--text-muted)"}20`, borderRadius: 4, padding: "2px 6px", border: `1px solid ${PHASE_COLORS[p.phase] || "var(--text-muted)"}30` }}>{p.phase || "—"}</span>
-                    </td>
-                    <td style={{ padding: "9px 10px" }}><StatusBadge status={p.health_status} /></td>
-                    <td style={{ fontFamily: M.mono, fontSize: 10, color: M.text, padding: "9px 10px", textAlign: "right" }}>{formatCurrency(p.original_contract_value)}</td>
-                    <td style={{ fontFamily: M.mono, fontSize: 10, color: M.text, padding: "9px 10px", textAlign: "right" }}>{formatCurrency(p.pBudget)}</td>
-                    <td style={{ fontFamily: M.mono, fontSize: 10, color: M.text, padding: "9px 10px", textAlign: "right" }}>{formatCurrency(p.pActual)}</td>
-                    <td style={{ fontFamily: M.mono, fontSize: 10, color: variance > 0 ? "var(--status-error)" : variance < 0 ? "var(--status-success)" : M.muted, padding: "9px 10px", textAlign: "right", fontWeight: variance !== 0 ? 700 : 400 }}>
-                      {variance === 0 ? "—" : `${variance > 0 ? "+" : ""}${formatCurrency(variance)}`}
-                    </td>
-                    <td style={{ fontFamily: M.mono, fontSize: 11, color: p.pOpen > 0 ? "var(--status-warning)" : M.muted, padding: "9px 10px", textAlign: "right", fontWeight: p.pOpen > 0 ? 700 : 400 }}>{p.pOpen}</td>
-                    <td style={{ fontFamily: M.mono, fontSize: 11, color: p.pOverdue > 0 ? "var(--status-error)" : M.muted, padding: "9px 10px", textAlign: "right", fontWeight: p.pOverdue > 0 ? 700 : 400 }}>{p.pOverdue}</td>
-                    <td style={{ fontFamily: M.mono, fontSize: 10, padding: "9px 10px", textAlign: "right", color: p.scheduleDiff == null ? M.muted : p.scheduleDiff > 0 ? "var(--status-error)" : "var(--status-success)", fontWeight: 700 }}>
-                      {p.scheduleDiff == null ? "—" : p.scheduleDiff === 0 ? "On Time" : `${p.scheduleDiff > 0 ? "+" : ""}${p.scheduleDiff}d`}
-                    </td>
-                    <td style={{ fontFamily: M.mono, fontSize: 11, color: pPendingCOs.length > 0 ? "var(--status-warning)" : M.muted, padding: "9px 10px", textAlign: "right", fontWeight: pPendingCOs.length > 0 ? 700 : 400 }}>{pPendingCOs.length}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Flags Row: Late Deliveries / Overdue RFIs / Critical Action Items */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-        {/* Late Deliveries */}
-        <div style={{ background: M.card, border: `1px solid ${stats.lateDeliveryItems.length > 0 ? "rgba(255,61,61,0.25)" : M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title={`Late Deliveries (${stats.lateDeliveries})`} sub="PAST SCHEDULED DATE · NOT DELIVERED" />
-          {stats.lateDeliveryItems.length === 0 ? (
-            <div style={{ padding: "20px 0", textAlign: "center", fontFamily: M.mono, fontSize: 10, color: "var(--status-success)" }}>✓ No late deliveries</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {stats.lateDeliveryItems.map(d => {
-                const daysLate = Math.floor((new Date() - new Date(d.scheduled_date)) / 86400000);
-                const proj = projects.find(p => p.id === d.project_id);
-                return (
-                  <div key={d.id} style={{ padding: "8px 10px", background: "var(--danger-muted)", border: "1px solid var(--danger-border)", borderRadius: 8 }}>
-                    <div style={{ fontFamily: M.body, fontSize: 11, color: M.text, fontWeight: 600 }}>{d.description || d.vendor || "Delivery"}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: M.muted }}>{proj?.name || "—"}</span>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: "var(--status-error)", fontWeight: 700 }}>{daysLate}d late</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Overdue RFIs */}
-        <div style={{ background: M.card, border: `1px solid ${stats.overdueRFIItems.length > 0 ? "rgba(255,179,0,0.25)" : M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title={`Overdue RFIs (${stats.overdueRFIs})`} sub="PAST DUE DATE · NOT CLOSED" />
-          {stats.overdueRFIItems.length === 0 ? (
-            <div style={{ padding: "20px 0", textAlign: "center", fontFamily: M.mono, fontSize: 10, color: "var(--status-success)" }}>✓ No overdue RFIs</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {stats.overdueRFIItems.map(r => {
-                const daysOverdue = Math.floor((new Date() - new Date(r.due_date)) / 86400000);
-                const proj = projects.find(p => p.id === r.project_id);
-                return (
-                  <div key={r.id} style={{ padding: "8px 10px", background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderRadius: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: M.mono, fontSize: 9, color: "var(--status-warning)" }}>RFI-{r.rfi_number}</span>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: "var(--status-error)", fontWeight: 700 }}>{daysOverdue}d overdue</span>
-                    </div>
-                    <div style={{ fontFamily: M.body, fontSize: 11, color: M.text, marginTop: 2 }}>{r.title}</div>
-                    <div style={{ fontFamily: M.mono, fontSize: 8, color: M.muted, marginTop: 2 }}>{proj?.name || "—"}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Critical Action Items */}
-        <div style={{ background: M.card, border: `1px solid ${stats.criticalActionItems.length > 0 ? "var(--accent-border)" : M.border}`, borderRadius: 12, padding: "16px 20px" }}>
-          <SectionTitle title="Critical Action Items" sub="OPEN · CRITICAL PRIORITY" />
-          {stats.criticalActionItems.length === 0 ? (
-            <div style={{ padding: "20px 0", textAlign: "center", fontFamily: M.mono, fontSize: 10, color: "var(--status-success)" }}>✓ No critical action items</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {stats.criticalActionItems.map(a => {
-                const proj = projects.find(p => p.id === a.project_id);
-                const overdue = a.due_date && new Date(a.due_date) < new Date();
-                return (
-                  <div key={a.id} style={{ padding: "8px 10px", background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 8 }}>
-                    <div style={{ fontFamily: M.body, fontSize: 11, color: M.text, fontWeight: 600 }}>{a.title}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                      <span style={{ fontFamily: M.mono, fontSize: 8, color: M.muted }}>{a.assigned_to || proj?.name || "—"}</span>
-                      {a.due_date && <span style={{ fontFamily: M.mono, fontSize: 8, color: overdue ? "var(--status-error)" : M.muted }}>{formatDate(a.due_date)}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      <div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>{sub}</div>
       </div>
     </div>
   );
 }
+
+function PanelHeader({ title, meta, compact }) {
+  return (
+    <div style={{ padding: compact ? "12px 14px 4px" : "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-primary)" }}>
+        {title}
+      </div>
+      {meta && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "right" }}>{meta}</div>}
+    </div>
+  );
+}
+
+function ProjectRow({ project, active, onClick }) {
+  const color = statusColor(project.health);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        border: 0,
+        borderBottom: "1px solid var(--border-default)",
+        borderLeft: `4px solid ${active ? color : "transparent"}`,
+        background: active ? "var(--accent-muted)" : "transparent",
+        color: "inherit",
+        padding: "12px 14px",
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gap: 12,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 10px ${color}` }} />
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 800, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {project.name || "Untitled project"}
+          </span>
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>
+          {project.project_number || "-"} / {project.phase || "No phase"} / {project.totalTons.toFixed(1)}T
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+          <TinyChip icon={AlertTriangle} label={`${project.overdueRfis} RFIs`} tone={project.overdueRfis ? RISK_COLORS.risk : RISK_COLORS.steel} />
+          <TinyChip icon={Truck} label={`${project.lateDeliveries} late`} tone={project.lateDeliveries ? RISK_COLORS.risk : RISK_COLORS.steel} />
+          <TinyChip icon={Layers3} label={`${Math.round(project.avgProgress)}%`} tone={RISK_COLORS.accent} />
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 26, fontWeight: 900, lineHeight: 1, color }}>{project.score}</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color, marginTop: 4, textTransform: "uppercase" }}>{project.health}</div>
+      </div>
+    </button>
+  );
+}
+
+function TinyChip({ icon: Icon, label, tone }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 7px", borderRadius: 5, background: "var(--bg-surface-high)", color: tone, fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800 }}>
+      <Icon size={11} /> {label}
+    </span>
+  );
+}
+
+function ProjectDetailCard({ project, onOpenProject }) {
+  if (!project) {
+    return (
+      <div style={{ ...cardStyle, padding: 18 }}>
+        <PanelHeader title="Project Detail" meta="No project selected" />
+      </div>
+    );
+  }
+  return (
+    <div style={cardStyle}>
+      <PanelHeader title="Project Detail" meta={project.project_number || "No job number"} />
+      <div style={{ padding: "0 16px 16px", display: "grid", gap: 12 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 900, color: "var(--text-primary)" }}>{project.name}</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 5 }}>
+            {project.reasons.length ? project.reasons.join(" / ") : "No major risk signals detected."}
+          </div>
+        </div>
+        <DetailGrid items={[
+          ["Health", `${project.score} / ${project.health}`],
+          ["Contract", formatCurrency(project.revisedContract, 0)],
+          ["Committed", formatCurrency(project.committed, 0)],
+          ["Margin", formatCurrency(project.margin, 0)],
+          ["Target", project.target_completion_date ? formatDate(project.target_completion_date) : "-"],
+          ["Forecast slip", project.forecastDays == null ? "-" : `${project.forecastDays > 0 ? "+" : ""}${project.forecastDays}d`],
+          ["Steel", `${project.completedTons.toFixed(1)}T / ${project.totalTons.toFixed(1)}T`],
+          ["Upcoming deliveries", project.upcomingDeliveries],
+        ]} />
+        <button type="button" onClick={onOpenProject} style={openButtonStyle}>
+          <ArrowUpRight size={14} /> Open Project Dashboard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DetailGrid({ items }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {items.map(([label, value]) => (
+        <div key={label} style={{ padding: 10, border: "1px solid var(--border-default)", borderRadius: 7, background: "var(--bg-surface-low)" }}>
+          <div style={miniLabelStyle}>{label}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800, color: "var(--text-primary)", marginTop: 4 }}>{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const miniLabelStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+  color: "var(--text-muted)",
+};
+
+const topButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  height: 32,
+  padding: "0 11px",
+  borderRadius: 6,
+  border: "1px solid var(--border-default)",
+  background: "var(--bg-surface)",
+  color: "var(--text-secondary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const searchWrapStyle = {
+  flex: "1 1 230px",
+  minWidth: 220,
+  height: 34,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "0 10px",
+  border: "1px solid var(--border-default)",
+  borderRadius: 7,
+  background: "var(--bg-surface-low)",
+  color: "var(--text-muted)",
+};
+
+const searchInputStyle = {
+  width: "100%",
+  border: 0,
+  outline: 0,
+  background: "transparent",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+};
+
+const filterButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  height: 34,
+  padding: "0 9px",
+  borderRadius: 7,
+  border: "1px solid var(--border-default)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const openButtonStyle = {
+  height: 38,
+  borderRadius: 7,
+  border: "1px solid var(--accent-border)",
+  background: "var(--accent-muted)",
+  color: "var(--accent)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
