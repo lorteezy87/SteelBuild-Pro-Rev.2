@@ -70,33 +70,44 @@ export function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
 
-/** Week starts on Sunday (US convention). */
-export function startOfWeek(d) {
+/**
+ * Start of the week containing `d`. `weekStart` is "sunday" (the US
+ * default — getDay() === 0) or "monday" (ISO/EU — getDay() === 1).
+ * Anything else falls back to "sunday" so callers that haven't been
+ * updated yet still get the original behaviour. Mirrors the
+ * Settings → Display → "Week Starts On" preference.
+ */
+export function startOfWeek(d, weekStart = "sunday") {
   const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  c.setDate(c.getDate() - c.getDay());
+  const startDow = weekStart === "monday" ? 1 : 0;
+  // (dow - startDow + 7) % 7 → days to subtract to land on the
+  // week's first day. e.g. Mon → Sun is (1 - 0 + 7) % 7 = 1.
+  const back = (c.getDay() - startDow + 7) % 7;
+  c.setDate(c.getDate() - back);
   return c;
 }
 
-export function endOfWeek(d) {
-  const s = startOfWeek(d);
+export function endOfWeek(d, weekStart = "sunday") {
+  const s = startOfWeek(d, weekStart);
   return addDays(s, 6);
 }
 
 /**
  * Build a 6-row × 7-col grid of Date objects covering the month that
- * contains `focus`. The first row starts on the Sunday of-or-before the
- * 1st; the grid extends 42 days. Standard month-view layout.
+ * contains `focus`. The first row starts on the configured week-start
+ * day of-or-before the 1st; the grid extends 42 days. Standard
+ * month-view layout.
  */
-export function buildMonthGrid(focus) {
-  const start = startOfWeek(startOfMonth(focus));
+export function buildMonthGrid(focus, weekStart = "sunday") {
+  const start = startOfWeek(startOfMonth(focus), weekStart);
   const days = [];
   for (let i = 0; i < 42; i += 1) days.push(addDays(start, i));
   return days;
 }
 
 /** 7-day list for week view. */
-export function buildWeekGrid(focus) {
-  const start = startOfWeek(focus);
+export function buildWeekGrid(focus, weekStart = "sunday") {
+  const start = startOfWeek(focus, weekStart);
   const days = [];
   for (let i = 0; i < 7; i += 1) days.push(addDays(start, i));
   return days;
@@ -141,9 +152,9 @@ export function formatLongDate(d) {
 export function formatShortDate(d) {
   return `${MONTH_NAMES_SHORT[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
-export function formatWeekRange(d) {
-  const s = startOfWeek(d);
-  const e = endOfWeek(d);
+export function formatWeekRange(d, weekStart = "sunday") {
+  const s = startOfWeek(d, weekStart);
+  const e = endOfWeek(d, weekStart);
   if (s.getMonth() === e.getMonth()) {
     return `${MONTH_NAMES_SHORT[s.getMonth()]} ${s.getDate()}–${e.getDate()}, ${e.getFullYear()}`;
   }

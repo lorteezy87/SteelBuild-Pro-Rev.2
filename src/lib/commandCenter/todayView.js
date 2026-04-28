@@ -49,6 +49,12 @@ export function buildTodayView(feed = [], { deliveries = [], workPackages = [], 
   const waitingOthers = [];
 
   for (const item of feed) {
+    // Pay-app deadlines (itemType === "PAY") live on their own SOV
+    // submission cadence and shouldn't crowd into the field-side
+    // deadlines view. They still surface inside the full Action
+    // Feed below — just not in the Today/Blocking/Overdue tiles.
+    if (item?.itemType === "PAY") continue;
+
     // Blocking takes priority
     if (item.urgency === "blocking") {
       blocking.push(item);
