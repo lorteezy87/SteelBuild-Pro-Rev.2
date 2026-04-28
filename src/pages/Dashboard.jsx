@@ -92,6 +92,14 @@ export default function Dashboard() {
   // activity surface that's actually populated — the generic
   // `activities` table is empty everywhere). Pull the latest 50
   // events globally and project-scope them in the section.
+  // Budget-hour rows live per-project; fetch only when a project is active
+  // so portfolio mode doesn't pay for a query that has no consumer.
+  const { data: budgetHourItems = [] } = useQuery({
+    queryKey: ["budget-hour-items", pid],
+    queryFn: () => (pid ? base44.entities.BudgetHourItem.filter({ project_id: pid }, "sort_order") : []),
+    enabled: !!pid,
+    staleTime: 30 * 1000,
+  });
   const { data: allDrawingActivity = [] } = useQuery({
     queryKey: ["drawing-activity-recent"],
     queryFn: () =>
@@ -164,6 +172,7 @@ export default function Dashboard() {
         sovItems={sovItems}
         scheduleTasks={scheduleTasks}
         drawingActivity={drawingActivity}
+        budgetHourItems={budgetHourItems}
         onClearProject={() => setActiveProject(null)}
         onNavigate={(target, opts = {}) => {
           // The 4-section dashboard fires onNavigate for every clickable
@@ -180,6 +189,7 @@ export default function Dashboard() {
             "field-reports": "/DailyLogs",
             schedule:        "/Schedule",
             "fab-release":   "/FabRelease",
+            "budget-hours":  "/BudgetHours",
           };
           const path = paths[target];
           if (!path) return;

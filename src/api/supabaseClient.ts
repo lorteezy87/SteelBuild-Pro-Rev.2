@@ -580,6 +580,8 @@ export const entities = {
   Expense:               createEntityClient('expenses'),
   Delivery:              createEntityClient('deliveries'),
   WorkPackage:           createEntityClient('work_packages'),
+  // 062: per-project budget vs actual hours (Estimating Kickoff scope items).
+  BudgetHourItem:        createEntityClient('budget_hour_items'),
   SOVItem:               createEntityClient('sov_items'),
   Vendor:                createEntityClient('vendors'),
   Contact:               createEntityClient('contacts'),

@@ -38,6 +38,7 @@ import {
   cashCollected,
   pendingPayment,
   retentionHeld,
+  budgetHoursVariance,
 } from "../projectMetrics";
 import { formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
 import InlineEditField from "@/components/shared/InlineEditField";
@@ -57,6 +58,8 @@ export default function FinancialControlsSection({
   expenses = [],
   wps = [],
   sovItems = [],
+  budgetHourItems = [],
+  onNavigate,
 }) {
   const baseContract = Number(project?.original_contract_value) || 0;
   const approvedDelta = useMemo(
@@ -78,6 +81,7 @@ export default function FinancialControlsSection({
   const collected = useMemo(() => cashCollected(sovItems), [sovItems]);
   const pendingPay = useMemo(() => pendingPayment(sovItems), [sovItems]);
   const retention = useMemo(() => retentionHeld(sovItems), [sovItems]);
+  const hoursVar = useMemo(() => budgetHoursVariance(budgetHourItems, wps), [budgetHourItems, wps]);
 
   const consumedPct = contractVal > 0 ? Math.min(150, (projFinal / contractVal) * 100) : 0;
   const consumedColor =
@@ -109,10 +113,10 @@ export default function FinancialControlsSection({
       subtitle="Budget tracking, projections, and cash flow"
       stats={stats}
     >
-      {/* Top tile strip — five fields side-by-side */}
+      {/* Top tile strip — six fields side-by-side */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)",
+        gridTemplateColumns: "repeat(6, 1fr)",
         gap: 8,
         marginBottom: 16,
       }}>
@@ -153,6 +157,7 @@ export default function FinancialControlsSection({
           value={ppt != null ? formatCurrency(ppt) : "—"}
           color="var(--text-secondary)"
         />
+        <HoursVarianceTile hoursVar={hoursVar} onNavigate={onNavigate} />
       </div>
 
       {/* Cost Analysis / Cash Flow split */}
@@ -281,6 +286,113 @@ function SubHeading({ children }) {
       color: "var(--text-muted)", marginBottom: 8,
     }}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Hours Variance tile — Shop / Field % over (or under) budget. Mirrors
+ * the rollup on the Budget Hours page so PMs can spot a labor-spend
+ * spike without leaving the dashboard. Click navigates to /BudgetHours.
+ *
+ * Renders a "Set up" CTA when no budget rows exist for the project so
+ * the empty state nudges the user to create the kickoff template
+ * rather than displaying 0% / 0%.
+ */
+function HoursVarianceTile({ hoursVar, onNavigate }) {
+  const handleClick = onNavigate ? () => onNavigate("budget-hours") : undefined;
+  const fmt = (pct) => {
+    if (!Number.isFinite(pct)) return "—";
+    const v = Math.round(pct * 10) / 10;
+    return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+  };
+  const colorFor = (pct) =>
+    pct >= 10 ? "var(--status-error)"
+      : pct > 0 ? "var(--status-warning)"
+      : "var(--status-success)";
+
+  if (!hoursVar.hasBudget) {
+    return (
+      <div
+        onClick={handleClick}
+        title="Set up budget hours from the Estimating Kickoff template"
+        style={{
+          padding: "12px 14px",
+          background: "var(--bg-surface-low)",
+          border: "1px dashed var(--border-default)",
+          borderRadius: 8,
+          cursor: handleClick ? "pointer" : "default",
+          display: "flex", flexDirection: "column", justifyContent: "center",
+        }}
+      >
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+          letterSpacing: "0.10em", textTransform: "uppercase",
+          color: "var(--text-muted)", marginBottom: 6,
+        }}>
+          Hours Variance
+        </div>
+        <div style={{
+          fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600,
+          color: "var(--accent)",
+        }}>
+          Set up budget →
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={handleClick}
+      title="Open Budget Hours"
+      style={{
+        padding: "12px 14px",
+        background: "var(--bg-surface-low)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 8,
+        cursor: handleClick ? "pointer" : "default",
+      }}
+    >
+      <div style={{
+        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+        letterSpacing: "0.10em", textTransform: "uppercase",
+        color: "var(--text-muted)", marginBottom: 6,
+      }}>
+        Hours Variance
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+        <div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
+            letterSpacing: "0.10em", textTransform: "uppercase",
+          }}>
+            Shop
+          </div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700,
+            color: colorFor(hoursVar.shopVariancePct),
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {fmt(hoursVar.shopVariancePct)}
+          </div>
+        </div>
+        <div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
+            letterSpacing: "0.10em", textTransform: "uppercase",
+          }}>
+            Field
+          </div>
+          <div style={{
+            fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700,
+            color: colorFor(hoursVar.fieldVariancePct),
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {fmt(hoursVar.fieldVariancePct)}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -496,6 +496,7 @@ export default function Projects() {
   const [search,        setSearch]        = useState("");
   const [phaseFilter,   setPhaseFilter]   = useState("all");
   const [healthFilter,  setHealthFilter]  = useState("all");
+  const [jobTypeFilter, setJobTypeFilter] = useState("all");
   const [view,          setView]          = useState("cards");
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editing,       setEditing]       = useState(null);
@@ -549,10 +550,13 @@ export default function Projects() {
   const filtered = useMemo(() => projects.filter(p => {
     const q = search.toLowerCase();
     const matchSearch = !q || p.name?.toLowerCase().includes(q) || p.project_number?.toLowerCase().includes(q) || p.client?.toLowerCase().includes(q) || p.general_contractor?.toLowerCase().includes(q);
-    return matchSearch && (phaseFilter === "all" || p.phase === phaseFilter) && (healthFilter === "all" || p.health_status === healthFilter);
-  }), [projects, search, phaseFilter, healthFilter]);
+    return matchSearch
+      && (phaseFilter === "all"   || p.phase === phaseFilter)
+      && (healthFilter === "all"  || p.health_status === healthFilter)
+      && (jobTypeFilter === "all" || p.job_type === jobTypeFilter);
+  }), [projects, search, phaseFilter, healthFilter, jobTypeFilter]);
 
-  const hasFilters = search || phaseFilter !== "all" || healthFilter !== "all";
+  const hasFilters = search || phaseFilter !== "all" || healthFilter !== "all" || jobTypeFilter !== "all";
 
   /* ─────────────────────────────────────────────
      Render
@@ -743,11 +747,35 @@ export default function Projects() {
           ))}
         </div>
 
+        {/* Divider */}
+        <div style={{ width: 1, height: 20, background: "var(--divider)", flexShrink: 0 }} />
+
+        {/* Job type pills — kept in sync with the projects_job_type_check
+            constraint added in migration 063. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+          {[
+            "Beams/Deck",
+            "Beams/Joists/Deck",
+            "Joist Deck",
+            "Tilt",
+            "Tilt Hybrid",
+            "Misc.",
+            "Other",
+          ].map(t => (
+            <FilterPill
+              key={t}
+              label={t}
+              active={jobTypeFilter === t}
+              onClick={() => setJobTypeFilter(jobTypeFilter === t ? "all" : t)}
+            />
+          ))}
+        </div>
+
         {/* Clear + count */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {hasFilters && (
             <button
-              onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); }}
+              onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); setJobTypeFilter("all"); }}
               style={{
                 background: "transparent",
                 border: "1px solid var(--border-default)",
@@ -841,7 +869,7 @@ export default function Projects() {
               </div>
               {hasFilters && (
                 <button
-                  onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); }}
+                  onClick={() => { setSearch(""); setPhaseFilter("all"); setHealthFilter("all"); setJobTypeFilter("all"); }}
                   style={{
                     marginTop: 14,
                     background: "transparent",
