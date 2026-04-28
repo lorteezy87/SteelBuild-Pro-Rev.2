@@ -15,7 +15,7 @@
  * means editing the registry + the PAGE_ICON map below.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   // Overview
   LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,

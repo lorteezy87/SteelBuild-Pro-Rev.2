@@ -75,10 +75,6 @@ function getDurationHint(budgetHours) {
 }
 
 export default function ResourceList({ resources, workPackages = [], onEdit, onDelete }) {
-  if (resources.length === 0) {
-    return null; // Empty state handled by parent
-  }
-
   // Pre-group WPs by assigned crew name for O(1) lookup per row.
   const wpsByCrew = React.useMemo(() => {
     const map = {};
@@ -165,6 +161,10 @@ export default function ResourceList({ resources, workPackages = [], onEdit, onD
     }
     return out;
   }, [topLevelResources, membersByParentId, expandedCrews, visibleIds]);
+
+  if (resources.length === 0) {
+    return null; // Empty state handled by parent
+  }
 
   return (
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>

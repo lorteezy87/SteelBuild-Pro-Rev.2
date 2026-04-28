@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -11,9 +11,7 @@ import { CommandBar } from "@/components/design-system";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
 import { Plus, RefreshCw } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
-import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent, formatDate } from "@/components/shared/formatters";
-import { X } from "lucide-react";
-import { toast } from "sonner";
+import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import {
   appendRecordToCaches,
   replaceRecordInCaches,
@@ -24,15 +22,12 @@ import {
 import {
   mono,
   body,
-  HEALTH_COLOR,
-  FAMILY_RULES,
   getFamilyMeta,
   safeNumber,
   formatSigned,
   varianceColor,
 } from "@/pages/financials/utils";
 import { SummaryCard, KPIStrip } from "@/pages/financials/KPIStrip";
-import { DrawerTile, ChartLegend, drawerTd, drawerTdRight } from "@/pages/financials/DrawerAtoms";
 import { SectionTabs, FilterBar, ReviewFlags } from "@/pages/financials/FilterBar";
 import { COImpactDrawer } from "@/pages/financials/drawers/COImpactDrawer";
 import { LaborDrawer } from "@/pages/financials/drawers/LaborDrawer";

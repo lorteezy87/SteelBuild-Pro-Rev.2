@@ -16,7 +16,7 @@ import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { useRef, useMemo } from "react";
 import { batchProcess } from "@/utils/batchProcess";
-import { CommandBar, KpiTile, Button, Icon } from "@/components/design-system";
+import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
 import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";

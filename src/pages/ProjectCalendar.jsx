@@ -25,7 +25,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Printer, Download, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, Download } from "lucide-react";
 
 import { base44 } from "@/api/base44Client";
 import { useProjectId } from "@/hooks/useProjectId";
