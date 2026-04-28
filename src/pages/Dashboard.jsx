@@ -108,6 +108,41 @@ export default function Dashboard() {
         : Promise.resolve([]),
     staleTime: 30 * 1000,
   });
+  // ── Field activity rollup (added with the Field overhaul) ──
+  // Each field surface (Daily Logs / Photos / Punchlist / Inspections /
+  // Safety / QC) feeds the new <FieldActivitySection> on the project
+  // dashboard AND the /Field hub. Pull globally and slice per-project
+  // so we don't duplicate fetches across the two consumers.
+  const { data: allDailyLogs = [] } = useQuery({
+    queryKey: ["daily-logs-all"],
+    queryFn: () => base44.entities.DailyLog.list("-date"),
+    staleTime: 60 * 1000,
+  });
+  const { data: allPhotos = [] } = useQuery({
+    queryKey: ["photos-all"],
+    queryFn: () => base44.entities.Photo.list("-taken_date"),
+    staleTime: 60 * 1000,
+  });
+  const { data: allPunchlist = [] } = useQuery({
+    queryKey: ["punchlist-all"],
+    queryFn: () => base44.entities.PunchlistItem.list(),
+    staleTime: 60 * 1000,
+  });
+  const { data: allInspections = [] } = useQuery({
+    queryKey: ["inspections-all"],
+    queryFn: () => base44.entities.Inspection.list("-inspection_date"),
+    staleTime: 60 * 1000,
+  });
+  const { data: allSafetyIncidents = [] } = useQuery({
+    queryKey: ["safety-all"],
+    queryFn: () => base44.entities.SafetyIncident.list("-incident_date"),
+    staleTime: 60 * 1000,
+  });
+  const { data: allQualityRecords = [] } = useQuery({
+    queryKey: ["qc-records-all"],
+    queryFn: () => base44.entities.QualityControlRecord.list("-test_date"),
+    staleTime: 60 * 1000,
+  });
 
   /* ── Project-scoped slices (derived from global data to avoid dupe queries) ── */
   const rfis       = useMemo(() => (pid ? allRFIs.filter((r)       => r.project_id === pid) : []), [allRFIs, pid]);
@@ -131,6 +166,12 @@ export default function Dashboard() {
     () => (pid ? allDrawingActivity.filter((a) => a.project_id === pid) : []),
     [allDrawingActivity, pid],
   );
+  const dailyLogs        = useMemo(() => (pid ? allDailyLogs.filter((r) => r.project_id === pid)        : []), [allDailyLogs, pid]);
+  const photosForProject = useMemo(() => (pid ? allPhotos.filter((r) => r.project_id === pid)           : []), [allPhotos, pid]);
+  const punchlistItems   = useMemo(() => (pid ? allPunchlist.filter((r) => r.project_id === pid)        : []), [allPunchlist, pid]);
+  const inspections      = useMemo(() => (pid ? allInspections.filter((r) => r.project_id === pid)      : []), [allInspections, pid]);
+  const safetyIncidents  = useMemo(() => (pid ? allSafetyIncidents.filter((r) => r.project_id === pid)  : []), [allSafetyIncidents, pid]);
+  const qualityRecords   = useMemo(() => (pid ? allQualityRecords.filter((r) => r.project_id === pid)   : []), [allQualityRecords, pid]);
 
   const isLoading = projectsLoading || rfisLoading;
 
@@ -173,6 +214,12 @@ export default function Dashboard() {
         scheduleTasks={scheduleTasks}
         drawingActivity={drawingActivity}
         budgetHourItems={budgetHourItems}
+        dailyLogs={dailyLogs}
+        photos={photosForProject}
+        punchlistItems={punchlistItems}
+        inspections={inspections}
+        safetyIncidents={safetyIncidents}
+        qualityRecords={qualityRecords}
         onClearProject={() => setActiveProject(null)}
         onNavigate={(target, opts = {}) => {
           // The 4-section dashboard fires onNavigate for every clickable
@@ -191,6 +238,14 @@ export default function Dashboard() {
             "fab-release":   "/FabRelease",
             "budget-hours":  "/BudgetHours",
             procurement:     "/Procurement",
+            // Field overhaul (FieldActivitySection + Field hub deep links)
+            field:           "/Field",
+            "daily-logs":    "/DailyLogs",
+            photos:          "/Photos",
+            punchlist:       "/Punchlist",
+            inspections:     "/Inspections",
+            safety:          "/Safety",
+            "quality-control": "/QualityControl",
           };
           const path = paths[target];
           if (!path) return;
