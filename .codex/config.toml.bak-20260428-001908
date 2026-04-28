@@ -4,15 +4,24 @@
 project_root = 'C:\dev\SteelBuild-Pro-Rev.2'
 project_name = "SteelBuild-Pro-Rev.2"
 
+# ──────────────────────────────────────────────
+# Model & Behavior
+# ──────────────────────────────────────────────
 model = "claude-opus-4-7"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 
+# ──────────────────────────────────────────────
+# Trusted Paths
+# ──────────────────────────────────────────────
 [trust]
 paths = [
   'C:\dev\SteelBuild-Pro-Rev.2',
 ]
 
+# ──────────────────────────────────────────────
+# Sandbox / Workspace Permissions
+# ──────────────────────────────────────────────
 [sandbox_workspace_write]
 network_access = true
 writable_roots = [
@@ -21,6 +30,9 @@ writable_roots = [
 exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 
+# ──────────────────────────────────────────────
+# Shell Environment (Windows / PowerShell)
+# ──────────────────────────────────────────────
 [shell_environment_policy]
 inherit = "all"
 ignore_default_excludes = false
@@ -36,6 +48,9 @@ exclude = [
 NODE_ENV = "development"
 NEXT_TELEMETRY_DISABLED = "1"
 
+# ──────────────────────────────────────────────
+# File Patterns — What Codex Should/Shouldn't Touch
+# ──────────────────────────────────────────────
 [file_patterns]
 exclude = [
   "node_modules/**",
@@ -72,6 +87,20 @@ include_priority = [
   "middleware.ts",
 ]
 
+# ──────────────────────────────────────────────
+# MCP Servers (optional — uncomment as needed)
+# ──────────────────────────────────────────────
+# [mcp_servers.supabase]
+# command = "npx"
+# args = ["-y", "@supabase/mcp-server-supabase@latest"]
+
+# [mcp_servers.github]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-github"]
+
+# ──────────────────────────────────────────────
+# Project Context — Pass to Model on Every Session
+# ──────────────────────────────────────────────
 [project_context]
 description = """
 SteelBuild Pro Rev.2 — purpose-built construction PM web application for
@@ -108,6 +137,9 @@ conventions = [
   "Use IBM Plex Mono for numbers, codes, IDs; Space Grotesk for headings",
 ]
 
+# ──────────────────────────────────────────────
+# Common Commands (reference for Codex)
+# ──────────────────────────────────────────────
 [commands]
 dev = "npm run dev"
 build = "npm run build"
