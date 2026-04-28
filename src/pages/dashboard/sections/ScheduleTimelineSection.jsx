@@ -14,7 +14,8 @@
  */
 
 import React, { useMemo } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, CalendarDays } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import SectionCard from "./SectionCard";
 import {
   daysRemaining,
@@ -38,7 +39,16 @@ const STAGE_COLOR = {
   "Shipped":     "#0d9488",
 };
 
-export default function ScheduleTimelineSection({ project, wps = [], scheduleTasks = [], deliveries = [], onNavigate }) {
+export default function ScheduleTimelineSection({
+  project,
+  wps = [],
+  scheduleTasks = [],
+  deliveries = [],
+  rfis = [],
+  actionItems = [],
+  onNavigate,
+}) {
+  const navigate = useNavigate();
   const elapsedPct = useMemo(() => timelineElapsedPct(project), [project]);
   const completePct = useMemo(() => wpProgressPct(wps), [wps]);
   const daysLeft = useMemo(() => daysRemaining(project), [project]);
@@ -178,6 +188,18 @@ export default function ScheduleTimelineSection({ project, wps = [], scheduleTas
           )}
         </div>
       </div>
+
+      {/* Today / This Week — high-priority upcoming-events strip.
+          Quickly answers "what's coming up?" without scrolling the
+          dashboard. Click → jump into the Project Calendar focused on
+          that day. */}
+      <UpcomingEventsStrip
+        scheduleTasks={scheduleTasks}
+        deliveries={deliveries}
+        rfis={rfis}
+        actionItems={actionItems}
+        onJumpToDay={(iso) => navigate(`/ProjectCalendar?date=${iso}`)}
+      />
 
       {/* Milestones / Critical Path */}
       <div style={{
@@ -633,3 +655,188 @@ const LINK_BTN = {
   letterSpacing: "0.08em", textTransform: "uppercase",
   cursor: "pointer",
 };
+
+// ── Upcoming Events strip ───────────────────────────────────────────
+// Surfaces the next 7 days' high-priority events (milestones, RFI
+// due dates, deliveries scheduled, action items overdue) in a compact
+// horizontal strip. Each item links into the Project Calendar focused
+// on that exact day.
+function UpcomingEventsStrip({ scheduleTasks = [], deliveries = [], rfis = [], actionItems = [], onJumpToDay }) {
+  const items = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const horizon = new Date(today); horizon.setDate(horizon.getDate() + 7);
+    const toIso = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    };
+    const inHorizon = (iso) => {
+      if (!iso) return false;
+      const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+      if (isNaN(d)) return false;
+      return d >= today && d <= horizon;
+    };
+    const isOverdue = (iso) => {
+      if (!iso) return false;
+      const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+      return !isNaN(d) && d < today;
+    };
+    const out = [];
+    // Milestones in the next 7 days
+    for (const t of scheduleTasks) {
+      if (t.task_type !== "Milestone" && t.is_milestone !== true) continue;
+      const iso = String(t.start_date || t.end_date || "").slice(0, 10);
+      if (!inHorizon(iso)) continue;
+      out.push({ key: `m-${t.id}`, type: "milestone", date: iso, title: t.task_name, color: "var(--status-warning)" });
+    }
+    // RFIs due (or overdue) in the window
+    for (const r of rfis) {
+      if (r.is_deleted) continue;
+      const iso = String(r.date_required || r.due_date || "").slice(0, 10);
+      if (!iso) continue;
+      if (!inHorizon(iso) && !isOverdue(iso)) continue;
+      out.push({
+        key: `r-${r.id}`,
+        type: "rfi",
+        date: iso,
+        title: `${r.rfi_number || "RFI"} due`,
+        color: isOverdue(iso) ? "var(--status-error)" : "var(--status-warning)",
+        overdue: isOverdue(iso),
+      });
+    }
+    // Deliveries scheduled in the window
+    for (const d of deliveries) {
+      if (d.is_deleted) continue;
+      const iso = String(d.scheduled_date || d.required_date || "").slice(0, 10);
+      if (!inHorizon(iso)) continue;
+      out.push({
+        key: `d-${d.id}`,
+        type: "delivery",
+        date: iso,
+        title: d.delivery_title || d.description || `PO ${d.po_number || ""}`,
+        color: "#0d9488",
+      });
+    }
+    // Action items overdue OR due within the window
+    for (const a of actionItems) {
+      const iso = String(a.due_date || "").slice(0, 10);
+      if (!iso) continue;
+      const status = (a.status || "").toLowerCase();
+      if (status === "closed" || status === "done" || status === "complete") continue;
+      if (!inHorizon(iso) && !isOverdue(iso)) continue;
+      out.push({
+        key: `a-${a.id}`,
+        type: "action",
+        date: iso,
+        title: a.title || "Action item",
+        color: isOverdue(iso) ? "var(--status-error)" : "var(--status-info)",
+        overdue: isOverdue(iso),
+      });
+    }
+    out.sort((x, y) => (x.date || "").localeCompare(y.date || ""));
+    return out.slice(0, 12); // cap so the strip stays one row
+  }, [scheduleTasks, deliveries, rfis, actionItems]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        padding: "10px 12px",
+        marginBottom: 18,
+        background: "var(--bg-surface-low)",
+        border: "1px solid var(--border-default)",
+        borderRadius: 6,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <CalendarDays size={12} strokeWidth={2} color="var(--accent)" />
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+            }}
+          >
+            Today / Next 7 Days · {items.length}
+          </span>
+        </div>
+        <button
+          onClick={() => onJumpToDay && onJumpToDay(new Date().toISOString().slice(0, 10))}
+          style={LINK_BTN}
+        >
+          Open Calendar →
+        </button>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+        }}
+      >
+        {items.map((it) => (
+          <button
+            key={it.key}
+            onClick={() => onJumpToDay && onJumpToDay(it.date)}
+            title={it.title}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 9px",
+              borderRadius: 4,
+              background: `color-mix(in srgb, ${it.color} 12%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${it.color} 40%, transparent)`,
+              borderLeft: `3px solid ${it.color}`,
+              cursor: "pointer",
+              fontFamily: "var(--font-body)",
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              maxWidth: 280,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                color: it.color,
+                letterSpacing: "0.06em",
+              }}
+            >
+              {it.overdue ? "OVERDUE" : it.date.slice(5)}
+            </span>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: 220,
+              }}
+            >
+              {it.title}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

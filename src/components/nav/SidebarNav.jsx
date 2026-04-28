@@ -20,7 +20,7 @@ import {
   // Overview
   LayoutDashboard, Terminal, Sparkles, Grid3x3, Briefcase, BarChart3,
   // Project management
-  CalendarRange, CheckSquare, HelpCircle, DollarSign, Scale, Users,
+  CalendarRange, CalendarDays, CheckSquare, HelpCircle, DollarSign, Scale, Users,
   // Design & drawings
   FileText, Eye, Box, ScanLine,
   // Production
@@ -59,6 +59,7 @@ const PAGE_ICON = {
   // Project management
   Schedule:                     CalendarRange,
   GanttChart:                   CalendarRange,
+  ProjectCalendar:              CalendarDays,
   ActionItems:                  CheckSquare,
   RFIs:                         HelpCircle,
   RFIHub:                       HelpCircle,
