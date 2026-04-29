@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
+import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput } from "./ReportFilters";
@@ -34,7 +35,14 @@ export default function UnbilledRevenue() {
 
   const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
-  // Per-project rollup
+  // Per-project rollup. Two passes:
+  //   1. billed-to-date — uses the deduped Certified-only set so
+  //      multi-app projects don't read 2-3× their actual billings.
+  //   2. unbilledLineItems — counts raw rows where no submission has
+  //      happened yet (line items still sitting at 0% on the very
+  //      first pay app). This walks the full set on purpose; "have
+  //      any pay app touched this line yet?" is a different question
+  //      from "billed-to-date".
   const rows = useMemo(() => {
     const m = {};
     for (const p of projects) {
@@ -48,16 +56,32 @@ export default function UnbilledRevenue() {
         unbilledLineItems: 0,
       };
     }
-    for (const r of sov) {
+    for (const r of latestCertifiedPerLineItem(sov)) {
       const sv = Number(r.scheduled_value) || 0;
       const pct = Number(r.current_percent_complete) || 0;
-      const billed = sv * (pct / 100);
       if (m[r.project_id]) {
-        m[r.project_id].billed += billed;
-        if (!r.payment_received_date && !r.submitted_date) {
-          m[r.project_id].unbilledLineItems += 1;
-        }
+        m[r.project_id].billed += sv * (pct / 100);
       }
+    }
+    // Pending lines = line items with no submitted billing row at all.
+    // Certified or Paid both count as "submitted somewhere down the
+    // workflow"; Drafts don't.
+    const seenLineItems = new Set();
+    for (const r of sov) {
+      if (r.is_deleted) continue;
+      if (r.status !== "Certified" && r.status !== "Paid") continue;
+      if (!r.submitted_date) continue;
+      seenLineItems.add(`${r.project_id}|${r.line_item_number}`);
+    }
+    for (const r of sov) {
+      if (r.is_deleted) continue;
+      if (!m[r.project_id]) continue;
+      const key = `${r.project_id}|${r.line_item_number}`;
+      if (seenLineItems.has(key)) continue;
+      // Only count the first row we see for this line item — otherwise
+      // every Draft row in app #1 would tally separately.
+      seenLineItems.add(key);
+      m[r.project_id].unbilledLineItems += 1;
     }
     return Object.values(m).map((r) => ({ ...r, unbilled: Math.max(0, r.contractValue - r.billed) }));
   }, [projects, sov]);

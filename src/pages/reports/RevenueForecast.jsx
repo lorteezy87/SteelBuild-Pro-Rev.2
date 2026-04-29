@@ -10,6 +10,7 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { certifiedPeriodDeltas } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import { LineChartSVG } from "./charts";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
@@ -53,15 +54,13 @@ export default function RevenueForecast() {
 
   const monthlyBilled = useMemo(() => {
     const buckets = Object.fromEntries(histKeys.map((k) => [k, 0]));
-    for (const row of sov) {
-      const sv = Number(row.scheduled_value) || 0;
-      const pct = Number(row.current_percent_complete) || 0;
-      if (!sv || pct <= 0) continue;
-      const billed = sv * (pct / 100);
-      const dateSrc = row.submitted_date || row.updated_at;
+    // Period delta over Certified rows only — same approach as
+    // Revenue.jsx so the forecast baseline matches the trend chart.
+    for (const d of certifiedPeriodDeltas(sov)) {
+      const dateSrc = d.periodTo || d.submittedDate;
       if (!dateSrc) continue;
       const k = monthKey(dateSrc);
-      if (k in buckets) buckets[k] += billed;
+      if (k in buckets) buckets[k] += d.delta;
     }
     return buckets;
   }, [sov, histKeys]);
