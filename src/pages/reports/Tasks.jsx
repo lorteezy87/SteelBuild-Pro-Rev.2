@@ -19,7 +19,11 @@ import { mono, body } from "./constants";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 
-const TASK_TYPES = ["Task", "Milestone", "Submittal", "Fabrication", "Install", "Procurement", "Detailing", "Closeout"];
+// Live `schedule_tasks.task_type` values: Task / Submittal / Install /
+// Fabrication / Milestone / Delivery. The earlier dropdown also offered
+// Procurement / Detailing / Closeout, none of which exist on real rows
+// — selecting them returned 0 results, which read like a bug.
+const TASK_TYPES = ["Task", "Milestone", "Submittal", "Fabrication", "Install", "Delivery"];
 const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
 
 export default function Tasks() {

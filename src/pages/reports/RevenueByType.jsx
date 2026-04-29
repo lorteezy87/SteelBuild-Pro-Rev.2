@@ -8,6 +8,7 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
@@ -23,9 +24,11 @@ export default function RevenueByType() {
     queryFn: () => base44.entities.SOVItem.list(),
   });
 
+  // Billed = latest Certified row per (project, line_item). See
+  // RevenueByClient.jsx / projectMetrics.js for why the dedupe matters.
   const billedByProject = useMemo(() => {
     const m = {};
-    for (const r of sov) {
+    for (const r of latestCertifiedPerLineItem(sov)) {
       const sv = Number(r.scheduled_value) || 0;
       const pct = Number(r.current_percent_complete) || 0;
       if (!sv || pct <= 0) continue;
