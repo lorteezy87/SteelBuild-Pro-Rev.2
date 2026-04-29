@@ -84,6 +84,18 @@ export default function Submittals() {
     staleTime: 30_000,
   });
 
+  // Drawing sets for the active project — used by the "Linked drawing
+  // sets" picker on the detail panel. Read-only here (the Drawings page
+  // owns the create/edit flow), so a longer staleTime is fine.
+  const { data: drawingSets = [] } = useQuery({
+    queryKey: ["drawing_sets", projectId],
+    queryFn: () => projectId
+      ? base44.entities.DrawingSet.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
   }, [qc, projectId]);
@@ -339,6 +351,7 @@ export default function Submittals() {
           {/* Detail panel */}
           <SubmittalDetail
             submittal={selected}
+            drawingSets={drawingSets}
             onClose={() => setSelectedId(null)}
             onEdit={() => selected && setEditingId(selected.id)}
             onDelete={() => selected && setToDelete(selected.id)}
@@ -513,7 +526,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
 
 // ── Detail panel ─────────────────────────────────────────────────────
 
-function SubmittalDetail({ submittal, onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange }) {
+function SubmittalDetail({ submittal, drawingSets = [], onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange }) {
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -690,6 +703,18 @@ function SubmittalDetail({ submittal, onClose, onEdit, onDelete, onStatusChange,
               onCommit={(v) => patch("reviewer", v)}
             />
           </div>
+        </DetailSection>
+
+        {/* Linked drawing sets — chips per linked set + a picker to
+            link more. The submittal_drawing_sets relationship is
+            stored as a uuid[] on the submittal row, so add/remove is
+            a single-field patch on `drawing_set_ids`. */}
+        <DetailSection title="Linked drawing sets">
+          <LinkedDrawingSets
+            value={submittal.drawing_set_ids || []}
+            allSets={drawingSets}
+            onChange={(next) => onFieldChange && onFieldChange({ drawing_set_ids: next })}
+          />
         </DetailSection>
 
         {/* Notes — always rendered (even when empty) so the user has a
@@ -882,6 +907,134 @@ function InlineTextarea({ value, onCommit, placeholder }) {
         outline: "none",
       }}
     />
+  );
+}
+
+// LinkedDrawingSets — chip list of linked drawing sets with an add
+// picker. The link is stored as `submittal.drawing_set_ids: uuid[]`,
+// so add/remove just rewrites the array and patches the column.
+//
+// We render set names by joining against the project-wide drawingSets
+// list passed in from the parent. A linked id with no matching set
+// (deleted/soft-deleted set) still renders as a chip with a "(missing)"
+// hint so the user can unlink it instead of being silently lost.
+function LinkedDrawingSets({ value = [], allSets = [], onChange }) {
+  const [picking, setPicking] = React.useState(false);
+  // Index live sets for O(1) lookups when rendering chips.
+  const setsById = React.useMemo(() => {
+    const m = new Map();
+    allSets.forEach((s) => m.set(s.id, s));
+    return m;
+  }, [allSets]);
+
+  // Sets the user can still pick (not already linked, not soft-deleted).
+  const available = React.useMemo(
+    () => allSets.filter((s) => !value.includes(s.id) && !s.is_deleted),
+    [allSets, value],
+  );
+
+  const remove = (id) => {
+    if (!onChange) return;
+    onChange(value.filter((v) => v !== id));
+  };
+  const add = (id) => {
+    if (!onChange || !id) return;
+    if (value.includes(id)) return;
+    onChange([...value, id]);
+    setPicking(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+        {value.length === 0 && (
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", fontStyle: "italic" }}>
+            No drawing sets linked.
+          </span>
+        )}
+        {value.map((id) => {
+          const set = setsById.get(id);
+          const label = set
+            ? `${set.set_name || "(unnamed set)"}${set.revision ? ` · R${set.revision}` : ""}`
+            : "(missing set)";
+          return (
+            <span
+              key={id}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "3px 4px 3px 10px", borderRadius: 999,
+                background: set ? "var(--accent-muted)" : "var(--bg-surface-high)",
+                color: set ? "var(--accent)" : "var(--text-muted)",
+                border: set ? "1px solid var(--accent)" : "1px dashed var(--border-default)",
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                maxWidth: 360,
+              }}
+              title={set?.discipline ? `${label} · ${set.discipline}` : label}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+              <button
+                onClick={() => remove(id)}
+                title="Unlink this drawing set"
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "inherit", padding: "0 4px", fontSize: 12, lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+      </div>
+
+      {picking ? (
+        <select
+          autoFocus
+          defaultValue=""
+          onChange={(e) => add(e.target.value)}
+          onBlur={() => setPicking(false)}
+          style={{
+            fontFamily: "var(--font-mono)", fontSize: 10, padding: "4px 8px",
+            background: "var(--bg-input, var(--bg-surface-low))",
+            border: "1px solid var(--accent)", borderRadius: 3,
+            color: "var(--text-primary)", outline: "none",
+            maxWidth: "100%",
+          }}
+        >
+          <option value="">— pick a drawing set —</option>
+          {available.length === 0 && (
+            <option disabled value="__none">
+              No more sets to link
+            </option>
+          )}
+          {available.map((s) => (
+            <option key={s.id} value={s.id}>
+              {(s.set_name || "(unnamed set)") + (s.revision ? ` · R${s.revision}` : "")}
+              {s.discipline ? ` · ${s.discipline}` : ""}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <button
+          onClick={() => setPicking(true)}
+          disabled={available.length === 0}
+          title={available.length === 0 ? "All project drawing sets are already linked" : "Link a drawing set to this submittal"}
+          style={{
+            padding: "4px 10px", borderRadius: 3,
+            background: "transparent",
+            border: "1px dashed var(--border-default)",
+            color: available.length === 0 ? "var(--text-muted)" : "var(--accent)",
+            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+            cursor: available.length === 0 ? "not-allowed" : "pointer",
+            textTransform: "uppercase",
+          }}
+        >
+          + Link drawing set
+        </button>
+      )}
+    </div>
   );
 }
 
