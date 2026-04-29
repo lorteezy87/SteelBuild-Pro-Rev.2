@@ -23,6 +23,7 @@ import {
   cashCollected,
   pendingPayment,
   retentionHeld,
+  latestCertifiedPerLineItem,
 } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import KPICard from "./KPICard";
@@ -65,10 +66,18 @@ export default function RevenueDashboard() {
   const pending = pendingPayment(sovItems);
   const retention = retentionHeld(sovItems);
 
+  // Donut math runs on the deduped Certified-only set. Pre-fix this
+  // walked every sov_items row, which double/triple-counted any line
+  // item with multi-app history (Draft + Certified per period).
+  const certifiedDeduped = useMemo(
+    () => latestCertifiedPerLineItem(sovItems),
+    [sovItems],
+  );
+
   /** SOV items have a project_id; project tells us the client + contract type. */
   const billedByClient = useMemo(() => {
     const map = new Map();
-    for (const i of sovItems) {
+    for (const i of certifiedDeduped) {
       const proj = projectsById.get(i.project_id);
       const client = proj?.general_contractor || proj?.client || "Unknown";
       const value =
@@ -85,11 +94,11 @@ export default function RevenueDashboard() {
     const top = all.slice(0, 6);
     const otherTotal = all.slice(6).reduce((s, r) => s + r.value, 0);
     return [...top, { label: "Other", value: otherTotal }];
-  }, [sovItems, projectsById]);
+  }, [certifiedDeduped, projectsById]);
 
   const billedByContractType = useMemo(() => {
     const map = new Map();
-    for (const i of sovItems) {
+    for (const i of certifiedDeduped) {
       const proj = projectsById.get(i.project_id);
       const type = proj?.contract_type || "Unspecified";
       const value =
@@ -101,7 +110,7 @@ export default function RevenueDashboard() {
     return [...map.entries()]
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
-  }, [sovItems, projectsById]);
+  }, [certifiedDeduped, projectsById]);
 
   const decoratedClient = useMemo(
     () =>

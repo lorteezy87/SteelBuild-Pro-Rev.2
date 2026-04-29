@@ -1,9 +1,18 @@
+// "Erection" and "Installation" are treated as a single canonical
+// field-execution phase. The user's terminology — and what the live
+// `projects.phase` column stores — is "Erection" (10/15 active
+// projects in production). "Installation" is retained as an alias so
+// scaffolding code that already emits it (wbsBuilder seed templates,
+// pccEngine tag matchers, lib/enums.ts) keeps working without a data
+// migration. Anywhere a phase name is being shown in the UI or used as
+// a filter key, prefer "Erection".
 export const PHASES = [
   'Pre-Construction',
   'Detailing',
   'Procurement',
   'Fabrication',
   'Delivery',
+  'Erection',
   'Installation',
   'Closeout',
 ];
@@ -14,6 +23,7 @@ export const PHASE_ORDER = {
   'Procurement':      2,
   'Fabrication':      3,
   'Delivery':         4,
+  'Erection':         5,
   'Installation':     5,
   'Closeout':         6,
 };
@@ -24,6 +34,7 @@ export const PHASE_COLORS = {
   'Procurement':      'var(--secondary)',
   'Fabrication':      'var(--phase-fab)',
   'Delivery':         'var(--warning)',
+  'Erection':         'var(--phase-erection)',
   'Installation':     'var(--phase-erection)',
   'Closeout':         'var(--phase-closeout)',
 };
@@ -40,6 +51,7 @@ export const PHASE_ABBREV = {
   'Procurement':      'PRO',
   'Fabrication':      'FAB',
   'Delivery':         'DEL',
+  'Erection':         'ERE',
   'Installation':     'INS',
   'Closeout':         'CLO',
 };
@@ -53,6 +65,9 @@ export const PHASE_ABBREV = {
  *   - Phase summary:       "<phase>.0"    e.g. "2.0" for Detailing
  *   - Flat task:           "<phase>.<n>"  e.g. "2.1", "2.2"
  *   - Nested child task:   "<phase>.<parent>.<child>" e.g. "2.1.1"
+ *
+ * Erection and Installation share slot 6 — they're aliases for the
+ * same field-execution phase.
  */
 export const PHASE_NUMBER = {
   'Pre-Construction': 1,
@@ -60,6 +75,7 @@ export const PHASE_NUMBER = {
   'Procurement':      3,
   'Fabrication':      4,
   'Delivery':         5,
+  'Erection':         6,
   'Installation':     6,
   'Closeout':         7,
 };

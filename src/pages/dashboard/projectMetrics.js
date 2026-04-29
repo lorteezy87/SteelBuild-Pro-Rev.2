@@ -669,19 +669,78 @@ export function projectedMargin(project, cos = [], expenses = []) {
 }
 
 /**
- * Total billed across SOV (cumulative billings = sum of scheduled_value
- * × current_percent_complete / 100). Empty array → 0.
+ * SOV ROW MODEL — IMPORTANT
+ *
+ * The `sov_items` table stores ONE ROW PER (project_id, line_item_number,
+ * application_number, status) tuple. Each pay application typically has
+ * a Draft row + a Certified row for every line item, so a project with
+ * 33 line items and 5 applications can hold 5 × 2 × 33 = 330 rows.
+ *
+ * That means a naïve `Σ scheduled_value × current_percent_complete / 100`
+ * across all rows DOUBLE / TRIPLE COUNTS billings — a $24K line item
+ * that closed at 100% in app #5 contributes:
+ *   - app 1 Certified (0%)        → 0
+ *   - app 5 Draft (100%)          → 24,000
+ *   - app 5 Certified (100%)      → 24,000
+ * …so the billed total reads $48K instead of $24K.
+ *
+ * Live data confirms this: 163 rows / 33 line items / 5 apps for the
+ * sample project = the ~3× overcount the audit caught. Always go
+ * through `latestCertifiedPerLineItem()` (or sum `period_delta` over
+ * Certified rows for monthly resolution) — never roll over the raw set.
+ */
+
+/**
+ * Reduce a raw `sov_items` collection to one row per
+ * (project_id, line_item_number) — keeping the row from the highest
+ * `application_number` whose status is in the "billed" set
+ * (Certified, Paid). Drafts and uncertified rows are dropped because
+ * they're not real billings yet.
+ *
+ * Paid is a downstream state of Certified — once a pay app is paid the
+ * row's status flips from Certified to Paid. Including Paid here means
+ * `cashCollected` can still find the row via `payment_received_date`.
+ *
+ * This is the "billed-to-date snapshot" view of the SOV: every line
+ * item appears at most once, and its current_percent_complete is the
+ * cumulative billed-percent through the latest pay app.
+ */
+const BILLED_SOV_STATUSES = new Set(["Certified", "Paid"]);
+
+export function latestCertifiedPerLineItem(sovItems = []) {
+  const byKey = new Map();
+  for (const r of sovItems) {
+    if (!r || r.is_deleted) continue;
+    if (!BILLED_SOV_STATUSES.has(r.status)) continue;
+    const key = `${r.project_id ?? ""}|${r.line_item_number ?? ""}`;
+    const cur = byKey.get(key);
+    const app = Number(r.application_number) || 0;
+    if (!cur || app > (Number(cur.application_number) || 0)) {
+      byKey.set(key, r);
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Total billed across SOV (cumulative billings) — billed-to-date based
+ * on the latest Certified pay-app row per line item. See the comment on
+ * `latestCertifiedPerLineItem` for why this dedupe is required.
  */
 export function totalBilled(sovItems = []) {
-  return sovItems.reduce(
+  return latestCertifiedPerLineItem(sovItems).reduce(
     (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
     0,
   );
 }
 
-/** Cash collected — sum of SOV items where payment_received_date is set. */
+/**
+ * Cash collected — billed-to-date for line items whose latest certified
+ * pay-app row carries a payment_received_date (i.e. the certified app
+ * for that line item has been paid). Same dedupe story as totalBilled.
+ */
 export function cashCollected(sovItems = []) {
-  return sovItems
+  return latestCertifiedPerLineItem(sovItems)
     .filter((i) => i.payment_received_date)
     .reduce(
       (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
@@ -690,11 +749,18 @@ export function cashCollected(sovItems = []) {
 }
 
 /**
- * Outstanding pay applications — submitted but not yet paid. Returns
- * `{ count, total }` so the UI can show "($N apps) $X".
+ * Outstanding pay applications — line items whose latest Certified row
+ * is submitted but not yet paid. Returns `{ count, total }` so the UI
+ * can show "($N apps) $X".
+ *
+ * `count` is line-item count, not pay-app count. That's what the UI was
+ * already showing pre-fix — relabeling would break callers. The audit
+ * is fine with that interpretation since "pending value" is what
+ * matters operationally.
  */
 export function pendingPayment(sovItems = []) {
-  const items = sovItems.filter((i) => i.submitted_date && !i.payment_received_date);
+  const items = latestCertifiedPerLineItem(sovItems)
+    .filter((i) => i.submitted_date && !i.payment_received_date);
   const total = items.reduce(
     (s, i) => s + (Number(i.scheduled_value) || 0) * (Number(i.current_percent_complete) || 0) / 100,
     0,
@@ -706,18 +772,56 @@ export function pendingPayment(sovItems = []) {
  * Retention held — sum of retainage withheld across SOV items.
  *
  * Computed as: scheduled_value × current_percent_complete% × retainage_percent%
- * The schema stores `retainage_percent` (e.g. 10 for 10%), not a precomputed
- * dollar amount. (An earlier version of this helper had a fallback for a
- * literal `retention_held` column, but that column never shipped — dropped
- * the dead branch.)
+ * over the deduped (one-row-per-line-item) Certified set. The schema
+ * stores `retainage_percent` (e.g. 10 for 10%), not a precomputed
+ * dollar amount. (An earlier version of this helper had a fallback for
+ * a literal `retention_held` column, but that column never shipped —
+ * dropped the dead branch.)
  */
 export function retentionHeld(sovItems = []) {
-  return sovItems.reduce((s, i) => {
+  return latestCertifiedPerLineItem(sovItems).reduce((s, i) => {
     const sched = Number(i?.scheduled_value) || 0;
     const pct   = Number(i?.current_percent_complete) || 0;
     const ret   = Number(i?.retainage_percent) || 0;
     return s + (sched * pct * ret) / 10000;
   }, 0);
+}
+
+/**
+ * Per-application-period billed delta for each Certified SOV row.
+ *
+ * The monthly trend chart needs "how much was billed THIS month", not
+ * "cumulative through this month". Each Certified row already carries
+ * `current_percent_complete` and `previous_percent_complete`, so the
+ * period delta in dollars is:
+ *
+ *   delta = scheduled_value × (current_pct − previous_pct) / 100
+ *
+ * Returns an array of `{ periodTo, submittedDate, delta, projectId,
+ * lineItemNumber }` for every Certified row. Drafts are excluded; the
+ * row is keyed on the application period. If `previous_percent_complete`
+ * is null/undefined, it's treated as 0 (a brand-new line item).
+ */
+export function certifiedPeriodDeltas(sovItems = []) {
+  const out = [];
+  for (const r of sovItems) {
+    if (!r || r.is_deleted) continue;
+    if (!BILLED_SOV_STATUSES.has(r.status)) continue;
+    const sched = Number(r.scheduled_value) || 0;
+    const cur   = Number(r.current_percent_complete) || 0;
+    const prev  = Number(r.previous_percent_complete) || 0;
+    const delta = (sched * (cur - prev)) / 100;
+    if (!delta) continue;
+    out.push({
+      projectId: r.project_id,
+      lineItemNumber: r.line_item_number,
+      applicationNumber: r.application_number,
+      periodTo: r.period_to,
+      submittedDate: r.submitted_date,
+      delta,
+    });
+  }
+  return out;
 }
 
 /**
