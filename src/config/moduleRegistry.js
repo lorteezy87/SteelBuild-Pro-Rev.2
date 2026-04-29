@@ -98,6 +98,7 @@ export const ALL_MODULES = [
   { icon: "\uD83D\uDCDD", name: "Change Requests",    group: "Closeout",      page: "ChangeRequests" },
   { icon: "\uD83C\uDFE2", name: "Vendors",            group: "Setup",         page: "Vendors" },
   { icon: "\uD83D\uDCD0", name: "Calculator",                group: "Tools", page: "Calculator" }, // 🧮 calculator
+  { icon: "📘", name: "Tutorial / Help",           group: "Setup", page: "Tutorial" },
   { icon: "📐", name: "Ft/In Calculator",          group: "Tools", page: "FeetInchesCalculator" },
   { icon: "\u2696",       name: "Steel Weight Calculator",   group: "Tools", page: "SteelWeightCalculator" },
   { icon: "\uD83C\uDFD7", name: "Crane Pick Calculator",     group: "Tools", page: "CranePickCalculator" },
@@ -117,7 +118,8 @@ export const NAV_GROUPS = [
   {
     label: "USER",
     items: [
-      { label: "Settings", icon: "\u2699", page: "Settings" },
+      { label: "Settings",        icon: "\u2699", page: "Settings" },
+      { label: "Tutorial / Help", icon: "\ud83d\udcd8", page: "Tutorial" },
     ],
   },
   {
@@ -317,6 +319,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
+      { label: "Tutorial / Help",  icon: "\uD83D\uDCD8", page: "Tutorial" },
     ],
   },
   {

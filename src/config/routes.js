@@ -152,6 +152,7 @@ const ROUTE_DOMAINS = {
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),
     AgentMemory:      r(lazyWithRetry(() => import("@/pages/AgentMemory")),      "Agent Memory"),
+    Tutorial:         r(lazyWithRetry(() => import("@/pages/Tutorial")),         "Tutorial / Help"),
   },
 
   // ── Tools ──
