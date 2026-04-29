@@ -9,6 +9,7 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { latestCertifiedPerLineItem } from "@/pages/dashboard/projectMetrics";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
@@ -24,9 +25,12 @@ export default function RevenueByClient() {
     queryFn: () => base44.entities.SOVItem.list(),
   });
 
+  // Billed = latest Certified row per (project, line_item). Pre-fix
+  // this summed across every row (Drafts + every prior pay app) and
+  // tripled the totals on projects with multi-app history.
   const billedByProject = useMemo(() => {
     const m = {};
-    for (const r of sov) {
+    for (const r of latestCertifiedPerLineItem(sov)) {
       const sv = Number(r.scheduled_value) || 0;
       const pct = Number(r.current_percent_complete) || 0;
       if (!sv || pct <= 0) continue;
@@ -35,10 +39,14 @@ export default function RevenueByClient() {
     return m;
   }, [sov]);
 
+  // "Revenue by Client" = who-pays-us. Standardised on
+  // `general_contractor || client` across the three revenue reports
+  // so the same number doesn't move depending on which page you
+  // opened. Previously this fell back the other way (client first).
   const grouped = useMemo(() => {
     const m = {};
     projects.forEach((p) => {
-      const client = p.client || p.general_contractor || "Unspecified";
+      const client = p.general_contractor || p.client || "Unspecified";
       if (!m[client]) m[client] = { client, projectCount: 0, contractValue: 0, billed: 0 };
       m[client].projectCount += 1;
       m[client].contractValue += Number(p.original_contract_value) || 0;

@@ -19,6 +19,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
+import {
+  isRfiOpen,
+  isCoPending,
+  isWpComplete,
+  isActionItemOpen,
+} from "@/lib/entityPredicates";
 import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import KPICard from "./KPICard";
@@ -171,19 +177,17 @@ export default function ProjectDetails() {
     [actionItems, pid]
   );
 
-  // Derived counts for KPI strip.
-  const openRFIs = projectRFIs.filter(
-    (r) => !["Answered", "Closed"].includes(r.status)
-  ).length;
-  const pendingCOs = projectCOs.filter((c) =>
-    ["Pending", "Submitted", "Under Review"].includes(c.status)
-  ).length;
-  const openActions = projectActions.filter(
-    (a) => a.status !== "Complete" && a.status !== "Closed"
-  ).length;
-  const wpComplete = projectWPs.filter(
-    (w) => w.status === "Complete" || w.status === "Shipped"
-  ).length;
+  // Derived counts for KPI strip — all four predicates pulled from
+  // the shared `entityPredicates` so this page can't drift from
+  // PortfolioOverview / TeamDashboard's interpretation of "open" /
+  // "pending" / "complete". Pre-fix this page's pendingCO filter
+  // included a literal "Pending" status (not in the live enum) and
+  // wpComplete checked for "Shipped" (also not in the live enum) —
+  // both branches were silent dead code.
+  const openRFIs = projectRFIs.filter(isRfiOpen).length;
+  const pendingCOs = projectCOs.filter(isCoPending).length;
+  const openActions = projectActions.filter(isActionItemOpen).length;
+  const wpComplete = projectWPs.filter(isWpComplete).length;
   const wpPct = projectWPs.length
     ? (wpComplete / projectWPs.length) * 100
     : 0;
@@ -196,7 +200,9 @@ export default function ProjectDetails() {
   //    an empty state.
   const rfiCols = [
     { key: "rfi_number", label: "RFI #", width: "100px" },
-    { key: "subject", label: "Subject", width: "minmax(200px, 2.5fr)" },
+    // The rfis table stores "title", not "subject" — pre-fix this
+    // column always rendered blank.
+    { key: "title", label: "Subject", width: "minmax(200px, 2.5fr)" },
     {
       key: "ball_in_court",
       label: "BIC",
@@ -248,7 +254,8 @@ export default function ProjectDetails() {
   ];
 
   const wpCols = [
-    { key: "package_id", label: "Package #", width: "100px" },
+    // work_packages stores "wp_number", not "package_id".
+    { key: "wp_number", label: "Package #", width: "100px" },
     { key: "name", label: "Name", width: "minmax(180px, 2fr)" },
     {
       key: "phase",
@@ -271,21 +278,31 @@ export default function ProjectDetails() {
   ];
 
   const deliveryCols = [
-    { key: "delivery_number", label: "Delivery #", width: "110px" },
+    // The deliveries table doesn't have a "delivery_number" column —
+    // identifiers are stored as either po_number or delivery_title.
+    // The original columns ("expected_delivery_date" / "actual_delivery_date")
+    // also don't exist; the live columns are scheduled_date / actual_date.
+    {
+      key: "po_number",
+      label: "Delivery #",
+      width: "110px",
+      render: (r) => r.po_number || r.delivery_title || "—",
+      csvValue: (r) => r.po_number || r.delivery_title || "",
+    },
     { key: "description", label: "Description", width: "minmax(180px, 2fr)" },
     {
-      key: "expected_delivery_date",
+      key: "scheduled_date",
       label: "Expected",
       width: "110px",
-      render: (r) => formatDate(r.expected_delivery_date),
-      csvValue: (r) => r.expected_delivery_date || "",
+      render: (r) => formatDate(r.scheduled_date),
+      csvValue: (r) => r.scheduled_date || "",
     },
     {
-      key: "actual_delivery_date",
+      key: "actual_date",
       label: "Actual",
       width: "110px",
-      render: (r) => formatDate(r.actual_delivery_date),
-      csvValue: (r) => r.actual_delivery_date || "",
+      render: (r) => formatDate(r.actual_date),
+      csvValue: (r) => r.actual_date || "",
     },
     { key: "status", label: "Status", width: "110px" },
   ];
@@ -302,7 +319,9 @@ export default function ProjectDetails() {
       key: "vendor",
       label: "Vendor",
       width: "minmax(140px, 1.4fr)",
-      render: (r) => r.vendor || r.vendor_name || "—",
+      // `vendor` is the live column; the dead `vendor_name` fallback
+      // was harmless but confusing, so it's gone.
+      render: (r) => r.vendor || "—",
     },
     {
       key: "description",
@@ -584,7 +603,7 @@ export default function ProjectDetails() {
             <ReportTable
               columns={wpCols}
               rows={projectWPs}
-              initialSort={{ key: "package_id", dir: "asc" }}
+              initialSort={{ key: "wp_number", dir: "asc" }}
               emptyText="No work packages on this project."
               minWidth={900}
               onRowClick={() => navigate(createPageUrl("WorkPackages"))}
@@ -595,7 +614,7 @@ export default function ProjectDetails() {
             <ReportTable
               columns={deliveryCols}
               rows={projectDeliveries}
-              initialSort={{ key: "expected_delivery_date", dir: "asc" }}
+              initialSort={{ key: "scheduled_date", dir: "asc" }}
               emptyText="No deliveries on this project."
               minWidth={900}
               onRowClick={() => navigate(createPageUrl("Deliveries"))}

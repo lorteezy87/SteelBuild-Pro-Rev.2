@@ -59,6 +59,11 @@ import {
   CircleDot, DollarSign, Layers, ShieldAlert, Sparkles, TrendingUp,
 } from "lucide-react";
 
+import {
+  isRfiOpen,
+  isCoPending,
+  isActionItemOpen,
+} from "@/lib/entityPredicates";
 import { mono, body } from "./constants";
 import { computeHealth, exportReportCSV } from "./utils";
 import { formatCurrencyShort } from "@/components/shared/formatters";
@@ -385,22 +390,19 @@ export default function PortfolioOverview() {
 
   const now = new Date();
 
-  /* ── Derived collections ── */
-  const openRFIs = useMemo(
-    () => rfis.filter((r) => !["Answered", "Closed"].includes(r.status)),
-    [rfis]
-  );
+  /* ── Derived collections ──
+       All four "open / pending" predicates come from the shared
+       `entityPredicates` module so this report can't drift from the
+       project dashboard or ProjectDetails. */
+  const openRFIs = useMemo(() => rfis.filter(isRfiOpen), [rfis]);
   const overdueRFIs = useMemo(
     () => openRFIs.filter((r) => r.date_required && new Date(r.date_required) < now),
     [openRFIs] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  /** AUDIT: Pending CO definition. The change_orders CHECK constraint
-   *  (migration 013) defines status ∈ Draft/Submitted/Under Review/
-   *  Approved/Rejected/Void. There is no "Pending" status — the
-   *  original page filtered on it and silently returned 0 every
-   *  Submitted CO. */
+  /** Pending CO = Submitted + Under Review (per change_orders CHECK
+   *  constraint). There is no literal "Pending" status. */
   const pendingCOs = useMemo(
-    () => changeOrders.filter((c) => ["Submitted", "Under Review"].includes(c.status)),
+    () => changeOrders.filter(isCoPending),
     [changeOrders]
   );
   const pendingCOValue = useMemo(
@@ -411,10 +413,7 @@ export default function PortfolioOverview() {
   const overdueActions = useMemo(
     () =>
       actionItems.filter(
-        (a) =>
-          !["Complete", "Closed", "Resolved", "Cancelled"].includes(a.status) &&
-          a.due_date &&
-          new Date(a.due_date) < now
+        (a) => isActionItemOpen(a) && a.due_date && new Date(a.due_date) < now
       ),
     [actionItems] // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -473,14 +472,8 @@ export default function PortfolioOverview() {
       const var_pct = budget > 0 ? (variance / budget) * 100 : 0;
       const health = computeHealth(budget, actual);
 
-      const pRFIs = rfis.filter(
-        (r) => r.project_id === p.id && !["Answered", "Closed"].includes(r.status)
-      );
-      const pCOs = changeOrders.filter(
-        (c) =>
-          c.project_id === p.id &&
-          ["Submitted", "Under Review"].includes(c.status)
-      );
+      const pRFIs = rfis.filter((r) => r.project_id === p.id && isRfiOpen(r));
+      const pCOs  = changeOrders.filter((c) => c.project_id === p.id && isCoPending(c));
       const pWPs = workPackages.filter((w) => w.project_id === p.id);
       const wpTotal = pWPs.length;
       // wpPct uses percent_complete average rather than the binary
@@ -886,7 +879,7 @@ export default function PortfolioOverview() {
           icon={AlertTriangle}
           label="Overdue Actions"
           value={overdueActions.length}
-          sub={`${actionItems.filter((a) => !["Complete", "Closed", "Resolved", "Cancelled"].includes(a.status)).length} open total`}
+          sub={`${actionItems.filter(isActionItemOpen).length} open total`}
           accent="var(--status-error)"
           badge={overdueActions.length > 0 ? "past due" : null}
           active={kpiFilter === "overdue"}
