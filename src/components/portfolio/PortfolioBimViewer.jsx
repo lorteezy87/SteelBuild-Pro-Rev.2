@@ -74,7 +74,6 @@ function ensureModelMaterial(THREE, mesh, typeKey = "MEMBER") {
     color: REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER,
     metalness: 0.72,
     roughness: 0.28,
-    envMapIntensity: 1.35,
   });
 
   if (Array.isArray(mesh.material)) {
@@ -101,7 +100,7 @@ function normalizeModelMaterial(THREE, mesh, typeKey = "MEMBER", viewMode = "mod
     }
     if ("metalness" in mat) mat.metalness = viewMode === "material" ? 0.42 : 0.72;
     if ("roughness" in mat) mat.roughness = viewMode === "material" ? 0.48 : 0.28;
-    if ("envMapIntensity" in mat) mat.envMapIntensity = 1.35;
+    if ("envMapIntensity" in mat) mat.envMapIntensity = 0;
     if (mat.transparent && mat.opacity >= 0.4) {
       mat.transparent = false;
       mat.opacity = 1;
@@ -123,7 +122,7 @@ function styleRenderableMaterial(THREE, object, typeKey = "MEMBER", viewMode = "
     if ("vertexColors" in mat) mat.vertexColors = false;
     if ("metalness" in mat) mat.metalness = viewMode === "material" ? 0.38 : 0.72;
     if ("roughness" in mat) mat.roughness = viewMode === "material" ? 0.5 : 0.3;
-    if ("envMapIntensity" in mat) mat.envMapIntensity = 1.35;
+    if ("envMapIntensity" in mat) mat.envMapIntensity = 0;
     if ("linewidth" in mat) mat.linewidth = 1.5;
     mat.transparent = false;
     mat.opacity = 1;
@@ -264,10 +263,9 @@ export default function PortfolioBimViewer({
       const mount = mountRef.current;
       if (!mount) return;
 
-      const [THREE, { OrbitControls }, { RoomEnvironment }] = await Promise.all([
+      const [THREE, { OrbitControls }] = await Promise.all([
         import("three"),
         import("three/examples/jsm/controls/OrbitControls.js"),
-        import("three/examples/jsm/environments/RoomEnvironment.js"),
       ]);
       if (disposed || !mountRef.current) return;
 
@@ -285,9 +283,6 @@ export default function PortfolioBimViewer({
       renderer.toneMappingExposure = 1.12;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      const pmremGenerator = new THREE.PMREMGenerator(renderer);
-      const environmentMap = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-      scene.environment = environmentMap;
       mount.innerHTML = "";
       mount.appendChild(renderer.domElement);
 
