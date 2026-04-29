@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/useProjectContext";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, KpiTile, Button, BulkActionBar } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,9 @@ import DeleteDialog from "../components/shared/DeleteDialog";
 import { daysUntil } from "@/lib/dateMath";
 import { formatDate } from "../components/shared/formatters";
 import CommentThread from "@/components/collaboration/CommentThread";
+import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
+import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
+import { batchProcess } from "@/utils/batchProcess";
 
 /**
  * Submittals — formal transmittal register.
@@ -64,6 +67,13 @@ export default function Submittals() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterBIC, setFilterBIC] = useState("all");
   const [search, setSearch] = useState("");
+  // Bulk-op state — mirrors the RFI page. selectedIds is a Set so
+  // toggling a single row is O(1) and React's structural compare
+  // (we always replace the Set) keeps re-renders predictable.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["submittals", projectId],
@@ -92,6 +102,79 @@ export default function Submittals() {
     mutationFn: (id) => base44.entities.Submittal.delete(id),
     onSuccess: () => { invalidate(); setSelectedId(null); setToDelete(null); toast.success("Deleted"); },
     onError: (err) => toast.error(`Delete failed: ${err.message}`),
+  });
+
+  // ── Bulk mutations ────────────────────────────────────────────────
+  // Bulk update — handles the special "__notes_append" sentinel from
+  // SubmittalBulkEditModal. When present, we read each row's existing
+  // notes off the cache and append the new text per row instead of
+  // overwriting. Every other field is a flat patch applied uniformly.
+  const bulkUpdateMut = useMutation({
+    mutationFn: async ({ ids, data }) => {
+      const { __notes_append: notesAppend, ...patch } = data || {};
+      // Snapshot the current cache once — avoids N reads per row.
+      const cached = qc.getQueryData(["submittals", projectId]) || [];
+      const byId = new Map(cached.map((r) => [r.id, r]));
+      return batchProcess(ids, (id) => {
+        const existing = byId.get(id);
+        const rowPatch = { ...patch };
+        if (notesAppend) {
+          const prior = (existing?.notes || "").trimEnd();
+          rowPatch.notes = prior ? `${prior}\n\n${notesAppend}` : notesAppend;
+        }
+        return base44.entities.Submittal.update(id, rowPatch);
+      });
+    },
+    onSuccess: (results) => {
+      invalidate();
+      setSelectedIds(new Set());
+      const ok = results.succeeded.length;
+      if (results.failed.length > 0) {
+        toast.warning(`${ok} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Updated ${ok} submittal${ok === 1 ? "" : "s"}`);
+      }
+    },
+    onError: (err) => toast.error(`Bulk update failed: ${err.message}`),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: async (ids) => batchProcess(ids, (id) => base44.entities.Submittal.delete(id)),
+    onSuccess: (results) => {
+      invalidate();
+      const ok = results.succeeded.length;
+      if (selectedId && [...selectedIds].includes(selectedId)) setSelectedId(null);
+      setSelectedIds(new Set());
+      setShowBulkDelete(false);
+      if (results.failed.length > 0) {
+        toast.warning(`${ok} deleted, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Deleted ${ok} submittal${ok === 1 ? "" : "s"}`);
+      }
+    },
+    onError: (err) => toast.error(`Bulk delete failed: ${err.message}`),
+  });
+
+  const bulkCreateMut = useMutation({
+    mutationFn: async (rows) => batchProcess(rows, (row) =>
+      base44.entities.Submittal.create({
+        project_id: projectId,
+        project_name: activeProject?.project_name || activeProject?.name || "",
+        round_number: 1,
+        ...row,
+      }),
+    ),
+    onSuccess: (results) => {
+      invalidate();
+      setShowBulkAdd(false);
+      const ok = results.succeeded.length;
+      if (results.failed.length > 0) {
+        toast.warning(`${ok} added, ${results.failed.length} failed`);
+      } else {
+        toast.success(`Added ${ok} submittal${ok === 1 ? "" : "s"}`);
+      }
+    },
+    onError: (err) => toast.error(`Bulk add failed: ${err.message}`),
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
@@ -126,6 +209,27 @@ export default function Submittals() {
   const selected = selectedId ? rows.find((r) => r.id === selectedId) : null;
   const editing  = editingId  ? rows.find((r) => r.id === editingId)  : null;
 
+  // ── Selection helpers ─────────────────────────────────────────────
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  // toggleAll uses the *filtered* list, not all rows — matches the
+  // RFI pattern. Without this, "select all" while a status filter
+  // was active would silently grab hidden rows too.
+  const allSelected = filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id));
+  const toggleAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (filtered.length > 0 && filtered.every((r) => prev.has(r.id))) return new Set();
+      const next = new Set(prev);
+      filtered.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }, [filtered]);
+
   if (!projectId) return (
     <div style={{ padding: 40, textAlign: "center" }}>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>
@@ -145,6 +249,9 @@ export default function Submittals() {
           ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
           : `${stats.pending} awaiting review · ${stats.approved} approved`}
       >
+        <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
+          BULK ADD
+        </Button>
         <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
           NEW SUBMITTAL
         </Button>
@@ -169,6 +276,23 @@ export default function Submittals() {
       <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Filter bar */}
         <div style={{ display: "flex", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", alignItems: "center" }}>
+          {/* Master checkbox — operates on the *filtered* list so it
+              respects the active status / BIC filters. The
+              indeterminate state is set imperatively because <input>
+              doesn't expose it as a controllable React prop. */}
+          <input
+            type="checkbox"
+            aria-label="Select all visible submittals"
+            ref={(el) => {
+              if (!el) return;
+              const some = filtered.some((r) => selectedIds.has(r.id));
+              el.indeterminate = some && !allSelected;
+            }}
+            checked={allSelected}
+            onChange={toggleAll}
+            disabled={filtered.length === 0}
+            style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer" }}
+          />
           <input
             placeholder="Search # / title / spec section"
             value={search}
@@ -200,7 +324,16 @@ export default function Submittals() {
               <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 {rows.length === 0 ? "No submittals yet. Click NEW SUBMITTAL to log one." : "No submittals match the current filters."}
               </div>
-            ) : filtered.map((r) => <SubmittalRow key={r.id} row={r} selected={r.id === selectedId} onClick={() => setSelectedId(r.id)} />)}
+            ) : filtered.map((r) => (
+              <SubmittalRow
+                key={r.id}
+                row={r}
+                selected={r.id === selectedId}
+                checked={selectedIds.has(r.id)}
+                onToggle={() => toggleSelect(r.id)}
+                onClick={() => setSelectedId(r.id)}
+              />
+            ))}
           </div>
 
           {/* Detail panel */}
@@ -237,16 +370,61 @@ export default function Submittals() {
           onClose={() => setToDelete(null)}
           onConfirm={() => deleteMut.mutate(toDelete)}
           title="Delete submittal"
-          body="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
+          description="This submittal and its comment thread will be soft-deleted. This cannot be undone from the UI."
         />
       )}
+
+      {/* Bulk actions — bottom-fixed, only renders when ≥1 row is
+          selected. Mirrors the RFI page exactly so muscle memory
+          carries over. */}
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "EDIT SELECTED",
+            icon: "edit",
+            onClick: () => setShowBulkEdit(true),
+          },
+          {
+            label: "DELETE",
+            icon: "x",
+            variant: "danger",
+            onClick: () => setShowBulkDelete(true),
+          },
+        ]}
+      />
+
+      <SubmittalBulkEditModal
+        open={showBulkEdit}
+        count={selectedIds.size}
+        onCancel={() => setShowBulkEdit(false)}
+        onSubmit={(data) => {
+          bulkUpdateMut.mutate({ ids: [...selectedIds], data });
+          setShowBulkEdit(false);
+        }}
+      />
+
+      <SubmittalBulkAddModal
+        open={showBulkAdd}
+        onCancel={() => setShowBulkAdd(false)}
+        onSubmit={(rows) => bulkCreateMut.mutate(rows)}
+      />
+
+      <DeleteDialog
+        open={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        onConfirm={() => bulkDeleteMut.mutate([...selectedIds])}
+        title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
+        description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
+      />
     </div>
   );
 }
 
 // ── Row ──────────────────────────────────────────────────────────────
 
-function SubmittalRow({ row, selected, onClick }) {
+function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
   const cfg = STATUS_CFG[row.status] || STATUS_CFG.Draft;
   const overdue =
     row.required_date &&
@@ -280,6 +458,23 @@ function SubmittalRow({ row, selected, onClick }) {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        {/* Selection checkbox — stops propagation so toggling the
+            checkbox doesn't also pop the detail panel for that row.
+            Hit area is intentionally larger than the input itself
+            (10px padding around) for thumb-friendliness on tablets. */}
+        <div
+          onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+          style={{ padding: "2px 6px 2px 0", display: "flex", alignItems: "center", cursor: "pointer" }}
+        >
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={(e) => { e.stopPropagation(); onToggle?.(); }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Select submittal ${row.submittal_number || row.title}`}
+            style={{ margin: 0, cursor: "pointer" }}
+          />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em" }}>
             {row.submittal_number}
