@@ -29,6 +29,47 @@ const TYPE_COLORS = {
   BRACE: "#E67E22", STAIR: "#F1C40F", WALL: "#95A5A6", MEMBER: "#7F8C8D",
 };
 
+// ─── WORK PACKAGE MATCHING ───────────────────────────────────────
+function matchElementToWorkPackage(elementName, workPackages) {
+  if (!elementName || !workPackages?.length) return null;
+
+  const name = elementName.toUpperCase().trim();
+
+  // Try exact match on work package number
+  let match = workPackages.find(wp => wp.wp_number?.toUpperCase() === name);
+  if (match) return match;
+
+  // Try partial match (e.g., "BM-101" matches "WP-001-BM-101")
+  match = workPackages.find(wp => name.includes(wp.wp_number?.toUpperCase()) || wp.wp_number?.toUpperCase().includes(name));
+  if (match) return match;
+
+  // Try matching common patterns like "W12x26-BM-101" to "BM-101"
+  const patterns = [
+    /-([A-Z]+-\d+)$/i,  // ends with -TYPE-NUMBER
+    /([A-Z]+-\d+)/i,     // contains TYPE-NUMBER
+  ];
+
+  for (const pattern of patterns) {
+    const match = name.match(pattern);
+    if (match) {
+      const code = match[1];
+      const wp = workPackages.find(wp => wp.wp_number?.toUpperCase().includes(code));
+      if (wp) return wp;
+    }
+  }
+
+  return null;
+}
+
+function getStatusColor(status, progress = 0) {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("complete") || s.includes("delivered") || s.includes("erected")) return "#22c55e"; // green
+  if (s.includes("progress") || s.includes("fabrication") || s.includes("in progress")) return "#f59e0b"; // amber
+  if (s.includes("planned") || s.includes("scheduled")) return "#6b7280"; // gray
+  if (progress > 0) return "#3b82f6"; // blue for in progress
+  return "#9ca3af"; // default gray
+}
+
 // ─── MATERIAL NORMALIZATION ──────────────────────────────────────
 // IFC files frequently bake transparency into glass / cladding materials.
 // On a white background that produces a "ghost" model. We force every
@@ -79,13 +120,29 @@ function isUncoloredMaterial(mat) {
   return spread < GREY_THRESHOLD;
 }
 
-function applyDefaultSteelColor(root) {
+function applyStatusBasedColor(root, workPackages, currentMembers = []) {
   root.traverse((child) => {
     if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
-    for (const mat of mats) {
-      if (isUncoloredMaterial(mat)) {
-        mat.color.copy(DEFAULT_STEEL_COLOR);
+
+    // Find the member data for this mesh
+    const memberData = currentMembers.find(m => m.mesh === child);
+    if (memberData?.workPackage) {
+      const statusColor = getStatusColor(memberData.workPackage.status, memberData.workPackage.percent_complete);
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of mats) {
+        if (mat && mat.color) {
+          mat.color.setStyle(statusColor);
+          mat.needsUpdate = true;
+        }
+      }
+    } else if (isUncoloredMaterial(child.material)) {
+      // Apply default steel color for uncolored, unlinked elements
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of mats) {
+        if (mat) {
+          mat.color.copy(DEFAULT_STEEL_COLOR);
+          mat.needsUpdate = true;
+        }
       }
     }
   });
@@ -138,6 +195,7 @@ export default function ModelViewer() {
   const [measureMode, setMeasureMode] = useState(false);
   const [measureReading, setMeasureReading] = useState(null); // { distanceFt, ftIn }
   const [isolateActive, setIsolateActive] = useState(false); // elements hidden via isolate
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
@@ -323,6 +381,12 @@ export default function ModelViewer() {
       clippingPlaneRef.current = null;
     };
   }, []);
+
+  // ─── UPDATE COLORS WHEN WORK PACKAGES CHANGE ──────────────────
+  useEffect(() => {
+    if (!loadedModelRef.current || !workPackages?.length) return;
+    applyStatusBasedColor(loadedModelRef.current, workPackages);
+  }, [workPackages, members]);
 
   // ─── FIT CAMERA ────────────────────────────────────────────────
   const fitCamera = useCallback((target) => {
@@ -623,6 +687,39 @@ export default function ModelViewer() {
     }
   }, []);
 
+  // ─── FULL SCREEN TOGGLE ─────────────────────────────────────────
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen().then(() => {
+          setIsFullscreen(true);
+        }).catch((err) => {
+          console.warn("Failed to enter fullscreen:", err);
+        });
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => {
+          setIsFullscreen(false);
+        }).catch((err) => {
+          console.warn("Failed to exit fullscreen:", err);
+        });
+      }
+    }
+  }, []);
+
+  // ─── FULLSCREEN CHANGE LISTENER ────────────────────────────────
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   // ─── LOAD GLTF/GLB ────────────────────────────────────────────
   const handleGLTFUpload = useCallback(async (file) => {
     const world = worldRef.current;
@@ -723,7 +820,7 @@ export default function ModelViewer() {
       const modelObject = model.object;
       if (modelObject) {
         normalizeMaterials(modelObject);
-        applyDefaultSteelColor(modelObject);
+        applyStatusBasedColor(modelObject, workPackages);
         enableShadows(modelObject);
         world.scene.three.add(modelObject);
       }
@@ -763,7 +860,20 @@ export default function ModelViewer() {
         if (child.isMesh) {
           const name = child.name || `Element ${idx + 1}`;
           const type = inferType(name);
-          extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
+          const workPackage = matchElementToWorkPackage(name, workPackages);
+          const statusColor = workPackage ? getStatusColor(workPackage.status, workPackage.percent_complete) : TYPE_COLORS[type];
+
+          extracted.push({
+            id: idx,
+            name,
+            type,
+            color: statusColor,
+            mesh: child,
+            workPackage,
+            status: workPackage?.status || "Unlinked",
+            progress: workPackage?.percent_complete || 0,
+            phase: workPackage?.phase || "Unknown"
+          });
           idx++;
         }
       });
@@ -786,7 +896,7 @@ export default function ModelViewer() {
         const box = new THREE.Box3().setFromObject(modelObject);
         if (box.isEmpty()) return false;
         normalizeMaterials(modelObject);
-        applyDefaultSteelColor(modelObject);
+        applyStatusBasedColor(modelObject, workPackages);
         enableShadows(modelObject);
         // One-shot — bounded box exists, fit + capture only the first time.
         // Material/shadow re-apply still runs on every call so freshly
@@ -803,7 +913,20 @@ export default function ModelViewer() {
           if (child.isMesh) {
             const name = child.name || `Element ${i + 1}`;
             const type = inferType(name);
-            fresh.push({ id: i, name, type, color: TYPE_COLORS[type], mesh: child });
+            const workPackage = matchElementToWorkPackage(name, workPackages);
+            const statusColor = workPackage ? getStatusColor(workPackage.status, workPackage.percent_complete) : TYPE_COLORS[type];
+
+            fresh.push({
+              id: i,
+              name,
+              type,
+              color: statusColor,
+              mesh: child,
+              workPackage,
+              status: workPackage?.status || "Unlinked",
+              progress: workPackage?.percent_complete || 0,
+              phase: workPackage?.phase || "Unknown"
+            });
             i++;
           }
         });
@@ -926,6 +1049,7 @@ export default function ModelViewer() {
       else   if (k === "m") { toggleMeasureMode(); }
       else   if (k === "c") { setSectionEnabled((v) => !v); }
       else   if (k === "p") { takeScreenshot(); }
+      else   if (e.key === "F11") { toggleFullscreen(); }
       else   if (e.key === "Escape") {
         if (measureMode) { toggleMeasureMode(); }
         else if (selectedMember) { setSelectedMember(null); clearSelectionOutline(); }
@@ -933,7 +1057,7 @@ export default function ModelViewer() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fitCamera, setView, isolateSelection, hideSelection, showAll, toggleMeasureMode, takeScreenshot, measureMode, selectedMember, clearSelectionOutline]);
+  }, [fitCamera, setView, isolateSelection, hideSelection, showAll, toggleMeasureMode, takeScreenshot, toggleFullscreen, measureMode, selectedMember, clearSelectionOutline]);
 
   // ─── MEMBER SELECTION ──────────────────────────────────────────
   const selectMember = useCallback((member) => {
@@ -1131,6 +1255,17 @@ export default function ModelViewer() {
             </button>
           )}
 
+          {/* Fullscreen */}
+          {modelLoaded && (
+            <button onClick={toggleFullscreen} title="Toggle fullscreen (F11)" style={{
+              ...tbBtn,
+              color: isFullscreen ? "var(--accent)" : "var(--text-muted)",
+              background: isFullscreen ? "rgba(200,155,32,0.12)" : "transparent",
+            }}>
+              {isFullscreen ? "⛶ EXIT" : "⛶ FULL"}
+            </button>
+          )}
+
           {modelLoaded && <div style={{ width: 1, height: 16, background: "var(--divider)" }} />}
 
           {/* List toggle */}
@@ -1174,6 +1309,7 @@ export default function ModelViewer() {
           <span>M: Measure</span>
           <span>C: Section</span>
           <span>P: Snap</span>
+          <span>F11: Fullscreen</span>
           <span>[: List</span>
         </div>
       )}
@@ -1206,16 +1342,40 @@ export default function ModelViewer() {
                   key={m.id}
                   onClick={() => selectMember(m)}
                   style={{
-                    padding: "6px 10px", marginBottom: 2, borderRadius: 6, cursor: "pointer",
-                    background: selectedMember?.id === m.id ? "rgba(245,158,11,0.12)" : "transparent",
-                    borderLeft: selectedMember?.id === m.id ? "2px solid var(--accent)" : "2px solid transparent",
-                    display: "flex", alignItems: "center", gap: 8, transition: "all 0.1s",
+                    padding: "8px 10px", marginBottom: 4, borderRadius: 6, cursor: "pointer",
+                    background: selectedMember?.id === m.id ? "rgba(245,158,11,0.12)" : "var(--bg-surface)",
+                    border: selectedMember?.id === m.id ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+                    display: "flex", flexDirection: "column", gap: 4, transition: "all 0.1s",
                   }}
                 >
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.name}>
-                    {m.name}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={m.name}>
+                      {m.name}
+                    </span>
+                  </div>
+                  {m.workPackage && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                          {m.phase}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: m.color, fontWeight: 700 }}>
+                          {m.status}
+                        </span>
+                      </div>
+                      {m.progress > 0 && (
+                        <div style={{ width: "100%", height: 3, background: "var(--bg-surface-low)", borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ width: `${m.progress}%`, height: "100%", background: m.color, borderRadius: 2 }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!m.workPackage && (
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
+                      Not linked to work package
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
