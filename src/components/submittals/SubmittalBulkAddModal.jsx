@@ -32,6 +32,22 @@ const STATUSES = [
 ];
 const BIC_CHOICES = ["Contractor", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
 
+// DB CHECK constraint allows only these values for submittal_type (or NULL).
+// Anything else from a pasted CSV produces a 400 from PostgREST, so we clamp
+// to canonical values here. Match is case/punctuation-insensitive.
+const SUBMITTAL_TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
+
+function clampToEnum(value, choices) {
+  if (value == null) return null;
+  const v = String(value).trim();
+  if (!v) return null;
+  const norm = v.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  for (const c of choices) {
+    if (c.toLowerCase().replace(/[^a-z0-9]+/g, "") === norm) return c;
+  }
+  return null;
+}
+
 // Header synonym → canonical column. Lower-cased + stripped of non-
 // alphanumerics on lookup, so "Submittal #", "submittal_number",
 // "SubmittalNumber" all collapse to the same key.
@@ -220,14 +236,33 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
 
   const commit = () => {
     if (parsed.rows.length === 0) return;
-    // Apply defaults at commit time so the parent doesn't need to
-    // know about them. Keeps the page-level create defaults and the
-    // bulk-add defaults from drifting apart.
-    const enriched = parsed.rows.map((r) => ({
-      status: "Draft",
-      ball_in_court: "Contractor",
-      ...r,
-    }));
+    // Apply defaults + DB-safety clamps at commit time so the parent
+    // doesn't need to know about them. The submittals table requires
+    // BOTH submittal_number AND title (NOT NULL), and the
+    // submittal_type / status CHECK constraints reject any value not
+    // in the canonical enum. Without these clamps a pasted CSV with
+    // only a number column, or with lower-cased "shop drawing", would
+    // 400 every row from PostgREST.
+    const enriched = parsed.rows.map((r) => {
+      const clampedType = clampToEnum(r.submittal_type, SUBMITTAL_TYPES);
+      const clampedStatus = clampToEnum(r.status, STATUSES) || "Draft";
+      // Backfill missing NOT NULLs from whichever column the user
+      // gave us — better than a row-failed toast for "no title".
+      const submittal_number = (r.submittal_number || r.title || "").trim();
+      const title = (r.title || r.submittal_number || "").trim();
+      const out = {
+        ball_in_court: "Contractor",
+        ...r,
+        submittal_number,
+        title,
+        status: clampedStatus,
+      };
+      // submittal_type: clamp to enum or omit entirely (column is
+      // nullable; sending an empty string would hit the CHECK).
+      if (clampedType) out.submittal_type = clampedType;
+      else delete out.submittal_type;
+      return out;
+    });
     onSubmit(enriched);
   };
 
