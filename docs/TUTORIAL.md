@@ -519,3 +519,30 @@ The data graph is the point of the app. Here are the most-used paths:
 - **Owner-facing PM:** Job Status Report + Decision Log + Portfolio Overview.
 
 If a feature isn't in this guide, check the **MODULES** dropdown — it lists every page in the app. If something's missing or stale, file it in **Action Items** with category = Documentation and assign to the SBP team.
+
+---
+
+## 15. What's New — Recent Releases
+
+Newest at the top. Each entry lists the user-facing change and the kind of integration (forward / reverse / cross-module) it affects.
+
+### 2026-04-29
+
+- **Tutorial / Help in the app shell.** This document is now reachable from the sidebar (**Administration → Tutorial / Help**) and from the Modules dropdown. It renders inside the app — no leaving for GitHub. The same source markdown lives in `docs/TUTORIAL.md` so doc and code travel together.
+- **"What's New" section.** This list. Fed by every shipping commit so the team can see what changed without spelunking the commit log.
+
+### 2026-04-28
+
+- **Submittal ↔ Drawing-Set linking (forward + reverse).** Submittals now carry a "Linked drawing sets" section on the detail panel — chip per linked set, `+ Link drawing set` picker, click `×` to unlink. Reverse view: every drawing-set group header on the Drawings page now shows `N SUBMITTALS · M OPEN`. "Open" excludes Approved / Approved as Noted / Void so the chip flags real work in flight against that set. Storage uses the existing `submittals.drawing_set_ids` (`uuid[]`); no migration needed.
+- **Submittal detail panel is fully inline-editable.** Every `<Meta>` cell (title, type, discipline, spec section, revision, submitted/required/returned/approved dates, submitted-by, reviewer, notes) is now click-to-edit. Enter commits, Esc cancels, blur commits; notes use Cmd/Ctrl+Enter so bare Enter inserts a newline. No more round-tripping through the Edit modal for a one-character fix.
+- **Submittal bulk-add hardened against PostgREST 400s.** CSV paste / sequential add now: backfill missing `title` from `submittal_number` (and vice-versa) so NOT NULL never trips, clamp `submittal_type` and `status` to canonical enums (case- and punctuation-insensitive — "shop drawing" → "Shop Drawing"), drop empty `submittal_type` so the column falls back to NULL instead of failing the CHECK.
+- **Recycled submittal numbers can be reused.** Migration 067 swapped the `(project_id, submittal_number)` unique constraint for a partial unique INDEX excluding soft-deleted rows. Same shape as drawing_sets (mig 029) and rfis (mig 030). You can now soft-delete a submittal and recreate the same number cleanly.
+
+### Earlier this month
+
+- **Submittal Register sidebar entry.** New `Submittal Register` item in the Project Management sidebar group; matching entry in the Modules dropdown's Communications column.
+- **Submittal bulk operations.** Bulk add (CSV paste + sequential), bulk edit (with "Don't change" toggle per field and notes-append sentinel), bulk delete. Mirrors the RFI page exactly.
+- **Schedule MPP import: `is_summary` column.** Migration 066 added the missing `is_summary boolean` to `schedule_tasks` so MPP imports stop failing with a schema-cache error.
+- **Project Status Matrix actuals reads Expenses, not the deprecated `cost_codes` column.** Portfolio Overview now shows truthful actuals.
+- **Reports module audit pass.** SOV dedupe, ProjectDetails column truthing, PHASES alignment, shared predicates so the same numbers appear on every report.
+- **Drawings + Submittals max-separation color palettes per stage/status.** Adjacent statuses no longer collapse into the same color tile.
