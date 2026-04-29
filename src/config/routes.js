@@ -79,7 +79,7 @@ const ROUTE_DOMAINS = {
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
     Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents"),
     ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),
-    Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittals",          { projectScoped: true }),
+    Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
   },
 
   // ── Fabrication & Production ──
