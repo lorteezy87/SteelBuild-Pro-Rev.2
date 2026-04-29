@@ -369,6 +369,14 @@ export default function PortfolioOverview() {
     queryKey: ["cost-codes-global"],
     queryFn: () => base44.entities.CostCode.list(),
   });
+  // Expenses carry the real "actuals" — `cost_codes.actual_cost` is
+  // populated on only ~2 of 150 rows in production, so the matrix
+  // previously rendered $0 for actual on every project. Sum from
+  // expenses (excluding Voided) per project to get the real number.
+  const { data: rawExpenses = [] } = useQuery({
+    queryKey: ["expenses-all"],
+    queryFn: () => base44.entities.Expense.list(),
+  });
   const { data: rawRisks = [] } = useQuery({
     queryKey: ["risks-all"],
     queryFn: () => base44.entities.Risk.list(),
@@ -386,6 +394,7 @@ export default function PortfolioOverview() {
   const deliveries   = useMemo(() => rawDeliveries.filter((d) => !d?.is_deleted), [rawDeliveries]);
   const workPackages = useMemo(() => rawWPs.filter((w) => !w?.is_deleted), [rawWPs]);
   const costCodes    = useMemo(() => rawCostCodes.filter((c) => !c?.is_deleted), [rawCostCodes]);
+  const expenses     = useMemo(() => rawExpenses.filter((e) => !e?.is_deleted), [rawExpenses]);
   const risks        = useMemo(() => rawRisks.filter((r) => !r?.is_deleted), [rawRisks]);
 
   const now = new Date();
@@ -467,7 +476,17 @@ export default function PortfolioOverview() {
       const revisedContract = baseContract + approvedDelta;
       // Use cost-code budget when populated, else revised contract.
       const budget = ccBudget || revisedContract || baseContract;
-      const actual = pCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+      // Sum actuals from `expenses` (the canonical source — Voided rows
+      // excluded). cost_codes.actual_cost was empty on 148 of 150 live
+      // rows, so the prior calc rendered $0 actual for every project
+      // even when the project had paid expenses. Fall back to the
+      // cost-code actual_cost only when no expenses exist for a
+      // project (covers any historical row that pre-dates the
+      // expenses table).
+      const pExpenses = expenses.filter((e) => e.project_id === p.id && e.payment_status !== "Voided");
+      const expenseActual = pExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const ccActual = pCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0), 0);
+      const actual = expenseActual > 0 ? expenseActual : ccActual;
       const variance = budget > 0 ? actual - budget : 0;
       const var_pct = budget > 0 ? (variance / budget) * 100 : 0;
       const health = computeHealth(budget, actual);
@@ -516,7 +535,7 @@ export default function PortfolioOverview() {
         raw: p,
       };
     });
-  }, [projects, costCodes, rfis, changeOrders, workPackages, now]);
+  }, [projects, costCodes, expenses, rfis, changeOrders, workPackages, now]);
 
   /* ── Portfolio totals ── */
   const portfolioContract = useMemo(

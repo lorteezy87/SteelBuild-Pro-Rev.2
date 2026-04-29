@@ -63,6 +63,7 @@ const PAGE_ICON = {
   ActionItems:                  CheckSquare,
   RFIs:                         HelpCircle,
   RFIHub:                       HelpCircle,
+  Submittals:                   FileText,
   ChangeOrders:                 DollarSign,
   ChangeRequests:               DollarSign,
   Mitigations:                  Scale,
