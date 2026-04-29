@@ -35,6 +35,8 @@ import {
   Contact2, Building2, UserCog, Settings as SettingsIcon,
   // Tools
   Ruler, Calculator, HardHat, ArrowLeftRight,
+  // Help
+  BookOpen,
   // Chrome
   ChevronsLeft, ChevronsRight, Search, Clock, ChevronRight as ChevronRightIcon,
 } from "lucide-react";
@@ -118,6 +120,7 @@ const PAGE_ICON = {
   UsersManagement:              UserCog,
   Settings:                     SettingsIcon,
   ScopeExclusions:              FileText,
+  Tutorial:                     BookOpen,
 
   // Tools
   Calculator:                   Calculator,
