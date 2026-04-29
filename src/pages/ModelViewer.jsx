@@ -773,7 +773,14 @@ export default function ModelViewer() {
 
       // FragmentsModel streams tile geometry in via the worker AFTER load()
       // resolves, so the bounding box is empty for the first few view updates.
-      // We listen for onViewUpdated and refit/re-extract until tiles arrive.
+      // We listen for onViewUpdated and refit/re-extract until tiles arrive,
+      // BUT we only ever fit the camera ONCE — after that, fitCamera() must
+      // not run again or it'll snap the camera back to the initial framing
+      // every time onViewUpdated fires (which is every zoom/pan tick).
+      // That's the bug we're fixing here: previous code only relied on the
+      // listener detacher, but @thatopen/components' Event.add() returns void
+      // so the detach was a no-op and the listener stayed attached forever.
+      let didFitOnce = false;
       const tryFit = () => {
         if (!modelObject) return false;
         const box = new THREE.Box3().setFromObject(modelObject);
@@ -781,8 +788,14 @@ export default function ModelViewer() {
         normalizeMaterials(modelObject);
         applyDefaultSteelColor(modelObject);
         enableShadows(modelObject);
-        fitCamera(modelObject);
-        captureModelBounds(modelObject);
+        // One-shot — bounded box exists, fit + capture only the first time.
+        // Material/shadow re-apply still runs on every call so freshly
+        // streamed tiles get the correct steel colour without re-zooming.
+        if (!didFitOnce) {
+          fitCamera(modelObject);
+          captureModelBounds(modelObject);
+          didFitOnce = true;
+        }
         // Re-extract members now that real meshes exist
         const fresh = [];
         let i = 0;
@@ -800,12 +813,16 @@ export default function ModelViewer() {
 
       if (!tryFit()) {
         let attempts = 0;
-        const off = model.onViewUpdated?.add?.(() => {
+        // Properly detach: @thatopen Event API exposes .add(cb) / .remove(cb).
+        // .add() returns void, so we must keep the callback ref ourselves and
+        // hand it to .remove() when we're done.
+        const onUpdate = () => {
           attempts++;
           if (tryFit() || attempts > 30) {
-            try { off?.(); } catch { /* ignore */ }
+            try { model.onViewUpdated?.remove?.(onUpdate); } catch { /* ignore */ }
           }
-        });
+        };
+        try { model.onViewUpdated?.add?.(onUpdate); } catch { /* ignore */ }
         // Safety net: poll for ~10s, forcing tile updates each tick in case
         // the per-frame onAfterUpdate hook hasn't streamed everything yet.
         let polled = 0;
