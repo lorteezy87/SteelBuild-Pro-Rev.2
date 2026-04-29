@@ -108,6 +108,16 @@ export default function Drawings() {
     staleTime: 60000,
   });
 
+  // Submittals — read-only here; we just want a per-set count to
+  // surface "N SUBMITTALS" on each drawing-set group header. Doesn't
+  // need to refetch aggressively, so a long staleTime is fine.
+  const { data: submittals = [] } = useQuery({
+    queryKey: ["submittals", projectId],
+    queryFn: () => projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 60000,
+  });
+
   // Parent drawing_sets rows — used for aggregate badges (sheet_count,
   // processed_count, etc.) and to keep set names in sync with the upload modal.
   const { data: drawingSetRecords = [] } = useQuery({
@@ -168,6 +178,28 @@ export default function Drawings() {
     rfis.forEach(r => { if (r.rfi_number) map[r.rfi_number] = r; });
     return map;
   }, [rfis]);
+
+  // Reverse index: drawing_set_id -> open/total submittal counts. The
+  // submittal table holds the link as a uuid[] column (drawing_set_ids),
+  // so each submittal can fan out into multiple sets. We tally both
+  // total and "open" (not Approved/Approved-as-Noted/Void) so the
+  // group header can call out work-in-flight without a click-through.
+  const submittalsBySetId = useMemo(() => {
+    const CLOSED = new Set(["Approved", "Approved as Noted", "Void"]);
+    const map = {};
+    (submittals || []).forEach((s) => {
+      if (s.is_deleted) return;
+      const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+      const open = !CLOSED.has(s.status);
+      ids.forEach((id) => {
+        if (!id) return;
+        if (!map[id]) map[id] = { total: 0, open: 0 };
+        map[id].total += 1;
+        if (open) map[id].open += 1;
+      });
+    });
+    return map;
+  }, [submittals]);
 
   const filtered = useMemo(() => {
     let list = [...drawings];
@@ -828,6 +860,7 @@ export default function Drawings() {
             onMarkTitleblock={openMarkTitleblock}
             rfiMap={rfiMap}
             drawingSetMap={drawingSetMap}
+            submittalsBySetId={submittalsBySetId}
           />
         ) : (
           <DrawingsGrid

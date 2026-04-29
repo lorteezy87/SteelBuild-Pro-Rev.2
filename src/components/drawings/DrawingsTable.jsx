@@ -366,6 +366,10 @@ function GroupRow({
   group, expanded, onToggleExpand,
   groupSelected, groupIndeterminate, onToggleGroupSelect,
   onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, hideOnCompact,
+  // { total, open } | undefined. When present (and total > 0), we
+  // render a "N SUBMITTALS" chip in the group meta line so you can
+  // see at a glance which sets have transmittal activity.
+  submittalCounts,
 }) {
   // Whether the parent drawing_sets row already has both title + sheet-#
   // rectangles saved. Drives the button label ("Mark" vs "Update") and
@@ -521,6 +525,25 @@ function GroupRow({
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                   <span style={{ ...mono, fontSize: 9, color: "var(--status-error)", fontWeight: 800 }}>
                     {a.overdueCount} OVERDUE{a.maxLate > 0 ? ` · MAX ${a.maxLate}D LATE` : ""}
+                  </span>
+                </>
+              )}
+              {/* Submittal rollup — only shown when at least one
+                  submittal references this set. "N OPEN" only renders
+                  when there's any open transmittal so closed sets
+                  stay visually quiet. */}
+              {submittalCounts && submittalCounts.total > 0 && (
+                <>
+                  <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
+                  <span
+                    title={`${submittalCounts.total} submittal${submittalCounts.total === 1 ? "" : "s"} reference this set${submittalCounts.open > 0 ? `, ${submittalCounts.open} still open (not approved/voided)` : ""}`}
+                    style={{
+                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                      color: submittalCounts.open > 0 ? "#0D9488" : "var(--text-muted)",
+                    }}
+                  >
+                    {submittalCounts.total} SUBMITTAL{submittalCounts.total === 1 ? "" : "S"}
+                    {submittalCounts.open > 0 ? ` · ${submittalCounts.open} OPEN` : ""}
                   </span>
                 </>
               )}
@@ -922,6 +945,10 @@ export default function DrawingsTable({
   onEdit, onDelete, onAdvance, onView,
   setContextMenu, onSetApproval, onDeleteSet, onRenameSet, onMarkTitleblock, rfiMap,
   drawingSetMap = {},
+  // submittalsBySetId: { [drawingSetId]: { total, open } } — used to
+  // surface a "N SUBMITTALS" chip on each set's group header row.
+  // Optional; when omitted, no chip is rendered.
+  submittalsBySetId = {},
 }) {
   // F20: sort state. null means "use the default by-sheet-number order
   // established inside groupByDrawingSet". Clicking a header toggles
@@ -1112,6 +1139,7 @@ export default function DrawingsTable({
                   onRenameSet={onRenameSet}
                   onMarkTitleblock={onMarkTitleblock}
                   hideOnCompact={hideOnCompact}
+                  submittalCounts={group.setId ? submittalsBySetId[group.setId] : undefined}
                 />
                 {isExpanded && group.setOnly && (
                   <SetOnlyInfoRow group={group} />
