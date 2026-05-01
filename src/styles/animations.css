@@ -31,6 +31,10 @@
   0%   { background: rgba(200,155,32,0.12); }
   100% { background: transparent; }
 }
+@keyframes photoShimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 
 /* ── Animation utilities ── */
 .anim-fade-in      { animation: fadeIn 0.2s ease-out both; }
