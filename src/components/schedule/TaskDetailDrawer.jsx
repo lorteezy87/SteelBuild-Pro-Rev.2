@@ -20,6 +20,7 @@ import {
 } from '../../services/scheduleCascade';
 import MultiSelectChips from '@/components/shared/MultiSelectChips';
 import { logActivity } from '@/services/auditLogger';
+import DateOrTbdInput from './DateOrTbdInput';
 
 // Coerce JSONB values that may come back from Postgres as strings or null.
 // Mirrors the helper in DailyLogForm — the entity wrapper also normalises,
@@ -165,7 +166,9 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
     onUpdate({ ...rest, ...patch, id: task.id });
   };
 
-  const duration = calculateTaskDuration(formData.start_date, formData.end_date);
+  const duration = (formData.start_date && formData.end_date)
+    ? calculateTaskDuration(formData.start_date, formData.end_date)
+    : 'TBD';
   // Predecessor links are now link objects: { id, type, lag_days }. The
   // legacy id-string shape is silently upgraded to FS+1 by parseDeps so
   // the editor can mix-and-match while a partial migration is in flight.
@@ -384,8 +387,42 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                   gridTemplateColumns: '1fr 1fr 1fr',
                   gap: 12,
                 }}>
-                  <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
-                  <FormField label="End Date"   type="date" value={formData.end_date}   onChange={(v) => setFormData({ ...formData, end_date: v })} />
+                  <div>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Start Date</label>
+                    <DateOrTbdInput
+                      value={formData.start_date}
+                      onChange={(v) => setFormData({ ...formData, start_date: v })}
+                      inputStyle={{
+                        width: '100%',
+                        background: 'var(--bg-surface-low)',
+                        border: '1px solid var(--border-default)',
+                        borderRadius: 6,
+                        padding: '6px 8px',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 11,
+                        color: 'var(--text-primary)',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>End Date</label>
+                    <DateOrTbdInput
+                      value={formData.end_date}
+                      onChange={(v) => setFormData({ ...formData, end_date: v })}
+                      inputStyle={{
+                        width: '100%',
+                        background: 'var(--bg-surface-low)',
+                        border: '1px solid var(--border-default)',
+                        borderRadius: 6,
+                        padding: '6px 8px',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 11,
+                        color: 'var(--text-primary)',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
                   <FormField label="Duration (days)" type="number" value={duration} readOnly={true} />
                 </div>
               )}

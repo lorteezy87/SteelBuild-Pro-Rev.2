@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
+import DateOrTbdInput from './DateOrTbdInput';
 
 export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false, existingTasks }) {
   const [formData, setFormData] = useState({
@@ -33,10 +34,12 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
   }, [open, prefilledDate]);
 
   const handleSubmit = () => {
-    if (!isSaving && formData.task_name && formData.start_date && formData.end_date) {
-      onSubmit(formData);
-      // Form will reset naturally when modal unmounts on success.
-      // Do NOT reset here — keeps data visible while mutation is in flight.
+    if (!isSaving && formData.task_name) {
+      onSubmit({
+        ...formData,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+      });
     }
   };
 
@@ -76,8 +79,11 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
 
           {/* Right */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <FormField label="Start Date *" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
-            <FormField label="End Date *" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
+            <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
+            <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: -4 }}>
+              Use TBD when the task is real but the schedule window is not known yet.
+            </div>
             <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
             <FormField label="Resources / Assigned To" value={formData.resource_names} onChange={(v) => setFormData({ ...formData, resource_names: v })} />
             <FormField
@@ -92,7 +98,7 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
 
         <div style={{ display: 'flex', gap: 12 }}>
           <Button onClick={onClose} variant="outline" style={{ flex: 1 }} disabled={isSaving}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isSaving || !formData.task_name || !formData.start_date || !formData.end_date} style={{ flex: 1, background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.6 : 1 }}>
+          <Button onClick={handleSubmit} disabled={isSaving || !formData.task_name} style={{ flex: 1, background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.6 : 1 }}>
             {isSaving ? 'Creating...' : 'Create Task →'}
           </Button>
         </div>
@@ -128,6 +134,21 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
             return <option key={isObj ? opt.value : opt} value={isObj ? opt.value : opt}>{isObj ? opt.label : opt}</option>;
           })}
         </select>
+      ) : type === 'date' ? (
+        <DateOrTbdInput
+          value={value}
+          onChange={onChange}
+          inputStyle={{
+            width: '100%',
+            background: 'var(--bg-surface-low)',
+            border: '1px solid var(--accent-border)',
+            borderRadius: 6,
+            padding: '6px 8px',
+            fontFamily: 'var(--font-body)',
+            fontSize: 11,
+            color: '#FFFFFF',
+          }}
+        />
       ) : (
         <input
           type={type}

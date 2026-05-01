@@ -229,16 +229,16 @@ function toDateOnly(input) {
 
 function fmtDate(d) {
   const dt = parseDateUTC(d);
-  if (!dt) return "—";
+  if (!dt) return "TBD";
   return dt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "UTC" });
 }
 
 function calcDuration(start, end) {
   const s = parseDateUTC(start);
   const e = parseDateUTC(end);
-  if (!s || !e) return "—";
+  if (!s || !e) return "TBD";
   const days = Math.round((e - s) / 86400000);
-  return days >= 0 ? `${days}d` : "—";
+  return days >= 0 ? `${days}d` : "TBD";
 }
 
 // ── Summary gantt bar with % rollup ──────────────────────────────────────
@@ -1047,6 +1047,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const completeTasks = allTasks.filter(t => t.status === "Complete").length;
   const overdueTasks = allTasks.filter(isOverdue).length;
   const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
+  const unscheduledTasks = allTasks.filter(t => !effStart(t) || !effEnd(t)).length;
 
   const px = (dateStr) => {
     const d = parseDateUTC(dateStr);
@@ -1209,6 +1210,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             { label: "COMPLETE", val: completeTasks, color: "#10B981" },
             { label: "IN PROGRESS", val: inProgressTasks, color: "var(--accent)" },
             { label: "OVERDUE", val: overdueTasks, color: "#EF4444" },
+            ...(unscheduledTasks > 0 ? [{ label: "TBD", val: unscheduledTasks, color: "var(--status-warning)" }] : []),
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.val}</span>
@@ -1630,7 +1632,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 ) : (
                   <span
                     title={isShifted ? `Stored: ${fmtDate(task.start_date)}\nShifted by predecessors` : undefined}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispStart ? "var(--status-warning)" : isShifted ? "var(--accent)" : "var(--text-secondary)", fontWeight: !dispStart ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
                   >
                     {fmtDate(dispStart)}{isShifted ? "*" : ""}
                   </span>
@@ -1641,7 +1643,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 ) : (
                   <span
                     title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "#EF4444" : isShifted ? "var(--accent)" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispEnd ? "var(--status-warning)" : overdue ? "#EF4444" : isShifted ? "var(--accent)" : "var(--text-secondary)", fontWeight: !dispEnd ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
                   >
                     {fmtDate(dispEnd)}{isShifted ? "*" : ""}
                   </span>
@@ -1873,7 +1875,37 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
                 const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
-                  return <div key={`gr-${task.id}`} style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg }} />;
+                  const tbdLeft = px(today.toISOString().slice(0, 10));
+                  return (
+                    <div key={`gr-${task.id}`}
+                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg, cursor: "pointer" }}
+                      onClick={() => onTaskClick && onTaskClick(task)}
+                      onMouseEnter={() => setHoveredRowId(task.id)}
+                      onMouseLeave={() => setHoveredRowId(null)}
+                    >
+                      <div
+                        title="Date TBD — task is tracked but not yet scheduled"
+                        style={{
+                          position: "absolute",
+                          left: Math.max(tbdLeft - 20, 4),
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          padding: "2px 8px",
+                          border: "1px dashed var(--status-warning)",
+                          borderRadius: 4,
+                          background: "rgba(245,158,11,0.08)",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: "var(--status-warning)",
+                          letterSpacing: "0.06em",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        TBD
+                      </div>
+                    </div>
+                  );
                 }
                 const taskEffS = effStart(task);
                 const taskEffE = effEnd(task);
