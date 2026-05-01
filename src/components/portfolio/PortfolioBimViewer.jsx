@@ -811,8 +811,6 @@ export default function PortfolioBimViewer({
         disposeObject(pickProxies);
         disposeObject(uploadedRoot);
         try { ifcComponents?.dispose?.(); } catch { /* ignore */ }
-        environmentMap.dispose();
-        pmremGenerator.dispose();
         renderer.dispose();
         if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       };
