@@ -3768,6 +3768,7 @@ export type Database = {
           date_required: string | null
           deleted_at: string | null
           description: string | null
+          discipline: string | null
           distribution_list: string | null
           drawing_reference: string | null
           due_date: string | null
@@ -3807,6 +3808,7 @@ export type Database = {
           date_required?: string | null
           deleted_at?: string | null
           description?: string | null
+          discipline?: string | null
           distribution_list?: string | null
           drawing_reference?: string | null
           due_date?: string | null
@@ -3846,6 +3848,7 @@ export type Database = {
           date_required?: string | null
           deleted_at?: string | null
           description?: string | null
+          discipline?: string | null
           distribution_list?: string | null
           drawing_reference?: string | null
           due_date?: string | null
