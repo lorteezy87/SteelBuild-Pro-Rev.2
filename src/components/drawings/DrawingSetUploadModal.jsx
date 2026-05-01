@@ -745,6 +745,29 @@ export default function DrawingSetUploadModal({
     const aggregateSetMeta = { ...EMPTY_SET_META };
     const aiFilled = {};
 
+    // If the user typed a set name that matches an existing set with a saved
+    // titleblock template, fetch it so extraction uses rect-based OCR instead
+    // of asking the LLM to guess sheet titles/numbers.
+    let titleblockTemplate = null;
+    try {
+      const setName = (meta.setName || "").trim();
+      if (setName && activeProject?.id) {
+        const existing = await base44.entities.DrawingSet.filter({
+          project_id: activeProject.id,
+          set_name:   setName,
+        });
+        if (Array.isArray(existing) && existing.length > 0) {
+          const tRect = existing[0].titleblock_title_rect;
+          const nRect = existing[0].titleblock_number_rect;
+          if (tRect && nRect) {
+            titleblockTemplate = { titleRect: tRect, numberRect: nRect };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Titleblock template lookup failed — extraction will use LLM fallback:", e);
+    }
+
     try {
       for (let i = 0; i < files.length; i++) {
         if (cancelledRef.current) break;
@@ -797,6 +820,7 @@ export default function DrawingSetUploadModal({
         try {
           extractResult = await withTimeout(
             validateAndExtract(file, {
+              ...(titleblockTemplate ? { titleblockTemplate } : {}),
               onStatus: (status) => {
                 if (status.phase === 'rate-limit-wait') {
                   setProcessingStatus(prev => ({
