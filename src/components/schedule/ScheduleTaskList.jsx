@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { PHASES, PHASE_COLORS, sortByPhase, derivePhase } from "../../utils/phases";
 import { formatDateShort } from "../shared/formatters";
+import DateOrTbdInput from "./DateOrTbdInput";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -26,7 +27,10 @@ const sortByDate = (a, b) => {
   return new Date(a.start_date) - new Date(b.start_date);
 };
 
-const fmtDate = (d) => formatDateShort(d);
+const fmtDate = (d) => {
+  if (!d) return "TBD";
+  return formatDateShort(d);
+};
 
 const INLINE_INPUT = {
   background: "rgba(200,155,32,0.08)",
@@ -280,26 +284,21 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       )}
                     </div>
 
-                    {/* Start Date — when editing, the user types stored
-                        values, not effective. _stored_start_date is the
-                        as-entered date; if no overlay was applied it
-                        will be undefined and we fall back to the visible
-                        start_date (which is the same value). */}
+                    {/* Start Date */}
                     <div>
                       {isEditing ? (
-                        <input
-                          type="date"
+                        <DateOrTbdInput
+                          compact
                           value={editDraft.start_date}
-                          onChange={(e) => patch("start_date", e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(e, task.id)}
-                          style={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
+                          onChange={(v) => patch("start_date", v)}
+                          inputStyle={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
                         />
                       ) : (
                         <span
-                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.start_date ? "var(--text-secondary)" : "var(--text-muted)" }}
+                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.start_date ? "var(--text-secondary)" : "var(--accent)", fontWeight: task.start_date ? 400 : 700 }}
                           title={task._shifted ? `Stored: ${task._stored_start_date || "—"}\nShifted ${task._shifted_by || 0}d by predecessors` : undefined}
                         >
-                          {task.start_date ? fmtDate(task.start_date) : "—"}
+                          {fmtDate(task.start_date)}
                           {task._shifted ? <span style={{ color: "var(--accent)", marginLeft: 2 }} aria-hidden>*</span> : null}
                         </span>
                       )}
@@ -308,19 +307,18 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                     {/* Finish Date */}
                     <div>
                       {isEditing ? (
-                        <input
-                          type="date"
+                        <DateOrTbdInput
+                          compact
                           value={editDraft.end_date}
-                          onChange={(e) => patch("end_date", e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(e, task.id)}
-                          style={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
+                          onChange={(v) => patch("end_date", v)}
+                          inputStyle={{ ...INLINE_INPUT, fontSize: 10, colorScheme: "dark" }}
                         />
                       ) : (
                         <span
-                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.end_date ? "var(--text-secondary)" : "var(--text-muted)" }}
+                          style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: task.end_date ? "var(--text-secondary)" : "var(--accent)", fontWeight: task.end_date ? 400 : 700 }}
                           title={task._shifted ? `Stored: ${task._stored_end_date || "—"}\nShifted ${task._shifted_by || 0}d by predecessors` : undefined}
                         >
-                          {task.end_date ? fmtDate(task.end_date) : "—"}
+                          {fmtDate(task.end_date)}
                           {task._shifted ? <span style={{ color: "var(--accent)", marginLeft: 2 }} aria-hidden>*</span> : null}
                         </span>
                       )}

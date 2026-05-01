@@ -471,6 +471,12 @@ export const entities = {
       const hasStatus = Object.prototype.hasOwnProperty.call(out, 'status');
       const hasPct    = Object.prototype.hasOwnProperty.call(out, 'percent_complete');
 
+      for (const field of ['start_date', 'end_date']) {
+        if (Object.prototype.hasOwnProperty.call(out, field) && out[field] === '') {
+          out[field] = null;
+        }
+      }
+
       if (hasPct) {
         const n = Number(out.percent_complete);
         if (Number.isFinite(n)) out.percent_complete = Math.max(0, Math.min(100, n));

@@ -441,7 +441,30 @@ export function scheduleTaskUrgency(task, projectMap = {}) {
     anchor = task.start_date || task.end_date || null;
     anchorKind = task.start_date ? "start" : "finish";
   }
-  if (!anchor) return null; // no dates → can't place
+  if (!anchor) {
+    // No dates at all — surface as "awaiting" so TBD tasks show up in the
+    // Command Center feed reminding the team to schedule them.
+    const daysOpen = daysSince(task.created_at || task.created_date);
+    const phaseLabel = task.phase ? task.phase : null;
+    const prefix = phaseLabel ? `${phaseLabel} — ` : "";
+    const titleBits = [task.wbs_code, task.task_name].filter(Boolean);
+    const titleStr = titleBits.length ? titleBits.join(" — ") : "(unnamed task)";
+    const ownerStr = task.resource_names || task.assigned_to || task.crew || null;
+    return {
+      urgency: "awaiting",
+      daysValue: daysOpen,
+      displayStatus: `${prefix}Dates TBD — ${daysOpen}d unscheduled`,
+      quickAction: { label: "View Schedule", route: `/Schedule?project=${task.project_id}` },
+      itemType: "TASK",
+      title: titleStr,
+      owner: ownerStr,
+      projectId: task.project_id,
+      projectNumber: project.project_number || null,
+      projectName: project.name || null,
+      sourceId: task.id,
+      raw: { ...task, due_date: null },
+    };
+  }
 
   const dueDays = daysUntil(anchor);
   if (!Number.isFinite(dueDays)) return null;

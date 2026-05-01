@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { PHASES } from "../../utils/phases";
+import DateOrTbdInput from "./DateOrTbdInput";
 
 const TASK_TYPES = ["Task", "Fabrication", "Delivery", "Install", "Submittal", "RFI", "Milestone"];
 const STATUSES   = ["Not Started", "In Progress", "Complete", "On Hold", "Cancelled"];
@@ -106,6 +107,8 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
     if (!filled.length) return;
     const payload = filled.map(({ _id, ...rest }) => ({
       ...rest,
+      start_date: rest.start_date || null,
+      end_date: rest.end_date || null,
       resource_names: rest.resource_names || null,
       parent_task_id: rest.parent_task_id || null,
     }));
@@ -213,21 +216,21 @@ export default function BulkAddTaskModal({ open, onClose, onSubmit, projectName,
 
                 {/* Start date */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <input
-                    type="date"
+                  <DateOrTbdInput
+                    compact
                     value={row.start_date}
-                    onChange={(e) => updateRow(row._id, "start_date", e.target.value)}
-                    style={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark" }}
+                    onChange={(v) => updateRow(row._id, "start_date", v)}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark" }}
                   />
                 </div>
 
                 {/* End date */}
                 <div style={{ ...CELL, borderRight: "1px solid var(--hover-bg)" }}>
-                  <input
-                    type="date"
+                  <DateOrTbdInput
+                    compact
                     value={row.end_date}
-                    onChange={(e) => updateRow(row._id, "end_date", e.target.value)}
-                    style={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark" }}
+                    onChange={(v) => updateRow(row._id, "end_date", v)}
+                    inputStyle={{ ...INPUT_STYLE, fontSize: 11, colorScheme: "dark" }}
                   />
                 </div>
 
