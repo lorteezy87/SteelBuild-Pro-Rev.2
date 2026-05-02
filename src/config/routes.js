@@ -74,6 +74,7 @@ const ROUTE_DOMAINS = {
 
   // ── Design & Documents ──
   documents: {
+    DrawingSubmittalHub: r(lazyWithRetry(() => import("@/pages/DrawingSubmittalHub")), "Drawings & Submittals", { projectScoped: true }),
     Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
     DrawingAnalysis:  r(lazyWithRetry(() => import("@/pages/DrawingAnalysis")),  "Drawing Analysis",    { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),

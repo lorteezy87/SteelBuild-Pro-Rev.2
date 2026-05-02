@@ -182,6 +182,41 @@ const RULES = {
     return errors.filter(Boolean);
   },
 
+  submittal: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.submittal_number, "submittal_number", "Submittal #"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
+    errors.push(validDate(data.required_date, "required_date", "Required Date"));
+    errors.push(validDate(data.returned_date, "returned_date", "Returned Date"));
+    errors.push(validDate(data.approved_date, "approved_date", "Approved Date"));
+    errors.push(maxLength(data.submittal_number, 50, "submittal_number", "Submittal #"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    if (data.round_number !== undefined && data.round_number !== null) {
+      const rn = Number(data.round_number);
+      if (isNaN(rn) || rn < 1) {
+        errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
+      }
+    }
+    return errors.filter(Boolean);
+  },
+
+  submittal_round: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.submittal_id, "submittal_id", "Submittal"));
+    errors.push(validDate(data.submitted_date, "submitted_date", "Submitted Date"));
+    errors.push(validDate(data.returned_date, "returned_date", "Returned Date"));
+    if (data.round_number !== undefined && data.round_number !== null) {
+      const rn = Number(data.round_number);
+      if (isNaN(rn) || rn < 1) {
+        errors.push({ field: "round_number", message: "Round must be 1 or greater.", rule: "POSITIVE_INTEGER" });
+      }
+    }
+    return errors.filter(Boolean);
+  },
+
   project: (data, mode) => {
     const errors = [];
     errors.push(required(data.project_number, "project_number", "Project Number"));

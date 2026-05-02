@@ -350,6 +350,34 @@ const REGISTRY = {
     ],
   },
 
+  submittal: {
+    primary:  (pid) => ["submittals", pid],
+    families: (pid) => [
+      ["submittals", pid],
+      ["submittals"],
+      ["submittals-all"],
+      ["submittals-nav-count", pid],
+      ["submittal-detail", pid],
+      ["pcc-submittals", pid],
+    ],
+  },
+
+  submittal_round: {
+    primary:  (pid) => ["submittal-rounds", pid],
+    families: (pid) => [
+      ["submittal-rounds", pid],
+      ["submittal-rounds"],
+    ],
+  },
+
+  submittal_activity: {
+    primary:  (pid) => ["submittal-activity", pid],
+    families: (pid) => [
+      ["submittal-activity", pid],
+      ["submittal-activity"],
+    ],
+  },
+
   change_request: {
     primary:  (pid) => ["change-requests", pid],
     families: (pid) => [
