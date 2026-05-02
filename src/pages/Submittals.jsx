@@ -15,6 +15,10 @@ import { formatDate } from "../components/shared/formatters";
 import CommentThread from "@/components/collaboration/CommentThread";
 import SubmittalBulkEditModal from "@/components/submittals/SubmittalBulkEditModal";
 import SubmittalBulkAddModal from "@/components/submittals/SubmittalBulkAddModal";
+import RoundTimeline from "@/components/submittals/RoundTimeline";
+import NewRoundModal from "@/components/submittals/NewRoundModal";
+import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
+import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
 import { batchProcess } from "@/utils/batchProcess";
 
 /**
@@ -74,6 +78,8 @@ export default function Submittals() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showNewRound, setShowNewRound] = useState(false);
+  const [showSheetResponse, setShowSheetResponse] = useState(null); // round object or null
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["submittals", projectId],
@@ -96,8 +102,71 @@ export default function Submittals() {
     staleTime: 60_000,
   });
 
+  // ── Rounds for the selected submittal ────────────────────────────
+  const { data: allRounds = [] } = useQuery({
+    queryKey: ["submittal-rounds", projectId],
+    queryFn: () => projectId
+      ? base44.entities.SubmittalRound.filter({ project_id: projectId }, "round_number")
+      : [],
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+  const roundsBySubmittal = useMemo(() => {
+    const map = {};
+    for (const r of allRounds) {
+      if (!map[r.submittal_id]) map[r.submittal_id] = [];
+      map[r.submittal_id].push(r);
+    }
+    for (const arr of Object.values(map)) {
+      arr.sort((a, b) => (a.round_number || 1) - (b.round_number || 1));
+    }
+    return map;
+  }, [allRounds]);
+
+  // ── RFIs for linked-entity picker ────────────────────────────────
+  const { data: allRfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => projectId
+      ? base44.entities.RFI.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // ── Schedule tasks for linked-entity picker ─────────────��────────
+  const { data: allTasks = [] } = useQuery({
+    queryKey: ["schedule-tasks", projectId],
+    queryFn: () => projectId
+      ? base44.entities.ScheduleTask.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // ── Drawings for sheet-response grid ─────────────────────────────
+  const { data: allDrawings = [] } = useQuery({
+    queryKey: ["drawings", projectId],
+    queryFn: () => projectId
+      ? base44.entities.Drawing.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
+
+  // ── Sheet responses for the active round ─────────────────────────
+  const { data: allSheetResponses = [] } = useQuery({
+    queryKey: ["sheet-responses", projectId],
+    queryFn: () => projectId
+      ? base44.entities.SubmittalSheetResponse.filter({ project_id: projectId })
+      : [],
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["submittals", projectId] });
+    qc.invalidateQueries({ queryKey: ["submittal-rounds", projectId] });
+    qc.invalidateQueries({ queryKey: ["sheet-responses", projectId] });
   }, [qc, projectId]);
 
   const createMut = useMutation({
@@ -187,6 +256,76 @@ export default function Submittals() {
       }
     },
     onError: (err) => toast.error(`Bulk add failed: ${err.message}`),
+  });
+
+  // ── Round mutations ───────────────────────────────────────────────
+  const createRoundMut = useMutation({
+    mutationFn: async (data) => {
+      const round = await base44.entities.SubmittalRound.create({
+        ...data,
+        project_id: projectId,
+      });
+      // Update parent submittal
+      if (round?.id && data.submittal_id) {
+        await base44.entities.Submittal.update(data.submittal_id, {
+          current_round_id: round.id,
+          total_rounds: data.round_number || 1,
+          status: "Submitted",
+          ball_in_court: data.ball_in_court || "EOR",
+          submitted_date: data.submitted_date || new Date().toISOString().split("T")[0],
+        });
+      }
+      return round;
+    },
+    onSuccess: () => { invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
+    onError: (err) => toast.error(`Failed to create round: ${err.message}`),
+  });
+
+  const updateRoundMut = useMutation({
+    mutationFn: ({ id, ...data }) => base44.entities.SubmittalRound.update(id, data),
+    onSuccess: () => { invalidate(); toast.success("Round updated"); },
+    onError: (err) => toast.error(`Failed to update round: ${err.message}`),
+  });
+
+  // ── Sheet response mutations ──────────────────────────────────────
+  const saveSheetResponsesMut = useMutation({
+    mutationFn: async ({ roundId, responses }) => {
+      const results = { succeeded: 0, failed: 0 };
+      for (const resp of responses) {
+        try {
+          if (resp.id) {
+            await base44.entities.SubmittalSheetResponse.update(resp.id, {
+              response_status: resp.response_status,
+              reviewer_comment: resp.reviewer_comment || null,
+            });
+          } else {
+            await base44.entities.SubmittalSheetResponse.create({
+              project_id: projectId,
+              submittal_round_id: roundId,
+              drawing_id: resp.drawing_id || null,
+              drawing_set_id: resp.drawing_set_id || null,
+              sheet_number: resp.sheet_number || null,
+              response_status: resp.response_status,
+              reviewer_comment: resp.reviewer_comment || null,
+            });
+          }
+          results.succeeded++;
+        } catch {
+          results.failed++;
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      invalidate();
+      setShowSheetResponse(null);
+      if (results.failed > 0) {
+        toast.warning(`${results.succeeded} saved, ${results.failed} failed`);
+      } else {
+        toast.success(`${results.succeeded} sheet response(s) saved`);
+      }
+    },
+    onError: (err) => toast.error(`Failed to save responses: ${err.message}`),
   });
 
   // ── Filter/search ──────────────────────────────────────────────────
@@ -352,6 +491,9 @@ export default function Submittals() {
           <SubmittalDetail
             submittal={selected}
             drawingSets={drawingSets}
+            rounds={selected ? (roundsBySubmittal[selected.id] || []) : []}
+            allRfis={allRfis}
+            allTasks={allTasks}
             onClose={() => setSelectedId(null)}
             onEdit={() => selected && setEditingId(selected.id)}
             onDelete={() => selected && setToDelete(selected.id)}
@@ -362,6 +504,11 @@ export default function Submittals() {
             // need to round-trip through the modal for trivial fixes
             // like "fix the date" or "rename this submittal".
             onFieldChange={(patch) => selected && updateMut.mutate({ id: selected.id, ...patch })}
+            onNewRound={() => setShowNewRound(true)}
+            onReturnRound={(roundId) => {
+              const round = allRounds.find((r) => r.id === roundId);
+              if (round) setShowSheetResponse(round);
+            }}
           />
         </div>
       </PhoenixPanel>
@@ -436,6 +583,50 @@ export default function Submittals() {
         title={`Delete ${selectedIds.size} submittal${selectedIds.size === 1 ? "" : "s"}`}
         description={`Soft-delete ${selectedIds.size} selected submittal${selectedIds.size === 1 ? "" : "s"}? This cannot be undone from the UI.`}
       />
+
+      {/* New Round modal — creates a new submittal round for the
+          selected submittal. Carries forward drawing sets and
+          increments the round number automatically. */}
+      {showNewRound && selected && (
+        <NewRoundModal
+          open={showNewRound}
+          submittal={selected}
+          previousRound={
+            (roundsBySubmittal[selected.id] || []).length > 0
+              ? (roundsBySubmittal[selected.id] || []).at(-1)
+              : null
+          }
+          onClose={() => setShowNewRound(false)}
+          onSubmit={(data) => createRoundMut.mutate(data)}
+        />
+      )}
+
+      {/* Sheet response grid — per-sheet response entry when a round
+          is returned by the reviewer. Opens when "Mark Returned" is
+          clicked on a timeline node. */}
+      {showSheetResponse && (
+        <Dialog open={!!showSheetResponse} onOpenChange={(o) => !o && setShowSheetResponse(null)}>
+          <DialogContent className="sm:max-w-[900px]" style={{ padding: 0 }}>
+            <SheetResponseGrid
+              round={showSheetResponse}
+              drawings={allDrawings.filter((d) => {
+                const setIds = showSheetResponse.drawing_set_ids || [];
+                return setIds.includes(d.drawing_set_id);
+              })}
+              existingResponses={allSheetResponses.filter(
+                (r) => r.submittal_round_id === showSheetResponse.id
+              )}
+              onSave={(responses) =>
+                saveSheetResponsesMut.mutate({
+                  roundId: showSheetResponse.id,
+                  responses,
+                })
+              }
+              onClose={() => setShowSheetResponse(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -526,7 +717,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
 
 // ── Detail panel ─────────────────────────────────────────────────────
 
-function SubmittalDetail({ submittal, drawingSets = [], onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange }) {
+function SubmittalDetail({ submittal, drawingSets = [], rounds = [], allRfis = [], allTasks = [], onClose, onEdit, onDelete, onStatusChange, onBICChange, onFieldChange, onNewRound, onReturnRound }) {
   // Wrap onFieldChange so a no-op edit (typing the same value back)
   // doesn't fire a network update — small UX nicety, also stops
   // accidental "Updated" toasts when the user just tabs through.
@@ -633,6 +824,38 @@ function SubmittalDetail({ submittal, drawingSets = [], onClose, onEdit, onDelet
           </div>
         </DetailSection>
 
+        {/* Round History — vertical timeline of all submittal rounds
+            with status badges, durations, and BIC. "New Round" creates
+            a fresh resubmission round. */}
+        <DetailSection title={`Round History (${rounds.length})`}>
+          <RoundTimeline
+            rounds={rounds}
+            submittalId={submittal.id}
+            onReturnRound={onReturnRound}
+          />
+          {onNewRound && (
+            <button
+              onClick={onNewRound}
+              style={{
+                marginTop: 8,
+                padding: "6px 14px",
+                borderRadius: 4,
+                background: "var(--accent)",
+                color: "#fff",
+                border: "none",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+                textTransform: "uppercase",
+              }}
+            >
+              + New Round
+            </button>
+          )}
+        </DetailSection>
+
         {/* Meta grid — every cell is inline-editable. Click the value
             (or the dash for an empty field) to turn it into an
             editor; blur or Enter commits, Esc cancels. Saves a round
@@ -702,6 +925,26 @@ function SubmittalDetail({ submittal, drawingSets = [], onClose, onEdit, onDelet
               value={submittal.reviewer}
               onCommit={(v) => patch("reviewer", v)}
             />
+            <EditableMeta
+              label="Received From"
+              value={submittal.received_from}
+              onCommit={(v) => patch("received_from", v)}
+            />
+            <EditableMeta
+              label="Distributed To"
+              value={submittal.distributed_to}
+              onCommit={(v) => patch("distributed_to", v)}
+            />
+            <EditableMeta
+              label="Transmittal #"
+              value={submittal.transmittal_number}
+              onCommit={(v) => patch("transmittal_number", v)}
+            />
+            <EditableMeta
+              label="Days in Review"
+              value={submittal.days_in_review != null ? String(submittal.days_in_review) : ""}
+              onCommit={(v) => patch("days_in_review", v ? parseInt(v, 10) : null)}
+            />
           </div>
         </DetailSection>
 
@@ -714,6 +957,24 @@ function SubmittalDetail({ submittal, drawingSets = [], onClose, onEdit, onDelet
             value={submittal.drawing_set_ids || []}
             allSets={drawingSets}
             onChange={(next) => onFieldChange && onFieldChange({ drawing_set_ids: next })}
+          />
+        </DetailSection>
+
+        {/* Linked RFIs */}
+        <DetailSection title="Linked RFIs">
+          <LinkedRFIs
+            value={submittal.linked_rfi_ids || []}
+            allRfis={allRfis}
+            onChange={(next) => onFieldChange && onFieldChange({ linked_rfi_ids: next })}
+          />
+        </DetailSection>
+
+        {/* Linked Tasks */}
+        <DetailSection title="Linked Tasks">
+          <LinkedTasks
+            value={submittal.linked_task_ids || []}
+            allTasks={allTasks}
+            onChange={(next) => onFieldChange && onFieldChange({ linked_task_ids: next })}
           />
         </DetailSection>
 
