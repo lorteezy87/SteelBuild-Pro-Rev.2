@@ -28,9 +28,9 @@ import React, { useMemo, useState } from "react";
 
 const STATUSES = [
   "Draft", "Submitted", "Under Review", "Approved", "Approved as Noted",
-  "Revise and Resubmit", "Rejected", "Void",
+  "Revise and Resubmit", "Rejected", "Released for Fabrication", "Void",
 ];
-const BIC_CHOICES = ["Contractor", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
+const BIC_CHOICES = ["Contractor", "Detailer", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
 
 // DB CHECK constraint allows only these values for submittal_type (or NULL).
 // Anything else from a pasted CSV produces a 400 from PostgREST, so we clamp

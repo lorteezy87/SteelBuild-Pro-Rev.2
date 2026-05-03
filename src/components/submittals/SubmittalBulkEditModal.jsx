@@ -22,12 +22,12 @@ import React, { useState } from "react";
 
 const STATUSES = [
   "Draft", "Submitted", "Under Review", "Approved", "Approved as Noted",
-  "Revise and Resubmit", "Rejected", "Void",
+  "Revise and Resubmit", "Rejected", "Released for Fabrication", "Void",
 ];
 // Bulk edit's BIC menu is wider than the page-level BIC filter on
 // purpose — Subcontractor is a common reviewer for shop drawings even
 // though it's not a recognized rolling-BIC state on the filter bar.
-const BIC_CHOICES = ["Contractor", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
+const BIC_CHOICES = ["Contractor", "Detailer", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 
 export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit }) {

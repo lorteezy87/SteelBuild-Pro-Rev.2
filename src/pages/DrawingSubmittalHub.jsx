@@ -61,6 +61,7 @@ const STATUS_COLORS = {
   "Approved as Noted":   "#84cc16",
   "Revise and Resubmit": "#f59e0b",
   Rejected:              "#ef4444",
+  "Released for Fabrication": "#0ea5e9",
   Void:                  "#6b7280",
 };
 
@@ -255,7 +256,7 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, byDrawingS
     for (const row of matrixRows) {
       if (!row.latestSubmittal) { noSubmittal++; continue; }
       const st = row.latestSubmittal.status;
-      if (st === "Approved" || st === "Approved as Noted") approved++;
+      if (st === "Approved" || st === "Approved as Noted" || st === "Released for Fabrication") approved++;
       else if (st === "Rejected" || st === "Revise and Resubmit") rejected++;
       else pending++;
     }
@@ -350,7 +351,7 @@ function MatrixRow({ drawingSet, sub, allSubmittals, roundsBySubmittal }) {
   const [expanded, setExpanded] = useState(false);
   const hasMultiple = allSubmittals.length > 1;
   const overdueStyle = sub?.required_date && new Date(sub.required_date) < new Date() &&
-    sub.status !== "Approved" && sub.status !== "Approved as Noted" && sub.status !== "Void"
+    sub.status !== "Approved" && sub.status !== "Approved as Noted" && sub.status !== "Released for Fabrication" && sub.status !== "Void"
     ? { color: error, fontWeight: 700 } : {};
 
   return (
