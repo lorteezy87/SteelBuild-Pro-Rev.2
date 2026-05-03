@@ -28,19 +28,23 @@ import { CommandBar, KpiTile, Button } from "@/components/design-system";
 const DrawingsPage = lazy(() => import("@/pages/Drawings"));
 const SubmittalsPage = lazy(() => import("@/pages/Submittals"));
 
-// ── Tokens ─────────────────────────────────────────────────────────────────
-const accent      = "var(--accent, #3b82f6)";
-const accentMuted = "var(--accent-muted, #1e3a5f)";
-const surface0    = "var(--surface-0, #0a0a0f)";
-const surface1    = "var(--surface-1, #111118)";
-const surface2    = "var(--surface-2, #1a1a24)";
-const border      = "var(--border, #2a2a3a)";
-const textPrimary = "var(--text-primary, #e8e8f0)";
-const textMuted   = "var(--text-muted, #8888a0)";
-const mono        = "var(--font-mono, 'JetBrains Mono', monospace)";
-const success     = "var(--status-success, #10b981)";
-const warning     = "var(--status-warning, #f59e0b)";
-const error       = "var(--status-error, #ef4444)";
+// ── Design-system tokens ──────────────────────────────────────────────────
+// Use the SAME CSS custom-property names as the rest of the app (Submittals,
+// Drawings, RFIs, etc.). Previous version referenced nonexistent vars
+// (--surface-0, --border) with dark hardcoded fallbacks, which made the
+// Approval Matrix unreadable.
+const accent      = "var(--accent)";
+const accentMuted = "var(--accent-muted)";
+const surface0    = "var(--bg-surface)";
+const surface1    = "var(--bg-surface-low)";
+const surface2    = "var(--bg-surface-high)";
+const border      = "var(--border-default)";
+const textPrimary = "var(--text-primary)";
+const textMuted   = "var(--text-muted)";
+const mono        = "var(--font-mono)";
+const success     = "var(--status-success)";
+const warning     = "var(--status-warning)";
+const error       = "var(--status-error)";
 
 const TABS = [
   { key: "drawings",   label: "Drawing Register" },

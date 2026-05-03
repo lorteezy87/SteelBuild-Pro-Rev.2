@@ -61,7 +61,6 @@ export const ALL_MODULES = [
   { icon: "\u25C8", name: "Drawing Analysis (AI)",    group: "Detailing",     page: "DrawingAnalysis" },
   { icon: "\u25B3", name: "3D Model Viewer",          group: "Detailing",     page: "ModelViewer" },
   { icon: "\u2691", name: "RFI Hub",                  group: "Comms",         page: "RFIs" },
-  { icon: "\ud83d\udcc4", name: "Submittal Register",  group: "Comms",         page: "Submittals" },
   { icon: "\uD83D\uDCDD", name: "Production Notes",   group: "Comms",         page: "ProductionNotes" },
   { icon: "\uD83D\uDC65", name: "Meetings",           group: "Comms",         page: "Meetings" },
   { icon: "\u2713", name: "Action Items",             group: "Comms",         page: "ActionItems" },
@@ -183,7 +182,6 @@ export const NAV_GROUPS = [
       { label: "Project Calendar", icon: "📅", page: "ProjectCalendar" },
       { label: "Gantt Schedule",  icon: "\u25A5", page: "Schedule" },
       { label: "Resource Board",  icon: "\uD83D\uDC65", page: "ResourceManagement" },
-      { label: "Weekly Look-Ahead", icon: "\uD83D\uDCC5", page: "LookAheadSchedule" },
     ],
   },
   {
@@ -248,7 +246,6 @@ export const SIDEBAR_GROUPS = [
       { label: "Schedule",       icon: "\u25A5", page: "Schedule" },
       { label: "Action Items",   icon: "\u2611", page: "ActionItems" },
       { label: "RFIs",                icon: "\u2691", page: "RFIs" },
-      { label: "Submittal Register", icon: "\ud83d\udcc4", page: "Submittals" },
       { label: "Change Orders",  icon: "$",  page: "ChangeOrders" },
       { label: "Mitigations",    icon: "\u2696", page: "Mitigations" },
       { label: "Meetings",       icon: "\uD83D\uDC65", page: "Meetings" },
