@@ -120,6 +120,23 @@ function isUncoloredMaterial(mat) {
   return spread < GREY_THRESHOLD;
 }
 
+// Apply default steel-blue color to any mesh whose material is uncolored
+// (near-black, near-white, or pure grey). Called during model load before
+// status-based coloring so the baseline isn't white/black ghosts.
+function applyDefaultSteelColor(root) {
+  if (!root) return;
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      if (mat && isUncoloredMaterial(mat)) {
+        mat.color.copy(DEFAULT_STEEL_COLOR);
+        mat.needsUpdate = true;
+      }
+    }
+  });
+}
+
 function applyStatusBasedColor(root, workPackages, currentMembers = []) {
   root.traverse((child) => {
     if (!child.isMesh) return;
