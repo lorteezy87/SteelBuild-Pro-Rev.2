@@ -9,10 +9,7 @@ import {
   usesStageDates,
   getActiveStage,
 } from "@/lib/stageDates";
-import {
-  parseDependencies,
-  computeEffectiveDates,
-} from "@/services/scheduleCascade";
+import { computeEffectiveDates } from "@/services/scheduleCascade";
 import {
   MIN_YEAR,
   MAX_YEAR,
@@ -21,6 +18,7 @@ import {
   calcDuration,
 } from "./scheduleDateUtils";
 import { buildTreeOrder } from "./scheduleTree";
+import { parseDeps } from "./scheduleDependencies";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 const PHASES = [
@@ -41,17 +39,6 @@ function normalizePhase(task) {
 }
 
 const PHASE_BY_KEY = Object.fromEntries(PHASES.map(p => [p.key, p]));
-
-// ── Dependency parsing ───────────────────────────────────────────────────
-// Local helper that flattens predecessor IDs out of the new link-object
-// shape `{ id, type, lag_days }`. Arrow rendering and the dependency
-// label below only care about the predecessor ID, not the link type or
-// lag — those are handled by the shared cascade utility. parseDependencies
-// also accepts the legacy id-string array shape, so this stays
-// back-compat through a partial deploy.
-function parseDeps(raw) {
-  return parseDependencies(raw).map((l) => l.id);
-}
 
 // ── Display helpers ──────────────────────────────────────────────────────
 // Tasks marked Complete should always read as 100% in the UI even if the
