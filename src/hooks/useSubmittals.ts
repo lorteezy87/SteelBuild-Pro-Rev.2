@@ -41,6 +41,7 @@ export const SUBMITTAL_STATUSES = [
   "Approved as Noted",
   "Revise and Resubmit",
   "Rejected",
+  "Released for Fabrication",
   "Void",
 ] as const;
 
@@ -54,6 +55,7 @@ export const OPEN_STATUSES = new Set([
 export const TERMINAL_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
+  "Released for Fabrication",
   "Void",
 ]);
 
@@ -157,7 +159,7 @@ export function useSubmittals(projectId: string | null | undefined) {
       (s) => s.status === "Submitted" || s.status === "Under Review"
     ).length;
     const approved = submittals.filter(
-      (s) => s.status === "Approved" || s.status === "Approved as Noted"
+      (s) => s.status === "Approved" || s.status === "Approved as Noted" || s.status === "Released for Fabrication"
     ).length;
     const rejected = submittals.filter(
       (s) => s.status === "Rejected" || s.status === "Revise and Resubmit"

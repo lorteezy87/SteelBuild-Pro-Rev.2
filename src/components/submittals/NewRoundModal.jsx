@@ -20,7 +20,7 @@ import { toast } from "sonner";
  *   onSubmit      — callback(roundData) with the new round payload
  */
 
-const BIC_CHOICES = ["Contractor", "EOR", "Architect", "GC", "Owner"];
+const BIC_CHOICES = ["Contractor", "Detailer", "EOR", "Architect", "GC", "Owner"];
 
 function todayISO() {
   const d = new Date();

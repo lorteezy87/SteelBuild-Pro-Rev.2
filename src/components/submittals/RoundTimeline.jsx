@@ -24,6 +24,7 @@ const ROUND_STATUS_COLORS = {
   "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.18)"  },
   "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.18)"  },
   "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.18)"   },
+  "Released for Fabrication": { color: "#0EA5E9", bg: "rgba(14,165,233,0.18)" },
   "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" },
 };
 const DEFAULT_COLOR = { color: "#64748B", bg: "rgba(100,116,139,0.16)" };

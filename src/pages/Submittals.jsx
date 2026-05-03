@@ -36,12 +36,12 @@ import { batchProcess } from "@/utils/batchProcess";
 
 const STATUSES = [
   "Draft","Submitted","Under Review","Approved","Approved as Noted",
-  "Revise and Resubmit","Rejected","Void",
+  "Revise and Resubmit","Rejected","Released for Fabrication","Void",
 ];
 
 const TYPES = ["Shop Drawing","Product Data","Sample","Mock-up","Calculation","Other"];
 
-const BIC_CHOICES = ["Contractor","EOR","Architect","GC","Owner"];
+const BIC_CHOICES = ["Contractor","Detailer","EOR","Architect","GC","Owner"];
 
 // One-color-per-status palette so adjacent statuses don't blur into
 // each other. Earlier scheme collapsed eight statuses onto four
@@ -56,6 +56,7 @@ const STATUS_CFG = {
   "Approved as Noted":   { color: "#84CC16", bg: "rgba(132,204,22,0.18)"  }, // lime — yellow-green, related to Approved
   "Revise and Resubmit": { color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange — action, warm
   "Rejected":            { color: "#DC2626", bg: "rgba(220,38,38,0.18)"   }, // red — failure
+  "Released for Fabrication": { color: "#0EA5E9", bg: "rgba(14,165,233,0.18)" }, // sky blue — past approval, into production
   "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" }, // cool gray — distinct from Draft slate
 };
 
@@ -351,7 +352,7 @@ export default function Submittals() {
     const rejected = rows.filter((r) => ["Rejected","Revise and Resubmit"].includes(r.status)).length;
     const overdue = rows.filter((r) => {
       if (!r.required_date) return false;
-      if (["Approved","Approved as Noted","Void"].includes(r.status)) return false;
+      if (["Approved","Approved as Noted","Released for Fabrication","Void"].includes(r.status)) return false;
       return daysUntil(r.required_date) < 0;
     }).length;
     return { total, pending, approved, rejected, overdue };
@@ -637,7 +638,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
   const cfg = STATUS_CFG[row.status] || STATUS_CFG.Draft;
   const overdue =
     row.required_date &&
-    !["Approved","Approved as Noted","Void"].includes(row.status) &&
+    !["Approved","Approved as Noted","Released for Fabrication","Void"].includes(row.status) &&
     daysUntil(row.required_date) < 0;
 
   // The list is dense — give each row a status-tinted left rail and a
@@ -738,7 +739,7 @@ function SubmittalDetail({ submittal, drawingSets = [], rounds = [], allRfis = [
   const cfg = STATUS_CFG[submittal.status] || STATUS_CFG.Draft;
   const overdue =
     submittal.required_date &&
-    !["Approved","Approved as Noted","Void"].includes(submittal.status) &&
+    !["Approved","Approved as Noted","Released for Fabrication","Void"].includes(submittal.status) &&
     daysUntil(submittal.required_date) < 0;
 
   return (
