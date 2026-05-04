@@ -107,7 +107,13 @@ export function useMarkup({ drawingId, initialMarkup }) {
   }, [scheduleSave]);
 
   const addItem = useCallback((item) => {
-    mutate((prev) => [...prev, item]);
+    // Default status to "open" so the resolution-status filter has a
+    // value to match against. Notes lean on this to render a status
+    // pill; other kinds carry the field as inert metadata.
+    const withDefaults = item && item.status === undefined
+      ? { ...item, status: "open" }
+      : item;
+    mutate((prev) => [...prev, withDefaults]);
   }, [mutate]);
 
   const removeItem = useCallback((id) => {
