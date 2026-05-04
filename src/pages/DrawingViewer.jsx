@@ -30,6 +30,7 @@ import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
 import { listZoneProposals } from "@/lib/drawingHub";
 import { STAGES, mono, toolBtn, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
+import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
 import {
   ensureCurrentRevision,
   listZones,
@@ -103,21 +104,10 @@ export default function DrawingViewer() {
   const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
 
   // ── Load all drawings for this project ──────────────────────────────────────
-  const { data: drawings = [] } = useQuery({
-    queryKey: ["drawings", projectId],
-    queryFn: () => projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
-    enabled: !!projectId,
-    staleTime: 30000,
-  });
-
-  const filtered = search.trim()
-    ? drawings.filter(d =>
-        d.sheet_number?.toLowerCase().includes(search.toLowerCase()) ||
-        d.title?.toLowerCase().includes(search.toLowerCase())
-      )
-    : drawings;
-
-  const activeDrawing = drawings.find(d => d.id === activeId);
+  // useDrawingsList encapsulates the project drawings query, the search
+  // filter, and the active-drawing lookup. activeIndex (used below by the
+  // keyboard shortcuts effect) also lives in there.
+  const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
   const markupScale = activeDrawing?.markup_scale || null;
 
   const qc = useQueryClient();
@@ -228,8 +218,6 @@ export default function DrawingViewer() {
 
     return () => { cancelled = true; };
   }, [pdfDoc, activeDrawing?.id, activeDrawing?.markup_scale, projectId, qc]);
-
-  const activeIndex = filtered.findIndex(d => d.id === activeId);
 
   // Markup hook is intentionally placed after activeDrawing so we can pass
   // its initial array in — Tier 3 persists drawing markup in drawings.markup.
