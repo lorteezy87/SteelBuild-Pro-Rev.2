@@ -12,6 +12,7 @@ import * as pdfjsLib from "pdfjs-dist";
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
+import ExportMarkupPDFModal from "@/components/drawings/ExportMarkupPDFModal";
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
 import ThumbnailFilmstrip from "@/components/drawings/viewer/ThumbnailFilmstrip";
@@ -82,6 +83,8 @@ export default function DrawingViewer() {
   // any note item whose status is "addressed" or "rejected" — useful for
   // a reviewer who wants to see only what's still outstanding.
   const [hideResolved, setHideResolved] = useState(false);
+  // Sprint 4 — markup PDF export modal trigger.
+  const [exportMarkupOpen, setExportMarkupOpen] = useState(false);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   // useDrawingsList encapsulates the project drawings query, the search
@@ -979,6 +982,32 @@ export default function DrawingViewer() {
           setSelectedZoneId(null);
           setActiveId(drawingId);
         }}
+      />
+
+      {/* ── Sprint 4: Export markup PDF (floating top-right trigger) ──── */}
+      {activeDrawing && (
+        <button
+          type="button"
+          onClick={() => setExportMarkupOpen(true)}
+          title="Export markup summary PDF"
+          style={{
+            position: "fixed", top: 12, right: 16, zIndex: 50,
+            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+            letterSpacing: "0.12em", padding: "6px 12px", borderRadius: 4,
+            background: "rgba(200,155,32,0.18)", border: "1px solid var(--accent)",
+            color: "var(--accent)", cursor: "pointer", textTransform: "uppercase",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          ↓ EXPORT MARKUPS
+        </button>
+      )}
+      <ExportMarkupPDFModal
+        open={exportMarkupOpen}
+        onClose={() => setExportMarkupOpen(false)}
+        project={activeProject}
+        activeDrawing={activeDrawing}
+        drawings={drawings}
       />
     </div>
   );
