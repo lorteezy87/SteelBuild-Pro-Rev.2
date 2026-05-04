@@ -106,7 +106,10 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     )
   );
 
-  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "FFF", "BFS", "Approved"];
+  // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
+  // (migration 077): OFS, IFC, Released. "Approved" string kept for any
+  // legacy submittal-shape data flowing through here.
+  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "OFS", "Approved", "Approved as Noted"];
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
   const hasProjectSelected = !!form.project_id;
   const projectDrawingCount = projectDrawings.length;

@@ -5,29 +5,54 @@
  * chevrons, KPI tiles, and group-header badges.
  *
  * No React, no Supabase, no side effects. All inputs are plain JS
- * objects, all outputs are strings or numbers. Lives next to
- * submittalAnalytics.js so the Drawings page can read display-only
- * workflow state without touching the .ts hook.
+ * objects, all outputs are strings or numbers.
  *
- * Canonical mapping (kept in sync with
- * `submittalPipelineRollupFromSubmittals` in projectMetrics.js):
+ * ── Canonical 7-stage detailing/submittal flow (corrected May 2026) ──
  *
- *   Not Started  → no submittal exists yet (or status === "Draft" with
- *                  no other signal)
- *   OFA          → Submitted / Under Review · BIC = EOR
- *   BFA          → Revise and Resubmit / Rejected
- *   OFS          → Submitted / Under Review · BIC = anyone other than
- *                  EOR (typically GC / Owner during in-house QA)
- *   BFS          → Approved as Noted
- *   FFF (IFC)    → Approved · no approved_date yet
- *   Released     → Released for Fabrication, OR Approved with an
- *                  approved_date set
+ *   Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
+ *                                    ↑
+ *                                    └─ R&R (Revise & Resubmit) loops
+ *                                       back to IFA. R&R is an OUTCOME
+ *                                       status on a submittal, not a
+ *                                       stage — it's surfaced via the
+ *                                       UI as a "Restart cycle" badge
+ *                                       and rolled up as IFA in counts.
  *
- * Void submittals are explicitly NOT mapped — they're terminal-dead
- * and shouldn't drive stage display.
+ * Stage glossary:
+ *   IFA = In For Approval         (internal prep — detailer → S&H → GC,
+ *                                  before going to EOR)
+ *   OFA = Out For Approval        (submitted to EOR / AOR)
+ *   BFA = Back From Approval      (returned with AAN / Approved / R&R)
+ *   OFS = Out For Scrub           (post-approval cleanup; detailer
+ *                                  addressing EOR's comments)
+ *   IFC = Issued For Construction (S&H sends record copy to GC)
+ *   Released                      (S&H internal release to fab shop)
+ *
+ * Mapping uses (status, ball_in_court) — no schema migration needed:
+ *
+ *   Status                          | BIC (Detailer-class)  → IFA / OFS
+ *                                   | BIC (Approver-class)  → OFA / BFA
+ *                                   | BIC (Downstream-class)→ OFA / IFC
+ *
+ *   Draft                           | (any)                  → IFA
+ *   Submitted / Under Review        | Detailer / S&H / Contractor → IFA
+ *                                   | EOR / Architect / AOR /
+ *                                     GC / Owner            → OFA
+ *   Approved / Approved as Noted    | EOR / Architect / AOR  → BFA
+ *                                   | Detailer / S&H / Contractor → OFS
+ *                                   | GC / Owner             → IFC
+ *   Revise and Resubmit / Rejected  | (any)                  → IFA
+ *                                                              (R&R loop)
+ *   Released for Fabrication        | (any)                  → Released
+ *   Void                            | (any)                  → null (skip)
  */
 
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+
+/** BIC discriminator classes — used to split status buckets by ownership. */
+const DETAILER_CLASS_BIC = new Set(["Detailer", "S&H", "Contractor"]);
+const APPROVER_CLASS_BIC = new Set(["EOR", "Architect", "AOR"]);
+const DOWNSTREAM_CLASS_BIC = new Set(["GC", "Owner"]);
 
 /** Match the .ts hook's terminal set so we never disagree on "open". */
 const TERMINAL_STATUSES = new Set([
@@ -37,28 +62,54 @@ const TERMINAL_STATUSES = new Set([
   "Void",
 ]);
 
+/** Statuses that represent an R&R (loop-back) outcome. */
+const RR_STATUSES = new Set(["Revise and Resubmit", "Rejected"]);
+
 /**
  * Map a single submittal's (status, ball_in_court, approved_date) to a
  * canonical drawing stage. Returns one of STAGE_ORDER, or null when the
- * submittal carries no usable signal (e.g. status === "Void", or an
+ * submittal carries no usable signal (e.g. status === "Void" or an
  * unrecognised status string).
+ *
+ * R&R outcomes (Revise and Resubmit / Rejected) are mapped to IFA — the
+ * cycle restarts back at internal prep. Callers that care about
+ * surfacing R&R as its own UI badge should use `isRRStatus(status)`
+ * alongside this function.
  *
  * @param {string|null|undefined} status
  * @param {string|null|undefined} ball_in_court
- * @param {string|null|undefined} approved_date — ISO date or null
+ * @param {string|null|undefined} approved_date — ISO date or null (unused
+ *   today; reserved for future OFS/IFC distinction by date-stamped events)
  * @returns {string|null}
  */
+// eslint-disable-next-line no-unused-vars
 export function submittalStatusToStage(status, ball_in_court, approved_date) {
   if (!status) return null;
   if (status === "Void") return null;
   if (status === "Released for Fabrication") return "Released";
-  if (status === "Approved") return approved_date ? "Released" : "FFF";
-  if (status === "Approved as Noted") return "BFS";
-  if (status === "Revise and Resubmit" || status === "Rejected") return "BFA";
-  if (status === "Submitted" || status === "Under Review") {
-    return ball_in_court === "EOR" ? "OFA" : "OFS";
+
+  // R&R loops back to IFA. Surface separately via isRRStatus() if you
+  // want a dedicated badge.
+  if (RR_STATUSES.has(status)) return "IFA";
+
+  if (status === "Approved" || status === "Approved as Noted") {
+    if (APPROVER_CLASS_BIC.has(ball_in_court)) return "BFA";
+    if (DETAILER_CLASS_BIC.has(ball_in_court)) return "OFS";
+    if (DOWNSTREAM_CLASS_BIC.has(ball_in_court)) return "IFC";
+    // BIC missing/unknown — default to BFA (just-returned, not yet
+    // routed onward). Better than guessing OFS or IFC and being wrong.
+    return "BFA";
   }
-  if (status === "Draft") return "Not Started";
+
+  if (status === "Submitted" || status === "Under Review") {
+    if (DETAILER_CLASS_BIC.has(ball_in_court)) return "IFA";
+    // EOR / Architect / AOR / GC / Owner / unknown → OFA (default
+    // outbound; matches the flow where Detailer→S&H→GC→EOR all happen
+    // while the submittal is "Submitted").
+    return "OFA";
+  }
+
+  if (status === "Draft") return "IFA";
   return null;
 }
 
@@ -72,29 +123,32 @@ export function submittalStatusToStage(status, ball_in_court, approved_date) {
  * stages.
  *
  * @param {string} stage
- * @returns {{ status: string, ball_in_court: string|null, approved_date_required: boolean }|null}
+ * @returns {{ status: string, ball_in_court: string|null }|null}
  */
 export function stageToSubmittalStatus(stage) {
   switch (stage) {
     case "Not Started":
-      // Caller decides: leave the set without a submittal, or create a
-      // Draft. We return Draft so callers that want a row get one.
-      return { status: "Draft", ball_in_court: "EOR", approved_date_required: false };
+      return null; // no submittal yet
+    case "IFA":
+      return { status: "Draft",                     ball_in_court: "Detailer" };
     case "OFA":
-      return { status: "Submitted",          ball_in_court: "EOR",      approved_date_required: false };
+      return { status: "Submitted",                 ball_in_court: "EOR" };
     case "BFA":
-      return { status: "Revise and Resubmit", ball_in_court: "Detailer", approved_date_required: false };
+      return { status: "Approved as Noted",         ball_in_court: "EOR" };
     case "OFS":
-      return { status: "Submitted",          ball_in_court: "GC",       approved_date_required: false };
-    case "BFS":
-      return { status: "Approved as Noted",  ball_in_court: "Detailer", approved_date_required: false };
-    case "FFF":
-      return { status: "Approved",           ball_in_court: null,       approved_date_required: false };
+      return { status: "Approved as Noted",         ball_in_court: "Detailer" };
+    case "IFC":
+      return { status: "Approved",                  ball_in_court: "GC" };
     case "Released":
-      return { status: "Released for Fabrication", ball_in_court: null, approved_date_required: false };
+      return { status: "Released for Fabrication",  ball_in_court: null };
     default:
       return null;
   }
+}
+
+/** True if a status represents an R&R (revise & resubmit) outcome. */
+export function isRRStatus(status) {
+  return RR_STATUSES.has(status);
 }
 
 /**
@@ -103,11 +157,10 @@ export function stageToSubmittalStatus(stage) {
  *   2. updated_at (desc)
  *   3. round_number (desc)
  *
- * `null` returns the same sentinel as an empty list.
+ * Returns null on empty / null input.
  */
 export function pickMostRecentSubmittal(submittals) {
   if (!Array.isArray(submittals) || submittals.length === 0) return null;
-  // Filter soft-deletes before sorting.
   const active = submittals.filter((s) => s && !s.is_deleted);
   if (active.length === 0) return null;
   const sorted = active.slice().sort((a, b) => {
@@ -144,9 +197,6 @@ export function pickMostRecentSubmittal(submittals) {
  * @returns {string} one of STAGE_ORDER
  */
 export function derivedSetStage(submittalsForSet, sheetsForSet = []) {
-  // Filter out Voided/unmapped submittals before picking the most-recent
-  // one — otherwise a stray Void at the top of the sort hides the
-  // active workflow status.
   const usable = (Array.isArray(submittalsForSet) ? submittalsForSet : []).filter((s) => {
     if (!s || s.is_deleted) return false;
     return submittalStatusToStage(s.status, s.ball_in_court, s.approved_date) !== null;
@@ -160,7 +210,6 @@ export function derivedSetStage(submittalsForSet, sheetsForSet = []) {
     );
     if (stage) return stage;
   }
-  // Fallback — dominant stage across the set's sheets.
   if (Array.isArray(sheetsForSet) && sheetsForSet.length > 0) {
     return dominantStage(sheetsForSet.map((s) => s?.stage));
   }
@@ -171,9 +220,6 @@ export function derivedSetStage(submittalsForSet, sheetsForSet = []) {
  * Pick the dominant (most-common, ties → earliest in canonical order)
  * stage from a list of stage strings. Unknown / falsy entries are
  * dropped. Returns "Not Started" when the list is empty.
- *
- * Mirrors the `pickDominantStage` helper in projectMetrics.js but
- * exported so the new mapping module is self-contained.
  *
  * @param {Array<string|null|undefined>} stages
  */
@@ -198,13 +244,13 @@ export function dominantStage(stages) {
 }
 
 /**
- * Convenience: return whether a set's submittal-derived stage is in the
- * "active workflow" range (anything between OFA and BFS inclusive).
- * Used by the IN REVIEW KPI tile when the page wants to count packages
- * by submittal status rather than sheet.stage.
+ * Convenience: returns true when a stage is in the "active workflow"
+ * range (anything that has left Not Started but isn't terminal).
+ * Single source of truth shared with IN_REVIEW_STAGES in drawingsConfig.
  */
 export function isStageInReview(stage) {
-  return stage === "OFA" || stage === "BFA" || stage === "OFS" || stage === "BFS" || stage === "FFF";
+  return stage === "IFA" || stage === "OFA" || stage === "BFA" ||
+         stage === "OFS" || stage === "IFC";
 }
 
 /** Re-export for tests / consumers that want the open/closed split. */

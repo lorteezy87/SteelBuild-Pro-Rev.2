@@ -487,12 +487,12 @@ export function rfiStatusRollup(rfis = []) {
 
 /**
  * Submittal pipeline rollup — 6 detailing-stage buckets:
- *   OFA = Out For Approval     · with EOR/Architect
- *   BFA = Back From Approval   · returned, needs revision
- *   OFS = Out For Scrub        · in-house QA review
- *   BFS = Back From Scrub      · QA returned, ready for next round
- *   FFF = Final For Fab        · approved as noted, ready
- *   Released = Released for Fabrication
+ *   IFA = In For Approval         · internal prep
+ *   OFA = Out For Approval        · with EOR/Architect/AOR
+ *   BFA = Back From Approval      · returned with verdict
+ *   OFS = Out For Scrub           · post-approval cleanup (detailer)
+ *   IFC = Issued For Construction · record copy to GC
+ *   Released                      · S&H internal release to fab shop
  *
  * Workflow source of truth is the `submittals` table (Sprint 1+).
  * This rollup derives display stages from `status` + `ball_in_court`.
@@ -505,7 +505,9 @@ export function rfiStatusRollup(rfis = []) {
  * @deprecated for drawing-shaped input — read submittals instead.
  */
 export function submittalPipelineRollup(rows = []) {
-  const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+  // Canonical 7-stage flow (corrected May 2026): IFA → OFA → BFA → OFS
+  // → IFC → Released. Mapping kept in sync with submittalStageMapping.js.
+  const stages = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
 
   // 1. If any rows look like drawings (have drawing_set_id), bucket
@@ -544,22 +546,30 @@ export function submittalPipelineRollup(rows = []) {
       counts[explicit]++;
       continue;
     }
-    // c) legacy submittals fallback — derive from status + ball_in_court
-    //
-    // Polarity convention (matches src/lib/submittalStageMapping.js):
-    //   bic in [EOR, Architect]  → OFA (Out For Approval — going to the
-    //                              approver who can stamp the drawing)
-    //   bic in [GC, Owner]       → OFS (Out For Shop — going downstream
-    //                              after EOR approval)
-    //   bic missing / Detailer / Contractor → OFA (default upstream review)
+    // c) legacy submittals fallback — derive from status + ball_in_court.
+    //    BIC discriminator classes (synced with submittalStageMapping.js):
+    //      Detailer-class:  Detailer / S&H / Contractor
+    //      Approver-class:  EOR / Architect / AOR
+    //      Downstream-class: GC / Owner
     const status = r?.status;
     const bic    = r?.ball_in_court;
-    if (status === "Approved" && r?.approved_date) counts["Released"]++;
-    else if (status === "Approved") counts["FFF"]++;
-    else if (status === "Approved as Noted") counts["BFS"]++;
-    else if (status === "Revise and Resubmit" || status === "Rejected") counts["BFA"]++;
-    else if ((status === "Submitted" || status === "Under Review") && (bic === "GC" || bic === "Owner")) counts["OFS"]++;
-    else if (status === "Submitted" || status === "Under Review" || status === "Draft") counts["OFA"]++;
+    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor";
+    const isApproverClass  = bic === "EOR" || bic === "Architect" || bic === "AOR";
+    const isDownstreamClass = bic === "GC" || bic === "Owner";
+
+    if (status === "Released for Fabrication") counts["Released"]++;
+    else if (status === "Approved" || status === "Approved as Noted") {
+      if (isApproverClass)        counts["BFA"]++;
+      else if (isDetailerClass)   counts["OFS"]++;
+      else if (isDownstreamClass) counts["IFC"]++;
+      else                        counts["BFA"]++; // unknown bic → just-returned
+    }
+    else if (status === "Revise and Resubmit" || status === "Rejected") counts["IFA"]++; // R&R loops back
+    else if (status === "Submitted" || status === "Under Review") {
+      if (isDetailerClass) counts["IFA"]++;
+      else                 counts["OFA"]++;
+    }
+    else if (status === "Draft") counts["IFA"]++;
     // Void / unknown → skipped.
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -581,20 +591,35 @@ export function submittalPipelineRollup(rows = []) {
  * and not part of the active pipeline).
  */
 export function submittalPipelineRollupFromSubmittals(submittals = []) {
-  const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+  // Canonical 7-stage flow (corrected May 2026). Mapping is kept in
+  // sync with src/lib/submittalStageMapping.js — submittalStatusToStage
+  // is the single source of truth; this function reproduces it inline
+  // to avoid an import cycle (projectMetrics.js is consumed at module
+  // init by dashboard rollups).
+  const stages = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
   const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
   for (const r of submittals) {
     if (!r || r.is_deleted) continue;
     const status = r?.status;
     if (!status || status === "Void") continue;
     const bic = r?.ball_in_court;
+    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor";
+    const isApproverClass  = bic === "EOR" || bic === "Architect" || bic === "AOR";
+    const isDownstreamClass = bic === "GC" || bic === "Owner";
+
     if (status === "Released for Fabrication") counts["Released"]++;
-    else if (status === "Approved" && r?.approved_date) counts["Released"]++;
-    else if (status === "Approved") counts["FFF"]++;
-    else if (status === "Approved as Noted") counts["BFS"]++;
-    else if (status === "Revise and Resubmit" || status === "Rejected") counts["BFA"]++;
-    else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") counts["OFS"]++;
-    else if (status === "Submitted" || status === "Under Review" || status === "Draft") counts["OFA"]++;
+    else if (status === "Approved" || status === "Approved as Noted") {
+      if (isApproverClass)        counts["BFA"]++;
+      else if (isDetailerClass)   counts["OFS"]++;
+      else if (isDownstreamClass) counts["IFC"]++;
+      else                        counts["BFA"]++; // unknown bic
+    }
+    else if (status === "Revise and Resubmit" || status === "Rejected") counts["IFA"]++; // R&R loop
+    else if (status === "Submitted" || status === "Under Review") {
+      if (isDetailerClass) counts["IFA"]++;
+      else                 counts["OFA"]++;
+    }
+    else if (status === "Draft") counts["IFA"]++;
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { stages, counts, total };

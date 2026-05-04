@@ -106,8 +106,9 @@ export default function DrawingSubmittalHub() {
   const drawingKpis = useMemo(() => {
     const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
     const released = active.filter((d) => d.stage === "Released").length;
+    // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
     const inReview = active.filter((d) =>
-      ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)
+      ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage)
     ).length;
     const overdueDrawings = active.filter((d) => {
       if (!d.due_date || d.stage === "Released") return false;

@@ -69,15 +69,16 @@ export const BIC_COLOR = {
   Owner:      "#22C55E",
 };
 
-/** Drawing-stage ordering + per-stage tint. */
+/** Drawing-stage ordering + per-stage tint. Corrected 7-stage flow
+ *  (migration 077): Not Started → IFA → OFA → BFA → OFS → IFC → Released. */
 export const DRAWING_STAGES = [
   { id: "Not Started", label: "NOT STARTED", color: "var(--text-muted)"     },
-  { id: "OFA",         label: "OFA",         color: "#58A6FF"               },
-  { id: "BFA",         label: "BFA",         color: "#3B82F6"               },
-  { id: "OFS",         label: "OFS",         color: "#E3B341"               },
-  { id: "BFS",         label: "BFS",         color: "#FF8C42"               },
-  { id: "FFF",         label: "FFF",         color: "#22C55E"               },
-  { id: "Released",    label: "RELEASED",    color: "var(--status-success)" },
+  { id: "IFA",         label: "IFA",         color: "#60A5FA"               }, // sky
+  { id: "OFA",         label: "OFA",         color: "#2563EB"               }, // blue
+  { id: "BFA",         label: "BFA",         color: "#FBBF24"               }, // amber
+  { id: "OFS",         label: "OFS",         color: "#F97316"               }, // orange
+  { id: "IFC",         label: "IFC",         color: "#34D399"               }, // mint
+  { id: "Released",    label: "RELEASED",    color: "var(--status-success)" }, // emerald
 ];
 
 /** Small utility: convert #RRGGBB → rgb triplet. */
