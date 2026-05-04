@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { X, FileText, AlertTriangle, Link2, Layers } from "lucide-react";
+import SignoffStampPanel from "@/components/drawings/SignoffStampPanel";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -33,6 +34,8 @@ export default function ContextPanel({
   allDrawings,
   onSelect,
   onClose,
+  drawingRevisionId,
+  isSetLocked = false,
 }) {
   const navigate = useNavigate();
 
@@ -145,6 +148,17 @@ export default function ContextPanel({
           <MetaRow label="Approved"      value={activeDrawing.approved_date} />
           <MetaRow label="Set"           value={activeDrawing.drawing_set_name} />
         </Section>
+
+        {/* Sign-offs (migration 072) — append-only review stamps. */}
+        {drawingRevisionId && (
+          <SignoffStampPanel
+            projectId={projectId}
+            drawingId={activeDrawing.id}
+            drawingRevisionId={drawingRevisionId}
+            isLocked={isSetLocked}
+            compact
+          />
+        )}
 
         {/* Linked RFIs */}
         <Section
