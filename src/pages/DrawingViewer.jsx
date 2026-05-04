@@ -78,6 +78,10 @@ export default function DrawingViewer() {
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
   const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
+  // Resolution-status filter (3a). When true, the AnnotationLayer hides
+  // any note item whose status is "addressed" or "rejected" — useful for
+  // a reviewer who wants to see only what's still outstanding.
+  const [hideResolved, setHideResolved] = useState(false);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   // useDrawingsList encapsulates the project drawings query, the search
@@ -596,20 +600,50 @@ export default function DrawingViewer() {
               content. Stays visible no matter how far the user pans the
               sheet. Only shown when we actually have a drawing to mark up. */}
           {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
-            <AnnotationToolbar
-              activeTool={activeTool}
-              onToolChange={setActiveTool}
-              activeColor={activeColor}
-              onColorChange={setActiveColor}
-              markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
-              onClearPage={() => {
-                markup.items
-                  .filter((m) => (m.pdf_page || 1) === currentPage)
-                  .forEach((m) => markup.removeItem(m.id));
-              }}
-              saving={markup.saving}
-              saveError={markup.saveError}
-            />
+            <>
+              <AnnotationToolbar
+                activeTool={activeTool}
+                onToolChange={setActiveTool}
+                activeColor={activeColor}
+                onColorChange={setActiveColor}
+                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+                onClearPage={() => {
+                  markup.items
+                    .filter((m) => (m.pdf_page || 1) === currentPage)
+                    .forEach((m) => markup.removeItem(m.id));
+                }}
+                saving={markup.saving}
+                saveError={markup.saveError}
+              />
+              {/* Resolution-status filter chip (3a). Only meaningful when
+                  there's at least one note on the page. */}
+              {markup.items.some((m) => m.kind === "note" && (m.pdf_page || 1) === currentPage) && (
+                <button
+                  type="button"
+                  onClick={() => setHideResolved((v) => !v)}
+                  title={hideResolved ? "Showing only unresolved notes — click to show all" : "Hide resolved (addressed/rejected) notes"}
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: 540,
+                    zIndex: 10,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    padding: "5px 10px",
+                    borderRadius: 4,
+                    background: hideResolved ? "rgba(245,158,11,0.15)" : "var(--bg-surface)",
+                    border: `1px solid ${hideResolved ? "rgba(245,158,11,0.4)" : "var(--border-default)"}`,
+                    color: hideResolved ? "#f59e0b" : "var(--text-muted)",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {hideResolved ? "Unresolved Only" : "Show All"}
+                </button>
+              )}
+            </>
           )}
 
           {/* Zones toggle — floats top-right of the viewer pane. Three-state:
@@ -787,6 +821,7 @@ export default function DrawingViewer() {
                   onRemoveItem={markup.removeItem}
                   onUpdateItem={markup.updateItem}
                   onCalibrate={handleCalibrate}
+                  hideResolved={hideResolved}
                 />
 
                 {/* ── Drawing-hub coordination zones (MVP Slice 0) ──

@@ -33,6 +33,28 @@ import {
 const ARROW_HEAD_SIZE = 10; // canvas pixels
 const NOTE_PIN_SIZE = 22;   // canvas pixels
 
+// Markup status (3a — code-only, no migration). Cycles open → addressed
+// → rejected → clarification → open. Status colors mirror the comment
+// thread palette (D + E in the spec) so the resolution semantics read
+// the same across surfaces.
+export const MARKUP_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"];
+export const MARKUP_STATUS_COLOR = {
+  open:          "#9ca3af",
+  addressed:     "#10b981",
+  rejected:      "#ef4444",
+  clarification: "#f59e0b",
+};
+const MARKUP_STATUS_LABEL = {
+  open:          "OPEN",
+  addressed:     "DONE",
+  rejected:      "NO",
+  clarification: "?",
+};
+function nextStatus(current) {
+  const idx = MARKUP_STATUS_ORDER.indexOf(current || "open");
+  return MARKUP_STATUS_ORDER[(idx + 1) % MARKUP_STATUS_ORDER.length];
+}
+
 export default function AnnotationLayer({
   viewport,
   canvasWidth,
@@ -46,6 +68,7 @@ export default function AnnotationLayer({
   onRemoveItem,
   onUpdateItem,
   onCalibrate,       // (pdfDist) => void — parent prompts user + persists scale
+  hideResolved = false, // 3a — filters note items whose status is addressed/rejected
 }) {
   const svgRef = useRef(null);
 
@@ -57,10 +80,19 @@ export default function AnnotationLayer({
 
   // Filter to only this page's markup. Memo'd so React.memo at render time
   // doesn't re-diff the full list.
-  const pageItems = useMemo(
-    () => items.filter((m) => (m.pdf_page || 1) === pdfPage),
-    [items, pdfPage],
-  );
+  const pageItems = useMemo(() => {
+    let list = items.filter((m) => (m.pdf_page || 1) === pdfPage);
+    if (hideResolved) {
+      // Only filter notes — drawing markup like a redline/rect doesn't
+      // carry meaningful resolution semantics, and hiding them on the
+      // "show unresolved" toggle would surprise users.
+      list = list.filter((m) => {
+        if (m.kind !== "note") return true;
+        return !(m.status === "addressed" || m.status === "rejected");
+      });
+    }
+    return list;
+  }, [items, pdfPage, hideResolved]);
 
   const isDrawingTool = activeTool && activeTool !== "select";
   const cursor = cursorFor(activeTool);
@@ -313,6 +345,10 @@ export default function AnnotationLayer({
           }}
           onNoteTextChange={(text) => onUpdateItem(m.id, { text })}
           onNoteBlur={() => setEditingNoteId(null)}
+          onCycleStatus={() => {
+            if (m.kind !== "note") return;
+            onUpdateItem(m.id, { status: nextStatus(m.status) });
+          }}
         />
       ))}
 
@@ -452,6 +488,7 @@ function MarkupItem({
   onNoteDoubleClick,
   onNoteTextChange,
   onNoteBlur,
+  onCycleStatus,
 }) {
   const color = item.color || "#FF3D3D";
   const selectionOutline = selected
@@ -575,6 +612,9 @@ function MarkupItem({
   if (item.kind === "note") {
     const [cx, cy] = pdfToCanvas(viewport, item.geom.x, item.geom.y);
     const size = NOTE_PIN_SIZE;
+    const statusKey = item.status || "open";
+    const statusColor = MARKUP_STATUS_COLOR[statusKey] || MARKUP_STATUS_COLOR.open;
+    const statusLabel = MARKUP_STATUS_LABEL[statusKey] || statusKey.toUpperCase();
     return (
       <g
         style={{ cursor: interactive ? "pointer" : "default", ...selectionOutline }}
@@ -585,6 +625,36 @@ function MarkupItem({
         <circle cx={cx} cy={cy} r={size / 2} fill={color} opacity={0.92} />
         <circle cx={cx} cy={cy} r={size / 2 - 3} fill="#fff" opacity={0.85} />
         <circle cx={cx} cy={cy} r={3} fill={color} />
+
+        {/* Status pill — above and slightly right of the pin. Click in
+            select mode cycles open → addressed → rejected → clarification. */}
+        {interactive && (
+          <g
+            transform={`translate(${cx + size / 2 - 6}, ${cy - size / 2 - 12})`}
+            style={{ cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); onCycleStatus?.(); }}
+          >
+            <rect
+              x={0} y={0}
+              width={36} height={12}
+              rx={6}
+              fill={statusColor}
+              stroke="rgba(0,0,0,0.35)"
+              strokeWidth={0.75}
+            />
+            <text
+              x={18} y={9}
+              textAnchor="middle"
+              fontFamily="var(--font-mono)"
+              fontSize={8}
+              fontWeight={700}
+              fill="#fff"
+              style={{ letterSpacing: "0.06em" }}
+            >
+              {statusLabel}
+            </text>
+          </g>
+        )}
 
         {editing ? (
           <foreignObject
