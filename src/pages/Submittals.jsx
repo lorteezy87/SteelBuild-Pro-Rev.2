@@ -21,6 +21,8 @@ import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
 import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
 import DrawingSetSelector from "@/components/submittals/DrawingSetSelector";
 import { batchProcess } from "@/utils/batchProcess";
+import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping";
+import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 
 /**
  * Submittals — formal transmittal register.
@@ -42,7 +44,17 @@ const STATUSES = [
 
 const TYPES = ["Shop Drawing","Product Data","Sample","Mock-up","Calculation","Other"];
 
-const BIC_CHOICES = ["Contractor","Detailer","EOR","Architect","GC","Owner"];
+// Ball-in-court values, ordered to mirror the real workflow handoff
+// (corrected May 2026 / migration 077):
+//   Detailer-class:  Detailer / S&H / Contractor / Subcontractor → IFA/OFS
+//   Approver-class:  EOR / Architect / AOR                       → OFA/BFA
+//   Downstream-class: GC / Owner                                  → IFC
+// See src/lib/submittalStageMapping.js for the canonical mapping.
+const BIC_CHOICES = [
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "EOR", "Architect", "AOR",
+  "GC", "Owner",
+];
 
 // One-color-per-status palette so adjacent statuses don't blur into
 // each other. Earlier scheme collapsed eight statuses onto four
@@ -349,7 +361,13 @@ export default function Submittals() {
   const stats = useMemo(() => {
     const total = rows.length;
     const pending = rows.filter((r) => ["Submitted","Under Review"].includes(r.status)).length;
-    const approved = rows.filter((r) => r.status === "Approved" || r.status === "Approved as Noted").length;
+    // Match the useSubmittals hook's `approved` definition — anything past
+    // the BFA gate counts (Approved / Approved as Noted / Released for Fab).
+    const approved = rows.filter((r) =>
+      r.status === "Approved" ||
+      r.status === "Approved as Noted" ||
+      r.status === "Released for Fabrication"
+    ).length;
     const rejected = rows.filter((r) => ["Rejected","Revise and Resubmit"].includes(r.status)).length;
     const overdue = rows.filter((r) => {
       if (!r.required_date) return false;
@@ -638,6 +656,12 @@ export default function Submittals() {
 
 function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
   const cfg = STATUS_CFG[row.status] || STATUS_CFG.Draft;
+  // Derived workflow stage — gives users IFA/OFA/BFA/OFS/IFC/Released
+  // alongside the literal submittal status. R&R outcomes are surfaced
+  // explicitly so users can see "looped back to IFA" at a glance.
+  const stage = submittalStatusToStage(row.status, row.ball_in_court, row.approved_date);
+  const stageCfg = stage ? STAGE_MAP[stage] : null;
+  const showRR = isRRStatus(row.status);
   const overdue =
     row.required_date &&
     !["Approved","Approved as Noted","Released for Fabrication","Void"].includes(row.status) &&
@@ -701,13 +725,30 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-            padding: "2px 8px", borderRadius: 3, letterSpacing: "0.06em",
-            color: cfg.color, background: cfg.bg, whiteSpace: "nowrap",
-          }}>
-            {row.status}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+            {/* Derived workflow-stage chip — shows IFA/OFA/BFA/OFS/IFC/
+                Released so the user can see workflow position at a
+                glance, not just the raw submittal status. */}
+            {stageCfg && (
+              <span
+                title={`Workflow stage: ${stageCfg.label}${showRR ? " (R&R loop)" : ""}`}
+                style={{
+                  fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                  padding: "2px 6px", borderRadius: 3, letterSpacing: "0.06em",
+                  color: stageCfg.color, background: stageCfg.bg, whiteSpace: "nowrap",
+                }}
+              >
+                {stageCfg.label}
+              </span>
+            )}
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+              padding: "2px 8px", borderRadius: 3, letterSpacing: "0.06em",
+              color: cfg.color, background: cfg.bg, whiteSpace: "nowrap",
+            }}>
+              {row.status}
+            </span>
+          </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)", marginTop: 4 }}>
             {row.required_date ? formatDate(row.required_date) : "—"}
             {overdue && " ⚠"}
