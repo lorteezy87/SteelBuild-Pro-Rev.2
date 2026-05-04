@@ -28,9 +28,11 @@ import {
   mono, surface,
 } from "@/components/drawings/drawingsConfig";
 import {
-  isOverdue, exportTransmittal, computeStats, computeDisciplineCounts, buildRevisionAlerts,
+  isOverdue, exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
   validateStageTransition,
 } from "@/components/drawings/drawingsUtils";
+import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
+import { derivedSetStage } from "@/lib/submittalStageMapping";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -209,7 +211,14 @@ export default function Drawings() {
     return list;
   }, [drawings, search, discipline, stageFilter]);
 
-  const stats = useMemo(() => computeStats(drawings, drawingSetRecords), [drawings, drawingSetRecords]);
+  // Sprint 5: KPI tiles read submittal status (RELEASED, IN REVIEW) where
+  // a submittal exists, falling back to dominant sheet.stage for
+  // legacy sets without a submittal yet. PACKAGES / PRIORITY / OVERDUE
+  // remain sheet-derived (document facets, not workflow assertions).
+  const stats = useMemo(
+    () => computeStatsFromSubmittals(drawings, drawingSetRecords, submittals),
+    [drawings, drawingSetRecords, submittals],
+  );
   const disciplineCounts = useMemo(() => computeDisciplineCounts(drawings, DISCIPLINES), [drawings]);
   const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);
 
@@ -765,9 +774,31 @@ export default function Drawings() {
             SUBMITTAL STAGE PIPELINE
           </div>
           {(() => {
-            // Build stage counts from all drawings
+            // Sprint 5: Stage Pipeline counts derive from submittals via
+            // submittalPipelineRollupFromSubmittals (one count per active
+            // submittal, mapped to a stage by status+BIC+approved_date),
+            // plus a Not-Started bucket counting packages with no
+            // submittal yet AND no released sheet — these are the "haven't
+            // entered the workflow" items the chevron should show.
+            const rollup = submittalPipelineRollupFromSubmittals(submittals);
+            // Count packages with no submittal as Not Started — they're
+            // the inverse of every set that's already represented in the
+            // submittal rollup.
+            const packagesWithSubmittal = new Set();
+            (submittals || []).forEach((s) => {
+              if (!s || s.is_deleted) return;
+              if (s.status === "Void") return;
+              const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+              ids.forEach((id) => packagesWithSubmittal.add(id));
+            });
+            const notStartedCount = drawingSetRecords.filter(
+              (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
+                derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
+            ).length;
             const counts = STAGES.reduce((acc, s) => {
-              acc[s.key] = drawings.filter((d) => d.stage === s.key).length;
+              acc[s.key] = s.key === "Not Started"
+                ? notStartedCount
+                : (rollup.counts[s.key] || 0);
               return acc;
             }, {});
             // Pipeline stages (use only the forward-flow stages; Released is the terminal)
