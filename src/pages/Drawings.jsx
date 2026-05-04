@@ -46,6 +46,7 @@ import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
 import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
 import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
+import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 // ── Design-system chrome (Claude Design redesign) ─────────────────────────
@@ -87,6 +88,8 @@ export default function Drawings() {
   const [markerSet, setMarkerSet] = useState(null);
   const [uploadSetOpen, setUploadSetOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
+  // Sprint 4 — package export modal. `kind` is "fab_release" | "turnover" | "claims".
+  const [exportPkgKind, setExportPkgKind] = useState(null);
   // F18: replace window.confirm() with a styled DeleteDialog. Shape:
   //   { title, description, run: () => void }
   // run() is what fires when the user hits "Delete" in the dialog.
@@ -688,6 +691,15 @@ export default function Drawings() {
         <Button variant="secondary" icon="download" onClick={() => exportTransmittal(filtered, activeProject?.name)}>
           TRANSMITTAL
         </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("fab_release")}>
+          EXPORT FAB RELEASE
+        </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("turnover")}>
+          TURNOVER PACKAGE
+        </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("claims")}>
+          CLAIMS PACKAGE
+        </Button>
         <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
           ADD SHEET
         </Button>
@@ -949,6 +961,16 @@ export default function Drawings() {
         onComplete={() => { invalidate(); setRevisionOpen(false); }}
         activeProject={activeProject}
         drawingSets={drawingSetRecords}
+      />
+
+      {/* Sprint 4 — package exports (fab release / turnover / claims). One
+          shared modal switches behavior based on `kind`. */}
+      <ExportFabReleaseModal
+        open={!!exportPkgKind}
+        onClose={() => setExportPkgKind(null)}
+        kind={exportPkgKind || "fab_release"}
+        project={activeProject}
+        drawings={drawings}
       />
 
       {/* F18: styled confirm replacing window.confirm() for destructive

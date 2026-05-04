@@ -250,8 +250,9 @@ const REPORT_DRAWING_SET_TOOL = {
             revision:    { type: "string", description: "PER-SHEET revision number as shown in the sheet's own title block (NOT the set-level revision). Use '0' only when no per-sheet revision is visible." },
             scale:       { type: "string", description: "Drawing scale (e.g. '1/4\" = 1\\'-0\"'). Empty string if not shown." },
             date:        { type: "string", description: "Per-sheet date in ISO YYYY-MM-DD format. Empty string if not shown." },
+            pdfPage:     { type: "integer", minimum: 1, description: "1-indexed PDF page number where this sheet's title block lives. The text input is delimited by '===== PAGE N =====' markers — emit the N for the page that physically contains this sheet's drawing. For drawing-index style PDFs where one cover page lists every sheet but each sheet's actual drawing lives on a later page, return the page where the drawing is, NOT the cover page. If unknown, return 1." },
           },
-          required: ["sheetNumber", "sheetTitle", "discipline", "sheetType", "revision", "scale", "date"],
+          required: ["sheetNumber", "sheetTitle", "discipline", "sheetType", "revision", "scale", "date", "pdfPage"],
         },
       },
     },
@@ -287,6 +288,12 @@ FIELD SEPARATION:
 REVISIONS AND DATES:
 - The sheet-level "revision" field is the PER-SHEET revision from the sheet's own title block. If a sheet's title block shows a different revision than the cover sheet, use the per-sheet value. Do NOT copy the package revision into every sheet automatically.
 - Dates go in ISO YYYY-MM-DD format (convert from MM/DD/YY if needed).
+
+PDF PAGE NUMBERS:
+- Every sheet MUST have a pdfPage value (1-indexed integer ≥ 1) that points to the PDF page where this sheet's drawing physically lives. Use the "===== PAGE N =====" markers in the input to determine which page contains each sheet.
+- For drawing sets where each sheet occupies its own page (the common case), pdfPage equals the page marker N where the sheet's title block was found.
+- For drawing-index style PDFs (one page lists every sheet, each sheet's drawing follows on subsequent pages), pdfPage MUST be the page where the actual drawing is — NOT the index page. If you can't tell, default to 1 but populate the field.
+- NEVER return pdfPage = 1 for every sheet of a multi-page PDF unless the PDF really does only have one page of drawings. That is the bug we are trying to avoid.
 
 COMPLETENESS:
 - If a sheet index exists, enumerate every single row — do not skip, summarize, or deduplicate. Prefer the index as the authoritative list.
@@ -360,6 +367,81 @@ export function fixupSheet(raw) {
 
   out.sheetNumber = sheetNumber;
   out.sheetTitle  = sheetTitle;
+  return out;
+}
+
+/**
+ * Validate a single LLM-emitted pdfPage value. Returns the validated
+ * positive integer, or null when the value is missing/invalid (caller
+ * decides what to fall back to).
+ */
+export function validatePdfPage(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (!Number.isInteger(n)) return null;
+  if (n < 1) return null;
+  return n;
+}
+
+/**
+ * Decide each sheet's pdf_page value.
+ *
+ * Rules:
+ *   - When the LLM returned exactly one sheet per PDF page (sheets.length
+ *     === pageCount), ignore whatever pdfPage the LLM emitted and assign
+ *     deterministically by index. This is the common one-sheet-per-page
+ *     upload pattern, where index-N corresponds unambiguously to PDF page
+ *     N+1, and the LLM has been observed to emit pdfPage=1 for every sheet.
+ *   - Otherwise (drawing-index style, multi-sheet pages, etc.), trust the
+ *     LLM's pdfPage when it is a valid positive integer. When invalid or
+ *     missing, fall back to 1 and log a warning so the user can hand-fix
+ *     via SheetFormModal.
+ *
+ * Returns a NEW array of sheet objects with `pdfPage` populated; does not
+ * mutate the input. Exported for testing.
+ */
+export function assignPdfPages(sheets, pageCount) {
+  const list = Array.isArray(sheets) ? sheets : [];
+  const pc = Number.isFinite(pageCount) && pageCount >= 1 ? pageCount : 0;
+
+  // One-sheet-per-page deterministic override.
+  if (pc > 0 && list.length === pc) {
+    return list.map((s, i) => ({ ...s, pdfPage: i + 1 }));
+  }
+
+  // Trust the LLM's pdfPage; validate and clamp.
+  let invalidCount = 0;
+  const out = list.map((s) => {
+    const validated = validatePdfPage(s?.pdfPage);
+    if (validated === null) {
+      invalidCount++;
+      return { ...s, pdfPage: 1 };
+    }
+    // Clamp to the page range when we know it.
+    if (pc > 0 && validated > pc) {
+      invalidCount++;
+      return { ...s, pdfPage: 1 };
+    }
+    return { ...s, pdfPage: validated };
+  });
+  if (invalidCount > 0) {
+    console.warn(
+      `[pdfSheetExtractor] ${invalidCount} of ${list.length} sheet(s) had invalid or out-of-range pdfPage — defaulted to 1. ` +
+      `Users can hand-fix via the sheet edit form.`,
+    );
+  }
+
+  // Sanity check: if pageCount > 1 and EVERY sheet ended up on page 1,
+  // that's almost certainly a regression of the original bug — surface it.
+  if (pc > 1 && out.length > 1 && out.every((s) => s.pdfPage === 1)) {
+    console.warn(
+      `[pdfSheetExtractor] All ${out.length} sheets resolved to pdf_page=1 in a ${pc}-page PDF — ` +
+      `this is the multi-sheet pdf_page bug. Verify the LLM is emitting pdfPage and that the ` +
+      `report_drawing_set tool schema includes the pdfPage field.`,
+    );
+  }
+
   return out;
 }
 
@@ -679,6 +761,13 @@ export async function extractSheetsFromPdf(file, options = {}) {
       });
     }
   }
+
+  // 6. Assign pdfPage deterministically. When the LLM returned one sheet
+  //    per page, the LLM's pdfPage is ignored and we use index+1 — this
+  //    is the most common upload pattern and the original source of the
+  //    "every drawing renders page 1" bug. Otherwise trust the LLM but
+  //    validate (positive integer, within page range) and warn on misses.
+  sheets = assignPdfPages(sheets, extracted.pageCount);
 
   return {
     setMeta,

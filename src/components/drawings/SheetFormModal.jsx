@@ -41,7 +41,16 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
       }
       setUploading(false);
     }
-    onSave({ ...form, file_url: fileUrl });
+    // Coerce pdf_page to a positive integer at save time. Empty string,
+    // NaN, zero, or negatives all become 1 — matches the upload modal's
+    // fallback so manual edits and new uploads obey the same rule.
+    const rawPage = form.pdf_page;
+    let pdfPage = 1;
+    if (rawPage !== "" && rawPage !== null && rawPage !== undefined) {
+      const n = Number(rawPage);
+      if (Number.isFinite(n) && Number.isInteger(n) && n >= 1) pdfPage = n;
+    }
+    onSave({ ...form, file_url: fileUrl, pdf_page: pdfPage });
   };
 
   return (
@@ -87,6 +96,24 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
           <div>
             <label style={labelStyle}>Revision</label>
             <input style={inputStyle} value={form.revision_number} onChange={e => set("revision_number", e.target.value)} placeholder="0" />
+          </div>
+          <div>
+            <label style={labelStyle}>PDF Page</label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              style={inputStyle}
+              value={form.pdf_page ?? 1}
+              onChange={e => set("pdf_page", e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="1"
+            />
+            <div
+              title="Which page of the source PDF this sheet lives on. For multi-sheet PDFs, set this so the viewer renders the correct page."
+              style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.08em" }}
+            >
+              Source-PDF page (1-indexed). For multi-sheet PDFs, use this to point at the right page.
+            </div>
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Title *</label>
