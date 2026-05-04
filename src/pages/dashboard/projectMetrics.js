@@ -545,13 +545,20 @@ export function submittalPipelineRollup(rows = []) {
       continue;
     }
     // c) legacy submittals fallback — derive from status + ball_in_court
+    //
+    // Polarity convention (matches src/lib/submittalStageMapping.js):
+    //   bic in [EOR, Architect]  → OFA (Out For Approval — going to the
+    //                              approver who can stamp the drawing)
+    //   bic in [GC, Owner]       → OFS (Out For Shop — going downstream
+    //                              after EOR approval)
+    //   bic missing / Detailer / Contractor → OFA (default upstream review)
     const status = r?.status;
     const bic    = r?.ball_in_court;
     if (status === "Approved" && r?.approved_date) counts["Released"]++;
     else if (status === "Approved") counts["FFF"]++;
     else if (status === "Approved as Noted") counts["BFS"]++;
     else if (status === "Revise and Resubmit" || status === "Rejected") counts["BFA"]++;
-    else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") counts["OFS"]++;
+    else if ((status === "Submitted" || status === "Under Review") && (bic === "GC" || bic === "Owner")) counts["OFS"]++;
     else if (status === "Submitted" || status === "Under Review" || status === "Draft") counts["OFA"]++;
     // Void / unknown → skipped.
   }

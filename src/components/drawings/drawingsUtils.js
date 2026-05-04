@@ -6,6 +6,7 @@
  */
 
 import { IN_REVIEW_STAGES, STAGE_ORDER } from "./drawingsConfig";
+import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 
 /**
  * Decide whether a stage transition is legal.
@@ -147,6 +148,94 @@ export function computeStats(drawings, drawingSetRecords = []) {
     inReview:   entries.filter(sheets => sheets.some(d => IN_REVIEW_STAGES.includes(d.stage))).length,
     overdue:    entries.filter(sheets => sheets.some(d => isOverdue(d))).length,
     priority:   entries.filter(sheets => sheets.some(d => d.priority_flag)).length,
+    sheetCount: drawings.length,
+  };
+}
+
+/**
+ * Submittal-aware variant of computeStats for the Drawings page KPI tiles.
+ *
+ * Sprint 5: workflow status (RELEASED, IN REVIEW) reads from submittals
+ * via derivedSetStage(). The two non-workflow tiles (PACKAGES, PRIORITY)
+ * stay sheet-derived because they're document-management facets, not
+ * workflow assertions. OVERDUE keeps reading sheet.due_date — a
+ * sheet-level deadline, not workflow.
+ *
+ * For each set we ask: what's the submittal-derived stage?
+ *   - has at least one active submittal → use submittal status
+ *   - no submittal yet                  → fall back to dominant
+ *                                          sheet.stage (preserves today's
+ *                                          display for legacy rows)
+ *
+ * @param {Array} drawings           — child sheet rows
+ * @param {Array} drawingSetRecords  — parent drawing_sets rows
+ * @param {Array} submittals         — all project submittals
+ */
+export function computeStatsFromSubmittals(drawings, drawingSetRecords = [], submittals = []) {
+  // Group sheets by parent set id (FK-first; fall back to set name).
+  const sheetsBySetId = new Map();
+  const sheetsBySetName = new Map();
+  for (const d of drawings) {
+    if (d?.drawing_set_id) {
+      if (!sheetsBySetId.has(d.drawing_set_id)) sheetsBySetId.set(d.drawing_set_id, []);
+      sheetsBySetId.get(d.drawing_set_id).push(d);
+    } else if (d?.drawing_set_name) {
+      const k = d.drawing_set_name.trim();
+      if (k) {
+        if (!sheetsBySetName.has(k)) sheetsBySetName.set(k, []);
+        sheetsBySetName.get(k).push(d);
+      }
+    }
+  }
+
+  // Index submittals by drawing_set_id (a single submittal may link
+  // multiple sets — fan out).
+  const submittalsBySetId = new Map();
+  for (const s of submittals || []) {
+    if (!s || s.is_deleted) continue;
+    const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+    for (const id of ids) {
+      if (!id) continue;
+      if (!submittalsBySetId.has(id)) submittalsBySetId.set(id, []);
+      submittalsBySetId.get(id).push(s);
+    }
+  }
+
+  // Collect a "package" view: every parent drawing_sets row, plus any
+  // legacy ungrouped sheets that share a drawing_set_name.
+  const packages = [];
+  const seenIds = new Set();
+  for (const ds of drawingSetRecords || []) {
+    if (!ds?.id) continue;
+    seenIds.add(ds.id);
+    const sheetsHere = sheetsBySetId.get(ds.id) || sheetsBySetName.get(ds.set_name?.trim()) || [];
+    const subsHere = submittalsBySetId.get(ds.id) || [];
+    packages.push({ id: ds.id, name: ds.set_name, sheets: sheetsHere, submittals: subsHere });
+  }
+  // Legacy sheets without a parent FK — group by name.
+  for (const [name, sheets] of sheetsBySetName.entries()) {
+    if (sheets.some((s) => s.drawing_set_id && seenIds.has(s.drawing_set_id))) continue;
+    packages.push({ id: null, name, sheets, submittals: [] });
+  }
+
+  let released = 0;
+  let inReview = 0;
+  let overdue  = 0;
+  let priority = 0;
+  for (const pkg of packages) {
+    const stage = derivedSetStage(pkg.submittals, pkg.sheets);
+    if (stage === "Released") released++;
+    else if (isStageInReview(stage)) inReview++;
+    if (pkg.sheets.some((d) => isOverdue(d))) overdue++;
+    if (pkg.sheets.some((d) => d.priority_flag)) priority++;
+  }
+
+  return {
+    total:      packages.length,
+    released,
+    inReview,
+    overdue,
+    priority,
     sheetCount: drawings.length,
   };
 }
