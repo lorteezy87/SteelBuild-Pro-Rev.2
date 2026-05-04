@@ -20,7 +20,13 @@ import { toast } from "sonner";
  *   onSubmit      — callback(roundData) with the new round payload
  */
 
-const BIC_CHOICES = ["Contractor", "Detailer", "EOR", "Architect", "GC", "Owner"];
+// Standardized across the submittal modals — see src/pages/Submittals.jsx
+// for the canonical list and stage-mapping rationale.
+const BIC_CHOICES = [
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "EOR", "Architect", "AOR",
+  "GC", "Owner",
+];
 
 function todayISO() {
   const d = new Date();

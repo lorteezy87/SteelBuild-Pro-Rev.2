@@ -27,7 +27,13 @@ const STATUSES = [
 // Bulk edit's BIC menu is wider than the page-level BIC filter on
 // purpose — Subcontractor is a common reviewer for shop drawings even
 // though it's not a recognized rolling-BIC state on the filter bar.
-const BIC_CHOICES = ["Contractor", "Detailer", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
+// Standardized across the submittal modals — see src/pages/Submittals.jsx
+// for the canonical list and stage-mapping rationale.
+const BIC_CHOICES = [
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "EOR", "Architect", "AOR",
+  "GC", "Owner",
+];
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 
 export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit }) {
