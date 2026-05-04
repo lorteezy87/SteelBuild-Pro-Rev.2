@@ -22,15 +22,17 @@ import { useAppSecurity } from "@/components/shared/useAppSecurity";
 const mono = { fontFamily: "var(--font-mono)" };
 
 // Pipeline order + canonical labels. "Released" is labelled "IFC" for the
-// end user since that's what the shop floor calls it.
+// Corrected 7-stage flow (migration 077). IFC and Released are distinct
+// gates (record copy to GC vs. internal release to fab) — display each
+// by its key with no aliasing.
 const PIPELINE = [
   { key: "Not Started", label: "Not Started", color: "#6B7280" },
+  { key: "IFA",         label: "IFA",         color: "#60A5FA" },
   { key: "OFA",         label: "OFA",         color: "#3B82F6" },
   { key: "BFA",         label: "BFA",         color: "#06B6D4" },
   { key: "OFS",         label: "OFS",         color: "#F59E0B" },
-  { key: "BFS",         label: "BFS",         color: "#F97316" },
-  { key: "FFF",         label: "FFF",         color: "#84CC16" },
-  { key: "Released",    label: "IFC",         color: "#10B981" },
+  { key: "IFC",         label: "IFC",         color: "#84CC16" },
+  { key: "Released",    label: "Released",    color: "#10B981" },
 ];
 
 export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock }) {

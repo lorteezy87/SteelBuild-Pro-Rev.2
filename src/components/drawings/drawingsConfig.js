@@ -7,29 +7,36 @@
 
 // ─── Stage Definitions ──────────────────────────────────────────────────────
 //
-// Palette tuned for maximum hue separation between adjacent stages so
-// the row badges and the stage-progress mini-bar read clearly at a
-// glance:
+// Canonical 7-stage detailing/submittal flow (corrected May 2026):
 //
-//   Not Started → slate    (neutral)
-//   OFA         → blue     (out, cool)
-//   BFA         → orange   (back, warm — needs attention in our court)
-//   OFS         → teal     (out for scrub, distinct cool)
-//   BFS         → red      (back from scrub, warm — needs attention)
-//   IFC (FFF)   → yellow   (final approval, distinct from greens)
-//   Released    → emerald  (done)
+//   Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
+//                                    ↑
+//                                    └─ R&R (Revise & Resubmit) loops
+//                                       back to IFA. R&R is an OUTCOME
+//                                       status on a submittal, not a
+//                                       stage — rendered as a separate
+//                                       UI badge / transition.
 //
-// Earlier scheme used adjacent blue→cyan, amber→orange, lime→emerald
-// pairs which were too close to distinguish quickly. Each stage now
-// picks a different family from the wheel.
+// Stage glossary:
+//   IFA = In For Approval         — internal prep (detailer → S&H → GC,
+//                                   before going to EOR)
+//   OFA = Out For Approval        — submitted to EOR / AOR
+//   BFA = Back From Approval      — returned with AAN / Approved / R&R
+//   OFS = Out For Scrub           — post-approval cleanup (detailer
+//                                   addressing EOR's comments)
+//   IFC = Issued For Construction — S&H sends record copy to GC
+//   Released for Fab              — S&H internal release to shop, terminal
+//
+// Color sequence: cool→warm→cool→warm with green at the end so the
+// chevron strip reads as progress.
 export const STAGES = [
   { key: "Not Started", label: "NOT STARTED", color: "#64748B", bg: "rgba(100,116,139,0.16)" }, // slate
-  { key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // blue
-  { key: "BFA",         label: "BFA",         color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // orange
-  { key: "OFS",         label: "OFS",         color: "#0D9488", bg: "rgba(13,148,136,0.18)"  }, // teal
-  { key: "BFS",         label: "BFS",         color: "#DC2626", bg: "rgba(220,38,38,0.18)"   }, // red
-  { key: "FFF",         label: "IFC",         color: "#EAB308", bg: "rgba(234,179,8,0.18)"   }, // yellow
-  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // emerald
+  { key: "IFA",         label: "IFA",         color: "#60A5FA", bg: "rgba(96,165,250,0.16)"  }, // info-muted (sky)
+  { key: "OFA",         label: "OFA",         color: "#2563EB", bg: "rgba(37,99,235,0.18)"   }, // info (blue)
+  { key: "BFA",         label: "BFA",         color: "#FBBF24", bg: "rgba(251,191,36,0.16)"  }, // warning-muted (amber)
+  { key: "OFS",         label: "OFS",         color: "#F97316", bg: "rgba(249,115,22,0.18)"  }, // warning (orange)
+  { key: "IFC",         label: "IFC",         color: "#34D399", bg: "rgba(52,211,153,0.16)"  }, // success-muted (mint)
+  { key: "Released",    label: "RELEASED",    color: "#10B981", bg: "rgba(16,185,129,0.18)"  }, // success (emerald)
 ];
 
 /** Map stage key → { key, label, color, bg } */
@@ -39,13 +46,14 @@ export const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]));
 export const STAGE_ORDER = STAGES.map(s => s.key);
 
 /**
- * Stages considered "in review" — any non-IFC stage that has left
- * "Not Started". Includes FFF (For Final Approval) because a sheet sitting
- * in FFF is still under review by the owner and not yet issued for
- * construction. Single source of truth for both the stat tile and the
- * "_inReview" filter button so their counts never disagree.
+ * Stages considered "in review" — anything that has left "Not Started"
+ * but isn't yet "Released for Fabrication". A sheet sitting in IFC is
+ * still in active workflow (record copy in transit to GC) so it counts
+ * as in-review until S&H releases it for fab. Single source of truth
+ * for both the stat tile and the "_inReview" filter button so their
+ * counts never disagree.
  */
-export const IN_REVIEW_STAGES = ["OFA", "BFA", "OFS", "BFS", "FFF"];
+export const IN_REVIEW_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC"];
 
 // ─── Discipline List ────────────────────────────────────────────────────────
 
@@ -68,6 +76,8 @@ export const EMPTY_FORM = {
   title: "",
   discipline: "Structural",
   revision_number: "0",
+  // New rows start in "Not Started" — IFA is the first active workflow
+  // stage but a fresh, unlinked sheet shouldn't auto-jump into it.
   stage: "Not Started",
   submitted_date: "",
   return_date: "",

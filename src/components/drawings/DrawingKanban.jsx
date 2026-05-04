@@ -6,18 +6,22 @@ import { createPageUrl } from "@/utils";
 import { batchProcess } from "@/utils/batchProcess";
 import { resolveFileUrl } from "@/api/base44Client";
 
-const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+// Canonical 7-stage flow (corrected May 2026):
+//   Not Started → IFA → OFA → BFA → OFS → IFC → Released
+// Imported from drawingsConfig so this file doesn't drift.
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+const STAGES = CANONICAL_STAGE_ORDER;
 
 // Stage priority — higher index = further along
 const STAGE_ORDER = Object.fromEntries(STAGES.map((s, i) => [s, i]));
 
 const STAGE_ACCENT = {
   "Not Started": { color: "var(--text-muted)", bg: "var(--bg-surface-high)", border: "var(--border-strong)" },
+  IFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   OFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   BFA:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
   OFS:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
-  BFS:           { color: "var(--accent)", bg: "var(--accent-muted)", border: "var(--accent-border)" },
-  FFF:           { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
+  IFC:           { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
   Released:      { color: "var(--status-success)", bg: "var(--success-muted)", border: "var(--success-border)" },
 };
 

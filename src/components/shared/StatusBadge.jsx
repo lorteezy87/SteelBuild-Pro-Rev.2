@@ -17,8 +17,6 @@ const badgeMap = {
   "Certified":      { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
   "Paid":           { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
   "Closeout":       { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
-  "BFS":            { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
-  "FFF":            { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
   "IFC":            { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
   "Kickoff":        { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },
   "Supplier":       { color: "var(--status-success)", bg: "var(--success-muted)",  border: "var(--success-border)" },

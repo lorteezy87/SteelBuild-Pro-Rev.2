@@ -1,12 +1,16 @@
 // Workflow validation utilities
 
+// "Approved" = drawings past the BFA gate. Corrected 7-stage flow
+// (migration 077): OFS, IFC, Released. Submittal-shape labels
+// "Approved" / "Approved as Noted" kept for any legacy data flowing
+// through here.
 const APPROVED_STAGES = [
   'Released',
   'IFC',
   'Issued for Construction',
-  'FFF',
-  'BFS',
+  'OFS',
   'Approved',
+  'Approved as Noted',
 ];
 
 export const validateWPCreate = (wp, linkedDrawings, projectDrawings = []) => {

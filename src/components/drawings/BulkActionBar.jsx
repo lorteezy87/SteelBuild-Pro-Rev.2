@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Trash2, X } from "lucide-react";
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
-const STAGES = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+// Imported from drawingsConfig so this dropdown follows the canonical
+// 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released).
+const STAGES = CANONICAL_STAGE_ORDER;
 const IFC_STATUSES = ["IFR", "IFC", "IFA", "Void"];
 
 function DropPopover({ label, options, onApply, count }) {
