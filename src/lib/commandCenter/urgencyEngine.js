@@ -135,6 +135,10 @@ export function rfiUrgency(rfi, projectMap = {}) {
 }
 
 // ── Drawing (sheet-level) ───────────────────────────────────────────────
+// @deprecated — reads drawings.stage. Workflow source of truth is the
+// submittals table; this helper still drives Command Center sheet-level
+// urgency tiles for back-compat. Migrate to a submittals-driven
+// urgency calc when the Command Center is reworked.
 
 export function drawingUrgency(drawing, projectMap = {}) {
   const stage = drawing.stage || "Not Started";
@@ -181,6 +185,9 @@ export function drawingUrgency(drawing, projectMap = {}) {
 }
 
 // ── DrawingSet (set-level submittals) ───────────────────────────────────
+// @deprecated — reads drawing_sets.set_approval_status. Workflow source
+// of truth is the submittals table; this helper is retained for legacy
+// urgency tiles until the Command Center reads submittals directly.
 
 export function drawingSetUrgency(ds, projectMap = {}) {
   const status = ds.set_approval_status;
