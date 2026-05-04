@@ -28,7 +28,7 @@ import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
 import { listZoneProposals } from "@/lib/drawingHub";
-import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+import { STAGES, mono, toolBtn, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
 import {
   ensureCurrentRevision,
   listZones,
@@ -47,14 +47,6 @@ import {
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
-// Stage colours pulled from the single source of truth in
-// drawingsConfig (STAGE_MAP) so this badge stays in sync with
-// StageChip and the stage progress mini-bar. Aliased to STAGES for
-// backward compatibility with existing STAGES[d.stage]?.color reads.
-const STAGES = STAGE_MAP;
-
-const mono = { fontFamily: "var(--font-mono)" };
 
 export default function DrawingViewer() {
   const [searchParams] = useSearchParams();
@@ -714,7 +706,6 @@ export default function DrawingViewer() {
   // Callout → navigation handler. If the targetSheetNumber resolves to a
   // drawing in the project list, switch to it. The effect above then jumps
   // to that drawing's pdf_page automatically.
-  const normalizeSN = (s) => String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
     const target = drawings.find(d =>
@@ -1832,15 +1823,3 @@ export default function DrawingViewer() {
     </div>
   );
 }
-
-const toolBtn = {
-  background: "none",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  padding: "4px 10px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 13,
-  lineHeight: 1,
-};
