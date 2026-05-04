@@ -29,6 +29,7 @@ import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
 import { listZoneProposals } from "@/lib/drawingHub";
 import { STAGES, mono, toolBtn, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
+import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import {
   ensureCurrentRevision,
   listZones,
@@ -877,28 +878,10 @@ export default function DrawingViewer() {
     });
   }, []);
 
-  // Spacebar-hold pan. Track press/release + change cursor to "grab"/"grabbing".
-  // While held, the markup tool is suppressed so dragging pans instead of drawing.
-  // spacebarPanRef is read by the pan event handlers attached via the container
-  // ref callback, which close over a stable ref not React state.
-  const [spacePan, setSpacePan] = useState(false);
-  const spacebarPanRef = useRef(false);
-  useEffect(() => { spacebarPanRef.current = spacePan; }, [spacePan]);
-  useEffect(() => {
-    const onDown = (e) => {
-      if (e.code !== "Space") return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      e.preventDefault();
-      setSpacePan(true);
-    };
-    const onUp = (e) => { if (e.code === "Space") setSpacePan(false); };
-    window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-    };
-  }, []);
+  // Spacebar-hold pan. Hook returns both the React state (drives the cursor
+  // styling on the container) and a mutable ref read by the imperative
+  // mousedown/mousemove handlers attached via the container ref callback.
+  const { spacePan, spacebarPanRef } = useSpacebarPan();
 
   // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async () => {
