@@ -28,9 +28,11 @@ import {
   mono, surface,
 } from "@/components/drawings/drawingsConfig";
 import {
-  isOverdue, exportTransmittal, computeStats, computeDisciplineCounts, buildRevisionAlerts,
+  isOverdue, exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
   validateStageTransition,
 } from "@/components/drawings/drawingsUtils";
+import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
+import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -41,6 +43,7 @@ import ActiveFilterPills from "@/components/drawings/ActiveFilterPills";
 import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import AdvanceStageDialog from "@/components/drawings/AdvanceStageDialog";
 import RenameSetModal from "@/components/drawings/RenameSetModal";
 import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
@@ -78,6 +81,7 @@ export default function Drawings() {
   const [bulkStage, setBulkStage] = useState("");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+  const [advanceTarget, setAdvanceTarget] = useState(null); // { drawingId, setId, currentStage, targetStage }
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
   const [renameSet, setRenameSet] = useState(null);   // { setId, setName, sheets }
@@ -209,7 +213,14 @@ export default function Drawings() {
     return list;
   }, [drawings, search, discipline, stageFilter]);
 
-  const stats = useMemo(() => computeStats(drawings, drawingSetRecords), [drawings, drawingSetRecords]);
+  // Sprint 5: KPI tiles read submittal status (RELEASED, IN REVIEW) where
+  // a submittal exists, falling back to dominant sheet.stage for
+  // legacy sets without a submittal yet. PACKAGES / PRIORITY / OVERDUE
+  // remain sheet-derived (document facets, not workflow assertions).
+  const stats = useMemo(
+    () => computeStatsFromSubmittals(drawings, drawingSetRecords, submittals),
+    [drawings, drawingSetRecords, submittals],
+  );
   const disciplineCounts = useMemo(() => computeDisciplineCounts(drawings, DISCIPLINES), [drawings]);
   const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);
 
@@ -440,7 +451,17 @@ export default function Drawings() {
     const target = STAGE_ORDER[idx + 1];
     const v = validateStageTransition(drawing.stage, target);
     if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
-    updateMut.mutate({ id: drawing.id, stage: target });
+    // Submittal-driven flow: open the dialog so the user can choose
+    // between the canonical "via submittal" path and the legacy direct
+    // sheet-stage mutation. The legacy fallback preserves the original
+    // behaviour for pre-Sprint-2 cleanup; the via-submittal path is the
+    // new primary action.
+    setAdvanceTarget({
+      drawingId: drawing.id,
+      setId: drawing.drawing_set_id || null,
+      currentStage: drawing.stage,
+      targetStage: target,
+    });
     setContextMenu(null);
   };
 
@@ -451,6 +472,15 @@ export default function Drawings() {
       toast.error(`Cannot apply unknown stage "${bulkStage}"`);
       return;
     }
+    // Bulk-via-submittal isn't well-defined when the selection spans
+    // multiple drawing sets (which submittal would we touch?), so we
+    // keep the direct-mutation handler here and surface the workflow
+    // boundary as an info toast instead. The single-row "advance stage"
+    // flow does prompt the user to use a submittal — see handleAdvanceStage.
+    toast.info(
+      "Bulk apply updates sheet stages directly. For workflow status, use the Submittals page.",
+      { duration: 4000 },
+    );
     const ids = [...selected];
     const { succeeded, failed } = await batchProcess(
       ids,
@@ -765,9 +795,31 @@ export default function Drawings() {
             SUBMITTAL STAGE PIPELINE
           </div>
           {(() => {
-            // Build stage counts from all drawings
+            // Sprint 5: Stage Pipeline counts derive from submittals via
+            // submittalPipelineRollupFromSubmittals (one count per active
+            // submittal, mapped to a stage by status+BIC+approved_date),
+            // plus a Not-Started bucket counting packages with no
+            // submittal yet AND no released sheet — these are the "haven't
+            // entered the workflow" items the chevron should show.
+            const rollup = submittalPipelineRollupFromSubmittals(submittals);
+            // Count packages with no submittal as Not Started — they're
+            // the inverse of every set that's already represented in the
+            // submittal rollup.
+            const packagesWithSubmittal = new Set();
+            (submittals || []).forEach((s) => {
+              if (!s || s.is_deleted) return;
+              if (s.status === "Void") return;
+              const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+              ids.forEach((id) => packagesWithSubmittal.add(id));
+            });
+            const notStartedCount = drawingSetRecords.filter(
+              (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
+                derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
+            ).length;
             const counts = STAGES.reduce((acc, s) => {
-              acc[s.key] = drawings.filter((d) => d.stage === s.key).length;
+              acc[s.key] = s.key === "Not Started"
+                ? notStartedCount
+                : (rollup.counts[s.key] || 0);
               return acc;
             }, {});
             // Pipeline stages (use only the forward-flow stages; Released is the terminal)
@@ -909,6 +961,34 @@ export default function Drawings() {
         onClose={() => setBulkEditOpen(false)}
         onApply={handleBulkEdit}
         selectedCount={selected.size}
+      />
+
+      <AdvanceStageDialog
+        open={!!advanceTarget}
+        currentStage={advanceTarget?.currentStage}
+        targetStage={advanceTarget?.targetStage}
+        drawingId={advanceTarget?.drawingId}
+        setId={advanceTarget?.setId}
+        onClose={() => setAdvanceTarget(null)}
+        onLegacy={({ drawingId, targetStage }) => {
+          // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
+          // workflow source of truth is now on submittals; this path is
+          // kept for cleanup of orphan sheets without linked submittals.
+          updateMut.mutate({ id: drawingId, stage: targetStage });
+          setAdvanceTarget(null);
+        }}
+        onViaSubmittal={({ setId, targetStage }) => {
+          // Canonical path: hand the user off to the Submittals page
+          // with a target set + prefilled status. Falls back to
+          // navigating without a status if the stage maps to "Not Started"
+          // or an unknown stage (stageToSubmittalStatus returns null).
+          const mapped = stageToSubmittalStatus(targetStage);
+          const params = new URLSearchParams();
+          if (setId) params.set("targetSetId", setId);
+          if (mapped?.status) params.set("prefilledStatus", mapped.status);
+          navigate(`/Submittals${params.toString() ? `?${params.toString()}` : ""}`);
+          setAdvanceTarget(null);
+        }}
       />
 
       <SetApprovalModal
