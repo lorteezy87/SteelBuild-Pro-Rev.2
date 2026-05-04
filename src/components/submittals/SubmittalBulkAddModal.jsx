@@ -30,7 +30,13 @@ const STATUSES = [
   "Draft", "Submitted", "Under Review", "Approved", "Approved as Noted",
   "Revise and Resubmit", "Rejected", "Released for Fabrication", "Void",
 ];
-const BIC_CHOICES = ["Contractor", "Detailer", "Architect", "EOR", "Owner", "GC", "Subcontractor"];
+// Standardized across the submittal modals — see src/pages/Submittals.jsx
+// for the canonical list and stage-mapping rationale.
+const BIC_CHOICES = [
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+  "EOR", "Architect", "AOR",
+  "GC", "Owner",
+];
 
 // DB CHECK constraint allows only these values for submittal_type (or NULL).
 // Anything else from a pasted CSV produces a 400 from PostgREST, so we clamp
