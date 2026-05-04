@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
@@ -11,7 +11,6 @@ import * as pdfjsLib from "pdfjs-dist";
 // 4.x only ships `.mjs` workers and the file name was wrong, causing every
 // drawing to fail to render.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Keyboard, Film, RotateCw } from "lucide-react";
 import ViewerHeader from "@/components/drawings/viewer/ViewerHeader";
 import ShortcutsOverlay from "@/components/drawings/viewer/ShortcutsOverlay";
 import RenderSkeleton from "@/components/drawings/viewer/RenderSkeleton";
@@ -21,49 +20,32 @@ import AnnotationLayer from "@/components/drawings/viewer/AnnotationLayer";
 import AnnotationToolbar, { MARKUP_COLORS } from "@/components/drawings/viewer/AnnotationToolbar";
 import { useMarkup } from "@/components/drawings/viewer/useMarkup";
 import { detectScaleFromPdf } from "@/components/drawings/viewer/detectScale";
+import { parseRealDistance, formatScaleFraction } from "@/components/drawings/viewer/scaleParse";
+import { extractStoragePathFromSignedUrl } from "@/components/drawings/viewer/storageUrl";
 import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
-import { listZoneProposals } from "@/lib/drawingHub";
-import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+import { mono, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
+import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
+import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
+import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
+import { usePdfRenderer } from "@/pages/drawingViewer/usePdfRenderer";
+import { useViewerKeyboardShortcuts } from "@/pages/drawingViewer/useViewerKeyboardShortcuts";
+import SheetListSidebar from "@/pages/drawingViewer/SheetListSidebar";
+import ZonesFloatingToolbar from "@/pages/drawingViewer/ZonesFloatingToolbar";
+import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
+import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
+import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
+import { useZoneData } from "@/pages/drawingViewer/useZoneData";
 import {
-  ensureCurrentRevision,
-  listZones,
-  listLinksForZones,
-  hydrateLinks,
-  computeZoneDensity,
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
-  summarizeLinks,
-  computeZoneStatus,
-  recomputeAndPersistZoneStatus,
   createNewRevisionAndCarryZones,
-  // V3.1 — zone-to-zone dependency graph
-  listZoneDependencies,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-
-// If a stored file_url is itself a Supabase signed URL with a JWT token,
-// extract the storage path and re-sign so expired URLs still resolve.
-function extractStoragePathFromSignedUrl(url) {
-  try {
-    const m = url.match(/\/object\/(?:sign|public)\/[^/]+\/(.+?)(?:\?|$)/);
-    return m ? decodeURIComponent(m[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
-// Stage colours pulled from the single source of truth in
-// drawingsConfig (STAGE_MAP) so this badge stays in sync with
-// StageChip and the stage progress mini-bar. Aliased to STAGES for
-// backward compatibility with existing STAGES[d.stage]?.color reads.
-const STAGES = STAGE_MAP;
-
-const mono = { fontFamily: "var(--font-mono)" };
 
 export default function DrawingViewer() {
   const [searchParams] = useSearchParams();
@@ -86,55 +68,50 @@ export default function DrawingViewer() {
   const [contextOpen, setContextOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [pdfDoc, setPdfDoc] = useState(null);
-  const [rendering, setRendering] = useState(false);
-  const [pdfError, setPdfError] = useState(null);
-  const [resolvedUrl, setResolvedUrl] = useState(null);
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
   // "iframe" = browser-native PDF viewer (fallback, no annotation layer)
   // Default to canvas now that the pdfjs worker is bundled via Vite and reliable.
   const [renderMode, setRenderMode] = useState("canvas");
 
-  const canvasRef = useRef(null);
   const annotLayerRef = useRef(null);
-  const renderTaskRef = useRef(null);
-  // pdfjs-extracted link hotspots (internal PDF links, external URLs).
-  // Renamed from `annotations` to avoid colliding with the new `markup`
-  // JSONB column used by AnnotationLayer.
-  const [linkHotspots, setLinkHotspots] = useState([]);
-  // Natural page size at scale 1 (PDF user units). Callouts are stored in
-  // this coordinate space with a top-left origin, so the overlay multiplies
-  // by `zoom` to position itself over the rendered canvas.
-  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
-  // Live pdfjs viewport for the current render. AnnotationLayer uses it to
-  // project markup (stored in PDF units) to canvas pixels + hit-test pointer
-  // events. Updated after every successful render.
-  const [currentViewport, setCurrentViewport] = useState(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
   const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
 
   // ── Load all drawings for this project ──────────────────────────────────────
-  const { data: drawings = [] } = useQuery({
-    queryKey: ["drawings", projectId],
-    queryFn: () => projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
-    enabled: !!projectId,
-    staleTime: 30000,
-  });
-
-  const filtered = search.trim()
-    ? drawings.filter(d =>
-        d.sheet_number?.toLowerCase().includes(search.toLowerCase()) ||
-        d.title?.toLowerCase().includes(search.toLowerCase())
-      )
-    : drawings;
-
-  const activeDrawing = drawings.find(d => d.id === activeId);
+  // useDrawingsList encapsulates the project drawings query, the search
+  // filter, and the active-drawing lookup. activeIndex (used below by the
+  // keyboard shortcuts effect) also lives in there.
+  const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
   const markupScale = activeDrawing?.markup_scale || null;
+
+  // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
+  // because the loader needs to clamp it to the active drawing's pdf_page
+  // when a multi-sheet master PDF resolves. setPdfError is exposed so the
+  // canvas renderer (renderPage below) can surface render-time failures.
+  const {
+    resolvedUrl,
+    pdfDoc,
+    totalPages,
+    pdfError,
+    setPdfError,
+    currentPage,
+    setCurrentPage,
+  } = usePdfLoader({ activeDrawing, renderMode });
+
+  // Canvas-side renderer. Owns the <canvas> ref + the in-flight render task
+  // and re-renders whenever the document, page index, zoom, or rotation
+  // changes. Surfaces the current viewport + canvas dimensions so overlay
+  // layers (markup, zones, callouts, link hotspots) can position themselves.
+  const {
+    canvasRef,
+    rendering,
+    currentViewport,
+    canvasSize,
+    pageSize,
+    linkHotspots,
+  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
 
   const qc = useQueryClient();
 
@@ -245,8 +222,6 @@ export default function DrawingViewer() {
     return () => { cancelled = true; };
   }, [pdfDoc, activeDrawing?.id, activeDrawing?.markup_scale, projectId, qc]);
 
-  const activeIndex = filtered.findIndex(d => d.id === activeId);
-
   // Markup hook is intentionally placed after activeDrawing so we can pass
   // its initial array in — Tier 3 persists drawing markup in drawings.markup.
   const markup = useMarkup({
@@ -285,218 +260,21 @@ export default function DrawingViewer() {
   // the canvas. Default OFF so the layer doesn't surprise V3.0 users.
   const [showDeps, setShowDeps] = useState(false);
 
-  // Resolve (or create) the drawing_revisions row that zones attach to.
-  // MVP: every drawing gets a v1 revision the first time the user opens
-  // zones on it. No explicit revision onboarding required.
-  const { data: currentRevision } = useQuery({
-    queryKey: ["drawing-revision-current", activeId],
-    queryFn: async () => {
-      if (!activeDrawing?.id) return null;
-      return ensureCurrentRevision({ drawing: activeDrawing });
-    },
-    enabled: !!activeDrawing?.id && zoneMode !== "off",
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: zones = [], refetch: refetchZones } = useQuery({
-    queryKey: ["drawing-zones", currentRevision?.id],
-    queryFn: () => listZones(currentRevision?.id),
-    enabled: !!currentRevision?.id,
-    staleTime: 30 * 1000,
-  });
-
-  // V3.0 — pending proposal count for the drawer-launcher badge.
-  // Quiet query (limit:1) just to read the total; the panel itself
-  // refetches the full list when it opens.
-  const { data: proposalCountData } = useQuery({
-    queryKey: ["drawing-zone-proposals-count", projectId, activeDrawing?.id, currentRevision?.id || null],
-    queryFn: () => listZoneProposals({
-      projectId,
-      drawingId:         activeDrawing.id,
-      drawingRevisionId: currentRevision?.id || undefined,
-      status:            "pending",
-      limit:             1,
-    }),
-    enabled: !!projectId && !!activeDrawing?.id,
-    staleTime: 30 * 1000,
-  });
-  const pendingProposalCount = proposalCountData?.total ?? 0;
-
-  // V3.1 — pull every active dependency edge incident to this drawing
-  // (either source or target zone lives on the current sheet). Used
-  // for the canvas DEPS overlay; cross-sheet edges still come back so
-  // we can render their "→ Sheet X" pills.
-  const { data: depsData = { rows: [], total: 0 } } = useQuery({
-    queryKey: ["drawing-zone-dependencies-sheet", projectId, activeDrawing?.id],
-    queryFn: () => listZoneDependencies({
-      projectId,
-      drawingId: activeDrawing.id,
-    }),
-    enabled: !!projectId && !!activeDrawing?.id && showDeps,
-    staleTime: 30 * 1000,
-  });
-  const sheetDependencies = depsData.rows || [];
-
-  // Build the dependencyEdges payload ZoneLayer wants. For each row:
-  //   - resolve source/target centroid from the hydrated bbox
-  //   - flag cross-sheet when one endpoint isn't on the active drawing
-  //   - hand the relationship + propagation_weight through verbatim
-  // Centroid math uses the hydrated bbox (mid-x, mid-y) so the arrow
-  // endpoints land in the visual middle of the zone, not its corner.
-  const dependencyEdges = useMemo(() => {
-    if (!showDeps || sheetDependencies.length === 0) return [];
-    const out = [];
-    for (const d of sheetDependencies) {
-      if (!d.__source || !d.__target) continue;
-      const src = d.__source;
-      const tgt = d.__target;
-      const srcOnSheet = src.drawing_id === activeDrawing?.id;
-      const tgtOnSheet = tgt.drawing_id === activeDrawing?.id;
-      const srcCenter = srcOnSheet
-        ? [(Number(src.x_min) + Number(src.x_max)) / 2, (Number(src.y_min) + Number(src.y_max)) / 2]
-        : null;
-      const tgtCenter = tgtOnSheet
-        ? [(Number(tgt.x_min) + Number(tgt.x_max)) / 2, (Number(tgt.y_min) + Number(tgt.y_max)) / 2]
-        : null;
-      // Anchor cross-sheet pills at whichever endpoint IS on this sheet.
-      if (!srcOnSheet && !tgtOnSheet) continue;
-      if (srcOnSheet && tgtOnSheet) {
-        out.push({
-          id:                d.id,
-          sourceCenter:      srcCenter,
-          targetCenter:      tgtCenter,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      false,
-          crossSheetLabel:   null,
-        });
-      } else if (srcOnSheet) {
-        // Outbound to another sheet — pill at source.
-        out.push({
-          id:                d.id,
-          sourceCenter:      srcCenter,
-          targetCenter:      null,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      true,
-          crossSheetLabel:   tgt.sheet_number || "other sheet",
-        });
-      } else {
-        // Inbound from another sheet — pill at target (which IS on this sheet).
-        out.push({
-          id:                d.id,
-          sourceCenter:      tgtCenter, // anchor at the on-sheet endpoint
-          targetCenter:      null,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      true,
-          crossSheetLabel:   `from ${src.sheet_number || "other sheet"}`,
-        });
-      }
-    }
-    return out;
-  }, [showDeps, sheetDependencies, activeDrawing?.id]);
-
-  // Link-count summaries keyed by zone id — used by the label chip to
-  // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
-  // the list of zones changes (e.g. a new one is drawn).
-  //
-  // This query also runs the rule engine over each zone's links and
-  // captures the computed status in `computedByZone`. That drives
-  // live overlay colors (via zonesWithComputed below) AND fires a
-  // best-effort background recompute-and-persist so the stored
-  // zone.status row stays in sync with reality — next time the viewer
-  // loads it can paint the right color immediately without waiting
-  // on a re-fetch of every linked record.
-  const { data: zoneData = { summaries: new Map(), computed: new Map(), densities: new Map() } } = useQuery({
-    queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length, zones.map((z) => z.id + ":" + z.status).join(",")],
-    queryFn: async () => {
-      const ids = zones.map((z) => z.id);
-      if (ids.length === 0) return { summaries: new Map(), computed: new Map(), densities: new Map() };
-      const byZone = await listLinksForZones(ids);
-      const summaries = new Map();
-      const computed = new Map();
-      const densities = new Map();
-      // Pre-hydrate every link in one sweep per record type (hydrateLinks
-      // already batches by type), then feed each zone's subset into the
-      // rule engine.
-      const allLinks = [];
-      for (const arr of byZone.values()) allLinks.push(...arr);
-      const hydrated = await hydrateLinks(allLinks); // Map<linkId, {link, record}>
-      for (const z of zones) {
-        const zoneLinks = byZone.get(z.id) || [];
-        summaries.set(z.id, summarizeLinks(zoneLinks));
-        const zoneItems = zoneLinks
-          .map((l) => hydrated.get(l.id))
-          .filter(Boolean);
-        computed.set(z.id, computeZoneStatus(zoneItems));
-        densities.set(z.id, computeZoneDensity(zoneItems));
-      }
-      // Fire-and-forget: persist computed status for any zone where
-      // the stored value drifted and the user hasn't manually pinned
-      // it. Never blocks the overlay render on these writes.
-      (async () => {
-        for (const z of zones) {
-          const c = computed.get(z.id);
-          if (!c) continue;
-          if (z.is_manual_status_override) continue;
-          if (c.status === z.status) continue;
-          try {
-            await recomputeAndPersistZoneStatus(
-              z,
-              (byZone.get(z.id) || []).map((l) => hydrated.get(l.id)).filter(Boolean),
-            );
-          } catch {
-            // Silent — rule-engine writes are advisory; panel still
-            // shows the right answer.
-          }
-        }
-      })();
-      return { summaries, computed, densities };
-    },
-    enabled: zones.length > 0,
-    staleTime: 30 * 1000,
-  });
-  const zoneSummaries = zoneData.summaries;
-  const zoneComputed  = zoneData.computed;
-  const zoneDensities = zoneData.densities;
-
-  // Overlay reads the computed status when available so colors are
-  // live even if the DB write hasn't caught up yet. Falls back to
-  // zone.status (which also stays fresh via the background write
-  // above). is_manual_status_override wins — rule engine is advisory
-  // when the user has explicitly pinned a color.
-  const zonesWithComputed = useMemo(() => {
-    return zones.map((z) => {
-      if (z.is_manual_status_override) return z;
-      const c = zoneComputed?.get?.(z.id);
-      if (!c || !c.status) return z;
-      return { ...z, status: c.status };
-    });
-  }, [zones, zoneComputed]);
-
-  // Status counts over the live (post-compute) zones — feeds the
-  // filter bar chips ("red · 3") and the summary "X/Y visible" label.
-  const zoneStatusCounts = useMemo(() => {
-    const out = {};
-    for (const z of zonesWithComputed) {
-      out[z.status] = (out[z.status] || 0) + 1;
-    }
-    return out;
-  }, [zonesWithComputed]);
-
-  // Apply the filter bar's choices. Empty statusSet = "no filter".
-  const filteredZones = useMemo(() => {
-    const { statusSet, typeKey } = zoneFilter;
-    const statusActive = statusSet && statusSet.size > 0;
-    const typeActive   = typeKey && typeKey !== "all";
-    if (!statusActive && !typeActive) return zonesWithComputed;
-    return zonesWithComputed.filter((z) => {
-      if (statusActive && !statusSet.has(z.status)) return false;
-      if (typeActive && z.zone_type !== typeKey) return false;
-      return true;
-    });
-  }, [zonesWithComputed, zoneFilter]);
+  // Drawing-hub server queries + derived memos. State setters stay in
+  // the page because the toolbar, filter bar, and panels all need them;
+  // useZoneData only owns the data side.
+  const {
+    currentRevision,
+    zones,
+    refetchZones,
+    pendingProposalCount,
+    dependencyEdges,
+    zoneSummaries,
+    zoneDensities,
+    zonesWithComputed,
+    zoneStatusCounts,
+    filteredZones,
+  } = useZoneData({ projectId, activeId, activeDrawing, zoneMode, showDeps, zoneFilter });
 
   // Handler: user clicked "+ Rev" — mint a new revision, carry
   // zones + links over, flip is_current, and force a refetch so
@@ -570,147 +348,6 @@ export default function DrawingViewer() {
     }
   }, [currentRevision, activeDrawing, refetchZones]);
 
-  // Resolve file_url (storage path) to a signed URL.
-  // If file_url is a stale Supabase signed URL, extract the path and re-sign.
-  useEffect(() => {
-    let cancelled = false;
-    setResolvedUrl(null);
-    setPdfDoc(null);
-    setPdfError(null);
-    setCurrentPage(1);
-    setTotalPages(0);
-
-    const rawUrl = activeDrawing?.file_url;
-    if (!rawUrl) return;
-
-    const isHttp = rawUrl.startsWith("http://") || rawUrl.startsWith("https://");
-    const storagePath = isHttp ? extractStoragePathFromSignedUrl(rawUrl) : rawUrl;
-    const toResolve = storagePath || rawUrl;
-
-    resolveFileUrl(toResolve)
-      .then(url => { if (!cancelled) setResolvedUrl(url); })
-      .catch(err => {
-        if (cancelled) return;
-        // Fall back to raw URL — iframe may still load it
-        if (isHttp) setResolvedUrl(rawUrl);
-        else setPdfError(`Failed to resolve file URL: ${err.message}`);
-      });
-
-    return () => { cancelled = true; };
-  }, [activeDrawing?.file_url]);
-
-  // Load the PDF once we have a signed URL (only when canvas mode is active)
-  useEffect(() => {
-    if (!resolvedUrl || renderMode !== "canvas") return;
-
-    let cancelled = false;
-    let loadingTask = null;
-
-    loadingTask = pdfjsLib.getDocument(resolvedUrl);
-    loadingTask.promise
-      .then(doc => {
-        if (cancelled) { doc.destroy(); return; }
-        setPdfDoc(doc);
-        setTotalPages(doc.numPages);
-        // Honor the active drawing's intended page (e.g. sheet B on page 3
-        // of a multi-sheet master PDF). Previously we blindly reset to 1
-        // here, which raced with the [activeDrawing?.id] effect — if this
-        // fired second, a click would "appear to do nothing" (sheet became
-        // active but PDF stayed on page 1). Clamp to the doc's page range.
-        const desired = Number(activeDrawing?.pdf_page) || 1;
-        setCurrentPage(Math.max(1, Math.min(doc.numPages, desired)));
-        setPdfError(null);
-      })
-      .catch(err => {
-        if (!cancelled) setPdfError(`PDF load failed: ${err.message}`);
-      });
-
-    return () => {
-      cancelled = true;
-      if (loadingTask) {
-        loadingTask.destroy?.();
-      }
-    };
-  }, [resolvedUrl, renderMode]);
-
-  // Destroy previous PDF document to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (pdfDoc) {
-        pdfDoc.destroy().catch(() => {});
-      }
-    };
-  }, [pdfDoc]);
-
-  // ── Render page when doc, page, or zoom changes ────────────────────────────
-  const renderPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-
-    // Cancel any in-flight render
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-      renderTaskRef.current = null;
-    }
-
-    setRendering(true);
-    try {
-      const page = await pdfDoc.getPage(currentPage);
-      const baseViewport = page.getViewport({ scale: 1, rotation });
-      setPageSize({ width: baseViewport.width, height: baseViewport.height });
-      const viewport = page.getViewport({ scale: zoom, rotation });
-      const canvas = canvasRef.current;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d");
-
-      renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
-      await renderTaskRef.current.promise;
-
-      // Publish viewport + size so AnnotationLayer can project markup.
-      // We do this AFTER the render so the overlay never displays against
-      // a mismatched canvas (prevents a 1-frame "jump" on zoom).
-      setCurrentViewport(viewport);
-      setCanvasSize({ width: viewport.width, height: viewport.height });
-
-      // ── Extract link annotations for clickable overlays ──────────────
-      try {
-        const annots = await page.getAnnotations({ intent: "display" });
-        const linkAnnots = annots
-          .filter(a => a.subtype === "Link" && a.rect)
-          .map(a => {
-            // Transform PDF rect [x1,y1,x2,y2] to canvas pixel coords
-            const [x1, y1, x2, y2] = a.rect;
-            const p1 = viewport.convertToViewportPoint(x1, y1);
-            const p2 = viewport.convertToViewportPoint(x2, y2);
-            const left = Math.min(p1[0], p2[0]);
-            const top = Math.min(p1[1], p2[1]);
-            const width = Math.abs(p2[0] - p1[0]);
-            const height = Math.abs(p2[1] - p1[1]);
-            return {
-              id: a.id || `${x1}-${y1}`,
-              left, top, width, height,
-              url: a.url || null,
-              dest: a.dest || null,
-              unsafeUrl: a.unsafeUrl || null,
-              title: a.title || "",
-            };
-          });
-        setLinkHotspots(linkAnnots);
-      } catch {
-        setLinkHotspots([]);
-      }
-    } catch (err) {
-      if (err?.name !== "RenderingCancelledException") {
-        console.error("Render error:", err);
-      }
-    } finally {
-      setRendering(false);
-      renderTaskRef.current = null;
-    }
-  }, [pdfDoc, currentPage, zoom, rotation]);
-
-  useEffect(() => { renderPage(); }, [renderPage]);
-
   // When the active drawing changes, jump to its source PDF page so callouts
   // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
   // legacy rows without it default to page 1.
@@ -723,7 +360,6 @@ export default function DrawingViewer() {
   // Callout → navigation handler. If the targetSheetNumber resolves to a
   // drawing in the project list, switch to it. The effect above then jumps
   // to that drawing's pdf_page automatically.
-  const normalizeSN = (s) => String(s || "").toUpperCase().replace(/[\s\-_.]/g, "");
   const onCalloutClick = useCallback((callout) => {
     if (!callout?.targetSheetNumber) return;
     const target = drawings.find(d =>
@@ -784,71 +420,22 @@ export default function DrawingViewer() {
   }, [pdfDoc, totalPages, drawings]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === "INPUT") return;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-        e.preventDefault();
-        const next = filtered[activeIndex + 1];
-        if (next) setActiveId(next.id);
-      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev = filtered[activeIndex - 1];
-        if (prev) setActiveId(prev.id);
-      } else if (e.key === "=" || e.key === "+") {
-        setZoom(z => Math.min(4.0, +(z + 0.25).toFixed(2)));
-      } else if (e.key === "-") {
-        setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)));
-      } else if (e.key === "0") {
-        setZoom(1.0);
-      } else if (e.key === "PageDown" || e.key === "j") {
-        setCurrentPage(p => Math.min(totalPages, p + 1));
-      } else if (e.key === "PageUp" || e.key === "k") {
-        setCurrentPage(p => Math.max(1, p - 1));
-      } else if (e.key === "[" || e.key === "]") {
-        setSidebarOpen(o => !o);
-      } else if (e.key === "f" || e.key === "F") {
-        setFilmstripOpen(o => !o);
-      } else if (e.key === "i" || e.key === "I") {
-        setContextOpen(o => !o);
-      } else if (e.key === "r" || e.key === "R") {
-        // r = rotate CW; Shift+R = rotate CCW
-        setRotation(rot => (e.shiftKey ? (rot + 270) % 360 : (rot + 90) % 360));
-      } else if (e.key === "?") {
-        // `?` — Shift+/ on US keyboards. Only intercept when no modifiers
-        // other than Shift are held so Ctrl+?/browser find still works.
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          e.preventDefault();
-          setShortcutsOpen(o => !o);
-        }
-      } else if (e.key === "v" || e.key === "V") {
-        setActiveTool("select");
-      } else if (e.key === "p" || e.key === "P") {
-        setActiveTool("pen");
-      } else if (e.key === "b" || e.key === "B") {
-        setActiveTool("rect");
-      } else if (e.key === "h" || e.key === "H") {
-        // H = highlight. Lowercase only — uppercase H on some layouts
-        // collides with browser "Open history" (not a thing by default
-        // but some extensions bind it); lowercase is safe.
-        setActiveTool("highlight");
-      } else if (e.key === "a" || e.key === "A") {
-        setActiveTool("arrow");
-      } else if (e.key === "m" || e.key === "M") {
-        setActiveTool("measure");
-      } else if (e.key === "k" || e.key === "K") {
-        setActiveTool("calibrate");
-      } else if (e.key === "t" || e.key === "T") {
-        setActiveTool("note");
-      } else if (e.key === "Escape") {
-        // Esc snaps back to select so keyboard users can bail on a tool
-        // without hunting for the toolbar.
-        setActiveTool("select");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [filtered, activeIndex, totalPages]);
+  // Hook lives in useViewerKeyboardShortcuts; binding logic + key map are
+  // identical to the previous inline effect.
+  useViewerKeyboardShortcuts({
+    filtered,
+    activeIndex,
+    totalPages,
+    setActiveId,
+    setZoom,
+    setCurrentPage,
+    setSidebarOpen,
+    setFilmstripOpen,
+    setContextOpen,
+    setRotation,
+    setShortcutsOpen,
+    setActiveTool,
+  });
 
   // ── Fit width / Fit page / zoom preset ────────────────────────────────────
   const handleFitWidth = useCallback(async () => {
@@ -895,28 +482,10 @@ export default function DrawingViewer() {
     });
   }, []);
 
-  // Spacebar-hold pan. Track press/release + change cursor to "grab"/"grabbing".
-  // While held, the markup tool is suppressed so dragging pans instead of drawing.
-  // spacebarPanRef is read by the pan event handlers attached via the container
-  // ref callback, which close over a stable ref not React state.
-  const [spacePan, setSpacePan] = useState(false);
-  const spacebarPanRef = useRef(false);
-  useEffect(() => { spacebarPanRef.current = spacePan; }, [spacePan]);
-  useEffect(() => {
-    const onDown = (e) => {
-      if (e.code !== "Space") return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      e.preventDefault();
-      setSpacePan(true);
-    };
-    const onUp = (e) => { if (e.code === "Space") setSpacePan(false); };
-    window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-    };
-  }, []);
+  // Spacebar-hold pan. Hook returns both the React state (drives the cursor
+  // styling on the container) and a mutable ref read by the imperative
+  // mousedown/mousemove handlers attached via the container ref callback.
+  const { spacePan, spacebarPanRef } = useSpacebarPan();
 
   // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async () => {
@@ -934,81 +503,17 @@ export default function DrawingViewer() {
     <div style={{ display: "flex", height: "100vh", background: "var(--bg-page)", overflow: "hidden" }}>
 
       {/* ── Sheet List Sidebar (collapsible) ──────────────────────────────── */}
-      <div style={{
-        width: sidebarOpen ? 260 : 0,
-        flexShrink: 0,
-        borderRight: sidebarOpen ? "1px solid var(--border-default)" : "none",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg-surface)",
-        overflow: "hidden",
-        transition: "width 0.2s ease",
-      }}>
-
-        {/* Sidebar header */}
-        <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--border-default)" }}>
-          <button onClick={() => navigate("/Drawings")}
-            style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 0, marginBottom: 10 }}>
-            <ArrowLeft size={12} /> Back to Drawings
-          </button>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search sheets…"
-            style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }} />
-          <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 8, letterSpacing: "0.10em", textTransform: "uppercase" }}>
-            {filtered.length} / {drawings.length} Sheets
-          </div>
-        </div>
-
-        {/* Sheet list */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {filtered.map((d, i) => {
-            const isActive = d.id === activeId;
-            const stageColor = STAGES[d.stage]?.color || "#6B7280";
-            return (
-              <div key={d.id} onClick={() => setActiveId(d.id)}
-                style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--hover-bg)", background: isActive ? "var(--accent-muted)" : "none", borderLeft: `3px solid ${isActive ? "var(--accent)" : "transparent"}`, transition: "background 0.1s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
-                  <div>
-                    <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: isActive ? "var(--accent)" : "var(--text-primary)", marginBottom: 2 }}>
-                      {d.sheet_number}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>
-                      {d.title}
-                    </div>
-                  </div>
-                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                    <span style={{ ...mono, fontSize: 8, fontWeight: 700, color: stageColor, border: `1px solid ${stageColor}44`, padding: "1px 5px", borderRadius: 2 }}>
-                      {d.stage === "Released" ? "IFC" : (d.stage || "—")}
-                    </span>
-                    {d.priority_flag && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--status-error)", display: "inline-block" }} />}
-                  </div>
-                </div>
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", opacity: 0.5, marginTop: 3 }}>R{d.revision_number ?? "0"} · {d.discipline}</div>
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div style={{ padding: 24, ...mono, fontSize: 10, color: "var(--text-muted)", textAlign: "center" }}>NO SHEETS FOUND</div>
-          )}
-        </div>
-
-        {/* Navigation footer */}
-        {filtered.length > 0 && (
-          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border-default)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button onClick={() => { const p = filtered[activeIndex - 1]; if (p) setActiveId(p.id); }}
-              disabled={activeIndex <= 0}
-              style={{ display: "inline-flex", alignItems: "center", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", color: "var(--text-secondary)", padding: "4px 10px", cursor: activeIndex <= 0 ? "not-allowed" : "pointer", opacity: activeIndex <= 0 ? 0.3 : 1 }}>
-              <ChevronLeft size={14} />
-            </button>
-            <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em" }}>{activeIndex + 1} / {filtered.length}</span>
-            <button onClick={() => { const n = filtered[activeIndex + 1]; if (n) setActiveId(n.id); }}
-              disabled={activeIndex >= filtered.length - 1}
-              style={{ display: "inline-flex", alignItems: "center", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", color: "var(--text-secondary)", padding: "4px 10px", cursor: activeIndex >= filtered.length - 1 ? "not-allowed" : "pointer", opacity: activeIndex >= filtered.length - 1 ? 0.3 : 1 }}>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
-      </div>
+      <SheetListSidebar
+        sidebarOpen={sidebarOpen}
+        navigate={navigate}
+        search={search}
+        setSearch={setSearch}
+        filtered={filtered}
+        drawings={drawings}
+        activeId={activeId}
+        setActiveId={setActiveId}
+        activeIndex={activeIndex}
+      />
 
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -1017,198 +522,30 @@ export default function DrawingViewer() {
         <ViewerHeader projectName={activeProject?.name} activeDrawing={activeDrawing} />
 
         {/* Viewer toolbar */}
-        <div style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
-          {/* Sidebar toggle */}
-          <button
-            onClick={() => setSidebarOpen(o => !o)}
-            title={sidebarOpen ? "Hide sheet list (more drawing space)" : "Show sheet list"}
-            style={{
-              ...toolBtn,
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "6px 8px",
-              color: sidebarOpen ? "var(--accent)" : "var(--text-muted)",
-              background: sidebarOpen ? "var(--accent-muted)" : "var(--bg-surface-low)",
-              border: sidebarOpen ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-              flexShrink: 0,
-            }}
-          >
-            {sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
-          </button>
-          {/* Sheet info */}
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            {activeDrawing ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{activeDrawing.sheet_number}</span>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeDrawing.title}</span>
-                <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", flexShrink: 0 }}>R{activeDrawing.revision_number ?? "0"}</span>
-                {activeDrawing.stage && (
-                  <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: STAGES[activeDrawing.stage]?.color, flexShrink: 0 }}>
-                    {activeDrawing.stage === "Released" ? "IFC" : activeDrawing.stage}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>SELECT A SHEET</span>
-            )}
-          </div>
-
-          {/* Page nav (for multi-page PDFs) */}
-          {totalPages > 1 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1}
-                style={toolBtn}>‹</button>
-              <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{currentPage}/{totalPages}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}
-                style={toolBtn}>›</button>
-            </div>
-          )}
-
-          {/* Zoom controls — pro-viewer style: -/+ around a preset dropdown.
-              Dropdown value "fitW" / "fitP" / "1" maps to actions in handleZoomPreset. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button onClick={() => setZoom(z => Math.max(0.1, +(z - 0.1).toFixed(2)))} title="Zoom out (−)" style={toolBtn}>−</button>
-            <select
-              value={zoom.toFixed(2)}
-              onChange={(e) => handleZoomPreset(e.target.value)}
-              style={{
-                fontFamily: "var(--font-mono)", fontSize: 10, padding: "4px 6px",
-                border: "1px solid var(--border-default)", borderRadius: 4,
-                background: "var(--bg-surface)", color: "var(--text-primary)",
-                minWidth: 82, cursor: "pointer",
-              }}
-            >
-              {/* Current value as first item so the select always reflects reality */}
-              <option value={zoom.toFixed(2)}>{Math.round(zoom * 100)}%</option>
-              <option value="fitW">Fit Width</option>
-              <option value="fitP">Fit Page</option>
-              <option value="0.50">50%</option>
-              <option value="0.75">75%</option>
-              <option value="1.00">100%</option>
-              <option value="1.25">125%</option>
-              <option value="1.50">150%</option>
-              <option value="2.00">200%</option>
-              <option value="3.00">300%</option>
-              <option value="4.00">400%</option>
-            </select>
-            <button onClick={() => setZoom(z => Math.min(5.0, +(z + 0.1).toFixed(2)))} title="Zoom in (+)" style={toolBtn}>+</button>
-          </div>
-          <button
-            onClick={() => setRotation(r => (r + 90) % 360)}
-            title={`Rotate (R) — currently ${rotation}°`}
-            style={{
-              ...toolBtn,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 8px",
-              color: rotation !== 0 ? "var(--accent)" : "var(--text-muted)",
-              background: rotation !== 0 ? "rgba(200,155,32,0.10)" : "none",
-            }}
-          >
-            <RotateCw size={12} />
-            {rotation !== 0 && <span style={{ ...mono, fontSize: 9, fontWeight: 700 }}>{rotation}°</span>}
-          </button>
-          <button
-            onClick={() => setRenderMode(m => m === "iframe" ? "canvas" : "iframe")}
-            title={renderMode === "iframe" ? "Switch to canvas (markups)" : "Switch to iframe (browser PDF)"}
-            style={{
-              ...toolBtn, ...mono, fontSize: 9,
-              color: renderMode === "iframe" ? "var(--accent)" : "var(--text-muted)",
-              background: renderMode === "iframe" ? "rgba(200,155,32,0.1)" : "none",
-            }}
-          >
-            {renderMode === "iframe" ? "IFRAME" : "CANVAS"}
-          </button>
-          <button onClick={handleDownload} disabled={!activeDrawing?.file_url}
-            style={{ ...toolBtn, ...mono, fontSize: 9, color: "var(--accent)", opacity: activeDrawing?.file_url ? 1 : 0.3 }}>
-            ↓ PDF
-          </button>
-
-          {/* Scale indicator + auto-detect button. Shown only when a PDF is
-              loaded. Reads activeDrawing.markup_scale; if null, shows "NO SCALE"
-              + an AUTO button that parses the title block. */}
-          {pdfDoc && (
-            <>
-              <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 4px" }} />
-              <span
-                title={markupScale
-                  ? `Calibrated scale (1 PDF inch = ${markupScale.toFixed(1)} real inches). Measurements render in real ft-in.`
-                  : "No scale calibrated — measure tool shows raw page-inches with a ~ prefix."}
-                style={{
-                  ...mono, fontSize: 9, fontWeight: 700,
-                  padding: "4px 8px",
-                  borderRadius: 3,
-                  background: markupScale ? "rgba(0,229,255,0.10)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${markupScale ? "rgba(0,229,255,0.45)" : "var(--border-default)"}`,
-                  color: markupScale ? "#00E5FF" : "var(--text-muted)",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {markupScale ? formatScaleFraction(markupScale) : "NO SCALE"}
-              </span>
-              <button
-                onClick={handleAutoDetectScale}
-                title="Scan the PDF title block and try to auto-detect the scale (K key opens the manual Calibrate tool if this fails)"
-                disabled={!activeDrawing?.id}
-                style={{
-                  ...toolBtn, ...mono, fontSize: 9,
-                  color: "var(--text-muted)",
-                  opacity: activeDrawing?.id ? 1 : 0.4,
-                }}
-              >
-                AUTO
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => setFilmstripOpen(o => !o)}
-            title={filmstripOpen ? "Hide thumbnail filmstrip (F)" : "Show thumbnail filmstrip (F)"}
-            style={{
-              ...toolBtn,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 8px",
-              color: filmstripOpen ? "var(--accent)" : "var(--text-muted)",
-              background: filmstripOpen ? "rgba(200,155,32,0.10)" : "none",
-            }}
-          >
-            <Film size={12} />
-          </button>
-          <button
-            onClick={() => setContextOpen(o => !o)}
-            title={contextOpen ? "Hide sheet context panel (I)" : "Show sheet context panel (I)"}
-            style={{
-              ...toolBtn,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 8px",
-              color: contextOpen ? "var(--accent)" : "var(--text-muted)",
-              background: contextOpen ? "rgba(200,155,32,0.10)" : "none",
-            }}
-          >
-            {contextOpen ? <PanelRightClose size={12} /> : <PanelRightOpen size={12} />}
-          </button>
-          <button
-            onClick={() => setShortcutsOpen(o => !o)}
-            title="Keyboard shortcuts (?)"
-            style={{
-              ...toolBtn,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 8px",
-              color: "var(--text-muted)",
-            }}
-          >
-            <Keyboard size={12} />
-            <span style={{ ...mono, fontSize: 9, fontWeight: 700 }}>?</span>
-          </button>
-        </div>
+        <ViewerToolbar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          activeDrawing={activeDrawing}
+          totalPages={totalPages}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          zoom={zoom}
+          setZoom={setZoom}
+          handleZoomPreset={handleZoomPreset}
+          rotation={rotation}
+          setRotation={setRotation}
+          renderMode={renderMode}
+          setRenderMode={setRenderMode}
+          handleDownload={handleDownload}
+          pdfDoc={pdfDoc}
+          markupScale={markupScale}
+          handleAutoDetectScale={handleAutoDetectScale}
+          filmstripOpen={filmstripOpen}
+          setFilmstripOpen={setFilmstripOpen}
+          contextOpen={contextOpen}
+          setContextOpen={setContextOpen}
+          setShortcutsOpen={setShortcutsOpen}
+        />
 
         {/* Viewer area — iframe (browser-native) or pdfjs canvas.
             Deep slate backdrop with a subtle radial vignette so the paper
@@ -1241,235 +578,28 @@ export default function DrawingViewer() {
           )}
 
           {/* Zones toggle — floats top-right of the viewer pane. Three-state:
-              OFF → VIEW (show saved zones) → DRAW (drag to create). Click
-              cycles OFF↔VIEW; click+Alt to jump straight to DRAW. Left
+              OFF → VIEW (show saved zones) → DRAW (drag to create). Left
               ghostly in the layout when we don't have a renderable sheet. */}
           {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
-            <div
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 12,
-                zIndex: 40,
-                display: "flex",
-                gap: 6,
-                padding: 4,
-                borderRadius: 6,
-                background: "rgba(15,17,24,0.72)",
-                border: "1px solid var(--border-default)",
-                backdropFilter: "blur(6px)",
-                fontFamily: "var(--font-mono)",
-              }}
-              title="Zones: rectangular coordination areas linked to RFIs / WPs / deliveries."
-            >
-              {[
-                { id: "off",  label: "OFF",   desc: "Hide zone overlay" },
-                { id: "view", label: `VIEW${filteredZones.length ? ` · ${filteredZones.length}` : ""}`, desc: "Show zones · click to select" },
-                { id: "draw", label: "DRAW",  desc: "Drag-create a new zone" },
-              ].map((btn) => {
-                const isActive = zoneMode === btn.id;
-                return (
-                  <button
-                    key={btn.id}
-                    onClick={() => { setZoneMode(btn.id); setSelectedZoneId(null); }}
-                    title={btn.desc}
-                    style={{
-                      padding: "5px 10px",
-                      border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
-                      background: isActive
-                        ? "rgba(0,229,255,0.14)"
-                        : "transparent",
-                      color: isActive ? "#00E5FF" : "var(--text-muted)",
-                      borderRadius: 3,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.10em",
-                      cursor: "pointer",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {btn.label}
-                  </button>
-                );
-              })}
-              {/* Heatmap overlay toggle — only useful when there are
-                  zones to recolor. In VIEW mode it swaps the status
-                  palette for a density-weighted cool→amber→red ramp so
-                  hot zones on the sheet jump out at a glance. Hidden
-                  in OFF + DRAW because there's nothing to recolor. */}
-              {zoneMode === "view" && zones.length > 0 && (
-                <button
-                  onClick={() => setZoneOverlay((v) => (v === "heatmap" ? "status" : "heatmap"))}
-                  title={zoneOverlay === "heatmap"
-                    ? "Switch back to status colors"
-                    : "Heatmap: recolor zones by weighted issue density (overdue RFIs, failed inspections, blocked WPs, late deliveries)"}
-                  style={{
-                    padding: "5px 10px",
-                    border: `1px solid ${zoneOverlay === "heatmap" ? "#EF4444" : "transparent"}`,
-                    background: zoneOverlay === "heatmap"
-                      ? "rgba(239,68,68,0.14)"
-                      : "transparent",
-                    color: zoneOverlay === "heatmap" ? "#EF4444" : "var(--text-muted)",
-                    borderRadius: 3,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.10em",
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    marginLeft: 4,
-                  }}
-                >
-                  HEAT
-                </button>
-              )}
-
-              {/* V3.1 — DEPS overlay toggle. Renders directed dependency
-                  arrows between zones (red=blocks, amber=depends_on,
-                  gray dashed=relates_to). Cross-sheet edges show as a
-                  "→ Sheet X" pill instead of an arrow. Hidden in OFF
-                  mode because there are no zone shapes to anchor
-                  arrows to. */}
-              {zoneMode !== "off" && (
-                <button
-                  onClick={() => setShowDeps((v) => !v)}
-                  title={showDeps
-                    ? "Hide dependency arrows"
-                    : "Show directed dependency arrows between zones (V3.1)"}
-                  style={{
-                    padding: "5px 10px",
-                    border: `1px solid ${showDeps ? "#F59E0B" : "transparent"}`,
-                    background: showDeps
-                      ? "rgba(245,158,11,0.14)"
-                      : "transparent",
-                    color: showDeps ? "#F59E0B" : "var(--text-muted)",
-                    borderRadius: 3,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.10em",
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    marginLeft: 4,
-                  }}
-                >
-                  DEPS
-                </button>
-              )}
-
-              {/* Shape chooser — only relevant while DRAW is active.
-                  Rectangle is fastest (drag) and polygon is for
-                  irregular zones like erection bays or stair cores.
-                  Hidden outside of DRAW mode to keep the toolbar quiet. */}
-              {zoneMode === "draw" && (
-                <div
-                  role="group"
-                  aria-label="Zone shape"
-                  style={{
-                    display: "flex",
-                    gap: 4,
-                    marginLeft: 4,
-                    paddingLeft: 6,
-                    borderLeft: "1px solid var(--border-default)",
-                  }}
-                  title="Shape to draw"
-                >
-                  {[
-                    { id: "rect",    label: "▭", desc: "Rectangle — drag to create" },
-                    { id: "polygon", label: "⬠", desc: "Polygon — click to add vertices, Enter/double-click to finish, Esc to cancel" },
-                  ].map((s) => {
-                    const isActive = drawShape === s.id;
-                    return (
-                      <button
-                        key={s.id}
-                        onClick={() => setDrawShape(s.id)}
-                        title={s.desc}
-                        style={{
-                          padding: "5px 8px",
-                          border: `1px solid ${isActive ? "#00E5FF" : "transparent"}`,
-                          background: isActive
-                            ? "rgba(0,229,255,0.14)"
-                            : "transparent",
-                          color: isActive ? "#00E5FF" : "var(--text-muted)",
-                          borderRadius: 3,
-                          fontSize: 12,
-                          lineHeight: 1,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* V3.0 — Proposals drawer launcher. Always visible in
-                  zone-mode so a PM can review AI-suggested zones without
-                  needing to draw any zones first. Badge shows pending
-                  count on this drawing. */}
-              {activeDrawing && (
-                <button
-                  onClick={() => setProposalPanelOpen((v) => !v)}
-                  title="Open the AI proposals drawer — zones suggested by clustering analyzer findings"
-                  style={{
-                    padding: "5px 10px",
-                    border: `1px solid ${proposalPanelOpen ? "#00E5FF" : "transparent"}`,
-                    background: proposalPanelOpen
-                      ? "rgba(0,229,255,0.14)"
-                      : pendingProposalCount > 0 ? "rgba(0,229,255,0.06)" : "transparent",
-                    color: proposalPanelOpen || pendingProposalCount > 0 ? "#00E5FF" : "var(--text-muted)",
-                    borderRadius: 3,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.10em",
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    marginLeft: 4,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  PROPOSALS
-                  {pendingProposalCount > 0 && (
-                    <span style={{
-                      ...mono,
-                      fontSize: 9,
-                      padding: "1px 5px",
-                      borderRadius: 8,
-                      background: "#00E5FF",
-                      color: "#0F1118",
-                    }}>
-                      {pendingProposalCount}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Revision carry-forward — only offered when there's at
-                  least one zone to carry. Invisible on a brand-new
-                  sheet so the chrome stays quiet. */}
-              {currentRevision && zones.length > 0 && (
-                <button
-                  onClick={handleNewRevision}
-                  title={`Create a new revision of ${activeDrawing?.sheet_number || "this sheet"} — zones will be copied forward.`}
-                  style={{
-                    padding: "5px 10px",
-                    border: "1px dashed var(--accent)",
-                    background: "transparent",
-                    color: "var(--accent)",
-                    borderRadius: 3,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.10em",
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                    marginLeft: 4,
-                  }}
-                >
-                  + Rev
-                </button>
-              )}
-            </div>
+            <ZonesFloatingToolbar
+              zoneMode={zoneMode}
+              setZoneMode={setZoneMode}
+              setSelectedZoneId={setSelectedZoneId}
+              filteredZones={filteredZones}
+              zones={zones}
+              zoneOverlay={zoneOverlay}
+              setZoneOverlay={setZoneOverlay}
+              showDeps={showDeps}
+              setShowDeps={setShowDeps}
+              drawShape={drawShape}
+              setDrawShape={setDrawShape}
+              activeDrawing={activeDrawing}
+              proposalPanelOpen={proposalPanelOpen}
+              setProposalPanelOpen={setProposalPanelOpen}
+              pendingProposalCount={pendingProposalCount}
+              currentRevision={currentRevision}
+              handleNewRevision={handleNewRevision}
+            />
           )}
 
           {/* Zone filter bar — only useful when the overlay is
@@ -1599,32 +729,12 @@ export default function DrawingViewer() {
                 />
 
                 {/* ── PDF link-hotspot layer (clickable internal/external links) ── */}
-                {linkHotspots.length > 0 && (
-                  <div ref={annotLayerRef} style={{ position: "absolute", top: 0, left: 0, width: canvasRef.current?.width || 0, height: canvasRef.current?.height || 0, pointerEvents: "none" }}>
-                    {linkHotspots.map(a => (
-                      <div
-                        key={a.id}
-                        onClick={() => handleAnnotationClick(a)}
-                        title={a.title || a.url || "Link"}
-                        style={{
-                          position: "absolute",
-                          left: a.left,
-                          top: a.top,
-                          width: a.width,
-                          height: a.height,
-                          cursor: "pointer",
-                          pointerEvents: "auto",
-                          border: "1px solid transparent",
-                          borderRadius: 2,
-                          transition: "border-color 0.15s, background 0.15s",
-                          background: "transparent",
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(200,155,32,0.12)"; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
-                      />
-                    ))}
-                  </div>
-                )}
+                <PdfLinkHotspotLayer
+                  linkHotspots={linkHotspots}
+                  canvasRef={canvasRef}
+                  annotLayerRef={annotLayerRef}
+                  onAnnotationClick={handleAnnotationClick}
+                />
 
                 {/* ── Markup layer (Tier 3: user-drawn redlines/shapes/notes) ──
                      Rendered ABOVE link hotspots + callouts so the user can
@@ -1677,53 +787,13 @@ export default function DrawingViewer() {
                 />
 
                 {/* ── Callout overlay layer — regex-detected cross-sheet refs ── */}
-                {Array.isArray(activeDrawing?.callouts) && activeDrawing.callouts.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 0, left: 0,
-                      width:  pageSize.width  * zoom,
-                      height: pageSize.height * zoom,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {activeDrawing.callouts.map((c, i) => {
-                      if (!c?.coords) return null;
-                      // Render-time resolution against the full project drawing
-                      // list — a callout flagged `resolved: false` at upload
-                      // time may still hit a sibling uploaded later.
-                      const match = drawings.find(d =>
-                        normalizeSN(d.sheet_number) === normalizeSN(c.targetSheetNumber)
-                      );
-                      const resolved = !!match;
-                      return (
-                        <button
-                          key={i}
-                          disabled={!resolved}
-                          onClick={() => resolved && onCalloutClick(c)}
-                          title={resolved
-                            ? `${c.text} → ${match.sheet_number}${match.title ? ` · ${match.title}` : ""}`
-                            : `${c.text} (no sibling sheet found)`
-                          }
-                          style={{
-                            position: "absolute",
-                            left:   Math.max(0, c.coords.x      * zoom - 2),
-                            top:    Math.max(0, c.coords.y      * zoom - 2),
-                            width:  Math.max(12, c.coords.width  * zoom + 4),
-                            height: Math.max(12, c.coords.height * zoom + 4),
-                            background: resolved ? "rgba(200,155,32,0.18)" : "rgba(255,200,0,0.05)",
-                            border: resolved ? "2px solid var(--accent)" : "2px dashed rgba(200,155,32,0.35)",
-                            borderRadius: 2,
-                            cursor: resolved ? "pointer" : "not-allowed",
-                            pointerEvents: "auto",
-                            padding: 0,
-                            zIndex: 5,
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+                <CalloutOverlay
+                  activeDrawing={activeDrawing}
+                  drawings={drawings}
+                  pageSize={pageSize}
+                  zoom={zoom}
+                  onCalloutClick={onCalloutClick}
+                />
               </div>
             </div>
           )}
@@ -1840,75 +910,4 @@ export default function DrawingViewer() {
       />
     </div>
   );
-}
-
-const toolBtn = {
-  background: "none",
-  border: "1px solid var(--border-default)",
-  borderRadius: 2,
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  padding: "4px 10px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 13,
-  lineHeight: 1,
-};
-
-/**
- * Parse a user-entered real-world distance into inches. Supports:
- *   10'-0       → 120
- *   10'0"       → 120
- *   10'-6 1/2"  → 126.5
- *   10ft        → 120
- *   10 feet     → 120
- *   120"        → 120
- *   120         → 120 (bare number assumed inches)
- *   10.5       (inches)
- * Returns NaN on unparseable input.
- */
-function parseRealDistance(raw) {
-  if (!raw) return NaN;
-  const s = String(raw).trim().toLowerCase();
-
-  // Feet + inches: "10'-0" / "10'0\"" / "10' 0" / "10'-6 1/2\""
-  const ftInMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)\s*[-\s]?\s*(\d+(?:\.\d+)?)?\s*(?:\d+\s*\/\s*\d+)?\s*"?$/i);
-  if (ftInMatch) {
-    const feet = parseFloat(ftInMatch[1]);
-    const inches = ftInMatch[2] ? parseFloat(ftInMatch[2]) : 0;
-    const fracMatch = s.match(/(\d+)\s*\/\s*(\d+)\s*"?$/);
-    const frac = fracMatch ? parseFloat(fracMatch[1]) / parseFloat(fracMatch[2]) : 0;
-    return feet * 12 + inches + frac;
-  }
-
-  // Plain inches: "120\"" / "120 in" / bare number
-  const inMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:"|in|inches|inch)?$/i);
-  if (inMatch) return parseFloat(inMatch[1]);
-
-  // Feet only with "ft": "10ft" / "10 feet"
-  const ftMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:ft|feet)$/i);
-  if (ftMatch) return parseFloat(ftMatch[1]) * 12;
-
-  return NaN;
-}
-
-/**
- * Turn a scale factor (real_inches_per_pdf_inch) into a human-readable
- * architectural scale label. 48 → "1/4\" = 1'-0\"", 96 → "1/8\" = 1'-0\"",
- * 24 → "1/2\" = 1'-0\"" — matching how PMs read drawings. Non-standard
- * scales fall back to "1:X" ratio form.
- */
-function formatScaleFraction(scale) {
-  const standard = [
-    { ratio: 12,  label: '1" = 1\'-0"' },
-    { ratio: 16,  label: '3/4" = 1\'-0"' },
-    { ratio: 24,  label: '1/2" = 1\'-0"' },
-    { ratio: 32,  label: '3/8" = 1\'-0"' },
-    { ratio: 48,  label: '1/4" = 1\'-0"' },
-    { ratio: 96,  label: '1/8" = 1\'-0"' },
-    { ratio: 192, label: '1/16" = 1\'-0"' },
-  ];
-  for (const s of standard) {
-    if (Math.abs(scale - s.ratio) / s.ratio < 0.03) return s.label;
-  }
-  return `1:${scale.toFixed(0)}`;
 }
