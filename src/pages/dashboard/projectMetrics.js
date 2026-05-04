@@ -553,7 +553,7 @@ export function submittalPipelineRollup(rows = []) {
     //      Downstream-class: GC / Owner
     const status = r?.status;
     const bic    = r?.ball_in_court;
-    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor";
+    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor" || bic === "Subcontractor";
     const isApproverClass  = bic === "EOR" || bic === "Architect" || bic === "AOR";
     const isDownstreamClass = bic === "GC" || bic === "Owner";
 
@@ -603,7 +603,7 @@ export function submittalPipelineRollupFromSubmittals(submittals = []) {
     const status = r?.status;
     if (!status || status === "Void") continue;
     const bic = r?.ball_in_court;
-    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor";
+    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor" || bic === "Subcontractor";
     const isApproverClass  = bic === "EOR" || bic === "Architect" || bic === "AOR";
     const isDownstreamClass = bic === "GC" || bic === "Owner";
 

@@ -50,7 +50,9 @@
 import { STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 
 /** BIC discriminator classes — used to split status buckets by ownership. */
-const DETAILER_CLASS_BIC = new Set(["Detailer", "S&H", "Contractor"]);
+const DETAILER_CLASS_BIC = new Set([
+  "Detailer", "S&H", "Contractor", "Subcontractor",
+]);
 const APPROVER_CLASS_BIC = new Set(["EOR", "Architect", "AOR"]);
 const DOWNSTREAM_CLASS_BIC = new Set(["GC", "Owner"]);
 
