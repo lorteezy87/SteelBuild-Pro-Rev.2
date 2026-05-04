@@ -16,7 +16,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ChevronRight, Home } from "lucide-react";
+import { ChevronRight, Home, Lock, Unlock } from "lucide-react";
+import { useAppSecurity } from "@/components/shared/useAppSecurity";
 
 const mono = { fontFamily: "var(--font-mono)" };
 
@@ -32,8 +33,10 @@ const PIPELINE = [
   { key: "Released",    label: "IFC",         color: "#10B981" },
 ];
 
-export default function ViewerHeader({ projectName, activeDrawing }) {
+export default function ViewerHeader({ projectName, activeDrawing, drawingSet, onUnlock }) {
   const navigate = useNavigate();
+  const { isAdmin } = useAppSecurity();
+  const isLocked = !!(drawingSet && drawingSet.is_locked === true);
 
   const setName = activeDrawing?.drawing_set_name || null;
   const setId = activeDrawing?.drawing_set_id || null;
@@ -150,6 +153,65 @@ export default function ViewerHeader({ projectName, activeDrawing }) {
               </span>
             )}
           </>
+        )}
+
+        {/* Lock badge — pushed to the far right via auto margin. Visible
+            to everyone when the set is locked; only admins see the
+            inline Unlock action. */}
+        {isLocked && (
+          <span
+            style={{
+              marginLeft: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 8px",
+              borderRadius: 4,
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.4)",
+              color: "#f59e0b",
+              ...mono,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.10em",
+              textTransform: "uppercase",
+            }}
+            title={
+              drawingSet?.locked_reason
+                ? `Locked: ${drawingSet.locked_reason}`
+                : "Set is locked from edits"
+            }
+          >
+            <Lock size={10} />
+            Locked
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => onUnlock?.()}
+                title="Admin: unlock this set"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  marginLeft: 4,
+                  padding: "1px 6px",
+                  borderRadius: 3,
+                  background: "rgba(245, 158, 11, 0.2)",
+                  border: "1px solid rgba(245, 158, 11, 0.5)",
+                  color: "#f59e0b",
+                  cursor: "pointer",
+                  ...mono,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <Unlock size={9} />
+                Unlock
+              </button>
+            )}
+          </span>
         )}
       </div>
 
