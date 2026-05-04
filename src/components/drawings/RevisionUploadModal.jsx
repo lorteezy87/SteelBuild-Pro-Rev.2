@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import { extractSheetsFromPdf } from "@/lib/pdfSheetExtractor";
+import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -641,7 +641,20 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
-      const matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
+      // Carry pdfPage and discipline/revision through matchSheets so the
+      // apply step can write per-sheet pdf_page on every revised/added
+      // drawing — without this the new revision keeps the file_url but
+      // every row points at page 1 of the new master PDF.
+      const matched = matchSheets(
+        oldSheets,
+        newSheets.map(s => ({
+          sheetNumber: s.sheetNumber,
+          sheetTitle:  s.sheetTitle,
+          pdfPage:     s.pdfPage,
+          discipline:  s.discipline,
+          revision:    s.revision,
+        })),
+      );
       // Store uploaded fileUrl on each new sheet match
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
       setMatchedSheets(matched);
@@ -709,6 +722,12 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         if (match.change === "removed") {
           if (existing) { await base44.entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
         } else if (match.change === "added") {
+          const addedPage = validatePdfPage(match.newSheet?.pdfPage);
+          if (addedPage === null) {
+            console.warn(
+              `[RevisionUploadModal] Added sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
+            );
+          }
           await base44.entities.Drawing.create({
             sheet_number: match.newSheet.sheetNumber,
             title: match.newSheet.sheetTitle,
@@ -720,6 +739,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             issue_date: revMeta.issueDate,
             issued_by: revMeta.issuedBy,
             file_url: newFileUrl,
+            pdf_page: addedPage ?? 1,
             drawing_set_name: selectedSet.set_name,
             ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
@@ -727,11 +747,23 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           added++;
         } else {
           if (existing) {
+            // Per-sheet pdf_page MUST be re-derived from the new PDF —
+            // the old value pointed at a page in the *previous* master
+            // PDF, which is no longer the file behind file_url. If the
+            // extractor didn't surface a page for this sheet, fall back
+            // to 1 with a warning so the user can hand-fix.
+            const updatedPage = validatePdfPage(match.newSheet?.pdfPage);
+            if (updatedPage === null) {
+              console.warn(
+                `[RevisionUploadModal] Updated sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
+              );
+            }
             await base44.entities.Drawing.update(existing.id, {
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
               issue_date: revMeta.issueDate,
               issued_by: revMeta.issuedBy || existing.issued_by,
               file_url: newFileUrl,
+              pdf_page: updatedPage ?? 1,
               is_superseded: false,
             });
             updated++;
