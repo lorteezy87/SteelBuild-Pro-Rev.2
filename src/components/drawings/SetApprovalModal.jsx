@@ -34,6 +34,15 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
           </p>
         </DialogHeader>
 
+        <div style={{ background: "var(--info-muted)", border: "1px solid var(--info-border)", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color: "var(--accent)" }}>
+            APPROVAL WORKFLOW MOVED
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-primary)", marginTop: 4, lineHeight: 1.4 }}>
+            Approval status now lives on the <strong>Submittals</strong> page. Use this dialog to record paper-trail metadata (revision, approved-by, notes) on the document set; the active workflow status is driven by the linked submittal.
+          </div>
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
           {/* Status */}
           <div>
