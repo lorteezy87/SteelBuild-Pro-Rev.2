@@ -494,23 +494,15 @@ export function rfiStatusRollup(rfis = []) {
  *   FFF = Final For Fab        · approved as noted, ready
  *   Released = Released for Fabrication
  *
- * In this app submittals are tracked as **drawing sets**, not
- * individual drawings. A set ("Anchor Bolts", "Stairs A & B", etc.)
- * is what gets sent out for approval, scrub, and fab release — every
- * drawing inside the set rides the same workflow stage. The
- * dashboard panel shows ONE row per set, so a 36-sheet "Embeds &
- * Lintels" set at OFA counts as 1 OFA, not 36.
+ * Workflow source of truth is the `submittals` table (Sprint 1+).
+ * This rollup derives display stages from `status` + `ball_in_court`.
  *
- * The function detects which kind of input it received:
- *   - Rows with `drawing_set_id` are drawings → group by set, derive
- *     the set's stage from its drawings (most-common; ties pick the
- *     earliest stage in the canonical workflow order so a set that's
- *     mid-transition lands in the upstream bucket).
- *   - Rows with a `set_name` but no `drawing_set_id` are drawing_set
- *     records → each row's `stage_summary` (or derived stage from
- *     metadata) drives one bucket.
- *   - Anything else falls through to the legacy submittals shape
- *     (status + ball_in_court).
+ * The function still accepts the legacy "drawings + drawing_sets"
+ * shape for back-compat with any caller that hasn't migrated yet,
+ * but new callers should use `submittalPipelineRollupFromSubmittals`
+ * directly. Mixed input is detected and bucketed correctly.
+ *
+ * @deprecated for drawing-shaped input — read submittals instead.
  */
 export function submittalPipelineRollup(rows = []) {
   const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
@@ -568,11 +560,47 @@ export function submittalPipelineRollup(rows = []) {
 }
 
 /**
+ * Submittal pipeline rollup driven exclusively by the `submittals`
+ * table — NEW canonical path (Sprint 2). Submittals are workflow
+ * source of truth; drawings columns (stage / set_approval_status)
+ * are deprecated and only used for display.
+ *
+ * Maps each non-deleted submittal to one of the 6 display stages
+ * via (status, ball_in_court, approved_date). One submittal = one
+ * bucket count, regardless of how many drawing_set_ids it links.
+ *
+ * Bucket totals reflect submittal rows; `total` is the count of rows
+ * that mapped to a stage. Void rows are skipped (they're terminal
+ * and not part of the active pipeline).
+ */
+export function submittalPipelineRollupFromSubmittals(submittals = []) {
+  const stages = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
+  for (const r of submittals) {
+    if (!r || r.is_deleted) continue;
+    const status = r?.status;
+    if (!status || status === "Void") continue;
+    const bic = r?.ball_in_court;
+    if (status === "Released for Fabrication") counts["Released"]++;
+    else if (status === "Approved" && r?.approved_date) counts["Released"]++;
+    else if (status === "Approved") counts["FFF"]++;
+    else if (status === "Approved as Noted") counts["BFS"]++;
+    else if (status === "Revise and Resubmit" || status === "Rejected") counts["BFA"]++;
+    else if ((status === "Submitted" || status === "Under Review") && bic === "EOR") counts["OFS"]++;
+    else if (status === "Submitted" || status === "Under Review" || status === "Draft") counts["OFA"]++;
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  return { stages, counts, total };
+}
+
+/**
  * For a set whose sheets sit at varying stages, pick the canonical
  * stage to display. Strategy: most-common; on ties, pick the EARLIEST
  * stage in the canonical workflow order so a partially-progressed set
  * shows up in the upstream bucket (better-PMs-want-to-finish-it
  * principle than over-counting it as released).
+ *
+ * @deprecated — derives stage from drawings.stage. Read submittals instead.
  */
 function pickDominantStage(stageList, canonicalOrder) {
   const tally = {};
