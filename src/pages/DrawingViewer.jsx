@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
@@ -26,7 +26,6 @@ import ZoneLayer from "@/components/drawings/viewer/ZoneLayer";
 import ZonePanel from "@/components/drawings/viewer/ZonePanel";
 import ZoneFilterBar from "@/components/drawings/viewer/ZoneFilterBar";
 import ProposalPanel from "@/components/drawings/viewer/ProposalPanel";
-import { listZoneProposals } from "@/lib/drawingHub";
 import { mono, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
@@ -38,21 +37,12 @@ import ZonesFloatingToolbar from "@/pages/drawingViewer/ZonesFloatingToolbar";
 import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
 import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
+import { useZoneData } from "@/pages/drawingViewer/useZoneData";
 import {
-  ensureCurrentRevision,
-  listZones,
-  listLinksForZones,
-  hydrateLinks,
-  computeZoneDensity,
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
-  summarizeLinks,
-  computeZoneStatus,
-  recomputeAndPersistZoneStatus,
   createNewRevisionAndCarryZones,
-  // V3.1 — zone-to-zone dependency graph
-  listZoneDependencies,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -270,218 +260,21 @@ export default function DrawingViewer() {
   // the canvas. Default OFF so the layer doesn't surprise V3.0 users.
   const [showDeps, setShowDeps] = useState(false);
 
-  // Resolve (or create) the drawing_revisions row that zones attach to.
-  // MVP: every drawing gets a v1 revision the first time the user opens
-  // zones on it. No explicit revision onboarding required.
-  const { data: currentRevision } = useQuery({
-    queryKey: ["drawing-revision-current", activeId],
-    queryFn: async () => {
-      if (!activeDrawing?.id) return null;
-      return ensureCurrentRevision({ drawing: activeDrawing });
-    },
-    enabled: !!activeDrawing?.id && zoneMode !== "off",
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: zones = [], refetch: refetchZones } = useQuery({
-    queryKey: ["drawing-zones", currentRevision?.id],
-    queryFn: () => listZones(currentRevision?.id),
-    enabled: !!currentRevision?.id,
-    staleTime: 30 * 1000,
-  });
-
-  // V3.0 — pending proposal count for the drawer-launcher badge.
-  // Quiet query (limit:1) just to read the total; the panel itself
-  // refetches the full list when it opens.
-  const { data: proposalCountData } = useQuery({
-    queryKey: ["drawing-zone-proposals-count", projectId, activeDrawing?.id, currentRevision?.id || null],
-    queryFn: () => listZoneProposals({
-      projectId,
-      drawingId:         activeDrawing.id,
-      drawingRevisionId: currentRevision?.id || undefined,
-      status:            "pending",
-      limit:             1,
-    }),
-    enabled: !!projectId && !!activeDrawing?.id,
-    staleTime: 30 * 1000,
-  });
-  const pendingProposalCount = proposalCountData?.total ?? 0;
-
-  // V3.1 — pull every active dependency edge incident to this drawing
-  // (either source or target zone lives on the current sheet). Used
-  // for the canvas DEPS overlay; cross-sheet edges still come back so
-  // we can render their "→ Sheet X" pills.
-  const { data: depsData = { rows: [], total: 0 } } = useQuery({
-    queryKey: ["drawing-zone-dependencies-sheet", projectId, activeDrawing?.id],
-    queryFn: () => listZoneDependencies({
-      projectId,
-      drawingId: activeDrawing.id,
-    }),
-    enabled: !!projectId && !!activeDrawing?.id && showDeps,
-    staleTime: 30 * 1000,
-  });
-  const sheetDependencies = depsData.rows || [];
-
-  // Build the dependencyEdges payload ZoneLayer wants. For each row:
-  //   - resolve source/target centroid from the hydrated bbox
-  //   - flag cross-sheet when one endpoint isn't on the active drawing
-  //   - hand the relationship + propagation_weight through verbatim
-  // Centroid math uses the hydrated bbox (mid-x, mid-y) so the arrow
-  // endpoints land in the visual middle of the zone, not its corner.
-  const dependencyEdges = useMemo(() => {
-    if (!showDeps || sheetDependencies.length === 0) return [];
-    const out = [];
-    for (const d of sheetDependencies) {
-      if (!d.__source || !d.__target) continue;
-      const src = d.__source;
-      const tgt = d.__target;
-      const srcOnSheet = src.drawing_id === activeDrawing?.id;
-      const tgtOnSheet = tgt.drawing_id === activeDrawing?.id;
-      const srcCenter = srcOnSheet
-        ? [(Number(src.x_min) + Number(src.x_max)) / 2, (Number(src.y_min) + Number(src.y_max)) / 2]
-        : null;
-      const tgtCenter = tgtOnSheet
-        ? [(Number(tgt.x_min) + Number(tgt.x_max)) / 2, (Number(tgt.y_min) + Number(tgt.y_max)) / 2]
-        : null;
-      // Anchor cross-sheet pills at whichever endpoint IS on this sheet.
-      if (!srcOnSheet && !tgtOnSheet) continue;
-      if (srcOnSheet && tgtOnSheet) {
-        out.push({
-          id:                d.id,
-          sourceCenter:      srcCenter,
-          targetCenter:      tgtCenter,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      false,
-          crossSheetLabel:   null,
-        });
-      } else if (srcOnSheet) {
-        // Outbound to another sheet — pill at source.
-        out.push({
-          id:                d.id,
-          sourceCenter:      srcCenter,
-          targetCenter:      null,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      true,
-          crossSheetLabel:   tgt.sheet_number || "other sheet",
-        });
-      } else {
-        // Inbound from another sheet — pill at target (which IS on this sheet).
-        out.push({
-          id:                d.id,
-          sourceCenter:      tgtCenter, // anchor at the on-sheet endpoint
-          targetCenter:      null,
-          relationship:      d.relationship,
-          propagationWeight: Number(d.propagation_weight ?? 1),
-          isCrossSheet:      true,
-          crossSheetLabel:   `from ${src.sheet_number || "other sheet"}`,
-        });
-      }
-    }
-    return out;
-  }, [showDeps, sheetDependencies, activeDrawing?.id]);
-
-  // Link-count summaries keyed by zone id — used by the label chip to
-  // show "Z-001 · 3" when a zone has 3 linked records. Refetches when
-  // the list of zones changes (e.g. a new one is drawn).
-  //
-  // This query also runs the rule engine over each zone's links and
-  // captures the computed status in `computedByZone`. That drives
-  // live overlay colors (via zonesWithComputed below) AND fires a
-  // best-effort background recompute-and-persist so the stored
-  // zone.status row stays in sync with reality — next time the viewer
-  // loads it can paint the right color immediately without waiting
-  // on a re-fetch of every linked record.
-  const { data: zoneData = { summaries: new Map(), computed: new Map(), densities: new Map() } } = useQuery({
-    queryKey: ["drawing-zones-summaries", currentRevision?.id, zones.length, zones.map((z) => z.id + ":" + z.status).join(",")],
-    queryFn: async () => {
-      const ids = zones.map((z) => z.id);
-      if (ids.length === 0) return { summaries: new Map(), computed: new Map(), densities: new Map() };
-      const byZone = await listLinksForZones(ids);
-      const summaries = new Map();
-      const computed = new Map();
-      const densities = new Map();
-      // Pre-hydrate every link in one sweep per record type (hydrateLinks
-      // already batches by type), then feed each zone's subset into the
-      // rule engine.
-      const allLinks = [];
-      for (const arr of byZone.values()) allLinks.push(...arr);
-      const hydrated = await hydrateLinks(allLinks); // Map<linkId, {link, record}>
-      for (const z of zones) {
-        const zoneLinks = byZone.get(z.id) || [];
-        summaries.set(z.id, summarizeLinks(zoneLinks));
-        const zoneItems = zoneLinks
-          .map((l) => hydrated.get(l.id))
-          .filter(Boolean);
-        computed.set(z.id, computeZoneStatus(zoneItems));
-        densities.set(z.id, computeZoneDensity(zoneItems));
-      }
-      // Fire-and-forget: persist computed status for any zone where
-      // the stored value drifted and the user hasn't manually pinned
-      // it. Never blocks the overlay render on these writes.
-      (async () => {
-        for (const z of zones) {
-          const c = computed.get(z.id);
-          if (!c) continue;
-          if (z.is_manual_status_override) continue;
-          if (c.status === z.status) continue;
-          try {
-            await recomputeAndPersistZoneStatus(
-              z,
-              (byZone.get(z.id) || []).map((l) => hydrated.get(l.id)).filter(Boolean),
-            );
-          } catch {
-            // Silent — rule-engine writes are advisory; panel still
-            // shows the right answer.
-          }
-        }
-      })();
-      return { summaries, computed, densities };
-    },
-    enabled: zones.length > 0,
-    staleTime: 30 * 1000,
-  });
-  const zoneSummaries = zoneData.summaries;
-  const zoneComputed  = zoneData.computed;
-  const zoneDensities = zoneData.densities;
-
-  // Overlay reads the computed status when available so colors are
-  // live even if the DB write hasn't caught up yet. Falls back to
-  // zone.status (which also stays fresh via the background write
-  // above). is_manual_status_override wins — rule engine is advisory
-  // when the user has explicitly pinned a color.
-  const zonesWithComputed = useMemo(() => {
-    return zones.map((z) => {
-      if (z.is_manual_status_override) return z;
-      const c = zoneComputed?.get?.(z.id);
-      if (!c || !c.status) return z;
-      return { ...z, status: c.status };
-    });
-  }, [zones, zoneComputed]);
-
-  // Status counts over the live (post-compute) zones — feeds the
-  // filter bar chips ("red · 3") and the summary "X/Y visible" label.
-  const zoneStatusCounts = useMemo(() => {
-    const out = {};
-    for (const z of zonesWithComputed) {
-      out[z.status] = (out[z.status] || 0) + 1;
-    }
-    return out;
-  }, [zonesWithComputed]);
-
-  // Apply the filter bar's choices. Empty statusSet = "no filter".
-  const filteredZones = useMemo(() => {
-    const { statusSet, typeKey } = zoneFilter;
-    const statusActive = statusSet && statusSet.size > 0;
-    const typeActive   = typeKey && typeKey !== "all";
-    if (!statusActive && !typeActive) return zonesWithComputed;
-    return zonesWithComputed.filter((z) => {
-      if (statusActive && !statusSet.has(z.status)) return false;
-      if (typeActive && z.zone_type !== typeKey) return false;
-      return true;
-    });
-  }, [zonesWithComputed, zoneFilter]);
+  // Drawing-hub server queries + derived memos. State setters stay in
+  // the page because the toolbar, filter bar, and panels all need them;
+  // useZoneData only owns the data side.
+  const {
+    currentRevision,
+    zones,
+    refetchZones,
+    pendingProposalCount,
+    dependencyEdges,
+    zoneSummaries,
+    zoneDensities,
+    zonesWithComputed,
+    zoneStatusCounts,
+    filteredZones,
+  } = useZoneData({ projectId, activeId, activeDrawing, zoneMode, showDeps, zoneFilter });
 
   // Handler: user clicked "+ Rev" — mint a new revision, carry
   // zones + links over, flip is_current, and force a refetch so
