@@ -23,6 +23,9 @@ import { base44 } from "@/api/base44Client";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { computeFabReady } from "@/lib/submittalAnalytics";
+import CycleTimeCard from "@/components/submittals/CycleTimeCard";
+import AgingReportTable from "@/components/submittals/AgingReportTable";
 
 // Lazy-load the existing pages as tab content
 const DrawingsPage = lazy(() => import("@/pages/Drawings"));
@@ -118,6 +121,12 @@ export default function DrawingSubmittalHub() {
     };
   }, [drawings]);
 
+  // ── Fab-Ready KPI ──────────────────────────────────────────────────────
+  const fabReady = useMemo(
+    () => computeFabReady(drawings, submittals),
+    [drawings, submittals]
+  );
+
   const isLoading = drawingsLoading || submittalsLoading;
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -151,6 +160,17 @@ export default function DrawingSubmittalHub() {
         <KpiTile label="Approved"        value={kpis.approved} color={success} loading={isLoading} />
         <KpiTile label="Needs Action"    value={kpis.rejected} color={error} loading={isLoading} />
         <KpiTile label="Overdue"         value={kpis.overdue}  color={error} loading={isLoading} />
+
+        <div style={{ width: 1, background: border, margin: "4px 8px" }} />
+
+        {/* Fab-Ready KPI: numerator/denominator (percent%) */}
+        <KpiTile
+          label="Fab-Ready"
+          value={`${fabReady.numerator} / ${fabReady.denominator}`}
+          sub={`${fabReady.percent}%`}
+          color={success}
+          loading={isLoading}
+        />
       </div>
 
       {/* ── Tab Bar ──────────────────────────────────────────────────── */}
@@ -267,6 +287,10 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, byDrawingS
 
   return (
     <div style={{ padding: 20 }}>
+      {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
+      <CycleTimeCard submittals={submittals} isLoading={isLoading} />
+      <AgingReportTable submittals={submittals} isLoading={isLoading} />
+
       {/* ── Summary Bar ──────────────────────────────────────────── */}
       <div style={{
         display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap",
