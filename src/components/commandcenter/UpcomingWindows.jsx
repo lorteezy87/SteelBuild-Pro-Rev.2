@@ -181,6 +181,7 @@ function Panel({ title, subtitle, accent, count, items, onOpenDetail }) {
             selectedIndex={-1}
             onSelectIndex={() => {}}
             onOpenDetail={onOpenDetail}
+            compact
           />
         )}
       </div>
