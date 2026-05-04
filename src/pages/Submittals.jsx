@@ -19,6 +19,7 @@ import RoundTimeline from "@/components/submittals/RoundTimeline";
 import NewRoundModal from "@/components/submittals/NewRoundModal";
 import SheetResponseGrid from "@/components/submittals/SheetResponseGrid";
 import { LinkedRFIs, LinkedTasks } from "@/components/submittals/LinkedEntities";
+import DrawingSetSelector from "@/components/submittals/DrawingSetSelector";
 import { batchProcess } from "@/utils/batchProcess";
 
 /**
@@ -520,6 +521,7 @@ export default function Submittals() {
           initial={editing || {}}
           projectId={projectId}
           projectName={activeProject?.project_name || activeProject?.name || ""}
+          availableSets={drawingSets}
           onClose={() => { setShowCreate(false); setEditingId(null); }}
           onSubmit={async (data) => {
             if (editing) await updateMut.mutateAsync({ id: editing.id, ...data });
@@ -1421,7 +1423,7 @@ function EditableMeta({ label, value, displayValue, kind = "text", choices, allo
 
 // ── Create/edit modal ───────────────────────────────────────────────
 
-function SubmittalFormModal({ open, initial, projectId, projectName, onClose, onSubmit }) {
+function SubmittalFormModal({ open, initial, projectId, projectName, availableSets = [], onClose, onSubmit }) {
   const [form, setForm] = useState({
     submittal_number: initial.submittal_number || "",
     title:            initial.title            || "",
@@ -1437,6 +1439,7 @@ function SubmittalFormModal({ open, initial, projectId, projectName, onClose, on
     submitted_by:     initial.submitted_by     || "",
     reviewer:         initial.reviewer         || "",
     notes:            initial.notes            || "",
+    drawing_set_ids:  Array.isArray(initial.drawing_set_ids) ? initial.drawing_set_ids : [],
   });
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -1476,6 +1479,14 @@ function SubmittalFormModal({ open, initial, projectId, projectName, onClose, on
           <div style={{ gridColumn: "1 / span 2" }}>
             <Label>Title *</Label>
             <Input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Structural steel shop drawings - Area A" />
+          </div>
+          <div style={{ gridColumn: "1 / span 2" }}>
+            <Label>Linked Drawing Sets</Label>
+            <DrawingSetSelector
+              value={form.drawing_set_ids}
+              onChange={(next) => setField("drawing_set_ids", next)}
+              availableSets={availableSets}
+            />
           </div>
           <div>
             <Label>Type</Label>
