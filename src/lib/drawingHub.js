@@ -27,43 +27,29 @@
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/lib/supabase";
 
-// The set of record types the app can currently link to a zone. Mirrors
-// the drawing_links.linked_record_type CHECK constraint — keep in sync
-// if the migration's allow-list changes.
-export const LINKABLE_TYPES = [
-  "rfi",
-  "work_package",
-  "delivery",
-  "photo",
-  "inspection",
-  "daily_log",
-  "document",
-  "change_order",
-  "submittal",
-  "drawing",
-  "finding",
-];
+// Public constants — extracted to drawingHub/constants.js. Re-exported
+// here so existing `import { LINKABLE_TYPES } from "@/lib/drawingHub"`
+// statements keep working byte-identically.
+export {
+  LINKABLE_TYPES,
+  LINKABLE_TYPE_LABELS,
+  STATUS_PRIORITY,
+  ALL_STATUSES,
+  ZONE_TYPES,
+  DEPENDENCY_RELATIONSHIPS,
+} from "./drawingHub/constants";
 
-// Friendly labels for UI chips + tabs.
-export const LINKABLE_TYPE_LABELS = {
-  rfi:           "RFI",
-  work_package:  "Work Package",
-  delivery:      "Delivery",
-  photo:         "Photo",
-  inspection:    "Inspection",
-  daily_log:     "Daily Log",
-  document:      "Document",
-  change_order:  "Change Order",
-  submittal:     "Submittal",
-  drawing:       "Drawing",
-  finding:       "Finding",
-};
+// Pure geometry helper — extracted to drawingHub/zoneGeometry.js.
+export { bboxFromPolygonPoints } from "./drawingHub/zoneGeometry";
 
-// Status priority order used when multiple zones overlap visually or
-// when the rule engine needs a deterministic pick. Matches the spec:
-// red > amber > purple > blue > green > neutral.
-export const STATUS_PRIORITY = ["red", "amber", "purple", "blue", "green", "neutral"];
-export const ALL_STATUSES    = STATUS_PRIORITY;
+// Local bindings for the symbols still referenced inside this file.
+// (ESM does not auto-bind names from `export ... from`.)
+import {
+  LINKABLE_TYPES,
+  ZONE_TYPES,
+  DEPENDENCY_RELATIONSHIPS,
+} from "./drawingHub/constants";
+import { bboxFromPolygonPoints } from "./drawingHub/zoneGeometry";
 
 /**
  * Return (or create) the "current" revision for a drawing. MVP users
@@ -145,29 +131,6 @@ export async function nextZoneKey(revisionId) {
     return Number.isFinite(n) && n > acc ? n : acc;
   }, 0);
   return `Z-${String(max + 1).padStart(3, "0")}`;
-}
-
-/**
- * Compute the axis-aligned bounding box of a polygon-points array.
- * Points are [x,y] pairs in normalized [0,1] viewer space. Returns
- * null if the input is empty or malformed — callers should guard on
- * that before relying on the result.
- */
-export function bboxFromPolygonPoints(points) {
-  if (!Array.isArray(points) || points.length === 0) return null;
-  let xMin =  Infinity, yMin =  Infinity;
-  let xMax = -Infinity, yMax = -Infinity;
-  for (const p of points) {
-    if (!Array.isArray(p) || p.length !== 2) return null;
-    const x = Number(p[0]);
-    const y = Number(p[1]);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    if (x < xMin) xMin = x;
-    if (y < yMin) yMin = y;
-    if (x > xMax) xMax = x;
-    if (y > yMax) yMax = y;
-  }
-  return { xMin, yMin, xMax, yMax };
 }
 
 /**
@@ -1406,16 +1369,7 @@ export async function recomputeAndPersistZoneStatus(zone, hydrated, opts = {}) {
 //     extended the CHECK constraint and validate_drawing_link_target()).
 // ────────────────────────────────────────────────────────────────────
 
-// Mirrors drawing_zones.zone_type CHECK constraint exactly.
-export const ZONE_TYPES = [
-  "area",
-  "detail",
-  "bay",
-  "erection_zone",
-  "delivery_zone",
-  "inspection_zone",
-  "member_group",
-];
+// (ZONE_TYPES exported + imported at the top of this file.)
 
 // Heuristic mapping from finding_type → suggested zone_type.
 // Used as the proposal's default; PM can override on accept.
@@ -2085,7 +2039,7 @@ export async function mergeZoneProposalIntoZone(proposalId, targetZoneId, { user
 // the panel but does not contribute to drag.
 // ────────────────────────────────────────────────────────────────────
 
-export const DEPENDENCY_RELATIONSHIPS = ["blocks", "depends_on", "relates_to"];
+// (DEPENDENCY_RELATIONSHIPS exported + imported at the top of this file.)
 
 /**
  * Add a directed edge between two zones in the same project.
