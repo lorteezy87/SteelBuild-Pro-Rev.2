@@ -454,6 +454,10 @@ export const entities = {
   DrawingRevision:       createEntityClient('drawing_revisions'),
   DrawingZone:           createEntityClient('drawing_zones'),
   DrawingLink:           createEntityClient('drawing_links'),
+  // 072: append-only sign-off stamps on drawing revisions (review approval,
+  // approved-as-noted, revise-and-resubmit, etc.). Voided rows stay in the
+  // table; UI filters them with is_voided=false in listSignoffs.
+  DrawingSignoff:        createEntityClient('drawing_signoffs'),
   ScheduleTask:          (() => {
     // Schedule audit fix (bug class 3): keep status and percent_complete in
     // lock-step on every create/update so no future code path can land a row

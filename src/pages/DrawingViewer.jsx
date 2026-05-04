@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
@@ -78,6 +78,10 @@ export default function DrawingViewer() {
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
   const [activeColor, setActiveColor] = useState(MARKUP_COLORS[0].value);
+  // Resolution-status filter (3a). When true, the AnnotationLayer hides
+  // any note item whose status is "addressed" or "rejected" — useful for
+  // a reviewer who wants to see only what's still outstanding.
+  const [hideResolved, setHideResolved] = useState(false);
 
   // ── Load all drawings for this project ──────────────────────────────────────
   // useDrawingsList encapsulates the project drawings query, the search
@@ -114,6 +118,27 @@ export default function DrawingViewer() {
   } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
 
   const qc = useQueryClient();
+
+  // Fetch the parent drawing_set for the active drawing so the header can
+  // show a lock badge (and the admin Unlock action) without a second
+  // round-trip per re-render. Cheap query — only refires when the
+  // drawing changes.
+  const setIdForActive = activeDrawing?.drawing_set_id || null;
+  const { data: activeDrawingSet } = useQuery({
+    queryKey: ["drawing_set", setIdForActive],
+    queryFn: async () => {
+      if (!setIdForActive) return null;
+      const { data, error } = await supabase
+        .from("drawing_sets")
+        .select("id, set_name, is_locked, locked_at, locked_by, locked_reason")
+        .eq("id", setIdForActive)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    enabled: !!setIdForActive,
+    staleTime: 30_000,
+  });
 
   // Calibrate handler — invoked by AnnotationLayer when the user commits
   // a calibrate gesture. Prompts for the real-world distance (accepts
@@ -518,8 +543,22 @@ export default function DrawingViewer() {
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-        {/* Breadcrumb + stage pipeline */}
-        <ViewerHeader projectName={activeProject?.name} activeDrawing={activeDrawing} />
+        {/* Breadcrumb + stage pipeline + lock badge */}
+        <ViewerHeader
+          projectName={activeProject?.name}
+          activeDrawing={activeDrawing}
+          drawingSet={activeDrawingSet}
+          onUnlock={async () => {
+            try {
+              const { unlockSet } = await import("@/lib/drawingHub");
+              await unlockSet({ setId: activeDrawingSet.id });
+              await qc.invalidateQueries({ queryKey: ["drawing_set", activeDrawingSet.id] });
+              toast.success("Set unlocked. Edits are now allowed.");
+            } catch (err) {
+              toast.error("Unlock failed: " + (err?.message || "Unknown error"));
+            }
+          }}
+        />
 
         {/* Viewer toolbar */}
         <ViewerToolbar
@@ -561,20 +600,50 @@ export default function DrawingViewer() {
               content. Stays visible no matter how far the user pans the
               sheet. Only shown when we actually have a drawing to mark up. */}
           {activeDrawing?.file_url && renderMode === "canvas" && !pdfError && (
-            <AnnotationToolbar
-              activeTool={activeTool}
-              onToolChange={setActiveTool}
-              activeColor={activeColor}
-              onColorChange={setActiveColor}
-              markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
-              onClearPage={() => {
-                markup.items
-                  .filter((m) => (m.pdf_page || 1) === currentPage)
-                  .forEach((m) => markup.removeItem(m.id));
-              }}
-              saving={markup.saving}
-              saveError={markup.saveError}
-            />
+            <>
+              <AnnotationToolbar
+                activeTool={activeTool}
+                onToolChange={setActiveTool}
+                activeColor={activeColor}
+                onColorChange={setActiveColor}
+                markupCount={markup.items.filter((m) => (m.pdf_page || 1) === currentPage).length}
+                onClearPage={() => {
+                  markup.items
+                    .filter((m) => (m.pdf_page || 1) === currentPage)
+                    .forEach((m) => markup.removeItem(m.id));
+                }}
+                saving={markup.saving}
+                saveError={markup.saveError}
+              />
+              {/* Resolution-status filter chip (3a). Only meaningful when
+                  there's at least one note on the page. */}
+              {markup.items.some((m) => m.kind === "note" && (m.pdf_page || 1) === currentPage) && (
+                <button
+                  type="button"
+                  onClick={() => setHideResolved((v) => !v)}
+                  title={hideResolved ? "Showing only unresolved notes — click to show all" : "Hide resolved (addressed/rejected) notes"}
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: 540,
+                    zIndex: 10,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    padding: "5px 10px",
+                    borderRadius: 4,
+                    background: hideResolved ? "rgba(245,158,11,0.15)" : "var(--bg-surface)",
+                    border: `1px solid ${hideResolved ? "rgba(245,158,11,0.4)" : "var(--border-default)"}`,
+                    color: hideResolved ? "#f59e0b" : "var(--text-muted)",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {hideResolved ? "Unresolved Only" : "Show All"}
+                </button>
+              )}
+            </>
           )}
 
           {/* Zones toggle — floats top-right of the viewer pane. Three-state:
@@ -752,6 +821,7 @@ export default function DrawingViewer() {
                   onRemoveItem={markup.removeItem}
                   onUpdateItem={markup.updateItem}
                   onCalibrate={handleCalibrate}
+                  hideResolved={hideResolved}
                 />
 
                 {/* ── Drawing-hub coordination zones (MVP Slice 0) ──
@@ -846,6 +916,8 @@ export default function DrawingViewer() {
           allDrawings={drawings}
           onSelect={setActiveId}
           onClose={() => setContextOpen(false)}
+          drawingRevisionId={currentRevision?.id || null}
+          isSetLocked={!!activeDrawingSet?.is_locked}
         />
       )}
 

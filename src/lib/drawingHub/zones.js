@@ -8,6 +8,24 @@
 
 import { supabase } from "@/lib/supabase";
 import { bboxFromPolygonPoints } from "./zoneGeometry";
+import { assertSetUnlocked } from "./setLock";
+
+/**
+ * Resolve drawing_id from a zone_id so updateZone / deleteZone can run
+ * the lock guard without their callers having to fetch the zone first.
+ * Returns null if the zone can't be found (RLS or stale id) — the lock
+ * guard tolerates null and the underlying mutation will surface its own
+ * error.
+ */
+async function _drawingIdForZone(zoneId) {
+  const { data, error } = await supabase
+    .from("drawing_zones")
+    .select("drawing_id")
+    .eq("id", zoneId)
+    .maybeSingle();
+  if (error) return null;
+  return data?.drawing_id || null;
+}
 
 /**
  * List zones for one drawing revision, newest first.
@@ -70,6 +88,11 @@ export async function createZone({
     throw new Error("createZone: projectId, drawingId, revisionId required");
   }
 
+  // Lock guard (migration 071). If the parent set is locked, refuse the
+  // write before we do any geometry resolution — a clean rejection beats
+  // a half-built payload sailing into a row-level reject.
+  await assertSetUnlocked(drawingId);
+
   // Resolve geometry. Polygon wins if points were supplied; otherwise
   // fall back to the rectangle branch. Whichever we land in, we end up
   // with a consistent {shape, bbox, points} tuple so the payload below
@@ -126,6 +149,11 @@ export async function createZone({
 
 export async function updateZone(zoneId, patch) {
   if (!zoneId) throw new Error("updateZone: zoneId required");
+  // Lock guard. _drawingIdForZone resolves zone → drawing so we can
+  // bubble up to drawing_sets.is_locked without forcing the caller to
+  // pass the drawing id in.
+  const drawingId = await _drawingIdForZone(zoneId);
+  await assertSetUnlocked(drawingId);
   const { data, error } = await supabase
     .from("drawing_zones")
     .update(patch)
@@ -142,6 +170,8 @@ export async function updateZone(zoneId, patch) {
  */
 export async function deleteZone(zoneId) {
   if (!zoneId) throw new Error("deleteZone: zoneId required");
+  const drawingId = await _drawingIdForZone(zoneId);
+  await assertSetUnlocked(drawingId);
   const { error } = await supabase
     .from("drawing_zones")
     .update({ is_active: false, deleted_at: new Date().toISOString() })

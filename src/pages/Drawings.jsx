@@ -577,6 +577,11 @@ export default function Drawings() {
           ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
         }),
       );
+      // Locking is now driven by submittal status, not document-side
+      // approval. When a submittal linked to this set reaches a
+      // terminal-approved status, useSubmittals.ts will lock the set
+      // automatically. The document-side approval here just records the
+      // legacy set_approval_status mirror.
       invalidate();
       if (failed.length > 0) {
         toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
