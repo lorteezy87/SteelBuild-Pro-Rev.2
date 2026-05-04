@@ -7,12 +7,18 @@ import { useNavigate } from "react-router-dom";
  * Layout (left to right):
  *  1. 4px urgency color bar
  *  2. Item type pill badge
- *  3. Project tag (job number)
- *  4. Title (one line, truncated)
+ *  3. Project tag (job number, optionally + name)
+ *  4. Title (one line, truncated; hover for full text via title attr)
  *  5. Age / due text
  *  6. Status label
- *  7. Owner / waiting-on
+ *  7. Owner / waiting-on (truncated; hover for full)
  *  8. Quick action button
+ *
+ * `compact` prop (default false): shrinks the project tag (number-only,
+ * no name) and the owner pill so the title gets more horizontal room.
+ * Used by the side-by-side UpcomingWindows panels where row width is
+ * roughly half the page. The full project name still surfaces on hover
+ * via the wrapper's `title` attribute.
  */
 
 const URGENCY_COLORS = {
@@ -61,7 +67,7 @@ const Pill = ({ label, color, bg }) => (
   </span>
 );
 
-export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) {
+export default function ActionRow({ item, isSelected, onSelect, onOpenDetail, compact = false }) {
   const navigate = useNavigate();
   const barColor = URGENCY_COLORS[item.urgency] || "var(--border-default)";
   const wash = URGENCY_WASH[item.urgency] || "transparent";
@@ -74,6 +80,14 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
     }
   };
 
+  // Hover-tooltip text: full project context + title so the user can
+  // recover anything that got truncated by tight column widths.
+  const rowTooltip = [
+    item.projectNumber && `[${item.projectNumber}]`,
+    item.projectName,
+    item.title,
+  ].filter(Boolean).join(" — ");
+
   return (
     <div
       role="row"
@@ -82,6 +96,7 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
       onKeyDown={(e) => {
         if (e.key === "Enter") onOpenDetail?.(item);
       }}
+      title={rowTooltip}
       style={{
         display: "flex",
         alignItems: "center",
@@ -121,7 +136,7 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
             alignItems: "center",
             gap: 6,
             flexShrink: 0,
-            maxWidth: 220,
+            maxWidth: compact ? 80 : 220,
             minWidth: 0,
           }}
           title={item.projectName || item.projectNumber || ""}
@@ -143,7 +158,11 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
               {item.projectNumber}
             </span>
           )}
-          {item.projectName && (
+          {/* Project name hidden in compact mode — title attr on the row
+              wrapper above still surfaces it on hover. Saves ~120-150px
+              of horizontal room for the title in narrow side-by-side
+              panels (UpcomingWindows). */}
+          {!compact && item.projectName && (
             <span
               style={{
                 fontFamily: "var(--font-body)",
@@ -173,8 +192,9 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
         </span>
       )}
 
-      {/* 4. Title */}
+      {/* 4. Title — hover for full text via the wrapper's title attribute. */}
       <div
+        title={item.title}
         style={{
           flex: 1,
           fontSize: 12,
@@ -204,9 +224,11 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail }) 
         {item.displayStatus}
       </span>
 
-      {/* 6. Owner / waiting-on */}
-      {item.owner && (
+      {/* 6. Owner / waiting-on — hide entirely in compact mode to free
+            up space for the title; rowTooltip already includes context. */}
+      {item.owner && !compact && (
         <span
+          title={item.owner}
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 9,

@@ -12,6 +12,7 @@ export default function ActionFeed({
   selectedIndex,
   onSelectIndex,
   onOpenDetail,
+  compact = false,
 }) {
   if (items.length === 0) {
     return (
@@ -58,6 +59,7 @@ export default function ActionFeed({
           isSelected={selectedIndex === idx}
           onSelect={() => onSelectIndex(idx)}
           onOpenDetail={onOpenDetail}
+          compact={compact}
         />
       ))}
     </div>
