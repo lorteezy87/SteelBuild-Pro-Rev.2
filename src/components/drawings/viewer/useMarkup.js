@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { assertSetUnlocked } from "@/lib/drawingHub";
 
 const SAVE_DEBOUNCE_MS = 500;
 
@@ -69,6 +70,10 @@ export function useMarkup({ drawingId, initialMarkup }) {
     setSaving(true);
     setSaveError(null);
     try {
+      // Lock guard. If the parent set is locked, surface a recognisable
+      // error to the UI and stop attempting writes — re-marking dirty
+      // would just retry into another rejection.
+      await assertSetUnlocked(targetId);
       const { error } = await supabase
         .from("drawings")
         .update({ markup: payload })
@@ -76,8 +81,11 @@ export function useMarkup({ drawingId, initialMarkup }) {
       if (error) throw error;
     } catch (err) {
       setSaveError(err.message || "Save failed");
-      // Re-mark dirty so the next mutation will retry.
-      dirtyRef.current = true;
+      // For lock rejections, do NOT re-mark dirty — retrying just
+      // burns a write per debounce until the user gives up.
+      if (err?.code !== "DRAWING_SET_LOCKED") {
+        dirtyRef.current = true;
+      }
     } finally {
       setSaving(false);
     }
@@ -99,7 +107,13 @@ export function useMarkup({ drawingId, initialMarkup }) {
   }, [scheduleSave]);
 
   const addItem = useCallback((item) => {
-    mutate((prev) => [...prev, item]);
+    // Default status to "open" so the resolution-status filter has a
+    // value to match against. Notes lean on this to render a status
+    // pill; other kinds carry the field as inert metadata.
+    const withDefaults = item && item.status === undefined
+      ? { ...item, status: "open" }
+      : item;
+    mutate((prev) => [...prev, withDefaults]);
   }, [mutate]);
 
   const removeItem = useCallback((id) => {

@@ -10,6 +10,21 @@
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/lib/supabase";
 import { LINKABLE_TYPES } from "./constants";
+import { assertSetUnlocked } from "./setLock";
+
+/**
+ * Resolve the drawing_id behind a link row so removeLink can run the
+ * lock guard without forcing callers to look it up first.
+ */
+async function _drawingIdForLink(linkId) {
+  const { data, error } = await supabase
+    .from("drawing_links")
+    .select("drawing_id")
+    .eq("id", linkId)
+    .maybeSingle();
+  if (error) return null;
+  return data?.drawing_id || null;
+}
 
 /**
  * List active links for one or more zones. Batches so the viewer can
@@ -51,6 +66,9 @@ export async function createLink({
   if (!projectId || !zone?.id || !zone?.drawing_id || !zone?.drawing_revision_id) {
     throw new Error("createLink: projectId + full zone record required");
   }
+  // Lock guard. Caller already passes the zone (with drawing_id) for
+  // payload assembly; reuse that to gate the write.
+  await assertSetUnlocked(zone.drawing_id);
   if (!LINKABLE_TYPES.includes(recordType)) {
     throw new Error(`createLink: recordType "${recordType}" not in LINKABLE_TYPES`);
   }
@@ -84,6 +102,8 @@ export async function createLink({
 /** Soft-delete a link (sets removed_at / removed_by). */
 export async function removeLink({ linkId, userId }) {
   if (!linkId) throw new Error("removeLink: linkId required");
+  const drawingId = await _drawingIdForLink(linkId);
+  await assertSetUnlocked(drawingId);
   const { error } = await supabase
     .from("drawing_links")
     .update({ removed_at: new Date().toISOString(), removed_by: userId || null })

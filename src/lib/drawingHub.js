@@ -109,3 +109,22 @@ export {
   _buildDependencyIndex,
   computeDependencyImpact,
 } from "./drawingHub/dependencies";
+
+// Set-level edit lock (migration 071). Service layer guards every write
+// path against assertSetUnlocked(); the UI uses lockSet/unlockSet on
+// approval and admin override.
+export {
+  lockSet,
+  unlockSet,
+  isSetLocked,
+  assertSetUnlocked,
+} from "./drawingHub/setLock";
+
+// Sign-off stamps on drawing revisions (migration 072). Append-only audit
+// trail — voiding leaves the row in place with is_voided=true.
+export {
+  listSignoffs,
+  createSignoff,
+  voidSignoff,
+  SIGNOFF_STAMP_TYPES,
+} from "./drawingHub/signoffs";

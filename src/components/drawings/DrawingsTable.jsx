@@ -6,6 +6,7 @@ import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue, daysLate, urgencyClass } from "./drawingsUtils";
 import { hasTitleblockTemplate } from "@/lib/titleblock";
+import { Lock } from "lucide-react";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
 //
@@ -444,8 +445,29 @@ function GroupRow({
               color: group.isUngrouped ? "var(--text-muted)" : "var(--text-primary)",
               letterSpacing: "0.08em", textTransform: "uppercase",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              display: "inline-flex", alignItems: "center", gap: 6,
             }}>
               {group.name}
+              {/* Lock indicator (migration 071). Shown to everyone — admin
+                  unlock lives on the viewer header. */}
+              {group.parent?.is_locked && (
+                <span
+                  title={
+                    group.parent?.locked_reason
+                      ? `Locked: ${group.parent.locked_reason}`
+                      : "Set is locked from edits"
+                  }
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 18, height: 18, borderRadius: 3,
+                    background: "rgba(245, 158, 11, 0.15)",
+                    border: "1px solid rgba(245, 158, 11, 0.4)",
+                    color: "#f59e0b",
+                  }}
+                >
+                  <Lock size={10} />
+                </span>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {group.setOnly ? (

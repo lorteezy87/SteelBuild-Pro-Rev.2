@@ -12,6 +12,35 @@
 
 import { supabase } from "@/lib/supabase";
 import { DEPENDENCY_RELATIONSHIPS } from "./constants";
+import { assertSetUnlocked } from "./setLock";
+
+/**
+ * For dependency add/remove we need the lock guard to gate writes if the
+ * source zone's drawing belongs to a locked set. (Target zone could live
+ * on a different sheet / set; the lock applies to the side that "owns"
+ * the edit — by convention the source.)
+ */
+async function _drawingIdForZone(zoneId) {
+  if (!zoneId) return null;
+  const { data, error } = await supabase
+    .from("drawing_zones")
+    .select("drawing_id")
+    .eq("id", zoneId)
+    .maybeSingle();
+  if (error) return null;
+  return data?.drawing_id || null;
+}
+
+async function _drawingIdForDependency(depId) {
+  if (!depId) return null;
+  const { data, error } = await supabase
+    .from("drawing_zone_dependencies")
+    .select("source_zone_id")
+    .eq("id", depId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return _drawingIdForZone(data.source_zone_id);
+}
 
 // ────────────────────────────────────────────────────────────────────
 // Drawing Hub V3.1 — Zone-to-Zone Dependency Graph
@@ -61,6 +90,9 @@ export async function addZoneDependency({
   if (!DEPENDENCY_RELATIONSHIPS.includes(relationship)) {
     throw new Error(`addZoneDependency: relationship "${relationship}" not in ${DEPENDENCY_RELATIONSHIPS.join(", ")}`);
   }
+  // Lock guard — gate by the source zone's drawing.
+  const drawingId = await _drawingIdForZone(sourceZoneId);
+  await assertSetUnlocked(drawingId);
   const weight = Number(propagationWeight);
   if (!Number.isFinite(weight) || weight < 0 || weight > 2) {
     throw new Error("addZoneDependency: propagationWeight must be a number in [0,2]");
@@ -102,6 +134,8 @@ export async function addZoneDependency({
  */
 export async function removeZoneDependency(depId, { userId = null } = {}) {
   if (!depId) throw new Error("removeZoneDependency: depId required");
+  const drawingId = await _drawingIdForDependency(depId);
+  await assertSetUnlocked(drawingId);
   const { data: dep, error } = await supabase
     .from("drawing_zone_dependencies")
     .update({

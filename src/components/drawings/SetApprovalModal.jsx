@@ -15,6 +15,10 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
   const [notes, setNotes] = useState("");
 
   const handleConfirm = () => {
+    // Locking is no longer triggered by the document-side approval.
+    // Drawing sets are locked automatically when a submittal linked to
+    // them reaches a terminal-approved status (Approved / Approved as
+    // Noted / Released for Fabrication). See useSubmittals.ts.
     onConfirm({ status, revision, approvedBy, approvalDate, applyToSheets, notes });
   };
 
