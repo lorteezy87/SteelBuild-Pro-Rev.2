@@ -760,8 +760,11 @@ export default function DrilldownView({
       const due = parseDate(r.due_date);
       return due && due >= today && daysBetween(due, today) <= 3;
     });
+    // Active workflow stages, post-migration-077 (corrected 7-stage flow):
+    //   IFA / OFA / BFA / OFS / IFC. Only "Not Started" and "Released" are
+    //   excluded — all other stages are still in active review/scrub/issue.
     const pendingRevisions = drawings.filter((drawing) =>
-      statusIn(drawing.stage, ["OFA", "BFA", "OFS", "BFS", "FFF"])
+      statusIn(drawing.stage, ["IFA", "OFA", "BFA", "OFS", "IFC"])
     );
     const stalledPackages = wps.filter(
       (wp) => !statusIs(wp.status, "Complete") && Number(wp.percent_complete || 0) === 0

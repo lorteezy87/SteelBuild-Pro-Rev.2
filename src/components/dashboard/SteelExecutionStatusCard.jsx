@@ -23,7 +23,11 @@ export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
   const detailingTons = wps
     .filter(w => statusIs(w.phase, "Detailing"))
     .reduce((s, w) => s + (tons(w) * ((Number(w.percent_complete) || 0) / 100)), 0);
-  const approvedDrawings = drawings.filter(d => statusIn(d.stage, ["OFS","BFS","FFF","Released"])).length;
+  // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
+  // (migration 077), that means OFS (post-approval scrub), IFC (issued for
+  // construction), and Released. BFA itself is "just-returned" and not
+  // yet committed-approved, so it's excluded.
+  const approvedDrawings = drawings.filter(d => statusIn(d.stage, ["OFS","IFC","Released"])).length;
   const totalDrawings = drawings.length || 1;
 
   // Released = all tonnage that has left Detailing (phase >= Fabrication)

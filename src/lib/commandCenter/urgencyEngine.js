@@ -144,8 +144,10 @@ export function drawingUrgency(drawing, projectMap = {}) {
   const stage = drawing.stage || "Not Started";
   const project = projectMap[drawing.project_id] || {};
 
-  // Only surface actionable stages
-  const actionableStages = new Set(["BFA", "OFS", "FFF"]);
+  // Only surface actionable stages — ones the user is waiting on. In the
+  // corrected 7-stage flow (migration 077): BFA (just returned, needs
+  // routing), OFS (post-approval scrub), IFC (record-copy distribution).
+  const actionableStages = new Set(["BFA", "OFS", "IFC"]);
   if (!actionableStages.has(stage)) return null;
 
   const dueDays = daysUntil(drawing.due_date);
@@ -158,15 +160,15 @@ export function drawingUrgency(drawing, projectMap = {}) {
   } else if (drawing.due_date && dueDays <= 7) {
     urgency = "due-soon";
     displayStatus = `${stage} — due in ${dueDays}d`;
-  } else if (stage === "FFF") {
+  } else if (stage === "IFC") {
     urgency = "normal";
-    displayStatus = "FFF — pending release";
+    displayStatus = "IFC — pending release";
   } else if (!drawing.due_date && (stage === "BFA" || stage === "OFS")) {
     urgency = "awaiting";
     displayStatus = `${stage} — awaiting return`;
   }
 
-  if (urgency === "normal" && stage !== "FFF") return null;
+  if (urgency === "normal" && stage !== "IFC") return null;
 
   return {
     urgency,

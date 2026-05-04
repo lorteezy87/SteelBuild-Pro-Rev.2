@@ -839,8 +839,10 @@ function SheetRow({
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {d.title}
           {/* Hide stale AI extraction badges on completed sheets — they're
-              upload-process artifacts, not approval status indicators. */}
-          {d.stage !== "Released" && d.stage !== "FFF" && (
+              upload-process artifacts, not approval status indicators.
+              Post-migration-077: drawings past IFC are considered done
+              for AI-extraction badge purposes. */}
+          {d.stage !== "Released" && d.stage !== "IFC" && (
             <AIStatusBadge status={d.ai_extraction_status} uploadStatus={d.upload_status} error={d.ai_extraction_error} />
           )}
         </div>

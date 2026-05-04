@@ -16,19 +16,21 @@
 import { supabase } from "@/lib/supabase";
 
 // Drawings.stage enum lives at src/components/drawings/drawingsConfig.js
-// (OFA, BFA, OFS, BFS, FFF, Released, Not Started). The drawing_analyses
-// enum is broader — this map reconciles the two.
+// (Not Started → IFA → OFA → BFA → OFS → IFC → Released, per migration 077).
+// The drawing_analyses enum is broader — this map reconciles the two.
 const STAGE_FROM_ANALYSIS = {
-  "OFA":       "OFA",
-  "BFA":       "BFA",
-  "OFS":       "OFS",
-  "BFS":       "BFS",
-  "FFF":       "FFF",
-  "Released":  "Released",
-  "IFA":       "OFA",       // Issued For Approval → starts at OFA
-  "IFC":       "Released",  // Issued For Construction → terminal stage
-  "Shop":      "OFS",       // Shop drawings typically enter at OFS (first submit)
-  "Revision":  "OFA",       // Revision being re-issued for approval
+  "Not Started": "Not Started",
+  "IFA":         "IFA",        // In For Approval (internal prep)
+  "OFA":         "OFA",        // Out For Approval (with EOR/AOR)
+  "BFA":         "BFA",        // Back From Approval
+  "OFS":         "OFS",        // Out For Scrub
+  "IFC":         "IFC",        // Issued For Construction
+  "Released":    "Released",
+  // Legacy stages dropped by migration 077 — coerce to closest match
+  "BFS":         "BFA",
+  "FFF":         "IFC",
+  "Shop":        "OFS",        // Shop drawings sit at OFS (post-approval scrub)
+  "Revision":    "IFA",        // Revision re-issued — back to internal prep
 };
 
 // Discipline derivation from sheet_number prefix. Shop is NOT a discipline

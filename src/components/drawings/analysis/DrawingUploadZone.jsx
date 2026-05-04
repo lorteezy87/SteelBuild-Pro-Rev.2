@@ -4,7 +4,13 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { mono, display, surface, AI_ACCENT } from "./tokens";
 
-const STAGES = ["IFA","IFC","OFA","BFA","OFS","BFS","FFF","Released","Shop","Revision"];
+// drawing_analyses-side stage list — broader than the drawings.stage
+// CHECK constraint because analysis can come from external sources that
+// label sheets as "Shop" or "Revision". Post-migration-077, the canonical
+// drawings stages are: Not Started → IFA → OFA → BFA → OFS → IFC → Released.
+// "Shop" and "Revision" are kept as analysis-source labels; they're
+// coerced into the canonical set via importAnalyzedDrawings.js.
+const STAGES = ["IFA","OFA","BFA","OFS","IFC","Released","Shop","Revision"];
 const MAX_BYTES = 32 * 1024 * 1024;
 
 /**

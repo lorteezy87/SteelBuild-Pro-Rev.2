@@ -7,25 +7,27 @@ export default function DrawingApprovalStatusCard({ drawings = [] }) {
   const navigate = useNavigate();
 
   const total = drawings.length;
+  // Corrected 7-stage flow (migration 077): Not Started → IFA → OFA → BFA
+  // → OFS → IFC → Released. R&R outcomes loop back to IFA.
   const notStarted = drawings.filter(d => d.stage === "Not Started").length;
+  const ifa = drawings.filter(d => d.stage === "IFA").length;
   const ofa = drawings.filter(d => d.stage === "OFA").length;
   const bfa = drawings.filter(d => d.stage === "BFA").length;
   const ofs = drawings.filter(d => d.stage === "OFS").length;
-  const bfs = drawings.filter(d => d.stage === "BFS").length;
-  const fff = drawings.filter(d => d.stage === "FFF").length;
+  const ifc = drawings.filter(d => d.stage === "IFC").length;
   const released = drawings.filter(d => d.stage === "Released").length;
   const overdue = drawings.filter(d => isOverdue(d.due_date, d.stage, ["Released"])).length;
 
-  const pendingApproval = ofa + bfa;
+  const pendingApproval = ifa + ofa + bfa;
 
   const stages = [
-    { label: "Not Started",        count: notStarted, color: "var(--text-muted)" },
-    { label: "OFA — For Approval", count: ofa,        color: "var(--status-warning)" },
-    { label: "BFA — By Approval",  count: bfa,        color: "var(--chart-3)" },
-    { label: "OFS — For Stamp",    count: ofs,        color: "var(--chart-4)" },
-    { label: "BFS — By Stamp",     count: bfs,        color: "var(--accent)" },
-    { label: "FFF — Final Fab",    count: fff,        color: "var(--status-success)" },
-    { label: "Released",           count: released,   color: "var(--status-success)" },
+    { label: "Not Started",         count: notStarted, color: "var(--text-muted)" },
+    { label: "IFA — In For Approval",   count: ifa,    color: "#60A5FA" },
+    { label: "OFA — Out For Approval",  count: ofa,    color: "var(--status-warning)" },
+    { label: "BFA — Back From Approval",count: bfa,    color: "var(--chart-3)" },
+    { label: "OFS — Out For Scrub",     count: ofs,    color: "var(--chart-4)" },
+    { label: "IFC — Issued For Construction", count: ifc, color: "#34D399" },
+    { label: "Released",                count: released, color: "var(--status-success)" },
   ];
 
   const overdueDrawings = drawings

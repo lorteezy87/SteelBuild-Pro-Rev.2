@@ -73,12 +73,13 @@ function loadColWidths() {
   } catch { return DEFAULT_COL_WIDTHS; }
 }
 
-// Valid drawing-stage values. Matches the drawings.stage CHECK constraint
-// minus "Not Started" — stage on a scheduled detailing task only becomes
-// meaningful once work is in motion. "IFC" is the end-user label for
-// Released so we expose both; the save path normalizes IFC → Released.
-const DETAILING_STAGES = ["OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
-const STAGE_DISPLAY = { Released: "IFC" };  // show IFC in the UI
+// Valid drawing-stage values for a scheduled detailing task — matches the
+// drawings.stage CHECK constraint after migration 077 (corrected 7-stage
+// flow) minus "Not Started" (stage on a scheduled task only becomes
+// meaningful once work is in motion). IFC and Released are now distinct
+// stages so we expose both directly with no display alias.
+const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
+const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 
 export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], weatherRisk = null, expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
