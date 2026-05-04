@@ -32,7 +32,7 @@ import {
   validateStageTransition,
 } from "@/components/drawings/drawingsUtils";
 import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
-import { derivedSetStage } from "@/lib/submittalStageMapping";
+import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
 
 // ── Presentation components ─────────────────────────────────────────────────
 import DrawingsTable from "@/components/drawings/DrawingsTable";
@@ -43,6 +43,7 @@ import ActiveFilterPills from "@/components/drawings/ActiveFilterPills";
 import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
 import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import AdvanceStageDialog from "@/components/drawings/AdvanceStageDialog";
 import RenameSetModal from "@/components/drawings/RenameSetModal";
 import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
 import BulkEditModal from "@/components/drawings/BulkEditModal";
@@ -80,6 +81,7 @@ export default function Drawings() {
   const [bulkStage, setBulkStage] = useState("");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+  const [advanceTarget, setAdvanceTarget] = useState(null); // { drawingId, setId, currentStage, targetStage }
   const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
   const [renameSet, setRenameSet] = useState(null);   // { setId, setName, sheets }
@@ -449,7 +451,17 @@ export default function Drawings() {
     const target = STAGE_ORDER[idx + 1];
     const v = validateStageTransition(drawing.stage, target);
     if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
-    updateMut.mutate({ id: drawing.id, stage: target });
+    // Submittal-driven flow: open the dialog so the user can choose
+    // between the canonical "via submittal" path and the legacy direct
+    // sheet-stage mutation. The legacy fallback preserves the original
+    // behaviour for pre-Sprint-2 cleanup; the via-submittal path is the
+    // new primary action.
+    setAdvanceTarget({
+      drawingId: drawing.id,
+      setId: drawing.drawing_set_id || null,
+      currentStage: drawing.stage,
+      targetStage: target,
+    });
     setContextMenu(null);
   };
 
@@ -460,6 +472,15 @@ export default function Drawings() {
       toast.error(`Cannot apply unknown stage "${bulkStage}"`);
       return;
     }
+    // Bulk-via-submittal isn't well-defined when the selection spans
+    // multiple drawing sets (which submittal would we touch?), so we
+    // keep the direct-mutation handler here and surface the workflow
+    // boundary as an info toast instead. The single-row "advance stage"
+    // flow does prompt the user to use a submittal — see handleAdvanceStage.
+    toast.info(
+      "Bulk apply updates sheet stages directly. For workflow status, use the Submittals page.",
+      { duration: 4000 },
+    );
     const ids = [...selected];
     const { succeeded, failed } = await batchProcess(
       ids,
@@ -940,6 +961,34 @@ export default function Drawings() {
         onClose={() => setBulkEditOpen(false)}
         onApply={handleBulkEdit}
         selectedCount={selected.size}
+      />
+
+      <AdvanceStageDialog
+        open={!!advanceTarget}
+        currentStage={advanceTarget?.currentStage}
+        targetStage={advanceTarget?.targetStage}
+        drawingId={advanceTarget?.drawingId}
+        setId={advanceTarget?.setId}
+        onClose={() => setAdvanceTarget(null)}
+        onLegacy={({ drawingId, targetStage }) => {
+          // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
+          // workflow source of truth is now on submittals; this path is
+          // kept for cleanup of orphan sheets without linked submittals.
+          updateMut.mutate({ id: drawingId, stage: targetStage });
+          setAdvanceTarget(null);
+        }}
+        onViaSubmittal={({ setId, targetStage }) => {
+          // Canonical path: hand the user off to the Submittals page
+          // with a target set + prefilled status. Falls back to
+          // navigating without a status if the stage maps to "Not Started"
+          // or an unknown stage (stageToSubmittalStatus returns null).
+          const mapped = stageToSubmittalStatus(targetStage);
+          const params = new URLSearchParams();
+          if (setId) params.set("targetSetId", setId);
+          if (mapped?.status) params.set("prefilledStatus", mapped.status);
+          navigate(`/Submittals${params.toString() ? `?${params.toString()}` : ""}`);
+          setAdvanceTarget(null);
+        }}
       />
 
       <SetApprovalModal
