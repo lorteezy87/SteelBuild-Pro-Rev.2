@@ -274,19 +274,36 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
     let bestTitle = "";
     let bestNumber = "";
     try {
-      // Most sheets are single-page but some bundle a cover sheet —
-      // walk pages until we find content in the rect, capped to a few
-      // pages so a giant PDF doesn't stall the run.
-      const maxPages = Math.min(pdf.numPages, 5);
-      for (let p = 1; p <= maxPages; p++) {
-        const page = await pdf.getPage(p);
-        if (titleRect && !bestTitle) {
-          bestTitle = (await extractTextFromRect(page, titleRect)) || "";
+      // Multi-sheet PDFs (one master PDF, N sheet rows pointing to it)
+      // require us to render the SPECIFIC page each row owns. Without
+      // honoring pdf_page, every sheet walks pages 1..5 starting from
+      // page 1 — so they all read the cover sheet's title/sheet_number,
+      // collide on uq_drawings_set_sheet_revision, and only the first
+      // update succeeds. (Bug observed in production logs: 2026-05-04.)
+      const targetPage =
+        Number.isFinite(drawing.pdf_page) && drawing.pdf_page >= 1
+          ? Math.min(drawing.pdf_page, pdf.numPages)
+          : null;
+
+      if (targetPage) {
+        // Specific page mapping — read only that page, no fallback walk.
+        const page = await pdf.getPage(targetPage);
+        if (titleRect) bestTitle = (await extractTextFromRect(page, titleRect)) || "";
+        if (numberRect) bestNumber = (await extractTextFromRect(page, numberRect)) || "";
+      } else {
+        // Legacy fallback: pdf_page missing or zero → walk the first few
+        // pages until we find content. Single-page PDFs land on page 1.
+        const maxPages = Math.min(pdf.numPages, 5);
+        for (let p = 1; p <= maxPages; p++) {
+          const page = await pdf.getPage(p);
+          if (titleRect && !bestTitle) {
+            bestTitle = (await extractTextFromRect(page, titleRect)) || "";
+          }
+          if (numberRect && !bestNumber) {
+            bestNumber = (await extractTextFromRect(page, numberRect)) || "";
+          }
+          if (bestTitle && bestNumber) break;
         }
-        if (numberRect && !bestNumber) {
-          bestNumber = (await extractTextFromRect(page, numberRect)) || "";
-        }
-        if (bestTitle && bestNumber) break;
       }
     } finally {
       try { await pdf.destroy(); } catch { /* ignore */ }
@@ -334,16 +351,40 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
             try {
               const patch = await reextractOne(sheet);
               if (patch) {
-                await base44.entities.Drawing.update(sheet.id, patch);
-                updated++;
+                // Skip the write if the extracted values are byte-identical
+                // to what's already on the row — saves a round trip and
+                // avoids touching updated_at unnecessarily.
+                const titleSame =
+                  !patch.title || patch.title === (sheet.title || "");
+                const numberSame =
+                  !patch.sheet_number ||
+                  patch.sheet_number === (sheet.sheet_number || "");
+                if (titleSame && numberSame) {
+                  unchanged++;
+                } else {
+                  await base44.entities.Drawing.update(sheet.id, patch);
+                  updated++;
+                }
               } else {
                 unchanged++;
               }
             } catch (err) {
               failed++;
+              // Detect the most-common failure: the master PDF has the
+              // wrong pdf_page assignment so multiple sheets land on the
+              // same titleblock and collide on uq_drawings_set_sheet_revision.
+              // Surface a clearer message so users know to re-upload the
+              // set or hand-edit pdf_page values.
+              const msg = String(err?.message || err || "");
+              const isUniqueConflict =
+                msg.includes("uq_drawings_set_sheet_revision") ||
+                msg.includes("duplicate key value");
               // eslint-disable-next-line no-console
               console.warn(
-                `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}:`,
+                `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}` +
+                  (isUniqueConflict
+                    ? ` (sheet_number collision — pdf_page=${sheet?.pdf_page} likely points at the wrong page; re-upload the set or fix pdf_page in Edit Sheet)`
+                    : ""),
                 err,
               );
             }
