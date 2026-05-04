@@ -881,6 +881,8 @@ export default function DrawingViewer() {
           allDrawings={drawings}
           onSelect={setActiveId}
           onClose={() => setContextOpen(false)}
+          drawingRevisionId={currentRevision?.id || null}
+          isSetLocked={!!activeDrawingSet?.is_locked}
         />
       )}
 
