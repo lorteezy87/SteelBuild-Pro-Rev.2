@@ -24,16 +24,36 @@ const mono = { fontFamily: "var(--font-mono)" };
 
 // Shared caches. All module-scoped so they survive component remounts.
 // - thumbCache: rendered data-URL per drawing id.
-// - pdfDocCache: parsed pdfjs doc per file_url. Critical for big sets where
-//   every sheet shares one master PDF — without this we'd parse the same
-//   file 50+ times. We keep the Promise so concurrent callers reuse the
-//   in-flight request instead of firing parallel downloads.
+// - pdfDocCache: parsed pdfjs doc per *stable* PDF identity. Critical for
+//   big sets where every sheet shares one master PDF — without this we'd
+//   parse the same file 50+ times. We keep the Promise so concurrent
+//   callers reuse the in-flight request instead of firing parallel
+//   downloads.
+//
+// Cache-key gotcha: the resolved signed URL changes every call (fresh JWT
+// token in the query string), so keying by resolved URL completely
+// defeats the cache for multi-sheet PDFs. We key by the URL *without*
+// the query string — that's the stable storage path for Supabase signed
+// URLs and a stable identity for any other URL too — while still using
+// the fresh signed URL to actually fetch.
 const thumbCache   = new Map();
-const pdfDocCache  = new Map(); // Map<resolvedUrl, Promise<pdfjsDoc>>
+const pdfDocCache  = new Map(); // Map<stableKey, Promise<pdfjsDoc>>
 
 // Hard cap on concurrent cached docs so we don't leak memory on huge
 // multi-set projects. LRU-ish: when we cross the cap, we destroy the oldest.
 const MAX_CACHED_DOCS = 6;
+
+/**
+ * Strip the query string from a URL to get a stable cache key. Supabase
+ * signed URLs embed a fresh JWT in `?token=…` per call; the path before
+ * the `?` is the stable storage location. For non-URL strings (raw
+ * storage paths) the input is returned as-is.
+ */
+function stableUrlKey(url) {
+  if (!url || typeof url !== "string") return String(url);
+  const q = url.indexOf("?");
+  return q >= 0 ? url.slice(0, q) : url;
+}
 
 const THUMB_WIDTH = 138;  // px at scale 1 (CSS pixels)
 const THUMB_HEIGHT = 96;  // aspect ~ 1.44; most drawings are wider than tall
@@ -43,10 +63,20 @@ const THUMB_HEIGHT = 96;  // aspect ~ 1.44; most drawings are wider than tall
 // render task un-starved during rapid sheet-clicking.
 const QUEUE_START_DELAY_MS = 350;
 
-function getOrLoadDoc(url) {
-  if (pdfDocCache.has(url)) return pdfDocCache.get(url);
-  const p = pdfjsLib.getDocument(url).promise;
-  pdfDocCache.set(url, p);
+/**
+ * Fetch and parse a pdfjs document, reusing the cached promise when the
+ * same stable key is loaded again. The stable key is the file_url with
+ * its query string stripped — multiple sheets that share one master PDF
+ * will collapse onto one cached doc.
+ *
+ * The signedUrl is the actual URL pdfjs hits to download the bytes; it
+ * is allowed to differ between calls for the same stableKey (signed
+ * URLs rotate). We only use it on the first call.
+ */
+function getOrLoadDoc(stableKey, signedUrl) {
+  if (pdfDocCache.has(stableKey)) return pdfDocCache.get(stableKey);
+  const p = pdfjsLib.getDocument(signedUrl).promise;
+  pdfDocCache.set(stableKey, p);
   // Evict oldest if we're over cap.
   if (pdfDocCache.size > MAX_CACHED_DOCS) {
     const firstKey = pdfDocCache.keys().next().value;
@@ -319,10 +349,17 @@ async function renderThumb(d, { resolveUrl, extractStoragePath }) {
   const toResolve = storagePath || raw;
   const url = await resolveUrl(toResolve);
 
-  // Reuse a shared parsed-PDF doc if it's already loaded for this URL.
+  // Cache key MUST be stable across signed-URL token rotations. Prefer
+  // the storage path (perfectly stable), then the raw file_url with its
+  // query string stripped (handles non-Supabase URLs and the rare case
+  // where extractStoragePath returns null), then the raw value as a
+  // last resort.
+  const cacheKey = storagePath || stableUrlKey(raw);
+
+  // Reuse a shared parsed-PDF doc if it's already loaded for this PDF.
   // This is the big win for multi-sheet sets — 1 download + parse instead
   // of N. We do NOT destroy the doc here; the shared cache owns its lifetime.
-  const doc = await getOrLoadDoc(url);
+  const doc = await getOrLoadDoc(cacheKey, url);
   const pageNum = Number(d.pdf_page) || 1;
   if (pageNum < 1 || pageNum > doc.numPages) {
     throw new Error(`page ${pageNum} out of range (${doc.numPages})`);

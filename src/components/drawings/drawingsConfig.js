@@ -81,6 +81,7 @@ export const EMPTY_FORM = {
   notes: "",
   linked_rfi_ids: "",
   priority_flag: false,
+  pdf_page: 1,
 };
 
 // ─── Shared Inline-Style Tokens ─────────────────────────────────────────────

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
-import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename } from "@/lib/pdfSheetExtractor";
+import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 
@@ -1102,6 +1102,17 @@ export default function DrawingSetUploadModal({
           sourceResult?.scanned ||
           sourceResult?.tooLarge ||
           !!sheet._note;
+        // Validate pdf_page — must be a positive integer. Anything else
+        // falls back to 1 with a warning so the user can hand-fix via
+        // SheetFormModal. The extractor's assignPdfPages() should have
+        // populated this correctly; if we're falling back here, something
+        // upstream regressed.
+        const validatedPage = validatePdfPage(sheet.pdfPage);
+        if (validatedPage === null) {
+          console.warn(
+            `[DrawingSetUploadModal] Sheet "${sheet.sheetNumber || "?"}" has invalid pdfPage=${JSON.stringify(sheet.pdfPage)} — defaulting to 1.`,
+          );
+        }
         return {
           sheet_number:     sheet.sheetNumber || "",
           title:            sheet.sheetTitle  || "",
@@ -1113,7 +1124,7 @@ export default function DrawingSetUploadModal({
           revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
           stage:            meta.defaultStage || "Not Started",
           file_url:         sheet.sourceFileUrl,
-          pdf_page:         Number.isFinite(sheet.pdfPage) ? sheet.pdfPage : 1,
+          pdf_page:         validatedPage ?? 1,
           callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
           upload_batch_id:      batchId,
           upload_status:        "Uploaded",
@@ -1133,6 +1144,28 @@ export default function DrawingSetUploadModal({
       let createdRows = 0;
       let failedRows  = 0;
       const records = selectedSheets.map(buildRecord);
+
+      // Sanity check per source PDF: if a multi-page PDF ended up with
+      // pdf_page=1 across every one of its sheets, that's the original
+      // bug regressing. Log loud per source file so QA can spot it in
+      // DevTools without inspecting every record.
+      const recordsBySource = new Map();
+      selectedSheets.forEach((sheet, i) => {
+        const key = sheet.sourceFile || "?";
+        if (!recordsBySource.has(key)) recordsBySource.set(key, []);
+        recordsBySource.get(key).push(records[i]);
+      });
+      for (const [sourceFile, group] of recordsBySource) {
+        if (group.length <= 1) continue;
+        const fileResult = fileResults.find(r => r.fileName === sourceFile);
+        const pageCount = fileResult?.pageCount;
+        if (Number.isFinite(pageCount) && pageCount > 1 && group.every(r => r.pdf_page === 1)) {
+          console.warn(
+            `[DrawingSetUploadModal] All ${group.length} sheets from "${sourceFile}" (a ${pageCount}-page PDF) have pdf_page=1. ` +
+            `This looks like the multi-sheet pdf_page bug regressing — check that the extractor schema includes pdfPage and that assignPdfPages ran.`,
+          );
+        }
+      }
 
       setProcessingStatus(prev => ({
         ...prev,
