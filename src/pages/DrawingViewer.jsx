@@ -32,6 +32,7 @@ import { STAGES, mono, toolBtn, normalizeSN } from "@/pages/drawingViewer/drawin
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
 import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
+import { usePdfRenderer } from "@/pages/drawingViewer/usePdfRenderer";
 import {
   ensureCurrentRevision,
   listZones,
@@ -72,28 +73,12 @@ export default function DrawingViewer() {
   const [contextOpen, setContextOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
-  const [rendering, setRendering] = useState(false);
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
   // "iframe" = browser-native PDF viewer (fallback, no annotation layer)
   // Default to canvas now that the pdfjs worker is bundled via Vite and reliable.
   const [renderMode, setRenderMode] = useState("canvas");
 
-  const canvasRef = useRef(null);
   const annotLayerRef = useRef(null);
-  const renderTaskRef = useRef(null);
-  // pdfjs-extracted link hotspots (internal PDF links, external URLs).
-  // Renamed from `annotations` to avoid colliding with the new `markup`
-  // JSONB column used by AnnotationLayer.
-  const [linkHotspots, setLinkHotspots] = useState([]);
-  // Natural page size at scale 1 (PDF user units). Callouts are stored in
-  // this coordinate space with a top-left origin, so the overlay multiplies
-  // by `zoom` to position itself over the rendered canvas.
-  const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
-  // Live pdfjs viewport for the current render. AnnotationLayer uses it to
-  // project markup (stored in PDF units) to canvas pixels + hit-test pointer
-  // events. Updated after every successful render.
-  const [currentViewport, setCurrentViewport] = useState(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
@@ -119,6 +104,19 @@ export default function DrawingViewer() {
     currentPage,
     setCurrentPage,
   } = usePdfLoader({ activeDrawing, renderMode });
+
+  // Canvas-side renderer. Owns the <canvas> ref + the in-flight render task
+  // and re-renders whenever the document, page index, zoom, or rotation
+  // changes. Surfaces the current viewport + canvas dimensions so overlay
+  // layers (markup, zones, callouts, link hotspots) can position themselves.
+  const {
+    canvasRef,
+    rendering,
+    currentViewport,
+    canvasSize,
+    pageSize,
+    linkHotspots,
+  } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
 
   const qc = useQueryClient();
 
@@ -551,75 +549,6 @@ export default function DrawingViewer() {
       toast.error(`Couldn't save zone: ${err?.message || "unknown error"}`);
     }
   }, [currentRevision, activeDrawing, refetchZones]);
-
-  // ── Render page when doc, page, or zoom changes ────────────────────────────
-  const renderPage = useCallback(async () => {
-    if (!pdfDoc || !canvasRef.current) return;
-
-    // Cancel any in-flight render
-    if (renderTaskRef.current) {
-      renderTaskRef.current.cancel();
-      renderTaskRef.current = null;
-    }
-
-    setRendering(true);
-    try {
-      const page = await pdfDoc.getPage(currentPage);
-      const baseViewport = page.getViewport({ scale: 1, rotation });
-      setPageSize({ width: baseViewport.width, height: baseViewport.height });
-      const viewport = page.getViewport({ scale: zoom, rotation });
-      const canvas = canvasRef.current;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d");
-
-      renderTaskRef.current = page.render({ canvasContext: ctx, viewport });
-      await renderTaskRef.current.promise;
-
-      // Publish viewport + size so AnnotationLayer can project markup.
-      // We do this AFTER the render so the overlay never displays against
-      // a mismatched canvas (prevents a 1-frame "jump" on zoom).
-      setCurrentViewport(viewport);
-      setCanvasSize({ width: viewport.width, height: viewport.height });
-
-      // ── Extract link annotations for clickable overlays ──────────────
-      try {
-        const annots = await page.getAnnotations({ intent: "display" });
-        const linkAnnots = annots
-          .filter(a => a.subtype === "Link" && a.rect)
-          .map(a => {
-            // Transform PDF rect [x1,y1,x2,y2] to canvas pixel coords
-            const [x1, y1, x2, y2] = a.rect;
-            const p1 = viewport.convertToViewportPoint(x1, y1);
-            const p2 = viewport.convertToViewportPoint(x2, y2);
-            const left = Math.min(p1[0], p2[0]);
-            const top = Math.min(p1[1], p2[1]);
-            const width = Math.abs(p2[0] - p1[0]);
-            const height = Math.abs(p2[1] - p1[1]);
-            return {
-              id: a.id || `${x1}-${y1}`,
-              left, top, width, height,
-              url: a.url || null,
-              dest: a.dest || null,
-              unsafeUrl: a.unsafeUrl || null,
-              title: a.title || "",
-            };
-          });
-        setLinkHotspots(linkAnnots);
-      } catch {
-        setLinkHotspots([]);
-      }
-    } catch (err) {
-      if (err?.name !== "RenderingCancelledException") {
-        console.error("Render error:", err);
-      }
-    } finally {
-      setRendering(false);
-      renderTaskRef.current = null;
-    }
-  }, [pdfDoc, currentPage, zoom, rotation]);
-
-  useEffect(() => { renderPage(); }, [renderPage]);
 
   // When the active drawing changes, jump to its source PDF page so callouts
   // overlay the correct sheet. Stored as `pdf_page` by DrawingSetUploadModal;
