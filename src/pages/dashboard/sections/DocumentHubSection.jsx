@@ -26,7 +26,7 @@
 import React, { useMemo } from "react";
 import { FileText, ChevronRight } from "lucide-react";
 import SectionCard from "./SectionCard";
-import { rfiStatusRollup, submittalPipelineRollup, ballInCourtRollup, openRFICount, recentActivityFeed } from "../projectMetrics";
+import { rfiStatusRollup, submittalPipelineRollupFromSubmittals, ballInCourtRollup, openRFICount, recentActivityFeed } from "../projectMetrics";
 
 const RFI_STATUS_COLOR = {
   Draft:     "var(--text-muted)",
@@ -74,15 +74,13 @@ export default function DocumentHubSection({
     [drawingActivity],
   );
   const rfiBuckets = useMemo(() => rfiStatusRollup(rfis), [rfis]);
-  // Submittals are tracked via the drawings table in this app — the
-  // dedicated `submittals` table is currently empty everywhere. The
-  // rollup keys off `stage` (CHECK-constrained to OFA/BFA/OFS/BFS/FFF/
-  // Released on drawings), so passing drawings here surfaces real
-  // counts. We still concat any submittals rows that exist as a
-  // safety net for migrated/legacy data.
+  // Sprint 2: workflow source of truth is the `submittals` table.
+  // Pipeline counts are now derived from submittals only — drawings
+  // contribute a sheet count via the stats strip below but no longer
+  // drive the OFA/BFA/OFS/BFS/FFF/Released rollup.
   const submittalRollup = useMemo(
-    () => submittalPipelineRollup([...drawings, ...submittals]),
-    [drawings, submittals],
+    () => submittalPipelineRollupFromSubmittals(submittals),
+    [submittals],
   );
   const bic = useMemo(() => ballInCourtRollup(rfis), [rfis]);
   const openRFIs = useMemo(() => openRFICount(rfis), [rfis]);
@@ -96,10 +94,9 @@ export default function DocumentHubSection({
 
   const stats = [
     { value: openRFIs, label: "Open RFIs", color: openRFIs > 0 ? "warning" : "muted" },
-    // submittalRollup now counts drawing SETS (one row per set, not
-    // per individual sheet), so the label says "Sets" to keep the
-    // semantics legible at a glance.
-    { value: submittalRollup.total, label: "Submittal Sets", color: "info" },
+    // submittalRollup.total is now the count of active (non-Void)
+    // submittals from the submittals table — one row per submittal.
+    { value: submittalRollup.total, label: "Submittals", color: "info" },
     { value: drawings.length, label: "Drawings", color: "accent" },
   ];
 

@@ -127,40 +127,11 @@ export default function Drawings() {
     staleTime: 30000,
   });
 
-  // F15: reconcile stuck "Extracting" rows on page mount.
-  //
-  // If a user closes the tab while the AI extractor is mid-run, the child
-  // sheet rows get left at ai_extraction_status='Extracting' forever — there
-  // is no server-side worker that notices. On mount we find any rows that
-  // have been in Extracting for more than 10 minutes (longer than any real
-  // Claude call) and mark them Failed so the UI stops lying.
-  useEffect(() => {
-    if (!drawings.length) return;
-    const STUCK_MS = 10 * 60 * 1000;
-    const now = Date.now();
-    const stuck = drawings.filter(d => {
-      if (d.ai_extraction_status !== "Extracting") return false;
-      const anchor = d.last_extracted_at || d.updated_at || d.created_at;
-      if (!anchor) return true;
-      return now - new Date(anchor).getTime() > STUCK_MS;
-    });
-    if (stuck.length === 0) return;
-    (async () => {
-      for (const d of stuck) {
-        try {
-          await base44.entities.Drawing.update(d.id, {
-            ai_extraction_status: "Failed",
-            ai_extraction_error: "Extraction interrupted — reconcile on page mount",
-          });
-        } catch (err) {
-          console.warn("[drawings] Failed to reconcile stuck row", d.id, err);
-        }
-      }
-      invalidate();
-      toast.info(`Reconciled ${stuck.length} stuck extraction${stuck.length === 1 ? "" : "s"}`);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  // Reconciliation now handled server-side by reconcile_stuck_extractions()
+  // (migration 076). The Postgres function flips any row stuck in
+  // 'Extracting' for >5 minutes back to 'Failed' regardless of whether
+  // a user has the page open. Wire it to pg_cron or an edge function
+  // for periodic execution.
 
   // H9: keep the search box in sync with ?sheet= / ?search= query params.
   // Without this, in-app deep links (e.g. PCC → /drawings?sheet=S-001) just
@@ -179,21 +150,34 @@ export default function Drawings() {
     return map;
   }, [rfis]);
 
-  // Reverse index: drawing_set_id -> open/total submittal counts. The
-  // submittal table holds the link as a uuid[] column (drawing_set_ids),
-  // so each submittal can fan out into multiple sets. We tally both
-  // total and "open" (not Approved/Approved-as-Noted/Void) so the
-  // group header can call out work-in-flight without a click-through.
+  // Reverse index: drawing_set_id -> { total, open, latestStatus, latestId }.
+  // The submittal table holds the link as a uuid[] column
+  // (drawing_set_ids), so each submittal can fan out into multiple sets.
+  // We tally both total and "open" (not Approved/Approved-as-Noted/Void)
+  // so the group header can call out work-in-flight without a
+  // click-through. `latestStatus` is the status of the most recently
+  // touched (-submitted_date order in the query) submittal that
+  // references the set, so the table badge can show the live workflow
+  // state — submittals are workflow source of truth post-Sprint 1.
   const submittalsBySetId = useMemo(() => {
     const CLOSED = new Set(["Approved", "Approved as Noted", "Void"]);
     const map = {};
+    // submittals come pre-sorted by -submitted_date from useSubmittals,
+    // so the FIRST encountered status for a set is the latest.
     (submittals || []).forEach((s) => {
       if (s.is_deleted) return;
       const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
       const open = !CLOSED.has(s.status);
       ids.forEach((id) => {
         if (!id) return;
-        if (!map[id]) map[id] = { total: 0, open: 0 };
+        if (!map[id]) {
+          map[id] = {
+            total: 0,
+            open: 0,
+            latestStatus: s.status || null,
+            latestId: s.id || null,
+          };
+        }
         map[id].total += 1;
         if (open) map[id].open += 1;
       });
