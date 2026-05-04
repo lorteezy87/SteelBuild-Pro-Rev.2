@@ -1,3 +1,10 @@
+// Module-scoped set of cycle keys that have already been warned about.
+// Persists across calls to computeEffectiveDates so the same cycle
+// doesn't spam the console on every cascade pass (Schedule page can
+// trigger 3+ passes during initial load via React re-renders).
+// Reset via __resetCycleWarnings() in tests.
+const _WARNED_CYCLES = new Set();
+
 /**
  * scheduleCascade.js
  *
@@ -252,12 +259,16 @@ export function computeEffectiveDates(tasks) {
   }
 
   const cycleNodes = new Set();
-  const warnedCycles = new Set(); // dedupe warn output per cycle key
 
   function warnCycle(chain) {
     const key = [...chain].sort().join("|");
-    if (warnedCycles.has(key)) return;
-    warnedCycles.add(key);
+    // Module-scoped dedupe (see _WARNED_CYCLES at the bottom of the
+    // file). The previous per-call Set re-warned every time the
+    // cascade ran, which on Schedule page load can be 3+ times,
+    // spamming the console. A cycle is a data issue — one warning
+    // per unique cycle per session is enough.
+    if (_WARNED_CYCLES.has(key)) return;
+    _WARNED_CYCLES.add(key);
     // eslint-disable-next-line no-console
     console.warn(
       `[scheduleCascade] Predecessor cycle detected, falling back to stored dates for: ${[...chain].join(" → ")}`
@@ -354,6 +365,15 @@ export function computeEffectiveDates(tasks) {
   }
 
   return out;
+}
+
+/**
+ * Test-only: reset the module-scoped cycle-warning dedupe set so a
+ * test can re-trigger the warning path without leaking state from a
+ * prior test.
+ */
+export function __resetCycleWarnings() {
+  _WARNED_CYCLES.clear();
 }
 
 /**
