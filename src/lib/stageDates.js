@@ -1,51 +1,46 @@
 /**
  * stageDates.js — Detailing-phase stage-gate dates.
  *
- * The detailing phase on a steel project runs through four review
- * gates — OFA (office for approval), BFA (back from approval), FFF
- * (final for fab / for fabrication), Released (IFC, issued for
- * construction). Each gate has its own start AND end date so the
- * schedule can track when each window was opened and when it closes.
+ * The detailing phase on a steel project runs through five review
+ * gates (corrected May 2026, migration 077):
+ *   IFA (in for approval, internal prep)
+ *   OFA (out for approval, with EOR/AOR)
+ *   BFA (back from approval — AAN/Approved/R&R verdict)
+ *   OFS (out for scrub — post-approval cleanup)
+ *   IFC (issued for construction — record copy to GC)
+ *   Released (S&H internal release to fab shop)
  *
- * Storage: `schedule_tasks.metadata.stage_dates = { OFA: { start, end },
- * BFA: {...}, FFF: {...}, Released: {...} }`. All keys + nested fields
- * optional; each value an ISO YYYY-MM-DD string. No schema migration —
- * metadata is a JSONB column on schedule_tasks.
+ * Each gate has its own start AND end date so the schedule can track
+ * when each window was opened and when it closes.
+ *
+ * Storage: `schedule_tasks.metadata.stage_dates = { IFA: { start, end },
+ * OFA: {...}, BFA: {...}, OFS: {...}, IFC: {...}, Released: {...} }`.
+ * All keys + nested fields optional; each value an ISO YYYY-MM-DD
+ * string. metadata is a JSONB column on schedule_tasks (no migration).
  *
  * Backward compatibility: rows written under the old single-date shape
  * (`{ OFA: "2026-01-15" }`) are read as `{ start: null, end: "2026-01-15" }`,
  * since the original semantics treated the value as the gate's
- * clearance date.
- *
- * Derivation: the Gantt bar still needs `start_date` and `end_date`
- * to render. Every write goes through `applyStageDatesToTask(task,
- * stageDates)` which:
- *   - Writes `metadata.stage_dates` in the new {start,end} shape
- *   - Derives `start_date` = earliest filled gate start (or end)
- *   - Derives `end_date`   = latest   filled gate end   (or start)
- *   - Derives `metadata.detailing_stage` = currently-active gate
- *     (the first gate whose end_date is in the future; falls back to
- *     the latest filled gate when everything is in the past)
- *
- * "Most updated date": the schedule's effective due date is the active
- * gate's end_date — see `getEffectiveDueDate` below. As OFA closes and
- * BFA opens, the schedule auto-shifts to track BFA's end, and so on.
+ * clearance date. Legacy rows under the dropped FFF / BFS gates are
+ * still readable (their dates are preserved on the task) but the UI
+ * doesn't surface them as gates anymore — coerce/migrate to the
+ * canonical list when re-saving via applyStageDatesToTask.
  */
 
-// Canonical ordered list of detailing gates the UI tracks. Order
-// matters — it's how we pick which stage is "current" and walk
+// Canonical ordered list of detailing gates the UI tracks (post-077).
+// Order matters — it's how we pick which stage is "current" and walk
 // forward when figuring out the next due window.
-export const DETAILING_STAGE_GATES = ["OFA", "BFA", "FFF", "Released"];
+export const DETAILING_STAGE_GATES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
 
 // Labels + colors for each gate — pulled into both the drawer form
 // and the Gantt cell so the visual language stays consistent.
 export const DETAILING_STAGE_META = {
-  OFA:      { label: "OFA",      caption: "Office for Approval",   color: "#0EA5E9" },
-  BFA:      { label: "BFA",      caption: "Back from Approval",    color: "#F59E0B" },
-  // FFF gate previously rendered purple; swapped to teal to stay inside
-  // the project's no-purple/no-pink industrial palette.
-  FFF:      { label: "FFF",      caption: "Final for Fabrication", color: "#0d9488" },
-  Released: { label: "Released", caption: "Released for Fabrication",     color: "#22C55E" },
+  IFA:      { label: "IFA",      caption: "In For Approval",            color: "#60A5FA" },
+  OFA:      { label: "OFA",      caption: "Out For Approval",           color: "#0EA5E9" },
+  BFA:      { label: "BFA",      caption: "Back From Approval",         color: "#F59E0B" },
+  OFS:      { label: "OFS",      caption: "Out For Scrub",              color: "#F97316" },
+  IFC:      { label: "IFC",      caption: "Issued For Construction",    color: "#0d9488" },
+  Released: { label: "Released", caption: "Released for Fabrication",   color: "#22C55E" },
 };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

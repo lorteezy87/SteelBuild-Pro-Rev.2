@@ -11,17 +11,18 @@ import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
 /**
  * Decide whether a stage transition is legal.
  *
- * The submittal state machine is linear: Not Started → OFA → BFA → OFS →
- * BFS → FFF → Released. We allow:
- *   • Moving forward any number of steps (fast-track from OFA straight to
- *     Released is legitimate for small revisions)
- *   • Moving back to ANY earlier stage (rework/revision cycles often bounce
- *     a sheet back from BFS to OFA)
+ * The corrected submittal state machine (migration 077) is linear:
+ *   Not Started → IFA → OFA → BFA → OFS → IFC → Released
+ * with R&R outcomes that loop any post-prep stage back to IFA.
+ * We allow:
+ *   • Moving forward any number of steps (fast-track from IFA straight
+ *     to Released is legitimate for small revisions)
+ *   • Moving back to ANY earlier stage (R&R / rework cycles)
  *   • Staying put (no-op)
  *
- * The one transition we reject is moving between two unknown stages (legacy
- * rows with garbage strings). This is the F13 fix — before, any string could
- * overwrite any other stage silently.
+ * The one transition we reject is moving to an unknown target stage
+ * (e.g. legacy rows with the dropped BFS / FFF strings). This is the
+ * F13 fix — before, any string could overwrite any other stage silently.
  *
  * @param {string} from - Current stage
  * @param {string} to - Target stage

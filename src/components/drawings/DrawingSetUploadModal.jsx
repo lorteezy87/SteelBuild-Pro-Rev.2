@@ -10,9 +10,11 @@ import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react
 import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
-const STAGES      = ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"];
+// Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
+const STAGES      = CANONICAL_STAGE_ORDER;
 const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
 const EXTRACT_TIMEOUT_MS = 300_000;  // 5 min — includes rate-limit retry backoff time

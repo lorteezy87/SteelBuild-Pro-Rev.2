@@ -108,13 +108,16 @@ export const WBS_PHASE = {
 } as const;
 export type WbsPhase = typeof WBS_PHASE[keyof typeof WBS_PHASE];
 
-// ─── Drawing stages ──────────────────────────────────────────────────────
+// ─── Drawing stages — corrected 7-stage flow (migration 077) ──────────────
+// Not Started → IFA → OFA → BFA → OFS → IFC → Released. See
+// src/lib/submittalStageMapping.js for the status↔stage mapping.
 export const DRAWING_STAGE = {
+  NOT_STARTED: "Not Started",
+  IFA: "IFA",
   OFA: "OFA",
   BFA: "BFA",
   OFS: "OFS",
-  BFS: "BFS",
-  FFF: "FFF",
+  IFC: "IFC",
   RELEASED: "Released",
 } as const;
 export type DrawingStage = typeof DRAWING_STAGE[keyof typeof DRAWING_STAGE];
