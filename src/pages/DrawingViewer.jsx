@@ -31,6 +31,7 @@ import { listZoneProposals } from "@/lib/drawingHub";
 import { STAGES, mono, toolBtn, normalizeSN } from "@/pages/drawingViewer/drawingViewerUtils";
 import { useSpacebarPan } from "@/pages/drawingViewer/useSpacebarPan";
 import { useDrawingsList } from "@/pages/drawingViewer/useDrawingsList";
+import { usePdfLoader } from "@/pages/drawingViewer/usePdfLoader";
 import {
   ensureCurrentRevision,
   listZones,
@@ -71,12 +72,7 @@ export default function DrawingViewer() {
   const [contextOpen, setContextOpen] = useState(true);
   const [zoom, setZoom] = useState(1.0);
   const [rotation, setRotation] = useState(0); // 0 | 90 | 180 | 270
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [pdfDoc, setPdfDoc] = useState(null);
   const [rendering, setRendering] = useState(false);
-  const [pdfError, setPdfError] = useState(null);
-  const [resolvedUrl, setResolvedUrl] = useState(null);
   // "canvas" = pdfjs canvas render (enables clickable hyperlinks + cross-sheet nav)
   // "iframe" = browser-native PDF viewer (fallback, no annotation layer)
   // Default to canvas now that the pdfjs worker is bundled via Vite and reliable.
@@ -109,6 +105,20 @@ export default function DrawingViewer() {
   // keyboard shortcuts effect) also lives in there.
   const { drawings, filtered, activeDrawing, activeIndex } = useDrawingsList({ projectId, activeId, search });
   const markupScale = activeDrawing?.markup_scale || null;
+
+  // PDF lifecycle: file_url → signed URL → pdfjs document. Owns currentPage
+  // because the loader needs to clamp it to the active drawing's pdf_page
+  // when a multi-sheet master PDF resolves. setPdfError is exposed so the
+  // canvas renderer (renderPage below) can surface render-time failures.
+  const {
+    resolvedUrl,
+    pdfDoc,
+    totalPages,
+    pdfError,
+    setPdfError,
+    currentPage,
+    setCurrentPage,
+  } = usePdfLoader({ activeDrawing, renderMode });
 
   const qc = useQueryClient();
 
@@ -541,78 +551,6 @@ export default function DrawingViewer() {
       toast.error(`Couldn't save zone: ${err?.message || "unknown error"}`);
     }
   }, [currentRevision, activeDrawing, refetchZones]);
-
-  // Resolve file_url (storage path) to a signed URL.
-  // If file_url is a stale Supabase signed URL, extract the path and re-sign.
-  useEffect(() => {
-    let cancelled = false;
-    setResolvedUrl(null);
-    setPdfDoc(null);
-    setPdfError(null);
-    setCurrentPage(1);
-    setTotalPages(0);
-
-    const rawUrl = activeDrawing?.file_url;
-    if (!rawUrl) return;
-
-    const isHttp = rawUrl.startsWith("http://") || rawUrl.startsWith("https://");
-    const storagePath = isHttp ? extractStoragePathFromSignedUrl(rawUrl) : rawUrl;
-    const toResolve = storagePath || rawUrl;
-
-    resolveFileUrl(toResolve)
-      .then(url => { if (!cancelled) setResolvedUrl(url); })
-      .catch(err => {
-        if (cancelled) return;
-        // Fall back to raw URL — iframe may still load it
-        if (isHttp) setResolvedUrl(rawUrl);
-        else setPdfError(`Failed to resolve file URL: ${err.message}`);
-      });
-
-    return () => { cancelled = true; };
-  }, [activeDrawing?.file_url]);
-
-  // Load the PDF once we have a signed URL (only when canvas mode is active)
-  useEffect(() => {
-    if (!resolvedUrl || renderMode !== "canvas") return;
-
-    let cancelled = false;
-    let loadingTask = null;
-
-    loadingTask = pdfjsLib.getDocument(resolvedUrl);
-    loadingTask.promise
-      .then(doc => {
-        if (cancelled) { doc.destroy(); return; }
-        setPdfDoc(doc);
-        setTotalPages(doc.numPages);
-        // Honor the active drawing's intended page (e.g. sheet B on page 3
-        // of a multi-sheet master PDF). Previously we blindly reset to 1
-        // here, which raced with the [activeDrawing?.id] effect — if this
-        // fired second, a click would "appear to do nothing" (sheet became
-        // active but PDF stayed on page 1). Clamp to the doc's page range.
-        const desired = Number(activeDrawing?.pdf_page) || 1;
-        setCurrentPage(Math.max(1, Math.min(doc.numPages, desired)));
-        setPdfError(null);
-      })
-      .catch(err => {
-        if (!cancelled) setPdfError(`PDF load failed: ${err.message}`);
-      });
-
-    return () => {
-      cancelled = true;
-      if (loadingTask) {
-        loadingTask.destroy?.();
-      }
-    };
-  }, [resolvedUrl, renderMode]);
-
-  // Destroy previous PDF document to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (pdfDoc) {
-        pdfDoc.destroy().catch(() => {});
-      }
-    };
-  }, [pdfDoc]);
 
   // ── Render page when doc, page, or zoom changes ────────────────────────────
   const renderPage = useCallback(async () => {
