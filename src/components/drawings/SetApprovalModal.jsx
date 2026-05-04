@@ -13,9 +13,24 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
   const [approvalDate, setApprovalDate] = useState(today());
   const [applyToSheets, setApplyToSheets] = useState(true);
   const [notes, setNotes] = useState("");
+  // Auto-lock toggle. Default on for "approved" — that's the path we
+  // want users to confirm by default; rejected/superseded leave it off.
+  const [autoLock, setAutoLock] = useState(true);
 
   const handleConfirm = () => {
-    onConfirm({ status, revision, approvedBy, approvalDate, applyToSheets, notes });
+    // For non-approved statuses we never lock.
+    const shouldLock = status === "approved" && autoLock;
+    if (shouldLock) {
+      // Confirmation prompt — make the lock side-effect visible BEFORE
+      // we kick off the approval write.
+      const ok = window.confirm(
+        `This set will be locked from edits after approval. ` +
+        `Zones, links, dependencies, and markup will be read-only until an admin unlocks. ` +
+        `Continue?`
+      );
+      if (!ok) return;
+    }
+    onConfirm({ status, revision, approvedBy, approvalDate, applyToSheets, notes, autoLock: shouldLock });
   };
 
   return (
@@ -99,6 +114,36 @@ export default function SetApprovalModal({ open, onClose, setName, sheetCount, e
               }} />
             </button>
           </div>
+
+          {/* Auto-lock toggle. Only meaningful for the "approved" status —
+              hide the row otherwise so the UI is honest about what will
+              happen. */}
+          {status === "approved" && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--hover-bg)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, padding: "10px 14px" }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", fontWeight: 500 }}>
+                  Lock set from further edits
+                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 2, letterSpacing: "0.08em" }}>
+                  Zones, links, dependencies, and markup become read-only after approval. Admins can unlock from the viewer.
+                </div>
+              </div>
+              <button
+                onClick={() => setAutoLock(v => !v)}
+                style={{
+                  width: 40, height: 22, borderRadius: 11, cursor: "pointer",
+                  background: autoLock ? "var(--accent)" : "var(--border-default)",
+                  border: "none", position: "relative", flexShrink: 0, transition: "background 0.2s"
+                }}
+                aria-label="Auto-lock on approval"
+              >
+                <span style={{
+                  position: "absolute", top: 3, width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                  left: autoLock ? "calc(100% - 19px)" : 3, transition: "left 0.2s"
+                }} />
+              </button>
+            </div>
+          )}
 
           <div>
             <label>Notes</label>

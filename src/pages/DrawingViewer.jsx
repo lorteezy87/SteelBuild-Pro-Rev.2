@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
@@ -114,6 +114,27 @@ export default function DrawingViewer() {
   } = usePdfRenderer({ pdfDoc, currentPage, zoom, rotation });
 
   const qc = useQueryClient();
+
+  // Fetch the parent drawing_set for the active drawing so the header can
+  // show a lock badge (and the admin Unlock action) without a second
+  // round-trip per re-render. Cheap query — only refires when the
+  // drawing changes.
+  const setIdForActive = activeDrawing?.drawing_set_id || null;
+  const { data: activeDrawingSet } = useQuery({
+    queryKey: ["drawing_set", setIdForActive],
+    queryFn: async () => {
+      if (!setIdForActive) return null;
+      const { data, error } = await supabase
+        .from("drawing_sets")
+        .select("id, set_name, is_locked, locked_at, locked_by, locked_reason")
+        .eq("id", setIdForActive)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    enabled: !!setIdForActive,
+    staleTime: 30_000,
+  });
 
   // Calibrate handler — invoked by AnnotationLayer when the user commits
   // a calibrate gesture. Prompts for the real-world distance (accepts
@@ -518,8 +539,22 @@ export default function DrawingViewer() {
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-        {/* Breadcrumb + stage pipeline */}
-        <ViewerHeader projectName={activeProject?.name} activeDrawing={activeDrawing} />
+        {/* Breadcrumb + stage pipeline + lock badge */}
+        <ViewerHeader
+          projectName={activeProject?.name}
+          activeDrawing={activeDrawing}
+          drawingSet={activeDrawingSet}
+          onUnlock={async () => {
+            try {
+              const { unlockSet } = await import("@/lib/drawingHub");
+              await unlockSet({ setId: activeDrawingSet.id });
+              await qc.invalidateQueries({ queryKey: ["drawing_set", activeDrawingSet.id] });
+              toast.success("Set unlocked. Edits are now allowed.");
+            } catch (err) {
+              toast.error("Unlock failed: " + (err?.message || "Unknown error"));
+            }
+          }}
+        />
 
         {/* Viewer toolbar */}
         <ViewerToolbar
