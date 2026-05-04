@@ -4,6 +4,27 @@ import { supabase } from "@/lib/supabase";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 
+// Comment-resolution status (migration 073). Cycle matches the markup
+// status (3a) palette so resolution semantics read the same across
+// surfaces. NULL on legacy rows — treated identically to "open".
+const COMMENT_STATUS_ORDER = ["open", "addressed", "rejected", "clarification"];
+const COMMENT_STATUS_COLOR = {
+  open:          "#9ca3af",
+  addressed:     "#10b981",
+  rejected:      "#ef4444",
+  clarification: "#f59e0b",
+};
+const COMMENT_STATUS_LABEL = {
+  open:          "OPEN",
+  addressed:     "DONE",
+  rejected:      "NO",
+  clarification: "?",
+};
+function nextCommentStatus(current) {
+  const idx = COMMENT_STATUS_ORDER.indexOf(current || "open");
+  return COMMENT_STATUS_ORDER[(idx + 1) % COMMENT_STATUS_ORDER.length];
+}
+
 /**
  * CommentThread — polymorphic comment thread for any entity in the app.
  *
@@ -139,6 +160,26 @@ export default function CommentThread({
     }
   };
 
+  const handleCycleStatus = async (comment) => {
+    // Optimistic-ish: write through base44.entities.Comment.update so the
+    // realtime subscription reflects the change for the rest of the
+    // thread. If the write fails we still invalidate to surface the
+    // server-truth state.
+    const next = nextCommentStatus(comment.status);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await base44.entities.Comment.update(comment.id, {
+        status: next,
+        status_changed_at: new Date().toISOString(),
+        status_changed_by: user?.id || null,
+      });
+      qc.invalidateQueries({ queryKey: QKEY(entityType, entityId) });
+    } catch (err) {
+      toast.error(`Status update failed: ${err.message}`);
+      qc.invalidateQueries({ queryKey: QKEY(entityType, entityId) });
+    }
+  };
+
   const onKeyDown = (e) => {
     // Enter = send, Shift+Enter = newline (familiar from Slack/Teams).
     if (e.key === "Enter" && !e.shiftKey) {
@@ -174,7 +215,7 @@ export default function CommentThread({
           </div>
         )}
         {comments.map((c) => (
-          <CommentRow key={c.id} c={c} onDelete={handleDelete} />
+          <CommentRow key={c.id} c={c} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
         ))}
       </div>
 
@@ -230,9 +271,12 @@ export default function CommentThread({
 
 // ── Private ────────────────────────────────────────────────────────────────
 
-function CommentRow({ c, onDelete }) {
+function CommentRow({ c, onDelete, onCycleStatus }) {
   const [hovering, setHovering] = useState(false);
   const when = useMemo(() => formatRelative(c.created_at), [c.created_at]);
+  const statusKey = c.status || "open";
+  const statusColor = COMMENT_STATUS_COLOR[statusKey] || COMMENT_STATUS_COLOR.open;
+  const statusLabel = COMMENT_STATUS_LABEL[statusKey] || statusKey.toUpperCase();
   return (
     <div
       onMouseEnter={() => setHovering(true)}
@@ -265,6 +309,27 @@ function CommentRow({ c, onDelete }) {
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>
           {when}
         </span>
+        <button
+          type="button"
+          onClick={() => onCycleStatus?.(c)}
+          title={`Status: ${statusLabel.toLowerCase()} — click to cycle`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "1px 7px",
+            borderRadius: 8,
+            background: statusColor,
+            color: "#fff",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+          }}
+        >
+          {statusLabel}
+        </button>
         {hovering && (
           <button
             onClick={() => onDelete(c.id)}
