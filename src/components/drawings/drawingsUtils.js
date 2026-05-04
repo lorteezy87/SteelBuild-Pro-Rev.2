@@ -44,6 +44,10 @@ export function validateStageTransition(from, to) {
 
 /**
  * Check whether a drawing is overdue (past due date and not yet released).
+ *
+ * @deprecated reads drawings.stage. Workflow source of truth is the
+ * submittals table; this helper drives drawings-page display badges only.
+ *
  * @param {{ due_date?: string, stage?: string }} drawing
  * @returns {boolean}
  */
@@ -163,6 +167,12 @@ export function computeDisciplineCounts(drawings, disciplines) {
 
 /**
  * Build revision-control alert objects from current drawing + RFI data.
+ *
+ * @deprecated reads drawings.set_approval_status (legacy display only).
+ * Workflow source of truth is the `submittals` table — read submittals
+ * for active workflow rollups. This helper is retained for legacy
+ * revision-alert display on the Drawings page.
+ *
  * @param {Array} drawings
  * @param {Record<string, object>} rfiMap
  * @returns {Array<object>}

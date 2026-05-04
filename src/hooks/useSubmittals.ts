@@ -32,13 +32,15 @@ export type SubmittalRound = RowWithAliases<"submittal_rounds">;
 // drawing set linked via submittal.drawing_set_ids is locked from edits.
 // Document-side flows (SetApprovalModal) no longer trigger locks; this
 // is the single trigger path.
-const TERMINAL_APPROVED_STATUSES = new Set([
+//
+// Exported for testing — see src/hooks/__tests__/useSubmittals.test.ts.
+export const TERMINAL_APPROVED_STATUSES = new Set([
   "Approved",
   "Approved as Noted",
   "Released for Fabrication",
 ]);
 
-async function lockLinkedSetsIfApproved(
+export async function lockLinkedSetsIfApproved(
   submittal: Partial<Submittal> | null | undefined,
 ): Promise<void> {
   if (!submittal || !submittal.status) return;
