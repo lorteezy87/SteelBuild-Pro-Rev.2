@@ -21,7 +21,6 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
-import { lockSet } from "@/lib/drawingHub";
 
 // ── Domain config & utils ───────────────────────────────────────────────────
 import {
@@ -541,7 +540,7 @@ export default function Drawings() {
     }
   };
 
-  const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes, autoLock = false }) => {
+  const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes }) => {
     if (!approvalSet) return;
     setSavingApproval(true);
     try {
@@ -578,25 +577,16 @@ export default function Drawings() {
           ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
         }),
       );
-      // F11+: when the user opted into auto-lock on an approved set, flip
-      // the lock flag now that the per-sheet approval mirror is written.
-      // We don't fail the whole flow on a lock-write error — the approval
-      // already succeeded; surface a warning so the user knows the set
-      // didn't lock and they can retry from the viewer's lock badge.
-      if (autoLock && status === "approved" && parentSetId) {
-        try {
-          await lockSet({ setId: parentSetId, reason: "Auto-locked on approval" });
-        } catch (lockErr) {
-          console.warn("Auto-lock after approval failed:", lockErr);
-          toast.warning("Approval saved, but auto-lock failed: " + (lockErr?.message || "Unknown"));
-        }
-      }
+      // Locking is now driven by submittal status, not document-side
+      // approval. When a submittal linked to this set reaches a
+      // terminal-approved status, useSubmittals.ts will lock the set
+      // automatically. The document-side approval here just records the
+      // legacy set_approval_status mirror.
       invalidate();
       if (failed.length > 0) {
         toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
       } else {
-        const lockSuffix = (autoLock && status === "approved") ? " and locked" : "";
-        toast.success(`Set "${approvalSet.setName}" marked as ${status}${lockSuffix}`);
+        toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
       }
       setApprovalSet(null);
     } catch (err) {

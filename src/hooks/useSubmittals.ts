@@ -22,9 +22,51 @@ import { base44 } from "@/api/base44Client";
 import type { Insert, Update, RowWithAliases } from "@/api/supabaseClient";
 import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
+import { lockSet } from "@/lib/drawingHub";
 
 export type Submittal = RowWithAliases<"submittals">;
 export type SubmittalRound = RowWithAliases<"submittal_rounds">;
+
+// ── Lock-on-approval: submittals are the workflow source of truth ──
+// When a submittal transitions to a terminal-approved status, every
+// drawing set linked via submittal.drawing_set_ids is locked from edits.
+// Document-side flows (SetApprovalModal) no longer trigger locks; this
+// is the single trigger path.
+const TERMINAL_APPROVED_STATUSES = new Set([
+  "Approved",
+  "Approved as Noted",
+  "Released for Fabrication",
+]);
+
+async function lockLinkedSetsIfApproved(
+  submittal: Partial<Submittal> | null | undefined,
+): Promise<void> {
+  if (!submittal || !submittal.status) return;
+  if (!TERMINAL_APPROVED_STATUSES.has(submittal.status as string)) return;
+  const setIds = Array.isArray(submittal.drawing_set_ids)
+    ? (submittal.drawing_set_ids as string[]).filter(Boolean)
+    : [];
+  if (!setIds.length) return;
+  const tag =
+    (submittal as Record<string, unknown>).submittal_number ||
+    submittal.id ||
+    "";
+  const reason = `Auto-locked: submittal ${tag} reached "${submittal.status}"`.trim();
+  for (const setId of setIds) {
+    try {
+      await lockSet({ setId, reason });
+    } catch (err) {
+      // Don't fail the submittal write on a lock failure — the workflow
+      // status update is the user-visible outcome; lock is a side effect.
+      // Surface to console for ops awareness.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[useSubmittals] Failed to lock drawing set ${setId} after approval:`,
+        err,
+      );
+    }
+  }
+}
 
 type BulkResult = {
   succeeded: number;
@@ -211,10 +253,15 @@ export function useSubmittals(projectId: string | null | undefined) {
   const updateMut = useMutation<Submittal, Error, UpdateInput>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
-      return await base44.entities.Submittal.update(
+      const updated = await base44.entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
+      // Lock linked drawing sets if this update transitions the submittal
+      // into a terminal-approved status. Submittal is workflow source of
+      // truth; drawing-set locks are a side effect of approval.
+      await lockLinkedSetsIfApproved(updated);
+      return updated;
     },
     onSuccess: async () => {
       await invalidateAll();
@@ -305,13 +352,33 @@ export function useSubmittals(projectId: string | null | undefined) {
   const bulkUpdateMut = useMutation<BulkResult, Error, BulkUpdateVars>({
     mutationFn: async ({ ids, patch }) => {
       const results: BulkResult = { succeeded: 0, failed: [] };
+      const patchStatus = (patch as { status?: string }).status;
+      const isApprovingPatch =
+        !!patchStatus && TERMINAL_APPROVED_STATUSES.has(patchStatus);
+      // Look up existing rows in the cached list so we have drawing_set_ids
+      // for the lock pass without an extra round trip.
+      const submittalsById: Record<string, Submittal> = {};
+      if (isApprovingPatch) {
+        for (const s of submittals) submittalsById[s.id as string] = s;
+      }
       for (const id of ids) {
         try {
-          await base44.entities.Submittal.update(
+          const updated = await base44.entities.Submittal.update(
             id,
             patch as Update<"submittals">
           );
           results.succeeded++;
+          if (isApprovingPatch) {
+            // Prefer the freshly updated row, fall back to the cached
+            // copy so drawing_set_ids resolves even if the update RPC
+            // returns a thin payload.
+            const merged = {
+              ...(submittalsById[id] || {}),
+              ...(updated || {}),
+              status: patchStatus,
+            } as Partial<Submittal>;
+            await lockLinkedSetsIfApproved(merged);
+          }
         } catch (err: unknown) {
           const msg =
             (err as { message?: string } | undefined)?.message ?? String(err);
