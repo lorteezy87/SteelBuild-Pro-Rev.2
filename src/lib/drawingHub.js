@@ -24,8 +24,6 @@
  * + zone_id pre-filled.
  */
 
-import { supabase } from "@/lib/supabase";
-
 // Public constants — extracted to drawingHub/constants.js. Re-exported
 // here so existing `import { LINKABLE_TYPES } from "@/lib/drawingHub"`
 // statements keep working byte-identically.
@@ -83,26 +81,9 @@ export {
 } from "./drawingHub/statusEngine";
 
 
-/**
- * Fetch the activity stream for a zone (newest first). Joins a
- * best-effort actor email from `user_profiles` or `auth.users` if the
- * project has a profile table; otherwise returns just the actor_id.
- *
- * Uses Supabase's PostgREST directly rather than the base44 entity
- * wrapper because drawing_zone_activity is append-only (no update/
- * delete) and we want a bounded limit.
- */
-export async function listZoneActivity(zoneId, { limit = 50 } = {}) {
-  if (!zoneId) return [];
-  const { data, error } = await supabase
-    .from("drawing_zone_activity")
-    .select("*")
-    .eq("drawing_zone_id", zoneId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data || [];
-}
+// Zone activity stream — extracted to drawingHub/activity.js.
+// Re-exported here so existing imports continue to work.
+export { listZoneActivity } from "./drawingHub/activity";
 
 // AI-suggested links — extracted to drawingHub/aiSuggest.js. Re-exported
 // here so existing imports continue to work.
