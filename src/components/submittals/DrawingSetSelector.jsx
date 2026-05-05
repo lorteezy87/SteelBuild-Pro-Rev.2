@@ -80,6 +80,7 @@ export default function DrawingSetSelector({
     <div>
       <input
         type="search"
+        className="sbd-input"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search drawing sets…"

@@ -111,7 +111,7 @@ export default function SheetResponseGrid({
   };
 
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       display: "flex",
       flexDirection: "column",
       maxHeight: "80vh",
@@ -119,6 +119,7 @@ export default function SheetResponseGrid({
       borderRadius: 8,
       border: "1px solid var(--border-default)",
       overflow: "hidden",
+      padding: 0,
     }}>
       {/* Header */}
       <div style={{
@@ -159,7 +160,7 @@ export default function SheetResponseGrid({
 
       {/* Table */}
       <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-        <table style={{
+        <table className="sbd-table" style={{
           width: "100%",
           borderCollapse: "collapse",
           fontFamily: "var(--font-body)",

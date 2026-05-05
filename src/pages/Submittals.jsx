@@ -465,6 +465,7 @@ export default function Submittals() {
             style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer" }}
           />
           <input
+            className="sbd-input"
             placeholder="Search # / title / spec section"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

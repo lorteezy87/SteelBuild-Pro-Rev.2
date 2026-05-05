@@ -199,6 +199,7 @@ export default function ExportFabReleaseModal({
       onClick={onClose}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card, 4px)", width: 540, maxWidth: "92vw",

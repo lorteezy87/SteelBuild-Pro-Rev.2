@@ -286,6 +286,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
       onClick={reset}
     >
       <div
+        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 720, maxWidth: "94vw", maxHeight: "92vh", overflow: "hidden",
@@ -293,6 +294,7 @@ export default function SubmittalBulkAddModal({ open, onCancel, onSubmit }) {
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)", borderRadius: 4,
           boxShadow: "var(--shadow-lg)", color: "var(--text-primary)",
+          padding: 0,
         }}
       >
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)" }}>
