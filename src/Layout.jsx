@@ -37,7 +37,11 @@ import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRo
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
-import QuickAddFAB from "./components/shared/QuickAddFAB";
+// QuickAddFAB intentionally not imported — the floating "+" shortcut at
+// bottom-right was hidden per user request. Component file is preserved
+// in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
+// render below to re-enable.
+// import QuickAddFAB from "./components/shared/QuickAddFAB";
 // AiAssistantLauncher intentionally not imported — the floating "Ask AI"
 // launcher and its Cmd/Ctrl+K shortcut were hidden site-wide because the
 // schedule-assistant edge function isn't reliably returning answers yet.
@@ -250,21 +254,30 @@ export default function Layout({ children, currentPageName }) {
 
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
         <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
-        <QuickAddFAB />
+        {/* QuickAddFAB removed per user request — the bottom-right "+"
+            shortcut was hidden site-wide. Re-enable by restoring the
+            import at the top of this file and the <QuickAddFAB /> render
+            here. The component file itself is preserved unchanged. */}
         {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
             edge function returns reliable answers. Underlying code kept
             in src/components/ai-assistant/* for re-enable. */}
         <Toaster
+          theme="dark"
+          richColors
+          closeButton
           position="bottom-right"
           toastOptions={{
             style: {
-              background: "var(--bg-elevated)",
-              border: "1px solid var(--border-strong)",
-              color: "var(--text-primary)",
+              background: "var(--sbd-bg-elevated, var(--bg-elevated, rgba(15,22,38,0.95)))",
+              border: "1px solid var(--sbd-border, var(--border-strong, rgba(255,255,255,0.08)))",
+              color: "var(--sbd-text, var(--text-primary, rgba(255,255,255,0.95)))",
               fontFamily: "'Inter', sans-serif",
               fontSize: 13, borderRadius: 10,
               boxShadow: "var(--shadow-lg)",
+              backdropFilter: "blur(20px) saturate(140%)",
+              WebkitBackdropFilter: "blur(20px) saturate(140%)",
             },
+            className: "sbd-card",
           }}
         />
       </div>
