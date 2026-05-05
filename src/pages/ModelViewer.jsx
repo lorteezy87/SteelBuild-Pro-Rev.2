@@ -1265,7 +1265,7 @@ export default function ModelViewer() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", flex: 1, minHeight: 0, background: "var(--bg-page)" }}>
       {/* TOOLBAR */}
-      <div style={{
+      <div className="sbd-topbar" style={{
         height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 14px", borderBottom: "1px solid var(--border-default)", background: "var(--bg-surface)",
       }}>
@@ -1427,17 +1427,19 @@ export default function ModelViewer() {
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
         {/* Left panel — element list */}
         {members.length > 0 && (
-          <div style={{
+          <div className="sbd-sidebar" style={{
             width: leftPanelOpen ? 220 : 0, minWidth: leftPanelOpen ? 220 : 0,
             background: "var(--bg-surface-low)", borderRight: leftPanelOpen ? "1px solid var(--border-default)" : "none",
             display: "flex", flexDirection: "column", overflow: "hidden", transition: "width 0.2s, min-width 0.2s",
+            padding: 0,
           }}>
             <div style={{ padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.14em", textTransform: "uppercase", borderBottom: "1px solid var(--divider)" }}>
               ELEMENTS ({filteredMembers.length})
             </div>
             <input
               type="text" placeholder="Search..." value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
-              style={{ margin: "8px", padding: "6px 10px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", outline: "none" }}
+              className="sbd-input"
+              style={{ margin: "8px", padding: "6px 10px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", outline: "none", width: "calc(100% - 16px)" }}
             />
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ margin: "0 8px 8px", padding: "6px 10px", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 6, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)" }}>
               <option value="all">All Types</option>

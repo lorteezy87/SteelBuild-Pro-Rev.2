@@ -86,6 +86,7 @@ export default function MarkupToolbar({
 
   return (
     <div
+      className="sbd-card"
       style={{
         position: "fixed",
         left: 12,
@@ -94,12 +95,8 @@ export default function MarkupToolbar({
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        background: "color-mix(in srgb, var(--bg-surface) 82%, black)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 12,
         padding: 10,
         zIndex: 60,
-        boxShadow: "0 14px 34px rgba(0,0,0,0.45)",
         userSelect: "none",
         width: 72,
       }}

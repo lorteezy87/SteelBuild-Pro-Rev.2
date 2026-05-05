@@ -85,14 +85,18 @@ export default function ContextPanel({
 
   return (
     <div
+      className="sbd-sidebar"
       style={{
         width: 300,
         flexShrink: 0,
         borderLeft: "1px solid var(--border-default)",
+        borderRight: "none",
         background: "var(--bg-surface)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        padding: 0,
+        minWidth: 0,
       }}
     >
       {/* Header */}
