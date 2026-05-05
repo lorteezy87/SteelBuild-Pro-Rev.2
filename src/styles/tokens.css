@@ -392,9 +392,15 @@ html {
    The .sbd-* tokens are defined in steelbuild-dark.css; we just point our
    legacy tokens at them here.
    ─────────────────────────────────────────────────────────────────── */
+/* Higher-specificity selectors so the SBD overlay wins regardless of
+ * whether the user has `data-theme="light"` saved on <html>. The
+ * attribute-and-class combinations ensure a specificity > (0,1,0). */
+[data-theme] .steelbuild-dark,
+html .steelbuild-dark,
 .steelbuild-dark {
   /* Surfaces — translucent over dark base */
   --bg-page:                  var(--sbd-bg-base);
+  --bg-base:                  var(--sbd-bg-base);
   --bg-surface:               var(--sbd-bg-surface);
   --bg-surface-low:           rgba(255,255,255,0.020);
   --bg-surface-high:          var(--sbd-bg-surface-hi);
