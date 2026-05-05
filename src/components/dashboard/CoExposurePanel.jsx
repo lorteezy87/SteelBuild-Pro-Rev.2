@@ -38,12 +38,14 @@ export default function CoExposurePanel({ data, projectMap, onOpenCO, onOpenProj
 
   return (
     <div
+      className="sbd-card"
       style={{
         gridColumn: "span 12",
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-card)",
         overflow: "hidden",
+        padding: 0,
       }}
     >
       <div
@@ -89,6 +91,7 @@ export default function CoExposurePanel({ data, projectMap, onOpenCO, onOpenProj
                 const rep = bucket.items[0];
                 if (rep && onOpenCO) onOpenCO(rep);
               }}
+              className={bucket.items.length > 0 ? "sbd-card-hover" : undefined}
               style={{
                 padding: "14px 16px",
                 borderRight: i < buckets.length - 1 ? "1px solid var(--divider)" : "none",
@@ -104,14 +107,14 @@ export default function CoExposurePanel({ data, projectMap, onOpenCO, onOpenProj
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: b.color }}>
+                <span className="sbd-kpi-label" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: b.color, margin: 0 }}>
                   {b.label}
                 </span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
                   {bucket.items.length} CO{bucket.items.length !== 1 ? "s" : ""}
                 </span>
               </div>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              <span className="sbd-kpi-value sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
                 {b.key === "unpriced" && bucket.items.length > 0 && bucket.amount === 0
                   ? "—"
                   : formatCurrency(bucket.amount).replace(/\.\d+/, "")}
