@@ -58,11 +58,11 @@ export default function AlertsCenter() {
         <button
           onClick={markAllRead}
           disabled={unreadCount === 0}
+          className="sbd-btn"
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
             color: unreadCount === 0 ? "var(--text-muted)" : "var(--text-secondary)",
-            borderRadius: "var(--radius-btn)", padding: "8px 12px",
+            padding: "8px 12px",
             fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
             letterSpacing: "0.08em", cursor: unreadCount === 0 ? "not-allowed" : "pointer",
             textTransform: "uppercase", opacity: unreadCount === 0 ? 0.5 : 1,
@@ -108,7 +108,7 @@ export default function AlertsCenter() {
       {isLoading ? (
         <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>LOADING ALERTS...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "60px 24px", textAlign: "center" }}>
+        <div className="sbd-card" style={{ padding: "60px 24px", textAlign: "center" }}>
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", fontWeight: 500, marginBottom: 4 }}>No active alerts</p>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Click "Scan for Alerts" to check your project data</p>
