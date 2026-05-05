@@ -4,14 +4,35 @@ A real-time project management platform purpose-built for structural steel
 contractors — tracking drawings, submittals, RFIs, fabrication, deliveries,
 change orders, costs, and field operations from detailing through closeout.
 
+> **Reading order for new contributors:**
+> 1. This README — get it running locally
+> 2. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the system shape, auth, RBAC, workflow concepts
+> 3. [`TECH_DEBT.md`](./TECH_DEBT.md) — known issues + remediation paths
+> 4. [`CLAUDE.md`](./CLAUDE.md) — agent-driven development conventions (deploy flow, branch model)
+
 ## Stack
 
-- **Frontend**: Vite + React 18, Tailwind CSS, shadcn/radix UI primitives,
-  TanStack Query, React Router, Recharts, react-leaflet
-- **3D / 2D viewers**: `@thatopen/components` v3 (IFC/fragments) and pdf.js
+- **Frontend**: Vite + React 18, shadcn/radix UI primitives, TanStack Query,
+  React Router, Recharts, react-leaflet. Style via CSS custom-property tokens
+  (`src/styles/tokens.css`) + a small design-system module — NOT Tailwind.
+- **3D / 2D viewers**: `@thatopen/components` v3.4.x (IFC/fragments) and pdf.js
 - **Data**: Supabase (Postgres + RLS + Storage + Auth + Edge Functions)
 - **Hosting**: Vercel (auto-deploys from `codex/base44-deploy-nick`)
 - **LLM**: Anthropic Claude via the `llm-proxy` Supabase Edge Function
+
+## Workflow
+
+The detailing/submittal flow has 7 stages. Submittals are the source of truth
+for workflow status; drawings are document artifacts.
+
+```
+Not Started → IFA → OFA → BFA → OFS → IFC → Released for Fab
+                              ↑
+                              └─ R&R loops back to IFA
+```
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md#domain-workflow) for the full
+glossary and the status×ball-in-court → stage mapping.
 
 ## Local development
 
@@ -71,12 +92,64 @@ dashboard SQL editor or the Supabase MCP/CLI. After applying a migration
 that adds columns, the code calls `NOTIFY pgrst, 'reload schema'` so
 PostgREST picks up the change without a restart.
 
+Latest migration as of this writing: `080_rbac_rls_tightening`. See
+[`ARCHITECTURE.md`](./ARCHITECTURE.md#auth--authorization) for the RBAC
+model.
+
+## Auth & roles
+
+Two role layers (post-Phase-B):
+
+- **Global**: `user_profiles.role` (`'admin' | 'user'`) gates `<AdminRoute>`-wrapped pages
+- **Per-project**: `user_projects.role` (`'owner' | 'admin' | 'pm' | 'field' | 'viewer'`)
+  gates lock/unlock, signoff voids, deletes, and lock-bypass writes — enforced
+  at the DB layer via RLS + a BEFORE-UPDATE trigger
+
+`'owner'` is treated as a synonym for `'admin'` (level 3) in all helpers.
+
+Front-end:
+- `useAuth()` for the current user + global role
+- `useProjectRole(projectId)` for per-project role
+- `useAppSecurity().isAdmin` is the composed gate (global admin OR per-project admin)
+
+Today the only way to edit `user_projects.role` is direct SQL — a
+member-management admin UI is queued (RBAC Phase C).
+
+## Testing
+
+- Unit / pure-helper tests via Vitest — 488+ tests as of this writing
+- `npm test` runs once; `npm run test:watch` for development
+- No component-rendering or E2E tests yet (TECH_DEBT.md tracks this)
+
+## CI/CD
+
+- `.github/workflows/ci.yml` runs on every push / PR: lint, typecheck (non-
+  blocking; types stale), Vitest, production build
+- Concurrency group cancels redundant runs on rapid iteration
+- TypeScript is currently `continue-on-error` because `src/types/supabase.ts`
+  is missing some recently-added tables; flip to blocking after running
+  `npm run types:db`
+
 ## Deployment
 
 - Feature work lands on a `claude/*` branch.
 - Deploys go out via merge into `codex/base44-deploy-nick`, which Vercel
-  auto-builds and publishes. `CLAUDE.md` documents the full auto-deploy
-  workflow.
+  auto-builds and publishes. [`CLAUDE.md`](./CLAUDE.md) documents the full
+  auto-deploy workflow.
+
+## Feature flags
+
+Lightweight homegrown system (`feature_flags` Supabase table). Admin UI at
+`/FeatureFlagsAdmin`. Read flags via:
+
+```js
+import { useFlag, useAllFlags } from "@/hooks/useFeatureFlag";
+
+const isNewDashboard = useFlag("new_dashboard");
+```
+
+Per-email overrides supported via `feature_flags.user_overrides` jsonb map.
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md#feature-flags) for usage.
 
 ## AI Drawing Analysis
 
@@ -132,11 +205,25 @@ as `drawing_reference`, severity-mapped priority, and a back-link via
 
 ## Notes on third-party viewers
 
-- `src/pages/ModelViewer.jsx` uses `@thatopen/components` v3.4.0.
+- `src/pages/ModelViewer.jsx` uses `@thatopen/components` v3.4.x.
   `FragmentsManager.init()` requires a worker URL — we serve it from
   `public/thatopen/fragments-worker.mjs`. If you upgrade
-  `@thatopen/fragments`, re-copy
-  `node_modules/@thatopen/fragments/dist/Worker/worker.mjs` there.
+  `@thatopen/fragments`, **re-copy**
+  `node_modules/@thatopen/fragments/dist/Worker/worker.mjs` to the
+  public path. Mismatch between the runtime worker and the package
+  silently produces zero geometry on IFC load.
+- The viewer's camera-fit guards (`didAutoFitRef`,
+  `userHasInteractedRef`) prevent late-arriving tile-stream callbacks
+  from snapping a user-zoomed view back to iso. `infinityDolly` is
+  off (was conflicting with `dollyToCursor`).
 - `src/pages/DrawingViewer.jsx` defaults to a browser-native `<iframe>`
   for reliability; pdf.js canvas mode is available via the toolbar
   toggle for cases that need it.
+
+## Where to find things
+
+- **Architecture + decisions** → [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- **Known issues + remediation** → [`TECH_DEBT.md`](./TECH_DEBT.md)
+- **Agent / deploy conventions** → [`CLAUDE.md`](./CLAUDE.md)
+- **AI Drawing Analysis tuning** → see `## AI Drawing Analysis` section above
+- **Drawing/submittal stage glossary** → [`ARCHITECTURE.md#domain-workflow`](./ARCHITECTURE.md#domain-workflow)
