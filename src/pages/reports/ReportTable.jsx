@@ -81,7 +81,7 @@ export default function ReportTable({
   const gridCols = defaultGridTemplate(columns);
 
   return (
-    <div style={{ ...CARD, padding: 0, overflow: "hidden" }}>
+    <div className="sbd-card" style={{ ...CARD, padding: 0, overflow: "hidden" }}>
       <div style={{ overflowX: "auto" }}>
         {/* Header */}
         <div

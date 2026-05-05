@@ -15,6 +15,7 @@ export default function KPICard({ label, value, detail, borderColor, badge, onCl
   return (
     <div
       onClick={onClick}
+      className="sbd-kpi"
       style={{
         ...CARD,
         borderTop: `2px solid ${borderColor}`,
@@ -26,7 +27,7 @@ export default function KPICard({ label, value, detail, borderColor, badge, onCl
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={LABEL}>{label}</div>
+        <div className="sbd-kpi-label" style={LABEL}>{label}</div>
         {badge && (
           <span
             style={{
@@ -45,7 +46,7 @@ export default function KPICard({ label, value, detail, borderColor, badge, onCl
           </span>
         )}
       </div>
-      <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: borderColor, lineHeight: 1.2, marginBottom: 4 }}>
+      <div className="sbd-kpi-value sbd-num" style={{ ...mono, fontSize: 20, fontWeight: 700, color: borderColor, lineHeight: 1.2, marginBottom: 4 }}>
         {value}
       </div>
       {detail && (
