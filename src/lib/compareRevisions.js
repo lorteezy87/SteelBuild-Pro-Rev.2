@@ -258,6 +258,8 @@ export async function compareRevisions(comparison, fromAnalysis, toAnalysis, {
     let data;
     try {
       const res = await invokeLlmProxy({
+      useCase: "revision-compare",
+      project_id: comparison?.project_id || fromAnalysis?.project_id || toAnalysis?.project_id || undefined,
       provider,
       model,
       maxTokens: 4000,

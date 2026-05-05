@@ -126,6 +126,8 @@ export async function suggestLinksForZone(zone, records, {
 
   const { data, error } = await supabase.functions.invoke("llm-proxy", {
     body: {
+      useCase: "drawing-link-suggest",
+      project_id: zone?.project_id || undefined,
       provider,
       model,
       maxTokens: 1500,

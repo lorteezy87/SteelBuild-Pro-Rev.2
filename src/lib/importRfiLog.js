@@ -133,6 +133,8 @@ export async function extractRfiLog({
   file_url,
   model    = DEFAULT_MODEL,
   provider = DEFAULT_PROVIDER,
+  // Optional, for telemetry only.
+  project_id,
 }) {
   const path = storage_path || file_url;
   if (!path) throw new Error("Missing storage path.");
@@ -152,6 +154,8 @@ export async function extractRfiLog({
   const pdfBase64 = await arrayBufferToBase64(buf);
 
   const { data } = await invokeProxyWithDetail({
+    useCase: "rfi-log-import",
+    project_id: project_id || undefined,
     provider,
     model,
     // RFI logs can have 100+ rows; 4k tokens was easily hitting ceiling

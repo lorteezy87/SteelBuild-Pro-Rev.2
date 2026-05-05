@@ -1,62 +1,79 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // llm-proxy — Supabase Edge Function
 //
-// Multi-provider LLM proxy. Accepts Anthropic-style request shape (document
-// blocks, tool definitions, system prompt) and routes to:
+// Multi-provider LLM gateway. Accepts Anthropic-style request shape
+// (document blocks, tool definitions, system prompt) and dispatches to a
+// provider client based on:
 //
-//   provider: "anthropic"  → Anthropic Messages API            (default)
-//   provider: "openai"     → OpenAI Chat Completions API       (cheaper)
+//   1. explicit `provider` + `model` in the body                  (override)
+//   2. `useCase` lookup against router.ts                         (default)
+//   3. fallback to "general" routing target                       (safety net)
 //
-// The response shape is always the Anthropic-compatible envelope, so client
-// code doesn't have to branch on which provider ran the request.
+// EXTERNAL WIRE FORMAT IS UNCHANGED.
+//
+// Existing callers continue to work without code changes — they get the
+// same `{ text, content, tool_use, raw, protocol_version }` envelope.
+// The `useCase` parameter is OPTIONAL.
+//
+// Telemetry: every call (success or failure) is best-effort logged to
+// public.llm_telemetry. Logging failures NEVER fail the user-facing
+// response — they go to console.error and we move on.
 //
 // Request body:
 //   {
-//     provider?:    "anthropic" | "openai"   // default "anthropic"
-//     prompt?:      string                   // legacy single-message input
+//     useCase?:     string                   // routing key (default "general")
+//     provider?:    "anthropic" | "openai"   // explicit override
+//     prompt?:      string
 //     system?:      string
-//     messages?:    Array<{role, content}>   // Anthropic-style content blocks
+//     messages?:    Array<{role, content}>
 //     maxTokens?:   number
-//     model?:       string
+//     model?:       string                   // explicit override
 //     temperature?: number
 //     tools?:       Anthropic-style tool definitions
 //     tool_choice?: Anthropic-style tool-choice
+//     project_id?:  string                   // for telemetry only
 //   }
 //
-// Response envelope:
+// Response envelope (UNCHANGED — DO NOT BREAK):
 //   {
-//     text:     string,        // first text block, OR stringified tool input
-//     content:  string,        // legacy alias
+//     text:     string,
+//     content:  string,
 //     tool_use: { name, input } | null,
-//     raw:      object,        // raw upstream response
+//     raw:      object,
 //     protocol_version: number,
 //   }
 //
 // Secrets required (Supabase → Project Settings → Edge Functions → Secrets):
-//   ANTHROPIC_API_KEY  — for the Anthropic path
-//   OPENAI_API_KEY     — for the OpenAI path
+//   ANTHROPIC_API_KEY, OPENAI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY,
+//   SUPABASE_SERVICE_ROLE_KEY (the last is for telemetry inserts).
 //
 // Deploy:
 //   supabase functions deploy llm-proxy --no-verify-jwt
-//   (or via the Supabase MCP deploy_edge_function tool with verify_jwt:false)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore-file no-explicit-any
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY");
-const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
-const DEFAULT_OPENAI_MODEL    = "gpt-4o-mini";
+import type { LLMResponse, ProviderClient } from "./providers/types.ts";
+import { LLMError } from "./providers/types.ts";
+import { anthropicClient } from "./providers/anthropic.ts";
+import { openaiClient }    from "./providers/openai.ts";
+import { computeCostUsd }  from "./providers/cost.ts";
+import { getProviderForUseCase } from "./router.ts";
 
-// Protocol version bumps when the request/response contract changes.
+// Protocol versions:
 //   v3 = verify_jwt disabled
 //   v4 = structured logging + friendlier error surfaces
 //   v5 = pre-v6 deploy baseline
 //   v6 = v5 + protocol_version returned on every error too
-//   v7 = multi-provider: accepts provider:"openai" and transforms to/from the
-//        OpenAI Chat Completions shape.
-const PROTOCOL_VERSION = 7;
+//   v7 = multi-provider (anthropic/openai)
+//   v8 = use-case routing + telemetry. Wire shape unchanged from v7.
+const PROTOCOL_VERSION = 8;
+
+const PROVIDER_REGISTRY: Record<string, ProviderClient> = {
+  anthropic: anthropicClient,
+  openai:    openaiClient,
+};
 
 function allowedOrigins(): string[] {
   const raw = Deno.env.get("ALLOWED_ORIGINS") || "";
@@ -149,332 +166,72 @@ async function authenticateRequest(req: Request): Promise<{ ok: true; userId: st
   }
 }
 
-// ─── OpenAI adapters ─────────────────────────────────────────────────────────
+// ─── Telemetry ──────────────────────────────────────────────────────────────
 
-// OpenAI content blocks accepted by the Chat Completions API when passing
-// a PDF inline:
-//   { type: "file", file: { file_data: "data:application/pdf;base64,...", filename: "..." } }
-// (requires gpt-4o / gpt-4o-mini or newer)
-function anthropicContentToOpenAI(block: any, fallbackFilename = "document.pdf"): any {
-  if (!block || typeof block !== "object") return null;
-  if (block.type === "text") {
-    return { type: "text", text: String(block.text ?? "") };
-  }
-  if (block.type === "document") {
-    const src = block.source || {};
-    if (src.type === "base64" && typeof src.data === "string") {
-      const media = src.media_type || "application/pdf";
-      return {
-        type: "file",
-        file: {
-          file_data: `data:${media};base64,${src.data}`,
-          filename:  block.filename || fallbackFilename,
-        },
-      };
-    }
-    return null;
-  }
-  if (block.type === "image") {
-    const src = block.source || {};
-    if (src.type === "base64" && typeof src.data === "string") {
-      const media = src.media_type || "image/png";
-      return {
-        type: "image_url",
-        image_url: { url: `data:${media};base64,${src.data}` },
-      };
-    }
-    if (src.type === "url" && typeof src.url === "string") {
-      return { type: "image_url", image_url: { url: src.url } };
-    }
-    return null;
-  }
-  return null;
+interface TelemetryRow {
+  use_case:      string;
+  provider:      string;
+  model:         string;
+  user_id:       string | null;
+  project_id:    string | null;
+  input_tokens:  number | null;
+  output_tokens: number | null;
+  cost_usd:      number | null;
+  latency_ms:    number;
+  success:       boolean;
+  error_kind:    string | null;
+  metadata:      Record<string, unknown>;
 }
 
-function anthropicMessagesToOpenAI(messages: any[], system?: string): any[] {
-  const out: any[] = [];
-  if (system) out.push({ role: "system", content: String(system) });
-
-  for (const m of messages || []) {
-    if (!m || typeof m !== "object") continue;
-    const role = m.role === "assistant" ? "assistant" : "user";
-
-    if (typeof m.content === "string") {
-      out.push({ role, content: m.content });
-      continue;
-    }
-
-    if (!Array.isArray(m.content)) continue;
-    const blocks: any[] = [];
-    for (const block of m.content) {
-      const converted = anthropicContentToOpenAI(block);
-      if (converted) blocks.push(converted);
-    }
-    if (blocks.length === 1 && blocks[0].type === "text") {
-      out.push({ role, content: blocks[0].text });
-    } else if (blocks.length > 0) {
-      out.push({ role, content: blocks });
-    }
+/**
+ * Best-effort insert into llm_telemetry. NEVER throws — a logging
+ * failure must not bubble up and break the caller's request. We use
+ * the service-role key so RLS doesn't block the insert.
+ */
+async function recordTelemetry(row: TelemetryRow): Promise<void> {
+  const supabaseUrl  = Deno.env.get("SUPABASE_URL");
+  const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    console.error("[llm-proxy] telemetry skipped: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing");
+    return;
   }
-  return out;
-}
-
-function anthropicToolsToOpenAI(tools: any[]): any[] {
-  return (tools || []).map((t) => ({
-    type: "function",
-    function: {
-      name:        t.name,
-      description: t.description || "",
-      parameters:  t.input_schema || { type: "object" },
-    },
-  }));
-}
-
-function anthropicToolChoiceToOpenAI(choice: any, firstToolName?: string): any {
-  if (!choice) {
-    return firstToolName
-      ? { type: "function", function: { name: firstToolName } }
-      : undefined;
-  }
-  if (choice.type === "tool" && typeof choice.name === "string") {
-    return { type: "function", function: { name: choice.name } };
-  }
-  if (choice.type === "any")  return "required";
-  if (choice.type === "auto") return "auto";
-  return undefined;
-}
-
-async function callOpenAI(body: any): Promise<Response> {
-  if (!OPENAI_API_KEY) {
-    console.error("[llm-proxy] OPENAI_API_KEY missing");
-    return json(
-      {
-        error: "OPENAI_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
-        protocol_version: PROTOCOL_VERSION,
-      },
-      500,
-    );
-  }
-
-  const {
-    system,
-    messages,
-    maxTokens = 1000,
-    model = DEFAULT_OPENAI_MODEL,
-    temperature,
-    tools,
-    tool_choice,
-    prompt,
-  } = body ?? {};
-
-  const inputMessages =
-    Array.isArray(messages) && messages.length > 0
-      ? messages
-      : [{ role: "user", content: String(prompt ?? "") }];
-
-  const openaiMessages = anthropicMessagesToOpenAI(inputMessages, system);
-  const openaiTools = Array.isArray(tools) && tools.length > 0
-    ? anthropicToolsToOpenAI(tools)
-    : undefined;
-  const openaiToolChoice = openaiTools
-    ? anthropicToolChoiceToOpenAI(tool_choice, tools?.[0]?.name)
-    : undefined;
-
-  const payload: Record<string, unknown> = {
-    model,
-    messages: openaiMessages,
-    max_tokens: Number(maxTokens) || 1000,
-  };
-  if (typeof temperature === "number" && Number.isFinite(temperature)) {
-    payload.temperature = temperature;
-  }
-  if (openaiTools) {
-    payload.tools = openaiTools;
-    if (openaiToolChoice) payload.tool_choice = openaiToolChoice;
-  }
-
-  let resp: Response;
   try {
-    resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    const resp = await fetch(`${supabaseUrl}/rest/v1/llm_telemetry`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
+        "apikey":       serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+        "Prefer":       "return=minimal",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(row),
     });
-  } catch (err) {
-    return json(
-      { error: `OpenAI fetch failed: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
-      502,
-    );
-  }
-
-  const rawText = await resp.text();
-  if (!resp.ok) {
-    return json(
-      { error: `OpenAI API ${resp.status}: ${rawText}`, protocol_version: PROTOCOL_VERSION },
-      resp.status,
-    );
-  }
-
-  let data: any;
-  try {
-    data = JSON.parse(rawText);
-  } catch (err) {
-    return json(
-      {
-        error: `OpenAI returned non-JSON: ${err instanceof Error ? err.message : String(err)}. Body head: ${rawText.slice(0, 200)}`,
-        protocol_version: PROTOCOL_VERSION,
-      },
-      502,
-    );
-  }
-
-  // Transform the first choice back into the Anthropic-compatible envelope.
-  const choice = data?.choices?.[0];
-  const messageObj = choice?.message || {};
-  let firstText = "";
-  let firstToolUse: { name: string; input: unknown } | null = null;
-
-  const toolCall = Array.isArray(messageObj.tool_calls) ? messageObj.tool_calls[0] : null;
-  if (toolCall?.function?.name) {
-    let parsedInput: unknown;
-    try {
-      parsedInput = JSON.parse(toolCall.function.arguments || "{}");
-    } catch {
-      parsedInput = toolCall.function.arguments;
+    if (!resp.ok) {
+      const detail = (await resp.text()).slice(0, 300);
+      console.error(`[llm-proxy] telemetry insert ${resp.status}: ${detail}`);
     }
-    firstToolUse = { name: toolCall.function.name, input: parsedInput };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[llm-proxy] telemetry insert threw: ${msg}`);
   }
-  if (typeof messageObj.content === "string" && messageObj.content) {
-    firstText = messageObj.content;
-  } else if (Array.isArray(messageObj.content)) {
-    for (const part of messageObj.content) {
-      if (part?.type === "text" && typeof part.text === "string") {
-        firstText = part.text;
-        break;
-      }
-    }
-  }
-
-  const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
-
-  return json({
-    text:     textOut,
-    content:  textOut,
-    tool_use: firstToolUse,
-    raw:      data,
-    protocol_version: PROTOCOL_VERSION,
-  });
 }
 
-// ─── Anthropic path (unchanged from v5/v6 deploy) ───────────────────────────
+// ─── Wire-format translator ─────────────────────────────────────────────────
 
-async function callAnthropic(body: any): Promise<Response> {
-  if (!ANTHROPIC_API_KEY) {
-    return json(
-      {
-        error: "ANTHROPIC_API_KEY not configured. Add it in Supabase → Project Settings → Edge Functions → Secrets.",
-        protocol_version: PROTOCOL_VERSION,
-      },
-      500,
-    );
-  }
-
-  const {
-    prompt,
-    system,
-    messages,
-    maxTokens = 1000,
-    model = DEFAULT_ANTHROPIC_MODEL,
-    temperature,
-    tools,
-    tool_choice,
-  } = body ?? {};
-
-  const msgs = Array.isArray(messages) && messages.length > 0
-    ? messages
-    : [{ role: "user", content: String(prompt ?? "") }];
-
-  const payload: Record<string, unknown> = {
-    model,
-    max_tokens: Number(maxTokens) || 1000,
-    messages: msgs,
-  };
-  if (system) payload.system = String(system);
-  if (typeof temperature === "number" && Number.isFinite(temperature)) {
-    payload.temperature = temperature;
-  }
-  if (Array.isArray(tools) && tools.length > 0) {
-    payload.tools = tools;
-    if (tool_choice) payload.tool_choice = tool_choice;
-    else if (tools[0]?.name) payload.tool_choice = { type: "tool", name: tools[0].name };
-  }
-
-  let resp: Response;
-  try {
-    resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type":     "application/json",
-        "x-api-key":        ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    return json(
-      { error: `Anthropic fetch failed: ${err instanceof Error ? err.message : String(err)}`, protocol_version: PROTOCOL_VERSION },
-      502,
-    );
-  }
-
-  const rawText = await resp.text();
-  if (!resp.ok) {
-    return json(
-      { error: `Anthropic API ${resp.status}: ${rawText}`, protocol_version: PROTOCOL_VERSION },
-      resp.status,
-    );
-  }
-
-  let data: any;
-  try {
-    data = JSON.parse(rawText);
-  } catch (err) {
-    return json(
-      {
-        error: `Anthropic returned non-JSON: ${err instanceof Error ? err.message : String(err)}. Body head: ${rawText.slice(0, 200)}`,
-        protocol_version: PROTOCOL_VERSION,
-      },
-      502,
-    );
-  }
-
-  let firstText = "";
-  let firstToolUse: { name: string; input: unknown } | null = null;
-  if (Array.isArray(data?.content)) {
-    for (const block of data.content) {
-      if (!block || typeof block !== "object") continue;
-      if (block.type === "tool_use" && !firstToolUse) {
-        firstToolUse = { name: block.name, input: block.input };
-      } else if (block.type === "text" && !firstText && typeof block.text === "string") {
-        firstText = block.text;
-      }
-    }
-  } else if (typeof data?.content === "string") {
-    firstText = data.content;
-  }
-
-  const textOut = firstToolUse ? JSON.stringify(firstToolUse.input) : firstText;
-
-  return json({
-    text:     textOut,
-    content:  textOut,
-    tool_use: firstToolUse,
-    raw:      data,
+/**
+ * Translate the internal `LLMResponse` into the v7-compatible wire
+ * envelope. EVERY existing caller depends on this exact shape, so DO
+ * NOT add or rename keys here without bumping PROTOCOL_VERSION and
+ * coordinating with `src/api/supabaseClient.ts`.
+ */
+function toWireEnvelope(resp: LLMResponse): Record<string, unknown> {
+  return {
+    text:     resp.text,
+    content:  resp.text,        // legacy alias — still emitted
+    tool_use: resp.toolUse,
+    raw:      resp.raw,
     protocol_version: PROTOCOL_VERSION,
-  });
+  };
 }
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
@@ -496,10 +253,37 @@ async function handle(req: Request): Promise<Response> {
     );
   }
 
-  const provider = String(body?.provider || "anthropic").toLowerCase();
+  // ── Routing decision ────────────────────────────────────────────────────
+  // Order of precedence:
+  //   1. Explicit body.provider AND body.model → caller knows what it wants.
+  //   2. Explicit body.provider only           → use router model for that provider's use case (rare).
+  //   3. body.useCase                          → router lookup.
+  //   4. neither                               → "general" default.
+  const useCase = typeof body?.useCase === "string" && body.useCase
+    ? body.useCase
+    : "general";
 
-  // Log enough about the incoming body to diagnose shape issues without
-  // dumping huge base64 payloads into the logs.
+  const routed = getProviderForUseCase(useCase);
+
+  const explicitProvider = typeof body?.provider === "string" && body.provider
+    ? String(body.provider).toLowerCase()
+    : null;
+  const explicitModel = typeof body?.model === "string" && body.model
+    ? String(body.model)
+    : null;
+
+  const provider = explicitProvider || routed.provider;
+  const model    = explicitModel    || routed.model;
+
+  const client = PROVIDER_REGISTRY[provider];
+  if (!client) {
+    return json(
+      { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
+      400,
+    );
+  }
+
+  // ── Diagnostic log (matches v7 format so existing log searches keep working)
   try {
     const msgCount = Array.isArray(body?.messages) ? body.messages.length : 0;
     const toolCount = Array.isArray(body?.tools) ? body.tools.length : 0;
@@ -514,28 +298,89 @@ async function handle(req: Request): Promise<Response> {
         }
       }
     }
-    console.log(`[llm-proxy] provider=${provider} model=${body?.model || "default"} maxTokens=${body?.maxTokens || "default"} msgs=${msgCount} blocks=${contentBlocks} tools=${toolCount} docB64Bytes=${docBytes}`);
+    console.log(
+      `[llm-proxy] useCase=${useCase} provider=${provider} model=${model} ` +
+      `maxTokens=${body?.maxTokens || "default"} msgs=${msgCount} blocks=${contentBlocks} ` +
+      `tools=${toolCount} docB64Bytes=${docBytes} ` +
+      `explicit=${explicitProvider ? "provider" : ""}${explicitModel ? "+model" : ""}`,
+    );
   } catch (e) {
     console.log("[llm-proxy] pre-dispatch log failed:", (e as Error)?.message);
   }
 
+  // ── Provider call (timed) ──────────────────────────────────────────────
+  const t0 = performance.now();
+  const projectId = typeof body?.project_id === "string" && body.project_id
+    ? body.project_id
+    : null;
+
   try {
-    if (provider === "openai")    return await callOpenAI(body);
-    if (provider === "anthropic") return await callAnthropic(body);
+    const result = await client.call(body, { model });
+    const latencyMs = Math.round(performance.now() - t0);
+
+    // Best-effort telemetry. Don't await before responding to the user
+    // beyond the insert itself — the row is small.
+    await recordTelemetry({
+      use_case:      useCase,
+      provider,
+      model,
+      user_id:       auth.userId,
+      project_id:    projectId,
+      input_tokens:  result.inputTokens,
+      output_tokens: result.outputTokens,
+      cost_usd:      computeCostUsd(provider, model, result.inputTokens, result.outputTokens),
+      latency_ms:    latencyMs,
+      success:       true,
+      error_kind:    null,
+      metadata:      {
+        explicit_provider: !!explicitProvider,
+        explicit_model:    !!explicitModel,
+        had_tools:         Array.isArray(body?.tools) && body.tools.length > 0,
+      },
+    });
+
+    return json(toWireEnvelope(result));
   } catch (err) {
-    const name = err instanceof Error ? err.name : "Error";
-    const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error && err.stack ? err.stack.split("\n").slice(0, 5).join(" | ") : null;
-    console.error(`[llm-proxy] ${provider} handler threw: ${name}: ${message}${stack ? " stack: " + stack : ""}`);
+    const latencyMs = Math.round(performance.now() - t0);
+    const isLLMError = err instanceof LLMError;
+    const status     = isLLMError ? (err as LLMError).status   : 500;
+    const errorKind  = isLLMError ? (err as LLMError).errorKind : "internal_error";
+    const message    = err instanceof Error ? err.message : String(err);
+
+    // Telemetry on the failure path too — without this, error rate
+    // dashboards would only ever see successes.
+    await recordTelemetry({
+      use_case:      useCase,
+      provider,
+      model,
+      user_id:       auth.userId,
+      project_id:    projectId,
+      input_tokens:  null,
+      output_tokens: null,
+      cost_usd:      null,
+      latency_ms:    latencyMs,
+      success:       false,
+      error_kind:    errorKind,
+      metadata:      {
+        explicit_provider: !!explicitProvider,
+        explicit_model:    !!explicitModel,
+        status,
+      },
+    });
+
+    if (!isLLMError) {
+      const name = err instanceof Error ? err.name : "Error";
+      const stack = err instanceof Error && err.stack
+        ? err.stack.split("\n").slice(0, 5).join(" | ")
+        : null;
+      console.error(`[llm-proxy] ${provider} handler threw: ${name}: ${message}${stack ? " stack: " + stack : ""}`);
+    }
+
     return json(
-      { error: `${provider} handler: ${name}: ${message}`, protocol_version: PROTOCOL_VERSION },
-      500,
+      { error: `${provider} handler: ${message}`, protocol_version: PROTOCOL_VERSION },
+      status,
     );
   }
-  return json(
-    { error: `Unknown provider: "${provider}". Use "anthropic" or "openai".`, protocol_version: PROTOCOL_VERSION },
-    400,
-  );
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {

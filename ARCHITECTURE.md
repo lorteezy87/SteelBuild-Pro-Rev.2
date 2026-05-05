@@ -283,6 +283,110 @@ options (install pg_cron OR run from a scheduled edge function).
 
 ---
 
+## LLM gateway
+
+All LLM-backed features (drawing analysis, revision compare, sheet
+extraction, RFI/shipping-ticket import, photo OCR, drawing-link
+suggestions) route through a single Supabase edge function called
+`llm-proxy`. The gateway is the only component that holds vendor API
+keys; the browser never touches Anthropic / OpenAI keys directly.
+
+### Phase 1 — what shipped
+
+**Routing.** Callers pass an optional `useCase` field; the function
+looks it up against a routing table to pick a `(provider, model)`
+pair. Explicit `provider`/`model` in the body still take precedence,
+so legacy callers that hard-coded `provider: "openai"` continue to
+work unchanged.
+
+| use case                  | provider  | model              | called from                                      |
+|---------------------------|-----------|--------------------|--------------------------------------------------|
+| `general` (default)       | anthropic | claude-sonnet-4-5  | catch-all for ad-hoc `InvokeLLM` calls            |
+| `drawing-analysis`        | openai    | gpt-4o-mini        | `src/lib/analyzeDrawing.js`                       |
+| `revision-compare`        | openai    | gpt-4o-mini        | `src/lib/compareRevisions.js`                     |
+| `sheet-extraction`        | openai    | gpt-4o-mini        | `src/lib/pdfSheetExtractor.js` (via `InvokeLLM`)  |
+| `drawing-link-suggest`    | openai    | gpt-4o-mini        | `src/lib/drawingHub/aiSuggest.js`                 |
+| `shipping-ticket-import`  | openai    | gpt-4o-mini        | `src/lib/importShippingTicket.js`                 |
+| `rfi-log-import`          | openai    | gpt-4o-mini        | `src/lib/importRfiLog.js`                         |
+| `photo-ocr`               | openai    | gpt-4o-mini        | `src/components/ocr/FileUploadWithOCR.jsx`        |
+| `schedule-assist`         | anthropic | claude-sonnet-4-5  | (NOT WIRED IN PHASE 1 — see TECH_DEBT.md)         |
+
+The Phase 1 routing intentionally **mirrors current production
+defaults**. We did not silently switch any caller to a new provider;
+Phase 2 will use telemetry to make informed switches.
+
+**Telemetry.** Every call writes one row to `public.llm_telemetry`
+(success or failure):
+
+| column        | type           | source                                                          |
+|---------------|----------------|-----------------------------------------------------------------|
+| `use_case`    | text           | request body (`general` if omitted)                             |
+| `provider`    | text           | resolved (explicit override OR router target)                   |
+| `model`       | text           | resolved                                                        |
+| `user_id`     | uuid           | from the JWT — function authenticates before dispatching        |
+| `project_id`  | uuid           | request body (`null` when caller doesn't know)                  |
+| `input_tokens`| integer        | provider response usage (Anthropic `input_tokens`, OpenAI `prompt_tokens`) |
+| `output_tokens`| integer       | provider response usage (`output_tokens` / `completion_tokens`) |
+| `cost_usd`    | numeric(12,6)  | `computeCostUsd(provider, model, in, out)` — null if unknown    |
+| `latency_ms`  | integer        | `performance.now()` delta around the provider call              |
+| `success`     | boolean        | true iff provider returned 2xx                                  |
+| `error_kind`  | text           | `rate_limit`, `auth_error`, `upstream_5xx`, `parse_error`, …    |
+| `metadata`    | jsonb          | freeform (`{ explicit_provider, had_tools, status, … }`)        |
+
+RLS allows SELECT only to `user_profiles.role = 'admin'`. Inserts go
+through the service role from inside the edge function so RLS doesn't
+block them.
+
+**Wire format.** The response envelope `{ text, content, tool_use,
+raw, protocol_version }` is **unchanged** from v7. The internal
+`LLMResponse` shape in `providers/types.ts` carries token counts and
+cost data that the dispatcher uses for telemetry but never returns to
+the caller.
+
+### File layout
+
+```
+supabase/functions/llm-proxy/
+├── index.ts             — auth, dispatch, telemetry, wire-format translation
+├── router.ts            — ROUTING_TABLE + getProviderForUseCase()
+└── providers/
+    ├── types.ts         — LLMRequest, LLMResponse, LLMError, ProviderClient
+    ├── cost.ts          — rate card + computeCostUsd()
+    ├── anthropic.ts     — Anthropic Messages API client
+    └── openai.ts        — OpenAI Chat Completions client (with content adapters)
+```
+
+### Adding a new provider (Phase 2)
+
+1. Add `providers/<vendor>.ts` exporting a `ProviderClient`. Re-use
+   the Anthropic/OpenAI files as templates — both adapt their vendor
+   API to the canonical Anthropic-style request shape and return the
+   internal `LLMResponse` shape. Throw `LLMError` for non-2xx so the
+   dispatcher can surface the correct HTTP status.
+2. Add the rate-card row to `providers/cost.ts` and update the source
+   comment with the date you fetched the prices.
+3. Register the client in `PROVIDER_REGISTRY` inside `index.ts`.
+4. Add or change the routing rows in `router.ts` for the use cases
+   you want to migrate.
+5. Add a router test pinning the new routing decisions before
+   deploying.
+
+### Deploy
+
+The edge function is **deployed manually** via:
+
+```
+supabase functions deploy llm-proxy --no-verify-jwt
+```
+
+The `--no-verify-jwt` flag is required — `llm-proxy` does its own JWT
+verification against `/auth/v1/user` (so it can attribute telemetry to
+the calling user) instead of relying on Supabase's gateway check.
+
+The migration that creates `llm_telemetry` is `081_llm_telemetry.sql`.
+
+---
+
 ## CI/CD
 
 ### Continuous integration

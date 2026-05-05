@@ -155,6 +155,9 @@ export async function extractShippingTicket({
   file_url,
   model    = DEFAULT_MODEL,
   provider = DEFAULT_PROVIDER,
+  // Optional, for telemetry only — when the caller knows the project,
+  // pass it through so per-project AI spend rolls up correctly.
+  project_id,
 }) {
   // Download the file from storage, base64 it.
   const path = storage_path || file_url;
@@ -175,6 +178,8 @@ export async function extractShippingTicket({
   const pdfBase64 = await arrayBufferToBase64(buf);
 
   const { data } = await invokeProxyWithDetail({
+    useCase: "shipping-ticket-import",
+    project_id: project_id || undefined,
     provider,
     model,
     maxTokens: 4000,

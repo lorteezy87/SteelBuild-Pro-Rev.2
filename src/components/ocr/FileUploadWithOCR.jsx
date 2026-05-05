@@ -44,6 +44,7 @@ async function runOCR(file, fileType) {
   const prompt = OCR_PROMPTS[fileType] || OCR_PROMPTS.site_photo;
 
   const raw = await base44.integrations.Core.InvokeLLM({
+    useCase: 'photo-ocr',
     prompt,
     system: 'You are an OCR data extraction engine for a structural steel construction management app. Extract data accurately from construction documents and photos. Always return valid JSON only. Use null for missing numeric fields. Use empty string for missing text fields.',
     file_urls: [await new Promise((resolve) => {
