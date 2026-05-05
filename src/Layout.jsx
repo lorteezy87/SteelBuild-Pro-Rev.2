@@ -27,6 +27,8 @@ import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import { useLayoutNavData } from "./components/nav/useLayoutNavData";
 import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoint";
 import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcut";
+import { useDensityRestore } from "./components/nav/useDensityRestore";
+import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
@@ -67,12 +69,7 @@ export default function Layout({ children, currentPageName }) {
   const isMobile = useResponsiveBreakpoint();
 
   // Density preference
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sbp-density");
-      if (saved) document.documentElement.setAttribute("data-density", saved);
-    } catch { /* ignore */ }
-  }, []);
+  useDensityRestore();
 
   // Active project
   const { activeProject: ctxActiveProject } = useProjectContext();
@@ -110,19 +107,8 @@ export default function Layout({ children, currentPageName }) {
   useDocumentTitle(titleSuffix);
 
   // Move keyboard focus back to <main> on every route change so screen
-  // readers and tab users land on the new page's content. We only focus
-  // when the previously-focused element is NOT a form input on the new
-  // page, otherwise typing would get yanked away mid-keystroke.
-  const isFirstRender = React.useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-    const el = typeof document !== "undefined" ? document.getElementById("main-content") : null;
-    if (!el) return;
-    const active = document.activeElement;
-    const tag = active?.tagName?.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
-    try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
-  }, [currentPageName]);
+  // readers and tab users land on the new page's content.
+  useFocusMainOnRouteChange(currentPageName);
 
   // ── Navigation handlers ──────────────────────────────────────────
   const activeTab = PRIMARY_TABS.find((t) => t.pages.includes(currentPageName));
