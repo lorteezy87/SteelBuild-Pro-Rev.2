@@ -143,7 +143,7 @@ export default function DrawingSubmittalHub() {
       />
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
-      <div style={{
+      <div className="sbd-mesh-bg" style={{
         display: "flex", gap: 8, padding: "8px 20px", flexWrap: "wrap",
         borderBottom: `1px solid ${border}`,
         background: surface1,
@@ -300,6 +300,7 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, byDrawingS
         <div style={{ flex: 1, minWidth: 200 }}>
           <input
             type="text"
+            className="sbd-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search sets, submittals..."
@@ -321,11 +322,12 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, byDrawingS
       </div>
 
       {/* ── Matrix Table ─────────────────────────────────────────── */}
-      <div style={{
+      <div className="sbd-card" style={{
         borderRadius: 6, border: `1px solid ${border}`,
         overflow: "hidden",
+        padding: 0,
       }}>
-        <table style={{
+        <table className="sbd-table" style={{
           width: "100%", borderCollapse: "collapse",
           fontFamily: mono, fontSize: 12,
         }}>
@@ -534,7 +536,7 @@ function Th({ children, style = {} }) {
 
 function Td({ children, style = {}, colSpan }) {
   return (
-    <td colSpan={colSpan} style={{
+    <td colSpan={colSpan} className="sbd-num" style={{
       padding: "8px 12px",
       fontFamily: mono, fontSize: 12,
       color: textPrimary,
@@ -564,7 +566,7 @@ function StatusChip({ status }) {
 
 function SummaryChip({ label, value, color }) {
   return (
-    <div style={{
+    <div className="sbd-pill" style={{
       display: "flex", alignItems: "center", gap: 6,
       padding: "4px 10px", borderRadius: 4,
       background: surface2, border: `1px solid ${border}`,
@@ -572,7 +574,7 @@ function SummaryChip({ label, value, color }) {
       <span style={{ fontFamily: mono, fontSize: 10, color: textMuted, textTransform: "uppercase" }}>
         {label}
       </span>
-      <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color }}>
+      <span className="sbd-num" style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color }}>
         {value}
       </span>
     </div>

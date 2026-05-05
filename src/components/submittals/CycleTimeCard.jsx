@@ -34,7 +34,7 @@ export default function CycleTimeCard({ submittals = [], isLoading = false }) {
   }, [submittals, windowDays]);
 
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: 6,
@@ -146,7 +146,7 @@ function Stat({ label, value, unit, color }) {
       }}>
         {label}
       </div>
-      <div style={{
+      <div className="sbd-num" style={{
         fontFamily: "var(--font-mono)",
         fontSize: 18, fontWeight: 700,
         color, fontVariantNumeric: "tabular-nums",
@@ -210,7 +210,7 @@ function Hdr({ children, right }) {
 
 function Cell({ children }) {
   return (
-    <div style={{
+    <div className="sbd-num" style={{
       color: "var(--text-primary)",
       textAlign: "right",
       fontVariantNumeric: "tabular-nums",
