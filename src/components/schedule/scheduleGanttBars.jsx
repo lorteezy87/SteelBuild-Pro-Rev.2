@@ -60,36 +60,43 @@ export function StatusChip({ status, overdue }) {
 }
 
 // ── Summary gantt bar with % rollup ──────────────────────────────────────
+// Gantter-AI-style summary ribbon: a translucent track with a glossy
+// progress fill, larger rounded corners, and a subtle inset highlight
+// that gives the bar a soft "lozenge" feel. End caps are baked into the
+// rounded background so there's nothing for the eye to catch as a seam.
+// Position math (leftPx, widthPx, top:50%) is unchanged so the bar lines
+// up exactly where the date math says it should.
 export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
   const ph = PHASE_BY_KEY[phase.key];
   const color = ph?.color || "#888";
   const pct = Math.round(pctComplete || 0);
+  const w = Math.max(widthPx, 6);
   return (
     <div style={{
       position: "absolute",
       left: leftPx,
-      width: Math.max(widthPx, 6),
-      height: 14,
+      width: w,
+      height: 12,
       top: "50%",
       transform: "translateY(-50%)",
-      background: `${color}40`,
-      borderRadius: 2,
+      background: `color-mix(in srgb, ${color} 22%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 55%, transparent)`,
+      borderRadius: 5,
       overflow: "hidden",
+      boxShadow: `0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px rgba(0,0,0,0.18)`,
     }}>
-      {/* Progress fill */}
+      {/* Progress fill — vertical gradient gives the bar a glossy
+          highlight without a separate overlay layer. */}
       <div style={{
         position: "absolute", left: 0, top: 0, height: "100%",
         width: `${Math.min(pct, 100)}%`,
-        background: color,
-        borderRadius: 2,
+        background: `linear-gradient(180deg, color-mix(in srgb, ${color} 92%, white) 0%, ${color} 60%, color-mix(in srgb, ${color} 88%, black) 100%)`,
+        borderRadius: 4,
         transition: "width 0.3s",
       }} />
-      {/* End caps */}
-      <div style={{ position: "absolute", left: 0, top: 0, width: 4, height: "100%", background: color, borderRadius: "2px 0 0 2px" }} />
-      <div style={{ position: "absolute", right: 0, top: 0, width: 4, height: "100%", background: color, borderRadius: "0 2px 2px 0" }} />
-      {/* % label */}
-      {widthPx > 40 && (
-        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)" }}>
+      {/* % label — only render when the bar is wide enough. */}
+      {w > 44 && (
+        <span className="sbd-num" style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", fontSize: 9, fontWeight: 700, color: "#fff", fontFamily: "var(--font-mono)", textShadow: "0 1px 1px rgba(0,0,0,0.45)", letterSpacing: "0.03em" }}>
           {pct}%
         </span>
       )}
@@ -98,18 +105,22 @@ export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
 }
 
 // ── Milestone diamond ────────────────────────────────────────────────────
+// Solid diamond marker — slightly tightened (12px instead of 14) so it
+// reads as a precise milestone pin against the bar grid. Triple-layer
+// box-shadow gives a 1.5px page-color isolation ring + a soft accent
+// halo so the diamond pops against any underlying summary band.
 export function MilestoneDiamond({ leftPx, task }) {
   const color = task.status === "Complete" ? "#10B981" : "var(--accent)";
   return (
     <div style={{
       position: "absolute",
-      left: leftPx - 7,
+      left: leftPx - 6,
       top: "50%",
       transform: "translateY(-50%) rotate(45deg)",
-      width: 14, height: 14,
+      width: 12, height: 12,
       background: color,
-      border: `2px solid ${color}`,
-      boxShadow: `0 0 6px ${color}40`,
+      borderRadius: 1.5,
+      boxShadow: `0 0 0 1.5px var(--bg-page), 0 0 0 2.5px color-mix(in srgb, ${color} 55%, transparent), 0 0 8px ${color}55`,
     }} />
   );
 }
@@ -224,6 +235,64 @@ export function GateDiamond({ left, color, active, kind, title }) {
   );
 }
 
+// Decide where the task name sits relative to the bar. Inside when
+// there's enough horizontal room (≥ ~6 chars worth), otherwise the
+// label renders absolutely-positioned past the right edge so a short
+// bar (e.g. a 1-day task at week zoom) still shows what it represents.
+// The outside label uses position:absolute against the bar shell, so
+// it never widens the shell's bounding box (which would shift any
+// dependency arrow targeting this task).
+function resolveLabelPlacement(name, widthPx) {
+  const required = Math.max(36, (name?.length || 0) * 5.5 + 16);
+  return widthPx >= required ? "inside" : "outside";
+}
+
+// Shared geometry so every status variant of TaskBar lays out
+// identically — anything position-sensitive (left, width, vertical
+// centring) stays untouched. Visual variants only swap colors / fills
+// inside this fixed shell.
+const BAR_HEIGHT = 18;
+const BAR_RADIUS = 4;
+
+// Task name rendered either inside the bar (white over the colored
+// fill, with a subtle text shadow on busy backgrounds) or as a
+// secondary-text label clipped to the right of the bar.
+function BarLabel({ name, placement, status }) {
+  if (placement === "inside") {
+    return (
+      <span style={{
+        position: "relative",
+        zIndex: 2,
+        fontSize: 9,
+        fontWeight: 700,
+        color: status === "Complete" ? "#003915" : status === "Delayed" ? "#fff" : "#0F1118",
+        letterSpacing: "0.01em",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        padding: "0 8px",
+        textShadow: status === "Delayed" ? "0 1px 1px rgba(0,0,0,0.4)" : undefined,
+      }}>{name}</span>
+    );
+  }
+  return (
+    <span style={{
+      position: "absolute",
+      left: "100%",
+      top: "50%",
+      transform: "translateY(-50%)",
+      marginLeft: 6,
+      fontSize: 10,
+      fontWeight: 500,
+      color: status === "Delayed" ? "#EF4444" : "var(--text-secondary)",
+      letterSpacing: "0.01em",
+      whiteSpace: "nowrap",
+      pointerEvents: "none",
+      fontFamily: "var(--font-body)",
+    }}>{name}</span>
+  );
+}
+
 export function TaskBar({ task, leftPx, widthPx }) {
   const pct = displayPct(task);
   const name = sanitizeTaskName(task);
@@ -232,33 +301,109 @@ export function TaskBar({ task, leftPx, widthPx }) {
     return <MilestoneDiamond leftPx={leftPx} task={task} />;
   }
 
+  const w = Math.max(widthPx, 4);
+  const placement = resolveLabelPlacement(name, w);
+
+  // Common shell — preserves leftPx/widthPx/top math from the original
+  // bar so dependency arrows and date alignment don't shift. Overflow
+  // is visible at shell level (so an outside label can paint past the
+  // right edge); the colored fill inside has its own overflow:hidden
+  // for clean rounded corners.
+  const shellStyle = {
+    position: "absolute",
+    left: leftPx,
+    width: w,
+    height: BAR_HEIGHT,
+    top: "50%",
+    transform: "translateY(-50%)",
+    overflow: "visible",
+    display: "flex",
+    alignItems: "center",
+  };
+
   if (task.status === "Complete") {
+    const c = "#10B981";
     return (
-      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", background: "#10B981", borderRadius: 2, overflow: "hidden", display: "flex", alignItems: "center", padding: "0 8px" }}>
-        <span style={{ fontSize: 8, fontWeight: 700, color: "#003915", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+      <div style={shellStyle}>
+        <div style={{
+          position: "absolute", inset: 0,
+          background: `linear-gradient(180deg, color-mix(in srgb, ${c} 92%, white) 0%, ${c} 55%, color-mix(in srgb, ${c} 86%, black) 100%)`,
+          borderRadius: BAR_RADIUS,
+          boxShadow: `0 1px 0 rgba(255,255,255,0.10) inset, 0 0 0 1px rgba(0,0,0,0.22)`,
+          overflow: "hidden",
+        }} />
+        <BarLabel name={name} placement={placement} status="Complete" />
       </div>
     );
   }
+
   if (task.status === "In Progress") {
     return (
-      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px solid var(--accent)", borderRadius: 2, overflow: "hidden", background: "rgba(200,155,32,0.08)" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden" }}>
-          <span style={{ fontSize: 8, fontWeight: 700, color: "#000", whiteSpace: "nowrap" }}>{name}</span>
+      <div style={shellStyle}>
+        {/* Track + progress fill. The track has a subtle accent border
+            and a faint accent-tinted background; the fill paints a
+            glossy gradient over [0..pct]% of the track. */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "rgba(200,155,32,0.10)",
+          border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
+          borderRadius: BAR_RADIUS,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            position: "absolute", left: 0, top: 0, height: "100%",
+            width: `${Math.max(0, Math.min(100, pct))}%`,
+            background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 86%, black) 100%)",
+            transition: "width 0.3s",
+          }} />
         </div>
+        <BarLabel name={name} placement={placement} status="In Progress" />
       </div>
     );
   }
+
   if (task.status === "Delayed") {
+    const c = "#EF4444";
     return (
-      <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1.5px dashed #EF4444", borderRadius: 2, background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
-        <span style={{ fontSize: 8, fontWeight: 700, color: "#EF4444", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+      <div style={shellStyle}>
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "rgba(239,68,68,0.18)",
+          border: `1.5px dashed ${c}`,
+          borderRadius: BAR_RADIUS,
+          overflow: "hidden",
+        }} />
+        <BarLabel name={name} placement={placement} status="Delayed" />
       </div>
     );
   }
-  // Not Started / default
+
+  // Not Started / default — outlined bar over a faint surface tint.
   return (
-    <div style={{ position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 20, top: "50%", transform: "translateY(-50%)", border: "1px solid var(--border-strong)", borderRadius: 2, background: "var(--hover-bg)", display: "flex", alignItems: "center", padding: "0 8px", overflow: "hidden" }}>
-      <span style={{ fontSize: 8, fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+    <div style={shellStyle}>
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "var(--hover-bg)",
+        border: "1px solid var(--border-strong)",
+        borderRadius: BAR_RADIUS,
+        overflow: "hidden",
+      }} />
+      {placement === "inside" ? (
+        <span style={{
+          position: "relative",
+          zIndex: 2,
+          fontSize: 9,
+          fontWeight: 600,
+          color: "var(--text-muted)",
+          letterSpacing: "0.01em",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          padding: "0 8px",
+        }}>{name}</span>
+      ) : (
+        <BarLabel name={name} placement="outside" status="Not Started" />
+      )}
     </div>
   );
 }
