@@ -182,6 +182,15 @@ export default function ModelViewer() {
   const gltfSceneRef = useRef(null); // For GLTF models (non-IFC)
   const fragmentsManagerRef = useRef(null);
   const rafHandleRef = useRef(0);
+  // Belt-and-braces: persists across the whole component lifetime, so
+  // even if multiple loaders / refit listeners race during IFC tile
+  // streaming they can't all call fitCamera() and yank the user back
+  // to the initial framing mid-zoom. Reset on clearCurrentModel().
+  const didAutoFitRef = useRef(false);
+  // Tracks whether the user has interacted with the camera controls.
+  // Once true, automatic fits (post-tile-stream) are suppressed even
+  // if didAutoFitRef somehow got reset.
+  const userHasInteractedRef = useRef(false);
 
   // Visual-polish / tool refs
   const envMapRef = useRef(null);
@@ -214,9 +223,19 @@ export default function ModelViewer() {
   const [isolateActive, setIsolateActive] = useState(false); // elements hidden via isolate
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // workPackages drives the per-mesh status colour pass. We cache for
+  // a minute so background refetches don't churn through
+  // applyStatusBasedColor every time the window regains focus — a tight
+  // refetch loop here was causing the viewer to feel like it was
+  // "constantly reloading" on every scroll/zoom interaction (each
+  // refetch produced a new array reference, re-firing the color
+  // effect that traverses every mesh). 60s is plenty fresh for a
+  // dashboard-style read.
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   // ─── @thatopen/components INITIALIZATION ────────────────────────
@@ -292,7 +311,13 @@ export default function ModelViewer() {
         ctrl.dollySpeed = 0.35; // slower scroll zoom — deliberate without being sluggish
         ctrl.truckSpeed = 2.5;
         ctrl.dollyToCursor = true;
-        try { ctrl.infinityDolly = true; } catch { /* ignore if unsupported */ }
+        // infinityDolly + dollyToCursor was producing a "snap back" feel
+        // on wheel zoom on some IFC packages — wheel events that crossed
+        // the camera target left controls in an inconsistent state and
+        // the next render frame yanked back to a sensible default.
+        // We don't need infinity dolly with the explicit min/max bounds
+        // we're setting below, so just leave it off.
+        try { ctrl.infinityDolly = false; } catch { /* ignore if unsupported */ }
         ctrl.minDistance = 0.1;
         ctrl.maxDistance = 5000;
         ctrl.setLookAt(80, 60, 80, 0, 0, 0);
@@ -336,6 +361,13 @@ export default function ModelViewer() {
         rafHandleRef.current = requestAnimationFrame(tick);
 
         const onCtrlChange = () => {
+          // Once the user touches the camera, suppress auto-fit. This
+          // is the safety net that fixes "viewer snaps back to first
+          // framing mid-zoom" — any further fitCamera() call from a
+          // late-arriving tile-stream callback will check this ref
+          // and bail out. Manual fit (F key, Fit button) sets it back
+          // to false explicitly.
+          userHasInteractedRef.current = true;
           try { fragmentsManager.initialized && fragmentsManager.core.update(); } catch { /* ignore */ }
         };
         const onCtrlRest = () => {
@@ -406,9 +438,21 @@ export default function ModelViewer() {
   }, [workPackages, members]);
 
   // ─── FIT CAMERA ────────────────────────────────────────────────
-  const fitCamera = useCallback((target) => {
+  // `auto=true` means "called by tile-streaming callbacks, please
+  // respect the user-interaction guard". Default (false) is the
+  // user-driven path (F key, Fit button, manual upload finish) and
+  // always reframes regardless of prior interaction.
+  const fitCamera = useCallback((target, { auto = false } = {}) => {
     const world = worldRef.current;
     if (!world?.camera?.controls || !target) return;
+    if (auto && (didAutoFitRef.current || userHasInteractedRef.current)) {
+      return; // post-stream tile arrived after user already framed; respect them
+    }
+    if (!auto) {
+      // User pressed F or clicked Fit — reset the guard so future tile
+      // streams can re-baseline if a NEW model is loaded later.
+      userHasInteractedRef.current = false;
+    }
 
     const box = new THREE.Box3().setFromObject(target);
     if (box.isEmpty()) return;
@@ -437,6 +481,7 @@ export default function ModelViewer() {
     const pos = center.clone().add(offset);
 
     ctrl.setLookAt(pos.x, pos.y, pos.z, center.x, center.y, center.z, true);
+    didAutoFitRef.current = true; // mark "we have an initial framing" — auto-callers will now bail
   }, []);
 
   // ─── MODEL BOUNDS (drives section slider + measure-marker sizing) ──
@@ -653,6 +698,11 @@ export default function ModelViewer() {
     const world = worldRef.current;
     const components = componentsRef.current;
     if (!world || !components) return;
+    // Loading a new model is an explicit user action — let the next
+    // post-stream auto-fit reframe the camera regardless of any prior
+    // interaction with the previous model.
+    didAutoFitRef.current = false;
+    userHasInteractedRef.current = false;
 
     // Remove GLTF model if loaded
     if (gltfSceneRef.current && world.scene?.three) {
@@ -919,7 +969,13 @@ export default function ModelViewer() {
         // Material/shadow re-apply still runs on every call so freshly
         // streamed tiles get the correct steel colour without re-zooming.
         if (!didFitOnce) {
-          fitCamera(modelObject);
+          // auto-mode — bails out if the user has already started
+          // interacting with the camera (wheel/drag) before tiles
+          // finished streaming. The local didFitOnce flag stays as a
+          // closure-level guard for the polling loop; the ref-level
+          // guards inside fitCamera are the safety net that survives
+          // even if multiple tryFit closures race.
+          fitCamera(modelObject, { auto: true });
           captureModelBounds(modelObject);
           didFitOnce = true;
         }
