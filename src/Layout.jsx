@@ -26,6 +26,7 @@ import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import { useLayoutNavData } from "./components/nav/useLayoutNavData";
 import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoint";
+import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcut";
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
@@ -78,16 +79,7 @@ export default function Layout({ children, currentPageName }) {
   const activeProjectId = ctxActiveProject?.id || null;
 
   // Cmd+K search shortcut
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useGlobalSearchShortcut(setSearchOpen);
 
   // ── Nav badge data ───────────────────────────────────────────────
   // useLayoutNavData owns the four cross-module count queries, the
