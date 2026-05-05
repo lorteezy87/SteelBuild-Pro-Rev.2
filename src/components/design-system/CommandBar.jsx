@@ -1,12 +1,15 @@
 /**
  * CommandBar — page header pattern.
  *
- *   eyebrow     — small uppercase context line (project path / breadcrumb)
- *   title       — 26pt display heading
+ *   eyebrow      — small uppercase context line (project path / breadcrumb)
+ *   title        — display heading (Barlow Condensed in SBD), light weight
+ *                  with slight tracking
  *   count + unit — compact chip next to the title (e.g. "32 · 2238.9T")
- *   subtitle    — smaller body-tone explainer line below
- *   children    — action buttons on the right
+ *   subtitle     — smaller body-tone explainer line below
+ *   children     — action buttons on the right
  *
+ * SBD treatment: glass card that sits above the page, backdrop-blurred,
+ * subtle bottom border + soft elevation so it reads as a header rail.
  * Used across every operational page to create visual rhythm.
  */
 
@@ -21,6 +24,13 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
         justifyContent: "space-between",
         gap: 16,
         flexWrap: "wrap",
+        padding: "14px 18px",
+        background: "var(--bg-surface)",
+        backdropFilter: "blur(20px) saturate(140%)",
+        WebkitBackdropFilter: "blur(20px) saturate(140%)",
+        border: "1px solid var(--border-default)",
+        borderRadius: "var(--radius-card)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
         marginBottom: 16,
       }}
     >
@@ -31,9 +41,9 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
               fontFamily: "var(--font-mono)",
               fontSize: 9,
               color: "var(--text-muted)",
-              letterSpacing: "0.16em",
+              letterSpacing: "0.18em",
               textTransform: "uppercase",
-              marginBottom: 4,
+              marginBottom: 6,
             }}
           >
             {eyebrow}
@@ -43,12 +53,13 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
           <h1
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: 26,
-              fontWeight: 800,
-              letterSpacing: "0.01em",
+              fontSize: 30,
+              fontWeight: 300,
+              letterSpacing: "0.02em",
               color: "var(--text-primary)",
               margin: 0,
               lineHeight: 1.1,
+              textTransform: "uppercase",
             }}
           >
             {title}
@@ -59,11 +70,12 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
                 fontFamily: "var(--font-mono)",
                 fontSize: 11,
                 fontWeight: 700,
-                padding: "3px 8px",
+                padding: "3px 10px",
                 borderRadius: 4,
-                background: "var(--bg-surface-high)",
-                color: "var(--text-secondary)",
-                letterSpacing: "0.08em",
+                background: "var(--accent-muted)",
+                border: "1px solid var(--accent-border)",
+                color: "var(--accent)",
+                letterSpacing: "0.10em",
                 whiteSpace: "nowrap",
               }}
             >
