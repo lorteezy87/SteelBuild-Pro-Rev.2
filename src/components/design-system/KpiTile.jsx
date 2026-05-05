@@ -1,9 +1,9 @@
 /**
  * KpiTile — click-to-filter metric card.
  *
- * Colored top border + optional icon + big tabular number + label
- * below. When `active`, gets a subtle glow matching the tile color
- * plus a 6px dot badge indicating "this filter is on."
+ * SBD treatment: glass surface (translucent white + backdrop-blur), mono
+ * uppercase label with wide tracking, large mono value, optional accent
+ * top border, soft hover-lift (transform + brighter border) when clickable.
  *
  * `compact` reduces padding + value size (used in multi-tile KPI
  * strips on list pages). Uncompact is the Dashboard hero variant.
@@ -67,6 +67,7 @@ export default function KpiTile({
   // Re-tick relative time every 30s so "just now" → "1m ago" lands without
   // a manual reload. Tiles are lightweight; the refresh is cheap.
   const [tick, setTick] = useState(0);
+  const [hover, setHover] = useState(false);
   useEffect(() => {
     if (!updatedAt) return undefined;
     const id = setInterval(() => setTick((n) => n + 1), 30 * 1000);
@@ -81,19 +82,29 @@ export default function KpiTile({
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => clickable && setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         background: "var(--bg-surface)",
+        backdropFilter: "blur(20px) saturate(140%)",
+        WebkitBackdropFilter: "blur(20px) saturate(140%)",
         borderRadius: "var(--radius-card)",
-        borderTop: `2px solid ${color}`,
-        border: active ? `1px solid ${color}` : "1px solid var(--border-default)",
+        border: active
+          ? `1px solid ${color}`
+          : hover && clickable
+          ? "1px solid var(--accent-border)"
+          : "1px solid var(--border-default)",
         borderTopWidth: 2,
         borderTopColor: color,
-        padding: compact ? "10px 12px" : "14px 14px 12px",
+        padding: compact ? "12px 14px" : "16px 16px 14px",
         cursor: clickable ? "pointer" : "default",
         boxShadow: active
-          ? `0 0 18px color-mix(in srgb, ${color} 20%, transparent), 0 0 36px color-mix(in srgb, ${color} 8%, transparent)`
+          ? `0 0 18px color-mix(in srgb, ${color} 22%, transparent), 0 0 36px color-mix(in srgb, ${color} 8%, transparent)`
+          : hover && clickable
+          ? "0 6px 24px rgba(0,0,0,0.32)"
           : "var(--shadow-card)",
-        transition: "all 0.15s",
+        transform: hover && clickable && !active ? "translateY(-1px)" : "none",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease",
         position: "relative",
         overflow: "hidden",
       }}
@@ -103,19 +114,20 @@ export default function KpiTile({
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: compact ? 22 : 26,
+              fontSize: compact ? 24 : 30,
               fontWeight: 600,
               color,
               lineHeight: 1,
-              marginBottom: 5,
+              marginBottom: 6,
               fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.01em",
             }}
           >
             {value}
           </div>
           <div
             style={{
-              fontFamily: "var(--font-body)",
+              fontFamily: "var(--font-mono)",
               fontSize: 9,
               fontWeight: 700,
               color: active ? color : "var(--text-muted)",
