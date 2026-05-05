@@ -8,6 +8,7 @@ export default function ThemeToggleButton() {
     <button
       onClick={toggleTheme}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="sbd-btn-ghost"
       style={{
         width: 32, height: 32, borderRadius: 8,
         background: "var(--bg-hover)", border: "1px solid var(--border)",

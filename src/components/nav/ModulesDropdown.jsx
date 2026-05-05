@@ -37,7 +37,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
   const totalModules = NAV_GROUPS.flatMap((g) => g.items).length;
 
   return (
-    <div ref={ref} style={{
+    <div ref={ref} className="sbd-card" style={{
       position: "absolute", top: "calc(100% + 4px)", right: 0,
       width: dropdownWidth,
       background: "var(--glass-bg)",
@@ -81,7 +81,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
             <div key={colIdx} style={{ borderRight: colIdx < 2 && !isMobile ? "1px solid var(--divider)" : "none", padding: "0" }}>
               {column.map((group, groupIdx) => (
                 <div key={group.label}>
-                  <div style={{
+                  <div className="sbd-nav-section" style={{
                     padding: "8px 14px 3px",
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                     letterSpacing: "0.20em", color: "var(--accent)",
@@ -165,6 +165,7 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
   return (
     <div
       onClick={() => { if (!isAdminOnly) { onNavigate(item.page); onClose(); } }}
+      className="sbd-nav-item"
       style={{
         display: "flex", alignItems: "center", gap: 10,
         padding: "7px 14px", cursor: isAdminOnly ? "not-allowed" : "pointer",
@@ -195,7 +196,7 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
         {isAdminOnly && <span style={{ fontSize: 10, color: "var(--status-error-bright)", marginLeft: 6 }}>{"\uD83D\uDC51"}</span>}
       </span>
       {item.badgeKey && alertCounts[item.badgeKey] > 0 && (
-        <span style={{
+        <span className="sbd-badge sbd-badge-error" style={{
           background: "var(--status-error)", color: "white", borderRadius: 10,
           padding: "1px 6px", fontSize: 8, fontFamily: "var(--font-mono)",
           fontWeight: 700, minWidth: 16, textAlign: "center",

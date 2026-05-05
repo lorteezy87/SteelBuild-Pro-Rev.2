@@ -20,6 +20,7 @@ export default function TopBarSearchButton({ onClick }) {
       onClick={onClick}
       title={`Search (${shortcutKeyLabel("K")})`}
       aria-label="Open global search"
+      className="sbd-btn-ghost"
       style={{
         height: 32, width: 32, borderRadius: 8,
         background: "var(--hover-bg)", border: "1px solid var(--border-default)",
