@@ -388,7 +388,8 @@ export default function ExpensesPage() {
         <button
           onClick={refetch}
           title="Refresh"
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          className="sbd-btn"
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
         >
           <RefreshCw size={12} /> Refresh
         </button>

@@ -327,10 +327,8 @@ export default function Deliveries() {
 
       {/* Pipeline */}
       <div
+        className="sbd-card"
         style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
           padding: "12px 14px",
         }}
       >
@@ -350,14 +348,12 @@ export default function Deliveries() {
 
       {/* Search + project selector */}
       <div
+        className="sbd-card"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
           padding: "8px 12px",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
           flexWrap: "wrap",
         }}
       >
@@ -427,10 +423,9 @@ export default function Deliveries() {
 
       {/* Table */}
       <div
+        className="sbd-card"
         style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
+          padding: 0,
           overflow: "hidden",
         }}
       >
