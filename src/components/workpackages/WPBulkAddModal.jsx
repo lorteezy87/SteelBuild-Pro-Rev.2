@@ -379,6 +379,7 @@ export default function WPBulkAddModal({
             }}
           >
             <table
+              className="sbd-table"
               style={{
                 width: "100%",
                 borderCollapse: "collapse",

@@ -277,7 +277,7 @@ export default function ShippingTicketImportModal({ open, projectId, projectName
                 </div>
               </div>
               <div style={{ border: "1px solid var(--border-default)", borderRadius: 2, maxHeight: 360, overflowY: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)" }}>
                     <tr>
                       {["Qty","Mark","Seq","Profile","Length","Grade","Finish","Weight"].map(h => (

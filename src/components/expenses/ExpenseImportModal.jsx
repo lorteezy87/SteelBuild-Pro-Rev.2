@@ -507,7 +507,7 @@ export default function ExpenseImportModal({ open, onClose, activeProject, workP
                 background: 'var(--bg-surface-low)', borderRadius: 6,
                 border: '1px solid var(--divider)',
               }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+                <table className="sbd-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
                   <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-surface-low)' }}>
                     <tr>
                       {['Row', 'Date', 'Description', 'Type', 'Cost Code', 'Amount', 'Vendor', 'Status', 'Issues'].map((h) => (

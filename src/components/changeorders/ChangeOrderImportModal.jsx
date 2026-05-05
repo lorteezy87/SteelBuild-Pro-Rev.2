@@ -356,7 +356,7 @@ export default function ChangeOrderImportModal({
                 </div>
               </div>
               <div style={{ border: "1px solid var(--border-default)", borderRadius: 2, maxHeight: 420, overflowY: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-secondary)", zIndex: 1 }}>
                     <tr>
                       {["#", "Title", "Status", "Amount", "Submitted", "Approved", ""].map((h, i) => (
