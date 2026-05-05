@@ -220,10 +220,8 @@ export default function Settings() {
       {/* Content — key forces remount on tab switch for the fade animation */}
       <div
         key={activeTab}
+        className="sbd-card"
         style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 'var(--radius-card)',
           padding: isMobile ? 16 : 28,
           minHeight: isMobile ? 300 : 500,
           animation: 'fadeIn 0.2s ease',

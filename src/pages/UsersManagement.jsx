@@ -101,12 +101,11 @@ function UsersManagementContent() {
         <button
           onClick={refetch}
           title="Refresh"
+          className="sbd-btn"
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-            color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
-            padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}
         >
           <RefreshCw size={12} /> Refresh
@@ -137,11 +136,10 @@ function UsersManagementContent() {
           placeholder="Search users by name, email, or role..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          className="sbd-input"
           style={{
             width: "100%", padding: "7px 32px 7px 30px",
-            background: "var(--bg-surface-low)", border: "1px solid var(--border-default)",
-            borderRadius: 8, fontSize: 12, color: "var(--text-primary)",
-            outline: "none", fontFamily: "var(--font-body)",
+            fontSize: 12,
           }}
         />
         {searchTerm && (
@@ -158,7 +156,7 @@ function UsersManagementContent() {
         )}
       </div>
 
-      <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden" }}>
+      <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
         <Table>
           <TableHeader>
             <TableRow style={{ background: "var(--bg-surface-low)", borderBottom: "1px solid var(--border-default)" }}>

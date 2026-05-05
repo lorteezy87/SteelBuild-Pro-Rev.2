@@ -36,6 +36,7 @@ function ReportCard({ entry, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="sbd-card sbd-card-hover"
       style={{
         ...CARD,
         textAlign: "left",
