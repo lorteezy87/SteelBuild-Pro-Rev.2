@@ -7,8 +7,9 @@
  *   actions  — array of `{ label, icon, variant?, onClick }` to render
  *              as Button components in order.
  *
- * Hides when count is 0. Sticky-float pattern — doesn't take layout
- * space in the page flow.
+ * SBD treatment: heavy glass (28px blur) + accent border + soft accent
+ * glow so the bar reads as elevated and active.  Hides when count is 0.
+ * Sticky-float pattern — doesn't take layout space in the page flow.
  */
 
 import React from "react";
@@ -27,11 +28,14 @@ export default function BulkActionBar({ count, onClear, actions = [] }) {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: "10px 14px",
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--accent)",
-        borderRadius: 8,
-        boxShadow: "0 8px 28px rgba(0,0,0,0.5), 0 0 20px var(--accent-muted)",
+        padding: "10px 16px",
+        background: "var(--bg-surface-high)",
+        backdropFilter: "blur(28px) saturate(160%)",
+        WebkitBackdropFilter: "blur(28px) saturate(160%)",
+        border: "1px solid var(--accent-border)",
+        borderRadius: "var(--radius-card)",
+        boxShadow:
+          "0 12px 40px rgba(0,0,0,0.55), 0 0 28px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 0 rgba(255,255,255,0.08)",
         zIndex: 200,
       }}
     >
@@ -41,7 +45,8 @@ export default function BulkActionBar({ count, onClear, actions = [] }) {
           fontSize: 10,
           fontWeight: 700,
           color: "var(--accent)",
-          letterSpacing: "0.10em",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
         }}
       >
         {count} SELECTED
@@ -68,8 +73,9 @@ export default function BulkActionBar({ count, onClear, actions = [] }) {
           fontFamily: "var(--font-mono)",
           fontSize: 9,
           fontWeight: 700,
-          letterSpacing: "0.10em",
+          letterSpacing: "0.12em",
           padding: "4px 8px",
+          textTransform: "uppercase",
         }}
       >
         CLEAR
