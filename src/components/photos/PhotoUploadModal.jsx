@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, Upload, Camera, Trash2, Check, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { X, Upload, Camera, Trash2, Check, AlertCircle } from "lucide-react";
 
 const CATEGORIES = ["Progress", "Safety", "Issue", "Delivery", "Punchlist", "Other"];
 const MAX_DIMENSION = 2400;

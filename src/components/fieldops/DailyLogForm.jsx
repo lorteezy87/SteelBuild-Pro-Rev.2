@@ -339,7 +339,7 @@ export default function DailyLogForm({ projectId, log, onSave, onClose, isSaving
     });
     // Manning grid drives headcount/hours — only re-sync when the totals
     // change, otherwise we'd loop forever fighting our own setState.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [manningTotals.totalCount, manningTotals.totalHours]);
 
   const handleSubmit = (e) => {

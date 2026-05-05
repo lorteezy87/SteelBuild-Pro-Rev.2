@@ -45,7 +45,7 @@ export function logError(error, context = {}) {
     pushBuffer(entry);
     // Loud console.error so it shows up in dev tools and any log forwarder
     // hooked into the console (e.g. LogRocket, Sentry's BrowserTracing).
-    // eslint-disable-next-line no-console
+     
     console.error("[telemetry]", entry);
   } catch {
     /* never throw from telemetry */
@@ -65,7 +65,7 @@ export function logEvent(name, data = {}) {
       data: safeStringify(data),
     };
     pushBuffer({ event: entry });
-    // eslint-disable-next-line no-console
+     
     if (typeof console !== "undefined" && console.debug) console.debug("[event]", entry);
   } catch { /* no-op */ }
 }

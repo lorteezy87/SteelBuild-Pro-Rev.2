@@ -76,7 +76,7 @@ export default function RelatedScheduleTasksChips({
 }) {
   if (!VALID_FIELDS.has(relatedField)) {
     // Programming error — surface in dev so we don't silently render nothing.
-    // eslint-disable-next-line no-console
+     
     console.warn(`[RelatedScheduleTasksChips] unknown relatedField: ${relatedField}`);
   }
 

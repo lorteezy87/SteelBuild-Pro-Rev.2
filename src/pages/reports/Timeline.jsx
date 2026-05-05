@@ -17,7 +17,7 @@ import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter } from "./ReportFilters";
 import { formatDate } from "./utils";
-import { mono, body, CARD } from "./constants";
+import { mono, CARD } from "./constants";
 
 const LANE_HEIGHT = 36;
 const BAR_HEIGHT = 18;
