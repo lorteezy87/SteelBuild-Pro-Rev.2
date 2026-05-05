@@ -768,6 +768,7 @@ export default function PortfolioView({
                   <div
                     key={p.id}
                     onClick={() => openProjectDashboard(p.id)}
+                    className="sbd-card sbd-card-hover"
                     style={{
                       background: "var(--bg-surface)",
                       border: `1px solid var(--border-default)`,
@@ -838,19 +839,21 @@ export default function PortfolioView({
 
       {/* Status Bar — all tiles are clickable filters with sparklines */}
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           borderBottom: "1px solid var(--divider)",
           display: "flex",
           flexShrink: 0,
           flexWrap: "wrap",
+          padding: 0,
         }}
       >
         {/* Portfolio Value — featured (wider, not filterable).
             Overflow-safe: value span is nowrap + tabular-nums so
             long currency strings don't wrap and line up tidily
             column-to-column. */}
-        <div style={{
+        <div className="sbd-kpi" style={{
           padding: "12px 22px",
           borderRight: "1px solid var(--divider)",
           borderTop: "3px solid var(--accent)",
@@ -860,16 +863,18 @@ export default function PortfolioView({
           minWidth: 220,
           overflow: "hidden",
         }}>
-          <span style={{
+          <span className="sbd-kpi-label" style={{
             fontFamily: "var(--font-mono)", fontSize: 9,
             letterSpacing: "0.14em", textTransform: "uppercase",
             color: "var(--text-muted)", whiteSpace: "nowrap",
             overflow: "hidden", textOverflow: "ellipsis",
+            margin: 0,
           }}>
             Portfolio Value
           </span>
           <span
             title={formatCurrency(portfolioKPIs.portfolioValue)}
+            className="sbd-kpi-value sbd-num"
             style={{
               fontFamily: "var(--font-mono)", fontSize: 24,
               fontWeight: 800, lineHeight: 1.1, color: "var(--accent)",
@@ -895,6 +900,7 @@ export default function PortfolioView({
               `Pending CO value: ${formatCurrency(portfolioKPIs.pendingCOValue).replace(/\.\d+/, "")}`,
               `Over-budget exposure: ${formatCurrency(portfolioKPIs.overBudgetExposure).replace(/\.\d+/, "")}`,
             ].join("\n")}
+            className="sbd-kpi"
             style={{
               padding: "12px 22px",
               borderRight: "1px solid var(--divider)",
@@ -910,16 +916,18 @@ export default function PortfolioView({
               overflow: "hidden",
             }}
           >
-            <span style={{
+            <span className="sbd-kpi-label" style={{
               fontFamily: "var(--font-mono)", fontSize: 9,
               letterSpacing: "0.14em", textTransform: "uppercase",
               color: "var(--text-muted)", whiteSpace: "nowrap",
               overflow: "hidden", textOverflow: "ellipsis",
+              margin: 0,
             }}>
               Cash at Risk
             </span>
             <span
               title={formatCurrency(portfolioKPIs.cashAtRisk)}
+              className="sbd-kpi-value sbd-num"
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: 24,
