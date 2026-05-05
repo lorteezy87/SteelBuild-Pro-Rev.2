@@ -114,7 +114,7 @@ export default function AnalyticsGrid({
 
 function Card({ title, flex, children }) {
   return (
-    <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", padding: "18px 20px", ...(flex ? { flex: 1 } : {}) }}>
+    <div className="sbd-card" style={{ padding: "18px 20px", ...(flex ? { flex: 1 } : {}) }}>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 12 }}>
         {title}
       </div>

@@ -23,7 +23,7 @@ export default function ExpenseTable({
   const [hoveredRow, setHoveredRow] = useState(null);
 
   return (
-    <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", overflow: "hidden", border: "1px solid var(--divider)" }}>
+    <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ overflowX: "auto", maxHeight: 600, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

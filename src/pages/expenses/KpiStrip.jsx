@@ -128,9 +128,8 @@ function Tile({ onClick, active, borderColor, children }) {
   return (
     <div
       onClick={onClick}
+      className="sbd-kpi"
       style={{
-        background: "var(--bg-surface)",
-        borderRadius: "var(--radius-card)",
         padding: "14px 16px 12px",
         borderTop: `2px solid ${borderColor}`,
         transition: "all 0.15s",
