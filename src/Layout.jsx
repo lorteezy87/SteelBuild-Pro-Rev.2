@@ -146,13 +146,11 @@ export default function Layout({ children, currentPageName }) {
         }} />
 
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
-        <nav aria-label="Primary" className="nav-glass" style={{
+        <nav aria-label="Primary" className="nav-glass sbd-topbar" style={{
           height: 36,
-          background: "var(--nav-bg)", borderBottom: "1px solid var(--border-default)",
           padding: "0 12px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           flexShrink: 0, position: "relative", zIndex: 100, gap: 8,
-          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
         }}>
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -162,7 +160,7 @@ export default function Layout({ children, currentPageName }) {
             </div>
             {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
             {!isMobile && (
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
             )}
