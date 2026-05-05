@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import { CommandBar, KpiTile, Button } from "@/components/design-system";
+import { CommandBar, KpiTile } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
 import CycleTimeCard from "@/components/submittals/CycleTimeCard";
 import AgingReportTable from "@/components/submittals/AgingReportTable";

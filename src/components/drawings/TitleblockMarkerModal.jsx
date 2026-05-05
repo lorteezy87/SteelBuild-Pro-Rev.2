@@ -379,7 +379,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
               const isUniqueConflict =
                 msg.includes("uq_drawings_set_sheet_revision") ||
                 msg.includes("duplicate key value");
-              // eslint-disable-next-line no-console
+               
               console.warn(
                 `[TitleblockMarker] re-extract failed for sheet ${sheet?.id}` +
                   (isUniqueConflict
@@ -392,7 +392,7 @@ export default function TitleblockMarkerModal({ set, onClose, onSaved }) {
           }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn("[TitleblockMarker] could not list sheets to re-extract:", err);
       }
 

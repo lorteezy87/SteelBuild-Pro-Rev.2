@@ -343,5 +343,5 @@ export default function AnalysisDetailModal({ analysis, onClose }) {
   );
 }
 
-/* eslint-disable-next-line no-unused-vars */
+ 
 // display is imported for consistency with other modules even if not used below

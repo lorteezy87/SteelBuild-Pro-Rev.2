@@ -6,7 +6,6 @@ import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 // markdown source lives at docs/TUTORIAL.md so the doc and the code
 // travel together — fix something in the app, fix the doc in the same
 // commit. No extra fetch, no separate hosting, no CORS.
-// eslint-disable-next-line import/no-unresolved
 import TUTORIAL_SOURCE from "../../docs/TUTORIAL.md?raw";
 
 /**

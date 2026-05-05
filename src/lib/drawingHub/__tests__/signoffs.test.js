@@ -118,7 +118,7 @@ describe("createSignoff", () => {
 
   it("accepts every value in SIGNOFF_STAMP_TYPES", async () => {
     for (const t of SIGNOFF_STAMP_TYPES) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const row = await createSignoff({
         projectId: "p", drawingId: "d", drawingRevisionId: "r", stampType: t,
       });

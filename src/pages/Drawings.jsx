@@ -147,7 +147,7 @@ export default function Drawings() {
   useEffect(() => {
     const next = searchParams.get("search") || searchParams.get("sheet") || "";
     setSearch(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [searchParams]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
