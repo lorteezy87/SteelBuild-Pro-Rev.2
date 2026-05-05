@@ -24,6 +24,9 @@ import SidebarNav from "./components/nav/SidebarNav";
 import MobileDrawer, { HamburgerMenu } from "./components/nav/MobileDrawer";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
+import TopBarSearchButton from "./components/nav/TopBarSearchButton";
+import DensityToggle from "./components/nav/DensityToggle";
+import UserSignOutBlock from "./components/nav/UserSignOutBlock";
 import { useLayoutNavData } from "./components/nav/useLayoutNavData";
 import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoint";
 import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcut";
@@ -45,9 +48,6 @@ import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 // Context
 import { useProjectContext } from "./components/shared/useProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
-
-// Utilities
-import { shortcutKeyLabel } from "@/lib/browser";
 
 // Config
 import { PRIMARY_TABS, TAB_DEFAULT_PAGE } from "@/config/moduleRegistry";
@@ -183,60 +183,13 @@ export default function Layout({ children, currentPageName }) {
 
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            {/* Search trigger \u2014 was a 180px-wide pill labeled "Search...
-                Ctrl+K" duplicating the SidebarNav search affordance. The
-                sidebar entry is the single source of truth for global
-                search now; we keep a compact icon-only button up here so
-                the action is reachable even with the sidebar collapsed
-                or on routes without it. The Cmd/Ctrl+K shortcut is still
-                wired in the effect above and stays unique app-wide. */}
-            {!isMobile && (
-              <button
-                onClick={() => setSearchOpen(true)}
-                title={`Search (${shortcutKeyLabel("K")})`}
-                aria-label="Open global search"
-                style={{
-                  height: 32, width: 32, borderRadius: 8,
-                  background: "var(--hover-bg)", border: "1px solid var(--border-default)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", color: "var(--text-muted)", transition: "all 0.15s",
-                  padding: 0,
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.borderColor = "var(--accent-border)"; e.currentTarget.style.color = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-              >
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <circle cx="8" cy="8" r="6" /><line x1="14" y1="14" x2="19" y2="19" />
-                </svg>
-              </button>
-            )}
+            {/* Search trigger \u2014 see TopBarSearchButton for context. */}
+            {!isMobile && <TopBarSearchButton onClick={() => setSearchOpen(true)} />}
 
             {/* Density toggle + Modules grid — desktop only */}
             {!isMobile && (
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 4 }}>
-                <div
-                  title="Toggle compact/comfortable density"
-                  onClick={() => {
-                    const html = document.documentElement;
-                    const current = html.getAttribute("data-density");
-                    const next = current === "compact" ? "comfortable" : "compact";
-                    html.setAttribute("data-density", next);
-                    try { localStorage.setItem("sbp-density", next); } catch { /* ignore */ }
-                  }}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: "var(--hover-bg)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", color: "var(--text-muted)", transition: "all 0.15s",
-                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-muted)"; e.currentTarget.style.color = "var(--accent)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <line x1="2" y1="3" x2="12" y2="3" /><line x1="2" y1="7" x2="12" y2="7" /><line x1="2" y1="11" x2="12" y2="11" />
-                  </svg>
-                </div>
+                <DensityToggle />
 
                 <div
                   title="All Modules"
@@ -281,36 +234,7 @@ export default function Layout({ children, currentPageName }) {
             />
 
             {/* User + Sign Out */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto", paddingRight: 0 }}>
-              <div style={{
-                fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)",
-                letterSpacing: "0.10em", textTransform: "uppercase",
-              }}>
-                {user?.email || user?.full_name || ""}
-              </div>
-              <button
-                onClick={logout}
-                style={{
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 6, padding: "4px 12px",
-                  color: "var(--text-muted)", fontFamily: "var(--font-mono)",
-                  fontSize: 8, letterSpacing: "0.10em", cursor: "pointer",
-                  transition: "all 0.15s", textTransform: "uppercase", fontWeight: 600,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--danger-muted)";
-                  e.currentTarget.style.borderColor = "var(--danger-border)";
-                  e.currentTarget.style.color = "var(--danger)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.borderColor = "var(--border)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                SIGN OUT
-              </button>
-            </div>
+            <UserSignOutBlock user={user} onLogout={logout} />
 
             {/* Project pill dropdown */}
             <ProjectPillDropdown />
