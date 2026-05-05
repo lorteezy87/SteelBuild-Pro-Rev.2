@@ -18,7 +18,7 @@ import ReportShell from "./ReportShell";
 import ReportTable from "./ReportTable";
 import { FilterBar, SearchInput } from "./ReportFilters";
 import { formatCurrencyFull, exportTableCSV } from "./utils";
-import { mono, body } from "./constants";
+import { mono } from "./constants";
 
 export default function UnbilledRevenue() {
   const navigate = useNavigate();

@@ -212,7 +212,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
       // same pattern in BulkAddTaskModal.
       const created = [];
       for (const row of payload) {
-        // eslint-disable-next-line no-await-in-loop
+         
         const row2 = await base44.entities.ScheduleTask.create(row);
         created.push(row2);
       }
@@ -227,7 +227,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
         const depId  = idByWbs.get(t.depends_on_wbs);
         if (!taskId || !depId) continue;
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           await base44.entities.ScheduleTask.update(taskId, {
             dependencies: JSON.stringify([depId]),
           });

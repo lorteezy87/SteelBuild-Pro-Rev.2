@@ -167,7 +167,7 @@ export default function ChangeOrderImportModal({
 
       let created = 0;
       for (const row of toInsert) {
-        // eslint-disable-next-line no-await-in-loop
+         
         await base44.entities.ChangeOrder.create(row);
         created += 1;
       }

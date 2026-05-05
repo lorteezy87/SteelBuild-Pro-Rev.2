@@ -19,7 +19,7 @@
  * table, status rule engine.
  */
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, FilePlus, Sparkles } from "lucide-react";

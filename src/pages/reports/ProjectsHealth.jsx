@@ -14,7 +14,7 @@ import { createPageUrl } from "@/utils";
 import { PHASES, PHASE_COLORS } from "@/utils/phases";
 import ReportShell from "./ReportShell";
 import { formatDate, formatCurrencyFull } from "./utils";
-import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
+import { mono, body, CARD } from "./constants";
 
 const SUPPORTED_PHASES = new Set(PHASES);
 

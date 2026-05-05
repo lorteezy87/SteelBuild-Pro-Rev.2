@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { toast } from "sonner";
@@ -16,7 +16,6 @@ import {
   ZoomOut,
   RotateCw,
   Save,
-  Check,
 } from "lucide-react";
 import PhotoThumb from "./PhotoThumb";
 

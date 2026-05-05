@@ -131,7 +131,7 @@ export function useScheduleAssistant({ projectId }) {
       } catch { /* network read failed */ }
 
       if (!res.ok) {
-        // eslint-disable-next-line no-console
+         
         console.error("[schedule-assistant] non-2xx response", {
           status: res.status,
           statusText: res.statusText,
