@@ -198,6 +198,7 @@ export default function ForwardLookDrawer({
       <div
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         tabIndex={-1}
+        className="sbd-sidebar"
         style={{
           position: "fixed",
           top: 0,
@@ -205,8 +206,10 @@ export default function ForwardLookDrawer({
           width: 440,
           maxWidth: "90vw",
           height: "100vh",
+          minWidth: 0,
           background: "var(--bg-surface-secondary)",
           borderLeft: "1px solid var(--border-default)",
+          padding: 0,
           zIndex: 1101,
           display: "flex",
           flexDirection: "column",
@@ -236,6 +239,7 @@ export default function ForwardLookDrawer({
             14-Day Forward Look
           </span>
           <button
+            className="sbd-btn-ghost"
             onClick={onClose}
             aria-label="Close forward look drawer"
             style={{
@@ -312,6 +316,7 @@ export default function ForwardLookDrawer({
           }}
         >
           <button
+            className="sbd-btn-ghost"
             onClick={onClose}
             style={{
               width: "100%",
