@@ -148,6 +148,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
       <div
         ref={drawerRef}
         tabIndex={-1}
+        className="sbd-sidebar"
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         style={{
           position: "fixed",
@@ -156,8 +157,10 @@ export default function ItemDetailDrawer({ item, onClose }) {
           width: 420,
           maxWidth: "90vw",
           height: "100vh",
+          minWidth: 0,
           background: "var(--bg-surface-secondary)",
           borderLeft: "1px solid var(--border-default)",
+          padding: 0,
           zIndex: 1101,
           display: "flex",
           flexDirection: "column",
@@ -213,6 +216,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
             </div>
           </div>
           <button
+            className="sbd-btn-ghost"
             onClick={onClose}
             aria-label="Close detail drawer"
             style={{
@@ -248,6 +252,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
           }}
         >
           <button
+            className="sbd-btn-primary"
             onClick={() => {
               if (item.quickAction?.route) navigate(item.quickAction.route);
             }}
@@ -269,6 +274,7 @@ export default function ItemDetailDrawer({ item, onClose }) {
             {item.quickAction?.label || "Go to Item"}
           </button>
           <button
+            className="sbd-btn-ghost"
             onClick={onClose}
             style={{
               background: "var(--bg-surface-low)",

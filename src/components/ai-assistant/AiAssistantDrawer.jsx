@@ -71,12 +71,15 @@ export default function AiAssistantDrawer({ open, onClose }) {
     <div
       role="dialog"
       aria-label="SteelBuild Pro AI"
+      className="sbd-sidebar"
       style={{
         position: "fixed",
         top: 0,
         right: 0,
         bottom: 0,
         width: "min(440px, 100vw)",
+        minWidth: 0,
+        padding: 0,
         zIndex: 520,
         background: "var(--bg-surface-low)",
         borderLeft: "1px solid var(--border-strong)",
