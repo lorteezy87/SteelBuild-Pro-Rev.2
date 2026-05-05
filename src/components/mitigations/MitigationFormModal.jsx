@@ -375,7 +375,7 @@ export default function MitigationFormModal({
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Expected Recovery:
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: "#0EA5E9" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: "var(--status-info)" }}>
                 ${Math.round(ev).toLocaleString()}
               </span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>

@@ -582,7 +582,7 @@ export default function Mitigations() {
           }}>
             <span style={{ fontSize: 18 }}>&#9888;</span>
             <div>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#F59E0B" }}>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--status-warning)" }}>
                 Mitigations table not set up yet
               </span>
               <p style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
@@ -771,7 +771,7 @@ export default function Mitigations() {
               background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.20)",
               display: "flex", alignItems: "center", gap: 10,
             }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "#F59E0B", letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "var(--status-warning)", letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
                 DATA GAP
               </span>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
@@ -876,7 +876,7 @@ export default function Mitigations() {
             <button onClick={handleBulkExport} style={{
               background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.30)",
               borderRadius: "var(--radius-btn)", padding: "5px 14px",
-              color: "#0EA5E9", fontFamily: "var(--font-mono)", fontSize: 9,
+              color: "var(--status-info)", fontFamily: "var(--font-mono)", fontSize: 9,
               fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em",
             }}>
               Export Selected

@@ -32,7 +32,7 @@ const TYPE_PAGE_MAP = {
 // ─── Type icon map ────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
   RFI:         { icon: "⚑",  label: "RFI",          color: "var(--status-warning)" },
-  Drawing:     { icon: "▦",  label: "DRAWING",       color: "#0EA5E9" },
+  Drawing:     { icon: "▦",  label: "DRAWING",       color: "var(--status-info)" },
   WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "var(--status-review)" },
   Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
   ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "var(--status-review)" },
