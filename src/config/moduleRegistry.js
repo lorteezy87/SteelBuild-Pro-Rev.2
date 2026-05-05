@@ -129,6 +129,7 @@ export const NAV_GROUPS = [
       { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Alerts",             icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
       { label: "User Management",    icon: "\uD83D\uDC65", page: "UsersManagement" },
+      { label: "Project Members",    icon: "\uD83D\uDC65", page: "ProjectMembers" },
       { label: "Feature Flags",      icon: "\u2691",       page: "FeatureFlagsAdmin" },
     ],
   },
@@ -316,6 +317,7 @@ export const SIDEBAR_GROUPS = [
       { label: "Contacts",         icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
+      { label: "Project Members",  icon: "\uD83D\uDC65", page: "ProjectMembers" },
       { label: "Feature Flags",    icon: "\u2691",       page: "FeatureFlagsAdmin" },
       { label: "Settings",         icon: "\u2699", page: "Settings" },
       { label: "Tutorial / Help",  icon: "\uD83D\uDCD8", page: "Tutorial" },
@@ -344,6 +346,7 @@ export const PAGE_LABELS = (() => {
     CommandCenter:   "Command Center",
     Settings:        "Settings",
     UsersManagement: "User Management",
+    ProjectMembers:  "Project Members",
     FeatureFlagsAdmin: "Feature Flags",
     Expenses:        "Expenses",
   });

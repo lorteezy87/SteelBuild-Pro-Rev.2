@@ -34,10 +34,30 @@ unlock / void / lock-bypass writes. `'owner'` is a synonym for `'admin'`
 (level 3) so the existing 15 owner rows keep their full access.
 LocalStorage roles still exist as a legacy fallback when there's no
 active project (settings, login chrome).
-**Remaining (Phase C):** No admin UI yet for editing
-`user_projects.role`. Today the only way to demote a user from `'owner'`
-is via direct SQL. Build a per-project member-management screen so
-admins can change roles in the app.
+**Remaining (Phase C):** RESOLVED. `src/pages/ProjectMembers.jsx` ships
+the per-project member-management UI. System admins (gated via
+`<AdminRoute>`) can pick any project, change member roles inline, remove
+members, and add existing users by email. Writes go through
+`base44.entities.UserProject` and are gated at the DB by the existing
+`admins_*` RLS policies on `user_projects` (so even a non-admin who
+bypasses the AdminRoute would 42501 on write).
+
+Phase C deferred items (call out as future sprints):
+  - **Member-activity audit table.** Role changes are not currently
+    logged anywhere — there is no `member_activity` table yet, and the
+    existing `drawing_activity` is the wrong shape for membership
+    events. Add a dedicated table + write a row from the page when
+    role changes / member additions / member removals happen.
+  - **Bulk role edits.** Today every change is one row at a time. A
+    "select N members, set role to X" path would be useful for
+    onboarding a whole subcontractor crew.
+  - **Inviting users by email.** Phase C only allows adding *existing*
+    `user_profiles` rows. Sending an actual email invite needs email
+    infrastructure (Sprint 3 — currently blocked).
+  - **Per-project-admin gate.** The page is wrapped in `<AdminRoute>`
+    (system admin only). The doc-comment in the page calls out the
+    future path: also let `useProjectRole(activeProjectId).role ===
+    'admin' | 'owner'` through, scoped to projects they admin.
 
 ### permissions.js usePermissions silent-deny — RESOLVED in RBAC Phase B
 **Where:** `src/services/permissions.js`
