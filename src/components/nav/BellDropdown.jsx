@@ -61,6 +61,7 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
     <div ref={ref} style={{ position: "relative" }}>
       <div
         onClick={() => setOpen((o) => !o)}
+        className="sbd-btn-ghost"
         style={{
           width: 32, height: 32, borderRadius: 8,
           background: open ? "var(--accent-muted)" : "var(--hover-bg)",
@@ -93,15 +94,11 @@ export default function BellDropdown({ alerts, unreadCount, onMarkAllRead, onVie
       </div>
 
       {open && (
-        <div style={{
+        <div className="sbd-card" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: 320,
-          background: "var(--glass-bg, var(--bg-surface-secondary))",
-          backdropFilter: "blur(var(--glass-blur, 20px))",
-          WebkitBackdropFilter: "blur(var(--glass-blur, 20px))",
-          border: "1px solid var(--glass-border, var(--border-default))",
-          borderTop: "2px solid var(--accent)", borderRadius: 12,
-          boxShadow: "var(--shadow-lg)", zIndex: 2000, overflow: "hidden",
+          borderTop: "2px solid var(--accent)",
+          zIndex: 2000, overflow: "hidden",
         }}>
           {/* Header */}
           <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--divider)" }}>

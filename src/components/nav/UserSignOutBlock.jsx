@@ -17,6 +17,7 @@ export default function UserSignOutBlock({ user, onLogout }) {
       </div>
       <button
         onClick={onLogout}
+        className="sbd-btn-ghost"
         style={{
           background: "var(--bg-hover)", border: "1px solid var(--border)",
           borderRadius: 6, padding: "4px 12px",

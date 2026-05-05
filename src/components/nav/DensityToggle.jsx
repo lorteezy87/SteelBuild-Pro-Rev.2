@@ -13,6 +13,7 @@ export default function DensityToggle() {
   return (
     <div
       title="Toggle compact/comfortable density"
+      className="sbd-btn-ghost"
       onClick={() => {
         const html = document.documentElement;
         const current = html.getAttribute("data-density");
