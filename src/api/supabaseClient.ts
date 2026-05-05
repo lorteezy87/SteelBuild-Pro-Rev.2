@@ -728,6 +728,10 @@ export const entities = {
   PmaAssumption:         createEntityClient('pma_assumptions'),
   PmaAuditLog:           createEntityClient('pma_audit_logs'),
   User:                  createEntityClient('user_profiles'),
+  // RBAC Phase C: per-project membership rows. Roles enforced by DB CHECK
+  // (owner/admin/pm/field/viewer). Writes are gated by RLS — only project
+  // admins or system admins can insert/update/delete here.
+  UserProject:           createEntityClient('user_projects'),
   MitigationLog:         createEntityClient('mitigation_logs'),
   MitigationAction:      createEntityClient('mitigation_actions'),
   // 078: lightweight homegrown feature flags. Read by every authenticated
