@@ -849,10 +849,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   : "transparent";
               return (
                 <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: headerBg }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
                     {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "var(--text-muted)", marginTop: 2 }}>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "var(--text-muted)", marginTop: 2 }}>
                     WK {Math.ceil((week - new Date(week.getFullYear(), 0, 1)) / 604800000)}
                   </span>
                 </div>
@@ -888,7 +888,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 >
                   <span style={{ color: phase.color, fontSize: 10, transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s", display: "inline-block", lineHeight: 1 }}>▾</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
+                    <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
                   </div>
@@ -1481,10 +1481,10 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       {tooltip && (
         <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{sanitizeTaskName(tooltip.task)}</div>
-          {tooltip.task.wbs_code && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>WBS: {tooltip.task.wbs_code}</div>}
+          {tooltip.task.wbs_code && <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>WBS: {tooltip.task.wbs_code}</div>}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.06em", marginBottom: 4 }}>{tooltip.task.status || "—"}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
           {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>Resources: {tooltip.task.resource_names || tooltip.task.assigned_to}</div>
           )}
