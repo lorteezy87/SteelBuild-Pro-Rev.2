@@ -19,7 +19,7 @@ export default function SheetListSidebar({
   activeIndex,
 }) {
   return (
-    <div style={{
+    <div className="sbd-sidebar" style={{
       width: sidebarOpen ? 260 : 0,
       flexShrink: 0,
       borderRight: sidebarOpen ? "1px solid var(--border-default)" : "none",
@@ -28,6 +28,8 @@ export default function SheetListSidebar({
       background: "var(--bg-surface)",
       overflow: "hidden",
       transition: "width 0.2s ease",
+      padding: 0,
+      minWidth: 0,
     }}>
 
       {/* Sidebar header */}
@@ -38,6 +40,7 @@ export default function SheetListSidebar({
         </button>
         <input value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search sheets…"
+          className="sbd-input"
           style={{ width: "100%", padding: "7px 10px", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, boxSizing: "border-box" }} />
         <div style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginTop: 8, letterSpacing: "0.10em", textTransform: "uppercase" }}>
           {filtered.length} / {drawings.length} Sheets

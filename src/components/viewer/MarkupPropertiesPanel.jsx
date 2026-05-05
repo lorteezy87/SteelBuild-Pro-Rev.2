@@ -15,14 +15,17 @@ export default function MarkupPropertiesPanel({ markup, onUpdate, onDelete }) {
   );
 
   return (
-    <div style={{
+    <div className="sbd-sidebar" style={{
       width: 260,
       background: "var(--bg-surface-low)",
       borderLeft: "1px solid var(--bg-surface-high)",
+      borderRight: "none",
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
       flexShrink: 0,
+      padding: 0,
+      minWidth: 0,
     }}>
       {/* Header */}
       <div style={{

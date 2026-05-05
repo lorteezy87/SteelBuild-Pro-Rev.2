@@ -118,17 +118,17 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1200 }} />
       <div
+        className="sbd-card-strong"
         style={{
           position: "fixed",
           top: "50%", left: "50%",
           transform: "translate(-50%, -50%)",
           width: 580, maxWidth: "92vw", maxHeight: "82vh",
-          background: "var(--bg-surface-secondary)",
           border: "1px solid #00E5FF",
-          borderRadius: 6,
           zIndex: 1201,
           display: "flex", flexDirection: "column",
           overflow: "hidden",
+          padding: 0,
         }}
       >
         <header style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

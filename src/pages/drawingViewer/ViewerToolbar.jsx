@@ -42,7 +42,7 @@ export default function ViewerToolbar({
   setShortcutsOpen,
 }) {
   return (
-    <div style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
+    <div className="sbd-topbar" style={{ height: 48, borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 10, padding: "0 16px", flexShrink: 0, background: "var(--bg-surface)" }}>
       {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen((o) => !o)}
