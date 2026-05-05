@@ -171,6 +171,7 @@ export default function ProjectPillDropdown() {
       {/* Dropdown panel */}
       {open && (
         <div
+          className="sbd-card"
           style={{
             position: "absolute",
             top: "calc(100% + 6px)",
