@@ -357,10 +357,8 @@ export default function ChangeOrders() {
 
       {/* Lifecycle pipeline chevron */}
       <div
+        className="sbd-card"
         style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
           padding: "12px 14px",
         }}
       >
@@ -380,14 +378,12 @@ export default function ChangeOrders() {
 
       {/* Search bar */}
       <div
+        className="sbd-card"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
           padding: "8px 12px",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
         }}
       >
         <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
@@ -435,10 +431,9 @@ export default function ChangeOrders() {
 
       {/* Table */}
       <div
+        className="sbd-card"
         style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
+          padding: 0,
           overflow: "hidden",
         }}
       >

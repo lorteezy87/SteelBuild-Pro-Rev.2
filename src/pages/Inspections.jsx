@@ -364,11 +364,10 @@ export default function Inspections() {
 
       {/* Empty State */}
       {!isLoading && filtered.length === 0 ? (
-        <div style={{
+        <div className="sbd-card" style={{
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           padding: "60px 20px", gap: 16,
-          background: "var(--bg-surface)", border: "1px dashed var(--border-default)",
-          borderRadius: "var(--radius-card)",
+          borderStyle: "dashed",
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: "50%",

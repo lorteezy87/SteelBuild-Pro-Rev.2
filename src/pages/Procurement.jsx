@@ -730,9 +730,8 @@ function ListView({ items, wpById, onEdit, onDelete }) {
   // Item · Category · Vendor · PO · Required · Promised · Lead · Weight · Status · Actions
   const GRID = '1.4fr 130px 130px 100px 90px 90px 70px 70px 110px 80px';
   return (
-    <div style={{
-      background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-      borderRadius: 'var(--radius-card)', overflow: 'hidden',
+    <div className="sbd-card" style={{
+      padding: 0, overflow: 'hidden',
     }}>
       <div style={{
         display: 'grid', gridTemplateColumns: GRID,

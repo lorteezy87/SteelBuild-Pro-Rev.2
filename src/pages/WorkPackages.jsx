@@ -363,14 +363,12 @@ export default function WorkPackages() {
 
       {/* Search bar */}
       <div
+        className="sbd-card"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
           padding: "8px 12px",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
         }}
       >
         <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
@@ -527,10 +525,8 @@ function BoardView({ wps, onSelect }) {
         return (
           <div
             key={phase}
+            className="sbd-card"
             style={{
-              background: "var(--bg-surface-low)",
-              borderRadius: "var(--radius-card)",
-              border: "1px solid var(--border-default)",
               borderTop: `2px solid ${PHASE_COLOR[phase]}`,
               padding: 10,
               display: "flex",
@@ -558,10 +554,8 @@ function BoardView({ wps, onSelect }) {
               <div
                 key={w.id}
                 onClick={() => onSelect(w)}
+                className="sbd-card sbd-card-hover"
                 style={{
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 6,
                   padding: "8px 10px",
                   cursor: "pointer",
                 }}

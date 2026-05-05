@@ -30,9 +30,9 @@ const PageHeader = ({ title, subtitle }) => (
 );
 
 const KPICard = ({ label, value, sub, tone }) => (
-  <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</span>
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: tone || "var(--text-primary)" }}>{value}</span>
+  <div className="sbd-kpi" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+    <span className="sbd-kpi-label" style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</span>
+    <span className="sbd-kpi-value sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: tone || "var(--text-primary)" }}>{value}</span>
     {sub && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{sub}</span>}
   </div>
 );
@@ -200,7 +200,7 @@ function ChangeOrdersTab({ changeOrders }) {
       </div>
 
       {/* Table */}
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
+      <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
@@ -291,7 +291,7 @@ function BillingSOVTab({ sovItems, expenses }) {
       </div>
 
       {/* Table */}
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
+      <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
@@ -434,7 +434,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {/* Contract Value Waterfall */}
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 20, boxShadow: "var(--shadow-card)" }}>
+      <div className="sbd-card" style={{ padding: 20 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 16 }}>Contract Value Waterfall</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           {waterfallSteps.map((step, i) => {
@@ -461,7 +461,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
       </div>
 
       {/* Timeline of Key Dates */}
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 20, boxShadow: "var(--shadow-card)" }}>
+      <div className="sbd-card" style={{ padding: 20 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 16 }}>Key Dates Timeline</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "space-between" }}>
           {[
@@ -498,7 +498,7 @@ function ContractSummaryTab({ project, changeOrders, sovItems, revisedValue }) {
       </div>
 
       {/* Contract Health Assessment */}
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: 20, boxShadow: "var(--shadow-card)" }}>
+      <div className="sbd-card" style={{ padding: 20 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 16 }}>Contract Health Assessment</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {healthItems.map((item, i) => {
