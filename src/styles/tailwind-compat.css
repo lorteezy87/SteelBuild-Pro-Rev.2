@@ -85,3 +85,59 @@
     color: var(--text-primary) !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SteelBuild Dark — shadcn HSL bridge override
+   ───────────────────────────────────────────────────────────────
+   shadcn/ui components (Dialog, Select, Input, Button, Toast) read
+   from the HSL variables above. The SBD overlay in tokens.css only
+   touches our legacy --bg-* / --text-* / --accent tokens, NOT the
+   HSL ones — so a shadcn Dialog kept rendering with the OLD gold
+   palette and lighter background. This block remaps every HSL token
+   to the SteelBuild Dark palette so shadcn surfaces look like our
+   custom-styled ones.
+
+   HSL space + Tailwind require space-separated H S% L% values.
+   Steel-blue primary  = #56B0FF ≈ hsl(210 100% 67%)
+   Deep navy base      = #050810 ≈ hsl(222 56%  5%)
+   Translucent surface ≈ hsl(220 35% 10%) — opaque approximation
+                                            (Tailwind's bg utilities
+                                            wrap these in hsl(), so
+                                            we can't use rgba)
+   Executive gold accent = #C89B20 ≈ hsl(43 73% 45%)
+   ═══════════════════════════════════════════════════════════════ */
+html.steelbuild-dark,
+.steelbuild-dark {
+  --background: 222 56% 4% !important;
+  --foreground: 220 20% 95% !important;
+  --card: 220 35% 8% !important;
+  --card-foreground: 220 20% 95% !important;
+  --popover: 220 38% 7% !important;
+  --popover-foreground: 220 20% 95% !important;
+  --primary: 210 100% 67% !important;
+  --primary-foreground: 222 56% 8% !important;
+  --secondary: 220 30% 12% !important;
+  --secondary-foreground: 220 20% 95% !important;
+  --muted: 220 30% 10% !important;
+  --muted-foreground: 220 14% 55% !important;
+  --tw-accent: 210 100% 67% !important;
+  --tw-accent-foreground: 222 56% 8% !important;
+  --destructive: 0 79% 65% !important;
+  --destructive-foreground: 220 20% 95% !important;
+  --border: 220 30% 16% !important;
+  --input: 220 35% 10% !important;
+  --ring: 210 100% 67% !important;
+  --chart-1: 210 100% 67% !important;
+  --chart-2: 43 73% 50% !important;
+  --chart-3: 142 71% 50% !important;
+  --chart-4: 173 80% 40% !important;
+  --chart-5: 0 79% 65% !important;
+  --sidebar-background: 222 56% 5% !important;
+  --sidebar-foreground: 220 20% 95% !important;
+  --sidebar-primary: 210 100% 67% !important;
+  --sidebar-primary-foreground: 222 56% 8% !important;
+  --sidebar-accent: 210 100% 67% / 0.10 !important;
+  --sidebar-accent-foreground: 210 100% 80% !important;
+  --sidebar-border: 220 30% 16% !important;
+  --sidebar-ring: 210 100% 67% !important;
+}
