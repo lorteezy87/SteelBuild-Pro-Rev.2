@@ -10,7 +10,7 @@ export default function AlertBanner({ alert, onDismiss: _onDismiss, onFilter }) 
   if (dismissed) return null;
 
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       display: "flex",
       alignItems: "flex-start",
       gap: 10,

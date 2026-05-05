@@ -56,7 +56,7 @@ export default function AgingReportTable({ submittals = [], isLoading = false })
   };
 
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: 6,
@@ -78,7 +78,7 @@ export default function AgingReportTable({ submittals = [], isLoading = false })
           borderRadius: 4, border: "1px solid var(--border-default)",
           overflow: "hidden",
         }}>
-          <table style={{
+          <table className="sbd-table" style={{
             width: "100%", borderCollapse: "collapse",
             fontFamily: "var(--font-mono)", fontSize: 11,
           }}>
@@ -169,6 +169,7 @@ function Header({ threshold, setThreshold, count }) {
           Threshold
         </span>
         <select
+          className="sbd-select"
           value={threshold}
           onChange={(e) => setThreshold(Number(e.target.value))}
           style={{
@@ -178,6 +179,7 @@ function Header({ threshold, setThreshold, count }) {
             background: "var(--bg-surface-low)",
             color: "var(--text-primary)",
             cursor: "pointer",
+            width: "auto",
           }}
         >
           {THRESHOLDS.map((t) => (

@@ -76,7 +76,7 @@ export default function ActiveFilterPills({
         FILTERING BY
       </span>
       {pills.map(p => (
-        <span key={p.key} style={pillStyle}>
+        <span key={p.key} className="sbd-badge-gold" style={pillStyle}>
           {p.label}
           <button type="button" aria-label={`Clear ${p.key} filter`} onClick={p.onClear} style={xStyle}>×</button>
         </span>
