@@ -459,7 +459,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                           const refs = [...(t._drawingRefs || []), ...(t._detailRefs || [])];
                           return (
                             <tr key={t.wbs_code} style={{ borderBottom: "1px solid var(--divider)" }}>
-                              <td style={{ ...mono, fontSize: 10, color, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.wbs_code}</td>
+                              <td className="sbd-num" style={{ ...mono, fontSize: 10, color, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.wbs_code}</td>
                               <td style={{ padding: "5px 8px", verticalAlign: "top" }}>
                                 <div>{t.task_name}</div>
                                 {refs.length > 0 && (
@@ -485,10 +485,10 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                                   </div>
                                 )}
                               </td>
-                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.start_date}</td>
-                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.end_date}</td>
-                              <td style={{ ...mono, fontSize: 10, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.duration}d</td>
-                              <td style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.depends_on_wbs || "—"}</td>
+                              <td className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.start_date}</td>
+                              <td className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.end_date}</td>
+                              <td className="sbd-num" style={{ ...mono, fontSize: 10, padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.duration}d</td>
+                              <td className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-muted)", padding: "5px 8px", whiteSpace: "nowrap", verticalAlign: "top" }}>{t.depends_on_wbs || "—"}</td>
                               <td style={{ padding: "5px 8px", textAlign: "right", verticalAlign: "top" }}>
                                 <button
                                   onClick={() => toggleRow(t.wbs_code)}
@@ -730,9 +730,9 @@ function ForecastBlock({ forecast }) {
                 </span>
               )}
             </div>
-            <div style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{formatPretty(g.start)}</div>
-            <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)" }}>{formatPretty(g.end)}</div>
-            <div style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", textAlign: "right" }}>
+            <div className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>{formatPretty(g.start)}</div>
+            <div className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-secondary)" }}>{formatPretty(g.end)}</div>
+            <div className="sbd-num" style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", textAlign: "right" }}>
               {daysSpan(g.start, g.end)}d
             </div>
           </div>
@@ -755,7 +755,7 @@ function ForecastTile({ label, value, sub }) {
       <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ ...mono, fontSize: 16, fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+      <div className="sbd-num" style={{ ...mono, fontSize: 16, fontWeight: 700, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
         {value}
       </div>
       {sub && (

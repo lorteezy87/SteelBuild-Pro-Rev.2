@@ -939,7 +939,7 @@ export default function Schedule() {
             zIndex: 20,
           }}
         >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
+          <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
             {selectedIds.size} SELECTED
           </span>
           <button onClick={() => bulkUpdateStatus("Not Started")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
