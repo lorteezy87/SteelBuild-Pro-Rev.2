@@ -224,12 +224,9 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
   return (
     <aside
       aria-label="Primary navigation"
+      className="sbd-sidebar"
       style={{
         width, minWidth: width,
-        background: "var(--bg-sidebar, rgba(14, 16, 22, 0.82))",
-        backdropFilter: "blur(18px) saturate(130%)",
-        WebkitBackdropFilter: "blur(18px) saturate(130%)",
-        borderRight: "1px solid var(--border-default)",
         display: "flex",
         flexDirection: "column",
         flexShrink: 0,
@@ -417,6 +414,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                 >
                   <span
                     data-label
+                    className="sbd-nav-section"
                     style={{
                       fontFamily: "var(--font-mono)",
                       fontSize: 9,
@@ -565,6 +563,7 @@ function SidebarLink({ item, active, railMode, onClick }) {
           title={item.label}
           aria-label={item.label}
           aria-current={active ? "page" : undefined}
+          className={`sbd-nav-item${active ? " is-active" : ""}`}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
@@ -633,6 +632,7 @@ function SidebarLink({ item, active, railMode, onClick }) {
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
+      className={`sbd-nav-item${active ? " is-active" : ""}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

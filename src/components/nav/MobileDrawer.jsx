@@ -51,10 +51,9 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
   return (
     <>
       {open && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 900 }} />}
-      <div ref={ref} style={{
+      <div ref={ref} className="sbd-sidebar" style={{
         position: "fixed", top: 0, left: 0, bottom: 0,
         width: "min(280px, 85vw)",
-        background: "var(--bg-sidebar)", borderRight: "1px solid var(--divider)",
         zIndex: 950,
         transform: open ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -77,7 +76,7 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
                     cursor: group.collapsible ? "pointer" : "default", userSelect: "none",
                   }}
                 >
-                  <span style={{
+                  <span className="sbd-nav-section" style={{
                     fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                     letterSpacing: "0.1em", color: "var(--text-muted)",
                   }}>
@@ -94,6 +93,7 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
                     <button
                       key={item.page}
                       onClick={() => { onNavigate(item.page); onClose(); }}
+                      className="sbd-nav-item"
                       style={{
                         width: "100%", textAlign: "left", padding: "7px 16px 7px 24px",
                         display: "flex", alignItems: "center", gap: 10,
