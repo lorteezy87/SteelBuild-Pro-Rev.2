@@ -84,6 +84,7 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
     <div className="filter-bar-responsive" style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
       {/* Search */}
       <input
+        className="sbd-input"
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Search sheets, titles, reviewers..."
@@ -97,12 +98,14 @@ export function FilterBar({ search, setSearch, stageFilter, setStageFilter, view
 
       {/* Stage filter dropdown */}
       <select
+        className="sbd-select"
         value={stageFilter}
         onChange={e => setStageFilter(e.target.value)}
         style={{
           padding: "7px 10px", background: "var(--bg-surface)",
           border: "1px solid var(--border-default)", borderRadius: 2,
           color: "var(--text-primary)", ...mono, fontSize: 10,
+          width: "auto",
         }}
       >
         <option value="ALL">ALL STAGES</option>
@@ -154,7 +157,7 @@ export function BulkActionsBar({
   onBulkEdit, onBulkDelete, onClear,
 }) {
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       ...surface, padding: "10px 16px", marginBottom: 12,
       display: "flex", alignItems: "center", gap: 12,
       background: "rgba(200,155,32,0.08)", borderColor: "rgba(200,155,32,0.3)",
@@ -164,12 +167,14 @@ export function BulkActionsBar({
       </span>
 
       <select
+        className="sbd-select"
         value={bulkStage}
         onChange={e => setBulkStage(e.target.value)}
         style={{
           padding: "5px 10px", background: "var(--bg-surface)",
           border: "1px solid var(--border-default)", borderRadius: 2,
           color: "var(--text-primary)", ...mono, fontSize: 10,
+          width: "auto",
         }}
       >
         <option value="">— SET STAGE —</option>

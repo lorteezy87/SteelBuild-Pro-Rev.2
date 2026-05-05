@@ -560,15 +560,16 @@ function GroupRow({
                 <>
                   <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>·</span>
                   <span
+                    className={submittalCounts.open > 0 ? "sbd-badge-info" : "sbd-badge"}
                     title={`${submittalCounts.total} submittal${submittalCounts.total === 1 ? "" : "s"} reference this set${submittalCounts.latestStatus ? `, latest: ${submittalCounts.latestStatus}` : ""}${submittalCounts.open > 0 ? ` · ${submittalCounts.open} still open` : ""}`}
                     style={{
                       ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
                       color: submittalCounts.open > 0 ? "#0D9488" : "var(--text-muted)",
                     }}
                   >
-                    {submittalCounts.total} SUBMITTAL{submittalCounts.total === 1 ? "" : "S"}
+                    <span className="sbd-num">{submittalCounts.total}</span> SUBMITTAL{submittalCounts.total === 1 ? "" : "S"}
                     {submittalCounts.latestStatus ? ` · ${String(submittalCounts.latestStatus).toUpperCase()}` : ""}
-                    {submittalCounts.open > 0 ? ` · ${submittalCounts.open} OPEN` : ""}
+                    {submittalCounts.open > 0 ? <> · <span className="sbd-num">{submittalCounts.open}</span> OPEN</> : ""}
                   </span>
                 </>
               )}
