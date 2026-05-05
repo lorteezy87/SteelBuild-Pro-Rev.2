@@ -126,6 +126,7 @@ export default function DocumentEditModal({ projectId, doc, onClose }) {
       }}
     >
       <div
+        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--bg-surface)",

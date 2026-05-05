@@ -311,7 +311,7 @@ export default function SteelWeightCalculator() {
         }} className="weight-calc-grid">
 
           {/* ── INPUTS CARD ────────────────────────────────────── */}
-          <div style={cardStyle}>
+          <div className="sbd-card" style={cardStyle}>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
                 Inputs
@@ -548,7 +548,7 @@ export default function SteelWeightCalculator() {
           </div>
 
           {/* ── RESULT CARD ────────────────────────────────────── */}
-          <div style={cardStyle}>
+          <div className="sbd-card" style={cardStyle}>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
                 Result
@@ -583,7 +583,7 @@ export default function SteelWeightCalculator() {
         </div>
 
         {/* ── RUNNING TOTAL ──────────────────────────────────────── */}
-        <div style={{ ...cardStyle, marginTop: 20 }}>
+        <div className="sbd-card" style={{ ...cardStyle, marginTop: 20 }}>
           <div style={{
             padding: "14px 18px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)",
             display: "flex", alignItems: "center", justifyContent: "space-between",

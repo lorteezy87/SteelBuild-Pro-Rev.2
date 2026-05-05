@@ -123,6 +123,7 @@ export default function UploadModal({ projectId, folderId = null, onClose }) {
       onClick={onClose}
     >
       <div
+        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--bg-surface-low)",

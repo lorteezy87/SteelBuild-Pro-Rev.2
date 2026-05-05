@@ -351,6 +351,7 @@ function PhotoCard({ photo, onClick }) {
   return (
     <div
       onClick={onClick}
+      className="sbd-card sbd-card-hover"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

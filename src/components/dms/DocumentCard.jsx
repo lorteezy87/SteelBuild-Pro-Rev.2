@@ -77,6 +77,7 @@ export default function DocumentCard({ doc, onView, onDownload, onEdit, onLink, 
 
   return (
     <div
+      className="sbd-card sbd-card-hover"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setConfirmDelete(false); }}
       onClick={() => onView?.(doc)}
