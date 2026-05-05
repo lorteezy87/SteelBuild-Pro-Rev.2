@@ -25,6 +25,7 @@ import MobileDrawer, { HamburgerMenu } from "./components/nav/MobileDrawer";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import { useLayoutNavData } from "./components/nav/useLayoutNavData";
+import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoint";
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
@@ -44,7 +45,7 @@ import { AuthContext } from "@/lib/AuthContext";
 // Utilities
 import useDocumentTitle from "@/hooks/useDocumentTitle";
 import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
-import { viewportWidth, shortcutKeyLabel } from "@/lib/browser";
+import { shortcutKeyLabel } from "@/lib/browser";
 
 // Config
 import { PRIMARY_TABS, TAB_DEFAULT_PAGE } from "@/config/moduleRegistry";
@@ -62,10 +63,7 @@ export default function Layout({ children, currentPageName }) {
   const [gridOpen, setGridOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  // Lazy initial state — viewportWidth() falls back to 0 when window is not
-  // defined (vitest node env, SSR), so the first render is "not mobile" and
-  // the effect below corrects it on the first client tick.
-  const [isMobile, setIsMobile] = useState(() => viewportWidth() < 900);
+  const isMobile = useResponsiveBreakpoint();
 
   // Density preference
   useEffect(() => {
@@ -78,13 +76,6 @@ export default function Layout({ children, currentPageName }) {
   // Active project
   const { activeProject: ctxActiveProject } = useProjectContext();
   const activeProjectId = ctxActiveProject?.id || null;
-
-  // Responsive breakpoint
-  useEffect(() => {
-    const handler = () => setIsMobile(viewportWidth() < 900);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
 
   // Cmd+K search shortcut
   useEffect(() => {
