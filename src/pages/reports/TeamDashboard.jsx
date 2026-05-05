@@ -14,7 +14,7 @@ import { base44 } from "@/api/base44Client";
 import { isRfiOpen, isActionItemOpen } from "@/lib/entityPredicates";
 import ReportShell from "./ReportShell";
 import { exportTableCSV } from "./utils";
-import { mono, body, CARD, CARD_TITLE } from "./constants";
+import { mono, body, CARD } from "./constants";
 
 // Schedule tasks have their own status enum (Not Started / In Progress
 // / Complete / Delayed / On Hold / Cancelled) — they're not in the

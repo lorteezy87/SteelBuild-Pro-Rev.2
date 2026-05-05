@@ -9,7 +9,6 @@ import ProgressBar from "../shared/ProgressBar";
 import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./portfolioHealth";
 import {
   PHASE_DOT,
-  parseTaskDate,
   summarizeProjectSchedule,
   MiniProjectTimeline,
 } from "./portfolioTimeline";

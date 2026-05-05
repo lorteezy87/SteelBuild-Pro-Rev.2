@@ -269,7 +269,7 @@ export function computeEffectiveDates(tasks) {
     // per unique cycle per session is enough.
     if (_WARNED_CYCLES.has(key)) return;
     _WARNED_CYCLES.add(key);
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[scheduleCascade] Predecessor cycle detected, falling back to stored dates for: ${[...chain].join(" → ")}`
     );
