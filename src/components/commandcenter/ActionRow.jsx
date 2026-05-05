@@ -38,18 +38,19 @@ const URGENCY_WASH = {
 };
 
 const TYPE_COLORS = {
-  RFI:  { color: "var(--status-warning)", bg: "var(--warning-muted)" },
-  DWG:  { color: "var(--status-info)",    bg: "var(--info-muted)" },
-  SUB:  { color: "var(--secondary)",      bg: "rgba(68,226,205,0.12)" },
-  CO:   { color: "var(--accent)",         bg: "var(--accent-muted)" },
-  DEL:  { color: "#0D9488",              bg: "rgba(13,148,136,0.12)" },
-  WP:   { color: "var(--status-success)", bg: "var(--success-muted)" },
-  PAY:  { color: "var(--tertiary)",       bg: "rgba(168,240,203,0.12)" },
-  NOTE: { color: "var(--text-muted)",     bg: "var(--hover-bg)" },
+  RFI:  { color: "var(--status-warning)", bg: "var(--warning-muted)",       badge: "sbd-badge-warning" },
+  DWG:  { color: "var(--status-info)",    bg: "var(--info-muted)",          badge: "sbd-badge-info" },
+  SUB:  { color: "var(--secondary)",      bg: "rgba(68,226,205,0.12)",      badge: "sbd-badge-info" },
+  CO:   { color: "var(--accent)",         bg: "var(--accent-muted)",        badge: "sbd-badge-info" },
+  DEL:  { color: "#0D9488",              bg: "rgba(13,148,136,0.12)",       badge: "sbd-badge-success" },
+  WP:   { color: "var(--status-success)", bg: "var(--success-muted)",       badge: "sbd-badge-success" },
+  PAY:  { color: "var(--tertiary)",       bg: "rgba(168,240,203,0.12)",     badge: "sbd-badge-gold" },
+  NOTE: { color: "var(--text-muted)",     bg: "var(--hover-bg)",            badge: "sbd-badge" },
 };
 
-const Pill = ({ label, color, bg }) => (
+const Pill = ({ label, color, bg, badgeClass }) => (
   <span
+    className={`sbd-badge ${badgeClass || ""}`}
     style={{
       fontFamily: "var(--font-mono)",
       fontSize: 8,
@@ -97,6 +98,7 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail, co
         if (e.key === "Enter") onOpenDetail?.(item);
       }}
       title={rowTooltip}
+      className="sbd-card-hover"
       style={{
         display: "flex",
         alignItems: "center",
@@ -122,7 +124,7 @@ export default function ActionRow({ item, isSelected, onSelect, onOpenDetail, co
       />
 
       {/* 2. Item type badge */}
-      <Pill label={item.itemType} color={typeCfg.color} bg={typeCfg.bg} />
+      <Pill label={item.itemType} color={typeCfg.color} bg={typeCfg.bg} badgeClass={typeCfg.badge} />
 
       {/* 3. Project tag — number pill + name label so a glance tells the
           user *which job* an item belongs to. The user explicitly asked

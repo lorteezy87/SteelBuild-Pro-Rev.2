@@ -123,12 +123,14 @@ function Section({ title, icon, accent, items, empty, renderRow, onOpenDetail })
   const hasItems = items && items.length > 0;
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderLeft: `3px solid ${hasItems ? accent : "var(--border-default)"}`,
         borderRadius: "var(--radius-card)",
         overflow: "hidden",
+        padding: 0,
       }}
     >
       <div

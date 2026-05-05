@@ -62,7 +62,7 @@ export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
   });
 
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", height: "100%" }}>
+    <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", height: "100%", padding: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderBottom: "1px solid var(--border-default)" }}>
         <div style={{ width: 3, height: 16, background: "var(--accent)", borderRadius: 2 }} />
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Steel Execution Status</span>
@@ -79,20 +79,20 @@ export default function SteelExecutionStatusCard({ wps = [], drawings = [] }) {
       {/* Stage metrics with tonnage ratios */}
       <div style={{ padding: "8px 16px 16px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {metrics.map((m) => (
-          <div key={m.key} style={{
+          <div key={m.key} className="sbd-kpi sbd-card-hover" style={{
             background: "var(--bg-surface-low)",
             borderRadius: 8,
             padding: "8px 10px",
             borderLeft: `3px solid ${m.color}`,
           }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>
+            <div className="sbd-kpi-label" style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", color: "var(--text-muted)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>
               {m.key}
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: m.color, lineHeight: 1 }}>
+              <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: m.color, lineHeight: 1 }}>
                 {Math.round(m.value)}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+              <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
                 / {Math.round(m.total)} {m.unit}
               </span>
             </div>

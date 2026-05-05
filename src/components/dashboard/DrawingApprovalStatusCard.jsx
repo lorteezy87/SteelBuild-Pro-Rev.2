@@ -36,14 +36,14 @@ export default function DrawingApprovalStatusCard({ drawings = [] }) {
     .slice(0, 4);
 
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", height: "100%" }}>
+    <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", height: "100%", padding: 0 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 16px", borderBottom: "1px solid var(--border-default)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 3, height: 16, background: "var(--chart-4)", borderRadius: 2 }} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Drawings & Approvals</span>
           {overdue > 0 && (
-            <span style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 4, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>{overdue} OVERDUE</span>
+            <span className="sbd-badge sbd-badge-error" style={{ background: "var(--danger-muted)", border: "1px solid var(--danger-border)", color: "var(--status-error)", borderRadius: 4, padding: "1px 6px", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700 }}>{overdue} OVERDUE</span>
           )}
         </div>
         <button onClick={() => navigate(createPageUrl("Drawings"))} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--chart-4)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.10em", fontWeight: 600 }}>LOG →</button>
@@ -57,9 +57,9 @@ export default function DrawingApprovalStatusCard({ drawings = [] }) {
             { label: "Pending Approval", value: pendingApproval, color: pendingApproval > 0 ? "var(--status-warning)" : "var(--text-secondary)" },
             { label: "Released", value: released, color: released > 0 ? "var(--status-success)" : "var(--text-muted)" },
           ].map(({ label, value, color }) => (
-            <div key={label} style={{ textAlign: "center", padding: "8px 6px", background: "var(--bg-hover)", borderRadius: 6 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 3 }}>{value}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>{label}</div>
+            <div key={label} className="sbd-kpi" style={{ textAlign: "center", padding: "8px 6px", background: "var(--bg-hover)", borderRadius: 6 }}>
+              <div className="sbd-kpi-value sbd-num" style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 3 }}>{value}</div>
+              <div className="sbd-kpi-label" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", margin: 0 }}>{label}</div>
             </div>
           ))}
         </div>
