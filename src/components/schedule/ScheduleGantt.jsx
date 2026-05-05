@@ -834,27 +834,87 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             </div>
           ))}
         </div>
-        {/* Right timeline header */}
+        {/* Right timeline header — Gantter-AI two-tier strip:
+            top half is the month band (only the first week of a month
+            renders the month label, rest stay transparent so the eye
+            reads the month as a wide segment); bottom half shows
+            week-of-year + start-of-week date. Current week is
+            highlighted with the accent color across both tiers. */}
         <div ref={rightHead} style={{ flex: 1, overflowX: "hidden", overflowY: "hidden", background: "var(--bg-surface-low)" }}>
-          <div style={{ display: "flex", width: totalW, height: HEAD_H }}>
+          <div style={{ display: "flex", width: totalW, height: HEAD_H, position: "relative" }}>
             {dateRange.weeks.map((week, i) => {
               const cur = isCurrentWeek(week);
-              // Match the body's alternating-week tint on the header so
-              // the bands read as one continuous stripe top-to-bottom.
               const banded = i % 2 === 1 && !cur;
+              // First week of a month — used to emit the month label
+              // and render a slightly stronger left-edge divider.
+              const isMonthStart = week.getDate() <= 7;
               const headerBg = cur
                 ? "rgba(200,155,32,0.10)"
                 : banded
-                  ? "var(--bg-surface)"
+                  ? "rgba(255,255,255,0.018)"
                   : "transparent";
+              const monthLabel = isMonthStart
+                ? week.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).toUpperCase()
+                : "";
               return (
-                <div key={i} style={{ minWidth: WEEK_PX, borderRight: "1px solid var(--divider)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: headerBg }}>
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: cur ? "var(--accent)" : "var(--text-muted)", letterSpacing: "0.08em" }}>
-                    {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
-                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: cur ? "var(--accent)" : "var(--text-muted)", marginTop: 2 }}>
-                    WK {Math.ceil((week - new Date(week.getFullYear(), 0, 1)) / 604800000)}
-                  </span>
+                <div key={i} style={{
+                  minWidth: WEEK_PX,
+                  borderRight: "1px solid rgba(255,255,255,0.04)",
+                  borderLeft: isMonthStart ? "1px solid rgba(255,255,255,0.10)" : "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  background: headerBg,
+                  position: "relative",
+                }}>
+                  {/* Top tier: month label (only on month-start weeks) */}
+                  <div style={{
+                    height: "44%",
+                    display: "flex",
+                    alignItems: "center",
+                    paddingLeft: 8,
+                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                  }}>
+                    {monthLabel && (
+                      <span style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        letterSpacing: "0.14em",
+                        color: cur ? "var(--accent)" : "var(--text-secondary)",
+                      }}>
+                        {monthLabel}
+                      </span>
+                    )}
+                  </div>
+                  {/* Bottom tier: week-of-year + start date */}
+                  <div style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1,
+                  }}>
+                    <span className="sbd-num" style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: cur ? "var(--accent)" : "var(--text-muted)",
+                      letterSpacing: "0.06em",
+                    }}>
+                      {week.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <span className="sbd-num" style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 7,
+                      fontWeight: 600,
+                      color: cur ? "var(--accent)" : "var(--text-muted)",
+                      letterSpacing: "0.10em",
+                      opacity: cur ? 1 : 0.7,
+                    }}>
+                      WK {Math.ceil((week - new Date(week.getFullYear(), 0, 1)) / 604800000)}
+                    </span>
+                  </div>
                 </div>
               );
             })}
