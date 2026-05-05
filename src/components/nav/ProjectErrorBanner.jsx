@@ -5,7 +5,7 @@ export default function ProjectErrorBanner() {
   const { projectLoadError } = useProjectContext();
   if (!projectLoadError) return null;
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       marginBottom: 16, padding: "12px 16px",
       background: "var(--warning-muted)",
       border: "1px solid var(--warning-border)",
