@@ -1254,10 +1254,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
         <div ref={rightBody} onScroll={() => { syncScroll("right"); syncHScroll(); }} style={{ flex: 1, overflowX: "auto", overflowY: "auto", background: "var(--bg-page)", position: "relative" }}>
           <div style={{ width: totalW, height: totalHeight, position: "relative" }}>
 
-            {/* Alternating week bands — subtle background tint on every
-                other week so the eye can track horizontal weeks across a
-                long timeline. Sits behind everything (zIndex 0); the
-                divider lines, today marker, and bars all paint on top. */}
+            {/* Alternating week bands — softer than before to match the
+                Gantter-AI dark canvas. Bands sit at zIndex 0 so dividers,
+                today marker, and bars all paint on top. */}
             {dateRange.weeks.map((w, i) => (
               i % 2 === 1 ? (
                 <div key={`band-${i}`} style={{
@@ -1266,41 +1265,77 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   bottom: 0,
                   left: i * WEEK_PX,
                   width: WEEK_PX,
-                  background: "var(--bg-surface-low)",
-                  opacity: 0.45,
+                  background: "rgba(255,255,255,0.018)",
                   pointerEvents: "none",
                   zIndex: 0,
                 }} />
               ) : null
             ))}
 
-            {/* Today line — accent-colored 3px stripe with a faint full-
-                height glow so it reads even when crossing dense bars. Pill
-                label sits at the very top edge so it doesn't get clipped. */}
+            {/* Today line — Gantter-AI-style: a soft full-height accent
+                wash behind a crisp 2px center stripe, plus a small pill
+                label. The wash gives the line presence even where bars
+                are dense; the center stripe keeps the exact "now"
+                position readable. */}
             {showToday && (
-              <div style={{ position: "absolute", top: 0, bottom: 0, left: todayPx - 1, width: 3, background: "#FF6B00", zIndex: 12, boxShadow: "0 0 6px rgba(255,107,0,0.55)" }}>
-                <div style={{ position: "absolute", top: 0, left: -22, background: "#FF6B00", borderRadius: "2px 2px 2px 0", padding: "2px 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, color: "#fff", letterSpacing: "0.10em", whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(0,0,0,0.35)" }}>TODAY</div>
-              </div>
+              <>
+                {/* Soft wash — wider, low-opacity stripe behind the bars */}
+                <div style={{
+                  position: "absolute", top: 0, bottom: 0,
+                  left: todayPx - 12, width: 24,
+                  background: "linear-gradient(90deg, transparent 0%, rgba(255,107,0,0.10) 50%, transparent 100%)",
+                  pointerEvents: "none",
+                  zIndex: 6,
+                }} />
+                {/* Sharp center line — sits above bars so it never gets
+                    visually swallowed by a colored fill. */}
+                <div style={{
+                  position: "absolute", top: 0, bottom: 0,
+                  left: todayPx - 1, width: 2,
+                  background: "#FF6B00",
+                  zIndex: 12,
+                  boxShadow: "0 0 4px rgba(255,107,0,0.65), 0 0 12px rgba(255,107,0,0.35)",
+                }}>
+                  <div style={{
+                    position: "absolute", top: 0, left: -22,
+                    background: "#FF6B00",
+                    borderRadius: "2px 2px 2px 0",
+                    padding: "2px 6px",
+                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800,
+                    color: "#fff", letterSpacing: "0.10em",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+                  }}>TODAY</div>
+                </div>
+              </>
             )}
 
-            {/* Week grid lines */}
+            {/* Week / month grid lines — week boundaries are a hairline
+                rgba so they don't compete with bars; month boundaries
+                get a slightly stronger line so the eye can navigate the
+                long timeline by month at a glance. */}
             {dateRange.weeks.map((w, i) => {
               const isMonthStart = w.getDate() <= 7;
               return (
                 <div key={i} style={{
                   position: "absolute", top: 0, bottom: 0, left: i * WEEK_PX, width: 1,
-                  background: isMonthStart ? "var(--border-strong)" : "var(--divider)",
+                  background: isMonthStart ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.035)",
                   zIndex: 1,
+                  pointerEvents: "none",
                 }} />
               );
             })}
 
-            {/* Dependency arrows — SVG overlay */}
+            {/* Dependency arrows — SVG overlay. Steel-blue 1px line with
+                a small filled arrowhead — quiet enough not to compete
+                with the bars but clear enough to trace a chain at a
+                glance. Sits at zIndex 5 so it paints below the today
+                line (12) but above the week bands and grid lines. */}
             {depArrows.length > 0 && (
               <svg style={{ position: "absolute", top: 0, left: 0, width: totalW, height: totalHeight, pointerEvents: "none", zIndex: 5 }}>
                 <defs>
-                  <marker id="depArrowHead" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280" />
+                  <marker id="depArrowHead" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#7DA3C7" />
                   </marker>
                 </defs>
                 {depArrows.map(({ key, fromX, fromY, toX, toY }) => {
@@ -1308,18 +1343,17 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   const gap = 8;
                   const midX = fromX + gap;
                   const sameRow = Math.abs(fromY - toY) < 4;
+                  const stroke = "#7DA3C7";
+                  const strokeOpacity = 0.65;
                   if (sameRow) {
-                    // Horizontal arrow
                     return (
                       <line key={key} x1={fromX} y1={fromY} x2={toX - 2} y2={toY}
-                        stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#depArrowHead)" />
+                        stroke={stroke} strokeOpacity={strokeOpacity} strokeWidth="1" markerEnd="url(#depArrowHead)" />
                     );
                   }
-                  // L-shaped connector: horizontal from pred end, then vertical, then horizontal to successor start
-                  const goDown = toY > fromY;
                   const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX - 2} ${toY}`;
                   return (
-                    <path key={key} d={path} fill="none" stroke="#6B7280" strokeWidth="1.5" markerEnd="url(#depArrowHead)" />
+                    <path key={key} d={path} fill="none" stroke={stroke} strokeOpacity={strokeOpacity} strokeWidth="1" markerEnd="url(#depArrowHead)" />
                   );
                 })}
               </svg>
@@ -1478,17 +1512,52 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       </div>
 
       {/* ── Tooltip ─────────────────────────────────────────────────── */}
+      {/* Uses the design-system .sbd-card-strong surface (frosted dark
+          panel + subtle inner border) so the hover card matches the
+          rest of the SteelBuild dark theme instead of the flat
+          background-surface previous version. */}
       {tooltip && (
-        <div style={{ position: "fixed", left: tooltip.x + 12, top: tooltip.y - 10, zIndex: 9999, background: "var(--bg-surface)", border: "1px solid var(--accent-border)", borderRadius: 6, padding: "8px 12px", pointerEvents: "none", minWidth: 200, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>{sanitizeTaskName(tooltip.task)}</div>
-          {tooltip.task.wbs_code && <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 4 }}>WBS: {tooltip.task.wbs_code}</div>}
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.06em", marginBottom: 4 }}>{tooltip.task.status || "—"}</div>
-          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}</div>
-          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginTop: 2 }}>{displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}</div>
-          {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>Resources: {tooltip.task.resource_names || tooltip.task.assigned_to}</div>
+        <div className="sbd-card-strong" style={{
+          position: "fixed",
+          left: tooltip.x + 12,
+          top: tooltip.y - 10,
+          zIndex: 9999,
+          padding: "10px 14px",
+          pointerEvents: "none",
+          minWidth: 220,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.3)",
+          borderRadius: 8,
+        }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6, letterSpacing: "0.01em" }}>
+            {sanitizeTaskName(tooltip.task)}
+          </div>
+          {tooltip.task.wbs_code && (
+            <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 6, letterSpacing: "0.06em" }}>
+              WBS · {tooltip.task.wbs_code}
+            </div>
           )}
-          {onSave && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, opacity: 0.7 }}>Double-click row to edit inline</div>}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(tooltip.task.status), flexShrink: 0 }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {tooltip.task.status || "Not Started"}
+            </span>
+          </div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginBottom: 2 }}>
+            {fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}
+          </div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? "#EF4444" : "var(--text-secondary)" }}>
+            {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
+          </div>
+          {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              {tooltip.task.resource_names || tooltip.task.assigned_to}
+            </div>
+          )}
+          {onSave && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, opacity: 0.65 }}>
+              Double-click row to edit
+            </div>
+          )}
         </div>
       )}
     </div>
