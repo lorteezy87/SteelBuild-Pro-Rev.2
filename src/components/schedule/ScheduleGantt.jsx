@@ -738,7 +738,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             ...(unscheduledTasks > 0 ? [{ label: "TBD", val: unscheduledTasks, color: "var(--status-warning)" }] : []),
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.val}</span>
+              <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.val}</span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>{s.label}</span>
             </div>
           ))}
@@ -892,7 +892,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
                   </div>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
                 </div>
               );
             }
@@ -908,7 +908,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: dColor, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>DELIVERIES</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{row.deliveryCount} items</span>
                   </div>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: dColor }}>{row.pctComplete}%</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: dColor }}>{row.pctComplete}%</span>
                 </div>
               );
             }
@@ -931,13 +931,13 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 500, color: isLate ? "#EF4444" : "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                   </span>
                   {/* Tonnage instead of duration */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>{d.weight_tons ? `${d.weight_tons}T` : "—"}</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>{d.weight_tons ? `${d.weight_tons}T` : "—"}</span>
                   {/* Scheduled date */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isLate ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.scheduled_date)}</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isLate ? "#EF4444" : "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.scheduled_date)}</span>
                   {/* Required/actual date */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.required_date || d.actual_date)}</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", textAlign: "center", whiteSpace: "nowrap" }}>{fmtDate(d.required_date || d.actual_date)}</span>
                   {/* Pieces */}
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center" }}>{d.pieces ? `${d.pieces}pc` : "—"}</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center" }}>{d.pieces ? `${d.pieces}pc` : "—"}</span>
                   {/* Vendor */}
                   <span title={d.vendor || "—"} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.vendor || "—"}</span>
                   {/* Status */}
@@ -976,7 +976,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                 onMouseLeave={() => setHoveredRowId(null)}
               >
                 {/* WBS */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || "—"}</span>
+                <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.wbs_code || "—"}</span>
                 {/* Task name — with hierarchy indentation and expand/collapse */}
                 {isEditing ? (
                   <input
@@ -1148,7 +1148,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     can't display "1d" on a 140-day task. The schedule_tasks
                     table still has a `duration` column, but it is no longer
                     a source of truth for display. */}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
+                <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", whiteSpace: "nowrap" }}>
                   {calcDuration(task.start_date, task.end_date)}
                 </span>
                 {/* Start */}
@@ -1156,6 +1156,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   <input type="date" value={editDraft.start_date} onChange={e => setEditDraft(d => ({ ...d, start_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
                   <span
+                    className="sbd-num"
                     title={isShifted ? `Stored: ${fmtDate(task.start_date)}\nShifted by predecessors` : undefined}
                     style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispStart ? "var(--status-warning)" : isShifted ? "var(--accent)" : "var(--text-secondary)", fontWeight: !dispStart ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
                   >
@@ -1167,6 +1168,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                   <input type="date" value={editDraft.end_date} onChange={e => setEditDraft(d => ({ ...d, end_date: e.target.value }))} onClick={e => e.stopPropagation()} style={{ fontFamily: "var(--font-mono)", fontSize: 8, background: "var(--bg-input)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-primary)", padding: "2px 2px", width: "100%" }} />
                 ) : (
                   <span
+                    className="sbd-num"
                     title={isShifted ? `Stored: ${fmtDate(task.end_date)}\nShifted by predecessors` : undefined}
                     style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: !dispEnd ? "var(--status-warning)" : overdue ? "#EF4444" : isShifted ? "var(--accent)" : "var(--text-secondary)", fontWeight: !dispEnd ? 700 : 400, textAlign: "center", whiteSpace: "nowrap" }}
                   >
@@ -1241,7 +1243,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
                     <button onClick={cancelEdit} style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, padding: "2px 6px", cursor: "pointer" }}>✕</button>
                   </div>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{displayPct(task)}%</span>
+                  <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: statusColor(task.status), textAlign: "right" }}>{displayPct(task)}%</span>
                 )}
               </div>
             );
