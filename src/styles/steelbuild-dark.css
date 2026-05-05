@@ -84,23 +84,33 @@
   isolation: isolate;
 }
 .steelbuild-dark .sbd-mesh-bg::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1;
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  /* Aurora wash — boosted from 0.18→0.32 so it reads through chrome on
+   * top. position: fixed keeps it stable while content scrolls. With the
+   * deeper base (#050810) underneath, the 32% steel-blue corner + 24%
+   * copper opposite corner produces a visible "lit-from-the-edges"
+   * vignette instead of the previously imperceptible 18% wash. */
   background:
-    radial-gradient(ellipse 60% 50% at 15% 10%, rgba(86,176,255,0.18), transparent 60%),
-    radial-gradient(ellipse 50% 50% at 85% 20%, rgba(217,119,6,0.14), transparent 60%),
-    radial-gradient(ellipse 60% 60% at 80% 90%, rgba(194,65,12,0.14), transparent 60%),
-    radial-gradient(ellipse 40% 50% at 30% 90%, rgba(123,139,158,0.10), transparent 60%);
-  filter: blur(40px);
+    radial-gradient(ellipse 70% 60% at 12% 8%, rgba(86,176,255,0.32), transparent 60%),
+    radial-gradient(ellipse 55% 55% at 88% 18%, rgba(217,119,6,0.24), transparent 60%),
+    radial-gradient(ellipse 65% 65% at 82% 92%, rgba(194,65,12,0.22), transparent 60%),
+    radial-gradient(ellipse 45% 55% at 28% 88%, rgba(123,139,158,0.16), transparent 60%);
+  filter: blur(48px);
 }
 .steelbuild-dark .sbd-mesh-bg::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1;
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  /* Subtle 48px grid — visible just enough to feel "technical" without
+   * fighting the content. 2.5% white instead of 1.2% so it actually
+   * reads on top of the deeper base. */
   background-image:
-    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, black 25%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 25%, transparent 85%);
 }
+/* Make sure children of mesh-bg containers stack above the aurora */
+.steelbuild-dark .sbd-mesh-bg > * { position: relative; z-index: 1; }
 
 
 /* ── 3. CARDS & SURFACES ──────────────────────────────────────── */
