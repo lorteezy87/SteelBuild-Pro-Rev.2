@@ -91,12 +91,14 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
       onClick={reset}
     >
       <div
+        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 560, maxWidth: "92vw", maxHeight: "92vh", overflowY: "auto",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)", borderRadius: 4,
           boxShadow: "var(--shadow-lg)", color: "var(--text-primary)",
+          padding: 0,
         }}
       >
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)" }}>

@@ -62,7 +62,7 @@ export default function SheetFormModal({ initial, onSave, onClose, saving, exist
       }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div style={{ ...surface, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: 28 }}>
+      <div className="sbd-card-strong" style={{ ...surface, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: 28 }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <span style={{ ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--accent)" }}>

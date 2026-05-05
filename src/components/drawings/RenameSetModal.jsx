@@ -36,6 +36,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1200 }} />
       <div
+        className="sbd-card-strong"
         tabIndex={-1}
         onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         style={{
@@ -45,6 +46,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
           width: 440, maxWidth: "95vw",
           zIndex: 1201, outline: "none",
           display: "flex", flexDirection: "column",
+          padding: 0,
         }}
       >
         <div style={{
@@ -65,6 +67,7 @@ export default function RenameSetModal({ open, initialName = "", onClose, onSave
           </label>
           <input
             ref={ref}
+            className="sbd-input"
             style={{
               width: "100%", padding: "8px 10px",
               background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,

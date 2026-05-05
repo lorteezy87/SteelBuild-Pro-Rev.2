@@ -119,6 +119,7 @@ export default function ExportMarkupPDFModal({
       onClick={onClose}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface)", border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card, 4px)", width: 480, maxWidth: "90vw",

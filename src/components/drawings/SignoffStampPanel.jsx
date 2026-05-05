@@ -93,6 +93,7 @@ export default function SignoffStampPanel({
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

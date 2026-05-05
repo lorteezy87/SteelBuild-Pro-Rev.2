@@ -71,7 +71,7 @@ export default function NewRoundModal({ open, submittal, previousRound, onClose,
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[560px] sbd-card-strong">
         <DialogHeader>
           <DialogTitle>New Submittal Round</DialogTitle>
         </DialogHeader>

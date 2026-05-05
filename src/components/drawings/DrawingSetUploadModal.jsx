@@ -1261,7 +1261,7 @@ export default function DrawingSetUploadModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

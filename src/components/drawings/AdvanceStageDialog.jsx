@@ -37,6 +37,7 @@ export default function AdvanceStageDialog({
   return (
     <Dialog open={!!open} onOpenChange={(o) => !o && onClose && onClose()}>
       <DialogContent
+        className="sbd-card-strong"
         style={{
           maxWidth: 480,
           background: "var(--bg-surface)",
@@ -106,6 +107,7 @@ export default function AdvanceStageDialog({
 
         <DialogFooter style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" }}>
           <button
+            className="sbd-btn sbd-btn-primary"
             onClick={() => {
               onViaSubmittal && onViaSubmittal({ drawingId, setId, targetStage });
             }}
@@ -126,6 +128,7 @@ export default function AdvanceStageDialog({
           </button>
 
           <button
+            className="sbd-btn"
             onClick={() => {
               onLegacy && onLegacy({ drawingId, setId, targetStage });
             }}
@@ -147,6 +150,7 @@ export default function AdvanceStageDialog({
           </button>
 
           <button
+            className="sbd-btn sbd-btn-ghost"
             onClick={() => onClose && onClose()}
             style={{
               padding: "6px 14px",
