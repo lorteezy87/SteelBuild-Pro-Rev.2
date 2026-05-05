@@ -159,7 +159,7 @@ export default function SecureDeleteDialog({
 
   return (
     <div style={S.overlay} onClick={onClose} onKeyDown={handleKey}>
-      <div style={S.dialog} onClick={e => e.stopPropagation()}>
+      <div className="sbd-card-strong" style={S.dialog} onClick={e => e.stopPropagation()}>
 
         <div style={S.header}>
           <span style={{ fontSize: 18, color: 'var(--status-error)', lineHeight: 1 }}>⚠</span>
@@ -206,10 +206,11 @@ export default function SecureDeleteDialog({
         )}
 
         <div style={S.actions}>
-          <button style={S.cancelBtn} onClick={onClose}>
+          <button className="sbd-btn-ghost" style={S.cancelBtn} onClick={onClose}>
             Cancel
           </button>
           <button
+            className="sbd-btn"
             style={S.deleteBtn}
             onClick={handleConfirm}
             disabled={!canConfirm}
