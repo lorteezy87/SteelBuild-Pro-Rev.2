@@ -415,6 +415,7 @@ export default function CommandCenter() {
           PMs, supers, fab managers and execs each see what they actually
           care about. Persisted to localStorage per-user. */}
       <div
+        className="sbd-card"
         style={{
           display: "flex",
           alignItems: "center",
@@ -482,6 +483,7 @@ export default function CommandCenter() {
       {view.blocking.length > 0 && (
         <div
           onClick={() => toggleFilter("dueToday")}
+          className="sbd-card sbd-card-hover"
           style={{
             display: "flex",
             alignItems: "center",
@@ -602,11 +604,13 @@ export default function CommandCenter() {
           view today). */}
       {sectionVisible("actionFeed") && (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-card)",
           overflow: "hidden",
+          padding: 0,
         }}
       >
         <button

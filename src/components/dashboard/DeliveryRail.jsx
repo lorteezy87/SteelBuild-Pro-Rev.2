@@ -67,14 +67,14 @@ export default function DeliveryRail({ deliveries = [], projectMap = {}, onOpenD
   // Early return — empty state when no upcoming deliveries.
   if (totals.total === 0) {
     return (
-      <div style={{ gridColumn: "span 12", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div className="sbd-card" style={{ gridColumn: "span 12", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>30-Day Delivery Rail</div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
             No deliveries scheduled in the next 30 days across the portfolio.
           </div>
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--status-success)", padding: "3px 10px", borderRadius: 3, background: "var(--success-muted)", border: "1px solid var(--success-border)" }}>
+        <span className="sbd-badge sbd-badge-success" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--status-success)", padding: "3px 10px", borderRadius: 3, background: "var(--success-muted)", border: "1px solid var(--success-border)" }}>
           ✓ ALL CLEAR
         </span>
       </div>
@@ -100,7 +100,7 @@ export default function DeliveryRail({ deliveries = [], projectMap = {}, onOpenD
   });
 
   return (
-    <div style={{ gridColumn: "span 12", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, overflow: "hidden" }}>
+    <div className="sbd-card" style={{ gridColumn: "span 12", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, overflow: "hidden", padding: 0 }}>
       {/* Header row */}
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
@@ -113,15 +113,15 @@ export default function DeliveryRail({ deliveries = [], projectMap = {}, onOpenD
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: "var(--font-mono)", fontSize: 10 }}>
           {totals.late > 0 && (
-            <span style={{ color: "var(--status-error)", padding: "3px 8px", borderRadius: 3, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", fontWeight: 700 }}>
+            <span className="sbd-badge sbd-badge-error" style={{ color: "var(--status-error)", padding: "3px 8px", borderRadius: 3, background: "var(--danger-muted)", border: "1px solid var(--danger-border)", fontWeight: 700 }}>
               {totals.late} LATE
             </span>
           )}
-          <span style={{ color: "var(--accent)", padding: "3px 8px", borderRadius: 3, background: "var(--accent-muted)", border: "1px solid var(--accent-border)", fontWeight: 700 }}>
+          <span className="sbd-badge sbd-badge-info" style={{ color: "var(--accent)", padding: "3px 8px", borderRadius: 3, background: "var(--accent-muted)", border: "1px solid var(--accent-border)", fontWeight: 700 }}>
             {totals.scheduled} SCHEDULED
           </span>
           {totals.ready > 0 && (
-            <span style={{ color: "var(--status-success)", padding: "3px 8px", borderRadius: 3, background: "var(--success-muted)", border: "1px solid var(--success-border)", fontWeight: 700 }}>
+            <span className="sbd-badge sbd-badge-success" style={{ color: "var(--status-success)", padding: "3px 8px", borderRadius: 3, background: "var(--success-muted)", border: "1px solid var(--success-border)", fontWeight: 700 }}>
               {totals.ready} READY
             </span>
           )}
