@@ -29,6 +29,7 @@ import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoin
 import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcut";
 import { useDensityRestore } from "./components/nav/useDensityRestore";
 import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteChange";
+import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
 
 // Shared components
 import GlobalSearchModal from "./components/search/GlobalSearchModal";
@@ -46,8 +47,6 @@ import { useProjectContext } from "./components/shared/useProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
 
 // Utilities
-import useDocumentTitle from "@/hooks/useDocumentTitle";
-import { routeLabel, PROJECT_SCOPED_PAGES } from "@/routes";
 import { shortcutKeyLabel } from "@/lib/browser";
 
 // Config
@@ -95,16 +94,8 @@ export default function Layout({ children, currentPageName }) {
     try { /* Base44 internal page tracking */ } catch { /* suppress */ }
   }, [currentPageName]);
 
-  // Keep document.title in sync with the current route so browser tabs,
-  // history entries, and screen readers get an informative label. When the
-  // page is project-scoped we also include the active project name.
-  const activeProjectName = ctxActiveProject?.name || ctxActiveProject?.project_name || null;
-  const pageLabel = routeLabel(currentPageName);
-  const titleSuffix =
-    activeProjectName && PROJECT_SCOPED_PAGES.has(currentPageName)
-      ? `${pageLabel} — ${activeProjectName}`
-      : pageLabel;
-  useDocumentTitle(titleSuffix);
+  // Keep document.title in sync with the current route.
+  useDocumentTitleForRoute(currentPageName, ctxActiveProject);
 
   // Move keyboard focus back to <main> on every route change so screen
   // readers and tab users land on the new page's content.
