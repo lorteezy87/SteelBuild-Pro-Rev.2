@@ -156,7 +156,7 @@ function DecimalToFractionPanel() {
   const clear = () => { setRaw(""); };
 
   return (
-    <div style={cardStyle}>
+    <div className="sbd-card" style={cardStyle}>
       <PanelHeader label="Decimal → Fraction" />
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
 
@@ -342,7 +342,7 @@ function FractionToDecimalPanel() {
   };
 
   return (
-    <div style={cardStyle}>
+    <div className="sbd-card" style={cardStyle}>
       <PanelHeader label="Fraction → Decimal" />
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
 

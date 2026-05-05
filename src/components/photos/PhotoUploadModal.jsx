@@ -296,6 +296,7 @@ export default function PhotoUploadModal({ projectId, onClose }) {
       }}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
