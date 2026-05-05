@@ -375,7 +375,7 @@ export default function WbsBuilderModal({ open, projectId, onClose, onSaved }) {
                   />
                 </label>
                 <span style={{ ...mono, fontSize: 10, color: scopeItemCount > 0 ? "var(--status-success)" : "var(--text-muted)" }}>
-                  {scopeItemCount} scope item{scopeItemCount === 1 ? "" : "s"} recognized → {wbs.tasks.length} task{wbs.tasks.length === 1 ? "" : "s"} across {Object.values(wbs.summary.tasksByPhase || {}).filter(Boolean).length} phase{Object.values(wbs.summary.tasksByPhase || {}).filter(Boolean).length === 1 ? "" : "s"}
+                  <span className="sbd-num">{scopeItemCount}</span> scope item{scopeItemCount === 1 ? "" : "s"} recognized → <span className="sbd-num">{wbs.tasks.length}</span> task{wbs.tasks.length === 1 ? "" : "s"} across <span className="sbd-num">{Object.values(wbs.summary.tasksByPhase || {}).filter(Boolean).length}</span> phase{Object.values(wbs.summary.tasksByPhase || {}).filter(Boolean).length === 1 ? "" : "s"}
                 </span>
                 {unmatchedCount > 0 && (
                   <span style={{ ...mono, fontSize: 10, color: "var(--status-warning)" }}>
