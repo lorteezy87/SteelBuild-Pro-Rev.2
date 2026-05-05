@@ -21,18 +21,31 @@ tables.
 **Fix:** Run `npm run types:db` with the Supabase CLI authenticated.
 Then flip the CI step back to blocking.
 
-### Bypass-able admin gating (localStorage roles)
-**Where:** `src/components/shared/useAppSecurity.jsx`
-**What:** Roles stored in localStorage (`sbp_app_roles` key). RLS only
-checks project membership, not role. A determined user with project
-access could bypass UI gating and hit Supabase directly.
-**Impact:** Adequate for trusted internal users, vulnerable to
-motivated insiders. Lock writes, sign-off voids, and admin operations
-all flow through this gate.
-**Fix:** Add `role` column to `user_projects` (`admin` / `pm` /
-`field` / `viewer`); add a `user_has_project_role(project_id, role)`
-RLS helper; update RLS policies on sensitive tables to check it.
-~1 sprint.
+### Bypass-able admin gating (localStorage roles) — RESOLVED in RBAC Phase B (079/080)
+**Where:** `src/components/shared/useAppSecurity.jsx`,
+`src/hooks/useProjectRole.ts`, migrations `079_user_project_roles`,
+`080_rbac_rls_tightening`.
+**What:** Roles are now read from `user_projects.role` via the SECURITY
+DEFINER `get_my_project_role(uuid)` RPC (Phase B). RLS on
+`drawing_sets`, `drawings`, `drawing_signoffs`, `drawing_zones`,
+`drawing_links`, and `drawing_zone_dependencies` consults
+`user_has_project_role_at_least(project_id, 'admin')` for delete /
+unlock / void / lock-bypass writes. `'owner'` is a synonym for `'admin'`
+(level 3) so the existing 15 owner rows keep their full access.
+LocalStorage roles still exist as a legacy fallback when there's no
+active project (settings, login chrome).
+**Remaining (Phase C):** No admin UI yet for editing
+`user_projects.role`. Today the only way to demote a user from `'owner'`
+is via direct SQL. Build a per-project member-management screen so
+admins can change roles in the app.
+
+### permissions.js usePermissions silent-deny — RESOLVED in RBAC Phase B
+**Where:** `src/services/permissions.js`
+**What:** `fetchUserRole` queried `user_profiles` with
+`.eq("user_id", user.id)`, but the table's PK is `id` (mirrors
+`auth.users.id`). The lookup always returned null, the hook silently
+fell through to `"viewer"`, and `can()` denied every action. Fixed in
+the same sprint as 079/080.
 
 ### Pg_cron not installed for AI extraction reconciler
 **Where:** Migration `076_ai_extraction_reconciler.sql`
