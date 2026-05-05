@@ -161,7 +161,7 @@ export default function TasksStatus() {
       <div style={{ ...CARD, padding: 0, overflow: "hidden" }}>
         <div style={{ ...CARD_TITLE, padding: "16px 20px 12px", margin: 0 }}>Phase × Status</div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
             <thead>
               <tr style={{ background: "var(--bg-surface-low)", borderTop: "1px solid var(--divider)" }}>
                 <th style={{ ...mono, fontSize: 9, color: "var(--text-muted)", padding: "10px 14px", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Phase</th>
