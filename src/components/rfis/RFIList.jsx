@@ -66,6 +66,7 @@ export default function RFIList({
   if (loading) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -87,6 +88,7 @@ export default function RFIList({
   if (!rfis.length) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -133,6 +135,7 @@ export default function RFIList({
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

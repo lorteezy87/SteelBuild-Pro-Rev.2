@@ -121,7 +121,7 @@ export default function RFIDashboard({ rfis = [], onEditRFI }) {
   }, [rfis]);
 
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: 14,

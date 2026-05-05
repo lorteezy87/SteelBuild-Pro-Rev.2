@@ -59,6 +59,7 @@ export default function RfiBulkEditModal({ open, count, onCancel, onSubmit }) {
       onClick={reset}
     >
       <div
+        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 520, maxWidth: "92vw", background: "var(--bg-surface)",

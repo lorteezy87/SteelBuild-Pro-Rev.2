@@ -50,6 +50,7 @@ export default function WorkPackageList({
   if (workPackages.length === 0) {
     return (
       <div
+        className="sbd-card"
         style={{
           padding: "48px 32px",
           textAlign: "center",
@@ -151,6 +152,7 @@ export default function WorkPackageList({
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

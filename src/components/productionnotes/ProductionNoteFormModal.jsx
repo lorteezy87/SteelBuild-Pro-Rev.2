@@ -227,6 +227,7 @@ export default function ProductionNoteFormModal({ projectId, onClose, note = nul
       }}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
