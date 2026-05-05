@@ -191,6 +191,12 @@ export default function ModelViewer() {
   // Once true, automatic fits (post-tile-stream) are suppressed even
   // if didAutoFitRef somehow got reset.
   const userHasInteractedRef = useRef(false);
+  // setInterval handle for the periodic tile-eviction pass. Without
+  // this, continuous zoom/pan never triggers `update(true)` (which only
+  // fires on the camera "rest" event), so streamed tiles accumulate
+  // and the viewer gets progressively heavier — "starts fast, slows
+  // down, runs out of juice."
+  const tileEvictIntervalRef = useRef(null);
 
   // Visual-polish / tool refs
   const envMapRef = useRef(null);
@@ -379,6 +385,32 @@ export default function ModelViewer() {
           ctrl.addEventListener("rest",    onCtrlRest);
         } catch { /* camera-controls API drift guard */ }
 
+        // 7b. Periodic forced tile-eviction pass.
+        //
+        // The "rest" event handler above fires `update(true)` (the heavy
+        // pass that evicts BIMMesh tiles outside the current frustum) —
+        // but only when the user STOPS interacting. If the user keeps
+        // panning/zooming continuously, rest never fires, no tiles are
+        // ever evicted, and the engine accumulates tiles every frame.
+        // Symptom: starts fast, slows down progressively, eventually
+        // unresponsive — "out of juice."
+        //
+        // Fix: kick `update(true)` every 2 seconds regardless of camera
+        // state. Cheap when the frustum hasn't moved; restorative when
+        // the user has been spinning the model.
+        try {
+          if (tileEvictIntervalRef.current) {
+            clearInterval(tileEvictIntervalRef.current);
+          }
+          tileEvictIntervalRef.current = setInterval(() => {
+            try {
+              if (fragmentsManager.initialized) {
+                fragmentsManager.core.update(true);
+              }
+            } catch { /* swallow eviction-pass errors */ }
+          }, 2000);
+        } catch { /* setInterval API drift guard — should never trip */ }
+
         // 8. Setup IFC loader
         const ifcLoader = components.get(OBC.IfcLoader);
 
@@ -408,6 +440,10 @@ export default function ModelViewer() {
       if (rafHandleRef.current) {
         cancelAnimationFrame(rafHandleRef.current);
         rafHandleRef.current = 0;
+      }
+      if (tileEvictIntervalRef.current) {
+        clearInterval(tileEvictIntervalRef.current);
+        tileEvictIntervalRef.current = null;
       }
       if (envMapRef.current) {
         try {
