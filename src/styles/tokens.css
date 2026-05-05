@@ -392,43 +392,53 @@ html {
    The .sbd-* tokens are defined in steelbuild-dark.css; we just point our
    legacy tokens at them here.
    ─────────────────────────────────────────────────────────────────── */
-/* Higher-specificity selectors so the SBD overlay wins regardless of
- * whether the user has `data-theme="light"` saved on <html>. The
- * attribute-and-class combinations ensure a specificity > (0,1,0). */
+/* SBD overlay must win unconditionally. We hit it from html (where
+ * ThemeContext puts the class), from any data-theme combo, from any
+ * data-accent combo, and bare. Plus !important on critical surface +
+ * accent + text tokens so any inline hex / rgb in component styles
+ * that DOESN'T read tokens still gets dragged into the dark world via
+ * cascading inheritance on its parent. */
+html.steelbuild-dark,
 [data-theme] .steelbuild-dark,
+[data-theme] html.steelbuild-dark,
+[data-accent] html.steelbuild-dark,
 html .steelbuild-dark,
 .steelbuild-dark {
   /* Surfaces — translucent over dark base */
-  --bg-page:                  var(--sbd-bg-base);
-  --bg-base:                  var(--sbd-bg-base);
-  --bg-surface:               var(--sbd-bg-surface);
-  --bg-surface-low:           rgba(255,255,255,0.020);
-  --bg-surface-high:          var(--sbd-bg-surface-hi);
-  --bg-elevated:              var(--sbd-bg-elevated);
-  --bg-input:                 var(--sbd-bg-input);
-  --bg-card:                  var(--sbd-bg-surface);
-  --bg-sidebar:               rgba(13,17,23,0.70);
-  --bg-row-hover:             var(--sbd-bg-row-hover);
-  --hover-bg:                 var(--sbd-bg-row-hover);
+  --bg-page:                  var(--sbd-bg-base) !important;
+  --bg-base:                  var(--sbd-bg-base) !important;
+  --bg-surface:               var(--sbd-bg-surface) !important;
+  --bg-surface-low:           rgba(255,255,255,0.020) !important;
+  --bg-surface-high:          var(--sbd-bg-surface-hi) !important;
+  --bg-elevated:              var(--sbd-bg-elevated) !important;
+  --bg-input:                 var(--sbd-bg-input) !important;
+  --bg-card:                  var(--sbd-bg-surface) !important;
+  --bg-secondary:             var(--sbd-bg-surface) !important;
+  --bg-sidebar:               rgba(13,17,23,0.70) !important;
+  --bg-row-hover:             var(--sbd-bg-row-hover) !important;
+  --hover-bg:                 var(--sbd-bg-row-hover) !important;
+  --nav-bg:                   rgba(15,22,38,0.65) !important;
+  --glass-bg:                 rgba(15,22,38,0.65) !important;
 
   /* Borders / dividers */
-  --border-default:           var(--sbd-border);
-  --border-strong:            var(--sbd-border-strong);
-  --divider:                  var(--sbd-divider);
+  --border-default:           var(--sbd-border) !important;
+  --border-strong:            var(--sbd-border-strong) !important;
+  --divider:                  var(--sbd-divider) !important;
+  --glass-border:             var(--sbd-border) !important;
 
   /* Text */
-  --text-primary:             var(--sbd-text);
-  --text-secondary:           var(--sbd-text-secondary);
-  --text-muted:               var(--sbd-text-muted);
+  --text-primary:             var(--sbd-text) !important;
+  --text-secondary:           var(--sbd-text-secondary) !important;
+  --text-muted:               var(--sbd-text-muted) !important;
 
   /* Accents — steel-blue primary, gold secondary (executive tier) */
-  --accent:                   var(--sbd-accent);
-  --accent-light:             var(--sbd-accent-light);
-  --accent-hover:             var(--sbd-accent-light);
-  --accent-muted:             var(--sbd-accent-muted);
-  --accent-border:            var(--sbd-accent-border);
-  --secondary:                var(--sbd-gold);
-  --secondary-light:          var(--sbd-gold-light);
+  --accent:                   var(--sbd-accent) !important;
+  --accent-light:             var(--sbd-accent-light) !important;
+  --accent-hover:             var(--sbd-accent-light) !important;
+  --accent-muted:             var(--sbd-accent-muted) !important;
+  --accent-border:            var(--sbd-accent-border) !important;
+  --secondary:                var(--sbd-gold) !important;
+  --secondary-light:          var(--sbd-gold-light) !important;
 
   /* Status (matches SBD palette: emerald/amber/rose/steel-blue) */
   --status-success:           var(--sbd-success);
