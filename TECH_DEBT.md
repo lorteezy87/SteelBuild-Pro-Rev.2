@@ -152,3 +152,8 @@ important lives only there.
 - ✅ Auto-lock trigger re-pointed from `set_approval_status` to
   submittal terminal-approved status.
 - ✅ Lock + sign-off + markup status (migrations 071/072/073).
+- ✅ Component-rendering test infrastructure — React Testing Library +
+  jsdom wired in (May 2026). Smoke tests for Layout, Drawings, Submittals
+  in `src/__tests__/components/`. Default vitest env stays `node` for the
+  pure-helper suite; component tests opt into jsdom with a
+  `// @vitest-environment jsdom` pragma. See ARCHITECTURE.md → Testing.

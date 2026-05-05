@@ -315,7 +315,7 @@ agent-driven development.
 
 ### Unit / integration
 
-Vitest. 488+ tests across pure helpers (`drawingHub`, `submittalStageMapping`,
+Vitest. 490+ tests across pure helpers (`drawingHub`, `submittalStageMapping`,
 `projectMetrics`, `submittalAnalytics`, `pdfSheetExtractor`, etc.) and
 some hook-level tests via mocked supabase calls.
 
@@ -324,14 +324,60 @@ npm test               # one-shot run
 npm run test:watch     # watch mode
 ```
 
+### Component rendering (RTL)
+
+Component-level smoke tests live in `src/__tests__/components/` and
+use React Testing Library + jsdom. The **default vitest environment is
+still `node`** (it keeps the pure-helper suite fast and avoids loading
+jsdom for tests that don't need it). Component tests opt into jsdom
+with a per-file pragma at the top of the file:
+
+```jsx
+// @vitest-environment jsdom
+```
+
+Setup:
+
+- `src/setupTests.ts` — runs after `vitest.setup.js`. Imports
+  `@testing-library/jest-dom/vitest` matchers, registers an
+  `afterEach(cleanup)` for unmounting, and polyfills the three
+  globals jsdom doesn't ship (`matchMedia`, `ResizeObserver`,
+  `IntersectionObserver`) so radix / recharts / charts don't
+  crash on first render.
+- Both setup files are wired into `vite.config.js`. The polyfill
+  block in `setupTests.ts` is guarded by `typeof window !== "undefined"`
+  so loading it under the default node env is a no-op.
+
+Pattern (see `Layout.test.jsx`, `Drawings.test.jsx`,
+`Submittals.test.jsx` for live examples):
+
+1. `vi.mock("@/api/base44Client", ...)` — return a Proxy whose
+   entities resolve to empty arrays / nulls. No network.
+2. `vi.mock("@/lib/supabase", ...)` — stub `auth.getSession`,
+   `auth.onAuthStateChange`, `from()` chains, `rpc()`.
+3. Render the real component inside `MemoryRouter` +
+   `QueryClientProvider`. For project-scoped pages, wrap in
+   `<ProjectContext.Provider value={...}>` directly with a
+   synthetic project rather than mounting `ProjectProvider`
+   (avoids the provider's network fetch).
+4. Assert on user-visible strings — the CommandBar title, an
+   empty-state message, an accessibility affordance.
+
+The point of these tests is proof-of-life: render the real component
+without throwing. They are not a substitute for unit tests of pure
+logic — they prove that the test infrastructure works on real
+production code paths and catch the kind of "import broke at module
+load" regression that pure-helper tests miss.
+
 ### What's not tested yet
 
-- Component rendering (no React Testing Library setup yet)
 - E2E flows (no Playwright / Cypress)
 - Visual regression
+- Most page-level components beyond the three smoke targets above
 
-Priorities for the next test sprint: RTL component tests for
-Layout, Drawings, Submittals, DrawingViewer, ModelViewer.
+Priorities for the next test sprint: extend RTL coverage to
+DrawingViewer and ModelViewer, then add interaction tests
+(`@testing-library/user-event`) for the most-trafficked flows.
 
 ---
 
