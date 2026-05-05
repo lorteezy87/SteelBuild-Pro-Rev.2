@@ -485,6 +485,8 @@ export async function analyzeDrawing(analysis, {
     let data;
     try {
       const res = await invokeLlmProxy({
+        useCase: "drawing-analysis",
+        project_id: analysis?.project_id || undefined,
         provider,
         model,
         // 8000 leaves headroom for a sheet_index of 40+ sheets plus a

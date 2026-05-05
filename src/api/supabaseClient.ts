@@ -873,6 +873,19 @@ export type InvokeLLMArgs = {
   tool_choice?: unknown;
   temperature?: number;
   provider?: string;
+  /**
+   * LLM gateway routing key. Optional — when omitted the edge function
+   * falls back to the "general" routing target. Set this to one of the
+   * keys in `supabase/functions/llm-proxy/router.ts` so spend/latency
+   * telemetry is grouped correctly. Common values:
+   *   "drawing-analysis" "revision-compare" "sheet-extraction"
+   *   "drawing-link-suggest" "shipping-ticket-import" "rfi-log-import"
+   *   "photo-ocr"
+   * Explicit `provider`/`model` still override the router decision.
+   */
+  useCase?: string;
+  /** Optional, for telemetry only — surfaces per-project cost. */
+  project_id?: string;
 };
 
 export type InvokeLLMResult = {
@@ -954,7 +967,7 @@ export const integrations = {
      * clean message on the fallback row instead of falling through to a
      * generic "AI response was not valid JSON" path.
      */
-    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature, provider = 'openai' }: InvokeLLMArgs): Promise<InvokeLLMResult> => {
+    InvokeLLM: async ({ prompt, system, messages, response_json_schema, input_variables, maxTokens = 1000, model, file_urls, files, tools, tool_choice, temperature, provider = 'openai', useCase, project_id }: InvokeLLMArgs): Promise<InvokeLLMResult> => {
       // The client expects this protocol version from the edge function. If the
       // function returns a lower version (or no version field), the deployed
       // edge function is older than the codebase and needs to be redeployed:
@@ -974,7 +987,7 @@ export const integrations = {
       // ── 1. Try Supabase Edge Function (llm-proxy) ──────────────────────────
       try {
         const { data, error } = await supabase.functions.invoke('llm-proxy', {
-          body: { provider, prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature },
+          body: { provider, prompt, system, messages, response_json_schema, input_variables, maxTokens, model, file_urls, files, tools, tool_choice, temperature, useCase, project_id },
         });
         if (error) {
           let detail = error?.message || String(error);

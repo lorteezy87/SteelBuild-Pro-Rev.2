@@ -546,6 +546,7 @@ export async function extractSheetsFromPdf(file, options = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
       llmResult = await base44.integrations.Core.InvokeLLM({
+        useCase:    "sheet-extraction",
         system:     SYSTEM_PROMPT,
         prompt:     buildUserPrompt(extracted, file.name),
         tools:      [REPORT_DRAWING_SET_TOOL],

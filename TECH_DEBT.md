@@ -8,6 +8,31 @@ exactly what's needed.
 
 ## Active items
 
+### `schedule-assistant` edge function bypasses the LLM gateway
+**Where:** `supabase/functions/schedule-assistant/` (separate edge
+function), routing key `schedule-assist` exists in
+`supabase/functions/llm-proxy/router.ts` but is currently un-wired.
+**What:** Phase 1 of the LLM gateway (migration 081 +
+`llm_telemetry`) instrumented every other AI caller in the codebase
+— `analyzeDrawing`, `compareRevisions`, `pdfSheetExtractor`,
+`aiSuggest`, `importShippingTicket`, `importRfiLog`,
+`FileUploadWithOCR`. The schedule-assistant edge function still has
+its own direct Anthropic call path and does NOT write to
+`llm_telemetry`.
+**Impact:** Token usage, cost, and latency for the schedule
+assistant feature do not show up on any dashboard built from
+`llm_telemetry`. Routing decisions for this caller cannot be made
+centrally; provider switches require editing the schedule-assistant
+edge function directly.
+**Fix:** Consolidate the schedule-assistant function so it calls
+`llm-proxy` internally (or replace its body with a forward to
+`llm-proxy` with `useCase: "schedule-assist"`). The routing key is
+already in `ROUTING_TABLE` and pinned by the
+`schedule-assist` test in `src/__tests__/llmGateway.test.ts`, so
+the wiring change is isolated to the edge function code itself.
+This is a separate sprint — not blocking the Phase 1 telemetry
+rollout.
+
 ### Stale Supabase generated types
 **Where:** `src/types/supabase.ts`
 **What:** Missing rows for `submittal_rounds` and possibly other tables
