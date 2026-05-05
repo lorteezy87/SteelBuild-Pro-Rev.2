@@ -54,7 +54,7 @@ button { cursor: pointer; outline: none; }
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg-page); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 /* ── Form elements ──
@@ -62,8 +62,8 @@ button { cursor: pointer; outline: none; }
    inline-style components expect dark-mode inputs by default.
    Long-term, these should be replaced with scoped .sbp-input classes. */
 input, textarea, select {
-  background:    var(--bg-surface-high)  !important;
-  border:        1px solid rgba(255,255,255,0.09) !important;
+  background:    var(--bg-input)         !important;
+  border:        1px solid var(--border-default) !important;
   color:         var(--text-primary)    !important;
   border-radius: var(--radius-input)    !important;
   padding:       8px 12px               !important;
@@ -73,8 +73,8 @@ input, textarea, select {
   transition:    border-color 0.15s     !important;
 }
 input:focus, textarea:focus, select:focus {
-  border-color: rgba(200,155,32,0.50) !important;
-  box-shadow: 0 0 0 2px rgba(200,155,32,0.08) !important;
+  border-color: var(--accent-border) !important;
+  box-shadow: 0 0 0 2px var(--accent-muted) !important;
 }
 input::placeholder, textarea::placeholder {
   color: var(--text-muted) !important;
