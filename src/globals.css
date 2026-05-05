@@ -18,6 +18,11 @@
 @import './styles/components.css';
 @import './styles/animations.css';
 @import './styles/responsive.css';
+/* SteelBuild Dark — industrial dark theme. Self-contained, scoped under
+ * .steelbuild-dark so it can't leak. Body wrapper class applied in
+ * Layout.jsx. Token-mapping overlay below picks up new palette for
+ * existing inline-style components automatically. */
+@import './styles/steelbuild-dark.css';
 
 @tailwind base;
 @tailwind components;

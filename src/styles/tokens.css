@@ -378,3 +378,81 @@ html {
   --glass-border:             #CBD5E1;
   --glass-blur:               22px;
 }
+
+/* ───────────────────────────────────────────────────────────────────
+   STEELBUILD DARK theme — token-mapping overlay
+   ───────────────────────────────────────────────────────────────────
+   When the body is wrapped with class="steelbuild-dark", every existing
+   inline style that uses our legacy tokens (var(--accent), var(--bg-surface),
+   var(--text-primary), etc.) automatically picks up the SteelBuild Dark
+   palette. This gives us ~70% theme coverage with zero per-component
+   refactors. Per-page sweeps then add `.sbd-*` utility classes for full
+   glass-morphism + KPI tiles + badges.
+
+   The .sbd-* tokens are defined in steelbuild-dark.css; we just point our
+   legacy tokens at them here.
+   ─────────────────────────────────────────────────────────────────── */
+.steelbuild-dark {
+  /* Surfaces — translucent over dark base */
+  --bg-page:                  var(--sbd-bg-base);
+  --bg-surface:               var(--sbd-bg-surface);
+  --bg-surface-low:           rgba(255,255,255,0.020);
+  --bg-surface-high:          var(--sbd-bg-surface-hi);
+  --bg-elevated:              var(--sbd-bg-elevated);
+  --bg-input:                 var(--sbd-bg-input);
+  --bg-card:                  var(--sbd-bg-surface);
+  --bg-sidebar:               rgba(13,17,23,0.70);
+  --bg-row-hover:             var(--sbd-bg-row-hover);
+  --hover-bg:                 var(--sbd-bg-row-hover);
+
+  /* Borders / dividers */
+  --border-default:           var(--sbd-border);
+  --border-strong:            var(--sbd-border-strong);
+  --divider:                  var(--sbd-divider);
+
+  /* Text */
+  --text-primary:             var(--sbd-text);
+  --text-secondary:           var(--sbd-text-secondary);
+  --text-muted:               var(--sbd-text-muted);
+
+  /* Accents — steel-blue primary, gold secondary (executive tier) */
+  --accent:                   var(--sbd-accent);
+  --accent-light:             var(--sbd-accent-light);
+  --accent-hover:             var(--sbd-accent-light);
+  --accent-muted:             var(--sbd-accent-muted);
+  --accent-border:            var(--sbd-accent-border);
+  --secondary:                var(--sbd-gold);
+  --secondary-light:          var(--sbd-gold-light);
+
+  /* Status (matches SBD palette: emerald/amber/rose/steel-blue) */
+  --status-success:           var(--sbd-success);
+  --status-warning:           var(--sbd-warning);
+  --status-error:             var(--sbd-error);
+  --status-info:              var(--sbd-info);
+  --status-review:            var(--sbd-review);
+
+  --success-muted:            rgba(52,211,153,0.12);
+  --success-border:           rgba(52,211,153,0.35);
+  --warning-muted:            rgba(245,158,11,0.12);
+  --warning-border:           rgba(245,158,11,0.35);
+  --danger-muted:             rgba(248,113,113,0.12);
+  --danger-border:            rgba(248,113,113,0.35);
+  --info-muted:               var(--sbd-accent-muted);
+  --info-border:              var(--sbd-accent-border);
+
+  /* Phases — match SBD construction-workflow palette */
+  --phase-detailing:          var(--sbd-phase-detailing);
+  --phase-fab:                var(--sbd-phase-fabrication);
+  --phase-delivery:           var(--sbd-phase-delivery);
+  --phase-erection:           var(--sbd-phase-erection);
+
+  /* Glass — translucent panels with backdrop-blur */
+  --glass-bg:                 rgba(15,22,38,0.65);
+  --glass-border:             var(--sbd-border);
+  --glass-blur:               20px;
+
+  /* Fonts — keep SBD's display+mono pairing */
+  --font-body:                var(--sbd-font-body);
+  --font-display:             var(--sbd-font-display);
+  --font-mono:                var(--sbd-font-mono);
+}

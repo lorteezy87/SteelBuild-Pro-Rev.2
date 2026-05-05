@@ -35,3 +35,6 @@ steelbuild-pro
 
 # temp commit-message files used by automation
 .git-commit-msg.tmp
+
+# extracted theme handoff (preview/reference only)
+.theme-reference/

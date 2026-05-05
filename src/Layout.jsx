@@ -113,8 +113,14 @@ export default function Layout({ children, currentPageName }) {
   const handleNavigate = (page) => navigate(createPageUrl(page));
 
   // ── Render ───────────────────────────────────────────────────────
+  // The `steelbuild-dark` class on the outermost element activates the
+  // industrial dark theme — a self-contained stylesheet (steelbuild-dark.css)
+  // plus a token-mapping overlay in tokens.css that retargets every existing
+  // `var(--accent)` / `var(--bg-surface)` / etc. inline-style reference at
+  // the new SBD palette without touching individual components. Per-page
+  // sweeps add `.sbd-*` utility classes for full glass-morphism + KPI tiles.
   return (
-    <div style={{
+    <div className="steelbuild-dark sbd-mesh-bg" style={{
       minHeight: "100vh", width: "100%",
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       padding: 0, background: "var(--bg-base)",
