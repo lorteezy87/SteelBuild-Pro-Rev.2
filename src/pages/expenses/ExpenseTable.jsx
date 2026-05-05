@@ -25,7 +25,7 @@ export default function ExpenseTable({
   return (
     <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ overflowX: "auto", maxHeight: 600, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
               <th style={{ ...thStyle, width: 40, textAlign: "center", cursor: "pointer" }} onClick={onToggleAll}>
