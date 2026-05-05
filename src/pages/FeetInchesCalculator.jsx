@@ -362,7 +362,7 @@ export default function FeetInchesCalculator() {
         {/* Main grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
           {/* ── Left: calc pad ─────────────────────────── */}
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
+          <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
             {/* Display */}
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
@@ -462,7 +462,7 @@ export default function FeetInchesCalculator() {
 
           {/* ── Right: tape + memory ───────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 14px" }}>
+            <div className="sbd-card" style={{ padding: "10px 14px" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
                 Memory
               </div>
@@ -470,7 +470,7 @@ export default function FeetInchesCalculator() {
                 {formatLength(memory, precision)}
               </div>
             </div>
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 14px", flex: 1, minHeight: 280, display: "flex", flexDirection: "column" }}>
+            <div className="sbd-card" style={{ padding: "10px 14px", flex: 1, minHeight: 280, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
                   Tape ({tape.length})
@@ -514,7 +514,7 @@ export default function FeetInchesCalculator() {
             </div>
 
             {/* Conversion reference */}
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 14px" }}>
+            <div className="sbd-card" style={{ padding: "10px 14px" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
                 Conversions
               </div>
@@ -526,7 +526,7 @@ export default function FeetInchesCalculator() {
         </div>
 
         {/* Tips */}
-        <div style={{ marginTop: 16, padding: "12px 16px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8 }}>
+        <div className="sbd-card" style={{ marginTop: 16, padding: "12px 16px" }}>
           <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>Tips</div>
           <ul style={{ ...mono, fontSize: 10, color: "var(--text-secondary)", lineHeight: 1.7, margin: 0, paddingLeft: 18 }}>
             <li>Press <b>Enter</b> to evaluate, <b>Esc</b> to clear the entry.</li>

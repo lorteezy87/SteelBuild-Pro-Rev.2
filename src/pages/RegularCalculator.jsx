@@ -321,7 +321,7 @@ export default function RegularCalculator() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16 }}>
           {/* ── Calc pad ───────────────────────────── */}
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
+          <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
             {/* Display */}
             <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", textAlign: "right" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
@@ -392,8 +392,8 @@ export default function RegularCalculator() {
 
           {/* ── Tape / Help ────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
                   History
                 </div>
@@ -433,7 +433,7 @@ export default function RegularCalculator() {
               </div>
             </div>
 
-            <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 8, padding: "10px 14px" }}>
+            <div className="sbd-card" style={{ padding: "10px 14px" }}>
               <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8 }}>
                 Keyboard
               </div>

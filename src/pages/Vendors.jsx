@@ -223,27 +223,24 @@ export default function Vendors() {
         <button
           onClick={refetch}
           title="Refresh"
+          className="sbd-btn"
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
-            color: "var(--text-secondary)", borderRadius: "var(--radius-btn)",
             padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}
         >
           <RefreshCw size={12} /> Refresh
         </button>
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
+          className="sbd-btn sbd-btn-primary"
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)", color: "var(--bg-base)", border: "none",
-            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            padding: "8px 14px",
             fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+            letterSpacing: "0.08em", textTransform: "uppercase",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
         >
           <Plus size={12} /> New Vendor
         </button>

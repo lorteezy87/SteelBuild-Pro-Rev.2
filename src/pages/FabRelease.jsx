@@ -196,17 +196,12 @@ export default function FabRelease() {
   const WPCard = ({ wp }) => (
     <div
       onClick={() => setEditingWP(wp)}
+      className="sbd-card sbd-card-hover"
       style={{
-        background: "var(--bg-surface-low)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
         padding: "8px 10px",
         marginBottom: 6,
         cursor: "pointer",
-        transition: "background 0.1s",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-mid)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface-low)")}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: stageColor(wp.fab_stage) }}>
@@ -304,9 +299,8 @@ export default function FabRelease() {
     const items = derivedWPs.filter((wp) => wp.fab_stage === stage.id);
     return (
       <div
+        className="sbd-card"
         style={{
-          background: "var(--bg-surface)",
-          borderRadius: "var(--radius-card)",
           borderTop: `3px solid ${stage.color}`,
           padding: 10,
           display: "flex",
@@ -405,7 +399,7 @@ export default function FabRelease() {
     const color = STATUS_COLORS[status] || "var(--text-muted)";
     const items = derivedWPs.filter((wp) => wp.status === status);
     return (
-      <div style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", borderTop: `3px solid ${color}`, padding: 10, minHeight: 320 }}>
+      <div className="sbd-card" style={{ borderTop: `3px solid ${color}`, padding: 10, minHeight: 320 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", color }}>{status.toUpperCase()}</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{items.length}</span>
@@ -417,15 +411,11 @@ export default function FabRelease() {
             <div key={wp.id} style={{ marginBottom: 8 }}>
               <div
                 onClick={() => setEditingWP(wp)}
+                className="sbd-card sbd-card-hover"
                 style={{
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-card)",
                   padding: 10,
                   cursor: "pointer",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-surface-mid)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface-low)")}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: stageColor(wp.fab_stage) }}>
@@ -447,10 +437,8 @@ export default function FabRelease() {
 
   const TonnagePipeline = () => (
     <div
+      className="sbd-card"
       style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
         padding: "14px 20px",
         marginTop: 14,
         marginBottom: 16,
@@ -518,11 +506,10 @@ export default function FabRelease() {
         </button>
         {showHours && (
           <div
+            className="sbd-card"
             style={{
               marginTop: 10,
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-card)",
+              padding: 0,
               overflow: "hidden",
             }}
           >
@@ -766,7 +753,7 @@ export default function FabRelease() {
             ))}
           </div>
 
-          <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+          <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
             <div
               style={{
                 display: "grid",
