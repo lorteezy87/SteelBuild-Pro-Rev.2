@@ -730,6 +730,11 @@ export const entities = {
   User:                  createEntityClient('user_profiles'),
   MitigationLog:         createEntityClient('mitigation_logs'),
   MitigationAction:      createEntityClient('mitigation_actions'),
+  // 078: lightweight homegrown feature flags. Read by every authenticated
+  // user (RLS is permissive on SELECT); writes are gated client-side via
+  // the AdminRoute on FeatureFlagsAdmin and the isAdmin check in
+  // useAppSecurity.
+  FeatureFlag:           createEntityClient('feature_flags'),
 };
 
 export type Entities = typeof entities;
