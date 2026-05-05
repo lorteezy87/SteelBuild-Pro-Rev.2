@@ -72,6 +72,7 @@ export default function QuickAddFAB() {
             {QUICK_ADD_OPTIONS.map((opt, i) => (
               <div
                 key={i}
+                className="sbd-card"
                 onClick={() => handleOptionClick(opt.action)}
                 style={{
                   display: "flex",

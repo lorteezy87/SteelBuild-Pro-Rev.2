@@ -3,11 +3,12 @@ import React from "react";
 // Phoenix standard panel with orange left-border header
 export function PhoenixPanel({ title, count, actions, children, style = {} }) {
   return (
-    <div style={{
+    <div className="sbd-card" style={{
       background: "var(--bg-surface)",
       border: "none",
       borderRadius: "var(--radius-card)",
       overflow: "hidden",
+      padding: 0,
       ...style
     }}>
       {(title || actions) && (
