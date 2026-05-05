@@ -286,9 +286,9 @@ export default function MitigationDetailPanel({
             </div>
             <div style={{
               background: "var(--bg-surface-low)", borderRadius: "var(--radius-card)",
-              padding: "10px 12px", borderTop: "2px solid #0EA5E9",
+              padding: "10px 12px", borderTop: "2px solid var(--status-info)",
             }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0EA5E9" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--status-info)" }}>
                 ${Math.round(ev).toLocaleString()}
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginTop: 2 }}>

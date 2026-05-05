@@ -61,7 +61,7 @@ const CAT_COLORS = {
   'Stairs & Ladders': 'var(--accent)',
   'Embeds & Anchor Bolts': 'var(--status-warning)',
   'Miscellaneous Metals': 'var(--status-info)',
-  'Galvanizing / Paint / Coating': '#F59E0B',
+  'Galvanizing / Paint / Coating': 'var(--status-warning)',
   'Long-Lead Item': 'var(--status-error)',
   'Hardware & Fasteners': 'var(--text-secondary)',
   'Equipment Rental': 'var(--phase-erection)',
@@ -75,7 +75,7 @@ const PIPELINE_STATUSES = [
   { id: 'PO Issued',      label: 'PO Issued',     short: 'PO',        color: 'var(--accent)' },
   { id: 'Confirmed',      label: 'Confirmed',     short: 'CONFIRM',   color: 'var(--phase-detailing)' },
   { id: 'In Production',  label: 'In Production', short: 'IN PROD',   color: 'var(--status-warning)' },
-  { id: 'Shipped',        label: 'Shipped',       short: 'SHIPPED',   color: '#0d9488' },
+  { id: 'Shipped',        label: 'Shipped',       short: 'SHIPPED',   color: 'var(--phase-delivery)' },
   { id: 'Received',       label: 'Received',      short: 'RECEIVED',  color: 'var(--status-success)' },
 ];
 
