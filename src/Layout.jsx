@@ -27,6 +27,7 @@ import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import TopBarSearchButton from "./components/nav/TopBarSearchButton";
 import DensityToggle from "./components/nav/DensityToggle";
 import UserSignOutBlock from "./components/nav/UserSignOutBlock";
+import SkipToMainContentLink from "./components/nav/SkipToMainContentLink";
 import { useLayoutNavData } from "./components/nav/useLayoutNavData";
 import { useResponsiveBreakpoint } from "./components/nav/useResponsiveBreakpoint";
 import { useGlobalSearchShortcut } from "./components/nav/useGlobalSearchShortcut";
@@ -120,27 +121,7 @@ export default function Layout({ children, currentPageName }) {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     }}>
       {/* Skip-to-main-content link — first focusable element on the page */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only"
-        style={{
-          position: "absolute",
-          top: 4, left: 4,
-          background: "var(--accent)",
-          color: "#fff",
-          padding: "6px 12px",
-          borderRadius: 6,
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          textDecoration: "none",
-          zIndex: 9999,
-        }}
-      >
-        Skip to main content
-      </a>
+      <SkipToMainContentLink />
 
       {/* Mobile Drawer */}
       <MobileDrawer open={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={handleNavigate} />
