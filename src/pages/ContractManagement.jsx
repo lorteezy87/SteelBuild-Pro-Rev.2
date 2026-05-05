@@ -202,7 +202,7 @@ function ChangeOrdersTab({ changeOrders }) {
       {/* Table */}
       <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={thStyle}>CO#</th>
@@ -293,7 +293,7 @@ function BillingSOVTab({ sovItems, expenses }) {
       {/* Table */}
       <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="sbd-table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={thStyle}>Line#</th>
