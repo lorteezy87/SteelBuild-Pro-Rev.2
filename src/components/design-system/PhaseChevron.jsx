@@ -60,7 +60,9 @@ function ChevronStyle({ stages, activeIdx, showIcons }) {
       {stages.map((s, i) => {
         const isActive = i === activeIdx;
         const isFuture = i > activeIdx;
-        const fill = isFuture ? "var(--bg-surface-low)" : s.color;
+        // Future stages render as glass tint; past/active stages get the
+        // saturated stage colour. Active stage adds an outer accent halo.
+        const fill = isFuture ? "var(--bg-surface)" : s.color;
         const textColor = isFuture ? "var(--text-muted)" : "#0B0E11";
 
         const clip =
@@ -86,8 +88,11 @@ function ChevronStyle({ stages, activeIdx, showIcons }) {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
-              boxShadow: isActive ? `inset 0 0 0 2px #0B0E11, 0 0 16px ${s.color}50` : "none",
-              opacity: isFuture ? 0.65 : 1,
+              boxShadow: isActive
+                ? `inset 0 0 0 2px #0B0E11, 0 0 18px color-mix(in srgb, ${s.color} 45%, transparent)`
+                : "none",
+              opacity: isFuture ? 0.7 : 1,
+              transition: "opacity 0.15s ease, box-shadow 0.15s ease",
             }}
           >
             {showIcons && phaseKey && (
@@ -135,7 +140,18 @@ function BarStyle({ stages }) {
   const totalCount = stages.reduce((s, x) => s + (x.count || 0), 0) || 1;
   return (
     <div>
-      <div style={{ display: "flex", height: 10, borderRadius: 3, overflow: "hidden", border: "1px solid var(--border-default)" }}>
+      <div
+        style={{
+          display: "flex",
+          height: 10,
+          borderRadius: 4,
+          overflow: "hidden",
+          border: "1px solid var(--border-default)",
+          background: "var(--bg-surface)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+        }}
+      >
         {stages.map((s) => (
           <div
             key={s.id}
@@ -189,9 +205,12 @@ function DotsStyle({ stages, activeIdx }) {
                 width: 10,
                 height: 10,
                 borderRadius: 5,
-                background: i <= activeIdx ? s.color : "var(--bg-surface-high)",
+                background: i <= activeIdx ? s.color : "var(--bg-surface)",
                 border: `1.5px solid ${s.color}`,
-                boxShadow: i === activeIdx ? `0 0 10px ${s.color}` : "none",
+                boxShadow:
+                  i === activeIdx
+                    ? `0 0 12px color-mix(in srgb, ${s.color} 60%, transparent)`
+                    : "none",
               }}
             />
             <span
