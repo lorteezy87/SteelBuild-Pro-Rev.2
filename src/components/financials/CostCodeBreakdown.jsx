@@ -4,6 +4,7 @@ export default function CostCodeBreakdown({ costCodes }) {
   if (costCodes.length === 0) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -29,6 +30,7 @@ export default function CostCodeBreakdown({ costCodes }) {
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

@@ -53,6 +53,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         }}
       />
       <div
+        className="sbd-card-strong"
         style={{
           position: "fixed",
           top: 0,
@@ -290,6 +291,7 @@ function NotesTab({ notes }) {
 function MiniCard({ label, value, color }) {
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",

@@ -113,6 +113,7 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
       }}
     >
       <div
+        className="sbd-card-strong"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",

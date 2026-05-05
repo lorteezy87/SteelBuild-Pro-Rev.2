@@ -80,6 +80,7 @@ export default function DailyLogsList({ logs = [] }) {
   if (logs.length === 0) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -115,6 +116,7 @@ export default function DailyLogsList({ logs = [] }) {
         return (
         <div
           key={log.id}
+          className="sbd-card sbd-card-hover"
           onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
           style={{
             background: "var(--bg-surface)",
