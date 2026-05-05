@@ -104,11 +104,13 @@ export default function UpcomingWindows({ feed = [], onOpenDetail }) {
 function Panel({ title, subtitle, accent, count, items, onOpenDetail }) {
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-card)",
         overflow: "hidden",
+        padding: 0,
       }}
     >
       <div
@@ -148,6 +150,7 @@ function Panel({ title, subtitle, accent, count, items, onOpenDetail }) {
           </span>
         </div>
         <span
+          className="sbd-badge sbd-num"
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,

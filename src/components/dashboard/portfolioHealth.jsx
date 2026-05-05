@@ -70,28 +70,31 @@ export function computeWeightedHealth(p) {
 /* ── Health pill with score + reason tooltip ──────────────────────────────── */
 export function HealthPill({ status, score, reasons }) {
   const cfg = {
-    "On Track": { bg: "var(--status-success)", text: "#fff", label: "ON TRACK" },
-    "Watch":    { bg: "var(--status-warning)", text: "#000", label: "WATCH" },
-    "At Risk":  { bg: "var(--status-error)",   text: "#fff", label: "AT RISK" },
+    "On Track": { bg: "var(--status-success)", text: "#fff", label: "ON TRACK", badge: "sbd-badge-success" },
+    "Watch":    { bg: "var(--status-warning)", text: "#000", label: "WATCH",    badge: "sbd-badge-warning" },
+    "At Risk":  { bg: "var(--status-error)",   text: "#fff", label: "AT RISK",  badge: "sbd-badge-error" },
   };
   const s = cfg[status] || cfg["On Track"];
   const tip = reasons?.length > 0 ? reasons.join(" · ") : "All signals healthy";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 5 }} title={tip}>
       {score != null && (
-        <span style={{
+        <span className="sbd-num" style={{
           fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800,
           color: s.bg, lineHeight: 1, minWidth: 20, textAlign: "right",
         }}>
           {score}
         </span>
       )}
-      <span style={{
-        background: s.bg, color: s.text,
-        fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
-        letterSpacing: "0.08em", padding: "3px 10px",
-        borderRadius: 999, whiteSpace: "nowrap",
-      }}>
+      <span
+        className={`sbd-badge ${s.badge}`}
+        style={{
+          background: s.bg, color: s.text,
+          fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+          letterSpacing: "0.08em", padding: "3px 10px",
+          borderRadius: 999, whiteSpace: "nowrap",
+        }}
+      >
         {s.label}
       </span>
     </div>

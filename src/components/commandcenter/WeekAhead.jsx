@@ -79,6 +79,7 @@ function ItemLine({ entry }) {
 export default function WeekAhead({ weekByDay = [], onForwardLookClick }) {
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
@@ -86,6 +87,7 @@ export default function WeekAhead({ weekByDay = [], onForwardLookClick }) {
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        padding: 0,
       }}
     >
       <div

@@ -46,10 +46,12 @@ export default function ActionFeed({
     <div
       role="grid"
       aria-label="Action items feed"
+      className="sbd-card"
       style={{
         border: "1px solid var(--border-default)",
         borderRadius: 4,
         overflow: "hidden",
+        padding: 0,
       }}
     >
       {items.map((item, idx) => (

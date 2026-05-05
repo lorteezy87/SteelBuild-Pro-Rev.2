@@ -64,12 +64,14 @@ export const PhoenixTooltip = ({ active, payload, label }) => {
 
 export const Card = ({ children, style = {} }) => (
   <div
+    className="sbd-card"
     style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: "var(--radius-card)",
       boxShadow: "var(--shadow-card)",
       overflow: "hidden",
+      padding: 0,
       ...style,
     }}
   >
@@ -132,6 +134,7 @@ export const HeaderBar = ({ title, right, count }) => (
 export const KPIBlock = ({ label, value, color, bordered, onClick, active }) => (
   <div
     onClick={onClick}
+    className={onClick ? "sbd-card-hover" : undefined}
     style={{
       padding: "12px 20px",
       borderRight: bordered ? "1px solid var(--divider)" : "none",
@@ -147,6 +150,7 @@ export const KPIBlock = ({ label, value, color, bordered, onClick, active }) => 
     }}
   >
     <span
+      className="sbd-kpi-label"
       style={{
         fontFamily: "var(--font-mono)",
         fontSize: 10,
@@ -156,12 +160,14 @@ export const KPIBlock = ({ label, value, color, bordered, onClick, active }) => 
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
+        margin: 0,
       }}
     >
       {label}
     </span>
     <span
       title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
+      className="sbd-kpi-value sbd-num"
       style={{
         fontFamily: "var(--font-mono)",
         fontSize: 20,
