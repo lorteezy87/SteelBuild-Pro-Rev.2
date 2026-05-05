@@ -32,3 +32,6 @@ steelbuild-pro
 
 .env
 .vercel
+
+# temp commit-message files used by automation
+.git-commit-msg.tmp
