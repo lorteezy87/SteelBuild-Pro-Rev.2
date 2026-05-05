@@ -43,9 +43,9 @@ const PageHeader = ({ title, subtitle }) => (
 );
 
 const KPICard = ({ label, value, sub, tone }) => (
-  <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</span>
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: tone || "var(--text-primary)" }}>{value}</span>
+  <div className="sbd-kpi" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+    <span className="sbd-kpi-label" style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)" }}>{label}</span>
+    <span className="sbd-kpi-value sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 800, color: tone || "var(--text-primary)" }}>{value}</span>
     {sub && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{sub}</span>}
   </div>
 );
@@ -83,7 +83,7 @@ function DataTable({ columns, rows, rowKey, rowStyle }) {
   const gridCols = columns.map((c) => c.width || "1fr").join(" ");
 
   return (
-    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+    <div className="sbd-card" style={{ padding: 0, overflow: "hidden" }}>
       {/* Header */}
       <div style={{ display: "grid", gridTemplateColumns: gridCols, padding: "10px 16px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-secondary)" }}>
         {columns.map((col) => (
@@ -326,7 +326,7 @@ function EquipmentTab({ dailyLogs }) {
 
       {/* Utilization bars */}
       {equipData.length > 0 && (
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="sbd-card" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           {equipData.slice(0, 10).map((eq) => {
             const maxDays = equipData[0].daysUsed || 1;
             const widthPct = (eq.daysUsed / maxDays) * 100;

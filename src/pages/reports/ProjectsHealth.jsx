@@ -30,19 +30,16 @@ function ProjectCard({ p, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="sbd-card sbd-card-hover"
       style={{
         ...CARD,
         textAlign: "left",
         cursor: "pointer",
         padding: "12px 14px",
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
         display: "flex",
         flexDirection: "column",
         gap: 6,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-row-hover)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-surface)")}
     >
       <div style={{ ...body, fontSize: 13, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {p.name}

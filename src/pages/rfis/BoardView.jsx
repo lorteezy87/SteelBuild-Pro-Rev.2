@@ -15,7 +15,7 @@ export default function BoardView({ filtered, onSelect }) {
       {statusColumns.map((st) => {
         const col = filtered.filter((r) => r.status === st);
         return (
-          <div key={st} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4, display: "flex", flexDirection: "column", maxHeight: "100%", overflow: "hidden" }}>
+          <div key={st} className="sbd-card" style={{ padding: 0, display: "flex", flexDirection: "column", maxHeight: "100%", overflow: "hidden" }}>
             <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--divider)", ...mono, fontSize: 10, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "0.10em", textTransform: "uppercase" }}>
               {st} · {col.length}
             </div>
@@ -28,11 +28,9 @@ export default function BoardView({ filtered, onSelect }) {
                   <div
                     key={r.id}
                     onClick={() => onSelect(r)}
+                    className="sbd-card sbd-card-hover"
                     style={{
-                      background: "var(--bg-surface)",
-                      border: "1px solid var(--border-default)",
                       borderLeft: overdue ? "3px solid var(--status-error)" : r.priority === "Critical" ? "3px solid var(--status-warning)" : "3px solid transparent",
-                      borderRadius: 4,
                       padding: "10px 12px",
                       cursor: "pointer",
                     }}
