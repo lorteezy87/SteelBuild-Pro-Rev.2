@@ -275,7 +275,7 @@ export default function FieldPlan() {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: Math.max(900, 140 + days.length * 180) }}>
+            <table className="sbd-table" style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", minWidth: Math.max(900, 140 + days.length * 180) }}>
               <thead>
                 <tr>
                   <th style={{ ...headerCellStyle, position: "sticky", left: 0, zIndex: 2, background: "var(--bg-sidebar)", minWidth: 140 }}>
