@@ -2,6 +2,13 @@ import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/useProjectContext";
 import {
@@ -42,12 +49,13 @@ function SignalCard({ label, value, color, sub, onClick, active }) {
       onClick={onClick}
       style={{
         flex: 1,
-        minWidth: 100,
-        padding: "10px 14px",
-        background: active ? "rgba(200,155,32,0.07)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "rgba(200,155,32,0.30)" : "rgba(255,255,255,0.06)"}`,
-        borderRadius: 8,
+        minWidth: 116,
+        padding: "12px 14px",
+        background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
+        border: `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
+        borderRadius: 10,
         cursor: onClick ? "pointer" : "default",
+        boxShadow: active ? "0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent)" : "none",
         transition: "all 0.15s",
       }}
     >
@@ -269,7 +277,7 @@ function DetailDrawer({ item, onClose, onNavigate }) {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50 }} />
-      <div style={{
+      <div className="sbp-opaque-sidebar" style={{
         position: "fixed", top: 0, right: 0, bottom: 0, width: 380,
         background: "var(--bg-surface)", borderLeft: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "-12px 0 40px rgba(0,0,0,0.70)", zIndex: 51,
@@ -661,8 +669,9 @@ export default function ProjectControlCenter() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
 
       {/* ═══ COMMAND BAR ════════════════════════════════════════════ */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 56, background: "var(--bg-sidebar)", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "18px 24px", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent) 0%, var(--bg-sidebar) 52%, var(--bg-surface-high) 100%)", borderBottom: "1px solid var(--divider)", flexShrink: 0, gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 280, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.06em" }}>
             PCC
           </span>
@@ -670,41 +679,74 @@ export default function ProjectControlCenter() {
             PROJECT CONTROL CENTER
           </span>
           {activeProject && (
-            <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>
               {activeProject.name}
             </span>
           )}
         </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-secondary)", maxWidth: 760 }}>
+            Ranked coordination feed for field pressure, external blockers, cost exposure, and the next moves that protect fabrication and delivery flow.
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {[
+              { label: "Open Feed", value: scoredFeed.length },
+              { label: "Critical + High", value: criticalHighCount },
+              { label: "Type", value: typeFilter === "all" ? "All Types" : TYPE_CONFIG[typeFilter]?.label || typeFilter },
+              { label: "Severity", value: severityFilter === "all" ? "All Severity" : severityFilter },
+            ].map((chip) => (
+              <span
+                key={chip.label}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid var(--border-default)",
+                  background: "var(--bg-surface-low)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  color: "var(--text-secondary)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span style={{ color: "var(--text-muted)" }}>{chip.label}</span>
+                <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{chip.value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* Last refresh */}
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.30)", letterSpacing: "0.08em" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.45)", letterSpacing: "0.10em", paddingTop: 10 }}>
             SCORED {lastRefresh.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
           </span>
 
-          {/* Type filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 28, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer", outline: "none" }}
-          >
-            <option value="all">All Types</option>
-            {Object.entries(TYPE_CONFIG).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
-            ))}
-          </select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-10 w-[170px] border-[var(--border-default)] bg-[var(--bg-input)] text-[11px] font-mono uppercase tracking-[0.08em]">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {Object.entries(TYPE_CONFIG).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          {/* Severity filter */}
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: 6, padding: "0 10px", height: 28, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer", outline: "none" }}
-          >
-            <option value="all">All Severity</option>
-            {Object.keys(SEVERITY).map((k) => (
-              <option key={k} value={k}>{k}</option>
-            ))}
-          </select>
+          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+            <SelectTrigger className="h-10 w-[170px] border-[var(--border-default)] bg-[var(--bg-input)] text-[11px] font-mono uppercase tracking-[0.08em]">
+              <SelectValue placeholder="All Severity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Severity</SelectItem>
+              {Object.keys(SEVERITY).map((k) => (
+                <SelectItem key={k} value={k}>{k}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Export briefing */}
           {!isEmpty && (
@@ -712,14 +754,14 @@ export default function ProjectControlCenter() {
               onClick={exportBriefing}
               title="Download daily briefing CSV"
               style={{
-                background: "rgba(200,155,32,0.10)", border: "1px solid rgba(200,155,32,0.30)",
-                borderRadius: 6, padding: "0 12px", height: 28,
+                background: "var(--accent-muted)", border: "1px solid var(--accent-border)",
+                borderRadius: 10, padding: "0 14px", height: 40,
                 color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9,
                 fontWeight: 700, cursor: "pointer", letterSpacing: "0.09em",
                 whiteSpace: "nowrap",
               }}
             >
-              ↓ EXPORT BRIEFING
+              EXPORT BRIEFING
             </button>
           )}
         </div>

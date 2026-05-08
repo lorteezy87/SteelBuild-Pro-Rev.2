@@ -222,6 +222,41 @@ button { cursor: pointer; outline: none; }
   border: 1px solid rgba(255,255,255,0.07);
 }
 
+.sbp-opaque-surface {
+  background: var(--bg-surface-secondary) !important;
+  background-color: var(--bg-surface-secondary) !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow: var(--shadow-lg) !important;
+  opacity: 1 !important;
+  isolation: isolate;
+}
+
+.sbp-opaque-popout {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)) ,
+    var(--bg-surface-secondary) !important;
+  background-color: var(--bg-surface-secondary) !important;
+  border: 1px solid var(--border-strong) !important;
+  box-shadow: var(--shadow-lg) !important;
+  opacity: 1 !important;
+  isolation: isolate;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sbp-opaque-sidebar {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+    var(--bg-sidebar) !important;
+  background-color: var(--bg-sidebar) !important;
+  border-right: 1px solid var(--border-strong) !important;
+  box-shadow: var(--shadow-lg) !important;
+  opacity: 1 !important;
+  isolation: isolate;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* ── Tailwind overrides ── */
 .bg-white { background: var(--bg-surface) !important; }
 .bg-gray-50, .bg-slate-50 { background: var(--bg-surface-low) !important; }

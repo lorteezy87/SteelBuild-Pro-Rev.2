@@ -26,6 +26,19 @@ const PHASE_ABBREV = {
   "Closeout":         "CLO",
 };
 
+const SURFACE_BUTTON = {
+  background: "var(--bg-surface)",
+  color: "var(--text-primary)",
+  border: "1px solid var(--accent-border)",
+  borderRadius: 10,
+  padding: "9px 14px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
 /**
  * Auto-generate a WBS code for a task based on its phase and the
  * existing tasks in that phase. Format: "FAB-003"
@@ -431,96 +444,141 @@ export default function Schedule() {
     setShowBulkDeleteConfirm(false);
   };
 
+  const stats = {
+    total: enrichedTasks.length,
+    complete: enrichedTasks.filter((task) => task.status === "Complete").length,
+    inProgress: enrichedTasks.filter((task) => task.status === "In Progress").length,
+    delayed: enrichedTasks.filter((task) => task.status === "Delayed").length,
+  };
+
+  const activeViewLabel = {
+    gantt: "Phase-driven timeline",
+    lookahead: "Upcoming six-week commitments",
+    list: "Editable task register",
+  }[view];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Header */}
-      <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Schedule
-            </h1>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              {selectedProject ? selectedProject.name : "All Projects"} &middot; {scheduleTasks.length} Tasks
-            </p>
+      <div style={{ flexShrink: 0, padding: "18px 24px 0" }}>
+        <div
+          className="sbp-panel"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 1fr)",
+            gap: 20,
+            padding: 24,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+              Project Management · {selectedProject ? selectedProject.name : "No Project Selected"}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <h1 style={{ fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "0.02em", textTransform: "uppercase", lineHeight: 0.95 }}>
+                Schedule
+              </h1>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", padding: "8px 14px", borderRadius: 10, border: "1px solid var(--accent-border)", background: "var(--accent-muted)" }}>
+                {stats.total} Tasks
+              </span>
+            </div>
+            <div style={{ marginTop: 12, fontFamily: "var(--font-body)", fontSize: 16, color: "var(--text-secondary)" }}>
+              {activeViewLabel}
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 20 }}>
+              {[
+                { label: "Complete", value: stats.complete, color: "var(--status-success)" },
+                { label: "In Progress", value: stats.inProgress, color: "var(--accent)" },
+                { label: "Delayed", value: stats.delayed, color: "var(--status-error)" },
+              ].map((item) => (
+                <div key={item.label} style={{ minWidth: 110, padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border-default)", background: "rgba(255,255,255,0.015)" }}>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, color: item.color, lineHeight: 1 }}>{item.value}</div>
+                  <div style={{ marginTop: 6, fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.16em", color: "var(--text-muted)", textTransform: "uppercase" }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <button
-            onClick={() => setShowAddTask(true)}
-            disabled={!hasProject}
-            style={{
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: hasProject ? "pointer" : "not-allowed",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              opacity: hasProject ? 1 : 0.45,
-            }}
-          >
-            + Add Task
-          </button>
-          <button
-            onClick={() => setShowBulkAdd(true)}
-            disabled={!hasProject}
-            style={{
-              marginLeft: 8,
-              background: "var(--bg-surface)",
-              color: "#fff",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 14px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: !hasProject ? "not-allowed" : "pointer",
-              opacity: !hasProject ? 0.45 : 1,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            + Bulk Add
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing || !hasProject}
-            style={{
-              marginLeft: 8,
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--accent-border)",
-              borderRadius: "var(--radius-btn)",
-              padding: "7px 12px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: importing || !hasProject ? "not-allowed" : "pointer",
-              opacity: importing || !hasProject ? 0.5 : 1,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            {importing ? "Importing..." : "Import MPP"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".mpp,.xml"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportMPP(f);
-            }}
-          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing || !hasProject}
+                style={{
+                  ...SURFACE_BUTTON,
+                  cursor: importing || !hasProject ? "not-allowed" : "pointer",
+                  opacity: importing || !hasProject ? 0.5 : 1,
+                }}
+              >
+                {importing ? "Importing..." : "Import MPP"}
+              </button>
+              <button
+                onClick={() => setShowBulkAdd(true)}
+                disabled={!hasProject}
+                style={{
+                  ...SURFACE_BUTTON,
+                  cursor: !hasProject ? "not-allowed" : "pointer",
+                  opacity: !hasProject ? 0.45 : 1,
+                }}
+              >
+                + Bulk Add
+              </button>
+              <button
+                onClick={() => setShowAddTask(true)}
+                disabled={!hasProject}
+                style={{
+                  background: "linear-gradient(135deg, var(--accent), #5ea7ea)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "9px 16px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: hasProject ? "pointer" : "not-allowed",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  opacity: hasProject ? 1 : 0.45,
+                  boxShadow: "0 12px 24px rgba(43,127,255,0.18)",
+                }}
+              >
+                + Add Task
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".mpp,.xml"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportMPP(f);
+                }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border-default)", background: "rgba(255,255,255,0.015)" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                  Current Filter
+                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--text-primary)", fontWeight: 600 }}>
+                  {phaseFilter === "all" ? "All phases" : phaseFilter}
+                </div>
+              </div>
+              <div style={{ padding: "14px 16px", borderRadius: 12, border: "1px solid var(--border-default)", background: "rgba(255,255,255,0.015)" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
+                  Active View
+                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--text-primary)", fontWeight: 600 }}>
+                  {view === "gantt" ? "Gantt chart" : view === "lookahead" ? "6-week lookahead" : "Task list"}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Phase Filter */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 24px 0" }}>
+      <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "14px 24px 0" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Phase:</span>
         {["all", ...PHASES].map((p) => (
           <button
@@ -547,7 +605,7 @@ export default function Schedule() {
       </div>
 
       {/* View Tabs */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px", marginTop: 8 }}>
+      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px", marginTop: 10 }}>
         {[
           { id: "gantt", label: "Gantt Chart" },
           { id: "lookahead", label: "6-Week Lookahead" },
