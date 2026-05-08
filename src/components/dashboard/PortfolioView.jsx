@@ -164,6 +164,71 @@ const KPIBlock = ({ label, value, color, bordered }) => (
   </div>
 );
 
+const CommandPill = ({ label, value, tone = "accent" }) => {
+  const tones = {
+    accent: {
+      color: "var(--accent)",
+      border: "var(--accent-border)",
+      bg: "var(--accent-muted)",
+    },
+    danger: {
+      color: "var(--status-error)",
+      border: "var(--danger-border)",
+      bg: "var(--danger-muted)",
+    },
+    success: {
+      color: "var(--status-success)",
+      border: "var(--success-border)",
+      bg: "var(--success-muted)",
+    },
+    warning: {
+      color: "var(--status-warning)",
+      border: "var(--warning-border)",
+      bg: "var(--warning-muted)",
+    },
+  };
+  const style = tones[tone] || tones.accent;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        minWidth: 132,
+        padding: "10px 12px",
+        borderRadius: "var(--radius-card)",
+        border: `1px solid ${style.border}`,
+        background: style.bg,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--text-muted)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 18,
+          fontWeight: 800,
+          lineHeight: 1,
+          color: style.color,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+};
+
 export default function PortfolioView({
   projects,
   allRFIs,
@@ -372,28 +437,43 @@ export default function PortfolioView({
       {/* Brand Header */}
       <div
         style={{
-          background: "var(--bg-sidebar)",
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent) 0%, var(--bg-sidebar) 48%, var(--bg-surface-high) 100%)",
           borderBottom: "1px solid var(--divider)",
-          padding: "20px 24px",
+          padding: "22px 24px 20px",
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 320, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
             <rect x="4" y="4" width="28" height="5" rx="1" fill="var(--accent)" />
             <rect x="15" y="9" width="6" height="18" rx="0" fill="var(--accent)" />
             <rect x="4" y="27" width="28" height="5" rx="1" fill="var(--accent)" />
           </svg>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                color: "var(--text-muted)",
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+              }}
+            >
+              Portfolio Command Surface
+            </span>
             <span
               style={{
                 fontFamily: "Space Grotesk, var(--font-display)",
                 fontWeight: 800,
-                fontSize: 22,
-                letterSpacing: "-0.02em",
+                fontSize: 28,
+                letterSpacing: "-0.03em",
                 color: "var(--text-primary)",
                 textTransform: "uppercase",
               }}
@@ -411,6 +491,27 @@ export default function PortfolioView({
             >
               Structural Steel Construction Management — S&H Steel
             </span>
+          </div>
+        </div>
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+              color: "var(--text-secondary)",
+              maxWidth: 760,
+            }}
+          >
+            Track portfolio health, urgent coordination pressure, cost exposure, fabrication movement, and delivery risk from one operating view.
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <CommandPill
+              label="Active Projects"
+              value={projects.filter((p) => p.status === "Active" || !p.status).length}
+              tone="accent"
+            />
+            <CommandPill label="At Risk" value={portfolioKPIs.atRisk} tone={portfolioKPIs.atRisk ? "danger" : "success"} />
+            <CommandPill label="Overdue RFIs" value={portfolioKPIs.overdueRFIs} tone={portfolioKPIs.overdueRFIs ? "danger" : "success"} />
+            <CommandPill label="Urgent Queue" value={urgentItems.length} tone={urgentItems.length ? "warning" : "success"} />
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

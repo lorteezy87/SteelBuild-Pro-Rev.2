@@ -284,7 +284,7 @@ function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {}
   const totalModules = NAV_GROUPS.flatMap((g) => g.items).length;
 
   return (
-    <div ref={ref} style={{
+    <div ref={ref} className="sbp-opaque-popout" style={{
       position: "absolute", top: "calc(100% + 4px)", right: 0,
       width: dropdownWidth,
       background: "var(--bg-surface-secondary)",
@@ -604,7 +604,7 @@ function BellDropdown({ alerts, unreadCount, onMarkAllRead, onViewAll }) {
       </div>
 
       {open &&
-      <div style={{
+      <div className="sbp-opaque-popout" style={{
         position: "absolute", top: "calc(100% + 8px)", right: 0,
         width: 320,
         background: "var(--bg-surface-secondary)",
@@ -704,7 +704,7 @@ function MobileDrawer({ open, onClose, onNavigate }) {
   return (
     <>
       {open && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 900 }} />}
-      <div ref={ref} style={{
+      <div ref={ref} className="sbp-opaque-sidebar" style={{
         position: "fixed", top: 0, left: 0, bottom: 0,
         width: 280,
         background: "var(--bg-sidebar)",

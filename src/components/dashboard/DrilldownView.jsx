@@ -126,6 +126,48 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
   );
 }
 
+function OverviewPill({ label, value, tone = "accent" }) {
+  const style = toneStyles(tone);
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        minWidth: 130,
+        padding: "10px 12px",
+        borderRadius: "var(--radius-card)",
+        border: `1px solid ${style.border}`,
+        background: style.bg,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "var(--text-muted)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 18,
+          fontWeight: 800,
+          lineHeight: 1,
+          color: style.color,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function StatStrip({ stats }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
@@ -718,6 +760,12 @@ export default function DrilldownView({
   ];
 
   const openPage = (page) => navigate(createPageUrl(page));
+  const projectHealthTone =
+    project?.health_status === "At Risk"
+      ? "danger"
+      : project?.health_status === "Watch"
+        ? "warning"
+        : "success";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -730,6 +778,180 @@ export default function DrilldownView({
           onClearProject={onClearProject}
         />
       </ErrorBoundary>
+
+      <div
+        style={{
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent) 0%, var(--bg-surface) 42%, var(--bg-surface-high) 100%)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "calc(var(--radius-card) + 2px)",
+          boxShadow: "var(--shadow-card)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 16,
+            padding: "18px 18px 14px",
+            borderBottom: "1px solid var(--divider)",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 260 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+              }}
+            >
+              Project Briefing
+            </div>
+            <div
+              style={{
+                fontFamily: "Space Grotesk, var(--font-display)",
+                fontSize: 28,
+                fontWeight: 700,
+                lineHeight: 1,
+                color: "var(--text-primary)",
+              }}
+            >
+              {project?.name || "Active Project"}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: toneStyles(projectHealthTone).color,
+                  background: toneStyles(projectHealthTone).bg,
+                  border: `1px solid ${toneStyles(projectHealthTone).border}`,
+                  borderRadius: "var(--radius-badge)",
+                  padding: "3px 10px",
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {project?.health_status || "On Track"}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {project?.project_number || "No number"} • {project?.status || "Active"}
+              </span>
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                color: "var(--text-secondary)",
+                maxWidth: 760,
+              }}
+            >
+              Live project command snapshot for open risks, assigned work, blocked production, and cost exposure.
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              justifyContent: "flex-end",
+            }}
+          >
+            <OverviewPill label="Revised Value" value={`$${Math.round(financials.revisedValue).toLocaleString()}`} tone="accent" />
+            <OverviewPill label="Committed Cost" value={`$${Math.round(financials.committedCosts).toLocaleString()}`} tone="warning" />
+            <OverviewPill label="Open Alerts" value={derived.attentionItems.length} tone={derived.attentionItems.length ? "danger" : "success"} />
+            <OverviewPill label="My Queue" value={derived.myItems.length} tone={derived.myItems.length ? "accent" : "muted"} />
+          </div>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 10,
+            padding: "14px 18px 18px",
+          }}
+        >
+          {[
+            {
+              label: "Drawing Pressure",
+              value: `${derived.lateDrawings.length} late / ${drawings.filter((d) => d.stage !== "Released").length} active`,
+              tone: derived.lateDrawings.length ? "danger" : "accent",
+            },
+            {
+              label: "Delivery Pressure",
+              value: `${derived.lateDeliveries.length} late / ${deliveries.filter((d) => d.status !== "Delivered").length} in play`,
+              tone: derived.lateDeliveries.length ? "warning" : "muted",
+            },
+            {
+              label: "Constraint Load",
+              value: `${derived.overdueConstraints.length} overdue / ${actionItems.filter((item) => item.category === "CONSTRAINT").length} total`,
+              tone: derived.overdueConstraints.length ? "danger" : "muted",
+            },
+            {
+              label: "Last Sync",
+              value: lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              tone: "muted",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                padding: "12px 14px",
+                borderRadius: "var(--radius-card)",
+                background: "var(--bg-surface-low)",
+                border: `1px solid ${toneStyles(item.tone).border}`,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 8,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-muted)",
+                  marginBottom: 6,
+                }}
+              >
+                {item.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: toneStyles(item.tone).color,
+                }}
+              >
+                {item.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ flex: 1 }}>
