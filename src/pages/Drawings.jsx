@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -6,6 +6,7 @@ import { useProjectContext } from "@/components/shared/useProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
+import { syncDrawingScheduleTasks } from "@/utils/syncDrawingScheduleTasks";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -261,6 +262,7 @@ export default function Drawings() {
   const [approvalSet, setApprovalSet] = useState(null);   // { setName, sheets }
   const [savingApproval, setSavingApproval] = useState(false);
   const contextRef = useRef(null);
+  const syncSignatureRef = useRef("");
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -275,15 +277,35 @@ export default function Drawings() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["drawings", projectId] });
 
+  const syncScheduleFromDrawings = async (drawingsToSync, options = {}) => {
+    if (!projectId) return;
+    const result = await syncDrawingScheduleTasks({
+      projectId,
+      projectName: activeProject?.name || "",
+      drawings: drawingsToSync,
+    });
+    if (result.created || result.updated || result.deleted) {
+      qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
+      if (options.toastOnChange) {
+        toast.success("Schedule updated from drawing sets");
+      }
+    }
+  };
+
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.Drawing.create({ ...data, project_id: projectId, project_name: activeProject?.name }),
     onSuccess: async (created) => {
       invalidate();
       toast.success("Sheet added");
       setShowModal(false);
+      try {
+        await syncScheduleFromDrawings([...drawings, created], { toastOnChange: true });
+      } catch (err) {
+        console.warn("Drawing schedule sync failed:", err);
+      }
 
       // Auto-create a ScheduleTask so drawing dates appear on the schedule
-      if (created && (created.due_date || created.submitted_date)) {
+      if (false && created && (created.due_date || created.submitted_date)) {
         try {
           const startDate = created.submitted_date || created.due_date;
           const endDate = created.due_date || created.submitted_date;
@@ -317,13 +339,33 @@ export default function Drawings() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }) => base44.entities.Drawing.update(id, data),
-    onSuccess: () => { invalidate(); toast.success("Sheet updated"); setEditing(null); },
+    onSuccess: async () => {
+      invalidate();
+      try {
+        const refreshedDrawings = await base44.entities.Drawing.filter({ project_id: projectId });
+        await syncScheduleFromDrawings(refreshedDrawings, { toastOnChange: false });
+      } catch (err) {
+        console.warn("Drawing schedule sync failed:", err);
+      }
+      toast.success("Sheet updated");
+      setEditing(null);
+    },
     onError: (e) => toast.error("Failed to update: " + (e?.message || "unknown")),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Drawing.delete(id),
-    onSuccess: () => { invalidate(); toast.success("Sheet deleted"); setSelected(new Set()); },
+    onSuccess: async () => {
+      invalidate();
+      try {
+        const refreshedDrawings = await base44.entities.Drawing.filter({ project_id: projectId });
+        await syncScheduleFromDrawings(refreshedDrawings, { toastOnChange: false });
+      } catch (err) {
+        console.warn("Drawing schedule sync failed:", err);
+      }
+      toast.success("Sheet deleted");
+      setSelected(new Set());
+    },
     onError: (e) => toast.error("Failed to delete: " + (e?.message || "unknown")),
   });
 
@@ -371,6 +413,29 @@ export default function Drawings() {
     });
     return map; // { "Set A": [drawing, ...], ... }
   }, [drawings]);
+
+  useEffect(() => {
+    if (!projectId || !drawings.length) return;
+    const signature = drawings
+      .filter((drawing) => !drawing.is_superseded)
+      .map((drawing) => [
+        drawing.id,
+        drawing.drawing_set_name || "",
+        drawing.sheet_number || "",
+        drawing.submitted_date || "",
+        drawing.due_date || "",
+        drawing.stage || "",
+      ].join(":"))
+      .sort()
+      .join("|");
+
+    if (!signature || syncSignatureRef.current === signature) return;
+    syncSignatureRef.current = signature;
+
+    syncScheduleFromDrawings(drawings).catch((err) => {
+      console.warn("Initial drawing schedule sync failed:", err);
+    });
+  }, [drawings, projectId]);
 
   // ── Save handlers ──────────────────────────────────────────────────────────
 

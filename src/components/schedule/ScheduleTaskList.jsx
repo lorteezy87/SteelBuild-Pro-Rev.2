@@ -26,6 +26,44 @@ const sortByDate = (a, b) => {
   return new Date(a.start_date) - new Date(b.start_date);
 };
 
+function sortTasksByHierarchy(tasks) {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const children = new Map();
+  const roots = [];
+
+  tasks.forEach((task) => {
+    const parentId = task.parent_task_id;
+    if (parentId && byId.has(parentId)) {
+      if (!children.has(parentId)) children.set(parentId, []);
+      children.get(parentId).push(task);
+    } else {
+      roots.push(task);
+    }
+  });
+
+  const ordered = [];
+  const visit = (task) => {
+    ordered.push(task);
+    const childTasks = (children.get(task.id) || []).sort(sortByDate);
+    childTasks.forEach(visit);
+  };
+
+  roots.sort(sortByDate).forEach(visit);
+  return ordered;
+}
+
+function getHierarchyDepth(task, tasks) {
+  let depth = 0;
+  let parentId = task.parent_task_id;
+  while (parentId) {
+    const parent = tasks.find((candidate) => candidate.id === parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parent_task_id;
+  }
+  return depth;
+}
+
 const fmtDate = (d) => formatDateShort(d);
 
 const INLINE_INPUT = {
@@ -118,7 +156,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
   });
 
   const sortTasks = (arr) => {
-    if (sortBy === "phase") return sortByPhase(arr);
+    if (sortBy === "phase") return sortTasksByHierarchy(sortByPhase(arr));
     if (sortBy === "priority") {
       const order = ["Critical", "High", "Normal", "Low"];
       return [...arr].sort((a, b) => order.indexOf(a.priority) - order.indexOf(b.priority));
@@ -266,7 +304,16 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                         />
                       ) : (
                         <>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{task.task_name}</div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: getHierarchyDepth(task, group.tasks) === 0 ? 600 : 500,
+                              color: "var(--text-primary)",
+                              paddingLeft: Math.min(getHierarchyDepth(task, group.tasks) * 18, 54),
+                            }}
+                          >
+                            {task.task_name}
+                          </div>
                           {task.task_number && (
                             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{task.task_number}</div>
                           )}
