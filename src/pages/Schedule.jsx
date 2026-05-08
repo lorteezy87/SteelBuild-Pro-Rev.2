@@ -13,7 +13,8 @@ import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import { PHASES } from "@/utils/phases";
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect } from "react";
+import { syncDrawingScheduleTasks } from "@/utils/syncDrawingScheduleTasks";
 
 /* ── Phase abbreviation map for WBS codes ────────────────────────────── */
 const PHASE_ABBREV = {
@@ -76,6 +77,7 @@ export default function Schedule() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const qc = useQueryClient();
+  const drawingSyncSignatureRef = useRef("");
 
   const { data: scheduleTasks = [] } = useQuery({
     queryKey: ["schedule-tasks", projectId],
@@ -91,6 +93,12 @@ export default function Schedule() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  const { data: drawings = [] } = useQuery({
+    queryKey: ["drawings", projectId],
+    queryFn: () => (projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : []),
+    enabled: !!projectId,
+  });
+
   // Fetch submittals linked to this project for Gantt overlay
   const { data: submittals = [] } = useQuery({
     queryKey: ["documents", projectId],
@@ -101,6 +109,40 @@ export default function Schedule() {
 
   const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
   const hasProject = !!(projectId || activeProject?.id);
+  useEffect(() => {
+    if (!projectId || !drawings.length) return;
+    const signature = drawings
+      .filter((drawing) => !drawing.is_superseded)
+      .map((drawing) =>
+        [
+          drawing.id,
+          drawing.drawing_set_name || "",
+          drawing.sheet_number || "",
+          drawing.submitted_date || "",
+          drawing.due_date || "",
+          drawing.stage || "",
+        ].join(":")
+      )
+      .sort()
+      .join("|");
+
+    if (!signature || drawingSyncSignatureRef.current === signature) return;
+    drawingSyncSignatureRef.current = signature;
+
+    syncDrawingScheduleTasks({
+      projectId,
+      projectName: selectedProject?.name || activeProject?.name || "",
+      drawings,
+    })
+      .then((result) => {
+        if (result.created || result.updated || result.deleted) {
+          qc.invalidateQueries({ queryKey: ["schedule-tasks", projectId] });
+        }
+      })
+      .catch((err) => {
+        console.warn("Schedule drawing sync failed:", err);
+      });
+  }, [drawings, projectId, selectedProject?.name, activeProject?.name, qc]);
 
   /* ── Auto-assign WBS codes to tasks that don't have one ────────── */
   const enrichedTasks = useMemo(() => {

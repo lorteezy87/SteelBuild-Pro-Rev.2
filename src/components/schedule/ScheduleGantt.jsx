@@ -53,6 +53,51 @@ function calcDuration(start, end) {
   return days >= 0 ? `${days}d` : "—";
 }
 
+function sortTasksByHierarchy(tasks) {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const children = new Map();
+  const roots = [];
+
+  const sortByStart = (a, b) => {
+    if (!a.start_date) return 1;
+    if (!b.start_date) return -1;
+    return new Date(a.start_date) - new Date(b.start_date);
+  };
+
+  tasks.forEach((task) => {
+    const parentId = task.parent_task_id;
+    if (parentId && byId.has(parentId)) {
+      if (!children.has(parentId)) children.set(parentId, []);
+      children.get(parentId).push(task);
+    } else {
+      roots.push(task);
+    }
+  });
+
+  const ordered = [];
+  const visit = (task) => {
+    ordered.push(task);
+    const childTasks = (children.get(task.id) || []).sort(sortByStart);
+    childTasks.forEach(visit);
+  };
+
+  roots.sort(sortByStart).forEach(visit);
+  return ordered;
+}
+
+function getHierarchyDepth(task, allTasks) {
+  if ((task.outline_level || 0) > 1) return Math.max(0, task.outline_level - 1);
+  let depth = 0;
+  let parentId = task.parent_task_id;
+  while (parentId) {
+    const parent = allTasks.find((candidate) => candidate.id === parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parent_task_id;
+  }
+  return depth;
+}
+
 // ── Summary gantt bar with % rollup ──────────────────────────────────────
 function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
   const ph = PHASE_BY_KEY[phase.key];
@@ -264,20 +309,13 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
       map[ph].push(t);
     });
 
-    // Sort tasks within each group by start_date ascending (earliest first)
-    const sortByStart = (a, b) => {
-      if (!a.start_date) return 1;
-      if (!b.start_date) return -1;
-      return new Date(a.start_date) - new Date(b.start_date);
-    };
-
     // Order by PHASES array, uncategorized last
     const ordered = [];
     PHASES.forEach(ph => {
-      if (map[ph.key]) ordered.push({ phase: ph, tasks: map[ph.key].sort(sortByStart) });
+      if (map[ph.key]) ordered.push({ phase: ph, tasks: sortTasksByHierarchy(map[ph.key]) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: map["Uncategorized"].sort(sortByStart) });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: sortTasksByHierarchy(map["Uncategorized"]) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
@@ -528,7 +566,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], expand
             const overdue = isOverdue(task);
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
-            const indent = (task.outline_level || 0) > 1 ? Math.min((task.outline_level - 1) * 12, 36) : 0;
+            const indent = Math.min(getHierarchyDepth(task, allTasks) * 14, 42);
             return (
               <div key={`task-${task.id}`}
                 style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid rgba(255,255,255,0.04)", background: leftHovered ? "rgba(200,155,32,0.07)" : "transparent", transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
