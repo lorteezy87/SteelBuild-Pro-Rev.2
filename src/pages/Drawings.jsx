@@ -25,6 +25,7 @@ const STAGE_ORDER = STAGES.map(s => s.key);
 const DISCIPLINES = ["Structural", "Misc Metals", "Connections", "Anchor Bolts", "Erection", "MEP", "Civil", "Architectural"];
 
 const EMPTY_FORM = {
+  drawing_set_name: "",
   sheet_number: "", title: "", discipline: "Structural",
   revision_number: "0", stage: "Not Started",
   submitted_date: "", return_date: "", due_date: "",
@@ -116,6 +117,10 @@ function SheetFormModal({ initial, onSave, onClose, saving }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Drawing Set Name *</label>
+            <input style={inputStyle} value={form.drawing_set_name || ""} onChange={e => set("drawing_set_name", e.target.value)} placeholder="e.g. Structural Steel Package A" />
+          </div>
           <div>
             <label style={labelStyle}>Sheet Number *</label>
             <input style={inputStyle} value={form.sheet_number} onChange={e => set("sheet_number", e.target.value)} placeholder="S1-001" />
@@ -211,7 +216,7 @@ function SheetFormModal({ initial, onSave, onClose, saving }) {
                 setUploading(false);
               }
               onSave({ ...form, file_url: fileUrl });
-            }} disabled={saving || uploading || !form.sheet_number || !form.title}
+            }} disabled={saving || uploading || !form.drawing_set_name || !form.sheet_number || !form.title}
             style={{ padding: "8px 24px", background: "var(--accent)", border: "none", borderRadius: 2, color: "#000", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: (saving || uploading) ? "not-allowed" : "pointer", opacity: (saving || uploading) ? 0.7 : 1 }}>
             {uploading ? "UPLOADING..." : saving ? "SAVING..." : "SAVE SHEET"}
           </button>
@@ -376,6 +381,7 @@ export default function Drawings() {
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(d =>
+        d.drawing_set_name?.toLowerCase().includes(q) ||
         d.sheet_number?.toLowerCase().includes(q) ||
         d.title?.toLowerCase().includes(q) ||
         d.reviewer?.toLowerCase().includes(q) ||
@@ -394,25 +400,41 @@ export default function Drawings() {
   }, [drawings]);
 
   const stats = useMemo(() => ({
+    sets: Object.keys(drawingSets).length,
     total: drawings.length,
     released: drawings.filter(d => d.stage === "Released").length,
     inReview: drawings.filter(d => ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)).length,
     overdue: drawings.filter(d => isOverdue(d)).length,
     priority: drawings.filter(d => d.priority_flag).length,
-  }), [drawings]);
+  }), [drawings, drawingSets]);
 
   // ── Drawing set grouping (for set approval) ────────────────────────────────
 
   const drawingSets = useMemo(() => {
     const map = {};
     drawings.forEach(d => {
-      const name = d.drawing_set_name?.trim();
-      if (!name) return;
+      const name = d.drawing_set_name?.trim() || "Ungrouped Drawings";
       if (!map[name]) map[name] = [];
       map[name].push(d);
     });
     return map; // { "Set A": [drawing, ...], ... }
   }, [drawings]);
+
+  const filteredDrawingSets = useMemo(() => {
+    const map = {};
+    filtered.forEach((drawing) => {
+      const name = drawing.drawing_set_name?.trim() || "Ungrouped Drawings";
+      if (!map[name]) map[name] = [];
+      map[name].push(drawing);
+    });
+
+    return Object.entries(map)
+      .map(([setName, sheets]) => ({
+        setName,
+        sheets: [...sheets].sort((a, b) => (a.sheet_number || "").localeCompare(b.sheet_number || "")),
+      }))
+      .sort((a, b) => a.setName.localeCompare(b.setName));
+  }, [filtered]);
 
   useEffect(() => {
     if (!projectId || !drawings.length) return;
@@ -566,8 +588,9 @@ export default function Drawings() {
       </div>
 
       {/* ── Stats Bar ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 20 }}>
         {[
+          { label: "DRAWING SETS", value: stats.sets, color: "var(--accent)" },
           { label: "TOTAL SHEETS", value: stats.total, color: "var(--text-primary)" },
           { label: "IFC / RELEASED", value: stats.released, color: "#10B981" },
           { label: "IN REVIEW", value: stats.inReview, color: "#3B82F6" },
@@ -611,7 +634,7 @@ export default function Drawings() {
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
         {/* Search */}
         <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search sheets, titles, reviewers…"
+          placeholder="Search set names, sheets, titles, reviewers…"
           style={{ flex: 1, minWidth: 200, padding: "7px 12px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13 }} />
 
         {/* Stage filter */}
@@ -669,18 +692,18 @@ export default function Drawings() {
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
             <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
-              {drawings.length === 0 ? "NO SHEETS YET — ADD YOUR FIRST DRAWING" : "NO SHEETS MATCH FILTERS"}
+              {drawings.length === 0 ? "NO DRAWING SETS YET — ADD YOUR FIRST SHEET" : "NO DRAWING SETS MATCH FILTERS"}
             </p>
           </div>
         ) : view === "list" ? (
-          <ListView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
+          <SetListView drawingSets={filteredDrawingSets} selected={selected} onToggleSelect={toggleSelect}
             onToggleAll={toggleSelectAll} onEdit={d => { setEditing(d); setShowModal(true); }}
             onDelete={handleDelete} onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             setContextMenu={setContextMenu}
             onSetApproval={openSetApproval} />
         ) : (
-          <GridView drawings={filtered} selected={selected} onToggleSelect={toggleSelect}
+          <SetGridView drawingSets={filteredDrawingSets} selected={selected} onToggleSelect={toggleSelect}
             onEdit={d => { setEditing(d); setShowModal(true); }}
             onDelete={handleDelete} onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
@@ -918,6 +941,212 @@ function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdva
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function SetListView({ drawingSets, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
+  const drawings = drawingSets.flatMap(group => group.sheets);
+  const allSelected = selected.size === drawings.length && drawings.length > 0;
+  const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
+  const tdStyle = { padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", verticalAlign: "middle" };
+
+  return (
+    <div style={{ ...surface, overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={{ ...thStyle, width: 36 }}>
+              <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
+            </th>
+            <th style={thStyle}>DRAWING SET / SHEET</th>
+            <th style={thStyle}>DETAIL</th>
+            <th style={thStyle}>DISCIPLINE</th>
+            <th style={thStyle}>REV</th>
+            <th style={thStyle}>STAGE</th>
+            <th style={thStyle}>SUBMITTED</th>
+            <th style={thStyle}>DUE DATE</th>
+            <th style={thStyle}>REVIEWER</th>
+            <th style={thStyle}>APPROVAL</th>
+            <th style={thStyle}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {drawingSets.map(({ setName, sheets }) => {
+            const approvalState = sheets[0]?.set_approval_status;
+            const releasedCount = sheets.filter((sheet) => sheet.stage === "Released").length;
+            const overdueCount = sheets.filter((sheet) => isOverdue(sheet)).length;
+
+            return (
+              <React.Fragment key={setName}>
+                <tr style={{ background: "color-mix(in srgb, var(--bg-surface-secondary) 72%, transparent)" }}>
+                  <td style={tdStyle}></td>
+                  <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 800, color: "var(--text-primary)" }}>{setName}</td>
+                  <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>
+                    {sheets.length} sheets · {releasedCount} released{overdueCount ? ` · ${overdueCount} overdue` : ""}
+                  </td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}></td>
+                  <td style={tdStyle}>
+                    {approvalState ? (
+                      <span style={{
+                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                        color: approvalState === "approved" ? "#10B981" : approvalState === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+                        background: approvalState === "approved" ? "rgba(16,185,129,0.12)" : approvalState === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
+                        border: `1px solid ${approvalState === "approved" ? "rgba(16,185,129,0.25)" : approvalState === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                        textTransform: "uppercase",
+                      }}>
+                        {approvalState}
+                      </span>
+                    ) : (
+                      <button onClick={() => onSetApproval(setName)} style={{
+                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                        background: "none", border: "1px dashed rgba(255,255,255,0.15)", color: "var(--text-muted)", cursor: "pointer",
+                      }}>
+                        REVIEW
+                      </button>
+                    )}
+                  </td>
+                  <td style={tdStyle}>
+                    <ActionBtn label="Approve" onClick={() => onSetApproval(setName)} />
+                  </td>
+                </tr>
+                {sheets.map(d => {
+                  const overdue = isOverdue(d);
+                  const isSel = selected.has(d.id);
+                  return (
+                    <tr key={d.id}
+                      onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, drawing: d }); }}
+                      style={{ background: isSel ? "rgba(200,155,32,0.06)" : "none", cursor: "default" }}>
+                      <td style={tdStyle}>
+                        <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(d.id)} style={{ cursor: "pointer" }} />
+                      </td>
+                      <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", paddingLeft: 24 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <PriorityDot active={d.priority_flag} />
+                          {d.sheet_number}
+                        </div>
+                      </td>
+                      <td style={{ ...tdStyle, maxWidth: 260 }}>
+                        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div>
+                        {d.linked_rfi_ids && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{d.linked_rfi_ids}</div>}
+                      </td>
+                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
+                      <td style={{ ...tdStyle, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
+                      <td style={{ ...tdStyle }}><StageChip stage={d.stage} /></td>
+                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ ...mono, fontSize: 10, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>{d.due_date || "—"}</span>
+                          {overdue && <OverdueBadge />}
+                        </div>
+                      </td>
+                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
+                      <td style={tdStyle}>
+                        {d.set_approval_status ? (
+                          <span style={{
+                            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
+                            color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+                            background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
+                            border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                            textTransform: "uppercase",
+                          }}>
+                            {d.set_approval_status}
+                          </span>
+                        ) : (
+                          <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</span>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <ActionBtn label="View" onClick={() => onView(d)} />
+                          <ActionBtn label="Edit" onClick={() => onEdit(d)} />
+                          <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
+                          <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SetGridView({ drawingSets, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+      {drawingSets.map(({ setName, sheets }) => (
+        <div key={setName} style={{ ...surface, overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-default)", background: "color-mix(in srgb, var(--bg-surface-secondary) 72%, transparent)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+              <div>
+                <div style={{ ...mono, fontSize: 12, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em" }}>{setName}</div>
+                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{sheets.length} sheets</div>
+              </div>
+              <ActionBtn label="Approve" onClick={() => onSetApproval(setName)} />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {sheets.map(d => {
+              const overdue = isOverdue(d);
+              const isSel = selected.has(d.id);
+              const stage = STAGE_MAP[d.stage] || STAGE_MAP["Not Started"];
+              return (
+                <div key={d.id} onClick={() => onToggleSelect(d.id)}
+                  style={{ background: isSel ? "rgba(200,155,32,0.06)" : "var(--bg-surface)", borderTop: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
+                  <div style={{ height: 3, background: stage.color }} />
+                  {d.priority_flag && <div style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)" }} />}
+                  <div style={{ padding: "12px 14px" }}>
+                    <div style={{ ...mono, fontSize: 15, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {d.sheet_number}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 10, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
+                      {d.title}
+                    </div>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                      <StageChip stage={d.stage} />
+                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>R{d.revision_number ?? "0"}</span>
+                      {overdue && <OverdueBadge />}
+                    </div>
+                    {d.due_date && (
+                      <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>
+                        DUE {d.due_date}
+                      </div>
+                    )}
+                    <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, opacity: 0.6 }}>{d.discipline}</div>
+                    {d.set_approval_status && (
+                      <div style={{ marginTop: 6 }}>
+                        <span style={{
+                          ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 2,
+                          color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
+                          background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
+                          border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
+                          textTransform: "uppercase",
+                        }}>{d.set_approval_status}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ borderTop: "1px solid var(--border-default)", padding: "7px 10px", display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
+                    <ActionBtn label="View" onClick={() => onView(d)} />
+                    <ActionBtn label="Edit" onClick={() => onEdit(d)} />
+                    <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
+                    <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
