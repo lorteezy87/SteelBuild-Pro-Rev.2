@@ -410,7 +410,7 @@ export default function Submittals() {
   );
 
   return (
-    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14, height: "100%", overflow: "hidden" }}>
+    <div style={{ padding: "10px 24px 24px", display: "flex", flexDirection: "column", gap: 16, height: "100%", overflow: "hidden" }}>
       <CommandBar
         eyebrow={`${activeProject?.project_name || "PROJECT"} · SUBMITTALS`}
         title="Submittal Register"
@@ -446,7 +446,7 @@ export default function Submittals() {
 
       <PhoenixPanel style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Filter bar */}
-        <div style={{ display: "flex", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--divider)", background: "var(--bg-surface-low)", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--divider)", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", alignItems: "center", backdropFilter: "blur(14px) saturate(145%)", WebkitBackdropFilter: "blur(14px) saturate(145%)" }}>
           {/* Master checkbox — operates on the *filtered* list so it
               respects the active status / BIC filters. The
               indeterminate state is set imperatively because <input>
@@ -462,14 +462,14 @@ export default function Submittals() {
             checked={allSelected}
             onChange={toggleAll}
             disabled={filtered.length === 0}
-            style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer" }}
+            style={{ margin: 0, marginRight: 4, cursor: filtered.length === 0 ? "not-allowed" : "pointer", accentColor: "var(--accent)" }}
           />
           <input
             className="sbd-input"
             placeholder="Search # / title / spec section"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, maxWidth: 360, padding: "6px 10px", fontSize: 12 }}
+            style={{ flex: 1, maxWidth: 360, padding: "8px 12px", fontSize: 12, borderRadius: 999 }}
           />
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>

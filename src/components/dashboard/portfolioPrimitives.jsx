@@ -66,10 +66,10 @@ export const Card = ({ children, style = {} }) => (
   <div
     className="sbd-card"
     style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--border-default)",
-      borderRadius: "var(--radius-card)",
-      boxShadow: "var(--shadow-card)",
+      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 78%, black 22%) 0%, var(--bg-surface) 46%, color-mix(in srgb, var(--bg-surface) 86%, black 14%) 100%)",
+      border: "1px solid color-mix(in srgb, var(--border-default) 72%, rgba(255,255,255,0.08) 28%)",
+      borderRadius: "calc(var(--radius-card) + 4px)",
+      boxShadow: "0 24px 56px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06)",
       overflow: "hidden",
       padding: 0,
       ...style,
@@ -85,19 +85,19 @@ export const HeaderBar = ({ title, right, count }) => (
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: "12px 16px",
+      padding: "14px 18px",
       borderBottom: "1px solid var(--divider)",
-      background: "var(--bg-surface-low)",
+      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 78%, #000 22%) 0%, color-mix(in srgb, var(--bg-surface) 94%, #000 6%) 100%)",
     }}
   >
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ width: 3, height: 16, background: "var(--accent)", borderRadius: 2 }} />
+      <div style={{ width: 4, height: 18, background: "linear-gradient(180deg, var(--accent-light) 0%, var(--accent) 100%)", borderRadius: 999 }} />
       <span
         style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: 700,
-          letterSpacing: "0.10em",
+          letterSpacing: "0.18em",
           color: "var(--text-primary)",
           textTransform: "uppercase",
         }}
@@ -110,8 +110,8 @@ export const HeaderBar = ({ title, right, count }) => (
             fontFamily: "var(--font-mono)",
             fontSize: 9,
             fontWeight: 700,
-            padding: "1px 6px",
-            borderRadius: 2,
+            padding: "3px 8px",
+            borderRadius: 999,
             background: "var(--accent-muted)",
             color: "var(--accent)",
             border: "1px solid var(--accent-border)",
@@ -136,24 +136,25 @@ export const KPIBlock = ({ label, value, color, bordered, onClick, active }) => 
     onClick={onClick}
     className={onClick ? "sbd-card-hover" : undefined}
     style={{
-      padding: "12px 20px",
+      padding: "16px 20px 14px",
       borderRight: bordered ? "1px solid var(--divider)" : "none",
       display: "flex",
       flexDirection: "column",
-      gap: 4,
+      gap: 8,
       cursor: onClick ? "pointer" : "default",
-      borderTop: active ? "3px solid var(--accent)" : "3px solid transparent",
-      boxShadow: active ? "0 0 12px rgba(59,130,246,0.25)" : "none",
-      transition: "box-shadow 0.2s, border-top 0.2s",
+      borderTop: active ? "2px solid var(--accent)" : "2px solid transparent",
+      boxShadow: active ? "inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent), 0 0 20px color-mix(in srgb, var(--accent) 18%, transparent)" : "none",
+      transition: "box-shadow 0.2s, border-top 0.2s, background 0.2s",
       minWidth: 160,
       overflow: "hidden",
+      background: active ? "color-mix(in srgb, var(--accent) 6%, transparent)" : "transparent",
     }}
   >
     <span
       className="sbd-kpi-label"
       style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 10,
+        fontSize: 9,
         letterSpacing: "0.14em",
         textTransform: "uppercase",
         color: "var(--text-muted)",
@@ -170,7 +171,7 @@ export const KPIBlock = ({ label, value, color, bordered, onClick, active }) => 
       className="sbd-kpi-value sbd-num"
       style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 800,
         lineHeight: 1.1,
         color: color || "var(--text-primary)",

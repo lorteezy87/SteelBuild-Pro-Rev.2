@@ -766,27 +766,31 @@ export default function Schedule() {
       </div>
 
       {/* View Tabs */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px", marginTop: 8 }}>
-        {[
-          { id: "gantt", label: "Gantt Chart" },
-          { id: "lookahead", label: "6-Week Lookahead" },
-          { id: "list", label: "Task List" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setView(tab.id)}
-            style={{
-              background: "none", border: "none", padding: "12px 16px",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
-              textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
-              borderBottom: view === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-              marginBottom: -1, transition: "color 0.15s",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ flexShrink: 0, display: "flex", gap: 8, borderBottom: "1px solid var(--divider)", padding: "0 24px 12px", marginTop: 8 }}>
+        <div style={{ display: "inline-flex", gap: 6, padding: 6, borderRadius: 18, background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", border: "1px solid var(--border-default)", boxShadow: "0 10px 28px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" }}>
+          {[
+            { id: "gantt", label: "Gantt Chart" },
+            { id: "lookahead", label: "6-Week Lookahead" },
+            { id: "list", label: "Task List" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setView(tab.id)}
+              style={{
+                background: view === tab.id ? "linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%)" : "transparent",
+                border: view === tab.id ? "1px solid var(--accent-border)" : "1px solid transparent", padding: "10px 16px",
+                borderRadius: 12,
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                color: view === tab.id ? "var(--accent)" : "var(--text-muted)",
+                textTransform: "uppercase", letterSpacing: "0.08em", cursor: "pointer",
+                boxShadow: view === tab.id ? "0 10px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)" : "none",
+                transition: "color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* View Content */}
@@ -927,15 +931,19 @@ export default function Schedule() {
         <div
           style={{
             position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "var(--bg-surface)",
-            borderTop: "1px solid var(--divider)",
-            padding: "10px 20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: 20,
+            background: "var(--bg-surface-high)",
+            border: "1px solid var(--accent-border)",
+            borderRadius: 18,
+            padding: "12px 16px",
             display: "flex",
             gap: 10,
             alignItems: "center",
+            boxShadow: "0 18px 40px rgba(0,0,0,0.45), 0 0 24px color-mix(in srgb, var(--accent) 14%, transparent), inset 0 1px 0 rgba(255,255,255,0.06)",
+            backdropFilter: "blur(24px) saturate(150%)",
+            WebkitBackdropFilter: "blur(24px) saturate(150%)",
             zIndex: 20,
           }}
         >

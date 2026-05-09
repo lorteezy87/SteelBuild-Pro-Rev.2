@@ -62,47 +62,69 @@ export default function ProjectDashboard({
   void codes;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <ScheduleTimelineSection
-        project={project}
-        wps={wps}
-        scheduleTasks={scheduleTasks}
-        deliveries={deliveries}
-        rfis={rfis}
-        actionItems={actionItems}
-        onNavigate={onNavigate}
-      />
-      <FieldActivitySection
-        dailyLogs={dailyLogs}
-        photos={photos}
-        punchlistItems={punchlistItems}
-        inspections={inspections}
-        safetyIncidents={safetyIncidents}
-        qualityRecords={qualityRecords}
-        onNavigate={onNavigate}
-      />
-      <FinancialControlsSection
-        project={project}
-        cos={cos}
-        expenses={expenses}
-        wps={wps}
-        sovItems={sovItems}
-        budgetHourItems={budgetHourItems}
-        onNavigate={onNavigate}
-      />
-      <DocumentHubSection
-        rfis={rfis}
-        submittals={submittals}
-        drawings={drawings}
-        drawingActivity={drawingActivity}
-        onNavigate={onNavigate}
-      />
-      <TeamWorkflowSection
-        project={project}
-        actionItems={actionItems}
-        scheduleTasks={scheduleTasks}
-        onNavigate={onNavigate}
-      />
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
+        <ScheduleTimelineSection
+          project={project}
+          wps={wps}
+          scheduleTasks={scheduleTasks}
+          deliveries={deliveries}
+          rfis={rfis}
+          actionItems={actionItems}
+          onNavigate={onNavigate}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
+        <FinancialControlsSection
+          project={project}
+          cos={cos}
+          expenses={expenses}
+          wps={wps}
+          sovItems={sovItems}
+          budgetHourItems={budgetHourItems}
+          onNavigate={onNavigate}
+        />
+        <DocumentHubSection
+          rfis={rfis}
+          submittals={submittals}
+          drawings={drawings}
+          drawingActivity={drawingActivity}
+          onNavigate={onNavigate}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
+        <FieldActivitySection
+          dailyLogs={dailyLogs}
+          photos={photos}
+          punchlistItems={punchlistItems}
+          inspections={inspections}
+          safetyIncidents={safetyIncidents}
+          qualityRecords={qualityRecords}
+          onNavigate={onNavigate}
+        />
+        <TeamWorkflowSection
+          project={project}
+          actionItems={actionItems}
+          scheduleTasks={scheduleTasks}
+          onNavigate={onNavigate}
+        />
+      </div>
     </div>
   );
 }

@@ -43,11 +43,12 @@ export default function SectionCard({
 
   return (
     <div style={{
-      background: "var(--bg-surface)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 10,
+      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%) 100%)",
+      border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+      borderRadius: 18,
       overflow: "hidden",
       transition: "border-color 0.12s",
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.30)",
     }}>
       {/* Header */}
       <div
@@ -58,17 +59,20 @@ export default function SectionCard({
           display: "flex",
           alignItems: "center",
           gap: 14,
-          padding: "14px 18px",
+          padding: "16px 18px",
           cursor: "pointer",
           userSelect: "none",
-          background: open ? "var(--bg-surface)" : "var(--bg-surface-low)",
+          background: open
+            ? "linear-gradient(90deg, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 34%, transparent 100%)"
+            : "color-mix(in srgb, var(--bg-surface-low) 92%, #000 8%)",
         }}
       >
         {icon && (
           <div style={{
-            width: 32, height: 32, borderRadius: 8,
+            width: 36, height: 36, borderRadius: 12,
             display: "flex", alignItems: "center", justifyContent: "center",
-            background: STAT_COLOR[iconColor] + "1A", // 10% alpha
+            background: STAT_COLOR[iconColor] + "20",
+            border: `1px solid ${STAT_COLOR[iconColor]}33`,
             color: STAT_COLOR[iconColor] || STAT_COLOR.accent,
             flexShrink: 0,
           }}>
@@ -79,7 +83,7 @@ export default function SectionCard({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontFamily: "var(--font-body)",
-            fontSize: 15, fontWeight: 600,
+            fontSize: 18, fontWeight: 600,
             color: "var(--text-primary)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
@@ -89,8 +93,8 @@ export default function SectionCard({
             <div style={{
               fontFamily: "var(--font-body)",
               fontSize: 12,
-              color: "var(--text-muted)",
-              marginTop: 2,
+              color: "var(--text-secondary)",
+              marginTop: 4,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {subtitle}
@@ -100,9 +104,16 @@ export default function SectionCard({
 
         {/* Inline stat strip */}
         {stats.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 22, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {stats.map((s, i) => (
-              <div key={i} style={{ textAlign: "center" }}>
+              <div key={i} style={{
+                textAlign: "center",
+                padding: "8px 10px",
+                minWidth: 72,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.025)",
+                border: "1px solid rgba(255,255,255,0.05)",
+              }}>
                 <div style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 18, fontWeight: 700,
@@ -113,7 +124,7 @@ export default function SectionCard({
                 </div>
                 <div style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+                  fontSize: 8, fontWeight: 700, letterSpacing: "0.12em",
                   color: "var(--text-muted)",
                   textTransform: "uppercase",
                   marginTop: 4,
@@ -133,6 +144,7 @@ export default function SectionCard({
         <div style={{
           borderTop: "1px solid var(--divider)",
           padding: 18,
+          background: "linear-gradient(180deg, rgba(0,0,0,0.06) 0%, transparent 100%)",
         }}>
           {children}
         </div>

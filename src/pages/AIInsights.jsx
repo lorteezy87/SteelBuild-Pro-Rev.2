@@ -25,7 +25,7 @@ import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
 import PortfolioBimViewer from "@/components/portfolio/PortfolioBimViewer";
-import { CommandBar } from "@/components/design-system";
+import { Button, CommandBar } from "@/components/design-system";
 import { useProjectContext } from "@/components/shared/useProjectContext";
 
 const CLOSED_RFI = ["Answered", "Closed", "Void"];
@@ -51,10 +51,10 @@ const tooltipStyle = {
 };
 
 const cardStyle = {
-  background: "var(--bg-surface)",
-  border: "1px solid var(--border-default)",
-  borderRadius: "var(--radius-card)",
-  boxShadow: "var(--shadow-card)",
+  background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 86%, #000 14%) 100%)",
+  border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+  borderRadius: 18,
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 30px rgba(0,0,0,0.30)",
   overflow: "hidden",
 };
 
@@ -365,12 +365,12 @@ export default function PortfolioOverview() {
         unit=" active projects"
         subtitle="Executive health, cost exposure, schedule pressure, steel progress, and model-based project inspection"
       >
-        <button type="button" onClick={() => navigate(createPageUrl("Projects"))} style={topButtonStyle}>
-          <Building2 size={14} /> Projects
-        </button>
-        <button type="button" onClick={() => navigate(createPageUrl("Reports"))} style={topButtonStyle}>
-          <ArrowUpRight size={14} /> Reports
-        </button>
+        <Button variant="secondary" icon="building" onClick={() => navigate(createPageUrl("Projects"))}>
+          Projects
+        </Button>
+        <Button variant="secondary" icon="arrow-up-right" onClick={() => navigate(createPageUrl("Reports"))}>
+          Reports
+        </Button>
       </CommandBar>
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
@@ -395,20 +395,14 @@ export default function PortfolioOverview() {
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {["All", "On Track", "Watch", "At Risk"].map((label) => (
-                <button
+                <Button
                   key={label}
-                  type="button"
                   onClick={() => setHealthFilter(label)}
-                  style={{
-                    ...filterButtonStyle,
-                    borderColor: healthFilter === label ? "var(--accent)" : "var(--border-default)",
-                    color: healthFilter === label ? "var(--accent)" : "var(--text-muted)",
-                    background: healthFilter === label ? "var(--accent-muted)" : "var(--bg-surface)",
-                  }}
+                  variant={healthFilter === label ? "primary" : "secondary"}
+                  size="sm"
                 >
-                  {label === "All" && <Filter size={12} />}
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -524,14 +518,23 @@ export default function PortfolioOverview() {
 
 function MetricCard({ icon: Icon, label, value, sub, color }) {
   return (
-    <div style={{ ...cardStyle, padding: 16, minHeight: 112, display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: `3px solid ${color}` }}>
+    <div style={{ ...cardStyle, padding: 18, minHeight: 120, display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative" }}>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `linear-gradient(135deg, color-mix(in srgb, ${color} 10%, transparent) 0%, transparent 44%, transparent 100%)`,
+          pointerEvents: "none",
+        }}
+      />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <span style={miniLabelStyle}>{label}</span>
         <Icon size={18} color={color} />
       </div>
       <div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
-        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>{sub}</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 30, fontWeight: 900, color, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)", marginTop: 6 }}>{sub}</div>
       </div>
     </div>
   );
@@ -629,9 +632,9 @@ function ProjectDetailCard({ project, onOpenProject }) {
           ["Steel", `${project.completedTons.toFixed(1)}T / ${project.totalTons.toFixed(1)}T`],
           ["Upcoming deliveries", project.upcomingDeliveries],
         ]} />
-        <button type="button" onClick={onOpenProject} style={openButtonStyle}>
-          <ArrowUpRight size={14} /> Open Project Dashboard
-        </button>
+        <Button variant="outline" icon="arrow-up-right" onClick={onOpenProject}>
+          Open Project Dashboard
+        </Button>
       </div>
     </div>
   );
@@ -659,24 +662,6 @@ const miniLabelStyle = {
   color: "var(--text-muted)",
 };
 
-const topButtonStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  height: 32,
-  padding: "0 11px",
-  borderRadius: 6,
-  border: "1px solid var(--border-default)",
-  background: "var(--bg-surface)",
-  color: "var(--text-secondary)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
 const searchWrapStyle = {
   flex: "1 1 230px",
   minWidth: 220,
@@ -701,36 +686,3 @@ const searchInputStyle = {
   fontSize: 12,
 };
 
-const filterButtonStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  height: 34,
-  padding: "0 9px",
-  borderRadius: 7,
-  border: "1px solid var(--border-default)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
-
-const openButtonStyle = {
-  height: 38,
-  borderRadius: 7,
-  border: "1px solid var(--accent-border)",
-  background: "var(--accent-muted)",
-  color: "var(--accent)",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  fontFamily: "var(--font-mono)",
-  fontSize: 10,
-  fontWeight: 900,
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  cursor: "pointer",
-};
