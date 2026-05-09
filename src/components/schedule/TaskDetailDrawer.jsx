@@ -60,6 +60,28 @@ function parseDeps(raw) {
   return parseDependencies(raw);
 }
 
+const drawerSurface = 'linear-gradient(180deg, rgba(8,12,19,0.99) 0%, rgba(5,8,13,1) 100%)';
+const drawerPanel = 'rgba(14,20,30,0.98)';
+const drawerPanelStrong = 'rgba(18,25,36,0.99)';
+const drawerBorder = 'rgba(135,154,180,0.22)';
+const drawerMutedBorder = 'rgba(135,154,180,0.14)';
+const drawerText = 'rgba(238,244,252,0.96)';
+const drawerMutedText = 'rgba(177,191,211,0.78)';
+
+const drawerControlStyle = {
+  width: '100%',
+  background: drawerPanelStrong,
+  border: `1px solid ${drawerBorder}`,
+  borderRadius: 8,
+  padding: '8px 10px',
+  fontFamily: 'var(--font-body)',
+  fontSize: 12,
+  color: drawerText,
+  boxSizing: 'border-box',
+  colorScheme: 'dark',
+  outline: 'none',
+};
+
 export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTasks = [], onDelete }) {
   const [formData, setFormData] = useState(task || {});
   const [activeTab, setActiveTab] = useState('details');
@@ -253,8 +275,9 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.4)',
-          zIndex: 998,
+          background: 'rgba(1,4,10,0.72)',
+          backdropFilter: 'blur(3px)',
+          zIndex: 1200,
         }}
       />
 
@@ -265,23 +288,24 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
           right: 0,
           top: 0,
           bottom: 0,
-          width: 480,
-          background: 'var(--bg-surface-low)',
-          borderLeft: '1px solid var(--border-default)',
-          boxShadow: '-4px 0 20px rgba(0,0,0,0.5)',
-          zIndex: 999,
+          width: 'min(620px, calc(100vw - 24px))',
+          background: drawerSurface,
+          borderLeft: `1px solid ${drawerBorder}`,
+          boxShadow: '-28px 0 70px rgba(0,0,0,0.66), inset 1px 0 0 rgba(255,255,255,0.04)',
+          color: drawerText,
+          zIndex: 1201,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'rgba(12,17,25,0.99)' }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 4 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: drawerMutedText, letterSpacing: '0.12em', marginBottom: 4 }}>
               {formData.task_type}{formData.wbs_code ? ` · ${formData.wbs_code}` : ''}
             </div>
-            <h2 style={{ fontFamily: 'var(--font-body)', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            <h2 style={{ fontFamily: 'var(--font-body)', fontSize: 21, fontWeight: 700, color: drawerText, margin: 0, lineHeight: 1.15 }}>
               {formData.task_name}
             </h2>
           </div>
@@ -310,7 +334,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
             )}
             <button
               onClick={onClose}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 20 }}
+              style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${drawerMutedBorder}`, borderRadius: 8, cursor: 'pointer', color: drawerMutedText, fontSize: 18, width: 34, height: 34 }}
             >
               ✕
             </button>
@@ -318,7 +342,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--divider)', background: 'var(--bg-surface-low)' }}>
+        <div style={{ display: 'flex', borderBottom: `1px solid ${drawerMutedBorder}`, background: 'rgba(9,13,20,0.99)' }}>
           {['DETAILS', 'DEPENDENCIES', 'LINKS', 'NOTES', 'HISTORY'].map(tab => (
             <button
               key={tab}
@@ -329,8 +353,8 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                 fontFamily: 'var(--font-mono)',
                 fontSize: 9,
                 letterSpacing: '0.10em',
-                color: activeTab === tab.toLowerCase() ? 'var(--accent)' : 'var(--text-muted)',
-                background: activeTab === tab.toLowerCase() ? 'var(--accent-muted)' : 'transparent',
+                color: activeTab === tab.toLowerCase() ? 'var(--accent)' : drawerMutedText,
+                background: activeTab === tab.toLowerCase() ? 'rgba(86,176,255,0.12)' : 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab.toLowerCase() ? '2px solid var(--accent)' : '1px solid transparent',
                 cursor: 'pointer',
@@ -342,7 +366,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: 24, background: drawerSurface }}>
           {activeTab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Two-column grid for the always-shown identity / status
@@ -350,7 +374,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                   below this block so each gate row has the full
                   drawer width to breathe (4 inputs + label + clear
                   don't fit in a 220px half-column). */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
                 {/* Left column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <FormField label="Task Name" value={formData.task_name} onChange={(v) => setFormData({ ...formData, task_name: v })} />
@@ -384,42 +408,28 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
               ) : (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 120px',
                   gap: 12,
                 }}>
                   <div>
-                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Start Date</label>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>Start Date</label>
                     <DateOrTbdInput
                       value={formData.start_date}
                       onChange={(v) => setFormData({ ...formData, start_date: v })}
                       inputStyle={{
                         width: '100%',
-                        background: 'var(--bg-surface-low)',
-                        border: '1px solid var(--border-default)',
-                        borderRadius: 6,
-                        padding: '6px 8px',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 11,
-                        color: 'var(--text-primary)',
-                        boxSizing: 'border-box',
+                        ...drawerControlStyle,
                       }}
                     />
                   </div>
                   <div>
-                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>End Date</label>
+                    <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 4 }}>End Date</label>
                     <DateOrTbdInput
                       value={formData.end_date}
                       onChange={(v) => setFormData({ ...formData, end_date: v })}
                       inputStyle={{
                         width: '100%',
-                        background: 'var(--bg-surface-low)',
-                        border: '1px solid var(--border-default)',
-                        borderRadius: 6,
-                        padding: '6px 8px',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 11,
-                        color: 'var(--text-primary)',
-                        boxSizing: 'border-box',
+                        ...drawerControlStyle,
                       }}
                     />
                   </div>
@@ -433,9 +443,9 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
               <div style={{
                 display: 'flex', gap: 12, flexWrap: 'wrap',
                 padding: '10px 12px',
-                background: 'var(--bg-page)',
-                border: '1px solid var(--divider)',
-                borderRadius: 6,
+                background: drawerPanel,
+                border: `1px solid ${drawerMutedBorder}`,
+                borderRadius: 8,
               }}>
                 <ScheduleFlag
                   label="Mark as Milestone"
@@ -463,7 +473,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Predecessors */}
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: drawerText, marginBottom: 8 }}>
                   Predecessors ({predecessorTasks.length})
                 </div>
                 {predecessorTasks.length > 0 ? (
@@ -477,17 +487,17 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                       // hardcoded behaviour exactly.
                       const link = predecessorLinks.find((l) => l.id === pred.id) || { type: 'FS', lag_days: 1 };
                       return (
-                        <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
+                        <div key={pred.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8 }}>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{pred.wbs_code || '—'}</span>
-                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.task_name}</span>
                           <select
                             value={link.type}
                             onChange={(e) => updatePredecessor(pred.id, { type: e.target.value })}
                             title="Link type — FS=finish→start, SS=start→start, FF=finish→finish, SF=start→finish"
                             style={{
-                              background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-                              borderRadius: 4, padding: '2px 4px',
-                              fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-primary)',
+                              background: drawerPanelStrong, border: `1px solid ${drawerBorder}`,
+                              borderRadius: 6, padding: '3px 5px',
+                              fontFamily: 'var(--font-mono)', fontSize: 9, color: drawerText,
                               flexShrink: 0,
                             }}
                           >
@@ -503,21 +513,21 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                             }}
                             title="Lag in days — negative values fast-track (allow successor to begin before predecessor finishes)"
                             style={{
-                              background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-                              borderRadius: 4, padding: '2px 4px',
-                              fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-primary)',
+                              background: drawerPanelStrong, border: `1px solid ${drawerBorder}`,
+                              borderRadius: 6, padding: '3px 5px',
+                              fontFamily: 'var(--font-mono)', fontSize: 9, color: drawerText,
                               width: 48, textAlign: 'right', flexShrink: 0,
                             }}
                             aria-label="Lag in days"
                           />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', flexShrink: 0 }}>d</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: drawerMutedText, flexShrink: 0 }}>d</span>
                           <button onClick={() => removePredecessor(pred.id)} style={{ background: 'none', border: 'none', color: 'var(--status-error)', cursor: 'pointer', fontSize: 12, padding: 2 }}>✕</button>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No predecessors</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, padding: '8px 0' }}>No predecessors</div>
                 )}
 
                 {/* Add predecessor */}
@@ -527,8 +537,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
                       defaultValue=""
                       onChange={(e) => { if (e.target.value) { addPredecessor(e.target.value); e.target.value = ''; } }}
                       style={{
-                        width: '100%', background: 'var(--bg-surface-low)', border: '1px solid var(--border-default)',
-                        borderRadius: 6, padding: '6px 8px', fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-primary)',
+                        ...drawerControlStyle,
                       }}
                     >
                       <option value="">+ Add predecessor...</option>
@@ -542,20 +551,20 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
 
               {/* Successors (read-only) */}
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 700, color: drawerText, marginBottom: 8 }}>
                   Successors ({successorTasks.length})
                 </div>
                 {successorTasks.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {successorTasks.map(suc => (
-                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--hover-bg)', border: '1px solid var(--divider)', borderRadius: 6 }}>
+                      <div key={suc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: drawerPanel, border: `1px solid ${drawerMutedBorder}`, borderRadius: 8 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--accent)', flexShrink: 0 }}>{suc.wbs_code || '—'}</span>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', flex: 1 }}>{suc.task_name}</span>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, flex: 1 }}>{suc.task_name}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', padding: '8px 0' }}>No successors</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, padding: '8px 0' }}>No successors</div>
                 )}
               </div>
             </div>
@@ -566,7 +575,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
               <div style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 11,
-                color: 'var(--text-muted)',
+                color: drawerMutedText,
                 lineHeight: 1.4,
               }}>
                 Link this task to RFIs, Change Orders, or Action Items so the
@@ -604,40 +613,34 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
               style={{
                 width: '100%',
                 height: 200,
-                background: 'var(--bg-surface-low)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 8,
+                ...drawerControlStyle,
                 padding: 12,
-                fontFamily: 'var(--font-body)',
-                fontSize: 12,
-                color: 'var(--text-primary)',
                 resize: 'none',
-                boxSizing: 'border-box',
               }}
               placeholder="Add notes..."
             />
           )}
 
           {activeTab === 'history' && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, textAlign: 'center', padding: '40px 0' }}>
               No history yet
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid var(--divider)' }}>
+        <div style={{ display: 'flex', gap: 10, padding: 18, borderTop: `1px solid ${drawerMutedBorder}`, background: 'rgba(7,10,16,0.99)' }}>
           <button
             onClick={onClose}
             style={{
               flex: 1,
-              background: 'transparent',
-              border: '1px solid var(--border-default)',
+              background: 'rgba(255,255,255,0.025)',
+              border: `1px solid ${drawerBorder}`,
               borderRadius: 8,
-              padding: '8px 12px',
+              padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
-              color: 'var(--text-secondary)',
+              color: drawerMutedText,
               cursor: 'pointer',
             }}
           >
@@ -647,14 +650,14 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
             onClick={handleSave}
             style={{
               flex: 1,
-              background: 'var(--accent)',
-              border: 'none',
+              background: 'linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(35,134,230,0.98) 100%)',
+              border: '1px solid rgba(86,176,255,0.4)',
               borderRadius: 8,
-              padding: '8px 12px',
+              padding: '10px 12px',
               fontFamily: 'var(--font-body)',
               fontSize: 12,
               fontWeight: 600,
-              color: '#fff',
+              color: '#04111f',
               cursor: 'pointer',
             }}
           >
@@ -669,7 +672,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
 function FormField({ label, type = 'text', value, onChange, readOnly = false, options = [] }) {
   return (
     <div>
-      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+      <label style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: drawerMutedText, display: 'block', marginBottom: 5 }}>
         {label}
       </label>
       {type === 'select' ? (
@@ -677,14 +680,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            width: '100%',
-            background: 'var(--bg-surface-low)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 6,
-            padding: '6px 8px',
-            fontFamily: 'var(--font-body)',
-            fontSize: 11,
-            color: 'var(--text-primary)',
+            ...drawerControlStyle,
           }}
         >
           <option value="">—</option>
@@ -698,15 +694,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           style={{
-            width: '100%',
-            background: 'var(--bg-surface-low)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 6,
-            padding: '6px 8px',
-            fontFamily: 'var(--font-body)',
-            fontSize: 11,
-            color: 'var(--text-primary)',
-            boxSizing: 'border-box',
+            ...drawerControlStyle,
           }}
         />
       ) : type === 'slider' ? (
@@ -719,7 +707,7 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
             onChange={(e) => onChange(parseInt(e.target.value))}
             style={{ flex: 1 }}
           />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', minWidth: 32, textAlign: 'right' }}>{value || 0}%</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: drawerMutedText, minWidth: 32, textAlign: 'right' }}>{value || 0}%</span>
         </div>
       ) : (
         <input
@@ -728,15 +716,9 @@ function FormField({ label, type = 'text', value, onChange, readOnly = false, op
           onChange={(e) => onChange(e.target.value)}
           readOnly={readOnly}
           style={{
-            width: '100%',
-            background: readOnly ? 'var(--hover-bg)' : 'var(--bg-surface-low)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 6,
-            padding: '6px 8px',
-            fontFamily: 'var(--font-body)',
-            fontSize: 11,
-            color: 'var(--text-primary)',
-            boxSizing: 'border-box',
+            ...drawerControlStyle,
+            background: readOnly ? 'rgba(255,255,255,0.035)' : drawerControlStyle.background,
+            color: readOnly ? drawerMutedText : drawerText,
           }}
         />
       )}
@@ -760,7 +742,7 @@ function ScheduleFlag({ label, checked, onChange, hint }) {
         fontWeight: 700,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
-        color: checked ? 'var(--accent)' : 'var(--text-muted)',
+        color: checked ? 'var(--accent)' : drawerMutedText,
       }}
     >
       <input
@@ -830,7 +812,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
           fontWeight: 700,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
-          color: 'var(--text-muted)',
+          color: drawerMutedText,
         }}>
           Detailing Stage Dates
         </div>
@@ -863,18 +845,18 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
             key={gate}
             style={{
               display: 'grid',
-              gridTemplateColumns: '140px 1fr 1fr 24px',
+              gridTemplateColumns: '112px minmax(0, 1fr) minmax(0, 1fr) 28px',
               alignItems: 'center',
-              gap: 10,
-              padding: '8px 10px',
+              gap: 8,
+              padding: '10px 12px',
               background: filled
-                ? `color-mix(in srgb, ${meta.color} 8%, var(--bg-surface-low))`
-                : 'var(--bg-surface-low)',
-              border: `1px solid ${filled ? meta.color : 'var(--border-default)'}`,
-              borderLeft: `3px solid ${isActive ? meta.color : (filled ? meta.color : 'var(--border-default)')}`,
-              borderRadius: 6,
+                ? `linear-gradient(90deg, color-mix(in srgb, ${meta.color} 16%, ${drawerPanelStrong}) 0%, ${drawerPanelStrong} 70%)`
+                : drawerPanel,
+              border: `1px solid ${filled ? `color-mix(in srgb, ${meta.color} 48%, ${drawerMutedBorder})` : drawerMutedBorder}`,
+              borderLeft: `3px solid ${isActive ? meta.color : (filled ? meta.color : drawerBorder)}`,
+              borderRadius: 8,
               boxShadow: isActive
-                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 30%, transparent)`
+                ? `0 0 0 1px color-mix(in srgb, ${meta.color} 34%, transparent), 0 14px 28px rgba(0,0,0,0.25)`
                 : 'none',
             }}
           >
@@ -891,7 +873,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
               <span style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 9,
-                color: 'var(--text-muted)',
+                color: drawerMutedText,
                 lineHeight: 1.2,
               }}>
                 {meta.caption}
@@ -917,7 +899,7 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: filled ? 'var(--text-muted)' : 'var(--divider)',
+                color: filled ? drawerMutedText : 'rgba(135,154,180,0.3)',
                 cursor: filled ? 'pointer' : 'not-allowed',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,
@@ -939,14 +921,14 @@ function StageGateDates({ stageDates, onChange, derivedStart, derivedEnd }) {
         style={{
           marginTop: 2,
           padding: '6px 8px',
-          background: 'var(--bg-page)',
-          border: '1px dashed var(--divider)',
-          borderRadius: 4,
+          background: 'rgba(255,255,255,0.025)',
+          border: `1px dashed ${drawerMutedBorder}`,
+          borderRadius: 8,
           display: 'flex',
           justifyContent: 'space-between',
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
-          color: 'var(--text-muted)',
+          color: drawerMutedText,
           letterSpacing: '0.04em',
         }}
       >
@@ -967,7 +949,7 @@ function DateInput({ value, onChange, ariaLabel, placeholder }) {
       <span style={{
         fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700,
         letterSpacing: '0.10em', textTransform: 'uppercase',
-        color: 'var(--text-muted)',
+        color: drawerMutedText,
       }}>
         {placeholder}
       </span>
@@ -977,15 +959,8 @@ function DateInput({ value, onChange, ariaLabel, placeholder }) {
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
         style={{
-          width: '100%',
-          background: 'var(--bg-surface-low)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 4,
-          padding: '6px 8px',
-          fontFamily: 'var(--font-body)',
-          fontSize: 11,
-          color: 'var(--text-primary)',
-          boxSizing: 'border-box',
+          ...drawerControlStyle,
+          minWidth: 0,
         }}
       />
     </label>
