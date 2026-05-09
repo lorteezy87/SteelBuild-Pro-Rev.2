@@ -1,44 +1,53 @@
 import React, { useState } from "react";
 
-/**
- * SubmittalBulkEditModal — apply the same field changes to many
- * submittals at once. Mirrors RfiBulkEditModal:
- *
- *   - Tri-state per field. Leaving a field blank means "don't touch
- *     it on any of the selected rows." Only fields the user explicitly
- *     edits are sent to the backend on submit.
- *   - Notes is special: instead of overwriting, the parent appends
- *     the new text to whatever notes a row already has, separated by
- *     a blank line. The append flag is sent through so the parent
- *     mutation knows to read-modify-write per row.
- *   - Date fields support an explicit CLEAR toggle so a user can
- *     unset a wrong required-date in bulk without entering a value.
- *
- * The fields covered (Status, BIC, Discipline, Required Date, Notes)
- * match the most-edited columns on the submittal log review pass,
- * which is when bulk edits get used in practice (e.g. moving a batch
- * of Submitted → Under Review after the architect picks them up).
- */
-
 const STATUSES = [
-  "Draft", "Submitted", "Under Review", "Approved", "Approved as Noted",
-  "Revise and Resubmit", "Rejected", "Released for Fabrication", "Void",
+  "Draft",
+  "Submitted",
+  "Under Review",
+  "Approved",
+  "Approved as Noted",
+  "Revise and Resubmit",
+  "Rejected",
+  "Released for Fabrication",
+  "Void",
 ];
-// Bulk edit's BIC menu is wider than the page-level BIC filter on
-// purpose — Subcontractor is a common reviewer for shop drawings even
-// though it's not a recognized rolling-BIC state on the filter bar.
-// Standardized across the submittal modals — see src/pages/Submittals.jsx
-// for the canonical list and stage-mapping rationale.
+
 const BIC_CHOICES = [
-  "Detailer", "S&H", "Contractor", "Subcontractor",
-  "EOR", "Architect", "AOR",
-  "GC", "Owner",
+  "Detailer",
+  "S&H",
+  "Contractor",
+  "Subcontractor",
+  "EOR",
+  "Architect",
+  "AOR",
+  "GC",
+  "Owner",
 ];
+
 const TYPES = ["Shop Drawing", "Product Data", "Sample", "Mock-up", "Calculation", "Other"];
 
+const modalSurfaceStyle = {
+  background: "linear-gradient(180deg, rgba(11,16,24,0.98) 0%, rgba(7,10,16,0.99) 100%)",
+  border: "1px solid rgba(120, 138, 162, 0.22)",
+  borderRadius: 16,
+  boxShadow: "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset",
+  color: "rgba(235,241,250,0.96)",
+};
+
+const controlSurfaceStyle = {
+  width: "100%",
+  padding: "9px 12px",
+  fontSize: 12,
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(120, 138, 162, 0.22)",
+  borderRadius: 8,
+  color: "rgba(235,241,250,0.96)",
+  fontFamily: "var(--font-body)",
+  boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset",
+  colorScheme: "dark",
+};
+
 export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit }) {
-  // "" sentinel = leave unchanged. Each field has its own state so we
-  // can detect "user explicitly cleared" vs. "user never touched it."
   const [status, setStatus] = useState("");
   const [bic, setBic] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -49,18 +58,13 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
 
   const apply = () => {
     const data = {};
-    if (status)        data.status = status;
-    if (bic)           data.ball_in_court = bic;
-    if (discipline)    data.discipline = discipline;
+    if (status) data.status = status;
+    if (bic) data.ball_in_court = bic;
+    if (discipline) data.discipline = discipline;
     if (submittalType) data.submittal_type = submittalType;
-    if (clearRequiredDate)  data.required_date = null;
-    else if (requiredDate)  data.required_date = requiredDate;
+    if (clearRequiredDate) data.required_date = null;
+    else if (requiredDate) data.required_date = requiredDate;
 
-    // Notes append signals to the parent that we want a per-row
-    // read-modify-write, not a flat overwrite. The parent's mutation
-    // looks for `__notes_append` and pulls each row's existing
-    // notes off the cache before patching. Sending the literal
-    // patch field would clobber every row's history.
     const meta = {};
     if (notesAppend.trim()) meta.__notes_append = notesAppend.trim();
 
@@ -68,12 +72,18 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
       onCancel();
       return;
     }
+
     onSubmit({ ...data, ...meta });
   };
 
   const reset = () => {
-    setStatus(""); setBic(""); setDiscipline(""); setSubmittalType("");
-    setRequiredDate(""); setClearRequiredDate(false); setNotesAppend("");
+    setStatus("");
+    setBic("");
+    setDiscipline("");
+    setSubmittalType("");
+    setRequiredDate("");
+    setClearRequiredDate(false);
+    setNotesAppend("");
     onCancel();
   };
 
@@ -85,35 +95,65 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
       aria-modal="true"
       aria-label={`Bulk edit ${count} submittals`}
       style={{
-        position: "fixed", inset: 0, background: "rgba(2,6,23,0.55)", backdropFilter: "blur(4px)",
-        zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
+        position: "fixed",
+        inset: 0,
+        background: "rgba(2,6,23,0.72)",
+        backdropFilter: "blur(10px)",
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
       }}
       onClick={reset}
     >
       <div
-        className="sbd-card-strong"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 560, maxWidth: "92vw", maxHeight: "92vh", overflowY: "auto",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)", borderRadius: 4,
-          boxShadow: "var(--shadow-lg)", color: "var(--text-primary)",
-          padding: 0,
+          width: 560,
+          maxWidth: "92vw",
+          maxHeight: "92vh",
+          overflowY: "auto",
+          ...modalSurfaceStyle,
         }}
       >
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--divider)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase" }}>
+        <div style={{ padding: "18px 20px 16px", borderBottom: "1px solid rgba(120, 138, 162, 0.18)" }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              color: "var(--accent)",
+              textTransform: "uppercase",
+            }}
+          >
             Bulk Edit
           </div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 800, color: "var(--text-primary)", marginTop: 2 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 17,
+              fontWeight: 800,
+              color: "rgba(245,248,252,0.98)",
+              marginTop: 4,
+            }}
+          >
             Apply changes to {count} submittal{count === 1 ? "" : "s"}
           </div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-body)",
+              fontSize: 11,
+              color: "rgba(176,190,210,0.82)",
+              marginTop: 6,
+            }}
+          >
             Leave any field blank to skip. Only the fields you touch will be updated.
           </div>
         </div>
 
-        <div style={{ padding: "14px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <Field label="Status">
             <Pills options={STATUSES} value={status} onChange={setStatus} />
           </Field>
@@ -126,32 +166,48 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
               value={discipline}
               onChange={(e) => setDiscipline(e.target.value)}
               placeholder="Structural"
-              style={{
-                width: "100%", padding: "6px 10px", fontSize: 12,
-                background: "var(--bg-input, var(--bg-surface-low))",
-                border: "1px solid var(--border-default)", borderRadius: 3,
-                color: "var(--text-primary)", fontFamily: "var(--font-body)",
-              }}
+              style={controlSurfaceStyle}
             />
           </Field>
           <Field label="Type">
             <Pills options={TYPES} value={submittalType} onChange={setSubmittalType} />
           </Field>
           <Field label="Required date">
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="date"
                 value={requiredDate}
-                onChange={(e) => { setRequiredDate(e.target.value); setClearRequiredDate(false); }}
+                onChange={(e) => {
+                  setRequiredDate(e.target.value);
+                  setClearRequiredDate(false);
+                }}
                 disabled={clearRequiredDate}
-                style={{ flex: 1, padding: "6px 8px", fontSize: 12, color: "var(--text-primary)" }}
+                style={{
+                  ...controlSurfaceStyle,
+                  flex: 1,
+                  opacity: clearRequiredDate ? 0.5 : 1,
+                }}
               />
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", cursor: "pointer" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  color: "rgba(176,190,210,0.82)",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={clearRequiredDate}
-                  onChange={(e) => { setClearRequiredDate(e.target.checked); if (e.target.checked) setRequiredDate(""); }}
-                  style={{ margin: 0 }}
+                  onChange={(e) => {
+                    setClearRequiredDate(e.target.checked);
+                    if (e.target.checked) setRequiredDate("");
+                  }}
+                  style={{ margin: 0, accentColor: "var(--accent)" }}
                 />
                 CLEAR
               </label>
@@ -162,24 +218,35 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
               rows={3}
               value={notesAppend}
               onChange={(e) => setNotesAppend(e.target.value)}
-              placeholder="Appended (with separator) — does not overwrite existing notes."
-              style={{
-                width: "100%", padding: "6px 10px", fontSize: 12, resize: "vertical",
-                background: "var(--bg-input, var(--bg-surface-low))",
-                border: "1px solid var(--border-default)", borderRadius: 3,
-                color: "var(--text-primary)", fontFamily: "var(--font-body)",
-              }}
+              placeholder="Appended with separator. Does not overwrite existing notes."
+              style={{ ...controlSurfaceStyle, resize: "vertical", minHeight: 88 }}
             />
           </Field>
         </div>
 
-        <div style={{ padding: "12px 18px", borderTop: "1px solid var(--divider)", display: "flex", justifyContent: "flex-end", gap: 8, background: "var(--bg-surface-low)" }}>
+        <div
+          style={{
+            padding: "14px 20px",
+            borderTop: "1px solid rgba(120, 138, 162, 0.18)",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            background: "rgba(255,255,255,0.03)",
+          }}
+        >
           <button
             onClick={reset}
             style={{
-              padding: "8px 14px", background: "transparent", border: "1px solid var(--border-default)",
-              borderRadius: 4, color: "var(--text-secondary)", cursor: "pointer",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+              padding: "9px 14px",
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(120, 138, 162, 0.22)",
+              borderRadius: 8,
+              color: "rgba(214,223,235,0.9)",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
             }}
           >
             CANCEL
@@ -187,9 +254,17 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
           <button
             onClick={apply}
             style={{
-              padding: "8px 14px", background: "var(--accent)", color: "#fff",
-              border: "none", borderRadius: 4, cursor: "pointer",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+              padding: "9px 16px",
+              background: "linear-gradient(135deg, rgba(86,176,255,0.98) 0%, rgba(38,134,233,0.98) 100%)",
+              color: "#04111f",
+              border: "1px solid rgba(86,176,255,0.38)",
+              borderRadius: 8,
+              cursor: "pointer",
+              boxShadow: "0 10px 24px rgba(17,113,190,0.28)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
             }}
           >
             APPLY TO {count}
@@ -203,7 +278,17 @@ export default function SubmittalBulkEditModal({ open, count, onCancel, onSubmit
 function Field({ label, children }) {
   return (
     <div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          fontWeight: 700,
+          color: "rgba(176,190,210,0.76)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
         {label}
       </div>
       {children}
@@ -213,20 +298,25 @@ function Field({ label, children }) {
 
 function Pills({ options, value, onChange }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
       {options.map((opt) => {
         const active = value === opt;
+
         return (
           <button
             key={opt}
             type="button"
             onClick={() => onChange(active ? "" : opt)}
             style={{
-              padding: "4px 10px", borderRadius: 3,
-              border: active ? "1px solid var(--accent)" : "1px solid var(--border-default)",
-              background: active ? "var(--accent-muted)" : "transparent",
-              color: active ? "var(--accent)" : "var(--text-secondary)",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+              padding: "5px 10px",
+              borderRadius: 999,
+              border: active ? "1px solid rgba(86,176,255,0.45)" : "1px solid rgba(120, 138, 162, 0.2)",
+              background: active ? "rgba(86,176,255,0.16)" : "rgba(255,255,255,0.02)",
+              color: active ? "rgba(144,205,255,0.98)" : "rgba(214,223,235,0.86)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
               cursor: "pointer",
             }}
           >

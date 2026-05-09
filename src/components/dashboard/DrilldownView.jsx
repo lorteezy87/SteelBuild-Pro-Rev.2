@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DonutChart from "@/components/shared/DonutChart";
 import CollapsibleCard from "@/components/shared/CollapsibleCard";
+import { Button } from "@/components/design-system";
 import ProjectCommandStrip from "./ProjectCommandStrip";
 import SteelExecutionStatusCard from "./SteelExecutionStatusCard";
 import FinancialSnapshotCard from "./FinancialSnapshotCard";
@@ -75,11 +76,12 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
   return (
     <div
       style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 76%, #000 24%) 0%, var(--bg-surface) 100%)",
+        border: "1px solid color-mix(in srgb, var(--border-default) 76%, rgba(255,255,255,0.06) 24%)",
+        borderRadius: "calc(var(--radius-card) + 4px)",
         minHeight: minHeight || "auto",
         overflow: "hidden",
+        boxShadow: "0 18px 40px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       <div
@@ -88,13 +90,13 @@ function Card({ title, count, tone = "accent", action, children, minHeight }) {
           alignItems: "center",
           justifyContent: "space-between",
           gap: 10,
-          padding: "12px 14px",
+          padding: "14px 16px",
           borderBottom: "1px solid var(--divider)",
-          background: "var(--bg-surface-low)",
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 3, height: 16, background: style.color, borderRadius: 2 }} />
+          <div style={{ width: 4, height: 18, background: style.color, borderRadius: 999 }} />
           <div
             style={{
               fontFamily: "var(--font-mono)",
@@ -158,14 +160,15 @@ function StatStrip({ stats }) {
           <div
             key={item.label}
             style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-default)",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 72%, #000 28%) 0%, var(--bg-surface) 100%)",
+              border: "1px solid color-mix(in srgb, var(--border-default) 78%, rgba(255,255,255,0.06) 22%)",
               borderTop: `2px solid ${isClearStat ? "var(--status-success)" : item.color}`,
-              borderRadius: "var(--radius-card)",
-              padding: "12px 14px",
+              borderRadius: "calc(var(--radius-card) + 2px)",
+              padding: "14px 14px",
               display: "flex",
               alignItems: "center",
               gap: 12,
+              boxShadow: "0 12px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
           >
             {item.chartValue != null && (
@@ -298,32 +301,16 @@ function QuickActionRail({ actions, onNavigate }) {
       }}
     >
       {actions.map((action) => (
-        <button
+        <Button
           key={action.label}
-          type="button"
           onClick={() => onNavigate(action.page)}
-          style={{
-            background: action.primary ? "var(--accent)" : "var(--bg-surface-low)",
-            color: action.primary ? "var(--accent-text)" : "var(--text-primary)",
-            border: action.primary ? "none" : "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "12px 10px",
-            minHeight: 44,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: 4,
-            cursor: "pointer",
-            textAlign: "left",
-          }}
+          variant={action.primary ? "primary" : "secondary"}
+          size="md"
+          style={{ minHeight: 44, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", textAlign: "left", gap: 4, padding: "10px 12px" }}
         >
           <span
             style={{
-              fontFamily: "var(--font-mono)",
               fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
             }}
           >
             {action.label}
@@ -338,7 +325,7 @@ function QuickActionRail({ actions, onNavigate }) {
           >
             {action.detail}
           </span>
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -1059,32 +1046,17 @@ export default function DrilldownView({
           }}>
             {lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
-          <button
-            type="button"
+          <Button
             onClick={() => {
               queryClient.invalidateQueries();
               setLastSynced(new Date());
             }}
             title="Refresh all data"
-            style={{
-              background: "none",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-btn)",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              padding: "3px 8px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              transition: "color 0.15s, border-color 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.borderColor = "var(--accent-border)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border-default)"; }}
+            variant="secondary"
+            size="sm"
           >
             &#x21BB;
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1097,14 +1069,9 @@ export default function DrilldownView({
           tone={derived.attentionItems.length > 0 ? "danger" : "accent"}
           count={taskInboxItems.length}
           action={
-            <button type="button" onClick={() => openPage("AlertsCenter")} style={{
-              background: "none", border: "none",
-              color: derived.attentionItems.length > 0 ? "var(--status-error)" : "var(--accent)",
-              cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9,
-              fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-            }}>
+            <Button type="button" onClick={() => openPage("AlertsCenter")} variant={derived.attentionItems.length > 0 ? "danger" : "outline"} size="sm">
               All alerts \u2192
-            </button>
+            </Button>
           }
         >
           {taskInboxItems.length > 0 ? (
@@ -1123,14 +1090,9 @@ export default function DrilldownView({
                   { label: "Upload Drawing", page: "Drawings" },
                   { label: "Add Work Package", page: "WorkPackages" },
                 ].map((qa) => (
-                  <button key={qa.label} type="button" onClick={() => openPage(qa.page)} style={{
-                    fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600,
-                    color: "var(--text-secondary)", background: "var(--bg-surface-low)",
-                    border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)",
-                    padding: "4px 10px", cursor: "pointer",
-                  }}>
+                  <Button key={qa.label} type="button" onClick={() => openPage(qa.page)} variant="secondary" size="sm">
                     {qa.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

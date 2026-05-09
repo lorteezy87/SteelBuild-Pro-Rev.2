@@ -248,7 +248,7 @@ html {
  *      they stay vivid on the near-white surfaces.
  *
  * Color system: Tailwind slate/neutral scale for surfaces/borders/text,
- * deep industrial gold (#B8860B) for accent, amber/emerald/rose/azure
+ * deep industrial gold (#B8860B) for accent, amber/emerald/red/azure
  * for semantic signals. No purple, no pink.
  * ────────────────────────────────────────────────────────── */
 [data-theme="light"] {
@@ -440,10 +440,11 @@ html .steelbuild-dark,
   --secondary:                var(--sbd-gold) !important;
   --secondary-light:          var(--sbd-gold-light) !important;
 
-  /* Status (matches SBD palette: emerald/amber/rose/steel-blue) */
+  /* Status (matches SBD palette: emerald/amber/red/steel-blue) */
   --status-success:           var(--sbd-success);
   --status-warning:           var(--sbd-warning);
   --status-error:             var(--sbd-error);
+  --status-error-bright:      var(--sbd-error);
   --status-info:              var(--sbd-info);
   --status-review:            var(--sbd-review);
 
@@ -451,8 +452,8 @@ html .steelbuild-dark,
   --success-border:           rgba(52,211,153,0.35);
   --warning-muted:            rgba(245,158,11,0.12);
   --warning-border:           rgba(245,158,11,0.35);
-  --danger-muted:             rgba(248,113,113,0.12);
-  --danger-border:            rgba(248,113,113,0.35);
+  --danger-muted:             rgba(239,68,68,0.12);
+  --danger-border:            rgba(239,68,68,0.35);
   --info-muted:               var(--sbd-accent-muted);
   --info-border:              var(--sbd-accent-border);
 

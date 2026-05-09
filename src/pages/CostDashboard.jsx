@@ -15,10 +15,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Line, ReferenceLine, Area, AreaChart
 } from "recharts";
-import { AlertTriangle, ShieldAlert, Download, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { Button as IconButton } from "@/components/ui/button";
 import { toast } from "sonner";
-import { CommandBar } from "@/components/design-system";
+import { Button as DSButton, CommandBar } from "@/components/design-system";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -337,7 +337,7 @@ export default function CostDashboard() {
   }
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "6px 24px 24px" }}>
       <CommandBar
         eyebrow={project?.name || "COST"}
         title="Cost Dashboard"
@@ -345,20 +345,12 @@ export default function CostDashboard() {
         unit=" · COST CODES"
         subtitle="Budget vs actual vs committed · variance monitoring"
       >
-        <button
-          onClick={exportCSV}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-        >
-          <Download size={12} /> Export
-        </button>
-        <button
-          onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> Add Cost Code
-        </button>
+        <DSButton variant="secondary" icon="download" onClick={exportCSV}>
+          Export
+        </DSButton>
+        <DSButton variant="primary" icon="plus" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}>
+          Add Cost Code
+        </DSButton>
       </CommandBar>
 
       <KPIStrip items={kpis} />
@@ -373,7 +365,7 @@ export default function CostDashboard() {
         </PhoenixPanel>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, marginBottom: 14 }}>
         <PhoenixPanel title="Budget vs Actual vs Committed" style={{ gridColumn: barChartData.length > 6 ? "span 2" : "span 1" }}>
           <div style={{ padding: 16 }}>
             {barChartData.length === 0 ? (
@@ -492,8 +484,8 @@ export default function CostDashboard() {
                   </PTD>
                   <PTD>
                     <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></Button>
+                      <IconButton variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></IconButton>
+                      <IconButton variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></IconButton>
                     </div>
                   </PTD>
                 </PTR>

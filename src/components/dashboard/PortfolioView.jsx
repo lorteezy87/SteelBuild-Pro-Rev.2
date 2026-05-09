@@ -12,6 +12,7 @@ import {
   summarizeProjectSchedule,
   MiniProjectTimeline,
 } from "./portfolioTimeline";
+import { Button } from "@/components/design-system";
 import { MiniSparkline, PhoenixTooltip, Card, HeaderBar, KPIBlock } from "./portfolioPrimitives";
 import DeliveryRail from "./DeliveryRail";
 import CoExposurePanel from "./CoExposurePanel";
@@ -644,17 +645,18 @@ export default function PortfolioView({
   }, [enrichedMetrics, allWPs]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)", background: "var(--bg-page)" }}>
       {/* Brand Header */}
       <div
         style={{
-          background: "var(--bg-surface-low)",
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 78%, #000 22%) 0%, color-mix(in srgb, var(--bg-surface) 94%, #000 6%) 100%)",
           borderBottom: "1px solid var(--divider)",
-          padding: "20px 24px",
+          padding: "22px 24px 20px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
+          boxShadow: "0 14px 34px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.04)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -701,24 +703,9 @@ export default function PortfolioView({
           >
             {today.replace(/,/g, " ·")}
           </div>
-          <button
-            onClick={() => navigate("/Projects")}
-            style={{
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              borderRadius: "var(--radius-btn)",
-              border: "1px solid var(--accent-border)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "8px 16px",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-          >
+          <Button variant="primary" icon="plus" onClick={() => navigate("/Projects")}>
             New Project
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -742,9 +729,9 @@ export default function PortfolioView({
         return (
           <div
             style={{
-              background: "var(--bg-surface-low)",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 72%, #000 28%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
               borderBottom: "1px solid var(--divider)",
-              padding: "12px 24px",
+              padding: "14px 24px",
               display: "flex",
               alignItems: "stretch",
               gap: 12,
@@ -770,24 +757,27 @@ export default function PortfolioView({
                     onClick={() => openProjectDashboard(p.id)}
                     className="sbd-card sbd-card-hover"
                     style={{
-                      background: "var(--bg-surface)",
+                      background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 76%, #000 24%) 0%, var(--bg-surface) 100%)",
                       border: `1px solid var(--border-default)`,
                       borderLeft: `3px solid ${sevColor}`,
-                      borderRadius: 4,
-                      padding: "8px 12px",
+                      borderRadius: 14,
+                      padding: "10px 12px",
                       cursor: "pointer",
                       display: "flex",
                       flexDirection: "column",
                       gap: 4,
-                      transition: "border-color 0.12s, transform 0.12s",
+                      transition: "border-color 0.12s, transform 0.12s, box-shadow 0.12s",
+                      boxShadow: "0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = "var(--accent)";
                       e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow = "0 16px 30px rgba(0,0,0,0.24), 0 0 20px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.05)";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.borderColor = "var(--border-default)";
                       e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)";
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
@@ -1200,71 +1190,29 @@ export default function PortfolioView({
             title="Project Health Overview"
             count={displayMetrics.length}
             right={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {[
                   { key: "health", label: "Default" },
                   { key: "rfi", label: "Most RFIs" },
                   { key: "deadline", label: "Soonest Deadline" },
                 ].map((opt) => (
-                  <button
+                  <Button
                     key={opt.key}
                     onClick={() => setSortMode(opt.key)}
-                    style={{
-                      background: sortMode === opt.key ? "var(--accent)" : "var(--bg-surface)",
-                      color: sortMode === opt.key ? "var(--accent-text)" : "var(--text-secondary)",
-                      border: sortMode === opt.key ? "1px solid var(--accent-border)" : "1px solid var(--border-default)",
-                      borderRadius: 999,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      padding: "5px 12px",
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      transition: "background 0.15s, color 0.15s",
-                    }}
+                    variant={sortMode === opt.key ? "primary" : "secondary"}
+                    size="sm"
                   >
                     {opt.label}
-                  </button>
+                  </Button>
                 ))}
                 {kpiFilter && (
-                  <button
-                    onClick={() => setKpiFilter(null)}
-                    style={{
-                      background: "var(--danger-muted)",
-                      color: "var(--status-error)",
-                      border: "1px solid var(--danger-border)",
-                      borderRadius: 999,
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      padding: "5px 12px",
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <Button onClick={() => setKpiFilter(null)} variant="danger" size="sm">
                     Clear Filter ✕
-                  </button>
+                  </Button>
                 )}
-                <button
-                  onClick={() => navigate("/Projects")}
-                  style={{
-                    background: "var(--bg-surface)",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-btn)",
-                    color: "var(--accent)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: "6px 10px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                    cursor: "pointer",
-                  }}
-                >
+                <Button onClick={() => navigate("/Projects")} variant="secondary" size="sm">
                   Manage Projects →
-                </button>
+                </Button>
               </div>
             }
           />
@@ -1280,7 +1228,7 @@ export default function PortfolioView({
           <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "min(980px, 78vh)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "var(--bg-surface-low)" }}>
+                <tr style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)" }}>
                   {["#", "Project", "Phase", "Timeline", "Health", "Budget", "Actual", "Variance", "Proj. Margin", "Open RFIs", "Overdue RFIs", "WP Progress", "Pending COs", "Tonnage", ""].map((h, idx) => (
                     <th
                       key={idx}
@@ -1295,7 +1243,7 @@ export default function PortfolioView({
                         whiteSpace: "nowrap",
                         position: "sticky",
                         top: 0,
-                        background: "var(--bg-surface-low)",
+                        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
                         zIndex: 2,
                       }}
                     >
@@ -1673,9 +1621,9 @@ export default function PortfolioView({
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textAlign: "center", maxWidth: 240, lineHeight: 1.5 }}>
                     Set up cost codes and enter expenses to enable financial tracking and cost control.
                   </div>
-                  <button onClick={() => navigate("/Projects")} style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, padding: "6px 14px", cursor: "pointer", letterSpacing: "0.06em" }}>
-                    SET UP COST CODES
-                  </button>
+                  <Button onClick={() => navigate("/Projects")} variant="primary" size="sm">
+                    Set Up Cost Codes
+                  </Button>
                 </div>
               )}
             </div>
@@ -1689,7 +1637,7 @@ export default function PortfolioView({
                   { label: "Pending", count: financials.pendingCOs, value: financials.pendingValue, color: "var(--status-warning)" },
                   { label: "Rejected", count: financials.rejectedCOs, value: financials.rejectedValue, color: "var(--status-error)" },
                 ].map((b) => (
-                  <div key={b.label} style={{ background: `${b.color}10`, border: `1px solid ${b.color}30`, borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
+                  <div key={b.label} style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${b.color} 12%, var(--bg-surface-high)) 0%, color-mix(in srgb, ${b.color} 4%, var(--bg-surface)) 100%)`, border: `1px solid color-mix(in srgb, ${b.color} 34%, var(--border-default) 66%)`, borderRadius: 14, padding: "10px 10px 9px", textAlign: "center", boxShadow: "0 12px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.04)" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.10em", color: b.color, textTransform: "uppercase" }}>{b.label}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: b.color }}>{b.count}</div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatCurrency(b.value).replace(/\.\d+/, "")}</div>
@@ -1768,9 +1716,9 @@ export default function PortfolioView({
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "var(--bg-surface-low)" }}>
+                <tr style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)" }}>
                   {["Project", "WPs", "In Fab", "Complete", "On Hold", "Fab %", "Tonnage", "Erection Ready", "Constraints"].map((h) => (
-                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "8px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "var(--bg-surface-low)", zIndex: 1 }}>
+                    <th key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", padding: "10px 8px", textAlign: h === "Constraints" ? "left" : "center", whiteSpace: "nowrap", position: "sticky", top: 0, background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 74%, #000 26%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)", zIndex: 1 }}>
                       {h}
                     </th>
                   ))}
@@ -1840,10 +1788,10 @@ export default function PortfolioView({
        * columns read as a substantial surface even when only 1-2 items
        * are present per column, and so there's always room for the
        * column header + 2-3 items without feeling cramped. */}
-      <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 320 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "5fr 4fr 3fr", gap: 0, minHeight: 320, background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 68%, #000 32%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)" }}>
 
         {/* Column 1: TODAY'S PRIORITIES */}
-        <div style={{ borderRight: "1px solid var(--divider)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ borderRight: "1px solid var(--divider)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-error)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 3, height: 12, background: "var(--status-error)", borderRadius: 1 }} />
             Today's Priorities
@@ -1859,10 +1807,11 @@ export default function PortfolioView({
               return (
                 <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
                   borderLeft: `3px solid ${sevColor}`,
-                  background: i === 0 ? `${sevColor}12` : "transparent",
-                  borderRadius: "0 4px 4px 0", padding: "8px 10px", cursor: "pointer",
-                  transition: "background 0.12s",
-                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = i === 0 ? `${sevColor}12` : "transparent"}>
+                  background: i === 0 ? `color-mix(in srgb, ${sevColor} 12%, var(--bg-surface))` : "color-mix(in srgb, var(--bg-surface) 88%, #000 12%)",
+                  borderRadius: "0 12px 12px 0", padding: "10px 12px", cursor: "pointer",
+                  transition: "background 0.12s, box-shadow 0.12s",
+                  boxShadow: "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)",
+                }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.boxShadow = "0 14px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = i === 0 ? `color-mix(in srgb, ${sevColor} 12%, var(--bg-surface))` : "color-mix(in srgb, var(--bg-surface) 88%, #000 12%)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)"; }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -1895,7 +1844,7 @@ export default function PortfolioView({
         </div>
 
         {/* Column 2: WAITING ON */}
-        <div style={{ borderRight: "1px solid var(--divider)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ borderRight: "1px solid var(--divider)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--status-warning)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 3, height: 12, background: "var(--status-warning)", borderRadius: 1 }} />
             Waiting On ({pccData.waitingOn.length})
@@ -1907,9 +1856,11 @@ export default function PortfolioView({
           ) : (
             pccData.waitingOn.slice(0, 8).map((item, i) => (
               <div key={i} onClick={() => navigate(createPageUrl(item.nav))} style={{
-                padding: "6px 8px", borderBottom: "1px solid var(--divider)", cursor: "pointer",
-                transition: "background 0.12s",
-              }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", borderRadius: 10,
+                background: "color-mix(in srgb, var(--bg-surface) 90%, #000 10%)",
+                transition: "background 0.12s, box-shadow 0.12s",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+              }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--hover-bg)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.03)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--bg-surface) 90%, #000 10%)"; e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,0.03)"; }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -1933,7 +1884,7 @@ export default function PortfolioView({
         </div>
 
         {/* Column 3: RISK WATCHLIST */}
-        <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 3, height: 12, background: "var(--text-muted)", borderRadius: 1 }} />
             Risk Watchlist
@@ -1948,9 +1899,9 @@ export default function PortfolioView({
               return (
                 <div key={i} onClick={() => openProjectDashboard(p.projectId)} style={{
                   borderLeft: `3px solid ${color}`,
-                  background: `${color}08`, borderRadius: "0 4px 4px 0",
-                  padding: "6px 8px", cursor: "pointer",
-                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = `${color}08`}>
+                  background: `color-mix(in srgb, ${color} 10%, var(--bg-surface))`, borderRadius: "0 12px 12px 0",
+                  padding: "8px 10px", cursor: "pointer", boxShadow: "0 10px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.03)",
+                }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"} onMouseLeave={(e) => e.currentTarget.style.background = `color-mix(in srgb, ${color} 10%, var(--bg-surface))`}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>{p.project}</span>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 800, color }}>{p.score}</span>
@@ -1973,13 +1924,14 @@ export default function PortfolioView({
         style={{
           width: 280,
           flexShrink: 0,
-          background: "var(--bg-surface-low)",
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 78%, #000 22%) 0%, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 100%)",
           borderLeft: "1px solid var(--divider)",
           overflowY: "auto",
-          padding: "16px 14px",
+          padding: "18px 16px",
           display: "flex",
           flexDirection: "column",
-          gap: 14,
+          gap: 16,
+          boxShadow: "inset 1px 0 0 rgba(255,255,255,0.03)",
         }}
       >
         {/* Portfolio Health Gauge */}
@@ -2062,7 +2014,7 @@ export default function PortfolioView({
             <div style={{ width: 3, height: 12, background: "var(--status-info)", borderRadius: 1 }} />
             How Health is Scored
           </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", lineHeight: 1.5, padding: "6px 8px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 4 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", lineHeight: 1.5, padding: "10px 10px", background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 70%, #000 30%) 0%, var(--bg-surface) 100%)", border: "1px solid var(--border-default)", borderRadius: 14, boxShadow: "0 12px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.03)" }}>
             <div style={{ marginBottom: 4, color: "var(--text-secondary)", fontWeight: 600 }}>Score = weighted average (0–100)</div>
             {[
               { label: "RFI Health", weight: "30%", desc: "Overdue ratio, open backlog" },
@@ -2074,7 +2026,7 @@ export default function PortfolioView({
                 <span>{f.label} <span style={{ color: "var(--accent)" }}>({f.weight})</span></span>
               </div>
             ))}
-            <div style={{ marginTop: 4, fontSize: 9, color: "var(--text-muted)" }}>
+            <div style={{ marginTop: 6, fontSize: 9, color: "var(--text-muted)" }}>
               75+ = On Track · 50–74 = Watch · 49- = At Risk
               <br />Missing budget data penalizes score (70/100)
             </div>
@@ -2092,7 +2044,7 @@ export default function PortfolioView({
             { label: "In Transit", value: deliveriesStats.inTransit, color: "var(--status-info)" },
             { label: "Late", value: deliveriesStats.late, color: deliveriesStats.late > 0 ? "var(--status-error)" : "var(--text-muted)" },
           ].map((r) => (
-            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 8px", fontFamily: "var(--font-mono)", fontSize: 10, borderBottom: "1px solid var(--divider)" }}>
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", fontFamily: "var(--font-mono)", fontSize: 10, borderBottom: "1px solid var(--divider)", background: "color-mix(in srgb, var(--bg-surface) 92%, #000 8%)", borderRadius: 10 }}>
               <span style={{ color: "var(--text-secondary)" }}>{r.label}</span>
               <span style={{ fontWeight: 700, color: r.color }}>{r.value}</span>
             </div>

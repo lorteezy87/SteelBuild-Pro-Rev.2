@@ -22,28 +22,47 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "space-between",
-        gap: 16,
+        gap: 18,
         flexWrap: "wrap",
-        padding: "14px 18px",
-        background: "var(--bg-surface)",
-        backdropFilter: "blur(20px) saturate(140%)",
-        WebkitBackdropFilter: "blur(20px) saturate(140%)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+        padding: "16px 18px",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 88%, #000 12%) 100%)",
+        backdropFilter: "blur(24px) saturate(150%)",
+        WebkitBackdropFilter: "blur(24px) saturate(150%)",
+        border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
+        borderRadius: "18px",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.34)",
         marginBottom: 16,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(90deg, rgba(86,176,255,0.10) 0%, transparent 28%, transparent 72%, rgba(200,155,32,0.07) 100%)",
+          pointerEvents: "none",
+        }}
+      />
       <div style={{ minWidth: 0, flex: "1 1 auto" }}>
         {eyebrow && (
           <div
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
               fontFamily: "var(--font-mono)",
-              fontSize: 9,
+              fontSize: 8,
+              fontWeight: 700,
               color: "var(--text-muted)",
               letterSpacing: "0.18em",
               textTransform: "uppercase",
-              marginBottom: 6,
+              marginBottom: 8,
+              padding: "4px 8px",
+              borderRadius: 999,
+              background: "rgba(86,176,255,0.08)",
+              border: "1px solid rgba(86,176,255,0.14)",
             }}
           >
             {eyebrow}
@@ -53,13 +72,12 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
           <h1
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: 30,
-              fontWeight: 300,
-              letterSpacing: "0.02em",
+              fontSize: 34,
+              fontWeight: 500,
+              letterSpacing: "0.01em",
               color: "var(--text-primary)",
               margin: 0,
-              lineHeight: 1.1,
-              textTransform: "uppercase",
+              lineHeight: 1.02,
             }}
           >
             {title}
@@ -68,15 +86,16 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
             <span
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 700,
-                padding: "3px 10px",
-                borderRadius: 4,
-                background: "var(--accent-muted)",
-                border: "1px solid var(--accent-border)",
+                padding: "5px 10px",
+                borderRadius: 999,
+                background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
                 color: "var(--accent)",
                 letterSpacing: "0.10em",
                 whiteSpace: "nowrap",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
               }}
             >
               {count}
@@ -89,15 +108,16 @@ export default function CommandBar({ eyebrow, title, count, unit, subtitle, chil
             style={{
               fontFamily: "var(--font-body)",
               fontSize: 12,
-              color: "var(--text-muted)",
-              marginTop: 6,
+              color: "var(--text-secondary)",
+              marginTop: 8,
+              maxWidth: 720,
             }}
           >
             {subtitle}
           </div>
         )}
       </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0, position: "relative", zIndex: 1 }}>
         {children}
       </div>
     </div>
