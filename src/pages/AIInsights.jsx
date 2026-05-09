@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatDate, isOverdue } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
+import PlanningStudio from "../components/reports/PlanningStudio";
+import { useProjectContext } from "../components/shared/useProjectContext";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend
@@ -49,6 +51,7 @@ function SectionTitle({ title, sub }) {
 
 export default function PortfolioOverview() {
   const navigate = useNavigate();
+  const { activeProject } = useProjectContext();
 
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
   const { data: allRFIs = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
@@ -58,6 +61,7 @@ export default function PortfolioOverview() {
   const { data: allLogs = [] } = useQuery({ queryKey: ["all-logs-portfolio"], queryFn: () => base44.entities.DailyLog.list(), initialData: [] });
   const { data: allDeliveries = [] } = useQuery({ queryKey: ["all-deliveries-portfolio"], queryFn: () => base44.entities.Delivery.list(), initialData: [] });
   const { data: allActionItems = [] } = useQuery({ queryKey: ["all-action-items-portfolio"], queryFn: () => base44.entities.ActionItem.list(), initialData: [] });
+  const { data: allTasks = [] } = useQuery({ queryKey: ["all-schedule-tasks-portfolio"], queryFn: () => base44.entities.ScheduleTask.list(), initialData: [] });
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -164,6 +168,17 @@ export default function PortfolioOverview() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <PlanningStudio
+        projects={projects}
+        tasks={allTasks}
+        rfis={allRFIs}
+        cos={allCOs}
+        deliveries={allDeliveries}
+        actionItems={allActionItems}
+        codes={allCodes}
+        activeProject={activeProject}
+      />
+
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div>
