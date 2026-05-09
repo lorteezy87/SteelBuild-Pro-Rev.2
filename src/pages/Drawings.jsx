@@ -399,14 +399,6 @@ export default function Drawings() {
     return counts;
   }, [drawings]);
 
-  const stats = useMemo(() => ({
-    sets: Object.keys(drawingSets).length,
-    total: drawings.length,
-    released: drawings.filter(d => d.stage === "Released").length,
-    inReview: drawings.filter(d => ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)).length,
-    overdue: drawings.filter(d => isOverdue(d)).length,
-    priority: drawings.filter(d => d.priority_flag).length,
-  }), [drawings, drawingSets]);
 
   // ── Drawing set grouping (for set approval) ────────────────────────────────
 
@@ -435,6 +427,15 @@ export default function Drawings() {
       }))
       .sort((a, b) => a.setName.localeCompare(b.setName));
   }, [filtered]);
+
+  const stats = useMemo(() => ({
+    sets: Object.keys(drawingSets).length,
+    total: drawings.length,
+    released: drawings.filter(d => d.stage === "Released").length,
+    inReview: drawings.filter(d => ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)).length,
+    overdue: drawings.filter(d => isOverdue(d)).length,
+    priority: drawings.filter(d => d.priority_flag).length,
+  }), [drawings, drawingSets]);
 
   useEffect(() => {
     if (!projectId || !drawings.length) return;
