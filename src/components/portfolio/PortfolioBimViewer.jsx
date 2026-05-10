@@ -139,6 +139,15 @@ function disposeObject(root) {
   });
 }
 
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(window.WebGLRenderingContext && (canvas.getContext("webgl2") || canvas.getContext("webgl")));
+  } catch {
+    return false;
+  }
+}
+
 function statusColor(status) {
   const s = String(status || "").toLowerCase();
   if (s.includes("complete") || s.includes("delivered")) return "#22c55e";
@@ -211,12 +220,17 @@ export default function PortfolioBimViewer({
   const mountRef = useRef(null);
   const fileInputRef = useRef(null);
   const apiRef = useRef(null);
+  const isolatedRef = useRef(false);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [mode, setMode] = useState("model");
   const [isolated, setIsolated] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const [modelState, setModelState] = useState({ source: "generated", status: "idle", message: "", count: 0 });
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    isolatedRef.current = isolated;
+  }, [isolated]);
 
   const pieces = useMemo(() => {
     const source = (workPackages || []).slice(0, 42);
@@ -250,6 +264,10 @@ export default function PortfolioBimViewer({
 
     const updateLayout = () => setIsCompact(section.getBoundingClientRect().width < 760);
     updateLayout();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateLayout);
+      return () => window.removeEventListener("resize", updateLayout);
+    }
     const observer = new ResizeObserver(updateLayout);
     observer.observe(section);
     return () => observer.disconnect();
@@ -262,6 +280,15 @@ export default function PortfolioBimViewer({
     async function init() {
       const mount = mountRef.current;
       if (!mount) return;
+      if (!supportsWebGL()) {
+        setModelState({
+          source: "fallback",
+          status: "error",
+          message: "3D preview requires WebGL. Use a WebGL-capable browser or open the project details.",
+          count: pieces.length,
+        });
+        return;
+      }
 
       const [THREE, { OrbitControls }] = await Promise.all([
         import("three"),
@@ -276,7 +303,19 @@ export default function PortfolioBimViewer({
       const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120);
       camera.position.set(12, 10, 14);
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+      } catch (error) {
+        console.error("Portfolio BIM preview renderer failed:", error);
+        setModelState({
+          source: "fallback",
+          status: "error",
+          message: "3D preview could not start in this browser session. Project model data is still available in the panel.",
+          count: pieces.length,
+        });
+        return;
+      }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -725,8 +764,8 @@ export default function PortfolioBimViewer({
           forEachMaterial(m, (mat) => {
             if (mat.color && m.userData.baseColor) mat.color.copy(m.userData.baseColor);
             mat.emissive?.set?.("#000000");
-            mat.opacity = isolated && mesh && m !== mesh ? 0.12 : 1;
-            mat.transparent = isolated && mesh && m !== mesh;
+            mat.opacity = isolatedRef.current && mesh && m !== mesh ? 0.12 : 1;
+            mat.transparent = isolatedRef.current && mesh && m !== mesh;
           });
         });
         if (mesh) {
@@ -780,8 +819,13 @@ export default function PortfolioBimViewer({
       };
 
       resize();
-      const observer = new ResizeObserver(resize);
-      observer.observe(mount);
+      let observer = null;
+      if (typeof ResizeObserver === "undefined") {
+        window.addEventListener("resize", resize);
+      } else {
+        observer = new ResizeObserver(resize);
+        observer.observe(mount);
+      }
 
       const animate = () => {
         controls.update();
@@ -794,7 +838,8 @@ export default function PortfolioBimViewer({
       cleanup = () => {
         cancelAnimationFrame(frameId);
         if (streamPoll) window.clearInterval(streamPoll);
-        observer.disconnect();
+        observer?.disconnect?.();
+        if (!observer) window.removeEventListener("resize", resize);
         renderer.domElement.removeEventListener("pointermove", onPointerMove);
         renderer.domElement.removeEventListener("mousedown", onMouseDown);
         renderer.domElement.removeEventListener("click", onClick);
@@ -821,7 +866,7 @@ export default function PortfolioBimViewer({
       disposed = true;
       cleanup();
     };
-  }, [pieces, mode, isolated, modelDocument]);
+  }, [pieces, mode, modelDocument]);
 
   useEffect(() => {
     apiRef.current?.applyIsolation(isolated);
@@ -867,6 +912,20 @@ export default function PortfolioBimViewer({
     >
       <div style={{ position: "relative", minHeight: isCompact ? 460 : 520, background: "#071017" }}>
         <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
+        {modelState.status === "loading" && (
+          <ViewerOverlay
+            title="Loading model"
+            message={modelState.message || "Preparing 3D model preview"}
+          />
+        )}
+        {modelState.status === "error" && (
+          <ViewerOverlay
+            title="3D preview unavailable"
+            message={modelState.message}
+            actionLabel={project?.id ? "Open project" : null}
+            onAction={project?.id ? onOpenProject : null}
+          />
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -1136,6 +1195,49 @@ function StatPill({ label, value }) {
     <div style={{ minWidth: 86, padding: "8px 10px", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, background: "rgba(2,6,23,0.68)" }}>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#94a3b8", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, color: "#f8fafc", marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
+
+function ViewerOverlay({ title, message, actionLabel, onAction }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 3,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        background: "linear-gradient(180deg, rgba(7,16,23,0.78), rgba(7,16,23,0.92))",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          width: "min(420px, 100%)",
+          border: "1px solid rgba(148,163,184,0.24)",
+          borderRadius: 8,
+          background: "rgba(8,13,20,0.94)",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.42)",
+          padding: 18,
+          textAlign: "center",
+          pointerEvents: "auto",
+        }}
+      >
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "#f8fafc" }}>
+          {title}
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#a8b4c8", lineHeight: 1.45, marginTop: 8 }}>
+          {message}
+        </div>
+        {actionLabel && onAction && (
+          <button type="button" onClick={onAction} style={{ ...toolbarButtonStyle, marginTop: 14, color: "var(--accent)", borderColor: "var(--accent)" }}>
+            {actionLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
