@@ -113,6 +113,7 @@ export default function RFIs() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [density, setDensity] = useState(loadDensity);
   const [insightsCollapsed, setInsightsCollapsed] = useState(loadInsightsCollapsed);
+  const [savingAttachments, setSavingAttachments] = useState(false);
   const handleDensityChange = (v) => {
     setDensity(v);
     try { localStorage.setItem(DENSITY_LS_KEY, v); } catch { /* noop */ }
@@ -368,6 +369,50 @@ export default function RFIs() {
 
   const toggleAll = (checked) =>
     setSelectedIds(checked ? new Set(filtered.map((r) => r.id)) : new Set());
+
+  const uploadRfiPdfDocuments = async (rfiRecord, files = []) => {
+    if (!rfiRecord?.id || !files.length) return;
+
+    setSavingAttachments(true);
+    try {
+      const uploadedBy = await base44.auth.me?.()
+        .then((user) => user?.email)
+        .catch(() => "");
+      const project = projects.find((p) => p.id === (rfiRecord.project_id || projectId));
+      const now = new Date().toISOString();
+
+      for (const file of files) {
+        const uploaded = await base44.integrations.Core.UploadFile({ file });
+        await base44.entities.Document.create({
+          project_id: rfiRecord.project_id || projectId,
+          project_name: rfiRecord.project_name || project?.name || "",
+          rfi_id: rfiRecord.id,
+          display_name: file.name,
+          description: `Attachment for ${rfiRecord.rfi_number || "RFI"}`,
+          file_name: file.name,
+          file_url: uploaded.file_url,
+          file_type: "pdf",
+          file_size_kb: Math.max(1, Math.round(file.size / 1024)),
+          mime_type: file.type || "application/pdf",
+          category: "RFI",
+          document_type: "RFI Attachment",
+          discipline: rfiRecord.discipline || "Other",
+          status: "Current",
+          revision_number: "0",
+          revision_date: now.slice(0, 10),
+          uploaded_by: uploadedBy || "Unknown",
+          uploaded_date: now,
+          tags: ["RFI", rfiRecord.rfi_number || rfiRecord.id].filter(Boolean),
+        });
+      }
+
+      await qc.invalidateQueries({ queryKey: ["rfi-documents", rfiRecord.id] });
+      await qc.invalidateQueries({ queryKey: ["documents", rfiRecord.project_id || projectId] });
+      toast.success(`${files.length} PDF${files.length === 1 ? "" : "s"} attached to ${rfiRecord.rfi_number || "RFI"}`);
+    } finally {
+      setSavingAttachments(false);
+    }
+  };
 
   /* ── Loading ── */
   if (rfisLoading) {
@@ -734,42 +779,48 @@ export default function RFIs() {
         <RFIFormModal
           open={showForm}
           onClose={() => { setShowForm(false); setEditingRFI(null); }}
-          onSave={async (data) => {
-            if (editingRFI) {
-              updateMut.mutate({
-                id: editingRFI.id,
-                data: {
+          onSave={async (data, pdfFiles = []) => {
+            try {
+              if (editingRFI) {
+                const updated = await updateMut.mutateAsync({
+                  id: editingRFI.id,
+                  data: {
+                    ...data,
+                    project_name:
+                      projects.find((p) => p.id === (data.project_id || projectId))?.name ||
+                      data.project_name ||
+                      editingRFI.project_name ||
+                      "",
+                  },
+                });
+                await uploadRfiPdfDocuments(updated || { ...editingRFI, ...data }, pdfFiles);
+              } else {
+                const num =
+                  data.rfi_number ||
+                  (await getNextFormattedNumber({
+                    projectId: data.project_id || projectId,
+                    recordType: "RFI",
+                    entityName: "RFI",
+                    fieldName: "rfi_number",
+                    prefix: "RFI #",
+                  }));
+                const created = await createMut.mutateAsync({
                   ...data,
+                  rfi_number: num,
                   project_name:
                     projects.find((p) => p.id === (data.project_id || projectId))?.name ||
                     data.project_name ||
-                    editingRFI.project_name ||
                     "",
-                },
-              });
-            } else {
-              const num =
-                data.rfi_number ||
-                (await getNextFormattedNumber({
-                  projectId: data.project_id || projectId,
-                  recordType: "RFI",
-                  entityName: "RFI",
-                  fieldName: "rfi_number",
-                  prefix: "RFI #",
-                }));
-              createMut.mutate({
-                ...data,
-                rfi_number: num,
-                project_name:
-                  projects.find((p) => p.id === (data.project_id || projectId))?.name ||
-                  data.project_name ||
-                  "",
-              });
+                });
+                await uploadRfiPdfDocuments(created, pdfFiles);
+              }
+              setShowForm(false);
+              setEditingRFI(null);
+            } catch (error) {
+              toastCrudError(error, "Failed to save RFI");
             }
-            setShowForm(false);
-            setEditingRFI(null);
           }}
-          saving={createMut.isPending || updateMut.isPending}
+          saving={createMut.isPending || updateMut.isPending || savingAttachments}
           rfi={editingRFI}
           projectId={projectId}
         />
