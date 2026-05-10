@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { X, Upload, FileText, CheckCircle2, ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -256,11 +256,20 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                     {matchedProject.name}
                   </div>
                 ) : (
+                  <>
+                  <DarkProjectSelect
+                    value={chosenProjectId || ""}
+                    onChange={setChosen}
+                    options={projects.map((p) => ({
+                      value: p.id,
+                      label: `${p.project_number ? `${p.project_number} - ` : ""}${p.name || "Unnamed project"}`,
+                    }))}
+                  />
                   <select
                     value={chosenProjectId || ""}
                     onChange={(e) => setChosen(e.target.value)}
                     style={{
-                      width: "100%", padding: "6px 10px", fontSize: 12,
+                      display: "none", width: "100%", padding: "6px 10px", fontSize: 12,
                       background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2,
                       color: "var(--text-primary)", fontFamily: "var(--font-body)",
                     }}
@@ -272,6 +281,7 @@ export default function RfiLogImportModal({ open, projectId, projectName, projec
                       </option>
                     ))}
                   </select>
+                  </>
                 )}
                 <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>
                   Log job: {header.job_number ? <strong>{header.job_number}</strong> : "—"}
@@ -394,6 +404,51 @@ function Td({ children, mono: isMono, accent, success }) {
   );
 }
 
+function DarkProjectSelect({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen((next) => !next)} style={projectSelectButtonStyle}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {selected?.label || "Select project"}
+        </span>
+        <span style={{ color: AI, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}>v</span>
+      </button>
+      {open && (
+        <div style={projectSelectMenuStyle}>
+          <button type="button" onClick={() => { onChange(""); setOpen(false); }} style={projectSelectOptionStyle(!value)}>
+            Select project
+          </button>
+          {options.map((option) => (
+            <button key={option.value} type="button" onClick={() => { onChange(option.value); setOpen(false); }} style={projectSelectOptionStyle(option.value === value)}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const btnPrimary = {
   padding: "8px 22px", background: AI, color: "#000",
   border: "none", borderRadius: 2,
@@ -407,3 +462,50 @@ const btnGhost = {
   fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
   letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer",
 };
+
+const projectSelectButtonStyle = {
+  width: "100%",
+  minHeight: 36,
+  padding: "7px 10px",
+  border: "1px solid var(--border-default)",
+  borderRadius: 6,
+  background: "rgba(5, 10, 18, 0.98)",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const projectSelectMenuStyle = {
+  position: "absolute",
+  zIndex: 4000,
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  maxHeight: 240,
+  overflowY: "auto",
+  padding: 4,
+  background: "linear-gradient(180deg, rgba(7, 13, 24, 0.998), rgba(4, 9, 18, 0.998))",
+  border: `1px solid color-mix(in srgb, ${AI} 38%, var(--border-default))`,
+  borderRadius: 8,
+  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+};
+
+const projectSelectOptionStyle = (active) => ({
+  width: "100%",
+  padding: "8px 10px",
+  border: "1px solid transparent",
+  borderRadius: 6,
+  background: active ? `color-mix(in srgb, ${AI} 14%, transparent)` : "transparent",
+  color: active ? AI : "var(--text-primary)",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  fontWeight: active ? 800 : 600,
+  textAlign: "left",
+  cursor: "pointer",
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ const Field = ({ label, span = 1, children }) => (
 
 export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi = null, initialDrawingReference = "" }) {
   const qc = useQueryClient();
+  const pdfInputRef = useRef(null);
 
   const empty = {
     project_id: projectId || "",
@@ -60,11 +61,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     drawing_reference: initialDrawingReference || empty.drawing_reference,
   };
   const [formData, setFormData] = useState(rfi ? { ...empty, ...rfi } : seedEmpty);
+  const [pendingPdfFiles, setPendingPdfFiles] = useState([]);
 
   useEffect(() => {
     setFormData(rfi
       ? { ...empty, ...rfi }
       : { ...empty, project_id: projectId || "", drawing_reference: initialDrawingReference || "" });
+    setPendingPdfFiles([]);
   }, [rfi, projectId, initialDrawingReference]);
 
   const { data: projects = [] } = useQuery({
@@ -72,6 +75,13 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
     staleTime: 5 * 60 * 1000,
+  });
+  const { data: existingPdfDocs = [] } = useQuery({
+    queryKey: ["rfi-documents", rfi?.id],
+    queryFn: () => rfi?.id ? base44.entities.Document.filter({ rfi_id: rfi.id }, "-uploaded_date") : [],
+    enabled: !!rfi?.id,
+    initialData: [],
+    staleTime: 30 * 1000,
   });
 
   // Fallback internal mutation — only used when parent does NOT supply onSave
@@ -135,6 +145,26 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const isSaving = saving || internalMutation.isPending;
 
   const set = (k, v) => setFormData((f) => ({ ...f, [k]: v }));
+  const addPdfFiles = (fileList) => {
+    const incoming = Array.from(fileList || []);
+    const pdfs = [];
+    const rejected = [];
+    for (const file of incoming) {
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+      if (isPdf) pdfs.push(file);
+      else rejected.push(file.name || "Unknown file");
+    }
+    if (rejected.length) toast.warning("Only PDF files can be attached to RFIs");
+    if (!pdfs.length) return;
+    setPendingPdfFiles((prev) => {
+      const existing = new Set(prev.map((file) => `${file.name}:${file.size}`));
+      return [...prev, ...pdfs.filter((file) => !existing.has(`${file.name}:${file.size}`))];
+    });
+  };
+  const removePendingPdf = (fileName, size) => {
+    setPendingPdfFiles((prev) => prev.filter((file) => !(file.name === fileName && file.size === size)));
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -142,7 +172,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
 
     // If parent supplied onSave, delegate to it (parent handles persistence + cache)
     if (typeof onSave === "function") {
-      onSave(formData);
+      onSave(formData, pendingPdfFiles);
       return;
     }
 
@@ -186,10 +216,12 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             {/* Section 1 — Identity */}
             <SectionLabel>Identity</SectionLabel>
             <Field label="Project" span={3}>
-              <select style={iStyle} value={formData.project_id} onChange={(e) => set("project_id", e.target.value)}>
-                <option value="">Select project...</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <DarkSelect
+                value={formData.project_id}
+                onChange={(value) => set("project_id", value)}
+                placeholder="Select project..."
+                options={projects.map((p) => ({ value: p.id, label: p.name || p.project_number || "Unnamed project" }))}
+              />
             </Field>
             <Field label="Title *" span={3}>
               <input style={iStyle} value={formData.title} onChange={(e) => set("title", e.target.value)} required />
@@ -221,8 +253,14 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               <input style={iStyle} value={formData.spec_section} onChange={(e) => set("spec_section", e.target.value)} placeholder="e.g. 05120" />
             </Field>
             <Field label="Discipline" span={3}>
+              <DarkSelect
+                value={formData.discipline || ""}
+                onChange={(value) => set("discipline", value)}
+                placeholder="Unspecified"
+                options={["Structural", "Connections", "Misc Metals", "Anchor Bolts"].map((d) => ({ value: d, label: d }))}
+              />
               <select
-                style={iStyle}
+                style={{ display: "none" }}
                 value={formData.discipline || ""}
                 onChange={(e) => set("discipline", e.target.value)}
               >
@@ -242,17 +280,20 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
             {/* Section 3 — Routing */}
             <SectionLabel>Routing</SectionLabel>
             <Field label="Priority">
-              <select style={iStyle} value={formData.priority} onChange={(e) => set("priority", e.target.value)}>
+              <DarkSelect value={formData.priority} onChange={(value) => set("priority", value)} options={["Critical", "High", "Medium", "Low"].map((o) => ({ value: o, label: o }))} />
+              <select style={{ display: "none" }} value={formData.priority} onChange={(e) => set("priority", e.target.value)}>
                 {["Critical", "High", "Medium", "Low"].map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
             <Field label="Status">
-              <select style={iStyle} value={formData.status} onChange={(e) => set("status", e.target.value)}>
+              <DarkSelect value={formData.status} onChange={(value) => set("status", value)} options={["Open", "Under Review", "Incomplete Response", "Answered", "Closed"].map((o) => ({ value: o, label: o }))} />
+              <select style={{ display: "none" }} value={formData.status} onChange={(e) => set("status", e.target.value)}>
                 {["Open", "Under Review", "Incomplete Response", "Answered", "Closed"].map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
             <Field label="Ball in Court">
-              <select style={iStyle} value={formData.ball_in_court} onChange={(e) => set("ball_in_court", e.target.value)}>
+              <DarkSelect value={formData.ball_in_court} onChange={(value) => set("ball_in_court", value)} options={["Contractor", "GC", "Engineer", "Architect", "Owner"].map((o) => ({ value: o, label: o }))} />
+              <select style={{ display: "none" }} value={formData.ball_in_court} onChange={(e) => set("ball_in_court", e.target.value)}>
                 {["Contractor", "GC", "Engineer", "Architect", "Owner"].map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
@@ -319,6 +360,55 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
               </div>
             </div>
 
+            <SectionLabel>PDF Attachments</SectionLabel>
+            <div style={{ gridColumn: "span 3" }}>
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+                style={{ display: "none" }}
+                onChange={(e) => addPdfFiles(e.target.files)}
+              />
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); addPdfFiles(e.dataTransfer.files); }}
+                style={attachmentDropStyle}
+              >
+                <div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    Attach RFI PDFs
+                  </div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                    Upload sketches, vendor responses, marked-up sheets, or official RFI PDFs. Files are linked to this RFI after save.
+                  </div>
+                </div>
+                <button type="button" onClick={() => pdfInputRef.current?.click()} style={uploadButtonStyle}>
+                  Select PDF
+                </button>
+              </div>
+              {(existingPdfDocs.length > 0 || pendingPdfFiles.length > 0) && (
+                <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                  {existingPdfDocs.map((doc) => (
+                    <AttachmentRow
+                      key={doc.id}
+                      name={doc.display_name || doc.file_name || "RFI PDF"}
+                      meta={`${Math.round(Number(doc.file_size_kb) || 0)} KB - uploaded`}
+                      href={doc.file_url}
+                    />
+                  ))}
+                  {pendingPdfFiles.map((file) => (
+                    <AttachmentRow
+                      key={`${file.name}:${file.size}`}
+                      name={file.name}
+                      meta={`${Math.round(file.size / 1024)} KB - pending save`}
+                      onRemove={() => removePendingPdf(file.name, file.size)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* Inbound chips — schedule tasks that link to this RFI. Read-only;
@@ -347,3 +437,169 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
     </div>
   );
 }
+
+function DarkSelect({ value, options, onChange, placeholder = "Select..." }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen((next) => !next)} style={darkSelectButtonStyle}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: selected ? "var(--text-primary)" : "var(--text-muted)" }}>
+          {selected?.label || placeholder}
+        </span>
+        <span style={{ color: "var(--text-muted)", transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.12s" }}>v</span>
+      </button>
+      {open && (
+        <div style={darkSelectMenuStyle}>
+          {placeholder && (
+            <button type="button" onClick={() => { onChange(""); setOpen(false); }} style={darkSelectOptionStyle(!value)}>
+              {placeholder}
+            </button>
+          )}
+          {options.map((option) => (
+            <button key={option.value} type="button" onClick={() => { onChange(option.value); setOpen(false); }} style={darkSelectOptionStyle(option.value === value)}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AttachmentRow({ name, meta, href, onRemove }) {
+  return (
+    <div style={attachmentRowStyle}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 800, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {name}
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+          {meta}
+        </div>
+      </div>
+      {href && (
+        <a href={href} target="_blank" rel="noreferrer" style={attachmentActionStyle}>
+          Open
+        </a>
+      )}
+      {onRemove && (
+        <button type="button" onClick={onRemove} style={{ ...attachmentActionStyle, color: "var(--status-error)", borderColor: "var(--danger-border)" }}>
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+const darkSelectButtonStyle = {
+  ...iStyle,
+  minHeight: 37,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  textAlign: "left",
+  cursor: "pointer",
+  background: "rgba(9, 18, 32, 0.98)",
+  borderRadius: 8,
+};
+
+const darkSelectMenuStyle = {
+  position: "absolute",
+  zIndex: 4000,
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  maxHeight: 220,
+  overflowY: "auto",
+  padding: 4,
+  background: "linear-gradient(180deg, rgba(7, 13, 24, 0.998), rgba(4, 9, 18, 0.998))",
+  border: "1px solid color-mix(in srgb, var(--accent) 32%, var(--border-default))",
+  borderRadius: 10,
+  boxShadow: "0 18px 46px rgba(0,0,0,0.74), inset 0 1px 0 rgba(255,255,255,0.06)",
+};
+
+const darkSelectOptionStyle = (active) => ({
+  width: "100%",
+  border: "1px solid transparent",
+  borderRadius: 7,
+  background: active ? "var(--accent-muted)" : "transparent",
+  color: active ? "var(--accent)" : "var(--text-primary)",
+  padding: "8px 10px",
+  textAlign: "left",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  fontWeight: active ? 800 : 600,
+  cursor: "pointer",
+});
+
+const attachmentDropStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 14,
+  padding: 14,
+  border: "1px dashed color-mix(in srgb, var(--accent) 45%, var(--border-default))",
+  borderRadius: 12,
+  background: "linear-gradient(135deg, rgba(86,176,255,0.08), rgba(255,255,255,0.025))",
+};
+
+const uploadButtonStyle = {
+  border: "1px solid var(--accent-border)",
+  borderRadius: 8,
+  background: "var(--accent-muted)",
+  color: "var(--accent)",
+  padding: "8px 13px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const attachmentRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: 10,
+  alignItems: "center",
+  padding: "9px 10px",
+  border: "1px solid var(--border-default)",
+  borderRadius: 9,
+  background: "rgba(255,255,255,0.035)",
+};
+
+const attachmentActionStyle = {
+  border: "1px solid var(--border-default)",
+  borderRadius: 7,
+  background: "rgba(255,255,255,0.04)",
+  color: "var(--accent)",
+  padding: "5px 8px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  textDecoration: "none",
+  cursor: "pointer",
+};
