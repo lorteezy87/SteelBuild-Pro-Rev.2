@@ -34,10 +34,22 @@ CREATE INDEX idx_submittal_rounds_project   ON submittal_rounds (project_id);
 
 -- RLS
 ALTER TABLE submittal_rounds ENABLE ROW LEVEL SECURITY;
-CREATE POLICY project_member_access ON submittal_rounds
-  FOR ALL TO authenticated
-  USING  (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()))
-  WITH CHECK (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+CREATE POLICY project_member_read_access ON submittal_rounds
+  FOR SELECT TO authenticated
+  USING (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+
+CREATE POLICY project_admin_write_access ON submittal_rounds
+  FOR INSERT TO authenticated
+  WITH CHECK (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
+
+CREATE POLICY project_admin_update_access ON submittal_rounds
+  FOR UPDATE TO authenticated
+  USING (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']))
+  WITH CHECK (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
+
+CREATE POLICY project_admin_delete_access ON submittal_rounds
+  FOR DELETE TO authenticated
+  USING (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
 
 -- 2. submittal_sheet_responses: per-sheet response within a round
 CREATE TABLE IF NOT EXISTS submittal_sheet_responses (
@@ -64,10 +76,22 @@ CREATE INDEX idx_sheet_responses_project ON submittal_sheet_responses (project_i
 
 -- RLS
 ALTER TABLE submittal_sheet_responses ENABLE ROW LEVEL SECURITY;
-CREATE POLICY project_member_access ON submittal_sheet_responses
-  FOR ALL TO authenticated
-  USING  (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()))
-  WITH CHECK (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+CREATE POLICY project_member_read_access ON submittal_sheet_responses
+  FOR SELECT TO authenticated
+  USING (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+
+CREATE POLICY project_admin_write_access ON submittal_sheet_responses
+  FOR INSERT TO authenticated
+  WITH CHECK (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
+
+CREATE POLICY project_admin_update_access ON submittal_sheet_responses
+  FOR UPDATE TO authenticated
+  USING (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']))
+  WITH CHECK (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
+
+CREATE POLICY project_admin_delete_access ON submittal_sheet_responses
+  FOR DELETE TO authenticated
+  USING (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
 
 -- 3. submittal_activity: audit trail mirroring drawing_activity
 CREATE TABLE IF NOT EXISTS submittal_activity (
@@ -92,10 +116,13 @@ CREATE INDEX idx_submittal_activity_project   ON submittal_activity (project_id,
 
 -- RLS
 ALTER TABLE submittal_activity ENABLE ROW LEVEL SECURITY;
-CREATE POLICY project_member_access ON submittal_activity
-  FOR ALL TO authenticated
-  USING  (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()))
-  WITH CHECK (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+CREATE POLICY project_member_read_access ON submittal_activity
+  FOR SELECT TO authenticated
+  USING (project_id IN (SELECT project_id FROM user_projects WHERE user_id = auth.uid()));
+
+CREATE POLICY project_admin_append_access ON submittal_activity
+  FOR INSERT TO authenticated
+  WITH CHECK (public.get_my_project_role(project_id) = ANY (ARRAY['owner','admin']));
 
 -- 4. Add columns to submittals for round tracking & transmittal info
 ALTER TABLE submittals ADD COLUMN IF NOT EXISTS current_round_id UUID REFERENCES submittal_rounds(id);
