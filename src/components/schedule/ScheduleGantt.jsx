@@ -155,6 +155,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     if (!externalFocus?.filter) return;
     setQuickFilter(externalFocus.filter);
     setSearchText("");
+    setCollapsed({});
+    setCollapsedTasks({});
+    setCollapsedDeliveries(false);
   }, [externalFocus]);
 
   // ── Resizable columns ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, Zap } from "lucide-react";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
@@ -75,6 +75,11 @@ function progressValue(task) {
 
 function taskDate(task) {
   return task?.end_date || task?.start_date || task?.target_date || null;
+}
+
+function formatBriefTask(task) {
+  const date = taskDate(task);
+  return `${taskName(task)} (${phaseOf(task)} / ${task?.status || "No status"} / ${date ? formatDateShort(date) : "TBD"})`;
 }
 
 function buildBrief(tasks) {
@@ -164,10 +169,35 @@ function buildBrief(tasks) {
     + Math.min(20, unlinked.length * 2)
   ));
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, unlinked, nextCritical, phaseRows, recoveryActions, riskScore };
+  const morningPlan = [
+    recoveryActions[0] ? `1. ${recoveryActions[0].title}: ${recoveryActions[0].detail}` : null,
+    nextCritical[0] ? `2. Critical path check: confirm ${formatBriefTask(nextCritical[0])}.` : null,
+    nearTerm[0] ? `3. Lookahead check: verify next visible task ${formatBriefTask(nearTerm[0])}.` : null,
+    unlinked.length ? `4. Logic cleanup: add dependencies to ${unlinked.length} unlinked open task${unlinked.length === 1 ? "" : "s"} where work has real predecessor/successor logic.` : null,
+  ].filter(Boolean);
+
+  const clipboardText = [
+    `Brena Schedule Brief - ${new Date().toLocaleDateString()}`,
+    `Project: ${tasks[0]?.project_name || "Selected Project"}`,
+    `Pressure: ${riskScore}%`,
+    `Open: ${openTasks.length}`,
+    `Delayed: ${delayed.length}`,
+    `Overdue: ${overdue.length}`,
+    `Critical: ${critical.length}`,
+    `TBD Dates: ${tbd.length}`,
+    "",
+    "Recommended morning plan:",
+    ...(morningPlan.length ? morningPlan : ["No recovery action is currently recommended."]),
+    "",
+    "Upcoming critical path watch:",
+    ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
+  ].join("\n");
+
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
+  const [copyState, setCopyState] = useState("idle");
   const brief = useMemo(() => buildBrief(tasks), [tasks]);
   const primaryPhase = brief.phaseRows[0]?.phase || null;
   const healthTone = brief.riskScore >= 70 ? "var(--status-error)" : brief.riskScore >= 35 ? "var(--status-warning)" : "var(--status-success)";
@@ -179,6 +209,18 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
       : brief.tbd.length
         ? "Start by replacing TBD dates on open work that affects release, fabrication, delivery, or erection."
         : "No major recovery pattern is visible. Use the lookahead to keep the next six weeks clean.";
+
+  const copyMorningBrief = async () => {
+    const text = brief.clipboardText.replace("Project: Selected Project", `Project: ${project?.name || "Selected Project"}`);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState("copied");
+      setTimeout(() => setCopyState("idle"), 1600);
+    } catch {
+      setCopyState("failed");
+      setTimeout(() => setCopyState("idle"), 1600);
+    }
+  };
 
   return (
     <section style={shellStyle}>
@@ -234,6 +276,9 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             <Button size="sm" variant="outline" icon="arrow-up-right" onClick={() => onSetView?.("gantt")}>
               Gantt
             </Button>
+            <Button size="sm" variant="outline" icon="download" onClick={copyMorningBrief}>
+              {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy Failed" : "Copy Brief"}
+            </Button>
           </div>
         </div>
 
@@ -255,6 +300,20 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               </button>
             )) : (
               <div style={emptyStyle}>No open phase pressure.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={morningPlanStyle}>
+          <div style={miniLabelStyle}>Morning planning brief</div>
+          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            {brief.morningPlan.length ? brief.morningPlan.map((line, index) => (
+              <div key={line} style={morningPlanRowStyle}>
+                <span className="sbd-num" style={{ color: index === 0 ? "var(--status-warning)" : "var(--accent)", fontSize: 11, fontWeight: 900 }}>{String(index + 1).padStart(2, "0")}</span>
+                <span>{line.replace(/^\d+\.\s*/, "")}</span>
+              </div>
+            )) : (
+              <div style={emptyStyle}>No recovery action is currently recommended.</div>
             )}
           </div>
         </div>
@@ -459,6 +518,14 @@ const recoveryPanelStyle = {
   padding: 12,
 };
 
+const morningPlanStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--accent) 24%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(86,176,255,0.06), rgba(255,255,255,0.025))",
+  padding: 12,
+};
+
 const criticalPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
@@ -527,6 +594,21 @@ function recoveryRowStyle(tone) {
     letterSpacing: "0.08em",
   };
 }
+
+const morningPlanRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "24px minmax(0, 1fr)",
+  gap: 9,
+  alignItems: "start",
+  border: "1px solid var(--border-default)",
+  borderRadius: 11,
+  background: "rgba(255,255,255,0.025)",
+  color: "var(--text-secondary)",
+  padding: "8px 10px",
+  fontFamily: "var(--font-body)",
+  fontSize: 12,
+  lineHeight: 1.35,
+};
 
 const criticalTaskStyle = {
   width: "100%",
