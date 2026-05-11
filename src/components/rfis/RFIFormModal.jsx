@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { resolveFileUrl } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNextFormattedNumber } from "../shared/numberSequencing";
@@ -164,6 +165,27 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
   const removePendingPdf = (fileName, size) => {
     setPendingPdfFiles((prev) => prev.filter((file) => !(file.name === fileName && file.size === size)));
     if (pdfInputRef.current) pdfInputRef.current.value = "";
+  };
+  const isAllowedFileReference = (value) => {
+    if (!value || typeof value !== "string") return false;
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (/^https?:\/\//i.test(trimmed)) return true;
+    // Treat non-protocol values as storage paths that must be signed.
+    return !/^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+  };
+
+  const openAttachment = async (fileUrl) => {
+    if (!isAllowedFileReference(fileUrl)) {
+      toast.error("Blocked unsafe attachment URL");
+      return;
+    }
+    const resolvedUrl = await resolveFileUrl(fileUrl);
+    if (!resolvedUrl || !/^https?:\/\//i.test(resolvedUrl)) {
+      toast.error("Unable to open attachment");
+      return;
+    }
+    window.open(resolvedUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleSubmit = (e) => {
@@ -394,7 +416,7 @@ export default function RFIFormModal({ projectId, onClose, onSave, saving, rfi =
                       key={doc.id}
                       name={doc.display_name || doc.file_name || "RFI PDF"}
                       meta={`${Math.round(Number(doc.file_size_kb) || 0)} KB - uploaded`}
-                      href={doc.file_url}
+                      onOpen={() => openAttachment(doc.file_url)}
                     />
                   ))}
                   {pendingPdfFiles.map((file) => (
@@ -485,7 +507,7 @@ function DarkSelect({ value, options, onChange, placeholder = "Select..." }) {
   );
 }
 
-function AttachmentRow({ name, meta, href, onRemove }) {
+function AttachmentRow({ name, meta, onOpen, onRemove }) {
   return (
     <div style={attachmentRowStyle}>
       <div style={{ minWidth: 0 }}>
@@ -496,10 +518,10 @@ function AttachmentRow({ name, meta, href, onRemove }) {
           {meta}
         </div>
       </div>
-      {href && (
-        <a href={href} target="_blank" rel="noreferrer" style={attachmentActionStyle}>
+      {onOpen && (
+        <button type="button" onClick={onOpen} style={attachmentActionStyle}>
           Open
-        </a>
+        </button>
       )}
       {onRemove && (
         <button type="button" onClick={onRemove} style={{ ...attachmentActionStyle, color: "var(--status-error)", borderColor: "var(--danger-border)" }}>
