@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, TrendingUp, Users, Zap } from "lucide-react";
 import { computeEffectiveDates } from "@/services/scheduleCascade";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
@@ -16,6 +16,10 @@ function dateValue(value) {
 function isOpenTask(task) {
   const status = String(task?.status || "").toLowerCase();
   return !CLOSED_STATUSES.some((closed) => status.includes(closed));
+}
+
+function taskOwner(task) {
+  return String(task?.resource_names || task?.assigned_to || "").trim();
 }
 
 function daysFromToday(value) {
@@ -134,6 +138,9 @@ function buildBrief(tasks) {
     .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
     .slice(0, 5);
   const handoffCount = new Set([...startsSoon, ...dueSoon, ...activeNow].map((task) => task.id || taskName(task))).size;
+  const unassignedTasks = openTasks
+    .filter((task) => !task.is_summary && !task._hasChildren && !taskOwner(task))
+    .slice(0, 8);
   const shiftedTasks = openTasks
     .filter((task) => effectiveDates[task.id]?.shifted)
     .sort((a, b) => shiftedByDays(effectiveDates[b.id]) - shiftedByDays(effectiveDates[a.id]))
@@ -211,6 +218,13 @@ function buildBrief(tasks) {
       filter: "shifted",
       tone: "var(--status-warning)",
     } : null,
+    unassignedTasks.length ? {
+      key: "unassigned",
+      title: "Assign owners to open work",
+      detail: `${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} have no assigned resource or owner. Assign accountability before relying on the lookahead in coordination meetings.`,
+      filter: "unassigned",
+      tone: "var(--status-error)",
+    } : null,
     logicGaps.length ? {
       key: "logic",
       title: "Tighten schedule logic",
@@ -241,6 +255,7 @@ function buildBrief(tasks) {
     + stalled.length * 6
     + tbd.length * 5
     + Math.min(20, shiftedTasks.length * 4)
+    + Math.min(18, unassignedTasks.length * 3)
     + Math.min(18, logicGaps.length * 3)
     + Math.min(20, unlinked.length * 2)
   ));
@@ -251,7 +266,8 @@ function buildBrief(tasks) {
     startsSoon[0] ? `3. Start handoff: verify ${formatBriefTask(startsSoon[0])}.` : null,
     dueSoon[0] ? `4. Finish handoff: confirm closeout path for ${formatBriefTask(dueSoon[0])}.` : null,
     shiftedTasks.length ? `5. Variance review: inspect ${shiftedTasks.length} open task${shiftedTasks.length === 1 ? "" : "s"} shifted by dependency cascade before publishing schedule dates.` : null,
-    logicGaps.length ? `6. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
+    unassignedTasks.length ? `6. Ownership cleanup: assign resources to ${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} with no owner.` : null,
+    logicGaps.length ? `7. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
   ].filter(Boolean);
 
   const clipboardText = [
@@ -265,6 +281,7 @@ function buildBrief(tasks) {
     `TBD Dates: ${tbd.length}`,
     `14-Day Handoff: ${handoffCount}`,
     `Cascade Variance: ${shiftedTasks.length} tasks / ${totalShiftDays} total days`,
+    `Unassigned Open Work: ${unassignedTasks.length}`,
     `Logic Gaps: ${logicGaps.length}`,
     "",
     "Recommended morning plan:",
@@ -288,11 +305,14 @@ function buildBrief(tasks) {
       return `${index + 1}. ${formatBriefTask(task)} - stored ${formatDateShort(task.start_date)} to ${formatDateShort(task.end_date)}, effective ${formatDateShort(effective.start)} to ${formatDateShort(effective.end)}, +${shiftedByDays(effective)}d`;
     }) : ["No dependency cascade variance found."]),
     "",
+    "Unassigned open work:",
+    ...(unassignedTasks.length ? unassignedTasks.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No unassigned open work found."]),
+    "",
     "Upcoming critical path watch:",
     ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
   ].join("\n");
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
@@ -345,6 +365,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={ShieldAlert} label="Critical" value={brief.critical.length} tone={brief.critical.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Route} label="14-Day" value={brief.handoffCount} tone={brief.handoffCount ? "var(--status-info)" : "var(--status-success)"} />
         <Metric icon={TrendingUp} label="Variance" value={brief.shiftedTasks.length} tone={brief.shiftedTasks.length ? "var(--status-warning)" : "var(--status-success)"} />
+        <Metric icon={Users} label="No Owner" value={brief.unassignedTasks.length} tone={brief.unassignedTasks.length ? "var(--status-error)" : "var(--status-success)"} />
         <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
 
         <div style={recommendationStyle}>
@@ -369,6 +390,11 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             {brief.shiftedTasks.length > 0 && (
               <Button size="sm" variant="secondary" icon="alert" onClick={() => onSetGanttFocus?.("shifted")}>
                 Show Variance
+              </Button>
+            )}
+            {brief.unassignedTasks.length > 0 && (
+              <Button size="sm" variant="secondary" icon="filter" onClick={() => onSetGanttFocus?.("unassigned")}>
+                Show No Owner
               </Button>
             )}
             {primaryPhase && (
@@ -532,6 +558,23 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               );
             }) : (
               <div style={emptyStyle}>No dependency cascade variance found.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={ownershipPanelStyle}>
+          <div style={miniLabelStyle}>Ownership watch</div>
+          <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
+            {brief.unassignedTasks.length ? brief.unassignedTasks.slice(0, 5).map((task) => (
+              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("unassigned")} style={ownershipTaskStyle}>
+                <Users size={12} color="var(--status-error)" />
+                <span style={{ minWidth: 0 }}>
+                  <span style={taskNameStyle}>{taskName(task)}</span>
+                  <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"} / {taskDate(task) ? formatDateShort(taskDate(task)) : "TBD"}</span>
+                </span>
+              </button>
+            )) : (
+              <div style={emptyStyle}>No unassigned open work found.</div>
             )}
           </div>
         </div>
@@ -802,6 +845,14 @@ const variancePanelStyle = {
   padding: 12,
 };
 
+const ownershipPanelStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--status-error) 26%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(239,68,68,0.052), rgba(255,255,255,0.025))",
+  padding: 12,
+};
+
 const miniLabelStyle = {
   fontFamily: "var(--font-mono)",
   fontSize: 8,
@@ -915,6 +966,20 @@ const varianceTaskStyle = {
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
   borderRadius: 10,
   background: "rgba(245,158,11,0.045)",
+  padding: "8px 9px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const ownershipTaskStyle = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: "14px minmax(0, 1fr)",
+  gap: 8,
+  alignItems: "start",
+  border: "1px solid color-mix(in srgb, var(--status-error) 24%, var(--border-default))",
+  borderRadius: 10,
+  background: "rgba(239,68,68,0.045)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
