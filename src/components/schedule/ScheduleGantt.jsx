@@ -211,7 +211,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const rightBody = useRef(null);
   const containerRef = useRef(null);
 
-  const WEEK_PX = zoom === "month" ? 80 : 240;
+  const WEEK_PX = zoom === "month" ? 80 : zoom === "day" ? 420 : 240;
 
   // Normalize "today" to UTC midnight so all date math (overdue checks, today
   // line, scroll-to-today) compares apples to apples with task dates that are
@@ -607,6 +607,31 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     }
   };
 
+  const scrollToProjectStart = () => {
+    if (rightBody.current) rightBody.current.scrollLeft = 0;
+  };
+
+  const scrollToProjectEnd = () => {
+    if (rightBody.current) {
+      rightBody.current.scrollLeft = Math.max(0, rightBody.current.scrollWidth - rightBody.current.clientWidth);
+    }
+  };
+
+  const expandAllRows = () => {
+    setCollapsed({});
+    setCollapsedTasks({});
+    setCollapsedDeliveries(false);
+  };
+
+  const collapseAllRows = () => {
+    const phaseMap = {};
+    grouped.forEach(({ phase }) => {
+      phaseMap[phase.key] = true;
+    });
+    setCollapsed(phaseMap);
+    setCollapsedDeliveries(true);
+  };
+
   // Auto-scroll to today on mount so every project starts centred on the current date
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -962,8 +987,20 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         <button onClick={scrollToToday} style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--accent-border)", background: "transparent", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today
         </button>
+        <button onClick={scrollToProjectStart} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Start
+        </button>
+        <button onClick={scrollToProjectEnd} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          End
+        </button>
+        <button onClick={expandAllRows} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Expand
+        </button>
+        <button onClick={collapseAllRows} style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--divider)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 800, cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Collapse
+        </button>
         <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 4, overflow: "hidden" }}>
-          {["week", "month"].map(z => (
+          {["month", "week", "day"].map(z => (
             <button key={z} onClick={() => setZoom(z)} style={{ padding: "4px 10px", border: "none", background: zoom === z ? "var(--accent-muted)" : "transparent", color: zoom === z ? "var(--accent)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               {z}
             </button>
@@ -1232,6 +1269,15 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             if (row.type === "summary") {
               const { phase, tasks, pctComplete } = row;
               const isOpen = !collapsed[phase.key];
+              const phaseOverdue = tasks.filter(isOverdue).length;
+              const phaseCritical = tasks.filter(isCriticalTask).length;
+              const phaseTbd = tasks.filter(t => !effStart(t) || !effEnd(t)).length;
+              const phaseMeta = [
+                `${pluralize(tasks.length, "task")}`,
+                phaseCritical ? `${phaseCritical} critical` : null,
+                phaseOverdue ? `${phaseOverdue} overdue` : null,
+                phaseTbd ? `${phaseTbd} TBD` : null,
+              ].filter(Boolean).join(" / ");
               return (
                 <div
                   key={`sum-${phase.key}`}
@@ -1251,7 +1297,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: phase.color, letterSpacing: "0.10em", background: `${phase.color}20`, border: `1px solid ${phase.color}40`, borderRadius: 2, padding: "1px 6px", flexShrink: 0 }}>{phase.id}.0</span>
                     <span style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: phase.color, letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{phase.label.toUpperCase()}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", flexShrink: 0 }}>{tasks.length} tasks</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phaseOverdue ? "#EF4444" : phaseCritical ? "var(--status-warning)" : "var(--text-muted)", flexShrink: 0 }}>{phaseMeta}</span>
                   </div>
                   <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phase.color }}>{Math.round(pctComplete)}%</span>
                 </div>
@@ -1329,9 +1375,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             const isEditing = editingId === task.id;
             const leftHovered = hoveredRowId === task.id;
             const parentRowBg = task._hasChildren ? `rgba(200,155,32,0.04)` : "transparent";
+            const critical = isCriticalTask(task);
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? "rgba(200,155,32,0.07)" : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? "rgba(200,155,32,0.07)" : critical ? "rgba(245,158,11,0.045)" : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? "3px solid #EF4444" : critical ? "3px solid var(--status-warning)" : "3px solid transparent" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -1792,9 +1839,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 top += ROW_H;
                 const { task } = row;
                 const overdue = isOverdue(task);
+                const critical = isCriticalTask(task);
                 const hovered = hoveredRowId === task.id;
                 const parentBg = task._hasChildren ? "rgba(200,155,32,0.04)" : "transparent";
-                const baseBg = overdue ? "rgba(239,68,68,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
+                const baseBg = overdue ? "rgba(239,68,68,0.04)" : critical ? "rgba(245,158,11,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
                 const hoverBg = "rgba(200,155,32,0.07)";
                 if (!task.start_date || !task.end_date) {
                   const tbdLeft = px(today.toISOString().slice(0, 10));
