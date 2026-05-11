@@ -18,7 +18,7 @@
  */
 
 import { useMemo, useCallback, useContext } from 'react';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from '@/lib/AuthContext';
 import { ProjectContext } from './ProjectContext';
 import { useProjectRole, roleAtLeast } from '@/hooks/useProjectRole';
 

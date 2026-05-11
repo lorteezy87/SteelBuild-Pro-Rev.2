@@ -80,7 +80,60 @@ function loadColWidths() {
 const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
 const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 
-export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all" }) {
+const QUICK_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "critical", label: "Critical" },
+  { key: "overdue", label: "Overdue" },
+  { key: "tbd", label: "TBD" },
+  { key: "shifted", label: "Shifted" },
+  { key: "deps", label: "Linked" },
+  { key: "milestones", label: "Milestones" },
+  { key: "weather", label: "Weather" },
+];
+
+function getTaskMetadata(task) {
+  if (!task?.metadata) return {};
+  if (typeof task.metadata === "object") return task.metadata;
+  if (typeof task.metadata === "string") {
+    try {
+      const parsed = JSON.parse(task.metadata);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function isCriticalTask(task) {
+  const metadata = getTaskMetadata(task);
+  return Boolean(
+    metadata.is_critical ||
+    metadata.critical_path ||
+    task?.is_critical ||
+    task?.is_critical_path ||
+    task?.critical_path
+  );
+}
+
+function taskSearchHaystack(task, phaseLabel = "") {
+  return [
+    task?.task_name,
+    task?.wbs_code,
+    task?.status,
+    task?.stage,
+    task?.task_type,
+    task?.resource_names,
+    task?.assigned_to,
+    phaseLabel,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function pluralize(value, singular, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -92,6 +145,9 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const [tooltip, setTooltip] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [collapsedTasks, setCollapsedTasks] = useState({});
+  const [searchText, setSearchText] = useState("");
+  const [quickFilter, setQuickFilter] = useState("all");
+  const [showLegend, setShowLegend] = useState(true);
 
   // ── Resizable columns ───────────────────────────────────────────────
   // Widths live in state; dragging a header divider mutates the index
@@ -572,6 +628,89 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
   const overdueTasks = allTasks.filter(isOverdue).length;
   const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
   const unscheduledTasks = allTasks.filter(t => !effStart(t) || !effEnd(t)).length;
+  const criticalTasks = allTasks.filter(isCriticalTask).length;
+  const milestoneTasks = allTasks.filter(isMilestoneTask).length;
+  const shiftedTasks = allTasks.filter(t => effectiveDates[t.id]?.shifted).length;
+  const weatherRiskTasks = allTasks.filter(t => weatherRiskByTask[t.id]).length;
+  const dependencyLinks = allTasks.reduce((sum, t) => sum + parseDeps(t.dependencies).length, 0);
+  const avgProgress = totalTasks > 0
+    ? Math.round(allTasks.reduce((sum, t) => sum + displayPct(t), 0) / totalTasks)
+    : 0;
+
+  const successorCountById = useMemo(() => {
+    const out = {};
+    allTasks.forEach((task) => {
+      parseDeps(task.dependencies).forEach((predId) => {
+        out[predId] = (out[predId] || 0) + 1;
+      });
+    });
+    return out;
+  }, [allTasks]);
+
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const hasActiveRowFilter = normalizedSearch.length > 0 || quickFilter !== "all";
+
+  const visibleTaskIds = useMemo(() => {
+    if (!hasActiveRowFilter) return null;
+
+    const allById = new Map(allTasks.map((task) => [task.id, task]));
+    const phaseById = new Map();
+    visibleGrouped.forEach(({ phase, tasks }) => {
+      tasks.forEach((task) => phaseById.set(task.id, phase));
+    });
+
+    const directMatches = new Set();
+    allTasks.forEach((task) => {
+      const phase = phaseById.get(task.id);
+      const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
+      const matchesQuick = (() => {
+        if (quickFilter === "all") return true;
+        if (quickFilter === "critical") return isCriticalTask(task);
+        if (quickFilter === "overdue") return isOverdue(task);
+        if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
+        if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
+        if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
+        if (quickFilter === "milestones") return isMilestoneTask(task);
+        if (quickFilter === "weather") return Boolean(weatherRiskByTask[task.id]);
+        return true;
+      })();
+      if (matchesText && matchesQuick) directMatches.add(task.id);
+    });
+
+    const withAncestors = new Set(directMatches);
+    directMatches.forEach((taskId) => {
+      let parentId = allById.get(taskId)?.parent_task_id;
+      const guard = new Set();
+      while (parentId && !guard.has(parentId)) {
+        guard.add(parentId);
+        withAncestors.add(parentId);
+        parentId = allById.get(parentId)?.parent_task_id;
+      }
+    });
+
+    return withAncestors;
+  }, [
+    allTasks,
+    grouped,
+    normalizedSearch,
+    quickFilter,
+    hasActiveRowFilter,
+    effectiveDates,
+    successorCountById,
+    weatherRiskByTask,
+  ]);
+
+  const visibleGrouped = useMemo(() => {
+    if (!visibleTaskIds) return grouped;
+    return grouped
+      .map(({ phase, tasks }) => ({
+        phase,
+        tasks: tasks.filter((task) => visibleTaskIds.has(task.id)),
+      }))
+      .filter(({ tasks }) => tasks.length > 0);
+  }, [grouped, visibleTaskIds]);
+
+  const visibleTaskCount = visibleTaskIds ? allTasks.filter((task) => visibleTaskIds.has(task.id)).length : totalTasks;
 
   const px = (dateStr) => {
     const d = parseDateUTC(dateStr);
@@ -672,7 +811,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
     }
 
     return list;
-  }, [grouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
+  }, [visibleGrouped, collapsed, collapsedTasks, showDeliveries, deliveries, collapsedDeliveries]);
 
   // Build task ID → row index + Y position map for dependency arrows
   const taskPositions = useMemo(() => {
@@ -734,6 +873,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
             { label: "COMPLETE", val: completeTasks, color: "#10B981" },
             { label: "IN PROGRESS", val: inProgressTasks, color: "var(--accent)" },
             { label: "OVERDUE", val: overdueTasks, color: "#EF4444" },
+            { label: "CRITICAL", val: criticalTasks, color: "var(--status-warning)" },
             ...(unscheduledTasks > 0 ? [{ label: "TBD", val: unscheduledTasks, color: "var(--status-warning)" }] : []),
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -741,6 +881,52 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>{s.label}</span>
             </div>
           ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 360 }}>
+          <input
+            type="search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search WBS, task, resource, status..."
+            aria-label="Search Gantt tasks"
+            style={{
+              width: 260,
+              height: 28,
+              borderRadius: 8,
+              border: "1px solid var(--border-default)",
+              background: "rgba(3,8,18,0.72)",
+              color: "var(--text-primary)",
+              padding: "0 10px",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+          {hasActiveRowFilter && (
+            <button
+              type="button"
+              onClick={() => { setSearchText(""); setQuickFilter("all"); }}
+              style={{
+                padding: "4px 8px",
+                borderRadius: 6,
+                border: "1px solid var(--divider)",
+                background: "transparent",
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Clear
+            </button>
+          )}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+            {visibleTaskCount}/{totalTasks} visible
+          </span>
         </div>
         {/* Controls */}
         {submittals.filter(s => s.is_submittal && s.linked_wp_id).length > 0 && (
@@ -786,6 +972,117 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       </div>
 
       {/* ── Synchronized header row ─────────────────────────────────── */}
+      <div data-gantt-export-exclude style={{
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "stretch",
+        gap: 10,
+        padding: "8px 16px",
+        borderBottom: "1px solid var(--divider)",
+        background: "linear-gradient(180deg, rgba(8,18,32,0.78), rgba(3,8,18,0.86))",
+        overflowX: "auto",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {QUICK_FILTERS.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              onClick={() => setQuickFilter(filter.key)}
+              style={{
+                padding: "5px 9px",
+                borderRadius: 999,
+                border: quickFilter === filter.key ? "1px solid var(--accent)" : "1px solid var(--divider)",
+                background: quickFilter === filter.key ? "rgba(86,176,255,0.16)" : "rgba(255,255,255,0.035)",
+                color: quickFilter === filter.key ? "var(--accent)" : "var(--text-secondary)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 900,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ width: 1, background: "var(--divider)", flexShrink: 0 }} />
+        {[
+          { label: "Health", value: `${avgProgress}%`, hint: "avg complete", color: "var(--accent)" },
+          { label: "Shifted", value: shiftedTasks, hint: "cascade moved", color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
+          { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },
+          { label: "Milestones", value: milestoneTasks, hint: "flagged", color: milestoneTasks ? "var(--status-warning)" : "var(--text-muted)" },
+          { label: "Weather", value: weatherRiskTasks, hint: "field risk", color: weatherRiskTasks ? "var(--status-error)" : "var(--text-muted)" },
+        ].map((card) => (
+          <div key={card.label} style={{
+            minWidth: 104,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 10,
+            background: "rgba(255,255,255,0.035)",
+            padding: "6px 8px",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
+          }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              {card.label}
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 16, color: card.color, fontWeight: 900, lineHeight: 1.1 }}>
+                {card.value}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {card.hint}
+              </span>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowLegend((v) => !v)}
+          style={{
+            marginLeft: "auto",
+            padding: "5px 10px",
+            borderRadius: 8,
+            border: "1px solid var(--divider)",
+            background: showLegend ? "rgba(86,176,255,0.12)" : "rgba(255,255,255,0.03)",
+            color: showLegend ? "var(--accent)" : "var(--text-muted)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          {showLegend ? "Hide Guide" : "Show Guide"}
+        </button>
+      </div>
+
+      {showLegend && (
+        <div data-gantt-export-exclude style={{
+          flexShrink: 0,
+          display: "flex",
+          gap: 10,
+          padding: "7px 16px",
+          borderBottom: "1px solid var(--divider)",
+          background: "rgba(255,255,255,0.025)",
+          color: "var(--text-secondary)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 8,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          overflowX: "auto",
+        }}>
+          <span><strong style={{ color: "var(--accent)" }}>Double-click</strong> edit row</span>
+          <span><strong style={{ color: "var(--accent)" }}>Alt+Up/Down</strong> reorder</span>
+          <span><strong style={{ color: "var(--accent)" }}>Tab / Shift+Tab</strong> indent</span>
+          <span><strong style={{ color: "var(--status-warning)" }}>Shifted</strong> dependency cascade moved dates</span>
+          <span><strong style={{ color: "var(--status-info)" }}>Linked</strong> predecessor or successor exists</span>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexShrink: 0, height: HEAD_H, borderBottom: "1px solid var(--divider)" }}>
         {/* Left header — each column cell wraps its label in a relative
             container with a drag handle on the right edge. Dragging any
@@ -926,6 +1223,11 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
 
         {/* Left panel */}
         <div ref={leftRef} onScroll={() => syncScroll("left")} style={{ width: LEFT_W, minWidth: LEFT_W, flexShrink: 0, overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+          {rows.length === 0 && (
+            <div style={{ padding: 18, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              No tasks match the current Gantt filters.
+            </div>
+          )}
           {rows.map((row, i) => {
             if (row.type === "summary") {
               const { phase, tasks, pctComplete } = row;
@@ -1583,7 +1885,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
           zIndex: 9999,
           padding: "10px 14px",
           pointerEvents: "none",
-          minWidth: 220,
+          minWidth: 260,
           boxShadow: "0 12px 32px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.3)",
           borderRadius: 8,
         }}>
@@ -1595,6 +1897,23 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
               WBS · {tooltip.task.wbs_code}
             </div>
           )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+            {isCriticalTask(tooltip.task) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", border: "1px solid var(--status-warning)", borderRadius: 999, padding: "2px 6px" }}>
+                Critical
+              </span>
+            )}
+            {isMilestoneTask(tooltip.task) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: 999, padding: "2px 6px" }}>
+                Milestone
+              </span>
+            )}
+            {effectiveDates[tooltip.task.id]?.shifted && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+                Shifted {effectiveDates[tooltip.task.id]?.shiftedBy || 0}d
+              </span>
+            )}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(tooltip.task.status), flexShrink: 0 }} />
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: statusColor(tooltip.task.status), fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -1604,9 +1923,31 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", marginBottom: 2 }}>
             {fmtDate(tooltip.task.start_date)} → {fmtDate(tooltip.task.end_date)}
           </div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginBottom: 2 }}>
+            Effective {fmtDate(effStart(tooltip.task))} to {fmtDate(effEnd(tooltip.task))} / {calcDuration(effStart(tooltip.task), effEnd(tooltip.task)) || 0}d
+          </div>
           <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isOverdue(tooltip.task) ? "#EF4444" : "var(--text-secondary)" }}>
             {displayPct(tooltip.task)}% complete{isOverdue(tooltip.task) ? " · OVERDUE" : ""}
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Pred</div>
+              <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
+                {parseDeps(tooltip.task.dependencies).length}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Succ</div>
+              <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
+                {successorCountById[tooltip.task.id] || 0}
+              </div>
+            </div>
+          </div>
+          {weatherRiskByTask[tooltip.task.id] && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              Weather risk: {pluralize(weatherRiskByTask[tooltip.task.id].length, "day")}
+            </div>
+          )}
           {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               {tooltip.task.resource_names || tooltip.task.assigned_to}
