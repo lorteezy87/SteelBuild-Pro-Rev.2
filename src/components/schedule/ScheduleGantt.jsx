@@ -83,10 +83,12 @@ const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 const QUICK_FILTERS = [
   { key: "all", label: "All" },
   { key: "critical", label: "Critical" },
+  { key: "delayed", label: "Delayed" },
   { key: "overdue", label: "Overdue" },
   { key: "tbd", label: "TBD" },
   { key: "shifted", label: "Shifted" },
   { key: "deps", label: "Linked" },
+  { key: "unlinked", label: "Unlinked" },
   { key: "milestones", label: "Milestones" },
   { key: "weather", label: "Weather" },
 ];
@@ -133,7 +135,7 @@ function pluralize(value, singular, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all" }) {
+export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all", externalFocus = null }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -148,6 +150,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [searchText, setSearchText] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
   const [showLegend, setShowLegend] = useState(true);
+
+  useEffect(() => {
+    if (!externalFocus?.filter) return;
+    setQuickFilter(externalFocus.filter);
+    setSearchText("");
+  }, [externalFocus]);
 
   // ── Resizable columns ───────────────────────────────────────────────
   // Widths live in state; dragging a header divider mutates the index
@@ -691,10 +699,12 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       const matchesQuick = (() => {
         if (quickFilter === "all") return true;
         if (quickFilter === "critical") return isCriticalTask(task);
+        if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
         if (quickFilter === "overdue") return isOverdue(task);
         if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
         if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
         if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
+        if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
         if (quickFilter === "milestones") return isMilestoneTask(task);
         if (quickFilter === "weather") return Boolean(weatherRiskByTask[task.id]);
         return true;

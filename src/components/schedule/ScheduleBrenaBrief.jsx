@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AlertTriangle, CalendarClock, GitBranch, Route, Sparkles, Target } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, Zap } from "lucide-react";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
@@ -49,13 +49,46 @@ function dependencyCount(task) {
   return 0;
 }
 
+function taskMetadata(task) {
+  if (!task?.metadata) return {};
+  if (typeof task.metadata === "object") return task.metadata;
+  if (typeof task.metadata === "string") {
+    try {
+      const parsed = JSON.parse(task.metadata);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function isCriticalTask(task) {
+  const metadata = taskMetadata(task);
+  return Boolean(metadata.is_critical || metadata.critical_path || task?.is_critical || task?.critical_path);
+}
+
+function progressValue(task) {
+  const value = Number(task?.percent_complete);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+}
+
+function taskDate(task) {
+  return task?.end_date || task?.start_date || task?.target_date || null;
+}
+
 function buildBrief(tasks) {
   const openTasks = tasks.filter(isOpenTask);
   const delayed = openTasks.filter((task) => String(task.status || "").toLowerCase().includes("delay"));
   const tbd = openTasks.filter((task) => !task.start_date || !task.end_date);
+  const critical = openTasks.filter(isCriticalTask);
   const overdue = openTasks.filter((task) => {
     const days = daysFromToday(task.end_date);
     return days != null && days < 0;
+  });
+  const stalled = openTasks.filter((task) => {
+    const startDelta = daysFromToday(task.start_date);
+    return startDelta != null && startDelta < 0 && progressValue(task) === 0 && !String(task.status || "").toLowerCase().includes("complete");
   });
   const nearTerm = openTasks
     .map((task) => ({ task, days: daysFromToday(task.start_date || task.end_date) }))
@@ -64,6 +97,11 @@ function buildBrief(tasks) {
     .slice(0, 6)
     .map((entry) => entry.task);
   const unlinked = openTasks.filter((task) => dependencyCount(task) === 0 && !task.parent_task_id && !task.is_summary);
+  const nextCritical = critical
+    .map((task) => ({ task, days: daysFromToday(taskDate(task)) }))
+    .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999))
+    .slice(0, 5)
+    .map((entry) => entry.task);
 
   const phaseRows = PHASES.map((phase) => {
     const phaseTasks = openTasks.filter((task) => task.phase === phase);
@@ -73,22 +111,63 @@ function buildBrief(tasks) {
       delayed: phaseTasks.filter((task) => delayed.includes(task)).length,
       overdue: phaseTasks.filter((task) => overdue.includes(task)).length,
       tbd: phaseTasks.filter((task) => tbd.includes(task)).length,
+      critical: phaseTasks.filter((task) => critical.includes(task)).length,
     };
   }).filter((row) => row.open > 0 || row.delayed > 0 || row.overdue > 0 || row.tbd > 0)
-    .sort((a, b) => (b.delayed * 4 + b.overdue * 3 + b.tbd) - (a.delayed * 4 + a.overdue * 3 + a.tbd))
+    .sort((a, b) => (b.delayed * 5 + b.overdue * 4 + b.critical * 3 + b.tbd) - (a.delayed * 5 + a.overdue * 4 + a.critical * 3 + a.tbd))
     .slice(0, 4);
+
+  const recoveryActions = [
+    overdue.length ? {
+      key: "overdue",
+      title: "Clean up overdue finish dates",
+      detail: `${overdue.length} open task${overdue.length === 1 ? "" : "s"} finish before today. Confirm status or reset dates before downstream reviews depend on bad data.`,
+      filter: "overdue",
+      tone: "var(--status-error)",
+    } : null,
+    critical.length ? {
+      key: "critical",
+      title: "Walk the critical path",
+      detail: `${critical.length} task${critical.length === 1 ? "" : "s"} are marked critical. Start with the earliest open critical item and verify predecessor logic.`,
+      filter: "critical",
+      tone: "var(--status-warning)",
+    } : null,
+    stalled.length ? {
+      key: "stalled",
+      title: "Resolve stalled starts",
+      detail: `${stalled.length} task${stalled.length === 1 ? "" : "s"} started in the past but still show 0%. Decide whether work is blocked, late, or status is stale.`,
+      filter: "delayed",
+      tone: "var(--status-warning)",
+    } : null,
+    tbd.length ? {
+      key: "tbd",
+      title: "Convert TBD dates",
+      detail: `${tbd.length} open task${tbd.length === 1 ? "" : "s"} still need start/finish dates. GanttPro-style schedules need unknown dates visible, but they should be burned down.`,
+      filter: "tbd",
+      tone: "var(--status-info)",
+    } : null,
+    unlinked.length ? {
+      key: "unlinked",
+      title: "Add missing logic links",
+      detail: `${unlinked.length} root-level task${unlinked.length === 1 ? "" : "s"} have no predecessor/successor logic. Add links where work truly depends on drawing, release, fabrication, or delivery gates.`,
+      filter: "unlinked",
+      tone: "var(--text-secondary)",
+    } : null,
+  ].filter(Boolean).slice(0, 4);
 
   const riskScore = Math.min(100, Math.round(
     delayed.length * 16
     + overdue.length * 12
+    + critical.length * 7
+    + stalled.length * 6
     + tbd.length * 5
     + Math.min(20, unlinked.length * 2)
   ));
 
-  return { openTasks, delayed, tbd, overdue, nearTerm, unlinked, phaseRows, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, unlinked, nextCritical, phaseRows, recoveryActions, riskScore };
 }
 
-export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView }) {
+export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
   const brief = useMemo(() => buildBrief(tasks), [tasks]);
   const primaryPhase = brief.phaseRows[0]?.phase || null;
   const healthTone = brief.riskScore >= 70 ? "var(--status-error)" : brief.riskScore >= 35 ? "var(--status-warning)" : "var(--status-success)";
@@ -122,11 +201,23 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={CalendarClock} label="Overdue" value={brief.overdue.length} tone={brief.overdue.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Target} label="TBD Dates" value={brief.tbd.length} tone={brief.tbd.length ? "var(--status-info)" : "var(--status-success)"} />
         <Metric icon={GitBranch} label="Unlinked" value={brief.unlinked.length} tone={brief.unlinked.length ? "var(--text-secondary)" : "var(--status-success)"} />
+        <Metric icon={ShieldAlert} label="Critical" value={brief.critical.length} tone={brief.critical.length ? "var(--status-warning)" : "var(--status-success)"} />
+        <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
 
         <div style={recommendationStyle}>
           <div style={miniLabelStyle}>Brena read</div>
           <p style={copyStyle}>{recommendation}</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            {brief.overdue.length > 0 && (
+              <Button size="sm" variant="secondary" icon="alert" onClick={() => onSetGanttFocus?.("overdue")}>
+                Show Overdue
+              </Button>
+            )}
+            {brief.critical.length > 0 && (
+              <Button size="sm" variant="secondary" icon="arrow" onClick={() => onSetGanttFocus?.("critical")}>
+                Show Critical
+              </Button>
+            )}
             {primaryPhase && (
               <Button
                 size="sm"
@@ -158,11 +249,52 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               >
                 <span style={{ color: "var(--text-primary)", fontWeight: 900 }}>{row.phase}</span>
                 <span>{row.open} open</span>
+                <span style={{ color: row.critical ? "var(--status-warning)" : "var(--text-muted)" }}>{row.critical} critical</span>
                 <span style={{ color: row.delayed ? "var(--status-error)" : "var(--text-muted)" }}>{row.delayed} delayed</span>
                 <span style={{ color: row.tbd ? "var(--status-info)" : "var(--text-muted)" }}>{row.tbd} TBD</span>
               </button>
             )) : (
               <div style={emptyStyle}>No open phase pressure.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={recoveryPanelStyle}>
+          <div style={miniLabelStyle}>Brena recovery queue</div>
+          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+            {brief.recoveryActions.length ? brief.recoveryActions.map((action, index) => (
+              <button
+                key={action.key}
+                type="button"
+                onClick={() => onSetGanttFocus?.(action.filter)}
+                style={recoveryRowStyle(action.tone)}
+              >
+                <span className="sbd-num" style={{ color: action.tone, fontSize: 12, fontWeight: 900 }}>{String(index + 1).padStart(2, "0")}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", color: "var(--text-primary)", fontWeight: 900 }}>{action.title}</span>
+                  <span style={{ display: "block", marginTop: 3, color: "var(--text-secondary)", lineHeight: 1.35, textTransform: "none", letterSpacing: 0 }}>{action.detail}</span>
+                </span>
+                <span style={{ color: "var(--accent)", whiteSpace: "nowrap" }}>Open</span>
+              </button>
+            )) : (
+              <div style={emptyStyle}>No recovery action is currently recommended.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={criticalPanelStyle}>
+          <div style={miniLabelStyle}>Critical path watch</div>
+          <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
+            {brief.nextCritical.length ? brief.nextCritical.map((task) => (
+              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("critical")} style={criticalTaskStyle}>
+                <CheckCircle2 size={12} color="var(--status-warning)" />
+                <span style={{ minWidth: 0 }}>
+                  <span style={taskNameStyle}>{taskName(task)}</span>
+                  <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"} / {taskDate(task) ? formatDateShort(taskDate(task)) : "TBD"}</span>
+                </span>
+              </button>
+            )) : (
+              <div style={emptyStyle}>No open critical path tasks are marked yet.</div>
             )}
           </div>
         </div>
@@ -278,7 +410,7 @@ function riskPillStyle(tone) {
 
 const gridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(120px, 0.55fr)) minmax(280px, 1.2fr) minmax(280px, 1fr)",
+  gridTemplateColumns: "repeat(6, minmax(104px, 1fr))",
   gap: 10,
   alignItems: "stretch",
 };
@@ -296,7 +428,7 @@ function metricStyle(tone) {
 }
 
 const recommendationStyle = {
-  gridRow: "span 2",
+  gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
   background: "rgba(255,255,255,0.03)",
@@ -304,7 +436,7 @@ const recommendationStyle = {
 };
 
 const phasePanelStyle = {
-  gridRow: "span 2",
+  gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
   background: "rgba(255,255,255,0.03)",
@@ -312,10 +444,26 @@ const phasePanelStyle = {
 };
 
 const nearTermStyle = {
-  gridColumn: "1 / 5",
+  gridColumn: "span 3",
   border: "1px solid var(--border-default)",
   borderRadius: 14,
   background: "rgba(255,255,255,0.025)",
+  padding: 12,
+};
+
+const recoveryPanelStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--status-info) 24%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(34,211,238,0.055), rgba(255,255,255,0.025))",
+  padding: 12,
+};
+
+const criticalPanelStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(245,158,11,0.055), rgba(255,255,255,0.025))",
   padding: 12,
 };
 
@@ -345,7 +493,7 @@ function phaseRowStyle(active) {
     color: "var(--text-muted)",
     padding: "8px 9px",
     display: "grid",
-    gridTemplateColumns: "minmax(90px, 1fr) auto auto auto",
+    gridTemplateColumns: "minmax(90px, 1fr) auto auto auto auto",
     gap: 8,
     alignItems: "center",
     textAlign: "left",
@@ -357,6 +505,42 @@ function phaseRowStyle(active) {
     letterSpacing: "0.08em",
   };
 }
+
+function recoveryRowStyle(tone) {
+  return {
+    width: "100%",
+    border: `1px solid color-mix(in srgb, ${tone} 26%, var(--border-default))`,
+    borderRadius: 12,
+    background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 8%, transparent), rgba(255,255,255,0.025))`,
+    color: "var(--text-muted)",
+    padding: "9px 10px",
+    display: "grid",
+    gridTemplateColumns: "24px minmax(0, 1fr) auto",
+    gap: 9,
+    alignItems: "start",
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  };
+}
+
+const criticalTaskStyle = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: "14px minmax(0, 1fr)",
+  gap: 8,
+  alignItems: "start",
+  border: "1px solid var(--border-default)",
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.025)",
+  padding: "8px 9px",
+  textAlign: "left",
+  cursor: "pointer",
+};
 
 const taskRowStyle = {
   display: "grid",
