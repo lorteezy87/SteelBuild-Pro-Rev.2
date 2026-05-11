@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, Zap } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, GitBranch, Route, ShieldAlert, Sparkles, Target, TrendingUp, Zap } from "lucide-react";
+import { computeEffectiveDates } from "@/services/scheduleCascade";
 import { PHASES } from "@/utils/phases";
 import { Button } from "@/components/design-system";
 import { formatDateShort } from "@/components/shared/formatters";
@@ -91,8 +92,14 @@ function daysBetween(task, field, min, max) {
   return days != null && days >= min && days <= max;
 }
 
+function shiftedByDays(effective) {
+  const value = Number(effective?.shiftedBy);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 function buildBrief(tasks) {
   const openTasks = tasks.filter(isOpenTask);
+  const effectiveDates = computeEffectiveDates(tasks);
   const delayed = openTasks.filter((task) => String(task.status || "").toLowerCase().includes("delay"));
   const tbd = openTasks.filter((task) => !task.start_date || !task.end_date);
   const critical = openTasks.filter(isCriticalTask);
@@ -127,6 +134,11 @@ function buildBrief(tasks) {
     .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
     .slice(0, 5);
   const handoffCount = new Set([...startsSoon, ...dueSoon, ...activeNow].map((task) => task.id || taskName(task))).size;
+  const shiftedTasks = openTasks
+    .filter((task) => effectiveDates[task.id]?.shifted)
+    .sort((a, b) => shiftedByDays(effectiveDates[b.id]) - shiftedByDays(effectiveDates[a.id]))
+    .slice(0, 8);
+  const totalShiftDays = openTasks.reduce((sum, task) => sum + shiftedByDays(effectiveDates[task.id]), 0);
   const successorCountById = openTasks.reduce((acc, task) => {
     dependencyIds(task).forEach((predId) => {
       const key = String(predId);
@@ -192,6 +204,13 @@ function buildBrief(tasks) {
       filter: "lookahead",
       tone: "var(--status-info)",
     } : null,
+    shiftedTasks.length ? {
+      key: "shifted",
+      title: "Review cascade variance",
+      detail: `${shiftedTasks.length} open task${shiftedTasks.length === 1 ? "" : "s"} moved from stored dates because predecessor logic pushed the effective schedule. Confirm whether the stored dates should be updated or the dependency should change.`,
+      filter: "shifted",
+      tone: "var(--status-warning)",
+    } : null,
     logicGaps.length ? {
       key: "logic",
       title: "Tighten schedule logic",
@@ -221,6 +240,7 @@ function buildBrief(tasks) {
     + critical.length * 7
     + stalled.length * 6
     + tbd.length * 5
+    + Math.min(20, shiftedTasks.length * 4)
     + Math.min(18, logicGaps.length * 3)
     + Math.min(20, unlinked.length * 2)
   ));
@@ -230,7 +250,8 @@ function buildBrief(tasks) {
     nextCritical[0] ? `2. Critical path check: confirm ${formatBriefTask(nextCritical[0])}.` : null,
     startsSoon[0] ? `3. Start handoff: verify ${formatBriefTask(startsSoon[0])}.` : null,
     dueSoon[0] ? `4. Finish handoff: confirm closeout path for ${formatBriefTask(dueSoon[0])}.` : null,
-    logicGaps.length ? `5. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
+    shiftedTasks.length ? `5. Variance review: inspect ${shiftedTasks.length} open task${shiftedTasks.length === 1 ? "" : "s"} shifted by dependency cascade before publishing schedule dates.` : null,
+    logicGaps.length ? `6. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
   ].filter(Boolean);
 
   const clipboardText = [
@@ -243,6 +264,7 @@ function buildBrief(tasks) {
     `Critical: ${critical.length}`,
     `TBD Dates: ${tbd.length}`,
     `14-Day Handoff: ${handoffCount}`,
+    `Cascade Variance: ${shiftedTasks.length} tasks / ${totalShiftDays} total days`,
     `Logic Gaps: ${logicGaps.length}`,
     "",
     "Recommended morning plan:",
@@ -260,11 +282,17 @@ function buildBrief(tasks) {
     "Dependency logic gaps:",
     ...(logicGaps.length ? logicGaps.map((task, index) => `${index + 1}. ${formatBriefTask(task)} - pred ${dependencyCount(task)}, succ ${successorCountById[String(task.id)] || 0}`) : ["No open dependency logic gaps found."]),
     "",
+    "Cascade variance:",
+    ...(shiftedTasks.length ? shiftedTasks.map((task, index) => {
+      const effective = effectiveDates[task.id];
+      return `${index + 1}. ${formatBriefTask(task)} - stored ${formatDateShort(task.start_date)} to ${formatDateShort(task.end_date)}, effective ${formatDateShort(effective.start)} to ${formatDateShort(effective.end)}, +${shiftedByDays(effective)}d`;
+    }) : ["No dependency cascade variance found."]),
+    "",
     "Upcoming critical path watch:",
     ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
   ].join("\n");
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
@@ -316,6 +344,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={GitBranch} label="Logic Gaps" value={brief.logicGaps.length} tone={brief.logicGaps.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={ShieldAlert} label="Critical" value={brief.critical.length} tone={brief.critical.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Route} label="14-Day" value={brief.handoffCount} tone={brief.handoffCount ? "var(--status-info)" : "var(--status-success)"} />
+        <Metric icon={TrendingUp} label="Variance" value={brief.shiftedTasks.length} tone={brief.shiftedTasks.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
 
         <div style={recommendationStyle}>
@@ -335,6 +364,11 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             {brief.logicGaps.length > 0 && (
               <Button size="sm" variant="secondary" icon="link" onClick={() => onSetGanttFocus?.("logic")}>
                 Show Logic
+              </Button>
+            )}
+            {brief.shiftedTasks.length > 0 && (
+              <Button size="sm" variant="secondary" icon="alert" onClick={() => onSetGanttFocus?.("shifted")}>
+                Show Variance
               </Button>
             )}
             {primaryPhase && (
@@ -476,6 +510,28 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               </button>
             )) : (
               <div style={emptyStyle}>No recovery action is currently recommended.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={variancePanelStyle}>
+          <div style={miniLabelStyle}>Cascade variance review</div>
+          <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
+            {brief.shiftedTasks.length ? brief.shiftedTasks.slice(0, 5).map((task) => {
+              const effective = brief.effectiveDates[task.id];
+              return (
+                <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("shifted")} style={varianceTaskStyle}>
+                  <span style={varianceDaysStyle}>+{shiftedByDays(effective)}d</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={taskNameStyle}>{taskName(task)}</span>
+                    <span style={taskMetaStyle}>
+                      Stored {task.start_date ? formatDateShort(task.start_date) : "TBD"} to {task.end_date ? formatDateShort(task.end_date) : "TBD"} / effective {effective?.start ? formatDateShort(effective.start) : "TBD"} to {effective?.end ? formatDateShort(effective.end) : "TBD"}
+                    </span>
+                  </span>
+                </button>
+              );
+            }) : (
+              <div style={emptyStyle}>No dependency cascade variance found.</div>
             )}
           </div>
         </div>
@@ -738,6 +794,14 @@ const dependencyPanelStyle = {
   padding: 12,
 };
 
+const variancePanelStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--status-warning) 28%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(245,158,11,0.06), rgba(255,255,255,0.025))",
+  padding: 12,
+};
+
 const miniLabelStyle = {
   fontFamily: "var(--font-mono)",
   fontSize: 8,
@@ -840,6 +904,36 @@ const logicTaskStyle = {
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
+};
+
+const varianceTaskStyle = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: "42px minmax(0, 1fr)",
+  gap: 8,
+  alignItems: "start",
+  border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
+  borderRadius: 10,
+  background: "rgba(245,158,11,0.045)",
+  padding: "8px 9px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const varianceDaysStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 22,
+  borderRadius: 8,
+  border: "1px solid color-mix(in srgb, var(--status-warning) 38%, var(--border-default))",
+  background: "rgba(245,158,11,0.10)",
+  color: "var(--status-warning)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
 };
 
 const handoffTaskStyle = {

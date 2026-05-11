@@ -89,7 +89,7 @@ const QUICK_FILTERS = [
   { key: "overdue", label: "Overdue" },
   { key: "tbd", label: "TBD" },
   { key: "logic", label: "Logic Gaps" },
-  { key: "shifted", label: "Shifted" },
+  { key: "shifted", label: "Variance" },
   { key: "deps", label: "Linked" },
   { key: "unlinked", label: "Unlinked" },
   { key: "milestones", label: "Milestones" },
@@ -704,6 +704,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const criticalTasks = allTasks.filter(isCriticalTask).length;
   const milestoneTasks = allTasks.filter(isMilestoneTask).length;
   const shiftedTasks = allTasks.filter(t => effectiveDates[t.id]?.shifted).length;
+  const totalShiftDays = allTasks.reduce((sum, t) => sum + (Number(effectiveDates[t.id]?.shiftedBy) || 0), 0);
   const weatherRiskTasks = allTasks.filter(t => weatherRiskByTask[t.id]).length;
   const dependencyLinks = allTasks.reduce((sum, t) => sum + parseDeps(t.dependencies).length, 0);
   const avgProgress = totalTasks > 0
@@ -953,6 +954,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             { label: "IN PROGRESS", val: inProgressTasks, color: "var(--accent)" },
             { label: "OVERDUE", val: overdueTasks, color: "#EF4444" },
             { label: "CRITICAL", val: criticalTasks, color: "var(--status-warning)" },
+            ...(shiftedTasks > 0 ? [{ label: "VARIANCE", val: shiftedTasks, color: "var(--status-warning)" }] : []),
             ...(unscheduledTasks > 0 ? [{ label: "TBD", val: unscheduledTasks, color: "var(--status-warning)" }] : []),
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -1104,7 +1106,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           { label: "14-Day", value: lookaheadTasks, hint: "handoff", color: lookaheadTasks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Stalled", value: stalledTasks, hint: "started 0%", color: stalledTasks ? "var(--status-error)" : "var(--text-muted)" },
           { label: "Logic", value: logicGapTasks, hint: "open ends", color: logicGapTasks ? "var(--status-warning)" : "var(--text-muted)" },
-          { label: "Shifted", value: shiftedTasks, hint: "cascade moved", color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
+          { label: "Variance", value: shiftedTasks, hint: `${totalShiftDays}d moved`, color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Milestones", value: milestoneTasks, hint: "flagged", color: milestoneTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Weather", value: weatherRiskTasks, hint: "field risk", color: weatherRiskTasks ? "var(--status-error)" : "var(--text-muted)" },
@@ -1172,7 +1174,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           <span><strong style={{ color: "var(--accent)" }}>Double-click</strong> edit row</span>
           <span><strong style={{ color: "var(--accent)" }}>Alt+Up/Down</strong> reorder</span>
           <span><strong style={{ color: "var(--accent)" }}>Tab / Shift+Tab</strong> indent</span>
-          <span><strong style={{ color: "var(--status-warning)" }}>Shifted</strong> dependency cascade moved dates</span>
+          <span><strong style={{ color: "var(--status-warning)" }}>Variance</strong> effective dates differ from stored dates</span>
           <span><strong style={{ color: "var(--status-info)" }}>Linked</strong> predecessor or successor exists</span>
         </div>
       )}
