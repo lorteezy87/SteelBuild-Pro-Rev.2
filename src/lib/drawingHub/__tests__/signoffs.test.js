@@ -13,6 +13,10 @@ let lastInsert = null;
 let lastUpdate = null;
 let lastFilter = null;
 
+const { assertSetUnlocked } = vi.hoisted(() => ({
+  assertSetUnlocked: vi.fn(async () => {}),
+}));
+
 function builder() {
   const state = { filters: [], op: "select", payload: null, order: null };
   const api = {
@@ -74,6 +78,8 @@ function query(state) {
   return rows;
 }
 
+vi.mock("../setLock", () => ({ assertSetUnlocked }));
+
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: () => builder(),
@@ -98,6 +104,7 @@ beforeEach(() => {
   lastInsert = null;
   lastUpdate = null;
   lastFilter = null;
+  assertSetUnlocked.mockClear();
 });
 
 describe("createSignoff", () => {
@@ -134,6 +141,7 @@ describe("createSignoff", () => {
     });
     expect(lastInsert.stamped_by_id).toBe("u-stamper");
     expect(lastInsert.stamped_by_name).toBe("Stamper Person");
+    expect(assertSetUnlocked).toHaveBeenCalledWith("d");
   });
 
   it("honours an explicit stampedByName override", async () => {
@@ -168,6 +176,7 @@ describe("voidSignoff", () => {
     expect(lastUpdate.voided_reason).toBe("wrong revision");
     expect(lastUpdate.voided_by).toBe("u-stamper");
     expect(lastUpdate.voided_at).toBeTruthy();
+    expect(assertSetUnlocked).toHaveBeenCalledWith("d");
   });
 });
 
