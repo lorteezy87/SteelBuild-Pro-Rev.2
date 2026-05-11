@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 import { addWorkdays, hoursToWorkdays, workdaysToCalendarDays } from "@/lib/workweek";
@@ -194,7 +194,6 @@ export default function ResourceScheduling() {
   }, [workPackages]);
 
   const pxPerDay = PX_PER_DAY[zoomMode];
-  const totalWidth = totalDays * pxPerDay;
 
   // Calculate bar position
   const getBarStyle = (wp) => {
@@ -328,7 +327,7 @@ export default function ResourceScheduling() {
     if (ghostRef.current) {
       try {
         document.body.removeChild(ghostRef.current);
-      } catch (e) {
+      } catch {
         // Already removed
       }
       ghostRef.current = null;
@@ -526,7 +525,7 @@ export default function ResourceScheduling() {
 
     try {
       boardRef.current?.releasePointerCapture(d.pointerId);
-    } catch (_) {}
+    } catch {}
 
     const timelineEl = timelineRef.current;
     const tRect = timelineEl.getBoundingClientRect();
@@ -557,7 +556,6 @@ export default function ResourceScheduling() {
     // field_hours_budget, field_hours_actual. Scheduling dates are on
     // scheduled_start_date / scheduled_end_date (migration 042).
     const droppedWp = workPackages.find((w) => w.id === d.wpId);
-    const durationDays = Math.max(1, Math.round(d.durationMs / 86400000));
     const isShop = droppedWp?.location === "Shop" || droppedWp?.phase === "Fabrication" || droppedWp?.phase === "Detailing";
     const totalEstHrs = Number(droppedWp?.shop_hours_budget) || Number(droppedWp?.field_hours_budget) || 0;
     const autoHours = {};

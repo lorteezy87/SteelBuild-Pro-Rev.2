@@ -167,7 +167,7 @@ export default function AnnotationLayer({
       // (click → move → click) so it doesn't need pointer capture.
       try { svgRef.current?.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     }
-  }, [activeTool, activeColor, isDrawingTool, onAddItem, pdfPage, viewport, draft]);
+  }, [activeTool, activeColor, isDrawingTool, onAddItem, onCalibrate, pdfPage, viewport, draft]);
 
   const handlePointerMove = useCallback((e) => {
     if (!draft || !viewport) return;

@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 /**
  * Single source of truth for resolving the active project ID.

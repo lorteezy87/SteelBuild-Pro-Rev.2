@@ -23,10 +23,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -95,8 +94,6 @@ const LIFECYCLE_STAGES_BASE = [
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
 

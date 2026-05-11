@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandBar, KpiTile } from "@/components/design-system";
@@ -71,10 +71,10 @@ function FeatureFlagsAdminContent() {
     [flags],
   );
 
-  const invalidate = () => {
+  const invalidate = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: ["feature_flags_admin"] });
     qc.invalidateQueries({ queryKey: ["feature_flags"] });
-  };
+  }, [qc]);
 
   const updateMut = useMutation({
     mutationFn: ({ id, updates }) => base44.entities.FeatureFlag.update(id, updates),

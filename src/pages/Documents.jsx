@@ -17,7 +17,7 @@ import React, { useState, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DocumentCard from "@/components/dms/DocumentCard";
 import DocumentFilters from "@/components/dms/DocumentFilters";
@@ -715,7 +715,6 @@ export default function Documents() {
       {/* Bulk-create folders dialog */}
       <BulkCreateFoldersModal
         open={bulkCreateOpen}
-        parentFolderId={currentFolderId}
         parentLabel={
           currentFolderId
             ? folders.find((f) => f.id === currentFolderId)?.name || "Current folder"

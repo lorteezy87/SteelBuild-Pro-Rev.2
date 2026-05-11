@@ -30,10 +30,6 @@ function fmtDate(d) {
 function fmtDateLong(d) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
-function isWeekend(d) {
-  const day = d.getDay();
-  return day === 0 || day === 6;
-}
 function startOfDay(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);

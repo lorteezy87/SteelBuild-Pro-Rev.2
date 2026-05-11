@@ -24,6 +24,12 @@ import { getQueryKey, invalidateEntities } from "@/services/cacheRegistry";
 import { validate } from "@/services/validation";
 import { lockSet } from "@/lib/drawingHub";
 
+const lockDrawingSet = lockSet as unknown as (args: {
+  setId: string;
+  reason?: string | null;
+  userId?: string | null;
+}) => Promise<unknown>;
+
 export type Submittal = RowWithAliases<"submittals">;
 export type SubmittalRound = RowWithAliases<"submittal_rounds">;
 
@@ -56,7 +62,7 @@ export async function lockLinkedSetsIfApproved(
   const reason = `Auto-locked: submittal ${tag} reached "${submittal.status}"`.trim();
   for (const setId of setIds) {
     try {
-      await lockSet({ setId, reason });
+      await lockDrawingSet({ setId, reason });
     } catch (err) {
       // Don't fail the submittal write on a lock failure — the workflow
       // status update is the user-visible outcome; lock is a side effect.

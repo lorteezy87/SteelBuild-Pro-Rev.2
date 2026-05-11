@@ -38,7 +38,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
   if (!wp) return null;
 
   const phaseColor = PHASE_COLORS[wp.phase] || "var(--text-muted)";
-  const statusColor = STATUS_COLORS[wp.status] || "var(--text-muted)";
+  const statusColorVal = STATUS_COLORS[wp.status] || "var(--text-muted)";
   const percent = Math.min(100, Math.max(0, Number(wp.percent_complete) || 0));
 
   return (
@@ -85,7 +85,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                 <Pill text={wp.phase || "—"} color={phaseColor} />
-                <Pill text={wp.status || "—"} color={statusColor} />
+                <Pill text={wp.status || "—"} color={statusColorVal} />
               </div>
             </div>
             <button

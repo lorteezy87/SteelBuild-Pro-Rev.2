@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { PAGE_LABELS } from "@/config/moduleRegistry";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 export default function Breadcrumbs({ currentPageName }) {
   const { activeProject } = useProjectContext();

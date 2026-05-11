@@ -9,7 +9,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { X, Send, RotateCcw, Sparkles } from "lucide-react";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useScheduleAssistant } from "./useScheduleAssistant";
 import AiMessageBubble from "./AiMessageBubble";
 

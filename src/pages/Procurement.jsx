@@ -31,7 +31,6 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useProjectContext } from '../components/shared/useProjectContext';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
@@ -142,7 +141,6 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function Procurement() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
 
@@ -180,10 +178,6 @@ export default function Procurement() {
     setShowForm(true);
   }, { enabled: !!projectId });
 
-  // Procurement signal = non-null procurement_category. We drop the
-  // delivery_type='PROCUREMENT' filter here so historical rows
-  // (predating the type-tag rollout) still surface, and a one-shot
-  // backfill in the same commit tags them so nothing drifts.
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ['procurement', projectId],
     queryFn: () => projectId
@@ -266,7 +260,7 @@ export default function Procurement() {
     },
   });
 
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
 
   // Compute per-row derivations once so list/pipeline/board all share
   // the same isLate / isOverdue / leadShipDate semantics.

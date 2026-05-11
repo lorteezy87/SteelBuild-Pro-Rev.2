@@ -130,7 +130,7 @@ export default function ZonePanel({
     enabled: !!zone?.id && !!zone?.project_id && open,
     staleTime: 30 * 1000,
   });
-  const dependencies = depData.rows || [];
+  const dependencies = useMemo(() => depData.rows || [], [depData.rows]);
 
   // Build the drag impact for THIS zone. We need a lookup of every
   // ancestor zone's status, which means fetching all dep rows in the

@@ -30,6 +30,12 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      '.claude/**',
+      'steelbuild-pro/**',
+    ],
     // Default environment is `node` — keeps the 488 pure-helper tests
     // fast (no jsdom overhead). Component tests opt into jsdom via a
     // `// @vitest-environment jsdom` pragma at the top of the file.

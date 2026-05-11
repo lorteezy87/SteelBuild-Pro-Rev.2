@@ -72,7 +72,6 @@ export default function DailyLogFormModal({
 
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [expandDelays, setExpandDelays] = useState(false);
-  const [expandPhotos, setExpandPhotos] = useState(false);
 
   useEffect(() => {
     if (log) {
@@ -101,7 +100,6 @@ export default function DailyLogFormModal({
   const fetchWeather = async () => {
     setWeatherLoading(true);
     try {
-      const now = new Date();
       const lat = 33.4484; // Phoenix, AZ default
       const lon = -112.0742;
       const res = await fetch(

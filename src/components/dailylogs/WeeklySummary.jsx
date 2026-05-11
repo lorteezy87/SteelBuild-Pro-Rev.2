@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function WeeklySummary({ weekLogs, weekStats }) {
+export default function WeeklySummary({ weekStats }) {
   if (!weekStats) return null;
 
   const kpis = [

@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useFinancials } from "@/hooks/useFinancials";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
@@ -35,8 +33,6 @@ import { BillingDrawer } from "@/pages/financials/drawers/BillingDrawer";
 import { DSODrawer } from "@/pages/financials/drawers/DSODrawer";
 
 export default function Financials() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [filterPhase, setFilterPhase] = useState("all");
   const [search, setSearch] = useState("");

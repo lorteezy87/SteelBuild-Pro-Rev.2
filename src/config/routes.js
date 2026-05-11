@@ -66,7 +66,6 @@ const ROUTE_DOMAINS = {
   // ── Communications ──
   communications: {
     RFIs:             r(lazyWithRetry(() => import("@/pages/RFIs")),             "RFIs",                { projectScoped: true }),
-    RFIHub:           r(lazyWithRetry(() => import("@/pages/RFIHub")),           "RFI Command Center"),
     Meetings:         r(lazyWithRetry(() => import("@/pages/Meetings")),         "Meetings",            { projectScoped: true }),
     ActionItems:      r(lazyWithRetry(() => import("@/pages/ActionItems")),      "Action Items",        { projectScoped: true }),
     ProductionNotes:  r(lazyWithRetry(() => import("@/pages/ProductionNotes")),  "Production Notes",    { projectScoped: true }),
@@ -135,7 +134,6 @@ const ROUTE_DOMAINS = {
     Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations"),
     ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests"),
     DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
-    Alerts:          r(lazyWithRetry(() => import("@/pages/Alerts")),          "Alerts"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 

@@ -64,8 +64,8 @@ export default function QCFormModal({
     if (!formData.test_date)             { toast.error("Test date is required.");   return; }
     if (!formData.material_or_component?.trim()) { toast.error("Material / component is required."); return; }
     const {
-      created_date, updated_date, created_at, updated_at,
-      is_deleted, deleted_at,
+      created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
+      is_deleted: _id, deleted_at: _da,
       ...clean
     } = formData;
     onSave?.({

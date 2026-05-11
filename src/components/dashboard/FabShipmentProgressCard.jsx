@@ -71,7 +71,6 @@ export default function FabShipmentProgressCard({ wps = [] }) {
         {totalTons > 0 && (() => {
           const phases = ["Released", "Fabricated", "Shipped", "Erected"];
           const vals = [releasedTons, fabTons, shippedTons, erectedTons];
-          const colors = ["var(--status-warning-bright)", "var(--accent)", "#FF9A60", "#00E676"];
           const chartData = phases.map((p, i) => ({ phase: p, tons: Math.round(vals[i]) }));
           return (
             <div style={{ marginBottom: 16 }}>

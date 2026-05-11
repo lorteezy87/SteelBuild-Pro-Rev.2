@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import SafetyIncidentFormModal from "@/components/safety/SafetyIncidentFormModal";
 import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
@@ -12,8 +10,6 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
 
 export default function Safety() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
@@ -107,7 +103,6 @@ export default function Safety() {
 
   const types = ["Injury", "Near Miss", "Hazard", "Property Damage", "Environmental", "Behavioral", "Equipment Failure", "Other"];
   const severities = ["Critical", "High", "Medium", "Low"];
-  const statuses = ["Open", "Under Investigation", "Action Plan", "In Progress", "Completed", "Closed"];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

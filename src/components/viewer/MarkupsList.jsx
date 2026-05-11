@@ -17,7 +17,7 @@ const STATUS_COLOR = {
   none:     "rgba(160,175,210,0.30)",
 };
 
-export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, onDelete, currentPage, totalPages }) {
+export default function MarkupsList({ markups, allMarkups = [], onSelectMarkup, onDelete, currentPage }) {
   const otherPageCount = allMarkups.length - markups.length;
 
   return (

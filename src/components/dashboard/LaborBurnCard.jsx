@@ -1,7 +1,7 @@
 import React from "react";
 import { AreaChart, Area, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
-function BurnRow({ label, actual, budget, color }) {
+function BurnRow({ label, actual, budget }) {
   const safeActual = Number(actual) || 0;
   const safeBudget = Number(budget) || 0;
   const pct = safeBudget > 0 ? Math.round(safeActual / safeBudget * 100) : 0;

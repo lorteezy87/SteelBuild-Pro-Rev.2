@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ProjectCloseoutForm from "@/components/closeout/ProjectCloseoutForm";
 import ProjectCloseoutChecklist from "@/components/closeout/ProjectCloseoutChecklist";
@@ -11,8 +9,6 @@ import ProjectCloseoutSummary from "@/components/closeout/ProjectCloseoutSummary
 import { CommandBar } from "@/components/design-system";
 
 export default function ProjectCloseout() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [activeTab, setActiveTab] = useState("checklist");
 
@@ -78,7 +74,7 @@ export default function ProjectCloseout() {
       />
 
       {!projectCloseout ? (
-        <ProjectCloseoutForm projectId={projectId} selectedProject={selectedProject} onSave={handleSave} />
+        <ProjectCloseoutForm projectId={projectId} onSave={handleSave} />
       ) : (
         <>
           {/* Tabs */}

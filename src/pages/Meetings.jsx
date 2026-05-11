@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "../components/shared/useProjectContext";
 import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -66,16 +64,7 @@ const MEETING_TEMPLATES = [
 const types = ["OAC", "Internal", "Safety", "Kickoff", "Progress", "Other"];
 const statuses = ["Scheduled", "In Progress", "Complete", "Cancelled"];
 
-const STAT_STATUS_MAP = {
-  Scheduled: "Scheduled",
-  "In Progress": "In Progress",
-  Complete: "Complete",
-  Cancelled: "Cancelled",
-};
-
 export default function Meetings() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
 
   const [showForm, setShowForm] = useState(false);

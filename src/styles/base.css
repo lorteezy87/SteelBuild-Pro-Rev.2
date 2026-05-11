@@ -90,6 +90,30 @@ input::placeholder, textarea::placeholder {
  * - Placeholder text lightens to slate-500 for clear-but-not-harsh contrast.
  * - Selection highlight tuned to gold instead of browser default blue.
  */
+/* Native browser <select> menus do not inherit the app surface reliably.
+   Force option panels dark so dropdowns do not flash white-on-dark modals. */
+select option,
+select optgroup {
+  background: #07111f !important;
+  color: #f3f7ff !important;
+}
+
+select option:checked {
+  background: #1f6feb !important;
+  color: #ffffff !important;
+}
+
+select option:disabled {
+  color: #7b8798 !important;
+}
+
+.steelbuild-dark select,
+.steelbuild-dark select option,
+.steelbuild-dark select optgroup {
+  background-color: #07111f !important;
+  color: #f3f7ff !important;
+}
+
 [data-theme="light"] body,
 [data-theme="light"] #root {
   background: var(--bg-page) !important;

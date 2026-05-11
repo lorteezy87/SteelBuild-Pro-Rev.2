@@ -71,67 +71,6 @@ function toneStyles(tone) {
   return map[tone] || map.muted;
 }
 
-function Card({ title, count, tone = "accent", action, children, minHeight }) {
-  const style = toneStyles(tone);
-  return (
-    <div
-      style={{
-        background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 76%, #000 24%) 0%, var(--bg-surface) 100%)",
-        border: "1px solid color-mix(in srgb, var(--border-default) 76%, rgba(255,255,255,0.06) 24%)",
-        borderRadius: "calc(var(--radius-card) + 4px)",
-        minHeight: minHeight || "auto",
-        overflow: "hidden",
-        boxShadow: "0 18px 40px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "14px 16px",
-          borderBottom: "1px solid var(--divider)",
-          background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 76%, #000 24%) 0%, color-mix(in srgb, var(--bg-surface) 96%, #000 4%) 100%)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 4, height: 18, background: style.color, borderRadius: 999 }} />
-          <div
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-primary)",
-            }}
-          >
-            {title}
-          </div>
-          {count != null && (
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                fontWeight: 700,
-                color: style.color,
-                background: style.bg,
-                border: `1px solid ${style.border}`,
-                borderRadius: "var(--radius-badge)",
-                padding: "2px 8px",
-              }}
-            >
-              {count}
-            </div>
-          )}
-        </div>
-        {action}
-      </div>
-      <div style={{ padding: 12 }}>{children}</div>
-    </div>
-  );
-}
 
 /* Mini sparkline for stat trend visualization */
 function StatSparkline({ color = "var(--accent)", width = 52, height = 16 }) {
@@ -658,7 +597,6 @@ export default function DrilldownView({
   codes = [],
   wps = [],
   drawings = [],
-  tasks = [],
   actionItems = [],
   deliveries = [],
   expenses = [],

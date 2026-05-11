@@ -9,7 +9,7 @@ const HEALTH_COLOR = {
   "Awaiting Data": "var(--text-muted)",
 };
 
-export default function ProjectCommandStrip({ project, wps, cos, financials, onClearProject }) {
+export default function ProjectCommandStrip({ project, wps, financials, onClearProject }) {
   const today = new Date(); today.setHours(0,0,0,0);
 
   const daysToEnd = project.target_completion_date

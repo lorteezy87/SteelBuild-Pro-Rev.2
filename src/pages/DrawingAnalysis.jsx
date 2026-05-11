@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CommandBar } from "@/components/design-system";
 import { GitCompare, RefreshCw } from "lucide-react";
@@ -28,7 +27,6 @@ import { toast } from "sonner";
  * adds pdf-vs-pdf revision-delta detection.
  */
 export default function DrawingAnalysis() {
-  const [searchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
 
@@ -104,7 +102,7 @@ export default function DrawingAnalysis() {
         .in("id", ids);
       qc.invalidateQueries({ queryKey: ["drawing_analyses", projectId] });
     })();
-  }, [analyses, qc, projectId]);
+  }, [analyses, qc, projectId, STUCK_MS]);
 
   // Kick off analyzeDrawing() for rows still in 'pending' — SERIALIZED
   // (one at a time). Multiple PDFs in flight blow past Anthropic's

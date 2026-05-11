@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Area,
@@ -18,15 +18,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, ArrowUpRight, Building2, DollarSign, Filter, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, DollarSign, Layers3, Search, ShieldCheck, Truck } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { formatCurrency, formatCurrencyShort, formatDate, isOverdue, statusIn } from "@/components/shared/formatters";
 import PortfolioBimViewer from "@/components/portfolio/PortfolioBimViewer";
+import PlanningStudio from "@/components/reports/PlanningStudio";
 import { Button, CommandBar } from "@/components/design-system";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 
 const CLOSED_RFI = ["Answered", "Closed", "Void"];
 const CLOSED_ACTION = ["Complete", "Cancelled", "Closed"];
@@ -196,8 +197,7 @@ function computeProjectModel(project, data) {
 
 export default function PortfolioOverview() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { activeProject } = useProjectContext();
+  const projectId = useProjectId();
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [healthFilter, setHealthFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -213,11 +213,11 @@ export default function PortfolioOverview() {
   const { data: documents = [] } = useQuery({ queryKey: ["portfolio-model-documents"], queryFn: () => base44.entities.Document.list("-uploaded_date"), staleTime: 60 * 1000 });
 
   useEffect(() => {
-    if (selectedProjectId || !activeProject?.id || projects.length === 0) return;
-    if (projects.some((project) => project.id === activeProject.id)) {
-      setSelectedProjectId(activeProject.id);
+    if (selectedProjectId || !projectId || projects.length === 0) return;
+    if (projects.some((project) => project.id === projectId)) {
+      setSelectedProjectId(projectId);
     }
-  }, [activeProject?.id, projects, selectedProjectId]);
+  }, [projectId, projects, selectedProjectId]);
 
   const portfolio = useMemo(() => {
     const data = { rfis, cos, codes, wps, deliveries, actionItems, scheduleTasks };
@@ -306,6 +306,11 @@ export default function PortfolioOverview() {
   }, [documents, selected]);
 
   const selectProject = (id) => setSelectedProjectId(id);
+  const openPlanningPage = (page) => {
+    if (!page) return;
+    const projectQuery = selected?.id ? `?project=${encodeURIComponent(selected.id)}` : "";
+    navigate(`${createPageUrl(page)}${projectQuery}`);
+  };
   const openSelectedProject = () => {
     if (!selected) return;
     navigate(`${createPageUrl("Dashboard")}?project=${selected.id}`);
@@ -480,6 +485,12 @@ export default function PortfolioOverview() {
         modelDocument={selectedModelDocument}
         onUploadModel={uploadModelForSelected}
         onOpenProject={openSelectedProject}
+      />
+
+      <PlanningStudio
+        portfolio={portfolio}
+        selected={selected}
+        onNavigatePage={openPlanningPage}
       />
 
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>

@@ -51,11 +51,8 @@ import GlobalSearchModal from "./components/search/GlobalSearchModal";
 import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 
 // Context
-import { useProjectContext } from "./components/shared/useProjectContext";
+import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
-
-// Config
-import { PRIMARY_TABS, TAB_DEFAULT_PAGE } from "@/config/moduleRegistry";
 
 // ─────────────────────────────────────────────────────────────────────
 export default function Layout({ children, currentPageName }) {
@@ -107,13 +104,6 @@ export default function Layout({ children, currentPageName }) {
   useFocusMainOnRouteChange(currentPageName);
 
   // ── Navigation handlers ──────────────────────────────────────────
-  const activeTab = PRIMARY_TABS.find((t) => t.pages.includes(currentPageName));
-
-  const handleTabClick = (tab) => {
-    const dest = TAB_DEFAULT_PAGE[tab.label];
-    if (dest) navigate(createPageUrl(dest));
-  };
-
   const handleNavigate = (page) => navigate(createPageUrl(page));
 
   // ── Render ───────────────────────────────────────────────────────

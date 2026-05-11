@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { CommandBar, KpiTile, Button, BulkActionBar } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -293,12 +293,6 @@ export default function Submittals() {
     },
     onSuccess: () => { invalidate(); toast.success("Round created — submittal resubmitted"); setShowNewRound(false); },
     onError: (err) => toast.error(`Failed to create round: ${err.message}`),
-  });
-
-  const updateRoundMut = useMutation({
-    mutationFn: ({ id, ...data }) => base44.entities.SubmittalRound.update(id, data),
-    onSuccess: () => { invalidate(); toast.success("Round updated"); },
-    onError: (err) => toast.error(`Failed to update round: ${err.message}`),
   });
 
   // ── Sheet response mutations ──────────────────────────────────────
@@ -1071,19 +1065,6 @@ function DetailSection({ title, children }) {
         {title}
       </div>
       {children}
-    </div>
-  );
-}
-
-function Meta({ label, value, warn }) {
-  return (
-    <div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 2 }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: warn ? "var(--status-error)" : "var(--text-primary)", fontWeight: warn ? 700 : 500 }}>
-        {value || "—"}
-      </div>
     </div>
   );
 }

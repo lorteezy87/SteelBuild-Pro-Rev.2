@@ -632,7 +632,7 @@ function AcceptModal({ proposal, onClose, onSubmit, loading }) {
   );
 }
 
-function RejectModal({ proposal, onClose, onSubmit, loading }) {
+function RejectModal({ onClose, onSubmit, loading }) {
   const [reason, setReason] = useState("");
   return (
     <ModalShell title="Reject proposal" onClose={onClose}>

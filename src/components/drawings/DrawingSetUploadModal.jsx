@@ -708,7 +708,6 @@ export default function DrawingSetUploadModal({
   const [createdCount, setCreatedCount]   = useState(0);
   const [processError, setProcessError]   = useState(null);
   const [aiFilledFields, setAiFilledFields] = useState({}); // { setName: true, ... }
-  const [detectedSetMeta, setDetectedSetMeta] = useState(null); // raw AI output, for banner
   const [uploadBatchId, setUploadBatchId] = useState(null); // set once per upload attempt
   const cancelledRef                      = useRef(false);
 
@@ -725,7 +724,6 @@ export default function DrawingSetUploadModal({
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
     setProcessError(null);
     setAiFilledFields({});
-    setDetectedSetMeta(null);
     setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
     setMeta({ setName: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
@@ -928,7 +926,6 @@ export default function DrawingSetUploadModal({
         return merged;
       });
       setAiFilledFields(aiFilled);
-      setDetectedSetMeta(aggregateSetMeta);
 
       // ── Done ──
       setProcessingStatus({

@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from '../components/shared/useProjectContext';
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ScheduleGantt from "@/components/schedule/ScheduleGantt";
+import ScheduleBrenaBrief from "@/components/schedule/ScheduleBrenaBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
@@ -14,7 +14,7 @@ import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
 import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useState } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
@@ -68,7 +68,6 @@ function generateWBS(phase, existingTasks) {
 
 export default function Schedule() {
   const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [view, setView] = useState("gantt");
   const [expandedTask, setExpandedTask] = useState(null);
@@ -131,8 +130,7 @@ export default function Schedule() {
   // stay as rows in the drawings table and are hidden from the Gantt.
   // See src/lib/autoScheduleDetailing.js for that path.)
 
-  const selectedProject = projectId ? projects.find((p) => p.id === projectId) : activeProject || null;
-  const hasProject = !!(projectId || activeProject?.id);
+  const selectedProject = projects.find((p) => p.id === projectId) || null;
 
   // Weather risk for the project's address. Open-Meteo is free + keyless
   // so no credit spend; the lib caches geocoding + forecast so repeated
@@ -224,7 +222,7 @@ export default function Schedule() {
 
   const updateTaskMut = useMutation({
     mutationFn: (data) => {
-      const { id, created_at, updated_at, created_date, updated_date, ...fields } = data;
+      const { id, created_at: _c, updated_at: _u, created_date: _cd, updated_date: _ud, ...fields } = data;
       return base44.entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
@@ -238,7 +236,7 @@ export default function Schedule() {
 
   const createTaskMut = useMutation({
     mutationFn: (data) => {
-      const pid = data.project_id || projectId || activeProject?.id;
+      const pid = data.project_id || projectId;
       if (!pid) throw new Error("Select a project first");
       const wbs = data.wbs_code || generateWBS(data.phase, scheduleTasks);
       return base44.entities.ScheduleTask.create({ ...data, project_id: pid, wbs_code: wbs });
@@ -344,10 +342,10 @@ export default function Schedule() {
   });
 
   const handleBulkAdd = async (rows) => {
-    if (!hasProject) return;
+    if (!projectId) return;
     setBulkSaving(true);
     try {
-      const pid = projectId || activeProject?.id;
+      const pid = projectId;
       // Build a running snapshot of tasks so each new WBS is unique
       const snapshot = [...scheduleTasks];
       for (const row of rows) {
@@ -463,7 +461,7 @@ export default function Schedule() {
   };
 
   const handleImportMPP = async (file) => {
-    if (!projectId && !activeProject?.id) {
+    if (!projectId) {
       toast.error("Select a project before importing");
       return;
     }
@@ -484,7 +482,7 @@ export default function Schedule() {
         throw new Error("Couldn't read tasks from the file. Please export the MPP as XML (File → Save As → XML) and retry.");
       }
 
-      const pid = projectId || activeProject?.id;
+      const pid = projectId;
       // UID → created task ID mapping (for linking predecessors + parent)
       const uidToDbId = {};
       // UID → parent UID mapping (based on outline levels)
@@ -632,7 +630,7 @@ export default function Schedule() {
           <Button
             variant="secondary"
             icon="upload"
-            disabled={importing || !hasProject}
+            disabled={importing || !projectId}
             onClick={() => fileInputRef.current?.click()}
           >
             {importing ? "IMPORTING…" : "IMPORT MPP"}
@@ -640,7 +638,7 @@ export default function Schedule() {
           <Button
             variant="secondary"
             icon="calendar"
-            disabled={!hasProject || scheduleTasks.length === 0}
+            disabled={!projectId || scheduleTasks.length === 0}
             onClick={() => {
               // Use the effective-date overlay so calendar entries match
               // where the Gantt actually places each task — exporting
@@ -665,7 +663,7 @@ export default function Schedule() {
             variant="secondary"
             icon="download"
             disabled={
-              !hasProject ||
+              !projectId ||
               scheduleTasks.length === 0 ||
               view !== "gantt" ||
               exportingPdf
@@ -699,7 +697,7 @@ export default function Schedule() {
           <Button
             variant="secondary"
             icon="sparkles"
-            disabled={!hasProject}
+            disabled={!projectId}
             onClick={() => setShowWbsBuilder(true)}
             title="Generate a WBS from a short scope-of-work description — tasks are filed under the project's existing phases."
           >
@@ -708,7 +706,7 @@ export default function Schedule() {
           <Button
             variant="outline"
             icon="plus"
-            disabled={!hasProject}
+            disabled={!projectId}
             onClick={() => setShowBulkAdd(true)}
           >
             BULK ADD
@@ -716,7 +714,7 @@ export default function Schedule() {
           <Button
             variant="primary"
             icon="plus"
-            disabled={!hasProject}
+            disabled={!projectId}
             onClick={() => setShowAddTask(true)}
           >
             ADD TASK
@@ -792,6 +790,14 @@ export default function Schedule() {
           ))}
         </div>
       </div>
+
+      <ScheduleBrenaBrief
+        tasks={tasksWithEffective}
+        project={selectedProject}
+        phaseFilter={phaseFilter}
+        onSetPhaseFilter={setPhaseFilter}
+        onSetView={setView}
+      />
 
       {/* View Content */}
       <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
@@ -882,7 +888,7 @@ export default function Schedule() {
         onSubmit={(data) =>
           createTaskMut.mutate({
             ...data,
-            project_id: projectId || activeProject?.id,
+            project_id: projectId,
             percent_complete: 0,
           })
         }
@@ -903,7 +909,7 @@ export default function Schedule() {
 
       <WbsBuilderModal
         open={showWbsBuilder}
-        projectId={projectId || activeProject?.id}
+        projectId={projectId}
         onClose={() => setShowWbsBuilder(false)}
       />
 

@@ -66,7 +66,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const handleSave = () => {
     if (!validate()) return;
     // Strip read-only / server-generated fields before sending
-    const { id, created_at, updated_at, created_date, updated_date, ...rest } = form;
+    const { id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud, ...rest } = form;
     const data = {
       ...rest,
       linked_drawing_ids: linkedDrawingIds.join(","),

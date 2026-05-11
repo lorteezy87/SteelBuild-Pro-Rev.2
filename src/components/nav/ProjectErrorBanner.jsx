@@ -1,5 +1,5 @@
 import React from "react";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 export default function ProjectErrorBanner() {
   const { projectLoadError } = useProjectContext();

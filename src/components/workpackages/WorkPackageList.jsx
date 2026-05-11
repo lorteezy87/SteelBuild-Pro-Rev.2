@@ -125,7 +125,7 @@ export default function WorkPackageList({
     );
   }
 
-  const formatDate = (d) =>
+  const _formatDate = (d) =>
     d
       ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
       : "—";

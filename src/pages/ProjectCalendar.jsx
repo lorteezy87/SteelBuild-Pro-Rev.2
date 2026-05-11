@@ -29,7 +29,7 @@ import { ChevronLeft, ChevronRight, Printer, Download } from "lucide-react";
 
 import { base44 } from "@/api/base44Client";
 import { useProjectId } from "@/hooks/useProjectId";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useUserPrefs } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { CommandBar, EmptyState, Button } from "@/components/design-system";

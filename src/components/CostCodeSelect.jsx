@@ -10,7 +10,6 @@ export default function CostCodeSelect({
   value,
   onChange,
   placeholder,
-  required,
   disabled,
   showAll,
   style,

@@ -3,7 +3,7 @@ import { X, ArrowRight } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { mono, display, AI_ACCENT, STATUS_COLORS, SEVERITY_COLORS, DELTA_TYPE_LABEL, pill } from "./tokens";
+import { mono, display, AI_ACCENT, SEVERITY_COLORS, DELTA_TYPE_LABEL, pill } from "./tokens";
 
 const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"];
 
@@ -42,8 +42,6 @@ export default function ComparisonDetailModal({ comparison, fromAnalysis, toAnal
   });
 
   if (!open) return null;
-
-  const statusColor = STATUS_COLORS[comparison.compare_status] || STATUS_COLORS.pending;
 
   const grouped = SEVERITY_ORDER
     .map(sev => ({ severity: sev, items: deltas.filter(d => d.severity === sev) }))

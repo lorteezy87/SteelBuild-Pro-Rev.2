@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusBadge from "../components/shared/StatusBadge";
@@ -676,13 +676,13 @@ export default function GanttChart() {
     };
   }, [filteredTasks]);
 
-  const togglePhase = (phase) => {
+  const togglePhase = useCallback((phase) => {
     setCollapsedPhases(prev => {
       const next = new Set(prev);
       next.has(phase) ? next.delete(phase) : next.add(phase);
       return next;
     });
-  };
+  }, []);
 
   // ── Context menu actions ──────────────────────────────────────────────
   const openDetails = useCallback((task) => {
@@ -749,7 +749,7 @@ export default function GanttChart() {
     const src = clipboard.task;
     // Strip server-managed fields; keep phase/dates/etc.
     const {
-      id, created_at, updated_at, created_date, updated_date,
+      id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud,
       ...rest
     } = src;
     const newRecord = {

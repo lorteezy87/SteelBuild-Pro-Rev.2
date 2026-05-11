@@ -112,7 +112,7 @@ export default function MitigationFormModal({
       if (!cancelled) setFormData((prev) => ({ ...prev, mitigation_number: num }));
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [isEdit, projectId]);
+  }, [isEdit, projectId, formData.mitigation_number]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

@@ -1,9 +1,8 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import MitigationFormModal from "@/components/mitigations/MitigationFormModal";
 import MitigationDetailPanel from "@/components/mitigations/MitigationDetailPanel";
@@ -39,8 +38,6 @@ const ROOT_CAUSE_COLORS = {
   "Owner Decision":        "#FF9F43",
   "Other":                 "#64748B",
 };
-
-const ROOT_CAUSE_CATEGORIES = Object.keys(ROOT_CAUSE_COLORS);
 
 const IMPACT_TYPE_COLORS = {
   Schedule: "#0EA5E9",
@@ -242,9 +239,7 @@ function ExposureBurnDown({ mitigations, width = 260, height = 80 }) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Mitigations() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");

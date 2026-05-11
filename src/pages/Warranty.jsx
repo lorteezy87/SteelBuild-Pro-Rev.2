@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
 import WarrantyList from "@/components/warranty/WarrantyList";
@@ -11,8 +9,6 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import StatCard from "@/components/shared/StatCard";
 
 export default function Warranty() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");

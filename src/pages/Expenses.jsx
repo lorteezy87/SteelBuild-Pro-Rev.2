@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { CommandBar } from "@/components/design-system";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { Plus, RefreshCw } from "lucide-react";
@@ -225,8 +225,8 @@ export default function ExpensesPage() {
   };
 
   /* ── Date-range filter helper ── */
-  const now = new Date();
-  const filterByDate = (e) => {
+  const now = useMemo(() => new Date(), []);
+  const filterByDate = useCallback((e) => {
     if (dateRangeFilter === "all") return true;
     const d = new Date(e.expense_date);
     if (dateRangeFilter === "this_month") {
@@ -238,7 +238,7 @@ export default function ExpensesPage() {
       return Math.floor(d.getMonth() / 3) === q && d.getFullYear() === now.getFullYear();
     }
     return true;
-  };
+  }, [dateRangeFilter, now]);
 
   /* ── Filtered list ── */
   const filtered = useMemo(() => {
@@ -259,7 +259,7 @@ export default function ExpensesPage() {
       const matchWP = wpFilter === "all" || e.work_package_id === wpFilter;
       return matchSearch && matchCC && matchType && matchStatus && matchWP && filterByDate(e);
     });
-  }, [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, dateRangeFilter]);
+  }, [expenses, debouncedSearch, costCodeFilter, typeFilter, statusFilter, wpFilter, filterByDate]);
 
   /* ── Spend by cost code (for donut) ── */
   const spendByCostCode = useMemo(() => {

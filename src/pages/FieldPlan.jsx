@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import { toast } from "sonner";

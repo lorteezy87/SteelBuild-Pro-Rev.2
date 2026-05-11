@@ -54,6 +54,8 @@ export default function UpcomingWindows({ feed = [], onOpenDetail }) {
   }, []);
 
   const { next48, next10 } = useMemo(() => {
+    // todayIso is referenced to ensure re-calculation on date rollover
+    void todayIso;
     const a = [];
     const b = [];
     for (const item of feed) {

@@ -1114,9 +1114,7 @@ export const integrations = {
       // error, schema problem, stale deployment) is far more actionable than
       // "deploy an edge function" advice.
       const finalMsg = firstFailure
-        || (directBrowserFallbackEnabled
-            ? 'Direct browser LLM fallback is disabled.'
-            : 'AI unavailable. Deploy and configure the authenticated Supabase Edge Function named "llm-proxy".');
+        || 'AI unavailable. Deploy and configure the authenticated Supabase Edge Function named "llm-proxy".';
       console.warn('[InvokeLLM]', finalMsg);
       return { error: finalMsg };
     },

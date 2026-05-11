@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export default function ProjectCloseoutForm({ projectId, selectedProject }) {
+export default function ProjectCloseoutForm({ projectId }) {
   const qc = useQueryClient();
   const [formData, setFormData] = useState({
     project_id: projectId,

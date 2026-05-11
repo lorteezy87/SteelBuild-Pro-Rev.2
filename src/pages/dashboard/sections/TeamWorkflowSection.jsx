@@ -41,7 +41,7 @@ import InlineEditField from "@/components/shared/InlineEditField";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 export default function TeamWorkflowSection({
   project,

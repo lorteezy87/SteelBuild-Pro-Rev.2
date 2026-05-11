@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "../shared/useProjectContext";
+import { useProjectContext } from "../shared/ProjectContext";
 
 export default function ProjectPillDropdown() {
   const { projects, activeProject, setActiveProject, loading } = useProjectContext();
@@ -179,12 +179,12 @@ export default function ProjectPillDropdown() {
             width: 360,
             maxHeight: 300,
             overflowY: "auto",
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 8,
+            background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
+            border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",
+            borderRadius: 14,
             boxShadow:
-              "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
-            zIndex: 1000,
+              "0 24px 70px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.07)",
+            zIndex: 3000,
             padding: 8,
           }}
         >
@@ -199,8 +199,8 @@ export default function ProjectPillDropdown() {
               style={{
                 width: "100%",
                 padding: "7px 10px",
-                background: "var(--bg-surface-high, var(--bg-surface-low))",
-                border: "1px solid var(--border-default)",
+                background: "rgba(9, 18, 32, 1)",
+                border: "1px solid var(--accent-border)",
                 borderRadius: 6,
                 fontFamily: "var(--font-body)",
                 fontSize: 12,
@@ -343,7 +343,7 @@ function ProjectOption({ project, isActive, openRFIs, onClick }) {
         background: isActive
           ? "var(--accent-muted)"
           : hovered
-            ? "var(--bg-hover)"
+            ? "rgba(86,176,255,0.12)"
             : "transparent",
         borderLeft: isActive
           ? "3px solid var(--accent)"

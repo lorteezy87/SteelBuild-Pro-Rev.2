@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { formatCurrency } from "@/components/shared/formatters";
 import ProjectFormModal from "@/components/projects/ProjectFormModal";
 import ProjectDetailView from "@/components/projects/ProjectDetailView";
@@ -491,7 +490,6 @@ function FilterPill({ label, color, active, onClick }) {
    Main component
 ───────────────────────────────────────────── */
 export default function Projects() {
-  const navigate   = useNavigate();
   const qc         = useQueryClient();
   const [search,        setSearch]        = useState("");
   const [phaseFilter,   setPhaseFilter]   = useState("all");

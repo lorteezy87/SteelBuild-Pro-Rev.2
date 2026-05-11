@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { AuthContext } from "@/components/shared/AuthContext";
+import { AuthContext } from "@/lib/AuthContext";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import UserSettingsTab from "@/components/settings/UserSettingsTab.jsx";

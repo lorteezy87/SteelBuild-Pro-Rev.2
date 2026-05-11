@@ -68,7 +68,7 @@ const Pill = ({ label, color, bg, badgeClass }) => (
   </span>
 );
 
-export default function ActionRow({ item, isSelected, onSelect, onOpenDetail, compact = false }) {
+export default function ActionRow({ item, isSelected, onOpenDetail, compact = false }) {
   const navigate = useNavigate();
   const barColor = URGENCY_COLORS[item.urgency] || "var(--border-default)";
   const wash = URGENCY_WASH[item.urgency] || "transparent";

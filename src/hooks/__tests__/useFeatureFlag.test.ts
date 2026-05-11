@@ -85,13 +85,12 @@ describe("resolveFlagsForEmail", () => {
   });
 
   it("skips rows missing a flag_key", () => {
-    const bad: FeatureFlagRow[] = [
+    const bad = [
       ...rows,
-      // @ts-expect-error testing runtime tolerance
       { enabled: true, user_overrides: {} },
       { flag_key: "", enabled: true, user_overrides: {} },
-    ];
-    const map = resolveFlagsForEmail(bad, null);
+    ] as Array<FeatureFlagRow | { enabled: boolean; user_overrides: object }>;
+    const map = resolveFlagsForEmail(bad as FeatureFlagRow[], null);
     expect(map.has("")).toBe(false);
     expect(map.size).toBe(rows.length);
   });

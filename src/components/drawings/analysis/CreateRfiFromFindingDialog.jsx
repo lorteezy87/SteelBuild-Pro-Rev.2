@@ -32,7 +32,7 @@ export default function CreateRfiFromFindingDialog({ open, onClose, finding, ana
       setForm(seed(finding, analysis, today));
       setTimeout(() => ref.current?.focus(), 0);
     }
-  }, [open, finding, analysis]);
+  }, [open, finding, analysis, today]);
 
   if (!open) return null;
 

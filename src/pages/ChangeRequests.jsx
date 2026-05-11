@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ChangeRequestFormModal from "@/components/changerequest/ChangeRequestFormModal";
 import ChangeRequestList from "@/components/changerequest/ChangeRequestList";
@@ -14,8 +12,6 @@ import { Plus } from "lucide-react";
 import { CHANGE_REQUEST_STATUS, PRIORITY } from "@/lib/enums";
 
 export default function ChangeRequests() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");

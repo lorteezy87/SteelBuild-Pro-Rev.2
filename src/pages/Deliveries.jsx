@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
@@ -238,7 +238,7 @@ export default function Deliveries() {
     };
     const t = setTimeout(createDeliveryAlerts, 4000);
     return () => clearTimeout(t);
-  }, [deliveries.length, projectMap, wpMap]);
+  }, [deliveries, projectMap, wpMap]);
 
   /* ── Helpers ── */
   const toggleSelect = (id) =>
