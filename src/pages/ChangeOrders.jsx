@@ -16,8 +16,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useProjectContext } from "@/components/shared/useProjectContext";
-import { useSearchParams } from "react-router-dom";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -45,19 +44,9 @@ const LIFECYCLE = [
   { id: "appr",   label: "APPROVED",  color: "var(--status-success)" },
 ];
 
-const STATUS_INDEX = {
-  Draft:          0,
-  Submitted:      1,
-  "Under Review": 2,
-  Approved:       3,
-  Rejected:       3, // visually rests on approved column but styled as stopped
-  Void:           3,
-};
-
 export default function ChangeOrders() {
   const qc = useQueryClient();
-  const { activeProject } = useProjectContext();
-  const [searchParams] = useSearchParams();
+  const { projectId, activeProject } = useProjectContext();
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -81,12 +70,12 @@ export default function ChangeOrders() {
 
   /* ── Data ── */
   const { data: cos = [], isLoading } = useQuery({
-    queryKey: ["change-orders", activeProject?.id],
+    queryKey: ["change-orders", projectId],
     queryFn: () =>
-      activeProject?.id
-        ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
+      projectId
+        ? base44.entities.ChangeOrder.filter({ project_id: projectId }, "-created_at")
         : [],
-    enabled: !!activeProject?.id,
+    enabled: !!projectId,
   });
 
   const { data: projects = [] } = useQuery({
@@ -105,7 +94,7 @@ export default function ChangeOrders() {
       // sequence helper is unavailable.
       const userTyped = (d.co_number || "").trim();
       let coNumber = userTyped;
-      const targetProjectId = d.project_id || activeProject?.id || null;
+      const targetProjectId = d.project_id || projectId || null;
       if (!coNumber && targetProjectId) {
         try {
           coNumber = await getNextFormattedNumber({
@@ -209,7 +198,7 @@ export default function ChangeOrders() {
   // CONTRACT tile here showing a stale baseContract until the next page
   // load. The projects query has staleTime 5 min and is invalidated on
   // every CO mutation below, so this picks up edits right away.
-  const liveProject = projects.find((p) => p.id === activeProject?.id) || activeProject;
+  const liveProject = projects.find((p) => p.id === projectId) || activeProject;
   const baseContract = Number(liveProject?.original_contract_value) || 0;
   const revisedContract = baseContract + totalApproved;
 
@@ -255,7 +244,7 @@ export default function ChangeOrders() {
     setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set());
 
   /* ── Guards ── */
-  if (!activeProject?.id) {
+  if (!projectId) {
     return (
       <div style={{ padding: 32, textAlign: "center" }}>
         <div
@@ -279,7 +268,7 @@ export default function ChangeOrders() {
     );
   }
 
-  const projectName = projects.find((p) => p.id === activeProject.id)?.name || "";
+  const projectName = projects.find((p) => p.id === projectId)?.name || "";
 
   // Whole-dollar currency for the financial command bar + KPI tiles.
   // `formatCurrency(_, 0)` handles negatives natively (deducts/credits
@@ -548,7 +537,7 @@ export default function ChangeOrders() {
       />
       <ChangeOrderImportModal
         open={importOpen}
-        projectId={activeProject?.id}
+        projectId={projectId}
         projectName={projectName}
         projects={projects}
         onClose={() => setImportOpen(false)}

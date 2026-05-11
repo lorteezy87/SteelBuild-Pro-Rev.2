@@ -19,11 +19,6 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(d) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 function normalizeRevisionNumber(value, fallback = "0") {
   if (value == null || value === "") return fallback;
   return String(value).trim() || fallback;
@@ -237,7 +232,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
       set("revisionLabel", suggestions[0]);
       setAutoFilled(true);
     }
-  }, []); // only on mount
+  }, [revMeta.revisionLabel, suggestions, set]);
 
   return (
     <div>
@@ -609,7 +604,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setStep("selectSet");
       setSelectedSet(null);
     }
-  }, [open]);
+  }, [open, preSelectedSet]);
 
   const handleExtract = async () => {
     try {
@@ -802,9 +797,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
   const handleClose = () => { reset(); onClose(); };
 
-  const STEP_LABELS = { selectSet: "Select Set", revMeta: "Revision Info", dropPDF: "Upload PDF", comparison: "Review Changes", success: "Done" };
   const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
-  const stepIdx = STEP_ORDER.indexOf(step);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

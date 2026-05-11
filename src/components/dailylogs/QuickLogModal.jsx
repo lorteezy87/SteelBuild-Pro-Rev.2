@@ -42,7 +42,7 @@ export default function QuickLogModal({ open, onClose, onSave, workPackages = []
     if (open) {
       setForm({ date: today, wp_id: "", percent_complete: "", field_hours: "", activities: "" });
     }
-  }, [open]);
+  }, [open, today]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 

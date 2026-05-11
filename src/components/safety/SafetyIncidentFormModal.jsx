@@ -72,8 +72,8 @@ export default function SafetyIncidentFormModal({ projectId, incident = null, on
     if (!formData.incident_date)       { toast.error("Incident date is required."); return; }
     if (!formData.description?.trim()) { toast.error("Describe what happened."); return; }
     const {
-      created_date, updated_date, created_at, updated_at,
-      is_deleted, deleted_at,
+      created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
+      is_deleted: _id, deleted_at: _da,
       ...clean
     } = formData;
     onSave?.(clean);

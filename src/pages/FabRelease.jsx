@@ -1,12 +1,10 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "../components/shared/useProjectContext";
 import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
 import { CommandBar, KpiTile } from "@/components/design-system";
-import { Plus } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 
 const FAB_STAGES = [
@@ -57,7 +55,6 @@ const formatDateUTC = (d) =>
 
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
 
   const [view, setView] = useState("pipeline");

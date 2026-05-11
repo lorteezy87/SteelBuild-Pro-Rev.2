@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import DonutChart from "@/components/shared/DonutChart";
 import TrendIndicator from "@/components/shared/TrendIndicator";
 import { Download } from "lucide-react";

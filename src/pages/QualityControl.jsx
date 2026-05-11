@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import QCFormModal from "@/components/qc/QCFormModal";
 import QCList from "@/components/qc/QCList";
@@ -13,8 +11,6 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
 
 export default function QualityControl() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);

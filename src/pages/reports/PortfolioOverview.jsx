@@ -397,7 +397,7 @@ export default function PortfolioOverview() {
   const expenses     = useMemo(() => rawExpenses.filter((e) => !e?.is_deleted), [rawExpenses]);
   const risks        = useMemo(() => rawRisks.filter((r) => !r?.is_deleted), [rawRisks]);
 
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
 
   /* ── Derived collections ──
        All four "open / pending" predicates come from the shared

@@ -788,7 +788,7 @@ export default function ModelViewer() {
       selectionOutlineRef.current.traverse?.((o) => o?.geometry?.dispose?.());
       selectionOutlineRef.current = null;
     }
-  }, []);
+  }, [clearMeasurementMarkers]);
 
   // ─── FULL SCREEN TOGGLE ─────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -888,7 +888,7 @@ export default function ModelViewer() {
       setUploadError("Failed to load model: " + err.message);
       setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
     }
-  }, [fitCamera, clearCurrentModel]);
+  }, [fitCamera, clearCurrentModel, captureModelBounds]);
 
   // ─── LOAD IFC via @thatopen/components ─────────────────────────
   const handleIFCUpload = useCallback(async (file) => {
@@ -1076,7 +1076,7 @@ export default function ModelViewer() {
       setUploadError(msg);
       setLoadingModel({ active: false, progress: 0, status: "", fileName: "" });
     }
-  }, [fitCamera, clearCurrentModel]);
+  }, [fitCamera, clearCurrentModel, captureModelBounds, workPackages]);
 
   // ─── FILE HANDLING ──────────────────────────────────────────────
   const handleFile = useCallback((file) => {

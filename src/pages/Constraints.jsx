@@ -11,15 +11,13 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 
 import { useProjectId } from "@/hooks/useProjectId";
-import { inputStyle } from "./constraints/constants";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -31,14 +29,12 @@ import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
 import { CONSTRAINT_TYPES, TYPE_COLORS } from "./constraints/constants";
 import { CommandBar } from "@/components/design-system";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 import { setDraft } from "@/lib/draftStorage";
 
 export default function Constraints() {
   const qc = useQueryClient();
-  const { activeProject } = useProjectContext();
-  const [searchParams] = useSearchParams();
   const projectId = useProjectId();
   const navigate = useNavigate();
 

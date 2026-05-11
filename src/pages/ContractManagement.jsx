@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatDate, formatCurrency, formatCurrencyShort } from "@/components/shared/formatters";
 import { CommandBar } from "@/components/design-system";
 
@@ -19,15 +19,6 @@ const pct = (n, d) => {
 };
 
 // ─── Inline components ──────────────────────────────────────────────────────
-
-const PageHeader = ({ title, subtitle }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-    <div>
-      <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-primary)", margin: 0 }}>{title}</h1>
-      {subtitle && <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>{subtitle}</p>}
-    </div>
-  </div>
-);
 
 const KPICard = ({ label, value, sub, tone }) => (
   <div className="sbd-kpi" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -177,10 +168,9 @@ function ChangeOrdersTab({ changeOrders }) {
   const cos = useMemo(() => [...(changeOrders || [])].sort((a, b) => (Number(a.co_number) || 0) - (Number(b.co_number) || 0)), [changeOrders]);
 
   const totals = useMemo(() => {
-    let total = 0, approved = 0, pending = 0, rejected = 0, rejectedCount = 0;
+    let approved = 0, pending = 0, rejected = 0, rejectedCount = 0;
     for (const co of cos) {
       const amt = Number(co.co_amount) || 0;
-      total += amt;
       const s = (co.status || "").trim();
       if (s === "Approved") approved += amt;
       else if (s === "Rejected") { rejected += amt; rejectedCount++; }

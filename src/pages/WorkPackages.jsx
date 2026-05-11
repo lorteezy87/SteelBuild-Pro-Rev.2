@@ -11,12 +11,10 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
@@ -32,7 +30,6 @@ import {
   Button,
   BulkActionBar,
   EmptyState,
-  Icon,
   ProgressBar,
   StatusPill,
 } from "@/components/design-system";
@@ -41,8 +38,6 @@ import { exportWorkPackagesCSV } from "./workPackages/utils";
 import WpRow from "./workPackages/WpRow";
 
 export default function WorkPackages() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
 
@@ -272,7 +267,7 @@ export default function WorkPackages() {
     setWPModalOpen(true);
   };
 
-  const handleWPCreate = async () => {
+  const handleWPCreate = React.useCallback(async () => {
     let wpNumber = "";
     try {
       if (projectId) {
@@ -289,7 +284,7 @@ export default function WorkPackages() {
     }
     setEditingWP({ wp_number: wpNumber, project_id: projectId });
     setWPModalOpen(true);
-  };
+  }, [projectId, workPackages]);
 
   // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
   // Gated on projectId because handleWPCreate needs a project to derive
@@ -379,9 +374,11 @@ export default function WorkPackages() {
               top: "50%",
               transform: "translateY(-50%)",
               color: "var(--text-muted)",
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            <Icon name="search" size={12} />
+            <StatusPill label="" icon="search" />
           </div>
           <input
             value={search}

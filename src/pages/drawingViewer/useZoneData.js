@@ -144,11 +144,13 @@ export function useZoneData({ projectId, activeId, activeDrawing, zoneMode, show
     enabled: !!projectId && !!activeDrawing?.id && showDeps,
     staleTime: 30 * 1000,
   });
-  const sheetDependencies = depsData.rows || [];
-
   const dependencyEdges = useMemo(
-    () => buildDependencyEdges({ showDeps, sheetDependencies, activeDrawingId: activeDrawing?.id }),
-    [showDeps, sheetDependencies, activeDrawing?.id],
+    () => buildDependencyEdges({
+      showDeps,
+      sheetDependencies: depsData.rows || [],
+      activeDrawingId: activeDrawing?.id
+    }),
+    [showDeps, depsData.rows, activeDrawing?.id],
   );
 
   // Link-count summaries keyed by zone id + rule-engine computed status

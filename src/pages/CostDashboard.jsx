@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import KPIStrip from "../components/shared/KPIStrip";

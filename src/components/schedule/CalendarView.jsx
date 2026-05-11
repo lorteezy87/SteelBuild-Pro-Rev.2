@@ -11,7 +11,7 @@ const TASK_TYPE_COLORS = {
   Task: 'rgba(160,175,210,0.5)',
 };
 
-export default function CalendarView({ tasks = [], onSelectTask, onAddTask, selectedDate, onSelectDate }) {
+export default function CalendarView({ tasks = [], onSelectTask, selectedDate, onSelectDate }) {
   const [currentDate, setCurrentDate] = useState(new Date(selectedDate || new Date()));
 
   const year = currentDate.getFullYear();
@@ -60,7 +60,7 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
 
   // Get tasks for a specific date
   const getTasksForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const _dateStr = date.toISOString().split('T')[0];
     return tasks.filter(t => {
       const start = new Date(t.start_date);
       const end = new Date(t.end_date);
@@ -195,11 +195,11 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
 
               {/* Task chips */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
-                {dayTasks.slice(0, 3).map((task, i) => {
+                {dayTasks.slice(0, 3).map((task, _) => {
                   const color = TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task;
                   const isMultiDay = getDaysBetween(task.start_date, task.end_date) > 1;
                   const taskStart = new Date(task.start_date).toISOString().split('T')[0];
-                  const taskEnd = new Date(task.end_date).toISOString().split('T')[0];
+                  const _taskEnd = new Date(task.end_date).toISOString().split('T')[0];
                   const isFirstDay = taskStart === dateStr;
 
                   return (

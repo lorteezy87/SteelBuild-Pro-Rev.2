@@ -16,7 +16,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { batchProcess } from "@/utils/batchProcess";
@@ -66,7 +66,7 @@ export default function Drawings() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const projectId = activeProject?.id;
 
   // ── UI state ──────────────────────────────────────────────────────────────

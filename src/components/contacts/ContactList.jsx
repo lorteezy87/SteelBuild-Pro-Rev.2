@@ -292,7 +292,6 @@ const ListView = ({ contacts, onEdit, onDelete }) => (
 
     {contacts.map((c) => {
       const color = TYPE_COLORS[c.contact_type] || "var(--border-default)";
-      const initials = `${(c.first_name || "?")[0]}${(c.last_name || "?")[0]}`.toUpperCase();
       return (
         <div
           key={c.id}

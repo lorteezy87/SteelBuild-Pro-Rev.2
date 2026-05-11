@@ -71,7 +71,7 @@ export default function FeedFilters({
     if (debouncedSearch !== search) {
       onFilterChange({ ...filters, search: debouncedSearch });
     }
-  }, [debouncedSearch]);
+  }, [debouncedSearch, search, onFilterChange, filters]);
 
   const toggleInArray = useCallback(
     (key, value) => {

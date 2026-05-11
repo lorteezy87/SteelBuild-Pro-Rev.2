@@ -49,7 +49,6 @@ const HEAD_H  = 40;
 //
 // Header order: WBS · TASK · DUR · START · FINISH · PRED · RESOURCES ·
 //               STATUS · STAGE · %
-const COL_KEYS = ["wbs", "name", "dur", "start", "finish", "pred", "res", "status", "stage", "pct"];
 const DEFAULT_COL_WIDTHS = [50, 0, 40, 68, 68, 48, 80, 72, 88, 36];
 const MIN_COL_WIDTH = 24;
 // Task-name (flex) column gets at least this much. Bumped from 140 → 240
@@ -81,7 +80,7 @@ function loadColWidths() {
 const DETAILING_STAGES = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
 const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 
-export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], weatherRisk = null, expandedTask, setExpandedTask, onTaskClick, onSave, phaseFilter = "all" }) {
+export default function ScheduleGantt({ tasks: rawTasks, submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all" }) {
   const [collapsed, setCollapsed] = useState({});
   const [zoom, setZoom] = useState("week"); // "week" | "month"
   const [showSubmittals, setShowSubmittals] = useState(true);
@@ -543,7 +542,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
     }
     if (weeks.length >= MAX_WEEKS) end = new Date(weeks[weeks.length - 1]);
     return { start, end, weeks };
-  }, [allTasks, deliveries]);
+  }, [allTasks, deliveries, today]);
 
   const scrollToToday = () => {
     if (rightBody.current) {
@@ -561,7 +560,7 @@ export default function ScheduleGantt({ tasks: rawTasks, submittals = [], delive
       }
     }, 80);
     return () => clearTimeout(timer);
-  }, [dateRange.start?.getTime?.(), dateRange.weeks.length]);
+  }, [dateRange.start, dateRange.weeks.length, today, WEEK_PX]);
 
   const dayCount = Math.ceil((dateRange.end - dateRange.start) / 86400000);
   const PX_PER_DAY = WEEK_PX / 7;

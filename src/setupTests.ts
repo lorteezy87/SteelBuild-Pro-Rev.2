@@ -22,7 +22,6 @@ afterEach(() => {
 
 if (typeof window !== "undefined") {
   if (!window.matchMedia) {
-    // @ts-expect-error - test-only polyfill
     window.matchMedia = (q: string) => ({
       matches: false,
       media: q,
@@ -36,7 +35,6 @@ if (typeof window !== "undefined") {
   }
 
   if (!window.ResizeObserver) {
-    // @ts-expect-error - test-only polyfill
     window.ResizeObserver = class {
       observe() {}
       unobserve() {}
@@ -45,7 +43,6 @@ if (typeof window !== "undefined") {
   }
 
   if (!window.IntersectionObserver) {
-    // @ts-expect-error - test-only polyfill
     window.IntersectionObserver = class {
       observe() {}
       unobserve() {}

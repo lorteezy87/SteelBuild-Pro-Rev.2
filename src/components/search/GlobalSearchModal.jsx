@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Search } from "lucide-react";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 // Stable empty array — prevents infinite re-render loops from useCallback/useEffect
 // dependency chains when queries are disabled and would otherwise return new [] refs.

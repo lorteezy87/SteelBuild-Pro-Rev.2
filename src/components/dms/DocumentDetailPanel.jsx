@@ -25,7 +25,7 @@ const ENTITY_LABELS = {
   submittal_id:    { label: "Submittal",    color: "#eab308", bg: "rgba(234,179,8,0.12)" },
 };
 
-export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, onEdit, onDelete }) {
+export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, onEdit }) {
   const [activeTab, setActiveTab] = useState("details");
   const navigate = useNavigate();
 
@@ -70,7 +70,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } catch (err) {
+    } catch (_err) {
       toast.error("Download failed");
     }
   };
@@ -85,7 +85,7 @@ export default function DocumentDetailPanel({ doc, allDocuments = [], onClose, o
       if (!url) { toast.error("No file URL available"); return; }
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard (valid 1 hour)");
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to generate share link");
     }
   };

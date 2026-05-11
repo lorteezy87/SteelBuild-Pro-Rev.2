@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import ContactFormModal from "@/components/contacts/ContactFormModal";
 import ContactList from "@/components/contacts/ContactList";
@@ -21,50 +20,7 @@ const TYPE_COLORS = {
   [CONTACT_TYPE.INTERNAL]: "var(--secondary)",
 };
 
-const StatCard = ({ label, value, color, active, onClick }) => (
-  <div
-    onClick={onClick}
-    style={{
-      padding: "10px 18px",
-      borderRight: "1px solid var(--divider)",
-      display: "flex",
-      flexDirection: "column",
-      gap: 4,
-      minWidth: 120,
-      cursor: onClick ? "pointer" : "default",
-      background: active ? `${color}12` : "transparent",
-      borderBottom: active ? `2px solid ${color}` : "2px solid transparent",
-      transition: "all 0.15s ease",
-    }}
-  >
-    <span
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        letterSpacing: "0.14em",
-        color: active ? color : "var(--text-muted)",
-        textTransform: "uppercase",
-        fontWeight: active ? 800 : 700,
-      }}
-    >
-      {label}
-    </span>
-    <span
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 22,
-        fontWeight: 800,
-        color: color || "var(--text-primary)",
-        lineHeight: 1.1,
-      }}
-    >
-      {value}
-    </span>
-  </div>
-);
-
 export default function Contacts() {
-  const [searchParams] = useSearchParams();
   const projectId = useProjectId();
   const qc = useQueryClient();
 

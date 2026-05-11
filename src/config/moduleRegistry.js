@@ -17,7 +17,7 @@ export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PCC",         pages: ["ProjectControlCenter"] },
   { label: "PROJECTS",    pages: ["Projects", "ExecutiveView"] },
-  { label: "RFIs",        pages: ["RFIs", "RFIHub"] },
+  { label: "RFIs",        pages: ["RFIs"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
   { label: "DELIVERIES",  pages: ["Deliveries"] },

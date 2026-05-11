@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
 import { toast } from "sonner";
 import { AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export default function Vendors() {
   const [typeFilter, setTypeFilter] = useState("all");
 
   // ── Queries ──
-  const { data: vendors = [], isLoading, refetch } = useQuery({
+  const { data: vendors = [], refetch } = useQuery({
     queryKey: ["vendors"],
     queryFn: () => base44.entities.Vendor.list("-is_preferred"),
     staleTime: 5 * 60 * 1000,

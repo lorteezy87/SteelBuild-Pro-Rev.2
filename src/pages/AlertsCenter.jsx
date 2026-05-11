@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -34,14 +34,14 @@ export default function AlertsCenter() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const filtered = alerts.filter(a => {
+  const filtered = useMemo(() => alerts.filter(a => {
     if (a.is_dismissed) return false;
     const matchSeverity = severityFilter === "all" || a.severity === severityFilter;
     const matchType = typeFilter === "all" || a.alert_type === typeFilter;
     return matchSeverity && matchType;
-  });
+  }), [alerts, severityFilter, typeFilter]);
 
-  const alertTypes = [...new Set(alerts.map(a => a.alert_type).filter(Boolean))];
+  const alertTypes = useMemo(() => [...new Set(alerts.map(a => a.alert_type).filter(Boolean))], [alerts]);
 
   const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
   const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };

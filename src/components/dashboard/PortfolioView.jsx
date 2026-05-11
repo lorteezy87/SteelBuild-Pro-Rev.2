@@ -4,7 +4,7 @@ import { createPageUrl } from "@/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency, isOverdue, daysOverdue, parseUTCDate, statusIn } from "../shared/formatters";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import ProgressBar from "../shared/ProgressBar";
 import { computeWeightedHealth, HealthPill, HEALTH_ORDER, healthColor } from "./portfolioHealth";
 import {

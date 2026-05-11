@@ -14,7 +14,6 @@ import {
   TYPE_COLORS,
   TYPE_ICONS,
   PRIORITY_CONFIG,
-  PRIORITIES,
   inputStyle,
   labelStyle,
 } from "./constants";

@@ -73,7 +73,7 @@ function UsersManagementContent() {
       setDeleteTarget(null);
       toast.success("User deleted");
     },
-    onError: (err) => {
+    onError: () => {
       toast.error("Failed to delete user");
     },
   });

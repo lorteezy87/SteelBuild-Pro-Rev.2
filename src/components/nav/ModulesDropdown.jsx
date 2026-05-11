@@ -40,27 +40,27 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
     <div ref={ref} className="sbd-card" style={{
       position: "absolute", top: "calc(100% + 4px)", right: 0,
       width: dropdownWidth,
-      background: "var(--glass-bg)",
-      backdropFilter: "blur(var(--glass-blur))",
-      WebkitBackdropFilter: "blur(var(--glass-blur))",
-      border: "1px solid var(--glass-border)",
+      background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
+      backdropFilter: "none",
+      WebkitBackdropFilter: "none",
+      border: "1px solid color-mix(in srgb, var(--accent) 34%, var(--border-default))",
       borderRadius: "var(--radius-card)",
-      boxShadow: "var(--shadow-lg)",
-      zIndex: 999,
+      boxShadow: "0 28px 80px rgba(0,0,0,0.72), inset 0 1px 0 rgba(255,255,255,0.07)",
+      zIndex: 3000,
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
       maxHeight: isMobile ? "calc(100vh - 72px)" : "auto",
     }}>
       {/* Search bar */}
-      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--divider)" }}>
+      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-default)", background: "rgba(2, 6, 14, 0.96)" }}>
         <input
           placeholder="Search modules..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
           style={{
-            width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+            width: "100%", background: "rgba(9, 18, 32, 1)", border: "1px solid var(--accent-border)",
             borderRadius: 6, padding: "6px 10px", color: "var(--text-primary)",
             fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
           }}
@@ -78,7 +78,7 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
           maxHeight: isMobile ? "calc(100vh - 140px)" : "none",
         }}>
           {columns.map((column, colIdx) => (
-            <div key={colIdx} style={{ borderRight: colIdx < 2 && !isMobile ? "1px solid var(--divider)" : "none", padding: "0" }}>
+            <div key={colIdx} style={{ borderRight: colIdx < 2 && !isMobile ? "1px solid rgba(255,255,255,0.095)" : "none", padding: "0" }}>
               {column.map((group, groupIdx) => (
                 <div key={group.label}>
                   <div className="sbd-nav-section" style={{
@@ -134,9 +134,9 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
 
       {/* Footer */}
       <div style={{
-        borderTop: "1px solid var(--divider)", padding: "7px 14px",
+        borderTop: "1px solid var(--border-default)", padding: "7px 14px",
         display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "var(--bg-surface)",
+        background: "rgba(2, 6, 14, 0.98)",
       }}>
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
           <span style={{
@@ -175,7 +175,7 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
       }}
       onMouseEnter={(e) => {
         if (!isAdminOnly) {
-          e.currentTarget.style.background = "var(--nav-hover-bg)";
+          e.currentTarget.style.background = "rgba(86,176,255,0.12)";
           e.currentTarget.style.borderLeft = "2px solid var(--accent)";
         }
       }}
@@ -190,7 +190,7 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
       </span>
       <span style={{
         fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 500,
-        color: "var(--text-secondary)", flex: 1, lineHeight: 1.2,
+        color: "var(--text-primary)", flex: 1, lineHeight: 1.2,
       }}>
         {item.label}
         {isAdminOnly && <span style={{ fontSize: 10, color: "var(--status-error-bright)", marginLeft: 6 }}>{"\uD83D\uDC51"}</span>}

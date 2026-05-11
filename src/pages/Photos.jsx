@@ -1,18 +1,14 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import PhotoUploadModal from "@/components/photos/PhotoUploadModal";
 import PhotoGallery from "@/components/photos/PhotoGallery";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Upload } from "lucide-react";
 
 export default function Photos() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showUpload, setShowUpload] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");

@@ -33,8 +33,6 @@ export default function UnbilledRevenue() {
     queryFn: () => base44.entities.SOVItem.list(),
   });
 
-  const projectsById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
-
   // Per-project rollup. Two passes:
   //   1. billed-to-date — uses the deduped Certified-only set so
   //      multi-app projects don't read 2-3× their actual billings.

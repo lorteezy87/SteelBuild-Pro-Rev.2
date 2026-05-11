@@ -4501,8 +4501,11 @@ export type Database = {
           approved_date: string | null
           ball_in_court: string | null
           created_at: string | null
+          current_round_id: string | null
+          days_in_review: number | null
           deleted_at: string | null
           discipline: string | null
+          distributed_to: string | null
           drawing_set_ids: string[] | null
           file_url: string | null
           id: string
@@ -4518,6 +4521,7 @@ export type Database = {
           reviewer: string | null
           revision: string | null
           round_number: number | null
+          received_from: string | null
           spec_section: string | null
           status: string
           submittal_number: string
@@ -4525,14 +4529,19 @@ export type Database = {
           submitted_by: string | null
           submitted_date: string | null
           title: string
+          total_rounds: number
+          transmittal_number: string | null
           updated_at: string | null
         }
         Insert: {
           approved_date?: string | null
           ball_in_court?: string | null
           created_at?: string | null
+          current_round_id?: string | null
+          days_in_review?: number | null
           deleted_at?: string | null
           discipline?: string | null
+          distributed_to?: string | null
           drawing_set_ids?: string[] | null
           file_url?: string | null
           id?: string
@@ -4548,6 +4557,7 @@ export type Database = {
           reviewer?: string | null
           revision?: string | null
           round_number?: number | null
+          received_from?: string | null
           spec_section?: string | null
           status?: string
           submittal_number: string
@@ -4555,14 +4565,19 @@ export type Database = {
           submitted_by?: string | null
           submitted_date?: string | null
           title: string
+          total_rounds?: number
+          transmittal_number?: string | null
           updated_at?: string | null
         }
         Update: {
           approved_date?: string | null
           ball_in_court?: string | null
           created_at?: string | null
+          current_round_id?: string | null
+          days_in_review?: number | null
           deleted_at?: string | null
           discipline?: string | null
+          distributed_to?: string | null
           drawing_set_ids?: string[] | null
           file_url?: string | null
           id?: string
@@ -4578,6 +4593,7 @@ export type Database = {
           reviewer?: string | null
           revision?: string | null
           round_number?: number | null
+          received_from?: string | null
           spec_section?: string | null
           status?: string
           submittal_number?: string
@@ -4585,6 +4601,8 @@ export type Database = {
           submitted_by?: string | null
           submitted_date?: string | null
           title?: string
+          total_rounds?: number
+          transmittal_number?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -4593,6 +4611,204 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submittal_activity: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          from_value: string | null
+          id: string
+          metadata: Json
+          project_id: string
+          submittal_id: string
+          to_value: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          from_value?: string | null
+          id?: string
+          metadata?: Json
+          project_id: string
+          submittal_id: string
+          to_value?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          from_value?: string | null
+          id?: string
+          metadata?: Json
+          project_id?: string
+          submittal_id?: string
+          to_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_activity_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submittal_rounds: {
+        Row: {
+          ball_in_court: string | null
+          created_at: string
+          deleted_at: string | null
+          drawing_set_ids: string[]
+          file_url: string | null
+          id: string
+          is_deleted: boolean
+          markup_file_url: string | null
+          metadata: Json
+          project_id: string
+          response_notes: string | null
+          returned_date: string | null
+          reviewer: string | null
+          round_number: number
+          status: string
+          submittal_id: string
+          submitted_by: string | null
+          submitted_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          ball_in_court?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_set_ids?: string[]
+          file_url?: string | null
+          id?: string
+          is_deleted?: boolean
+          markup_file_url?: string | null
+          metadata?: Json
+          project_id: string
+          response_notes?: string | null
+          returned_date?: string | null
+          reviewer?: string | null
+          round_number?: number
+          status?: string
+          submittal_id: string
+          submitted_by?: string | null
+          submitted_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ball_in_court?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          drawing_set_ids?: string[]
+          file_url?: string | null
+          id?: string
+          is_deleted?: boolean
+          markup_file_url?: string | null
+          metadata?: Json
+          project_id?: string
+          response_notes?: string | null
+          returned_date?: string | null
+          reviewer?: string | null
+          round_number?: number
+          status?: string
+          submittal_id?: string
+          submitted_by?: string | null
+          submitted_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_rounds_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_rounds_submittal_id_fkey"
+            columns: ["submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submittal_sheet_responses: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          drawing_id: string | null
+          drawing_set_id: string | null
+          id: string
+          is_deleted: boolean
+          markup_file_url: string | null
+          metadata: Json
+          project_id: string
+          response_status: string
+          reviewer_comment: string | null
+          sheet_number: string | null
+          submittal_round_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          drawing_set_id?: string | null
+          id?: string
+          is_deleted?: boolean
+          markup_file_url?: string | null
+          metadata?: Json
+          project_id: string
+          response_status?: string
+          reviewer_comment?: string | null
+          sheet_number?: string | null
+          submittal_round_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          drawing_id?: string | null
+          drawing_set_id?: string | null
+          id?: string
+          is_deleted?: boolean
+          markup_file_url?: string | null
+          metadata?: Json
+          project_id?: string
+          response_status?: string
+          reviewer_comment?: string | null
+          sheet_number?: string | null
+          submittal_round_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittal_sheet_responses_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_sheet_responses_drawing_set_id_fkey"
+            columns: ["drawing_set_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittal_sheet_responses_submittal_round_id_fkey"
+            columns: ["submittal_round_id"]
+            isOneToOne: false
+            referencedRelation: "submittal_rounds"
             referencedColumns: ["id"]
           },
         ]

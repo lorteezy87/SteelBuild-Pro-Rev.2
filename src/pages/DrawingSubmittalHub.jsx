@@ -15,7 +15,7 @@
 
 import React, { useState, useMemo, Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useDrawings } from "@/hooks/useDrawings";
 import { useSubmittals } from "@/hooks/useSubmittals";
 import { useQuery } from "@tanstack/react-query";
@@ -37,7 +37,6 @@ const SubmittalsPage = lazy(() => import("@/pages/Submittals"));
 // (--surface-0, --border) with dark hardcoded fallbacks, which made the
 // Approval Matrix unreadable.
 const accent      = "var(--accent)";
-const accentMuted = "var(--accent-muted)";
 const surface0    = "var(--bg-surface)";
 const surface1    = "var(--bg-surface-low)";
 const surface2    = "var(--bg-surface-high)";
@@ -90,7 +89,7 @@ export default function DrawingSubmittalHub() {
   // ── Data for KPI strip & matrix ────────────────────────────────────────
   const { drawings, isLoading: drawingsLoading } = useDrawings(projectId);
   const {
-    submittals, kpis, byDrawingSet, rounds, roundsBySubmittal,
+    submittals, kpis, _byDrawingSet, roundsBySubmittal,
     isLoading: submittalsLoading,
   } = useSubmittals(projectId);
 
@@ -218,7 +217,6 @@ export default function DrawingSubmittalHub() {
                 drawingSets={drawingSets}
                 submittals={submittals}
                 roundsBySubmittal={roundsBySubmittal}
-                byDrawingSet={byDrawingSet}
                 isLoading={isLoading}
               />
             )}
@@ -233,7 +231,7 @@ export default function DrawingSubmittalHub() {
 // Approval Matrix — rows: drawing sets, columns show linked submittal status
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, byDrawingSet, isLoading }) {
+function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading }) {
   const [search, setSearch] = useState("");
 
   // Build matrix: for each drawing set, find all submittals that reference it

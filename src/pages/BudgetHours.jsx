@@ -28,7 +28,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { CommandBar } from "@/components/design-system";
 import { useProjectId } from "@/hooks/useProjectId";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
 
 /* ─────────────────────────────────────────────

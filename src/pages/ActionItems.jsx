@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import ActionItemList from "@/components/actionitems/ActionItemList";
@@ -12,16 +10,7 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
-const PRIORITY_COLORS = {
-  [PRIORITY.CRITICAL]: "var(--status-error)",
-  [PRIORITY.HIGH]:     "var(--status-warning)",
-  [PRIORITY.MEDIUM]:   "var(--status-info)",
-  [PRIORITY.LOW]:      "var(--text-muted)",
-};
-
 export default function ActionItems() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -118,8 +107,6 @@ export default function ActionItems() {
     { label: "Cancelled",   value: stats.cancelled,   color: "var(--text-muted)",     filterKey: ACTION_ITEM_STATUS.CANCELLED },
     { label: "Critical",    value: stats.critical,    color: "var(--status-error)",   filterKey: null, priorityKey: PRIORITY.CRITICAL },
   ];
-
-  const priorities = Object.values(PRIORITY);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

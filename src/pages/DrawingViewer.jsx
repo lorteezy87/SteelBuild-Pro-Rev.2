@@ -3,7 +3,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { base44, resolveFileUrl } from "@/api/base44Client";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { supabase } from "@/lib/supabase";
 import * as pdfjsLib from "pdfjs-dist";
 // Bundle the pdf.js worker with Vite so versions always match the installed
@@ -102,7 +102,6 @@ export default function DrawingViewer() {
     pdfDoc,
     totalPages,
     pdfError,
-    setPdfError,
     currentPage,
     setCurrentPage,
   } = usePdfLoader({ activeDrawing, renderMode });
@@ -383,7 +382,7 @@ export default function DrawingViewer() {
     if (!activeDrawing) return;
     const page = Number(activeDrawing.pdf_page) || 1;
     setCurrentPage(page);
-  }, [activeDrawing?.id]);
+  }, [activeDrawing, setCurrentPage]);
 
   // Callout → navigation handler. If the targetSheetNumber resolves to a
   // drawing in the project list, switch to it. The effect above then jumps
@@ -445,7 +444,7 @@ export default function DrawingViewer() {
         }
       }
     }
-  }, [pdfDoc, totalPages, drawings]);
+  }, [pdfDoc, totalPages, drawings, setCurrentPage]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   // Hook lives in useViewerKeyboardShortcuts; binding logic + key map are
@@ -476,7 +475,7 @@ export default function DrawingViewer() {
       const target = (container.clientWidth - 32) / vp.width;
       setZoom(+target.toFixed(2));
     }
-  }, [pdfDoc, currentPage, rotation]);
+  }, [pdfDoc, currentPage, rotation, canvasRef]);
 
   const handleFitPage = useCallback(async () => {
     if (!pdfDoc || !canvasRef.current) return;
@@ -487,7 +486,7 @@ export default function DrawingViewer() {
     const sX = (container.clientWidth - 32) / vp.width;
     const sY = (container.clientHeight - 32) / vp.height;
     setZoom(+Math.min(sX, sY).toFixed(2));
-  }, [pdfDoc, currentPage, rotation]);
+  }, [pdfDoc, currentPage, rotation, canvasRef]);
 
   // Dispatch from the zoom preset <select>. Keeps the select value in sync
   // with `zoom` state because the first option is always the current zoom.

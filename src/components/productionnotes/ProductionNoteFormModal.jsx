@@ -32,7 +32,7 @@ function SketchCanvas({ value, onChange, height = 200 }) {
       img.onload = () => ctx.drawImage(img, 0, 0);
       img.src = value;
     }
-  }, []);
+  }, [value]);
 
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();

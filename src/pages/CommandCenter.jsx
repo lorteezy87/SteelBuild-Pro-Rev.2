@@ -44,19 +44,6 @@ const STALE_TIME = 60_000;
 // experience as before, so existing users see no behaviour change
 // until they switch roles.
 const ROLE_STORAGE_KEY = "sbp-cc-role-v1";
-const TILE_KEYS = {
-  needsAction:   "needsAction",
-  overdue:       "overdue",
-  dueToday:      "dueToday",
-  arrivingToday: "arrivingToday",
-  waitingOthers: "waitingOthers",
-};
-const SECTION_KEYS = {
-  todayAgenda:    "todayAgenda",
-  weekAhead:      "weekAhead",
-  upcomingWindow: "upcomingWindow",
-  actionFeed:     "actionFeed",
-};
 const ROLE_PRESETS = [
   {
     id: "pm",
@@ -117,7 +104,6 @@ export default function CommandCenter() {
   const [feedExpanded, setFeedExpanded] = useState(false);
   const [roleId, setRoleId] = useState(loadRole);
   const activeRole = ROLE_PRESETS.find((r) => r.id === roleId) || ROLE_PRESETS[0];
-  const tileVisible = (key) => activeRole.tiles.includes(key);
   const sectionVisible = (key) => activeRole.sections.includes(key);
 
   // ── Data queries ────────────────────────────────────────────────────
@@ -231,7 +217,10 @@ export default function CommandCenter() {
   // change. Driven by rawFeed's identity because that's the closest
   // single handle we have to "did the numbers change?". Feeds the
   // KpiTile trust footers so PMs can see how fresh each count is.
-  const feedUpdatedAt = useMemo(() => Date.now(), [rawFeed]);
+  const [feedUpdatedAt, setFeedUpdatedAt] = useState(Date.now());
+  useEffect(() => {
+    setFeedUpdatedAt(Date.now());
+  }, [rawFeed]);
 
   // ── Today-first view buckets ────────────────────────────────────────
   const view = useMemo(

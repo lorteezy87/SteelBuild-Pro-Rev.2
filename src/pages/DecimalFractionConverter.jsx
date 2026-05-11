@@ -20,7 +20,6 @@ import {
 } from "@/utils/fractionConversion";
 
 const mono = { fontFamily: "var(--font-mono)" };
-const body = { fontFamily: "var(--font-body)" };
 
 const cardStyle = {
   background: "var(--bg-surface)",
@@ -281,9 +280,9 @@ function FractionToDecimalPanel() {
   const [customNum, setCustomNum]   = useState("");
   const [customDen, setCustomDen]   = useState("16");
 
-  const fraction = customMode
+  const fraction = useMemo(() => customMode
     ? { num: parseFloat(customNum) || 0, den: parseFloat(customDen) || 1 }
-    : COMMON_FRACTIONS[fracIdx];
+    : COMMON_FRACTIONS[fracIdx], [customMode, customNum, customDen, fracIdx]);
 
   // Validation — collect bad fields so we can render them inline rather
   // than silently producing NaN.

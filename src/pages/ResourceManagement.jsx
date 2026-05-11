@@ -1,10 +1,8 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import ResourceFormModal from "@/components/resources/ResourceFormModal";
 import ResourceList from "@/components/resources/ResourceList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -47,8 +45,6 @@ const GHOST_RESOURCES = [
 ];
 
 export default function ResourceManagement() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -169,9 +165,9 @@ export default function ResourceManagement() {
           // tell which project rows came from the library and which
           // library row they came from.
           const {
-            id, created_at, updated_at,
+            id: _id, created_at: _created_at, updated_at: _updated_at,
             project_id: _oldProject, project_name: _oldProjectName,
-            parent_resource_id,
+            parent_resource_id: _parent_resource_id,
             metadata,
             ...rest
           } = src;

@@ -10,7 +10,6 @@ export default function AlertBanner({
   visible,
   overdueDeliveries,
   wpMap,
-  projectMap,
   today,
   onChipClick,
 }) {

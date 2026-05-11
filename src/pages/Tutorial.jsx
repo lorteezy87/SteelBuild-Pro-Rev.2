@@ -147,7 +147,7 @@ export default function Tutorial() {
         >
           <ReactMarkdown
             components={{
-              h1: ({ node, children, ...rest }) => (
+              h1: ({ children, ...rest }) => (
                 <h1
                   id={slugify(String(children))}
                   style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 800, marginTop: 0, marginBottom: 16, color: "var(--text-primary)", letterSpacing: "-0.01em" }}
@@ -156,7 +156,7 @@ export default function Tutorial() {
                   {children}
                 </h1>
               ),
-              h2: ({ node, children, ...rest }) => (
+              h2: ({ children, ...rest }) => (
                 <h2
                   id={slugify(String(children))}
                   style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, marginTop: 32, marginBottom: 10, color: "var(--text-primary)", borderBottom: "1px solid var(--divider)", paddingBottom: 4 }}
@@ -165,7 +165,7 @@ export default function Tutorial() {
                   {children}
                 </h2>
               ),
-              h3: ({ node, children, ...rest }) => (
+              h3: ({ children, ...rest }) => (
                 <h3
                   id={slugify(String(children))}
                   style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, marginTop: 22, marginBottom: 6, color: "var(--text-primary)" }}
@@ -174,7 +174,7 @@ export default function Tutorial() {
                   {children}
                 </h3>
               ),
-              h4: ({ node, children, ...rest }) => (
+              h4: ({ children, ...rest }) => (
                 <h4
                   style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, marginTop: 14, marginBottom: 4, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.04em" }}
                   {...rest}
@@ -182,19 +182,19 @@ export default function Tutorial() {
                   {children}
                 </h4>
               ),
-              p: ({ node, children, ...rest }) => (
+              p: ({ children, ...rest }) => (
                 <p style={{ margin: "0 0 10px 0" }} {...rest}>{children}</p>
               ),
-              ul: ({ node, children, ...rest }) => (
+              ul: ({ children, ...rest }) => (
                 <ul style={{ margin: "0 0 12px 0", paddingLeft: 22 }} {...rest}>{children}</ul>
               ),
-              ol: ({ node, children, ...rest }) => (
+              ol: ({ children, ...rest }) => (
                 <ol style={{ margin: "0 0 12px 0", paddingLeft: 22 }} {...rest}>{children}</ol>
               ),
-              li: ({ node, children, ...rest }) => (
+              li: ({ children, ...rest }) => (
                 <li style={{ margin: "3px 0" }} {...rest}>{children}</li>
               ),
-              code: ({ node, inline, children, ...rest }) =>
+              code: ({ inline, children, ...rest }) =>
                 inline ? (
                   <code
                     style={{
@@ -224,11 +224,11 @@ export default function Tutorial() {
                     <code {...rest}>{children}</code>
                   </pre>
                 ),
-              a: ({ node, children, ...rest }) => (
+              a: ({ children, ...rest }) => (
                 <a style={{ color: "var(--accent)", textDecoration: "underline" }} {...rest}>{children}</a>
               ),
               hr: () => <hr style={{ border: 0, borderTop: "1px solid var(--divider)", margin: "22px 0" }} />,
-              blockquote: ({ node, children, ...rest }) => (
+              blockquote: ({ children, ...rest }) => (
                 <blockquote
                   style={{
                     borderLeft: "3px solid var(--accent)",
@@ -242,7 +242,7 @@ export default function Tutorial() {
                   {children}
                 </blockquote>
               ),
-              table: ({ node, children, ...rest }) => (
+              table: ({ children, ...rest }) => (
                 <div style={{ overflowX: "auto", margin: "0 0 14px 0" }}>
                   <table
                     style={{
@@ -257,7 +257,7 @@ export default function Tutorial() {
                   </table>
                 </div>
               ),
-              th: ({ node, children, ...rest }) => (
+              th: ({ children, ...rest }) => (
                 <th
                   style={{
                     textAlign: "left",
@@ -276,7 +276,7 @@ export default function Tutorial() {
                   {children}
                 </th>
               ),
-              td: ({ node, children, ...rest }) => (
+              td: ({ children, ...rest }) => (
                 <td
                   style={{
                     padding: "8px 10px",
@@ -288,7 +288,7 @@ export default function Tutorial() {
                   {children}
                 </td>
               ),
-              strong: ({ node, children, ...rest }) => (
+              strong: ({ children, ...rest }) => (
                 <strong style={{ fontWeight: 800, color: "var(--text-primary)" }} {...rest}>{children}</strong>
               ),
             }}

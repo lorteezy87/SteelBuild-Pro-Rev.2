@@ -74,8 +74,8 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
     // filtered server-side too, but trimming here makes the payload
     // smaller and the intent clearer.
     const {
-      created_date, updated_date, created_at, updated_at,
-      is_deleted, deleted_at,
+      created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
+      is_deleted: _id, deleted_at: _da,
       ...clean
     } = formData;
     onSave?.({

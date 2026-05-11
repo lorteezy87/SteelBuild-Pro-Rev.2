@@ -1,9 +1,7 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import PunchlistFormModal from "@/components/punchlist/PunchlistFormModal";
 import PunchlistList from "@/components/punchlist/PunchlistList";
@@ -13,8 +11,6 @@ import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 
 export default function Punchlist() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");

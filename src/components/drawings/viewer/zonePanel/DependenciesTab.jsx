@@ -139,7 +139,6 @@ export function DependenciesTab({
         title="Blocking this zone"
         emptyHint="Nothing upstream is gating this zone."
         rows={blocking}
-        zoneId={zone.id}
         currentSheetDrawingId={currentSheetDrawingId}
         onSheetNavigate={onSheetNavigate}
         onRemove={handleRemove}
@@ -148,7 +147,6 @@ export function DependenciesTab({
         title="Blocked by this zone"
         emptyHint="No downstream zones are gated by this one."
         rows={blockedBy}
-        zoneId={zone.id}
         currentSheetDrawingId={currentSheetDrawingId}
         onSheetNavigate={onSheetNavigate}
         onRemove={handleRemove}
@@ -157,7 +155,6 @@ export function DependenciesTab({
         title="Related"
         emptyHint="No informational related-to edges."
         rows={related}
-        zoneId={zone.id}
         currentSheetDrawingId={currentSheetDrawingId}
         onSheetNavigate={onSheetNavigate}
         onRemove={handleRemove}
@@ -183,7 +180,6 @@ function DependencyGroup({
   title,
   emptyHint,
   rows,
-  zoneId,
   currentSheetDrawingId,
   onSheetNavigate,
   onRemove,

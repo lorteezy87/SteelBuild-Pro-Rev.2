@@ -236,7 +236,7 @@ export default function WPBulkAddModal({
   const handleCommit = () => {
     if (!canCommit) return;
     // Strip UI-only fields; leave wp_number empty for rows that need auto-allocation.
-    const payload = validRows.map(({ __index, errors, isDuplicate, ...data }) => ({
+    const payload = validRows.map(({ __index, errors: _errors, isDuplicate: _isDuplicate, ...data }) => ({
       ...data,
       project_id: projectId,
       project_name: projectName || undefined,

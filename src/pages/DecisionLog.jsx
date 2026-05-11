@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useProjectContext } from '../components/shared/useProjectContext';
-import { useSearchParams } from 'react-router-dom';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import PhoenixModal, { FormField, btnPrimary, btnSecondary, inputStyle } from '@/components/shared/PhoenixModal';
 import { formatDate } from '@/components/shared/formatters';
@@ -11,9 +9,10 @@ import { CommandBar } from '@/components/design-system';
 import { Plus } from 'lucide-react';
 import { useProjectId } from "@/hooks/useProjectId";
 
-// Local aliases so the surviving filter-bar callers keep compiling without
-// edits. Both now delegate to the shared PhoenixModal style constants.
-const iStyle = inputStyle;
+const fmtDate = (d) => {
+  if (!d) return '—';
+  return formatDate(d);
+};
 
 const IMPACT_COLORS = {
   Critical: 'var(--status-error)',
@@ -22,19 +21,7 @@ const IMPACT_COLORS = {
   Low: 'var(--text-muted)',
 };
 
-const PHASES = ['Preconstruction', 'Procurement', 'Detailing', 'Fabrication', 'Field Execution', 'Closeout', 'General'];
-
-// Local alias so the existing call sites don't need to change. Shared
-// `formatDate` produces the same "Apr 21, 2026" format for a non-null
-// value; returns "-" for null, which we normalize to "—" below.
-const fmtDate = (d) => {
-  if (!d) return '—';
-  return formatDate(d);
-};
-
 export default function DecisionLog() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
 
   const [activeTab, setActiveTab] = useState('decisions');
@@ -97,7 +84,7 @@ export default function DecisionLog() {
     onError: (e) => toast.error('Failed: ' + (e?.message || 'Unknown error')),
   });
 
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
 
   const filteredDecisions = useMemo(() => {
     const q = search.toLowerCase();

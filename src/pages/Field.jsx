@@ -32,7 +32,7 @@ import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";

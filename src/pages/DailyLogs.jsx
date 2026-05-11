@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { useProjectContext } from "../components/shared/useProjectContext";
 import DailyLogForm from "@/components/fieldops/DailyLogForm";
 import DailyLogsList from "@/components/fieldops/DailyLogsList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -12,7 +10,6 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
-import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -37,8 +34,6 @@ function getDateCutoff(preset) {
 }
 
 export default function DailyLogs() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
   const projectId = useProjectId();
 
   const [showForm, setShowForm] = useState(false);
@@ -46,12 +41,6 @@ export default function DailyLogs() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState("all");
-
-  // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
-  useAutoOpenCreate(() => {
-    setEditing(null);
-    setShowForm(true);
-  });
 
   const qc = useQueryClient();
 

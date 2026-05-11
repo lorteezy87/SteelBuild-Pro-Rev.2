@@ -787,7 +787,7 @@ function SetOnlyInfoRow({ group }) {
 
 function SheetRow({
   d, isSel, onToggleSelect, onEdit, onDelete, onAdvance, onView,
-  setContextMenu, onSetApproval, rfiMap, isChild, hideOnCompact,
+  setContextMenu, rfiMap, isChild, hideOnCompact,
 }) {
   const overdue = isOverdue(d);
   const late = daysLate(d);

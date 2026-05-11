@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryKey } from "@/services/cacheRegistry";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { formatDate } from "@/components/shared/formatters";
 import { CommandBar, StatusPill } from "@/components/design-system";
 
@@ -32,15 +32,6 @@ const burnTone = (burn) => {
 };
 
 // ─── Shared Components ──────────────────────────────────────────────────────
-
-const PageHeader = ({ title, subtitle }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-    <div>
-      <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--text-primary)", margin: 0 }}>{title}</h1>
-      {subtitle && <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>{subtitle}</p>}
-    </div>
-  </div>
-);
 
 const KPICard = ({ label, value, sub, tone }) => (
   <div className="sbd-kpi" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -446,7 +437,7 @@ export default function LEMs() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: expenses = [], isLoading: expLoading } = useQuery({
+  const { isLoading: expLoading } = useQuery({
     queryKey: getQueryKey("expense", projectId),
     queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
     enabled: !!projectId,

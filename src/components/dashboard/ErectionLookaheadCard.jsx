@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../shared/formatters";
 
-export default function ErectionLookaheadCard({ wps, deliveries, drawings, tasks }) {
+export default function ErectionLookaheadCard({ wps, deliveries, tasks }) {
   const navigate = useNavigate();
   const today = new Date(); today.setHours(0,0,0,0);
   const threeWeeks = new Date(today.getTime() + 21 * 86400000);

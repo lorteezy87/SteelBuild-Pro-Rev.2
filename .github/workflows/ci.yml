@@ -1,4 +1,4 @@
-# CI — lint + typecheck + test + build on every push and PR.
+﻿# CI â€” lint + typecheck + test + build on every push and PR.
 #
 # What runs here:
 #   1. Install (cached node_modules via actions/setup-node)
@@ -11,7 +11,7 @@
 # What does NOT run here:
 #   - End-to-end tests (no E2E suite yet)
 #   - Lighthouse / a11y / bundle-size budgets (queued for later)
-#   - Deploy — Vercel handles that on push to codex/base44-deploy-nick
+#   - Deploy â€” Vercel handles that on push to codex/base44-deploy-nick
 #
 # This workflow runs against EVERY push and pull request to any branch
 # so contributors see green/red feedback before merging into deploy.
@@ -65,25 +65,20 @@ jobs:
         run: npm run lint
 
       - name: Typecheck (TypeScript)
-        # Currently non-blocking — src/types/supabase.ts is stale
-        # (missing submittal_rounds + a few other recently-added tables).
-        # Run `npm run types:db` locally with the Supabase CLI to
-        # regenerate, then flip this to a blocking check.
-        # See TECH_DEBT.md for the full ticket.
+        # Blocking: guards Supabase table names, hook contracts,
+        # and TS/TSX integration points before Vercel receives a deploy.
         run: npm run typecheck
-        continue-on-error: true
 
       - name: Typecheck (JavaScript via jsconfig)
-        # The codebase is mid-migration to TS; this catches obvious
-        # type errors in the .js / .jsx side via // @ts-check + JSDoc.
+        # Blocking: parses JS/JSX and verifies module resolution while the
+        # remaining business logic migrates toward TypeScript coverage.
         run: npm run typecheck:js
-        continue-on-error: true
 
       - name: Run Vitest tests
         run: npm test
 
       - name: Production build
         # Catches dead imports / runtime-only refs that the type checks
-        # don't see. Output is discarded — we just want the failure
+        # don't see. Output is discarded â€” we just want the failure
         # signal.
         run: npm run build

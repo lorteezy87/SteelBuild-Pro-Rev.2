@@ -113,7 +113,6 @@ export function parseBulkFolderInput(text) {
 
 export default function BulkCreateFoldersModal({
   open,
-  parentFolderId = null,    // current folder; used as the parent for depth=0 lines
   parentLabel = "(Root)",
   onClose,
   onSubmit,                 // (parsed[]) => Promise<{ created, failed }>
