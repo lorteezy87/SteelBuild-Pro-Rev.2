@@ -86,6 +86,7 @@ export default function Schedule() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showWbsBuilder, setShowWbsBuilder] = useState(false);
+  const [ganttFocus, setGanttFocus] = useState(null);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
@@ -797,6 +798,10 @@ export default function Schedule() {
         phaseFilter={phaseFilter}
         onSetPhaseFilter={setPhaseFilter}
         onSetView={setView}
+        onSetGanttFocus={(filter) => {
+          setView("gantt");
+          setGanttFocus({ filter, requestedAt: Date.now() });
+        }}
       />
 
       {/* View Content */}
@@ -822,6 +827,7 @@ export default function Schedule() {
                 }
               }}
               phaseFilter={phaseFilter}
+              externalFocus={ganttFocus}
             />
           </ErrorBoundary>
         )}
