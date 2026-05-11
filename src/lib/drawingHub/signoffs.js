@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { assertSetUnlocked } from "./setLock";
 
 const VALID_STAMP_TYPES = [
   "approved_for_fabrication",
@@ -24,6 +25,17 @@ const VALID_STAMP_TYPES = [
   "for_information_only",
   "void",
 ];
+
+
+async function _drawingIdForSignoff(id) {
+  const { data, error } = await supabase
+    .from("drawing_signoffs")
+    .select("drawing_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return data?.drawing_id || null;
+}
 
 /**
  * List sign-offs for a drawing or specific revision, newest first.
@@ -94,6 +106,8 @@ export async function createSignoff({
     );
   }
 
+  await assertSetUnlocked(drawingId);
+
   // Pull current user for stamped_by_id; tolerant if not signed in
   // (RLS will reject the insert anyway, so this is best-effort).
   const { data: { user } } = await supabase.auth.getUser();
@@ -131,6 +145,8 @@ export async function createSignoff({
  */
 export async function voidSignoff({ id, reason = null } = {}) {
   if (!id) throw new Error("voidSignoff: id required");
+  const drawingId = await _drawingIdForSignoff(id);
+  await assertSetUnlocked(drawingId);
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from("drawing_signoffs")
