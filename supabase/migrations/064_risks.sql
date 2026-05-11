@@ -76,26 +76,63 @@ CREATE TRIGGER set_updated_at_risks
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 -- ── RLS ──────────────────────────────────────────────────────────────
--- Project membership read + write — same shape as work_packages
--- (011_rls_project_isolation) and budget_hour_items (062).
+-- Reads are open to any project member.
+-- Writes/deletes are restricted to write-capable roles.
 ALTER TABLE public.risks ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "project_member_access" ON public.risks;
-CREATE POLICY "project_member_access" ON public.risks
-  FOR ALL TO authenticated
+DROP POLICY IF EXISTS "project_member_read" ON public.risks;
+DROP POLICY IF EXISTS "project_member_write_insert" ON public.risks;
+DROP POLICY IF EXISTS "project_member_write_update" ON public.risks;
+DROP POLICY IF EXISTS "project_member_write_delete" ON public.risks;
+
+CREATE POLICY "project_member_read" ON public.risks
+  FOR SELECT TO authenticated
   USING (
-    project_id IS NULL
-    OR EXISTS (
+    EXISTS (
       SELECT 1 FROM public.user_projects
       WHERE user_projects.user_id = auth.uid()
         AND user_projects.project_id = risks.project_id
     )
-  )
+  );
+
+CREATE POLICY "project_member_write_insert" ON public.risks
+  FOR INSERT TO authenticated
   WITH CHECK (
-    project_id IS NULL
-    OR EXISTS (
+    EXISTS (
       SELECT 1 FROM public.user_projects
       WHERE user_projects.user_id = auth.uid()
         AND user_projects.project_id = risks.project_id
+        AND user_projects.role IN ('owner', 'admin', 'pm', 'field')
+    )
+  );
+
+CREATE POLICY "project_member_write_update" ON public.risks
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_projects
+      WHERE user_projects.user_id = auth.uid()
+        AND user_projects.project_id = risks.project_id
+        AND user_projects.role IN ('owner', 'admin', 'pm', 'field')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_projects
+      WHERE user_projects.user_id = auth.uid()
+        AND user_projects.project_id = risks.project_id
+        AND user_projects.role IN ('owner', 'admin', 'pm', 'field')
+    )
+  );
+
+CREATE POLICY "project_member_write_delete" ON public.risks
+  FOR DELETE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_projects
+      WHERE user_projects.user_id = auth.uid()
+        AND user_projects.project_id = risks.project_id
+        AND user_projects.role IN ('owner', 'admin', 'pm', 'field')
     )
   );
