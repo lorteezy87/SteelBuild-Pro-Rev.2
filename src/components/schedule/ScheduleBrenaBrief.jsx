@@ -34,19 +34,23 @@ function phaseOf(task) {
   return PHASES.includes(task?.phase) ? task.phase : "Unassigned";
 }
 
-function dependencyCount(task) {
+function dependencyIds(task) {
   const raw = task?.dependencies || task?.predecessors || task?.predecessor_ids;
-  if (!raw) return 0;
-  if (Array.isArray(raw)) return raw.length;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.length : 0;
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
     } catch {
-      return raw.split(",").filter(Boolean).length;
+      return raw.split(",").map((item) => item.trim()).filter(Boolean);
     }
   }
-  return 0;
+  return [];
+}
+
+function dependencyCount(task) {
+  return dependencyIds(task).length;
 }
 
 function taskMetadata(task) {
@@ -123,6 +127,21 @@ function buildBrief(tasks) {
     .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
     .slice(0, 5);
   const handoffCount = new Set([...startsSoon, ...dueSoon, ...activeNow].map((task) => task.id || taskName(task))).size;
+  const successorCountById = openTasks.reduce((acc, task) => {
+    dependencyIds(task).forEach((predId) => {
+      const key = String(predId);
+      acc[key] = (acc[key] || 0) + 1;
+    });
+    return acc;
+  }, {});
+  const logicGaps = openTasks
+    .filter((task) => {
+      if (task.is_summary || task._hasChildren) return false;
+      const predecessorCount = dependencyCount(task);
+      const successorCount = successorCountById[String(task.id)] || 0;
+      return predecessorCount === 0 || successorCount === 0;
+    })
+    .slice(0, 8);
   const unlinked = openTasks.filter((task) => dependencyCount(task) === 0 && !task.parent_task_id && !task.is_summary);
   const nextCritical = critical
     .map((task) => ({ task, days: daysFromToday(taskDate(task)) }))
@@ -173,6 +192,13 @@ function buildBrief(tasks) {
       filter: "lookahead",
       tone: "var(--status-info)",
     } : null,
+    logicGaps.length ? {
+      key: "logic",
+      title: "Tighten schedule logic",
+      detail: `${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} have missing predecessor or successor context. Review whether each is a true project start/end or needs dependency links.`,
+      filter: "logic",
+      tone: "var(--status-warning)",
+    } : null,
     tbd.length ? {
       key: "tbd",
       title: "Convert TBD dates",
@@ -195,6 +221,7 @@ function buildBrief(tasks) {
     + critical.length * 7
     + stalled.length * 6
     + tbd.length * 5
+    + Math.min(18, logicGaps.length * 3)
     + Math.min(20, unlinked.length * 2)
   ));
 
@@ -203,7 +230,7 @@ function buildBrief(tasks) {
     nextCritical[0] ? `2. Critical path check: confirm ${formatBriefTask(nextCritical[0])}.` : null,
     startsSoon[0] ? `3. Start handoff: verify ${formatBriefTask(startsSoon[0])}.` : null,
     dueSoon[0] ? `4. Finish handoff: confirm closeout path for ${formatBriefTask(dueSoon[0])}.` : null,
-    unlinked.length ? `5. Logic cleanup: add dependencies to ${unlinked.length} unlinked open task${unlinked.length === 1 ? "" : "s"} where work has real predecessor/successor logic.` : null,
+    logicGaps.length ? `5. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
   ].filter(Boolean);
 
   const clipboardText = [
@@ -216,6 +243,7 @@ function buildBrief(tasks) {
     `Critical: ${critical.length}`,
     `TBD Dates: ${tbd.length}`,
     `14-Day Handoff: ${handoffCount}`,
+    `Logic Gaps: ${logicGaps.length}`,
     "",
     "Recommended morning plan:",
     ...(morningPlan.length ? morningPlan : ["No recovery action is currently recommended."]),
@@ -229,11 +257,14 @@ function buildBrief(tasks) {
     "14-day handoff - active now:",
     ...(activeNow.length ? activeNow.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open tasks are currently spanning today."]),
     "",
+    "Dependency logic gaps:",
+    ...(logicGaps.length ? logicGaps.map((task, index) => `${index + 1}. ${formatBriefTask(task)} - pred ${dependencyCount(task)}, succ ${successorCountById[String(task.id)] || 0}`) : ["No open dependency logic gaps found."]),
+    "",
     "Upcoming critical path watch:",
     ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
   ].join("\n");
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
@@ -282,7 +313,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={AlertTriangle} label="Delayed" value={brief.delayed.length} tone={brief.delayed.length ? "var(--status-error)" : "var(--status-success)"} />
         <Metric icon={CalendarClock} label="Overdue" value={brief.overdue.length} tone={brief.overdue.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Target} label="TBD Dates" value={brief.tbd.length} tone={brief.tbd.length ? "var(--status-info)" : "var(--status-success)"} />
-        <Metric icon={GitBranch} label="Unlinked" value={brief.unlinked.length} tone={brief.unlinked.length ? "var(--text-secondary)" : "var(--status-success)"} />
+        <Metric icon={GitBranch} label="Logic Gaps" value={brief.logicGaps.length} tone={brief.logicGaps.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={ShieldAlert} label="Critical" value={brief.critical.length} tone={brief.critical.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Route} label="14-Day" value={brief.handoffCount} tone={brief.handoffCount ? "var(--status-info)" : "var(--status-success)"} />
         <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
@@ -299,6 +330,11 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             {brief.critical.length > 0 && (
               <Button size="sm" variant="secondary" icon="arrow" onClick={() => onSetGanttFocus?.("critical")}>
                 Show Critical
+              </Button>
+            )}
+            {brief.logicGaps.length > 0 && (
+              <Button size="sm" variant="secondary" icon="link" onClick={() => onSetGanttFocus?.("logic")}>
+                Show Logic
               </Button>
             )}
             {primaryPhase && (
@@ -457,6 +493,25 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               </button>
             )) : (
               <div style={emptyStyle}>No open critical path tasks are marked yet.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={dependencyPanelStyle}>
+          <div style={miniLabelStyle}>Dependency logic watch</div>
+          <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
+            {brief.logicGaps.length ? brief.logicGaps.slice(0, 5).map((task) => (
+              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("logic")} style={logicTaskStyle}>
+                <GitBranch size={12} color="var(--status-warning)" />
+                <span style={{ minWidth: 0 }}>
+                  <span style={taskNameStyle}>{taskName(task)}</span>
+                  <span style={taskMetaStyle}>
+                    {phaseOf(task)} / pred {dependencyCount(task)} / succ {brief.successorCountById[String(task.id)] || 0}
+                  </span>
+                </span>
+              </button>
+            )) : (
+              <div style={emptyStyle}>No open dependency logic gaps found.</div>
             )}
           </div>
         </div>
@@ -675,6 +730,14 @@ const criticalPanelStyle = {
   padding: 12,
 };
 
+const dependencyPanelStyle = {
+  gridColumn: "span 3",
+  border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(145deg, rgba(245,158,11,0.05), rgba(255,255,255,0.025))",
+  padding: 12,
+};
+
 const miniLabelStyle = {
   fontFamily: "var(--font-mono)",
   fontSize: 8,
@@ -760,6 +823,20 @@ const criticalTaskStyle = {
   border: "1px solid var(--border-default)",
   borderRadius: 10,
   background: "rgba(255,255,255,0.025)",
+  padding: "8px 9px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const logicTaskStyle = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: "14px minmax(0, 1fr)",
+  gap: 8,
+  alignItems: "start",
+  border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
+  borderRadius: 10,
+  background: "rgba(245,158,11,0.045)",
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",

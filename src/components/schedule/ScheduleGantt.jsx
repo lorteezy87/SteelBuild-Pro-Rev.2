@@ -88,6 +88,7 @@ const QUICK_FILTERS = [
   { key: "stalled", label: "Stalled" },
   { key: "overdue", label: "Overdue" },
   { key: "tbd", label: "TBD" },
+  { key: "logic", label: "Logic Gaps" },
   { key: "shifted", label: "Shifted" },
   { key: "deps", label: "Linked" },
   { key: "unlinked", label: "Unlinked" },
@@ -141,6 +142,18 @@ function isStalledTask(task, today, parseStart) {
   if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
   const start = parseStart(task);
   return Boolean(start && start < today && displayPct(task) === 0);
+}
+
+function isOpenScheduleTask(task) {
+  const status = String(task?.status || "").toLowerCase();
+  return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
+}
+
+function hasLogicGapTask(task, successorCountById) {
+  if (!task || !isOpenScheduleTask(task) || task._hasChildren || task.is_summary) return false;
+  const predecessorCount = parseDeps(task.dependencies).length;
+  const successorCount = successorCountById[task.id] || 0;
+  return predecessorCount === 0 || successorCount === 0;
 }
 
 function isLookaheadTask(task, today, getStart, getEnd, days = 14) {
@@ -706,6 +719,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     });
     return out;
   }, [allTasks]);
+  const logicGapTasks = allTasks.filter(t => hasLogicGapTask(t, successorCountById)).length;
 
   const normalizedSearch = searchText.trim().toLowerCase();
   const hasActiveRowFilter = normalizedSearch.length > 0 || quickFilter !== "all";
@@ -731,6 +745,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
         if (quickFilter === "overdue") return isOverdue(task);
         if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
+        if (quickFilter === "logic") return hasLogicGapTask(task, successorCountById);
         if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
         if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
         if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
@@ -1088,6 +1103,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           { label: "Health", value: `${avgProgress}%`, hint: "avg complete", color: "var(--accent)" },
           { label: "14-Day", value: lookaheadTasks, hint: "handoff", color: lookaheadTasks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Stalled", value: stalledTasks, hint: "started 0%", color: stalledTasks ? "var(--status-error)" : "var(--text-muted)" },
+          { label: "Logic", value: logicGapTasks, hint: "open ends", color: logicGapTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Shifted", value: shiftedTasks, hint: "cascade moved", color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Milestones", value: milestoneTasks, hint: "flagged", color: milestoneTasks ? "var(--status-warning)" : "var(--text-muted)" },
@@ -1404,6 +1420,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               const dt = allTasks.find(t => t.id === dId);
               return dt?.wbs_code || (dt?.task_name?.slice(0, 6) + "…") || "—";
             }).join(", ");
+            const predecessorCount = deps.length;
+            const successorCount = successorCountById[task.id] || 0;
+            const logicGap = hasLogicGapTask(task, successorCountById);
             const overdue = isOverdue(task);
             // Show *effective* start/finish in the left columns so the date
             // text matches the bar position. If a task slipped because of a
@@ -1566,6 +1585,29 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                         </span>
                       );
                     })()}
+                    {logicGap && (
+                      <span
+                        title={`${predecessorCount === 0 ? "Missing predecessor" : ""}${predecessorCount === 0 && successorCount === 0 ? " / " : ""}${successorCount === 0 ? "Missing successor" : ""}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 7,
+                          fontWeight: 900,
+                          letterSpacing: "0.08em",
+                          color: "var(--status-warning)",
+                          border: "1px solid color-mix(in srgb, var(--status-warning) 50%, transparent)",
+                          background: "rgba(245,158,11,0.10)",
+                          borderRadius: 2,
+                          padding: "1px 4px",
+                          marginRight: 5,
+                          flexShrink: 0,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        LOGIC
+                      </span>
+                    )}
                     <span style={{
                       fontFamily: "var(--font-body)",
                       // Slight WBS-level type ramp: parent tasks read as
@@ -2002,6 +2044,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 Shifted {effectiveDates[tooltip.task.id]?.shiftedBy || 0}d
               </span>
             )}
+            {hasLogicGapTask(tooltip.task, successorCountById) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-warning)", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+                Logic gap
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(tooltip.task.status), flexShrink: 0 }} />
@@ -2024,12 +2071,22 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
                 {parseDeps(tooltip.task.dependencies).length}
               </div>
+              {parseDeps(tooltip.task.dependencies).length === 0 && hasLogicGapTask(tooltip.task, successorCountById) && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  Missing
+                </div>
+              )}
             </div>
             <div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase" }}>Succ</div>
               <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)", fontWeight: 800 }}>
                 {successorCountById[tooltip.task.id] || 0}
               </div>
+              {!successorCountById[tooltip.task.id] && hasLogicGapTask(tooltip.task, successorCountById) && (
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  Missing
+                </div>
+              )}
             </div>
           </div>
           {weatherRiskByTask[tooltip.task.id] && (
