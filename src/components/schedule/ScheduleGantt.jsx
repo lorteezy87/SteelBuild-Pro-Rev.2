@@ -89,6 +89,7 @@ const QUICK_FILTERS = [
   { key: "overdue", label: "Overdue" },
   { key: "tbd", label: "TBD" },
   { key: "logic", label: "Logic Gaps" },
+  { key: "unassigned", label: "No Owner" },
   { key: "shifted", label: "Variance" },
   { key: "deps", label: "Linked" },
   { key: "unlinked", label: "Unlinked" },
@@ -147,6 +148,14 @@ function isStalledTask(task, today, parseStart) {
 function isOpenScheduleTask(task) {
   const status = String(task?.status || "").toLowerCase();
   return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
+}
+
+function taskOwner(task) {
+  return String(task?.resource_names || task?.assigned_to || "").trim();
+}
+
+function isUnassignedTask(task) {
+  return Boolean(task && isOpenScheduleTask(task) && !task._hasChildren && !task.is_summary && !taskOwner(task));
 }
 
 function hasLogicGapTask(task, successorCountById) {
@@ -705,6 +714,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const milestoneTasks = allTasks.filter(isMilestoneTask).length;
   const shiftedTasks = allTasks.filter(t => effectiveDates[t.id]?.shifted).length;
   const totalShiftDays = allTasks.reduce((sum, t) => sum + (Number(effectiveDates[t.id]?.shiftedBy) || 0), 0);
+  const unassignedTasks = allTasks.filter(isUnassignedTask).length;
   const weatherRiskTasks = allTasks.filter(t => weatherRiskByTask[t.id]).length;
   const dependencyLinks = allTasks.reduce((sum, t) => sum + parseDeps(t.dependencies).length, 0);
   const avgProgress = totalTasks > 0
@@ -747,6 +757,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         if (quickFilter === "overdue") return isOverdue(task);
         if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
         if (quickFilter === "logic") return hasLogicGapTask(task, successorCountById);
+        if (quickFilter === "unassigned") return isUnassignedTask(task);
         if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
         if (quickFilter === "deps") return parseDeps(task.dependencies).length > 0 || successorCountById[task.id] > 0;
         if (quickFilter === "unlinked") return parseDeps(task.dependencies).length === 0 && !successorCountById[task.id] && !task.parent_task_id && !task._hasChildren;
@@ -1106,6 +1117,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           { label: "14-Day", value: lookaheadTasks, hint: "handoff", color: lookaheadTasks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Stalled", value: stalledTasks, hint: "started 0%", color: stalledTasks ? "var(--status-error)" : "var(--text-muted)" },
           { label: "Logic", value: logicGapTasks, hint: "open ends", color: logicGapTasks ? "var(--status-warning)" : "var(--text-muted)" },
+          { label: "Owners", value: unassignedTasks, hint: "missing", color: unassignedTasks ? "var(--status-error)" : "var(--text-muted)" },
           { label: "Variance", value: shiftedTasks, hint: `${totalShiftDays}d moved`, color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Milestones", value: milestoneTasks, hint: "flagged", color: milestoneTasks ? "var(--status-warning)" : "var(--text-muted)" },
@@ -1425,6 +1437,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             const predecessorCount = deps.length;
             const successorCount = successorCountById[task.id] || 0;
             const logicGap = hasLogicGapTask(task, successorCountById);
+            const unassigned = isUnassignedTask(task);
             const overdue = isOverdue(task);
             // Show *effective* start/finish in the left columns so the date
             // text matches the bar position. If a task slipped because of a
@@ -1608,6 +1621,29 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                         }}
                       >
                         LOGIC
+                      </span>
+                    )}
+                    {unassigned && (
+                      <span
+                        title="No assigned resource or owner"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 7,
+                          fontWeight: 900,
+                          letterSpacing: "0.08em",
+                          color: "var(--status-error)",
+                          border: "1px solid color-mix(in srgb, var(--status-error) 50%, transparent)",
+                          background: "rgba(239,68,68,0.10)",
+                          borderRadius: 2,
+                          padding: "1px 4px",
+                          marginRight: 5,
+                          flexShrink: 0,
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        NO OWNER
                       </span>
                     )}
                     <span style={{
@@ -2051,6 +2087,11 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 Logic gap
               </span>
             )}
+            {isUnassignedTask(tooltip.task) && (
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--status-error)", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 999, padding: "2px 6px" }}>
+                No owner
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: statusColor(tooltip.task.status), flexShrink: 0 }} />
@@ -2096,11 +2137,9 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
               Weather risk: {pluralize(weatherRiskByTask[tooltip.task.id].length, "day")}
             </div>
           )}
-          {(tooltip.task.resource_names || tooltip.task.assigned_to) && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              {tooltip.task.resource_names || tooltip.task.assigned_to}
-            </div>
-          )}
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: taskOwner(tooltip.task) ? "var(--text-muted)" : "var(--status-error)", marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            Owner: {taskOwner(tooltip.task) || "Unassigned"}
+          </div>
           {onSave && (
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 6, opacity: 0.65 }}>
               Double-click row to edit
