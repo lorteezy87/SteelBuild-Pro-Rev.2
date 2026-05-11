@@ -82,6 +82,7 @@ const STAGE_DISPLAY = {};  // no aliases — display each stage by its key
 
 const QUICK_FILTERS = [
   { key: "all", label: "All" },
+  { key: "lookahead", label: "14-Day" },
   { key: "critical", label: "Critical" },
   { key: "delayed", label: "Delayed" },
   { key: "stalled", label: "Stalled" },
@@ -140,6 +141,20 @@ function isStalledTask(task, today, parseStart) {
   if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
   const start = parseStart(task);
   return Boolean(start && start < today && displayPct(task) === 0);
+}
+
+function isLookaheadTask(task, today, getStart, getEnd, days = 14) {
+  if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
+  const start = parseDateUTC(getStart(task));
+  const end = parseDateUTC(getEnd(task));
+  if (!start && !end) return false;
+
+  const windowEnd = new Date(today);
+  windowEnd.setUTCDate(windowEnd.getUTCDate() + days);
+
+  if (start && end) return start <= windowEnd && end >= today;
+  if (start) return start >= today && start <= windowEnd;
+  return end >= today && end <= windowEnd;
 }
 
 export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all", externalFocus = null }) {
@@ -671,6 +686,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const overdueTasks = allTasks.filter(isOverdue).length;
   const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
   const unscheduledTasks = allTasks.filter(t => !effStart(t) || !effEnd(t)).length;
+  const lookaheadTasks = allTasks.filter(t => isLookaheadTask(t, today, effStart, effEnd)).length;
   const stalledTasks = allTasks.filter(t => isStalledTask(t, today, (task) => parseDateUTC(effStart(task)))).length;
   const criticalTasks = allTasks.filter(isCriticalTask).length;
   const milestoneTasks = allTasks.filter(isMilestoneTask).length;
@@ -699,7 +715,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
     const allById = new Map(allTasks.map((task) => [task.id, task]));
     const phaseById = new Map();
-    visibleGrouped.forEach(({ phase, tasks }) => {
+    grouped.forEach(({ phase, tasks }) => {
       tasks.forEach((task) => phaseById.set(task.id, phase));
     });
 
@@ -709,6 +725,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
       const matchesQuick = (() => {
         if (quickFilter === "all") return true;
+        if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
         if (quickFilter === "critical") return isCriticalTask(task);
         if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
         if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
@@ -1069,6 +1086,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         <div style={{ width: 1, background: "var(--divider)", flexShrink: 0 }} />
         {[
           { label: "Health", value: `${avgProgress}%`, hint: "avg complete", color: "var(--accent)" },
+          { label: "14-Day", value: lookaheadTasks, hint: "handoff", color: lookaheadTasks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Stalled", value: stalledTasks, hint: "started 0%", color: stalledTasks ? "var(--status-error)" : "var(--text-muted)" },
           { label: "Shifted", value: shiftedTasks, hint: "cascade moved", color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },

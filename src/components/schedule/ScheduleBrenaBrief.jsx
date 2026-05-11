@@ -82,6 +82,11 @@ function formatBriefTask(task) {
   return `${taskName(task)} (${phaseOf(task)} / ${task?.status || "No status"} / ${date ? formatDateShort(date) : "TBD"})`;
 }
 
+function daysBetween(task, field, min, max) {
+  const days = daysFromToday(task?.[field]);
+  return days != null && days >= min && days <= max;
+}
+
 function buildBrief(tasks) {
   const openTasks = tasks.filter(isOpenTask);
   const delayed = openTasks.filter((task) => String(task.status || "").toLowerCase().includes("delay"));
@@ -101,6 +106,23 @@ function buildBrief(tasks) {
     .sort((a, b) => a.days - b.days)
     .slice(0, 6)
     .map((entry) => entry.task);
+  const startsSoon = openTasks
+    .filter((task) => daysBetween(task, "start_date", 0, 14))
+    .sort((a, b) => daysFromToday(a.start_date) - daysFromToday(b.start_date))
+    .slice(0, 5);
+  const dueSoon = openTasks
+    .filter((task) => daysBetween(task, "end_date", 0, 14))
+    .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
+    .slice(0, 5);
+  const activeNow = openTasks
+    .filter((task) => {
+      const startDays = daysFromToday(task.start_date);
+      const endDays = daysFromToday(task.end_date);
+      return startDays != null && endDays != null && startDays <= 0 && endDays >= 0;
+    })
+    .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
+    .slice(0, 5);
+  const handoffCount = new Set([...startsSoon, ...dueSoon, ...activeNow].map((task) => task.id || taskName(task))).size;
   const unlinked = openTasks.filter((task) => dependencyCount(task) === 0 && !task.parent_task_id && !task.is_summary);
   const nextCritical = critical
     .map((task) => ({ task, days: daysFromToday(taskDate(task)) }))
@@ -144,6 +166,13 @@ function buildBrief(tasks) {
       filter: "stalled",
       tone: "var(--status-warning)",
     } : null,
+    handoffCount ? {
+      key: "lookahead",
+      title: "Review the 14-day handoff",
+      detail: `${handoffCount} open task${handoffCount === 1 ? "" : "s"} start, finish, or span the next two weeks. Confirm crews, releases, blockers, and date logic before the weekly coordination meeting.`,
+      filter: "lookahead",
+      tone: "var(--status-info)",
+    } : null,
     tbd.length ? {
       key: "tbd",
       title: "Convert TBD dates",
@@ -172,8 +201,9 @@ function buildBrief(tasks) {
   const morningPlan = [
     recoveryActions[0] ? `1. ${recoveryActions[0].title}: ${recoveryActions[0].detail}` : null,
     nextCritical[0] ? `2. Critical path check: confirm ${formatBriefTask(nextCritical[0])}.` : null,
-    nearTerm[0] ? `3. Lookahead check: verify next visible task ${formatBriefTask(nearTerm[0])}.` : null,
-    unlinked.length ? `4. Logic cleanup: add dependencies to ${unlinked.length} unlinked open task${unlinked.length === 1 ? "" : "s"} where work has real predecessor/successor logic.` : null,
+    startsSoon[0] ? `3. Start handoff: verify ${formatBriefTask(startsSoon[0])}.` : null,
+    dueSoon[0] ? `4. Finish handoff: confirm closeout path for ${formatBriefTask(dueSoon[0])}.` : null,
+    unlinked.length ? `5. Logic cleanup: add dependencies to ${unlinked.length} unlinked open task${unlinked.length === 1 ? "" : "s"} where work has real predecessor/successor logic.` : null,
   ].filter(Boolean);
 
   const clipboardText = [
@@ -185,15 +215,25 @@ function buildBrief(tasks) {
     `Overdue: ${overdue.length}`,
     `Critical: ${critical.length}`,
     `TBD Dates: ${tbd.length}`,
+    `14-Day Handoff: ${handoffCount}`,
     "",
     "Recommended morning plan:",
     ...(morningPlan.length ? morningPlan : ["No recovery action is currently recommended."]),
+    "",
+    "14-day handoff - starting:",
+    ...(startsSoon.length ? startsSoon.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open tasks start in the next 14 days."]),
+    "",
+    "14-day handoff - due:",
+    ...(dueSoon.length ? dueSoon.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open tasks finish in the next 14 days."]),
+    "",
+    "14-day handoff - active now:",
+    ...(activeNow.length ? activeNow.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open tasks are currently spanning today."]),
     "",
     "Upcoming critical path watch:",
     ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
   ].join("\n");
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
@@ -244,6 +284,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <Metric icon={Target} label="TBD Dates" value={brief.tbd.length} tone={brief.tbd.length ? "var(--status-info)" : "var(--status-success)"} />
         <Metric icon={GitBranch} label="Unlinked" value={brief.unlinked.length} tone={brief.unlinked.length ? "var(--text-secondary)" : "var(--status-success)"} />
         <Metric icon={ShieldAlert} label="Critical" value={brief.critical.length} tone={brief.critical.length ? "var(--status-warning)" : "var(--status-success)"} />
+        <Metric icon={Route} label="14-Day" value={brief.handoffCount} tone={brief.handoffCount ? "var(--status-info)" : "var(--status-success)"} />
         <Metric icon={Zap} label="Stalled" value={brief.stalled.length} tone={brief.stalled.length ? "var(--status-error)" : "var(--status-success)"} />
 
         <div style={recommendationStyle}>
@@ -272,6 +313,9 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             )}
             <Button size="sm" variant="secondary" icon="calendar" onClick={() => onSetView?.("lookahead")}>
               6-Week Lookahead
+            </Button>
+            <Button size="sm" variant="secondary" icon="filter" onClick={() => onSetGanttFocus?.("lookahead")}>
+              Show 14-Day
             </Button>
             <Button size="sm" variant="outline" icon="arrow-up-right" onClick={() => onSetView?.("gantt")}>
               Gantt
@@ -315,6 +359,65 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             )) : (
               <div style={emptyStyle}>No recovery action is currently recommended.</div>
             )}
+          </div>
+        </div>
+
+        <div style={handoffPanelStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+            <div style={miniLabelStyle}>14-day handoff</div>
+            <button type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={linkButtonStyle}>
+              Open in Gantt
+            </button>
+          </div>
+          <div style={handoffGridStyle}>
+            <div>
+              <div style={handoffHeadingStyle}>Active now</div>
+              <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
+                {brief.activeNow.length ? brief.activeNow.map((task) => (
+                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                    <span style={dateChipStyle}>{task.end_date ? formatDateShort(task.end_date) : "TBD"}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={taskNameStyle}>{taskName(task)}</span>
+                      <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"}</span>
+                    </span>
+                  </button>
+                )) : (
+                  <div style={emptyStyle}>No open tasks currently span today.</div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div style={handoffHeadingStyle}>Starting</div>
+              <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
+                {brief.startsSoon.length ? brief.startsSoon.map((task) => (
+                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                    <span style={dateChipStyle}>{task.start_date ? formatDateShort(task.start_date) : "TBD"}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={taskNameStyle}>{taskName(task)}</span>
+                      <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"}</span>
+                    </span>
+                  </button>
+                )) : (
+                  <div style={emptyStyle}>No open tasks start in the next 14 days.</div>
+                )}
+              </div>
+            </div>
+            <div>
+              <div style={handoffHeadingStyle}>Due</div>
+              <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
+                {brief.dueSoon.length ? brief.dueSoon.map((task) => (
+                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                    <span style={dateChipStyle}>{task.end_date ? formatDateShort(task.end_date) : "TBD"}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={taskNameStyle}>{taskName(task)}</span>
+                      <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"}</span>
+                    </span>
+                  </button>
+                )) : (
+                  <div style={emptyStyle}>No open tasks finish in the next 14 days.</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -526,6 +629,44 @@ const morningPlanStyle = {
   padding: 12,
 };
 
+const handoffPanelStyle = {
+  gridColumn: "span 6",
+  border: "1px solid color-mix(in srgb, var(--status-info) 30%, var(--border-default))",
+  borderRadius: 14,
+  background: "linear-gradient(135deg, rgba(34,211,238,0.07), rgba(255,255,255,0.026))",
+  padding: 12,
+};
+
+const handoffGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 12,
+  marginTop: 10,
+};
+
+const handoffHeadingStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: "0.11em",
+  textTransform: "uppercase",
+  color: "var(--status-info)",
+};
+
+const linkButtonStyle = {
+  border: "1px solid var(--accent-border)",
+  borderRadius: 999,
+  background: "var(--accent-muted)",
+  color: "var(--accent)",
+  padding: "5px 9px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.10em",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
 const criticalPanelStyle = {
   gridColumn: "span 3",
   border: "1px solid color-mix(in srgb, var(--status-warning) 24%, var(--border-default))",
@@ -622,6 +763,36 @@ const criticalTaskStyle = {
   padding: "8px 9px",
   textAlign: "left",
   cursor: "pointer",
+};
+
+const handoffTaskStyle = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: "58px minmax(0, 1fr)",
+  gap: 9,
+  alignItems: "start",
+  border: "1px solid var(--border-default)",
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.026)",
+  padding: "8px 9px",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const dateChipStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 22,
+  borderRadius: 8,
+  border: "1px solid color-mix(in srgb, var(--status-info) 32%, var(--border-default))",
+  background: "rgba(34,211,238,0.08)",
+  color: "var(--status-info)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 8,
+  fontWeight: 900,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
 };
 
 const taskRowStyle = {
