@@ -84,6 +84,7 @@ const QUICK_FILTERS = [
   { key: "all", label: "All" },
   { key: "critical", label: "Critical" },
   { key: "delayed", label: "Delayed" },
+  { key: "stalled", label: "Stalled" },
   { key: "overdue", label: "Overdue" },
   { key: "tbd", label: "TBD" },
   { key: "shifted", label: "Shifted" },
@@ -133,6 +134,12 @@ function taskSearchHaystack(task, phaseLabel = "") {
 
 function pluralize(value, singular, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function isStalledTask(task, today, parseStart) {
+  if (!task || task.status === "Complete" || String(task.status || "").toLowerCase().includes("complete")) return false;
+  const start = parseStart(task);
+  return Boolean(start && start < today && displayPct(task) === 0);
 }
 
 export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], deliveries = [], weatherRisk = null, onTaskClick, onSave, phaseFilter = "all", externalFocus = null }) {
@@ -664,6 +671,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const overdueTasks = allTasks.filter(isOverdue).length;
   const inProgressTasks = allTasks.filter(t => t.status === "In Progress").length;
   const unscheduledTasks = allTasks.filter(t => !effStart(t) || !effEnd(t)).length;
+  const stalledTasks = allTasks.filter(t => isStalledTask(t, today, (task) => parseDateUTC(effStart(task)))).length;
   const criticalTasks = allTasks.filter(isCriticalTask).length;
   const milestoneTasks = allTasks.filter(isMilestoneTask).length;
   const shiftedTasks = allTasks.filter(t => effectiveDates[t.id]?.shifted).length;
@@ -703,6 +711,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         if (quickFilter === "all") return true;
         if (quickFilter === "critical") return isCriticalTask(task);
         if (quickFilter === "delayed") return String(task.status || "").toLowerCase().includes("delay");
+        if (quickFilter === "stalled") return isStalledTask(task, today, (item) => parseDateUTC(effStart(item)));
         if (quickFilter === "overdue") return isOverdue(task);
         if (quickFilter === "tbd") return !effStart(task) || !effEnd(task);
         if (quickFilter === "shifted") return Boolean(effectiveDates[task.id]?.shifted);
@@ -1060,6 +1069,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
         <div style={{ width: 1, background: "var(--divider)", flexShrink: 0 }} />
         {[
           { label: "Health", value: `${avgProgress}%`, hint: "avg complete", color: "var(--accent)" },
+          { label: "Stalled", value: stalledTasks, hint: "started 0%", color: stalledTasks ? "var(--status-error)" : "var(--text-muted)" },
           { label: "Shifted", value: shiftedTasks, hint: "cascade moved", color: shiftedTasks ? "var(--status-warning)" : "var(--text-muted)" },
           { label: "Links", value: dependencyLinks, hint: "predecessors", color: dependencyLinks ? "var(--status-info)" : "var(--text-muted)" },
           { label: "Milestones", value: milestoneTasks, hint: "flagged", color: milestoneTasks ? "var(--status-warning)" : "var(--text-muted)" },

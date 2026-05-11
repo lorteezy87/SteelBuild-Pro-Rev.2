@@ -141,7 +141,7 @@ function buildBrief(tasks) {
       key: "stalled",
       title: "Resolve stalled starts",
       detail: `${stalled.length} task${stalled.length === 1 ? "" : "s"} started in the past but still show 0%. Decide whether work is blocked, late, or status is stale.`,
-      filter: "delayed",
+      filter: "stalled",
       tone: "var(--status-warning)",
     } : null,
     tbd.length ? {
