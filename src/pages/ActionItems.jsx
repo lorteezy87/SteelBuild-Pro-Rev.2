@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
+import { daysUntil } from "@/lib/dateMath";
 
 const priorities = [
   PRIORITY.CRITICAL,
@@ -103,6 +104,28 @@ export default function ActionItems() {
     return statusMatch && priorityMatch && searchMatch;
   }), [actionItems, filterStatus, filterPriority, search]);
 
+  const executionQueue = useMemo(() => {
+    const activeItems = actionItems.filter((ai) => ai.status !== ACTION_ITEM_STATUS.COMPLETE && ai.status !== ACTION_ITEM_STATUS.CANCELLED);
+    const score = (ai) => {
+      const days = ai.due_date ? daysUntil(ai.due_date) : null;
+      let value = 0;
+      if (ai.priority === PRIORITY.CRITICAL) value += 50;
+      else if (ai.priority === PRIORITY.HIGH) value += 35;
+      else if (ai.priority === PRIORITY.MEDIUM) value += 20;
+      if (days !== null && days < 0) value += 60 + Math.min(30, Math.abs(days) * 4);
+      else if (days === 0) value += 45;
+      else if (days === 1) value += 30;
+      else if (days === 2) value += 20;
+      if (!ai.assigned_to) value += 12;
+      if (ai.metadata?.created_from === "production_meeting_parser") value += 8;
+      return value;
+    };
+    return activeItems
+      .map((ai) => ({ ...ai, _daysUntil: ai.due_date ? daysUntil(ai.due_date) : null, _executionScore: score(ai) }))
+      .sort((a, b) => b._executionScore - a._executionScore)
+      .slice(0, 8);
+  }, [actionItems]);
+
   const handleResolve = (item) => {
     const isComplete = item.status === ACTION_ITEM_STATUS.COMPLETE;
     updateMut.mutate({
@@ -195,6 +218,63 @@ export default function ActionItems() {
           );
         })}
       </div>
+
+      {executionQueue.length > 0 && (
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--divider)" }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: "var(--accent)", textTransform: "uppercase" }}>
+                Today's Execution Queue
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+                Auto-ranked by due date, priority, missing owner, and production-meeting origin.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setFilterStatus("all"); setFilterPriority("all"); setSearch(""); }}
+              style={{ background: "var(--bg-surface-low)", color: "var(--text-secondary)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "7px 12px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}
+            >
+              Show All
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 0 }}>
+            {executionQueue.map((item) => {
+              const overdue = item._daysUntil !== null && item._daysUntil < 0;
+              const dueToday = item._daysUntil === 0;
+              const priorityColor = PRIORITY_COLORS[item.priority] || "var(--text-muted)";
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setEditingItem(item)}
+                  style={{ textAlign: "left", background: overdue ? "rgba(239,68,68,0.06)" : dueToday ? "rgba(245,158,11,0.06)" : "transparent", border: "none", borderRight: "1px solid var(--divider)", borderBottom: "1px solid var(--divider)", padding: 14, cursor: "pointer" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = overdue ? "rgba(239,68,68,0.06)" : dueToday ? "rgba(245,158,11,0.06)" : "transparent"}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: priorityColor, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      {item.priority || "Normal"}
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: overdue ? "var(--status-error)" : dueToday ? "var(--status-warning)" : "var(--text-muted)", fontWeight: 800 }}>
+                      {item._daysUntil === null ? "NO DATE" : overdue ? `${Math.abs(item._daysUntil)}D OVERDUE` : dueToday ? "DUE TODAY" : `${item._daysUntil}D`}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.35 }}>
+                    {item.title}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                    <span>{item.assigned_to || "Unassigned"}</span>
+                    {item.metadata?.impact_area && <span>{item.metadata.impact_area}</span>}
+                    {item.metadata?.task_type && <span>{item.metadata.task_type}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="filter-bar-responsive" style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
