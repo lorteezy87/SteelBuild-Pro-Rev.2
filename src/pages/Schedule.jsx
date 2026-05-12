@@ -12,6 +12,7 @@ import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
 import AddTaskModal from "@/components/schedule/AddTaskModal";
 import BulkAddTaskModal from "@/components/schedule/BulkAddTaskModal";
+import BulkDateEditModal from "@/components/schedule/BulkDateEditModal";
 import WbsBuilderModal from "@/components/schedule/WbsBuilderModal";
 import { PHASES, PHASE_NUMBER } from "@/utils/phases";
 import { useRef, useMemo, useState } from "react";
@@ -121,6 +122,7 @@ export default function Schedule() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkResource, setShowBulkResource] = useState(false);
   const [bulkResourceValue, setBulkResourceValue] = useState("");
+  const [showBulkDates, setShowBulkDates] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const qc = useQueryClient();
 
@@ -366,6 +368,44 @@ export default function Schedule() {
       }
     },
     onError: () => toast.error("Bulk resource assignment failed"),
+  });
+
+  const bulkDateMut = useMutation({
+    mutationFn: async ({ ids, fields }) => {
+      const selected = tasksWithEffective.filter((task) => ids.includes(task.id));
+      const editable = selected.filter((task) => !task._hasChildren && !task._isRolledUpSummary && !task.is_summary);
+      const skipped = selected.length - editable.length;
+
+      if (editable.length === 0) {
+        throw new Error("Summary tasks roll up from child tasks. Select child tasks to bulk edit dates.");
+      }
+
+      const results = await batchProcess(
+        editable.map((task) => task.id),
+        (id) => base44.entities.ScheduleTask.update(id, fields),
+      );
+
+      if (results.failed.length > 0 && results.succeeded.length === 0) {
+        throw new Error(`All ${results.failed.length} date updates failed.`);
+      }
+
+      return { ...results, skipped };
+    },
+    onSuccess: (results) => {
+      invalidateEntity(qc, "schedule_task", projectId);
+      setSelectedIds(new Set());
+      setShowBulkDates(false);
+
+      const skippedMsg = results.skipped > 0
+        ? ` ${results.skipped} summary row${results.skipped === 1 ? "" : "s"} skipped.`
+        : "";
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} date update${results.succeeded.length === 1 ? "" : "s"} applied, ${results.failed.length} failed.${skippedMsg}`);
+      } else {
+        toast.success(`${results.succeeded.length} task date${results.succeeded.length === 1 ? "" : "s"} updated.${skippedMsg}`);
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Bulk date update failed"),
   });
 
   const handleBulkAdd = async (rows) => {
@@ -618,14 +658,20 @@ export default function Schedule() {
 
   const bulkUpdateStatus = (status) => {
     const ids = Array.from(selectedIds);
-    if (!ids.length || bulkUpdateMut.isPending || bulkDeleteMut.isPending) return;
+    if (!ids.length || bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending) return;
     bulkUpdateMut.mutate({ ids, status });
   };
 
   const bulkDelete = () => {
     const ids = Array.from(selectedIds);
-    if (!ids.length || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
+    if (!ids.length || bulkDeleteMut.isPending || bulkUpdateMut.isPending || bulkDateMut.isPending) return;
     setShowBulkDeleteConfirm(true);
+  };
+
+  const bulkUpdateDates = (fields) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length || bulkDateMut.isPending || bulkDeleteMut.isPending || bulkUpdateMut.isPending) return;
+    bulkDateMut.mutate({ ids, fields });
   };
 
   const confirmBulkDelete = () => {
@@ -951,6 +997,14 @@ export default function Schedule() {
         existingTasks={enrichedTasks}
       />
 
+      <BulkDateEditModal
+        open={showBulkDates}
+        count={selectedIds.size}
+        isSaving={bulkDateMut.isPending}
+        onClose={() => setShowBulkDates(false)}
+        onSubmit={bulkUpdateDates}
+      />
+
       <WbsBuilderModal
         open={showWbsBuilder}
         projectId={projectId}
@@ -1000,20 +1054,23 @@ export default function Schedule() {
           <span className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
             {selectedIds.size} SELECTED
           </span>
-          <button onClick={() => bulkUpdateStatus("Not Started")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+          <button onClick={() => bulkUpdateStatus("Not Started")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? 0.6 : 1 }}>
             Set Not Started
           </button>
-          <button onClick={() => bulkUpdateStatus("In Progress")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-warning)", background: "rgba(234,179,8,0.12)", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+          <button onClick={() => bulkUpdateStatus("In Progress")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-warning)", background: "rgba(234,179,8,0.12)", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? 0.6 : 1 }}>
             Set In Progress
           </button>
-          <button onClick={() => bulkUpdateStatus("Complete")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-success)", background: "var(--success-muted)", color: "var(--status-success)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+          <button onClick={() => bulkUpdateStatus("Complete")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-success)", background: "var(--success-muted)", color: "var(--status-success)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? 0.6 : 1 }}>
             Mark Complete
           </button>
-          <button onClick={() => bulkUpdateStatus("Delayed")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+          <button onClick={() => bulkUpdateStatus("Delayed")} disabled={bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--status-error)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? "not-allowed" : "pointer", opacity: bulkUpdateMut.isPending || bulkDeleteMut.isPending || bulkDateMut.isPending ? 0.6 : 1 }}>
             Mark Delayed
           </button>
-          <button onClick={bulkDelete} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending ? 0.6 : 1 }}>
+          <button onClick={bulkDelete} disabled={bulkDeleteMut.isPending || bulkUpdateMut.isPending || bulkDateMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--danger-border)", background: "var(--danger-muted)", color: "var(--status-error)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDeleteMut.isPending || bulkUpdateMut.isPending || bulkDateMut.isPending ? "not-allowed" : "pointer", opacity: bulkDeleteMut.isPending || bulkUpdateMut.isPending || bulkDateMut.isPending ? 0.6 : 1 }}>
             Delete
+          </button>
+          <button onClick={() => setShowBulkDates(true)} disabled={bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "rgba(86,176,255,0.12)", color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, cursor: bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? "not-allowed" : "pointer", opacity: bulkDateMut.isPending || bulkUpdateMut.isPending || bulkDeleteMut.isPending ? 0.6 : 1 }}>
+            Edit Dates
           </button>
 
           <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />

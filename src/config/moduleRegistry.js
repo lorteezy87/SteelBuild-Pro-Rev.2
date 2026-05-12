@@ -111,6 +111,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "Dashboard",       icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center", icon: "\u2318", page: "CommandCenter" },
+      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
       { label: "Executive View", icon: "\u25A4", page: "ExecutiveView" },
     ],
   },
@@ -237,6 +238,7 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: "Dashboard",          icon: "\u25C8", page: "Dashboard" },
       { label: "Command Center",    icon: "\u2318", page: "CommandCenter" },
+      { label: "Project Control Center", icon: "\u2295", page: "ProjectControlCenter" },
       { label: "Portfolio Overview",  icon: "\u2726", page: "AIInsights" },
     ],
   },
