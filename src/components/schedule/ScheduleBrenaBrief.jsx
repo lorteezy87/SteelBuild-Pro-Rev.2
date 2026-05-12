@@ -102,83 +102,129 @@ function shiftedByDays(effective) {
 }
 
 function buildBrief(tasks) {
-  const openTasks = tasks.filter(isOpenTask);
   const effectiveDates = computeEffectiveDates(tasks);
-  const delayed = openTasks.filter((task) => String(task.status || "").toLowerCase().includes("delay"));
-  const tbd = openTasks.filter((task) => !task.start_date || !task.end_date);
-  const critical = openTasks.filter(isCriticalTask);
-  const overdue = openTasks.filter((task) => {
-    const days = daysFromToday(task.end_date);
-    return days != null && days < 0;
-  });
-  const stalled = openTasks.filter((task) => {
-    const startDelta = daysFromToday(task.start_date);
-    return startDelta != null && startDelta < 0 && progressValue(task) === 0 && !String(task.status || "").toLowerCase().includes("complete");
-  });
-  const nearTerm = openTasks
-    .map((task) => ({ task, days: daysFromToday(task.start_date || task.end_date) }))
-    .filter((entry) => entry.days != null && entry.days >= 0 && entry.days <= 42)
+
+  const openTasks = [];
+  const delayed = [];
+  const tbd = [];
+  const critical = [];
+  const overdue = [];
+  const stalled = [];
+  const nearTermEntries = [];
+  const startsSoonEntries = [];
+  const dueSoonEntries = [];
+  const activeNowEntries = [];
+  const unassignedAll = [];
+  const shiftedAll = [];
+  const criticalEntries = [];
+  const depCountById = {};
+  const successorCountById = {};
+  const phaseStats = Object.fromEntries(
+    PHASES.map((phase) => [phase, { phase, open: 0, delayed: 0, overdue: 0, tbd: 0, critical: 0 }])
+  );
+  let totalShiftDays = 0;
+
+  for (const task of tasks) {
+    if (!isOpenTask(task)) continue;
+    openTasks.push(task);
+
+    const phaseStatsRow = phaseStats[task.phase];
+    if (phaseStatsRow) phaseStatsRow.open += 1;
+
+    const status = String(task.status || "").toLowerCase();
+    const startDays = daysFromToday(task.start_date);
+    const endDays = daysFromToday(task.end_date);
+    const dateDays = daysFromToday(task.start_date || task.end_date);
+    const deps = dependencyIds(task);
+    depCountById[String(task.id)] = deps.length;
+    deps.forEach((predId) => {
+      const key = String(predId);
+      successorCountById[key] = (successorCountById[key] || 0) + 1;
+    });
+
+    if (status.includes("delay")) {
+      delayed.push(task);
+      if (phaseStatsRow) phaseStatsRow.delayed += 1;
+    }
+    if (!task.start_date || !task.end_date) {
+      tbd.push(task);
+      if (phaseStatsRow) phaseStatsRow.tbd += 1;
+    }
+    if (isCriticalTask(task)) {
+      critical.push(task);
+      criticalEntries.push({ task, days: daysFromToday(taskDate(task)) });
+      if (phaseStatsRow) phaseStatsRow.critical += 1;
+    }
+    if (endDays != null && endDays < 0) {
+      overdue.push(task);
+      if (phaseStatsRow) phaseStatsRow.overdue += 1;
+    }
+    if (startDays != null && startDays < 0 && progressValue(task) === 0 && !status.includes("complete")) {
+      stalled.push(task);
+    }
+    if (dateDays != null && dateDays >= 0 && dateDays <= 42) {
+      nearTermEntries.push({ task, days: dateDays });
+    }
+    if (startDays != null && startDays >= 0 && startDays <= 14) {
+      startsSoonEntries.push({ task, days: startDays });
+    }
+    if (endDays != null && endDays >= 0 && endDays <= 14) {
+      dueSoonEntries.push({ task, days: endDays });
+    }
+    if (startDays != null && endDays != null && startDays <= 0 && endDays >= 0) {
+      activeNowEntries.push({ task, days: endDays });
+    }
+    if (!task.is_summary && !task._hasChildren && !taskOwner(task)) {
+      unassignedAll.push(task);
+    }
+
+    const effective = effectiveDates[task.id];
+    const shiftedBy = shiftedByDays(effective);
+    totalShiftDays += shiftedBy;
+    if (effective?.shifted) shiftedAll.push(task);
+  }
+
+  const nearTerm = nearTermEntries
     .sort((a, b) => a.days - b.days)
     .slice(0, 6)
     .map((entry) => entry.task);
-  const startsSoon = openTasks
-    .filter((task) => daysBetween(task, "start_date", 0, 14))
-    .sort((a, b) => daysFromToday(a.start_date) - daysFromToday(b.start_date))
-    .slice(0, 5);
-  const dueSoon = openTasks
-    .filter((task) => daysBetween(task, "end_date", 0, 14))
-    .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
-    .slice(0, 5);
-  const activeNow = openTasks
-    .filter((task) => {
-      const startDays = daysFromToday(task.start_date);
-      const endDays = daysFromToday(task.end_date);
-      return startDays != null && endDays != null && startDays <= 0 && endDays >= 0;
-    })
-    .sort((a, b) => daysFromToday(a.end_date) - daysFromToday(b.end_date))
-    .slice(0, 5);
+  const startsSoon = startsSoonEntries
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 5)
+    .map((entry) => entry.task);
+  const dueSoon = dueSoonEntries
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 5)
+    .map((entry) => entry.task);
+  const activeNow = activeNowEntries
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 5)
+    .map((entry) => entry.task);
   const handoffCount = new Set([...startsSoon, ...dueSoon, ...activeNow].map((task) => task.id || taskName(task))).size;
-  const unassignedTasks = openTasks
-    .filter((task) => !task.is_summary && !task._hasChildren && !taskOwner(task))
-    .slice(0, 8);
-  const shiftedTasks = openTasks
-    .filter((task) => effectiveDates[task.id]?.shifted)
+  const unassignedTasks = unassignedAll.slice(0, 8);
+  const shiftedTasks = shiftedAll
     .sort((a, b) => shiftedByDays(effectiveDates[b.id]) - shiftedByDays(effectiveDates[a.id]))
     .slice(0, 8);
-  const totalShiftDays = openTasks.reduce((sum, task) => sum + shiftedByDays(effectiveDates[task.id]), 0);
-  const successorCountById = openTasks.reduce((acc, task) => {
-    dependencyIds(task).forEach((predId) => {
-      const key = String(predId);
-      acc[key] = (acc[key] || 0) + 1;
-    });
-    return acc;
-  }, {});
-  const logicGaps = openTasks
-    .filter((task) => {
-      if (task.is_summary || task._hasChildren) return false;
-      const predecessorCount = dependencyCount(task);
-      const successorCount = successorCountById[String(task.id)] || 0;
-      return predecessorCount === 0 || successorCount === 0;
-    })
-    .slice(0, 8);
-  const unlinked = openTasks.filter((task) => dependencyCount(task) === 0 && !task.parent_task_id && !task.is_summary);
-  const nextCritical = critical
-    .map((task) => ({ task, days: daysFromToday(taskDate(task)) }))
+  const logicGaps = [];
+  const unlinked = [];
+  for (const task of openTasks) {
+    if (task.is_summary || task._hasChildren) continue;
+    const predecessorCount = depCountById[String(task.id)] || 0;
+    const successorCount = successorCountById[String(task.id)] || 0;
+    if ((predecessorCount === 0 || successorCount === 0) && logicGaps.length < 8) {
+      logicGaps.push(task);
+    }
+    if (predecessorCount === 0 && !task.parent_task_id) {
+      unlinked.push(task);
+    }
+  }
+  const nextCritical = criticalEntries
     .sort((a, b) => (a.days ?? 9999) - (b.days ?? 9999))
     .slice(0, 5)
     .map((entry) => entry.task);
 
-  const phaseRows = PHASES.map((phase) => {
-    const phaseTasks = openTasks.filter((task) => task.phase === phase);
-    return {
-      phase,
-      open: phaseTasks.length,
-      delayed: phaseTasks.filter((task) => delayed.includes(task)).length,
-      overdue: phaseTasks.filter((task) => overdue.includes(task)).length,
-      tbd: phaseTasks.filter((task) => tbd.includes(task)).length,
-      critical: phaseTasks.filter((task) => critical.includes(task)).length,
-    };
-  }).filter((row) => row.open > 0 || row.delayed > 0 || row.overdue > 0 || row.tbd > 0)
+  const phaseRows = Object.values(phaseStats)
+    .filter((row) => row.open > 0 || row.delayed > 0 || row.overdue > 0 || row.tbd > 0)
     .sort((a, b) => (b.delayed * 5 + b.overdue * 4 + b.critical * 3 + b.tbd) - (a.delayed * 5 + a.overdue * 4 + a.critical * 3 + a.tbd))
     .slice(0, 4);
 

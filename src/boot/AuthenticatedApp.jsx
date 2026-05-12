@@ -1,7 +1,12 @@
+import { Suspense, lazy } from "react";
 import { useAuth } from "@/lib/AuthContext";
-import LocalLoginForm from "@/components/LocalLoginForm";
 import AppLoader from "@/boot/AppLoader";
-import AppRoutes from "@/boot/AppRoutes";
+
+const LocalLoginForm = lazy(() => import("@/components/LocalLoginForm"));
+const AppRoutes = lazy(() => import("@/boot/AppRoutes"));
+const ProjectProvider = lazy(() =>
+  import("@/components/shared/ProjectContext").then((mod) => ({ default: mod.ProjectProvider }))
+);
 
 /**
  * AuthenticatedApp — auth gate + routing.
@@ -25,13 +30,21 @@ export default function AuthenticatedApp() {
 
   if (authError?.type === "auth_required") {
     return (
-      <LocalLoginForm
-        onSubmit={loginWithPassword}
-        isSubmitting={isLoadingAuth}
-        errorMessage={authError?.message !== "Authentication required" ? authError?.message : null}
-      />
+      <Suspense fallback={<AppLoader />}>
+        <LocalLoginForm
+          onSubmit={loginWithPassword}
+          isSubmitting={isLoadingAuth}
+          errorMessage={authError?.message !== "Authentication required" ? authError?.message : null}
+        />
+      </Suspense>
     );
   }
 
-  return <AppRoutes />;
+  return (
+    <Suspense fallback={<AppLoader />}>
+      <ProjectProvider>
+        <AppRoutes />
+      </ProjectProvider>
+    </Suspense>
+  );
 }

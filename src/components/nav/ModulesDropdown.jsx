@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { NAV_GROUPS, getDropdownColumn } from "@/config/moduleRegistry";
+import { prefetchRoute } from "@/lib/routePrefetch";
 
 export default function ModulesDropdown({ open, onClose, onNavigate, userRole, alertCounts = {} }) {
   const ref = useRef(null);
@@ -162,6 +163,9 @@ export default function ModulesDropdown({ open, onClose, onNavigate, userRole, a
 
 function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
   const isAdminOnly = item.adminOnly && userRole !== "admin";
+  const warmRoute = () => {
+    if (!isAdminOnly) prefetchRoute(item.page);
+  };
   return (
     <div
       onClick={() => { if (!isAdminOnly) { onNavigate(item.page); onClose(); } }}
@@ -175,10 +179,12 @@ function NavItem({ item, userRole, alertCounts, onNavigate, onClose }) {
       }}
       onMouseEnter={(e) => {
         if (!isAdminOnly) {
+          warmRoute();
           e.currentTarget.style.background = "rgba(86,176,255,0.12)";
           e.currentTarget.style.borderLeft = "2px solid var(--accent)";
         }
       }}
+      onFocus={warmRoute}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = "transparent";
         e.currentTarget.style.borderLeft = "2px solid transparent";

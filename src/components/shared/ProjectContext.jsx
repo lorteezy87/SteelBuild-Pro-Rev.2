@@ -35,6 +35,7 @@ export function ProjectProvider({ children }) {
   // in tests) — useContext returns undefined in that case and we just
   // skip the default-project fallback.
   const auth = useContext(AuthContext);
+  const authAllowsProjectLoad = !auth || (!auth.isLoadingAuth && auth.isAuthenticated);
   const defaultProjectIdPref =
     typeof auth?.user?.default_project_id === "string"
       ? auth.user.default_project_id
@@ -53,6 +54,14 @@ export function ProjectProvider({ children }) {
 
   // Load projects on mount — retries up to 3x in case SDK isn't ready yet
   useEffect(() => {
+    if (!authAllowsProjectLoad) {
+      if (auth?.isAuthenticated === false) {
+        setLoading(false);
+        setActiveProject(null);
+      }
+      return;
+    }
+
     let cancelled = false;
 
     const fetchProjects = async (attempt = 1) => {
@@ -130,7 +139,7 @@ export function ProjectProvider({ children }) {
     // current session shouldn't yank the user out of whatever project
     // they've since picked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authAllowsProjectLoad, auth?.isAuthenticated]);
 
   const handleProjectSelect = (project) => {
     if (!project) {

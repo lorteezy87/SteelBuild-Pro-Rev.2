@@ -18,7 +18,6 @@ import { useRef, useMemo, useState } from "react";
 import { batchProcess } from "@/utils/batchProcess";
 import { CommandBar, KpiTile, Button } from "@/components/design-system";
 import { downloadIcs, scheduleTaskToEvent } from "@/lib/icsExport";
-import { exportGanttToPdf } from "@/lib/exportGanttPdf";
 import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
@@ -673,6 +672,7 @@ export default function Schedule() {
               setExportingPdf(true);
               const t = toast.loading("Generating PDF…");
               try {
+                const { exportGanttToPdf } = await import("@/lib/exportGanttPdf");
                 const { pageCount, filename } = await exportGanttToPdf({
                   project: selectedProject,
                 });

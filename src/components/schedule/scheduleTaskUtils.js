@@ -7,16 +7,17 @@
 // derivation rules (Task list, lookahead, exports, etc.) so we don't
 // drift on what "displayed %" or "milestone" means across views.
 import { derivePhase } from "../../utils/phases";
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "../../lib/ganttTheme";
 
 // ── Phase definition — ordered 1-7 ──────────────────────────────────────
 export const PHASES = [
-  { id: 1, label: "Pre-Construction",    key: "Pre-Construction",  color: "#64748B" },
-  { id: 2, label: "Detailing",           key: "Detailing",         color: "#0EA5E9" },
-  { id: 3, label: "Procurement",         key: "Procurement",       color: "#F59E0B" },
-  { id: 4, label: "Fabrication",         key: "Fabrication",       color: "var(--status-review)" },
-  { id: 5, label: "Delivery",            key: "Delivery",          color: "#10B981" },
-  { id: 6, label: "Installation",        key: "Installation",      color: "#06B6D4" },
-  { id: 7, label: "Closeout",            key: "Closeout",          color: "#6B7280" },
+  { id: 1, label: "Pre-Construction",    key: "Pre-Construction",  color: GANTT_PHASE_HEX["Pre-Construction"] },
+  { id: 2, label: "Detailing",           key: "Detailing",         color: GANTT_PHASE_HEX.Detailing },
+  { id: 3, label: "Procurement",         key: "Procurement",       color: GANTT_PHASE_HEX.Procurement },
+  { id: 4, label: "Fabrication",         key: "Fabrication",       color: GANTT_PHASE_HEX.Fabrication },
+  { id: 5, label: "Delivery",            key: "Delivery",          color: GANTT_PHASE_HEX.Delivery },
+  { id: 6, label: "Installation",        key: "Installation",      color: GANTT_PHASE_HEX.Installation },
+  { id: 7, label: "Closeout",            key: "Closeout",          color: GANTT_PHASE_HEX.Closeout },
 ];
 // Also catch Erection as Installation
 export const PHASE_KEY_MAP = { Erection: "Installation" };
@@ -70,11 +71,11 @@ export function sanitizeTaskName(task) {
 
 // ── Status helpers ────────────────────────────────────────────────────────
 export const STATUS_COLOR = {
-  "Complete":    "#10B981",
-  "In Progress": "var(--accent)",
-  "Delayed":     "#EF4444",
-  "On Hold":     "#DDB7FF",
-  "Not Started": "var(--text-muted)",
+  "Complete":    GANTT_STATUS_HEX.complete,
+  "In Progress": GANTT_STATUS_HEX.inProgress,
+  "Delayed":     GANTT_STATUS_HEX.delayed,
+  "On Hold":     GANTT_STATUS_HEX.onHold,
+  "Not Started": GANTT_STATUS_HEX.notStarted,
 };
 
 export function statusColor(s) { return STATUS_COLOR[s] || "var(--text-muted)"; }

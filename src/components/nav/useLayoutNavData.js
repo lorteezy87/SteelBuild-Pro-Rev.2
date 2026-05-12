@@ -20,9 +20,11 @@ import { batchProcess } from "@/utils/batchProcess";
  *   - markAllRead          mutate-fn shorthand: marks every unread alert read
  *
  * Behaviour:
- *   - Every query is gated on `projectId` being truthy; when null, all
- *     counts are 0 and `allAlerts` is `[]`. Portfolio mode (no project
- *     selected) intentionally renders no badges.
+ *   - The alert query is gated on `projectId` being truthy; when null,
+ *     `allAlerts` is `[]`.
+ *   - Module badge count queries are additionally gated by
+ *     `includeModuleCounts`, so closed module menus do not start RFI,
+ *     drawing, and delivery count requests on every app load.
  *   - Refetch interval: 120s. Stale window: 60s. Same as the inline
  *     queries this hook replaces — nothing about cadence changed.
  *   - The alerts query catches errors so a missing `is_dismissed` column
@@ -32,8 +34,9 @@ import { batchProcess } from "@/utils/batchProcess";
  * Extracted from Layout.jsx (see git history) so the chrome JSX is
  * separable from its data layer and the hook can be tested in isolation.
  */
-export function useLayoutNavData(projectId) {
+export function useLayoutNavData(projectId, { includeModuleCounts = false } = {}) {
   const qc = useQueryClient();
+  const moduleCountsEnabled = !!projectId && includeModuleCounts;
 
   const { data: allAlerts = [] } = useQuery({
     queryKey: ["alerts-nav", projectId],
@@ -61,7 +64,7 @@ export function useLayoutNavData(projectId) {
     queryFn: () => base44.entities.RFI.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
-    enabled: !!projectId,
+    enabled: moduleCountsEnabled,
   });
 
   const { data: navDrawings = [] } = useQuery({
@@ -69,7 +72,7 @@ export function useLayoutNavData(projectId) {
     queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
-    enabled: !!projectId,
+    enabled: moduleCountsEnabled,
   });
 
   const { data: navDeliveries = [] } = useQuery({
@@ -77,7 +80,7 @@ export function useLayoutNavData(projectId) {
     queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
     refetchInterval: 120_000,
     staleTime: 60_000,
-    enabled: !!projectId,
+    enabled: moduleCountsEnabled,
   });
 
   // Overdue computations re-derive `now` once per memo so a stale closure
@@ -98,27 +101,46 @@ export function useLayoutNavData(projectId) {
     };
   }, [navRFIs, navDrawings, navDeliveries]);
 
-  const unreadAlerts = useMemo(
-    () => allAlerts.filter((a) => !a.is_read && !a.is_dismissed),
-    [allAlerts]
-  );
-  const unreadCount = unreadAlerts.length;
+  const alertSummary = useMemo(() => {
+    const unreadAlerts = [];
+    let rfiAlertCount = 0;
+    let coAlertCount = 0;
+
+    for (const alert of allAlerts) {
+      if (!alert.is_read && !alert.is_dismissed) {
+        unreadAlerts.push(alert);
+      }
+      if (alert.is_dismissed) continue;
+      if (alert.alert_type === "RFI Overdue" || alert.alert_type === "RFI_Overdue") {
+        rfiAlertCount += 1;
+      } else if (alert.alert_type === "CO Pending") {
+        coAlertCount += 1;
+      }
+    }
+
+    return {
+      unreadAlerts,
+      unreadCount: unreadAlerts.length,
+      rfiAlertCount,
+      coAlertCount,
+    };
+  }, [allAlerts]);
+
+  const { unreadAlerts, unreadCount, rfiAlertCount, coAlertCount } = alertSummary;
 
   // Modules dropdown reads this object directly. Preserve exact keys/shape
   // ModulesDropdown consumes today.
   const alertCounts = useMemo(() => ({
     unread: unreadCount,
-    rfi: allAlerts.filter((a) =>
-      (a.alert_type === "RFI Overdue" || a.alert_type === "RFI_Overdue") && !a.is_dismissed
-    ).length,
-    co: allAlerts.filter((a) => a.alert_type === "CO Pending" && !a.is_dismissed).length,
+    rfi: rfiAlertCount,
+    co: coAlertCount,
     drawings: overdueDrawingCount,
     deliveries: overdueDeliveryCount,
-  }), [allAlerts, unreadCount, overdueDrawingCount, overdueDeliveryCount]);
+  }), [unreadCount, rfiAlertCount, coAlertCount, overdueDrawingCount, overdueDeliveryCount]);
 
   const markAllReadMut = useMutation({
     mutationFn: async () => {
-      const unread = allAlerts.filter((a) => !a.is_read);
+      const unread = unreadAlerts;
       try {
         return await batchProcess(unread, (a) =>
           base44.entities.Alert.update(a.id, { is_read: true })

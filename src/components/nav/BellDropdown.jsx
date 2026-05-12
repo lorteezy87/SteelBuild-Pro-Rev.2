@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { SEVERITY_COLOR, timeAgo } from "@/config/moduleRegistry";
+import { SEVERITY_COLOR, timeAgo } from "@/lib/alertDisplay";
 
 // Group alert types into 5 short labels so the dropdown header shows
 // a compact "RFI 3 · CO 1 · DWG 15" strip instead of a single number

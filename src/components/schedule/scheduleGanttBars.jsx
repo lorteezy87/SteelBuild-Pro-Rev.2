@@ -6,6 +6,7 @@
 // out drops the main component file by ~300 lines without altering any
 // rendered output.
 import React from "react";
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 import {
   DETAILING_STAGE_GATES,
   DETAILING_STAGE_META,
@@ -110,7 +111,7 @@ export function SummaryBar({ phase, leftPx, widthPx, pctComplete }) {
 // box-shadow gives a 1.5px page-color isolation ring + a soft accent
 // halo so the diamond pops against any underlying summary band.
 export function MilestoneDiamond({ leftPx, task }) {
-  const color = task.status === "Complete" ? "#10B981" : "var(--accent)";
+  const color = task.status === "Complete" ? GANTT_STATUS_HEX.complete : GANTT_STATUS_HEX.inProgress;
   return (
     <div style={{
       position: "absolute",
@@ -284,7 +285,7 @@ function BarLabel({ name, placement, status }) {
       marginLeft: 6,
       fontSize: 10,
       fontWeight: 500,
-      color: status === "Delayed" ? "#EF4444" : "var(--text-secondary)",
+      color: status === "Delayed" ? GANTT_STATUS_HEX.delayed : "var(--text-secondary)",
       letterSpacing: "0.01em",
       whiteSpace: "nowrap",
       pointerEvents: "none",
@@ -322,7 +323,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
   };
 
   if (task.status === "Complete") {
-    const c = "#10B981";
+    const c = GANTT_STATUS_HEX.complete;
     return (
       <div style={shellStyle}>
         <div style={{
@@ -345,15 +346,15 @@ export function TaskBar({ task, leftPx, widthPx }) {
             glossy gradient over [0..pct]% of the track. */}
         <div style={{
           position: "absolute", inset: 0,
-          background: "rgba(200,155,32,0.10)",
-          border: "1px solid color-mix(in srgb, var(--accent) 55%, transparent)",
+          background: `${GANTT_STATUS_HEX.inProgress}18`,
+          border: `1px solid ${GANTT_STATUS_HEX.inProgress}80`,
           borderRadius: BAR_RADIUS,
           overflow: "hidden",
         }}>
           <div style={{
             position: "absolute", left: 0, top: 0, height: "100%",
             width: `${Math.max(0, Math.min(100, pct))}%`,
-            background: "linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 86%, black) 100%)",
+            background: `linear-gradient(180deg, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 92%, white) 0%, ${GANTT_STATUS_HEX.inProgress} 55%, color-mix(in srgb, ${GANTT_STATUS_HEX.inProgress} 86%, black) 100%)`,
             transition: "width 0.3s",
           }} />
         </div>
@@ -363,7 +364,7 @@ export function TaskBar({ task, leftPx, widthPx }) {
   }
 
   if (task.status === "Delayed") {
-    const c = "#EF4444";
+    const c = GANTT_STATUS_HEX.delayed;
     return (
       <div style={shellStyle}>
         <div style={{
@@ -411,11 +412,11 @@ export function TaskBar({ task, leftPx, widthPx }) {
 // ── Submittal bar ─────────────────────────────────────────────────────────
 export function SubmittalBar({ submittal, leftPx, widthPx }) {
   const statusColors = {
-    "Approved":             { bg: "rgba(16,185,129,0.15)", border: "#10B981", text: "#10B981" },
-    "Approved as Noted":    { bg: "rgba(16,185,129,0.10)", border: "#10B981", text: "#10B981" },
-    "Rejected":             { bg: "rgba(239,68,68,0.12)",  border: "#EF4444", text: "#EF4444" },
-    "Revise & Resubmit":    { bg: "rgba(239,68,68,0.10)",  border: "#EF4444", text: "#EF4444" },
-    "Under Review":         { bg: "rgba(59,130,246,0.12)", border: "#3B82F6", text: "#3B82F6" },
+    "Approved":             { bg: `${GANTT_STATUS_HEX.complete}26`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Approved as Noted":    { bg: `${GANTT_STATUS_HEX.complete}1A`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Rejected":             { bg: `${GANTT_STATUS_HEX.delayed}1F`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Revise & Resubmit":    { bg: `${GANTT_STATUS_HEX.delayed}1A`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Under Review":         { bg: `${GANTT_STATUS_HEX.inProgress}1F`, border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
     "Draft":                { bg: "rgba(100,116,139,0.10)", border: "#64748B", text: "#94A3B8" },
   };
   const c = statusColors[submittal.status] || statusColors["Draft"];
@@ -424,13 +425,13 @@ export function SubmittalBar({ submittal, leftPx, widthPx }) {
     <div style={{
       position: "absolute", left: leftPx, width: Math.max(widthPx, 4), height: 18,
       top: "50%", transform: "translateY(-50%)",
-      background: c.bg, border: `1.5px dashed ${isLate ? "#EF4444" : c.border}`,
+      background: c.bg, border: `1.5px dashed ${isLate ? GANTT_STATUS_HEX.delayed : c.border}`,
       borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
     }}
     title={`📂 ${submittal.display_name || submittal.file_name}${isLate ? " — OVERDUE" : ""}`}
     >
       <span style={{ fontSize: 9, flexShrink: 0 }}>📂</span>
-      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? "#EF4444" : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? GANTT_STATUS_HEX.delayed : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {submittal.display_name || submittal.file_name}
       </span>
     </div>
@@ -440,12 +441,12 @@ export function SubmittalBar({ submittal, leftPx, widthPx }) {
 // ── Delivery bar ─────────────────────────────────────────────────────────
 export function DeliveryBar({ delivery, leftPx, widthPx }) {
   const statusColors = {
-    "Scheduled":   { bg: "rgba(245,158,11,0.15)", border: "#F59E0B", text: "#F59E0B" },
-    "In Transit":  { bg: "rgba(59,130,246,0.15)", border: "#3B82F6", text: "#3B82F6" },
-    "Delivered":   { bg: "rgba(16,185,129,0.15)", border: "#10B981", text: "#10B981" },
-    "Partial":     { bg: "rgba(239,68,68,0.12)",  border: "#EF4444", text: "#EF4444" },
-    "Rejected":    { bg: "rgba(239,68,68,0.15)",  border: "#EF4444", text: "#EF4444" },
-    "Delayed":     { bg: "rgba(220,38,38,0.12)", border: "#DC2626", text: "#DC2626" },
+    "Scheduled":   { bg: `${GANTT_PHASE_HEX.Delivery}26`, border: GANTT_PHASE_HEX.Delivery, text: GANTT_PHASE_HEX.Delivery },
+    "In Transit":  { bg: `${GANTT_STATUS_HEX.inProgress}26`, border: GANTT_STATUS_HEX.inProgress, text: GANTT_STATUS_HEX.inProgress },
+    "Delivered":   { bg: `${GANTT_STATUS_HEX.complete}26`, border: GANTT_STATUS_HEX.complete, text: GANTT_STATUS_HEX.complete },
+    "Partial":     { bg: `${GANTT_STATUS_HEX.delayed}1F`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Rejected":    { bg: `${GANTT_STATUS_HEX.delayed}26`,  border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
+    "Delayed":     { bg: `${GANTT_STATUS_HEX.delayed}1F`, border: GANTT_STATUS_HEX.delayed, text: GANTT_STATUS_HEX.delayed },
   };
   const c = statusColors[delivery.status] || statusColors["Scheduled"];
   const isLate = delivery.scheduled_date && new Date(delivery.scheduled_date) < new Date() && delivery.status !== "Delivered";
@@ -454,13 +455,13 @@ export function DeliveryBar({ delivery, leftPx, widthPx }) {
     <div style={{
       position: "absolute", left: leftPx, width: Math.max(widthPx, 20), height: 20,
       top: "50%", transform: "translateY(-50%)",
-      background: c.bg, border: `1.5px solid ${isLate ? "#EF4444" : c.border}`,
+      background: c.bg, border: `1.5px solid ${isLate ? GANTT_STATUS_HEX.delayed : c.border}`,
       borderRadius: 3, display: "flex", alignItems: "center", padding: "0 6px", overflow: "hidden", gap: 4,
     }}
     title={`🚛 ${label} · ${delivery.vendor || "—"} · ${delivery.pieces || 0}pc ${delivery.weight_tons || 0}T${isLate ? " — OVERDUE" : ""}`}
     >
       <span style={{ fontSize: 9, flexShrink: 0 }}>🚛</span>
-      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? "#EF4444" : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span style={{ fontSize: 8, fontWeight: 600, color: isLate ? GANTT_STATUS_HEX.delayed : c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {label}
       </span>
     </div>

@@ -8,6 +8,7 @@
 import React from "react";
 import { STATUS_COLORS } from "./constants";
 import { isSameDay } from "./utils";
+import { GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 export default function TimelineView({
   projectId,
@@ -24,7 +25,7 @@ export default function TimelineView({
     : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }));
 
   return (
-    <div style={{ position: "relative", overflow: "auto", padding: 12 }}>
+    <div style={{ position: "relative", overflow: "auto", padding: 12, background: "var(--sbd-gantt-bg)" }}>
       <div style={{ display: "grid", gridTemplateColumns: `150px repeat(${timelineDays.length}, 48px)`, gap: 2, alignItems: "stretch" }}>
         <div />
         {timelineDays.map((d, i) => (
@@ -40,7 +41,7 @@ export default function TimelineView({
                 (d) => d.scheduled_date && isSameDay(new Date(d.scheduled_date), day)
               );
               return (
-                <div key={idx} style={{ position: "relative", minHeight: 38, border: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
+              <div key={idx} style={{ position: "relative", minHeight: 38, border: "1px solid var(--sbd-gantt-grid)", background: idx % 2 === 0 ? "var(--sbd-gantt-row)" : "var(--sbd-gantt-row-alt)" }}>
                   {dayDeliveries.map((d, i2) => {
                     const colors = STATUS_COLORS[d.status] || STATUS_COLORS.Scheduled;
                     return (
@@ -83,7 +84,8 @@ export default function TimelineView({
           left: `calc(150px + ${timelineDays.findIndex((d) => isSameDay(d, today)) * 50}px)`,
           bottom: 0,
           width: 2,
-          background: "var(--status-error)",
+          background: GANTT_TODAY_HEX,
+          boxShadow: "0 0 12px rgba(255,107,0,0.45)",
           pointerEvents: "none",
         }}
       />

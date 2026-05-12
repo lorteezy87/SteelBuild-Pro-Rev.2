@@ -494,6 +494,7 @@ export default function WorkPackages() {
       {selectedBoardWP && (
         <WorkPackageDetailModal
           wp={selectedBoardWP}
+          drawings={drawings}
           onClose={() => setSelectedBoardWP(null)}
           onEdit={(wp) => { setSelectedBoardWP(null); handleWPEdit(wp); }}
         />

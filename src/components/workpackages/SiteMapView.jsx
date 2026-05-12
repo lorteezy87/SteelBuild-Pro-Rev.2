@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from "react";
 import { X, AlertTriangle, Pause } from "lucide-react";
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX } from "@/lib/ganttTheme";
 
 const PHASE_COLOR = {
-  Detailing: "#0D9488",
-  Fabrication: "var(--accent)",
-  Delivery: "#00B8D9",
-  Erection: "var(--status-success-bright)",
+  Detailing: GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Erection: GANTT_PHASE_HEX.Erection,
 };
 
 const STATUS_COLOR = {
-  "Complete":    "var(--status-success-bright)",
-  "In Progress": "var(--status-warning)",
-  "On Hold":     "var(--status-error-bright)",
-  "Not Started": "var(--text-muted)",
+  "Complete":    GANTT_STATUS_HEX.complete,
+  "In Progress": GANTT_STATUS_HEX.inProgress,
+  "On Hold":     GANTT_STATUS_HEX.delayed,
+  "Not Started": GANTT_STATUS_HEX.notStarted,
 };
 
 function mono(style = {}) {

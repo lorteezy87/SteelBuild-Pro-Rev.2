@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { GANTT_PHASE_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 // ─── Phase colors (matches page) ────────────────────────────────────
 const PHASE_COLOR = {
-  Detailing:   "#0D9488",
-  Fabrication: "var(--accent)",
-  Delivery:    "#00B8D9",
-  Erection:    "var(--status-success-bright)",
+  Detailing:   GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery:    GANTT_PHASE_HEX.Delivery,
+  Erection:    GANTT_PHASE_HEX.Erection,
 };
 
 const LEFT_COL = 340;
@@ -245,9 +246,9 @@ export default function WPGantt({ wps, updateMut }) {
   const totalHeight = wps.length * ROW_H;
 
   return (
-    <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--border-default)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
+    <div style={{ background: "var(--sbd-gantt-panel)", border: "1px solid var(--sbd-gantt-grid-strong)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
       {/* ── Toolbar ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid var(--border-default)", background: "var(--info-muted)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Zoom */}
           <div style={{ display: "flex", background: "var(--hover-bg)", borderRadius: 6, border: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
@@ -286,7 +287,7 @@ export default function WPGantt({ wps, updateMut }) {
         {/* LEFT COLUMN — WP info */}
         <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid var(--border-default)" }}>
           {/* Header spacer */}
-          <div style={{ height: HEADER_H, borderBottom: "1px solid var(--border-default)", background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", padding: "0 12px" }}>
+          <div style={{ height: HEADER_H, borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)", display: "flex", alignItems: "center", padding: "0 12px" }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
           </div>
           {/* Rows */}
@@ -297,7 +298,7 @@ export default function WPGantt({ wps, updateMut }) {
               return (
                 <div
                   key={wp.id}
-                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--hover-bg)", background: i % 2 === 0 ? "transparent" : "var(--hover-bg)", borderLeft: isConflict ? "2px solid var(--status-error-bright)" : "2px solid transparent", gap: 8 }}
+                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--sbd-gantt-grid)", background: i % 2 === 0 ? "var(--sbd-gantt-row)" : "var(--sbd-gantt-row-alt)", borderLeft: isConflict ? "2px solid var(--status-error-bright)" : "2px solid transparent", gap: 8 }}
                 >
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: "hidden" }}>
@@ -326,12 +327,12 @@ export default function WPGantt({ wps, updateMut }) {
           <div ref={timelineRef} style={{ width: totalWidth, position: "relative" }}>
 
             {/* HEADER — date ticks */}
-            <div style={{ height: HEADER_H, borderBottom: "1px solid var(--border-default)", background: "rgba(0,0,0,0.15)", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ height: HEADER_H, borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)", position: "sticky", top: 0, zIndex: 10 }}>
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
                 return (
                   <div key={i} style={{ position: "absolute", left: x, top: 0, height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ width: 1, height: "100%", background: "var(--hover-bg)", position: "absolute", left: 0, top: 0 }} />
+                    <div style={{ width: 1, height: "100%", background: "var(--sbd-gantt-grid)", position: "absolute", left: 0, top: 0 }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", paddingLeft: 5, whiteSpace: "nowrap" }}>
                       {zoom.fmt(tick)}
                     </span>
@@ -341,7 +342,7 @@ export default function WPGantt({ wps, updateMut }) {
               {/* Today marker in header */}
               {todayOffset >= 0 && todayOffset <= totalWidth && (
                 <div style={{ position: "absolute", left: todayOffset, top: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 4, zIndex: 2 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", fontWeight: 700, background: "var(--bg-page)", padding: "0 3px" }}>TODAY</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 700, background: GANTT_TODAY_HEX, padding: "0 3px" }}>TODAY</span>
                 </div>
               )}
             </div>
@@ -350,18 +351,18 @@ export default function WPGantt({ wps, updateMut }) {
             <div style={{ position: "relative", height: totalHeight }}>
               {/* Weekend bands */}
               {weekendBands.map((b, i) => (
-                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "var(--sbd-gantt-weekend)", pointerEvents: "none" }} />
               ))}
 
               {/* Vertical tick lines */}
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
-                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} />;
+                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "var(--sbd-gantt-grid)", pointerEvents: "none" }} />;
               })}
 
               {/* Today line */}
               {todayOffset >= 0 && todayOffset <= totalWidth && (
-                <div style={{ position: "absolute", left: todayOffset, top: 0, width: 2, height: totalHeight, background: "var(--accent)", opacity: 0.6, pointerEvents: "none", zIndex: 3 }} />
+                <div style={{ position: "absolute", left: todayOffset, top: 0, width: 2, height: totalHeight, background: GANTT_TODAY_HEX, opacity: 0.95, pointerEvents: "none", zIndex: 3, boxShadow: "0 0 12px rgba(255,107,0,0.45)" }} />
               )}
 
               {/* WP bars */}

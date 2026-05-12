@@ -20,8 +20,8 @@
  *      if you forget.
  */
 
-import { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } from "./moduleRegistry";
 import { lazyWithRetry } from "@/lib/lazyRetry";
+import { registerRoutePrefetcher } from "@/lib/routePrefetch";
 
 // ── Helper: build a registry entry ───────────────────────────────────
 /**
@@ -179,6 +179,19 @@ const ROUTE_REGISTRY = Object.values(ROUTE_DOMAINS).reduce(
   /** @type {Record<string, RouteEntry>} */ ({})
 );
 
+// Intent-based route warming for the heaviest and highest-traffic pages.
+// Sidebar/modules hover and keyboard focus can warm these chunks, but app boot
+// no longer idle-prefetches them for users who never open the route.
+registerRoutePrefetcher("Dashboard", () => import("@/pages/Dashboard"));
+registerRoutePrefetcher("Schedule", () => import("@/pages/Schedule"));
+registerRoutePrefetcher("RFIs", () => import("@/pages/RFIs"));
+registerRoutePrefetcher("Drawings", () => import("@/pages/Drawings"));
+registerRoutePrefetcher("DrawingViewer", () => import("@/pages/DrawingViewer"));
+// Do not hover-prefetch the 3D model viewer: that route pulls the heavy
+// Three/@thatopen stack and should stay explicitly user-triggered.
+registerRoutePrefetcher("WorkPackages", () => import("@/pages/WorkPackages"));
+registerRoutePrefetcher("Financials", () => import("@/pages/Financials"));
+
 // ── Derived: page → component map (legacy router contract) ───────────
 export const PAGES = Object.fromEntries(
   Object.entries(ROUTE_REGISTRY).map(([key, entry]) => [key, entry.component])
@@ -230,7 +243,8 @@ export function routeLabel(pageName) {
  * In dev, logs each issue. Returns the list so tests / CI can assert
  * an empty result.
  */
-export function validateRoutes() {
+export async function validateRoutes() {
+  const { NAV_GROUPS, SIDEBAR_GROUPS, PRIMARY_TABS } = await import("./moduleRegistry");
   const registered = new Set(Object.keys(ROUTE_REGISTRY));
   const referenced = new Set();
 
@@ -266,7 +280,7 @@ export function validateRoutes() {
 
 // Run validation at module load in dev so drift surfaces on first refresh.
 if (import.meta.env.DEV) {
-  validateRoutes();
+  void validateRoutes();
 }
 
 // ── Domain metadata (for tooling, route grouping, etc.) ──────────────

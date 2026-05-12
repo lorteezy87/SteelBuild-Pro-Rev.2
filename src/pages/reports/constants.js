@@ -42,11 +42,11 @@ export const HEALTH_COLORS = {
 };
 
 export const PHASE_COLORS = {
-  Detailing:       "var(--phase-detailing)",
-  Fabrication:     "var(--phase-fab)",
-  Delivery:        "var(--phase-delivery)",
-  Erection:        "var(--phase-erection)",
-  Closeout:        "var(--phase-closeout)",
+  Detailing:       "var(--sbd-gantt-detailing)",
+  Fabrication:     "var(--sbd-gantt-fabrication)",
+  Delivery:        "var(--sbd-gantt-delivery)",
+  Erection:        "var(--sbd-gantt-installation)",
+  Closeout:        "var(--sbd-gantt-closeout)",
   Bidding:         "var(--status-info)",
   Preconstruction: "var(--accent)",
 };

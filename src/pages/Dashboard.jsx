@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { Suspense, lazy, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -6,8 +6,9 @@ import { useProjectContext } from "../components/shared/ProjectContext";
 import { useUserPrefs, refetchIntervalFromPref } from "@/hooks/useUserPrefs";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
-import PortfolioView from "../components/dashboard/PortfolioView";
 import ProjectDashboard from "./dashboard/ProjectDashboard";
+
+const PortfolioView = lazy(() => import("../components/dashboard/PortfolioView"));
 
 /**
  * Dashboard — portfolio-or-single-project orchestrator.
@@ -27,6 +28,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { activeProject, setActiveProject } = useProjectContext();
   const pid = activeProject?.id;
+  const projectScope = pid || "portfolio";
+  const listForDashboard = (entity, sortBy) =>
+    pid ? entity.filter({ project_id: pid }, sortBy) : entity.list(sortBy);
 
   // Honour the Settings → Dashboard → "Auto-Refresh Live Data" pref
   // on the most-volatile queries. The pref is saved per-user as
@@ -43,61 +47,61 @@ export default function Dashboard() {
     staleTime: 5 * 60 * 1000,
   });
   const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
-    queryKey: ["rfis"],
-    queryFn: () => base44.entities.RFI.list(),
+    queryKey: ["rfis-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.RFI),
     refetchInterval: refetchMs,
   });
   const { data: allCOs = [] } = useQuery({
-    queryKey: ["cos-all"],
-    queryFn: () => base44.entities.ChangeOrder.list(),
+    queryKey: ["cos-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.ChangeOrder),
   });
   const { data: allCodes = [] } = useQuery({
-    queryKey: ["codes-all"],
-    queryFn: () => base44.entities.CostCode.list(),
+    queryKey: ["codes-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.CostCode),
   });
   const { data: allWPs = [] } = useQuery({
-    queryKey: ["work-packages"],
-    queryFn: () => base44.entities.WorkPackage.list(),
+    queryKey: ["work-packages-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.WorkPackage),
     staleTime: 30000,
   });
   const { data: allDeliveries = [] } = useQuery({
-    queryKey: ["deliveries-all"],
-    queryFn: () => base44.entities.Delivery.list(),
+    queryKey: ["deliveries-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Delivery),
     refetchInterval: refetchMs,
   });
   const { data: allActionItems = [] } = useQuery({
-    queryKey: ["action-items-all"],
-    queryFn: () => base44.entities.ActionItem.list(),
+    queryKey: ["action-items-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.ActionItem),
     refetchInterval: refetchMs,
   });
   const { data: allExpenses = [] } = useQuery({
-    queryKey: ["expenses-all"],
-    queryFn: () => base44.entities.Expense.list(),
+    queryKey: ["expenses-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Expense),
   });
   // Portfolio timeline column needs schedule_tasks for every project.
   // Tiny payload — one row per task, a few date columns — so fetching
   // them globally is cheaper than per-project drilldown round-trips.
   const { data: allScheduleTasks = [] } = useQuery({
-    queryKey: ["schedule-tasks-all"],
-    queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
+    queryKey: ["schedule-tasks-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.ScheduleTask, "-start_date"),
     staleTime: 60 * 1000,
   });
   // Used by the Document Hub submittal pipeline + Drawings count tile.
   const { data: allSubmittals = [] } = useQuery({
-    queryKey: ["submittals-all"],
-    queryFn: () => base44.entities.Submittal.list(),
+    queryKey: ["submittals-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Submittal),
     staleTime: 30 * 1000,
   });
   const { data: allDrawings = [] } = useQuery({
-    queryKey: ["drawings-all"],
-    queryFn: () => base44.entities.Drawing.list(),
+    queryKey: ["drawings-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Drawing),
     staleTime: 30 * 1000,
   });
   // Cash-flow figures (total billed / collected / pending payment /
   // retention) on the Financial Controls section come from SOV items.
   const { data: allSovItems = [] } = useQuery({
-    queryKey: ["sov-items-all"],
-    queryFn: () => base44.entities.SOVItem.list(),
+    queryKey: ["sov-items-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.SOVItem),
     staleTime: 60 * 1000,
   });
   // Recent Activity feed pulls from drawing_activity (the only
@@ -113,10 +117,12 @@ export default function Dashboard() {
     staleTime: 30 * 1000,
   });
   const { data: allDrawingActivity = [] } = useQuery({
-    queryKey: ["drawing-activity-recent"],
+    queryKey: ["drawing-activity-recent", projectScope],
     queryFn: () =>
       base44.entities.DrawingActivity
-        ? base44.entities.DrawingActivity.list("-created_at", 50)
+        ? pid
+          ? base44.entities.DrawingActivity.filter({ project_id: pid }, "-created_at", 50)
+          : base44.entities.DrawingActivity.list("-created_at", 50)
         : Promise.resolve([]),
     staleTime: 30 * 1000,
     refetchInterval: refetchMs,
@@ -127,33 +133,33 @@ export default function Dashboard() {
   // dashboard AND the /Field hub. Pull globally and slice per-project
   // so we don't duplicate fetches across the two consumers.
   const { data: allDailyLogs = [] } = useQuery({
-    queryKey: ["daily-logs-all"],
-    queryFn: () => base44.entities.DailyLog.list("-date"),
+    queryKey: ["daily-logs-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.DailyLog, "-date"),
     staleTime: 60 * 1000,
   });
   const { data: allPhotos = [] } = useQuery({
-    queryKey: ["photos-all"],
-    queryFn: () => base44.entities.Photo.list("-taken_date"),
+    queryKey: ["photos-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Photo, "-taken_date"),
     staleTime: 60 * 1000,
   });
   const { data: allPunchlist = [] } = useQuery({
-    queryKey: ["punchlist-all"],
-    queryFn: () => base44.entities.PunchlistItem.list(),
+    queryKey: ["punchlist-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.PunchlistItem),
     staleTime: 60 * 1000,
   });
   const { data: allInspections = [] } = useQuery({
-    queryKey: ["inspections-all"],
-    queryFn: () => base44.entities.Inspection.list("-inspection_date"),
+    queryKey: ["inspections-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.Inspection, "-inspection_date"),
     staleTime: 60 * 1000,
   });
   const { data: allSafetyIncidents = [] } = useQuery({
-    queryKey: ["safety-all"],
-    queryFn: () => base44.entities.SafetyIncident.list("-incident_date"),
+    queryKey: ["safety-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.SafetyIncident, "-incident_date"),
     staleTime: 60 * 1000,
   });
   const { data: allQualityRecords = [] } = useQuery({
-    queryKey: ["qc-records-all"],
-    queryFn: () => base44.entities.QualityControlRecord.list("-test_date"),
+    queryKey: ["qc-records-dashboard", projectScope],
+    queryFn: () => listForDashboard(base44.entities.QualityControlRecord, "-test_date"),
     staleTime: 60 * 1000,
   });
 
@@ -195,17 +201,19 @@ export default function Dashboard() {
   if (!pid) {
     return (
       <ErrorBoundary label="Portfolio Dashboard">
-        <PortfolioView
-          projects={projects}
-          allRFIs={allRFIs}
-          allCOs={allCOs}
-          allCodes={allCodes}
-          allWPs={allWPs}
-          allDeliveries={allDeliveries}
-          allActionItems={allActionItems}
-          allExpenses={allExpenses}
-          allScheduleTasks={allScheduleTasks}
-        />
+        <Suspense fallback={<LoadingSkeleton variant="page" />}>
+          <PortfolioView
+            projects={projects}
+            allRFIs={allRFIs}
+            allCOs={allCOs}
+            allCodes={allCodes}
+            allWPs={allWPs}
+            allDeliveries={allDeliveries}
+            allActionItems={allActionItems}
+            allExpenses={allExpenses}
+            allScheduleTasks={allScheduleTasks}
+          />
+        </Suspense>
       </ErrorBoundary>
     );
   }
