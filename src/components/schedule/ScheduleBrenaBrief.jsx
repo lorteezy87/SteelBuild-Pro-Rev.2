@@ -18,6 +18,14 @@ function isOpenTask(task) {
   return !CLOSED_STATUSES.some((closed) => status.includes(closed));
 }
 
+function isSummaryTask(task, parentIds = new Set()) {
+  return Boolean(task?.is_summary || task?._hasChildren || task?._isRolledUpSummary || parentIds.has(task?.id));
+}
+
+function isWorkTask(task, parentIds = new Set()) {
+  return !isSummaryTask(task, parentIds);
+}
+
 function taskOwner(task) {
   return String(task?.resource_names || task?.assigned_to || "").trim();
 }
@@ -103,6 +111,7 @@ function shiftedByDays(effective) {
 
 function buildBrief(tasks) {
   const effectiveDates = computeEffectiveDates(tasks);
+  const parentIds = new Set(tasks.map((task) => task?.parent_task_id).filter(Boolean));
 
   const openTasks = [];
   const delayed = [];
@@ -126,21 +135,25 @@ function buildBrief(tasks) {
 
   for (const task of tasks) {
     if (!isOpenTask(task)) continue;
-    openTasks.push(task);
-
-    const phaseStatsRow = phaseStats[task.phase];
-    if (phaseStatsRow) phaseStatsRow.open += 1;
-
-    const status = String(task.status || "").toLowerCase();
-    const startDays = daysFromToday(task.start_date);
-    const endDays = daysFromToday(task.end_date);
-    const dateDays = daysFromToday(task.start_date || task.end_date);
+    const actionable = isWorkTask(task, parentIds);
     const deps = dependencyIds(task);
     depCountById[String(task.id)] = deps.length;
     deps.forEach((predId) => {
       const key = String(predId);
       successorCountById[key] = (successorCountById[key] || 0) + 1;
     });
+
+    if (!actionable) continue;
+
+    openTasks.push(task);
+
+    const phaseStatsRow = phaseStats[phaseOf(task)];
+    if (phaseStatsRow) phaseStatsRow.open += 1;
+
+    const status = String(task.status || "").toLowerCase();
+    const startDays = daysFromToday(task.start_date);
+    const endDays = daysFromToday(task.end_date);
+    const dateDays = daysFromToday(task.start_date || task.end_date);
 
     if (status.includes("delay")) {
       delayed.push(task);
@@ -174,7 +187,7 @@ function buildBrief(tasks) {
     if (startDays != null && endDays != null && startDays <= 0 && endDays >= 0) {
       activeNowEntries.push({ task, days: endDays });
     }
-    if (!task.is_summary && !task._hasChildren && !taskOwner(task)) {
+    if (!taskOwner(task)) {
       unassignedAll.push(task);
     }
 
@@ -208,7 +221,6 @@ function buildBrief(tasks) {
   const logicGaps = [];
   const unlinked = [];
   for (const task of openTasks) {
-    if (task.is_summary || task._hasChildren) continue;
     const predecessorCount = depCountById[String(task.id)] || 0;
     const successorCount = successorCountById[String(task.id)] || 0;
     if ((predecessorCount === 0 || successorCount === 0) && logicGaps.length < 8) {
@@ -387,6 +399,18 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
     }
   };
 
+  const focusFilter = (filter) => {
+    onSetGanttFocus?.({ filter });
+  };
+
+  const focusTask = (task, filter) => {
+    onSetGanttFocus?.({
+      filter,
+      taskId: task?.id,
+      taskName: taskName(task),
+    });
+  };
+
   return (
     <section style={shellStyle}>
       <div style={headerStyle}>
@@ -419,27 +443,27 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           <p style={copyStyle}>{recommendation}</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {brief.overdue.length > 0 && (
-              <Button size="sm" variant="secondary" icon="alert" onClick={() => onSetGanttFocus?.("overdue")}>
+              <Button size="sm" variant="secondary" icon="alert" onClick={() => focusFilter("overdue")}>
                 Show Overdue
               </Button>
             )}
             {brief.critical.length > 0 && (
-              <Button size="sm" variant="secondary" icon="arrow" onClick={() => onSetGanttFocus?.("critical")}>
+              <Button size="sm" variant="secondary" icon="arrow" onClick={() => focusFilter("critical")}>
                 Show Critical
               </Button>
             )}
             {brief.logicGaps.length > 0 && (
-              <Button size="sm" variant="secondary" icon="link" onClick={() => onSetGanttFocus?.("logic")}>
+              <Button size="sm" variant="secondary" icon="link" onClick={() => focusFilter("logic")}>
                 Show Logic
               </Button>
             )}
             {brief.shiftedTasks.length > 0 && (
-              <Button size="sm" variant="secondary" icon="alert" onClick={() => onSetGanttFocus?.("shifted")}>
+              <Button size="sm" variant="secondary" icon="alert" onClick={() => focusFilter("shifted")}>
                 Show Variance
               </Button>
             )}
             {brief.unassignedTasks.length > 0 && (
-              <Button size="sm" variant="secondary" icon="filter" onClick={() => onSetGanttFocus?.("unassigned")}>
+              <Button size="sm" variant="secondary" icon="filter" onClick={() => focusFilter("unassigned")}>
                 Show No Owner
               </Button>
             )}
@@ -456,7 +480,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             <Button size="sm" variant="secondary" icon="calendar" onClick={() => onSetView?.("lookahead")}>
               6-Week Lookahead
             </Button>
-            <Button size="sm" variant="secondary" icon="filter" onClick={() => onSetGanttFocus?.("lookahead")}>
+            <Button size="sm" variant="secondary" icon="filter" onClick={() => focusFilter("lookahead")}>
               Show 14-Day
             </Button>
             <Button size="sm" variant="outline" icon="arrow-up-right" onClick={() => onSetView?.("gantt")}>
@@ -507,7 +531,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         <div style={handoffPanelStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
             <div style={miniLabelStyle}>14-day handoff</div>
-            <button type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={linkButtonStyle}>
+            <button type="button" onClick={() => focusFilter("lookahead")} style={linkButtonStyle}>
               Open in Gantt
             </button>
           </div>
@@ -516,7 +540,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               <div style={handoffHeadingStyle}>Active now</div>
               <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
                 {brief.activeNow.length ? brief.activeNow.map((task) => (
-                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                  <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "lookahead")} style={handoffTaskStyle}>
                     <span style={dateChipStyle}>{task.end_date ? formatDateShort(task.end_date) : "TBD"}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={taskNameStyle}>{taskName(task)}</span>
@@ -532,7 +556,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               <div style={handoffHeadingStyle}>Starting</div>
               <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
                 {brief.startsSoon.length ? brief.startsSoon.map((task) => (
-                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                  <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "lookahead")} style={handoffTaskStyle}>
                     <span style={dateChipStyle}>{task.start_date ? formatDateShort(task.start_date) : "TBD"}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={taskNameStyle}>{taskName(task)}</span>
@@ -548,7 +572,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               <div style={handoffHeadingStyle}>Due</div>
               <div style={{ display: "grid", gap: 7, marginTop: 8 }}>
                 {brief.dueSoon.length ? brief.dueSoon.map((task) => (
-                  <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("lookahead")} style={handoffTaskStyle}>
+                  <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "lookahead")} style={handoffTaskStyle}>
                     <span style={dateChipStyle}>{task.end_date ? formatDateShort(task.end_date) : "TBD"}</span>
                     <span style={{ minWidth: 0 }}>
                       <span style={taskNameStyle}>{taskName(task)}</span>
@@ -570,7 +594,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
               <button
                 key={action.key}
                 type="button"
-                onClick={() => onSetGanttFocus?.(action.filter)}
+                onClick={() => focusFilter(action.filter)}
                 style={recoveryRowStyle(action.tone)}
               >
                 <span className="sbd-num" style={{ color: action.tone, fontSize: 12, fontWeight: 900 }}>{String(index + 1).padStart(2, "0")}</span>
@@ -592,7 +616,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
             {brief.shiftedTasks.length ? brief.shiftedTasks.slice(0, 5).map((task) => {
               const effective = brief.effectiveDates[task.id];
               return (
-                <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("shifted")} style={varianceTaskStyle}>
+                <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "shifted")} style={varianceTaskStyle}>
                   <span style={varianceDaysStyle}>+{shiftedByDays(effective)}d</span>
                   <span style={{ minWidth: 0 }}>
                     <span style={taskNameStyle}>{taskName(task)}</span>
@@ -612,7 +636,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           <div style={miniLabelStyle}>Ownership watch</div>
           <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
             {brief.unassignedTasks.length ? brief.unassignedTasks.slice(0, 5).map((task) => (
-              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("unassigned")} style={ownershipTaskStyle}>
+              <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "unassigned")} style={ownershipTaskStyle}>
                 <Users size={12} color="var(--status-error)" />
                 <span style={{ minWidth: 0 }}>
                   <span style={taskNameStyle}>{taskName(task)}</span>
@@ -629,7 +653,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           <div style={miniLabelStyle}>Critical path watch</div>
           <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
             {brief.nextCritical.length ? brief.nextCritical.map((task) => (
-              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("critical")} style={criticalTaskStyle}>
+              <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "critical")} style={criticalTaskStyle}>
                 <CheckCircle2 size={12} color="var(--status-warning)" />
                 <span style={{ minWidth: 0 }}>
                   <span style={taskNameStyle}>{taskName(task)}</span>
@@ -646,7 +670,7 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           <div style={miniLabelStyle}>Dependency logic watch</div>
           <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
             {brief.logicGaps.length ? brief.logicGaps.slice(0, 5).map((task) => (
-              <button key={task.id || taskName(task)} type="button" onClick={() => onSetGanttFocus?.("logic")} style={logicTaskStyle}>
+              <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "logic")} style={logicTaskStyle}>
                 <GitBranch size={12} color="var(--status-warning)" />
                 <span style={{ minWidth: 0 }}>
                   <span style={taskNameStyle}>{taskName(task)}</span>
@@ -665,13 +689,13 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
           <div style={miniLabelStyle}>Next visible tasks</div>
           <div style={{ display: "grid", gap: 7, marginTop: 10 }}>
             {brief.nearTerm.length ? brief.nearTerm.map((task) => (
-              <div key={task.id || taskName(task)} style={taskRowStyle}>
+              <button key={task.id || taskName(task)} type="button" onClick={() => focusTask(task, "all")} style={taskRowStyle}>
                 <Route size={12} color="var(--status-info)" />
                 <span style={{ minWidth: 0 }}>
                   <span style={taskNameStyle}>{taskName(task)}</span>
                   <span style={taskMetaStyle}>{phaseOf(task)} / {task.status || "No status"} / {task.end_date ? formatDateShort(task.end_date) : "TBD"}</span>
                 </span>
-              </div>
+              </button>
             )) : (
               <div style={emptyStyle}>No tasks dated in the next six weeks.</div>
             )}
@@ -1078,12 +1102,20 @@ const dateChipStyle = {
 };
 
 const taskRowStyle = {
+  width: "100%",
   display: "grid",
   gridTemplateColumns: "14px minmax(0, 1fr)",
   gap: 8,
   alignItems: "start",
+  background: "transparent",
+  color: "inherit",
+  textAlign: "left",
   borderTop: "1px solid var(--border-default)",
+  borderRight: "none",
+  borderBottom: "none",
+  borderLeft: "none",
   paddingTop: 7,
+  cursor: "pointer",
 };
 
 const taskNameStyle = {

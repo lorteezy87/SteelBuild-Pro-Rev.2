@@ -173,16 +173,24 @@ function isOpenScheduleTask(task) {
   return !["complete", "completed", "closed", "cancelled", "canceled"].some((closed) => status.includes(closed));
 }
 
+function isSummaryScheduleTask(task) {
+  return Boolean(task?._hasChildren || task?._isRolledUpSummary || task?.is_summary);
+}
+
+function isActionableScheduleTask(task) {
+  return !isSummaryScheduleTask(task);
+}
+
 function taskOwner(task) {
   return String(task?.resource_names || task?.assigned_to || "").trim();
 }
 
 function isUnassignedTask(task) {
-  return Boolean(task && isOpenScheduleTask(task) && !task._hasChildren && !task.is_summary && !taskOwner(task));
+  return Boolean(task && isOpenScheduleTask(task) && isActionableScheduleTask(task) && !taskOwner(task));
 }
 
 function hasLogicGapTask(task, successorCountById) {
-  if (!task || !isOpenScheduleTask(task) || task._hasChildren || task.is_summary) return false;
+  if (!task || !isOpenScheduleTask(task) || !isActionableScheduleTask(task)) return false;
   const predecessorCount = parseDeps(task.dependencies).length;
   const successorCount = successorCountById[task.id] || 0;
   return predecessorCount === 0 || successorCount === 0;
@@ -216,6 +224,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [collapsedTasks, setCollapsedTasks] = useState({});
   const [searchText, setSearchText] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [showLegend, setShowLegend] = useState(true);
   const [bodyViewport, setBodyViewport] = useState({ scrollTop: 0, height: 720 });
 
@@ -223,6 +232,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     if (!externalFocus?.filter) return;
     setQuickFilter(externalFocus.filter);
     setSearchText("");
+    setFocusedTaskId(externalFocus.taskId ? String(externalFocus.taskId) : null);
     setCollapsed({});
     setCollapsedTasks({});
     setCollapsedDeliveries(false);
@@ -391,10 +401,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
     // Order by PHASES array, uncategorized last — tree-sort within each phase
     const ordered = [];
     PHASES.forEach(ph => {
-      if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key]) });
+      if (map[ph.key]) ordered.push({ phase: ph, tasks: buildTreeOrder(map[ph.key], { rootPrefix: ph.id }) });
     });
     if (map["Uncategorized"]) {
-      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: buildTreeOrder(map["Uncategorized"]) });
+      ordered.push({ phase: { id: 99, key: "Uncategorized", label: "Uncategorized", color: "#888" }, tasks: buildTreeOrder(map["Uncategorized"], { rootPrefix: 99 }) });
     }
     return ordered;
   }, [rawTasks, phaseFilter]);
@@ -402,6 +412,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   // ── Date range ─────────────────────────────────────────────────────
   const allTasks = grouped.flatMap(g => g.tasks);
   const taskById = useMemo(() => new Map(allTasks.map((task) => [task.id, task])), [allTasks]);
+  const focusedTask = useMemo(
+    () => focusedTaskId ? allTasks.find((task) => String(task.id) === String(focusedTaskId)) : null,
+    [allTasks, focusedTaskId]
+  );
 
   // ── Hierarchy helpers (inline indent / outdent) ─────────────────────
   //
@@ -772,26 +786,31 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       weatherRiskTasks: 0,
       dependencyLinks: 0,
       progressTotal: 0,
+      progressCount: 0,
     };
     for (const task of allTasks) {
+      const actionable = isActionableScheduleTask(task);
       if (task.status === "Complete") stats.completeTasks += 1;
       if (task.status === "In Progress") stats.inProgressTasks += 1;
-      if (isOverdue(task)) stats.overdueTasks += 1;
-      if (!effStart(task) || !effEnd(task)) stats.unscheduledTasks += 1;
-      if (isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
-      if (isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
-      if (isCriticalTask(task)) stats.criticalTasks += 1;
-      if (isMilestoneTask(task)) stats.milestoneTasks += 1;
-      if (effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
-      stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
-      if (isUnassignedTask(task)) stats.unassignedTasks += 1;
-      if (weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
-      stats.dependencyLinks += parseDeps(task.dependencies).length;
-      stats.progressTotal += displayPct(task);
+      if (actionable && isOverdue(task)) stats.overdueTasks += 1;
+      if (actionable && (!effStart(task) || !effEnd(task))) stats.unscheduledTasks += 1;
+      if (actionable && isLookaheadTask(task, today, effStart, effEnd)) stats.lookaheadTasks += 1;
+      if (actionable && isStalledTask(task, today, (item) => parseDateUTC(effStart(item)))) stats.stalledTasks += 1;
+      if (actionable && isCriticalTask(task)) stats.criticalTasks += 1;
+      if (actionable && isMilestoneTask(task)) stats.milestoneTasks += 1;
+      if (actionable && effectiveDates[task.id]?.shifted) stats.shiftedTasks += 1;
+      if (actionable) stats.totalShiftDays += Number(effectiveDates[task.id]?.shiftedBy) || 0;
+      if (actionable && isUnassignedTask(task)) stats.unassignedTasks += 1;
+      if (actionable && weatherRiskByTask[task.id]) stats.weatherRiskTasks += 1;
+      if (actionable) stats.dependencyLinks += parseDeps(task.dependencies).length;
+      if (actionable) {
+        stats.progressTotal += displayPct(task);
+        stats.progressCount += 1;
+      }
     }
     return {
       ...stats,
-      avgProgress: stats.totalTasks > 0 ? Math.round(stats.progressTotal / stats.totalTasks) : 0,
+      avgProgress: stats.progressCount > 0 ? Math.round(stats.progressTotal / stats.progressCount) : 0,
     };
   }, [allTasks, effectiveDates, today, weatherRiskByTask]);
 
@@ -841,6 +860,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
       const phase = phaseById.get(task.id);
       const matchesText = !normalizedSearch || taskSearchHaystack(task, phase?.label || phase?.key || "").includes(normalizedSearch);
       const matchesQuick = (() => {
+        if (quickFilter !== "all" && isSummaryScheduleTask(task)) return false;
         if (quickFilter === "all") return true;
         if (quickFilter === "lookahead") return isLookaheadTask(task, today, effStart, effEnd);
         if (quickFilter === "critical") return isCriticalTask(task);
@@ -969,8 +989,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
 
       // Phase % uses displayPct so Complete tasks always count as 100% even
       // when their percent_complete field is stale.
-      const avgPct = tasks.length > 0
-        ? tasks.reduce((sum, t) => sum + displayPct(t), 0) / tasks.length
+      const phaseProgressTasks = tasks.filter((task) => !task._hasChildren);
+      const progressBasis = phaseProgressTasks.length ? phaseProgressTasks : tasks;
+      const avgPct = progressBasis.length > 0
+        ? progressBasis.reduce((sum, t) => sum + displayPct(t), 0) / progressBasis.length
         : 0;
 
       // Phase summary bar spans from the earliest *effective* start to the
@@ -1067,6 +1089,24 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const virtualBottomPadding = virtualRows.length
     ? Math.max(0, totalHeight - (virtualRows[virtualRows.length - 1].top + virtualRows[virtualRows.length - 1].height))
     : 0;
+
+  useEffect(() => {
+    if (!focusedTaskId) return;
+    const focusedRow = rowLayout.items.find((item) => (
+      item.row.type === "task" && String(item.row.task?.id) === String(focusedTaskId)
+    ));
+    if (!focusedRow) return;
+
+    const targetTop = Math.max(0, focusedRow.top - 96);
+    requestAnimationFrame(() => {
+      if (leftRef.current) leftRef.current.scrollTop = targetTop;
+      if (rightBody.current) rightBody.current.scrollTop = targetTop;
+      setBodyViewport((prev) => (
+        prev.scrollTop === targetTop ? prev : { scrollTop: targetTop, height: rightBody.current?.clientHeight || leftRef.current?.clientHeight || prev.height }
+      ));
+    });
+  }, [focusedTaskId, rowLayout, externalFocus?.requestedAt]);
+
   const visibleDepArrows = useMemo(() => {
     const overscan = 320;
     const start = Math.max(0, bodyViewport.scrollTop - overscan);
@@ -1121,7 +1161,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           {hasActiveRowFilter && (
             <button
               type="button"
-              onClick={() => { setSearchText(""); setQuickFilter("all"); }}
+              onClick={() => { setSearchText(""); setQuickFilter("all"); setFocusedTaskId(null); }}
               style={{
                 padding: "4px 8px",
                 borderRadius: 6,
@@ -1143,6 +1183,32 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
             {visibleTaskCount}/{totalTasks} visible
           </span>
+          {focusedTask && (
+            <button
+              type="button"
+              onClick={() => setFocusedTaskId(null)}
+              title="Clear Brena task focus"
+              style={{
+                maxWidth: 220,
+                padding: "4px 8px",
+                borderRadius: 999,
+                border: `1px solid ${GANTT_STATUS_HEX.inProgress}88`,
+                background: `${GANTT_STATUS_HEX.inProgress}18`,
+                color: GANTT_STATUS_HEX.inProgress,
+                fontFamily: "var(--font-mono)",
+                fontSize: 8,
+                fontWeight: 900,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Brena Focus: {sanitizeTaskName(focusedTask)}
+            </button>
+          )}
         </div>
         {/* Controls */}
         {submittals.filter(s => s.is_submittal && s.linked_wp_id).length > 0 && (
@@ -1215,7 +1281,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             <button
               key={filter.key}
               type="button"
-              onClick={() => setQuickFilter(filter.key)}
+              onClick={() => { setQuickFilter(filter.key); setFocusedTaskId(null); }}
               style={{
                 padding: "5px 9px",
                 borderRadius: 999,
@@ -1576,9 +1642,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
             const leftHovered = hoveredRowId === task.id;
             const parentRowBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
             const critical = isCriticalTask(task);
+            const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
             return (
               <div key={`task-${task.id}`}
-                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent" }}
+                style={{ height: ROW_H, display: "grid", gridTemplateColumns: GRID, alignItems: "center", padding: "0 12px", gap: 4, borderBottom: "1px solid var(--divider)", background: isFocused ? `${GANTT_STATUS_HEX.inProgress}24` : leftHovered ? `${GANTT_STATUS_HEX.inProgress}12` : critical ? `${GANTT_PHASE_HEX.Procurement}0C` : parentRowBg, transition: "background 0.08s", cursor: "pointer", borderLeft: isFocused ? `3px solid ${GANTT_STATUS_HEX.inProgress}` : overdue ? `3px solid ${GANTT_STATUS_HEX.delayed}` : critical ? `3px solid ${GANTT_PHASE_HEX.Procurement}` : "3px solid transparent", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
                 onClick={() => onTaskClick && onTaskClick(task)}
                 onMouseEnter={() => setHoveredRowId(task.id)}
                 onMouseLeave={() => setHoveredRowId(null)}
@@ -2087,14 +2154,16 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const overdue = isOverdue(task);
                 const critical = isCriticalTask(task);
                 const hovered = hoveredRowId === task.id;
+                const isFocused = focusedTaskId && String(task.id) === String(focusedTaskId);
                 const parentBg = task._hasChildren ? `${GANTT_STATUS_HEX.inProgress}0A` : "transparent";
                 const baseBg = overdue ? "rgba(239,68,68,0.04)" : critical ? "rgba(245,158,11,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
                 const hoverBg = `${GANTT_STATUS_HEX.inProgress}12`;
+                const focusedBg = `${GANTT_STATUS_HEX.inProgress}20`;
                 if (!task.start_date || !task.end_date) {
                   const tbdLeft = px(today.toISOString().slice(0, 10));
                   return (
                     <div key={`gr-${task.id}`}
-                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg, cursor: "pointer" }}
+                      style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
                       onClick={() => onTaskClick && onTaskClick(task)}
                       onMouseEnter={() => setHoveredRowId(task.id)}
                       onMouseLeave={() => setHoveredRowId(null)}
@@ -2127,7 +2196,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const taskEffE = effEnd(task);
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s" }}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
                     onClick={() => onTaskClick && onTaskClick(task)}
                     onMouseEnter={e => { setHoveredRowId(task.id); setTooltip({ task, x: e.clientX, y: e.clientY }); }}
                     onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
