@@ -133,12 +133,101 @@ function getDrawingDueDate(drawing) {
   return drawing?.due_date || drawing?.required_date || drawing?.target_date || null;
 }
 
+function getSetDisplayName({ parent, legacyName, fallback = "Ungrouped drawing set" } = {}) {
+  return (parent?.set_name || legacyName || fallback).trim();
+}
+
+function compareDueDates(a, b) {
+  const ad = daysUntil(a);
+  const bd = daysUntil(b);
+  if (ad === null && bd === null) return 0;
+  if (ad === null) return 1;
+  if (bd === null) return -1;
+  return ad - bd;
+}
+
+function earliestDate(values) {
+  return values.filter(Boolean).sort(compareDueDates)[0] || null;
+}
+
 function isClosedSubmittal(submittal) {
   return CLOSED_SUBMITTAL_STATUSES.has(submittal?.status);
 }
 
 function isClosedDrawing(drawing) {
   return drawing?.stage === "Released" || drawing?.set_approval_status === "approved";
+}
+
+function rollupDrawingStage(sheets) {
+  if (!sheets.length) return "No sheets";
+  if (sheets.every(isClosedDrawing)) return "Released";
+  if (sheets.some((d) => ["Rejected", "Revise and Resubmit", "Returned"].includes(d.stage))) return "Needs Action";
+  if (sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))) return "In Review";
+  return sheets[0]?.stage || "No stage";
+}
+
+function buildSetPackages(drawings, drawingSets, submittals) {
+  const parentsById = new Map((drawingSets || []).filter((set) => !set?.is_deleted).map((set) => [set.id, set]));
+  const parentsByName = new Map(
+    Array.from(parentsById.values())
+      .map((set) => [(set.set_name || "").trim().toLowerCase(), set])
+      .filter(([name]) => !!name)
+  );
+  const packages = new Map();
+
+  const ensurePackage = ({ setId = null, legacyName = "", parent = null }) => {
+    const key = setId ? `id:${setId}` : `name:${(legacyName || "").trim() || "Ungrouped drawing set"}`;
+    if (!packages.has(key)) {
+      packages.set(key, {
+        key,
+        setId,
+        name: getSetDisplayName({ parent, legacyName }),
+        parent,
+        sheets: [],
+        submittals: [],
+      });
+    }
+    return packages.get(key);
+  };
+
+  for (const parent of parentsById.values()) {
+    ensurePackage({ setId: parent.id, legacyName: parent.set_name, parent });
+  }
+
+  for (const drawing of drawings || []) {
+    if (!drawing || drawing.is_deleted || drawing.is_superseded) continue;
+    const parent = drawing.drawing_set_id ? parentsById.get(drawing.drawing_set_id) : null;
+    const pkg = ensurePackage({
+      setId: drawing.drawing_set_id || null,
+      legacyName: drawing.drawing_set_name,
+      parent,
+    });
+    pkg.sheets.push(drawing);
+  }
+
+  for (const submittal of submittals || []) {
+    if (!submittal || submittal.is_deleted) continue;
+    const ids = Array.isArray(submittal.drawing_set_ids) ? submittal.drawing_set_ids.filter(Boolean) : [];
+    if (ids.length) {
+      ids.forEach((setId) => {
+        const parent = parentsById.get(setId);
+        ensurePackage({ setId, legacyName: parent?.set_name || submittal.drawing_set_name, parent }).submittals.push(submittal);
+      });
+      continue;
+    }
+    if (submittal.drawing_set_name) {
+      const parent = parentsByName.get(submittal.drawing_set_name.trim().toLowerCase()) || null;
+      ensurePackage({
+        setId: parent?.id || null,
+        legacyName: submittal.drawing_set_name,
+        parent,
+      }).submittals.push(submittal);
+    }
+  }
+
+  return Array.from(packages.values())
+    .filter((pkg) => pkg.name && pkg.name !== "Ungrouped drawing set" ? true : pkg.sheets.length || pkg.submittals.length)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
 }
 
 function itemUrgency(a, b) {
@@ -186,25 +275,30 @@ export default function DrawingSubmittalHub() {
     staleTime: 60_000,
   });
 
+  const setPackages = useMemo(
+    () => buildSetPackages(drawings, drawingSets, submittals),
+    [drawings, drawingSets, submittals]
+  );
+
   // ── Drawing KPIs ───────────────────────────────────────────────────────
   const drawingKpis = useMemo(() => {
     const active = drawings.filter((d) => !d.is_superseded && !d.is_deleted);
-    const released = active.filter((d) => d.stage === "Released").length;
+    const released = setPackages.filter((pkg) => pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing)).length;
     // "In review" = active workflow stages (post-077): IFA / OFA / BFA / OFS / IFC.
-    const inReview = active.filter((d) =>
-      ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage)
+    const inReview = setPackages.filter((pkg) =>
+      pkg.sheets.some((d) => ["IFA", "OFA", "BFA", "OFS", "IFC"].includes(d.stage))
     ).length;
-    const overdueDrawings = active.filter((d) => {
-      if (!d.due_date || d.stage === "Released") return false;
-      return new Date(d.due_date) < new Date();
-    }).length;
+    const overdueDrawings = setPackages.filter((pkg) =>
+      pkg.sheets.some((d) => dueInfo(getDrawingDueDate(d), isClosedDrawing(d)).overdue)
+    ).length;
     return {
+      totalSets: setPackages.length,
       totalSheets: active.length,
       released,
       inReview,
       overdue: overdueDrawings,
     };
-  }, [drawings]);
+  }, [drawings, setPackages]);
 
   // ── Fab-Ready KPI ──────────────────────────────────────────────────────
   const fabReady = useMemo(
@@ -215,23 +309,35 @@ export default function DrawingSubmittalHub() {
   const isLoading = drawingsLoading || submittalsLoading;
 
   const triage = useMemo(() => {
-    const activeDrawings = drawings.filter((d) => !d.is_deleted && !d.is_superseded);
     const activeSubmittals = submittals.filter((s) => !s.is_deleted);
 
-    const drawingItems = activeDrawings.map((drawing) => {
-      const closed = isClosedDrawing(drawing);
-      const dueDate = getDrawingDueDate(drawing);
-      const title = [drawing.sheet_number, drawing.title || drawing.name]
-        .filter(Boolean)
-        .join(" - ") || drawing.drawing_set_name || "Untitled drawing";
-      const needsAction = ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage);
+    const setItems = setPackages.map((pkg) => {
+      const sortedSubmittals = pkg.submittals
+        .slice()
+        .sort((a, b) => (b.round_number || 1) - (a.round_number || 1));
+      const latestSubmittal = sortedSubmittals[0] || null;
+      const closed = latestSubmittal ? isClosedSubmittal(latestSubmittal) : (pkg.sheets.length > 0 && pkg.sheets.every(isClosedDrawing));
+      const dueDate = getSubmittalDueDate(latestSubmittal) || earliestDate(pkg.sheets.map(getDrawingDueDate));
+      const needsAction =
+        (latestSubmittal && ACTION_STATUSES.has(latestSubmittal.status)) ||
+        pkg.sheets.some((drawing) => ["Rejected", "Revise and Resubmit", "Returned"].includes(drawing.stage));
+      const status = latestSubmittal?.status || rollupDrawingStage(pkg.sheets);
+      const owner =
+        latestSubmittal?.ball_in_court ||
+        latestSubmittal?.assigned_to ||
+        latestSubmittal?.reviewer ||
+        pkg.sheets.find((drawing) => drawing.ball_in_court || drawing.assigned_to || drawing.reviewer)?.ball_in_court ||
+        pkg.sheets.find((drawing) => drawing.assigned_to)?.assigned_to ||
+        pkg.sheets.find((drawing) => drawing.reviewer)?.reviewer ||
+        "Unassigned";
+      const submittalLabel = latestSubmittal?.submittal_number ? `Submittal ${latestSubmittal.submittal_number}` : "No linked submittal";
       return {
-        id: `drawing-${drawing.id}`,
-        kind: "Drawing",
-        title,
-        group: drawing.drawing_set_name || drawing.set_name || "Ungrouped set",
-        status: drawing.stage || drawing.set_approval_status || "No stage",
-        owner: drawing.ball_in_court || drawing.assigned_to || drawing.reviewer || "Unassigned",
+        id: `set-${pkg.key}`,
+        kind: "Drawing Set",
+        title: pkg.name,
+        group: `${pkg.sheets.length} sheet${pkg.sheets.length === 1 ? "" : "s"} - ${submittalLabel}`,
+        status,
+        owner,
         dueDate,
         due: dueInfo(dueDate, closed),
         closed,
@@ -240,19 +346,23 @@ export default function DrawingSubmittalHub() {
       };
     });
 
-    const submittalItems = activeSubmittals.map((submittal) => {
+    const linkedSubmittalIds = new Set(
+      setPackages.flatMap((pkg) => pkg.submittals.map((submittal) => submittal.id).filter(Boolean))
+    );
+    const unlinkedSubmittalItems = activeSubmittals
+      .filter((submittal) => !linkedSubmittalIds.has(submittal.id))
+      .map((submittal) => {
       const closed = isClosedSubmittal(submittal);
       const dueDate = getSubmittalDueDate(submittal);
       const title = [submittal.submittal_number, submittal.title || submittal.description]
         .filter(Boolean)
         .join(" - ") || "Untitled submittal";
-      const setCount = Array.isArray(submittal.drawing_set_ids) ? submittal.drawing_set_ids.length : 0;
       const needsAction = ACTION_STATUSES.has(submittal.status);
       return {
         id: `submittal-${submittal.id}`,
-        kind: "Submittal",
+        kind: "Unlinked Submittal",
         title,
-        group: submittal.drawing_set_name || (setCount ? `${setCount} linked set${setCount === 1 ? "" : "s"}` : "No linked set"),
+        group: "No drawing set name linked",
         status: submittal.status || "Draft",
         owner: submittal.ball_in_court || submittal.assigned_to || submittal.reviewer || "Unassigned",
         dueDate,
@@ -263,7 +373,7 @@ export default function DrawingSubmittalHub() {
       };
     });
 
-    const openItems = [...drawingItems, ...submittalItems].filter((item) => !item.closed);
+    const openItems = [...setItems, ...unlinkedSubmittalItems].filter((item) => !item.closed);
     const overdue = openItems.filter((item) => item.due.overdue).sort(itemUrgency);
     const dueSoon = openItems
       .filter((item) => item.due.dueSoon)
@@ -282,19 +392,21 @@ export default function DrawingSubmittalHub() {
     }, {});
 
     return {
-      drawingItems,
-      submittalItems,
+      setItems,
+      unlinkedSubmittalItems,
       openItems: openItems.sort(itemUrgency),
       overdue,
       dueSoon,
       needsAction,
       noDate,
       pipelineCounts,
-      overdueDrawings: overdue.filter((item) => item.kind === "Drawing").length,
-      overdueSubmittals: overdue.filter((item) => item.kind === "Submittal").length,
+      overdueDrawingSets: overdue.filter((item) => item.kind === "Drawing Set").length,
+      overdueUnlinkedSubmittals: overdue.filter((item) => item.kind === "Unlinked Submittal").length,
+      dueSoonDrawingSets: dueSoon.filter((item) => item.kind === "Drawing Set").length,
+      noDateDrawingSets: noDate.filter((item) => item.kind === "Drawing Set").length,
       fabReady,
     };
-  }, [drawings, submittals, fabReady]);
+  }, [submittals, setPackages, fabReady]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -303,9 +415,9 @@ export default function DrawingSubmittalHub() {
       <CommandBar
         eyebrow={projectName}
         title="Drawings & Submittals"
-        count={drawingKpis.totalSheets + kpis.total}
-        unit="items"
-        subtitle="Unified drawing register, submittal tracking, and approval pipeline"
+        count={drawingKpis.totalSets}
+        unit="sets"
+        subtitle="Drawing sets tracked by user-created set name, with submittal status and approval risk"
       />
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
@@ -315,9 +427,9 @@ export default function DrawingSubmittalHub() {
         background: surface1,
       }}>
         {/* Drawing KPIs */}
-        <KpiTile label="Total Sheets"    value={drawingKpis.totalSheets} color={accent} loading={isLoading} />
-        <KpiTile label="Released"        value={drawingKpis.released}    color={success} loading={isLoading} />
-        <KpiTile label="In Review"       value={drawingKpis.inReview}    color={warning} loading={isLoading} />
+        <KpiTile label="Drawing Sets"    value={drawingKpis.totalSets}   sub={`${drawingKpis.totalSheets} sheets`} color={accent} loading={isLoading} />
+        <KpiTile label="Sets Released"   value={drawingKpis.released}    color={success} loading={isLoading} />
+        <KpiTile label="Sets In Review"  value={drawingKpis.inReview}    color={warning} loading={isLoading} />
 
         <div style={{ width: 1, background: border, margin: "4px 8px" }} />
 
@@ -444,14 +556,14 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
             </h2>
             <p style={{ margin: "8px 0 0", color: "var(--text-secondary)", maxWidth: 920, lineHeight: 1.5 }}>
               {oldest
-                ? `${triage.overdueDrawings} drawings and ${triage.overdueSubmittals} submittals are past due. Oldest: ${oldest.title} (${oldest.due.label}, due ${fmtDate(oldest.dueDate)}).`
-                : "Use the board below to watch due-this-week work, missing due dates, and resubmittal/rejection items before they become schedule blockers."}
+                ? `${triage.overdueDrawingSets} drawing sets and ${triage.overdueUnlinkedSubmittals} unlinked submittals are past due. Oldest: ${oldest.title} (${oldest.due.label}, due ${fmtDate(oldest.dueDate)}).`
+                : "Use the board below to watch drawing sets due this week, missing required dates, and resubmittal/rejection items before they become schedule blockers."}
             </p>
           </div>
           <button
             type="button"
             className="sbd-btn-primary"
-            onClick={() => onOpenTab(triage.overdueSubmittals >= triage.overdueDrawings ? "submittals" : "drawings")}
+            onClick={() => onOpenTab(triage.overdueUnlinkedSubmittals > triage.overdueDrawingSets ? "submittals" : "drawings")}
             style={{ minWidth: 156 }}
           >
             Open Register
@@ -460,24 +572,24 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-        <TriageMetric label="Overdue" value={triage.overdue.length} color={error} sub="Past required date" />
-        <TriageMetric label="Due This Week" value={triage.dueSoon.length} color={warning} sub="Next 7 days" />
+        <TriageMetric label="Overdue Sets" value={triage.overdueDrawingSets} color={error} sub={`${triage.overdueUnlinkedSubmittals} unlinked subs`} />
+        <TriageMetric label="Sets Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
         <TriageMetric label="Needs Action" value={triage.needsAction.length} color={error} sub="Rejected / resubmit" />
-        <TriageMetric label="No Due Date" value={triage.noDate.length} color={textMuted} sub="Needs cleanup" />
+        <TriageMetric label="Sets Missing Date" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
         <TriageMetric label="Fab Ready" value={`${triage.fabReady.numerator}/${triage.fabReady.denominator}`} color={success} sub={`${triage.fabReady.percent}% released`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
         <TriageList
           title="Overdue Now"
-          subtitle="Sorted by most urgent drawing/submittal due date."
+          subtitle="Sorted by drawing set required date, not sheet number."
           items={triage.overdue.slice(0, 10)}
           empty="Nothing is overdue."
           onOpenTab={onOpenTab}
         />
         <TriageList
           title="Due Next 7 Days"
-          subtitle="Upcoming required dates before they become late."
+          subtitle="Drawing sets with required dates approaching."
           items={triage.dueSoon.slice(0, 8)}
           empty="No drawing or submittal due dates in the next week."
           onOpenTab={onOpenTab}
@@ -487,7 +599,7 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
         <TriageList
           title="Needs Action"
-          subtitle="Rejected or revise-and-resubmit work that needs ownership."
+          subtitle="Drawing sets with rejected or revise-and-resubmit work."
           items={triage.needsAction.slice(0, 8)}
           empty="No rejected or resubmit items."
           onOpenTab={onOpenTab}
