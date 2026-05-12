@@ -537,3 +537,43 @@ export function buildOwnerLoad(scoredItems) {
     b.maxScore - a.maxScore
   );
 }
+
+export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) {
+  const isHighSignal = (item) => item.severityKey === "CRITICAL" || item.severityKey === "HIGH";
+  const hasAnyTag = (item, tags) => tags.some((tag) => item.tags.includes(tag));
+
+  const criticalReleases = scoredItems
+    .filter((item) => isHighSignal(item) && hasAnyTag(item, ["RELEASE_GATE", "BLOCKS_DELIVERY", "BLOCKS_FAB", "BLOCKS_ERECTION"]))
+    .slice(0, 6);
+
+  const waitingOn = waitingBoard
+    .flatMap((group) => group.items.map((item) => ({ ...item, waitingParty: group.party })))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  const next48 = (executionWindows?.next48 || [])
+    .filter((item) => isHighSignal(item) || hasAnyTag(item, ["RELEASE_GATE", "BLOCKS_DELIVERY", "BLOCKS_FAB", "BLOCKS_ERECTION"]))
+    .slice(0, 8);
+
+  const scheduleRisk = scoredItems
+    .filter((item) => hasAnyTag(item, ["SCHEDULE_RISK", "OWNER_MISSING"]) || item.type === "ScheduleTask")
+    .slice(0, 8);
+
+  const costExposure = scoredItems
+    .filter((item) => hasAnyTag(item, ["COST_EXPOSURE"]))
+    .slice(0, 6);
+
+  return {
+    criticalReleases,
+    waitingOn,
+    next48,
+    scheduleRisk,
+    costExposure,
+    total:
+      criticalReleases.length +
+      waitingOn.length +
+      next48.length +
+      scheduleRisk.length +
+      costExposure.length,
+  };
+}
