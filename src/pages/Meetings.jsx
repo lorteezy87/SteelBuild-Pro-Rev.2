@@ -6,8 +6,9 @@ import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
-import { Plus } from "lucide-react";
+import { CheckSquare, Plus } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
+import { parseProductionMeetingNotes } from "@/utils/productionMeetingParser";
 
 /* ── Meeting type templates for Quick Start empty state ── */
 const MEETING_TEMPLATES = [
@@ -64,6 +65,151 @@ const MEETING_TEMPLATES = [
 const types = ["OAC", "Internal", "Safety", "Kickoff", "Progress", "Other"];
 const statuses = ["Scheduled", "In Progress", "Complete", "Cancelled"];
 
+function ProductionMeetingParserPanel({
+  notes,
+  onNotesChange,
+  parsedActions,
+  selectedIds,
+  onToggle,
+  onParse,
+  onCreate,
+  isCreating,
+  canCreate,
+}) {
+  const inputStyle = {
+    width: "100%",
+    background: "var(--bg-input)",
+    border: "1px solid var(--border-default)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 0.9fr)", gap: 0 }}>
+        <div style={{ padding: 16, borderRight: "1px solid var(--divider)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 800, marginBottom: 6 }}>
+            PRODUCTION MEETING PARSER
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45, marginBottom: 12 }}>
+            Paste meeting notes. SteelBuild will suggest action items for VIF, RFIs, drawing revisions, load lists, deliveries, fabrication, field coordination, and cost exposure. Review before creating records.
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            placeholder={"Example:\n- Need Walker to confirm VIF before 5/13 shipment\n- Fire protection drawings pending GC response\n- ABs shipping tomorrow, load list not confirmed"}
+            rows={8}
+            style={{ ...inputStyle, minHeight: 170, resize: "vertical" }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={onParse}
+              disabled={!notes.trim()}
+              style={{
+                background: "var(--accent)",
+                color: "var(--bg-base)",
+                border: "none",
+                borderRadius: "var(--radius-btn)",
+                padding: "8px 14px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: notes.trim() ? "pointer" : "not-allowed",
+                opacity: notes.trim() ? 1 : 0.55,
+              }}
+            >
+              Extract Actions
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, minHeight: 260 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", letterSpacing: "0.12em", fontWeight: 800 }}>
+                SUGGESTED ACTIONS
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                {selectedIds.size} selected of {parsedActions.length}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onCreate}
+              disabled={!canCreate || isCreating}
+              style={{
+                background: "var(--accent-muted)",
+                color: "var(--accent)",
+                border: "1px solid var(--accent)",
+                borderRadius: "var(--radius-btn)",
+                padding: "8px 12px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                cursor: canCreate && !isCreating ? "pointer" : "not-allowed",
+                opacity: canCreate && !isCreating ? 1 : 0.55,
+              }}
+            >
+              {isCreating ? "Creating..." : "Create Selected"}
+            </button>
+          </div>
+
+          {parsedActions.length === 0 ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", border: "1px dashed var(--divider)", borderRadius: 8, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textAlign: "center", padding: 20 }}>
+              No extracted actions yet
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", maxHeight: 300 }}>
+              {parsedActions.map((item) => {
+                const selected = selectedIds.has(item.id);
+                return (
+                  <label
+                    key={item.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "18px 1fr",
+                      gap: 10,
+                      padding: 10,
+                      border: `1px solid ${selected ? "var(--accent)" : "var(--divider)"}`,
+                      borderRadius: 8,
+                      background: selected ? "var(--accent-muted)" : "var(--bg-surface-low)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input type="checkbox" checked={selected} onChange={() => onToggle(item.id)} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                        {item.title}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                        <span>{item.priority}</span>
+                        <span>Due {item.due_date}</span>
+                        <span>{item.metadata.task_type}</span>
+                        <span>{item.metadata.impact_area}</span>
+                        {item.assigned_to && <span>Owner {item.assigned_to}</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Meetings() {
   const projectId = useProjectId();
 
@@ -73,6 +219,10 @@ export default function Meetings() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [showParser, setShowParser] = useState(false);
+  const [meetingNotes, setMeetingNotes] = useState("");
+  const [parsedActions, setParsedActions] = useState([]);
+  const [selectedActionIds, setSelectedActionIds] = useState(new Set());
 
   const qc = useQueryClient();
 
@@ -128,6 +278,36 @@ export default function Meetings() {
     onError: (err) => toast.error(err.message),
   });
 
+  const createActionsMut = useMutation({
+    mutationFn: async (items) => {
+      if (!projectId) throw new Error("Select a project before creating action items.");
+      await Promise.all(items.map((item) => base44.entities.ActionItem.create({
+        project_id: projectId,
+        project_name: selectedProject?.name || "",
+        title: item.title,
+        description: item.description,
+        assigned_to: item.assigned_to,
+        due_date: item.due_date,
+        priority: item.priority,
+        status: item.status,
+        meeting_reference: item.meeting_reference,
+        metadata: item.metadata,
+      })));
+      return items.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      qc.invalidateQueries({ queryKey: ["action-items", projectId] });
+      qc.invalidateQueries({ queryKey: ["action-items-all"] });
+      toast.success(`${count} action item${count === 1 ? "" : "s"} created`);
+      setShowParser(false);
+      setMeetingNotes("");
+      setParsedActions([]);
+      setSelectedActionIds(new Set());
+    },
+    onError: (err) => toast.error(err?.message || "Failed to create action items"),
+  });
+
   const handleSave = (data) => {
     if (editing) {
       updateMut.mutate({ id: editing.id, data });
@@ -135,6 +315,17 @@ export default function Meetings() {
       createMut.mutate(data);
     }
   };
+
+  const handleParseNotes = () => {
+    const parsed = parseProductionMeetingNotes(meetingNotes, { source: "Production meeting notes" });
+    setParsedActions(parsed);
+    setSelectedActionIds(new Set(parsed.map((item) => item.id)));
+    if (parsed.length === 0) {
+      toast.info("No actionable meeting items found");
+    }
+  };
+
+  const selectedParsedActions = parsedActions.filter((item) => selectedActionIds.has(item.id));
 
   const openTemplate = (tpl) => {
     setEditing(null);
@@ -203,6 +394,25 @@ export default function Meetings() {
         subtitle={`${stats.upcoming || 0} upcoming · ${stats.complete || 0} complete · OAC / Foreman / Pre-Con templates`}
       >
         <button
+          onClick={() => setShowParser((v) => !v)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: showParser ? "var(--accent-muted)" : "var(--bg-surface)",
+            color: showParser ? "var(--accent)" : "var(--text-secondary)",
+            border: `1px solid ${showParser ? "var(--accent)" : "var(--border-default)"}`,
+            borderRadius: "var(--radius-btn)",
+            padding: "8px 14px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontWeight: 700,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          <CheckSquare size={12} /> Parse Notes
+        </button>
+        <button
           onClick={() => {
             setEditing(null);
             setTemplateDefaults(null);
@@ -228,6 +438,27 @@ export default function Meetings() {
           <Plus size={12} /> New Meeting
         </button>
       </CommandBar>
+
+      {showParser && (
+        <ProductionMeetingParserPanel
+          notes={meetingNotes}
+          onNotesChange={setMeetingNotes}
+          parsedActions={parsedActions}
+          selectedIds={selectedActionIds}
+          onToggle={(id) => {
+            setSelectedActionIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+          onParse={handleParseNotes}
+          onCreate={() => createActionsMut.mutate(selectedParsedActions)}
+          isCreating={createActionsMut.isPending}
+          canCreate={!!projectId && selectedParsedActions.length > 0}
+        />
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
         {kpiTiles.map((stat) => {
