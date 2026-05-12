@@ -19,6 +19,7 @@ import {
   buildWaitingOnBoard,
   buildExecutionWindows,
   buildOwnerLoad,
+  buildDailyBriefing,
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
@@ -616,6 +617,137 @@ function RiskWatchlist({ items, onSelect }) {
   );
 }
 
+function DailyBriefing({ briefing, onSelect }) {
+  const sections = [
+    {
+      key: "criticalReleases",
+      title: "TODAY'S CRITICAL RELEASES",
+      subtitle: "Release-blocking confirmations that can affect fabrication, shipping, delivery, or erection.",
+      empty: "No critical release blockers detected",
+    },
+    {
+      key: "waitingOn",
+      title: "WAITING ON",
+      subtitle: "External or owner-held items that need follow-up before work can move.",
+      empty: "No external waiting items detected",
+    },
+    {
+      key: "next48",
+      title: "NEXT 48 HOURS",
+      subtitle: "Near-term work due inside the next two days.",
+      empty: "No high-signal 48-hour items detected",
+    },
+    {
+      key: "scheduleRisk",
+      title: "SCHEDULE RISK",
+      subtitle: "Tasks with missing owners, blocked status, milestones, or gate risk.",
+      empty: "No schedule risk items detected",
+    },
+    {
+      key: "costExposure",
+      title: "COST EXPOSURE",
+      subtitle: "Change or cost-related items that need commercial attention.",
+      empty: "No cost exposure items detected",
+    },
+  ];
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "grid", gap: 12 }}>
+      <div style={{ padding: "14px 16px", background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 10 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.14em", fontWeight: 800 }}>
+          DAILY PM BRIEFING
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.45 }}>
+          A deterministic morning agenda built from RFIs, drawings, work packages, deliveries, change orders, and schedule tasks. It flags what is due, blocked, waiting, ownerless, or able to hurt fabrication, shipping, erection, or cost.
+        </div>
+      </div>
+
+      {sections.map((section) => (
+        <BriefingSection
+          key={section.key}
+          title={section.title}
+          subtitle={section.subtitle}
+          empty={section.empty}
+          items={briefing[section.key] || []}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BriefingSection({ title, subtitle, items, empty, onSelect }) {
+  return (
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--divider)", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderBottom: "1px solid var(--divider)" }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)", letterSpacing: "0.12em", fontWeight: 800 }}>{title}</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>{subtitle}</div>
+        </div>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: items.length > 0 ? "var(--accent)" : "var(--text-muted)", border: "1px solid var(--divider)", borderRadius: 6, padding: "3px 8px" }}>
+          {items.length}
+        </span>
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ padding: "12px 14px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+          {empty}
+        </div>
+      ) : (
+        items.map((item) => {
+          const tc = TYPE_CONFIG[item.type] || { label: item.type, color: "var(--text-muted)" };
+          return (
+            <button
+              key={`${title}-${item.id}`}
+              type="button"
+              onClick={() => onSelect?.(item)}
+              style={{
+                width: "100%",
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto",
+                gap: 10,
+                alignItems: "center",
+                padding: "10px 14px",
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid var(--divider)",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              <SeverityBadge severity={item.severity} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: tc.color, letterSpacing: "0.08em" }}>{tc.label}</span>
+                  {item.waitingParty && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>WAITING: {item.waitingParty}</span>
+                  )}
+                  {item.daysOut != null && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: item.daysOut <= 2 ? "var(--status-warning)" : "var(--text-muted)" }}>
+                      {item.daysOut === 0 ? "TODAY" : `${item.daysOut}D`}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {item.title}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                  {(item.reasons || []).slice(0, 2).map((reason, idx) => (
+                    <span key={idx} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{reason}</span>
+                  ))}
+                </div>
+              </div>
+              <ActionBadge action={item.nextAction} />
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 function ExecutionWindow({ title, subtitle, items, empty, onSelect }) {
   if (!items.length) {
     return (
@@ -884,6 +1016,7 @@ export default function ProjectControlCenter() {
   const waitingBoard = useMemo(() => buildWaitingOnBoard(scoredFeed), [scoredFeed]);
   const executionWindows = useMemo(() => buildExecutionWindows(scoredFeed), [scoredFeed]);
   const ownerLoad = useMemo(() => buildOwnerLoad(scoredFeed), [scoredFeed]);
+  const dailyBriefing = useMemo(() => buildDailyBriefing(scoredFeed, executionWindows, waitingBoard), [scoredFeed, executionWindows, waitingBoard]);
 
   const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
 
@@ -983,6 +1116,7 @@ export default function ProjectControlCenter() {
 
   const tabs = [
     { id: "morning", label: "MORNING SCAN",    count: criticalHighCount },
+    { id: "briefing", label: "DAILY BRIEF",    count: dailyBriefing.total },
     { id: "gate",    label: "48-HR GATE",      count: executionWindows.releaseGate.length },
     { id: "next10",  label: "10-DAY WATCH",    count: executionWindows.next10.length },
     { id: "feed",    label: "PRIORITY FEED",   count: filteredFeed.length },
@@ -1213,6 +1347,10 @@ export default function ProjectControlCenter() {
                 </div>
                 <MorningScan items={scoredFeed} onSelect={(item) => setDrawerItem(item)} />
               </div>
+            )}
+
+            {!noProject && !isLoading && activeTab === "briefing" && (
+              <DailyBriefing briefing={dailyBriefing} onSelect={setDrawerItem} />
             )}
 
             {!noProject && !isLoading && activeTab === "gate" && (
