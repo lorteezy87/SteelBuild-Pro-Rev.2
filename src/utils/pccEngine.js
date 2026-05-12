@@ -99,6 +99,14 @@ export function recommendNextAction(item) {
     if (status === "Not Started") return "ASSIGN OWNER";
     return "REVIEW TASK";
   }
+  if (type === "ActionItem") {
+    if (overdueDays > 0) return "COMPLETE TODAY";
+    if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
+    if (blocksPhase === "Erection") return "VERIFY FIELD READY";
+    if (blocksPhase === "Fabrication") return "CLEAR FAB BLOCKER";
+    if (status === "Open") return "START";
+    return "REVIEW ACTION";
+  }
   return "REVIEW";
 }
 
@@ -124,6 +132,7 @@ export function scoreItem(item) {
     Delivery: 32,
     ChangeOrder: 20,
     ScheduleTask: 18,
+    ActionItem: 22,
   };
   score += typeBase[item.type] || 10;
 
@@ -179,6 +188,7 @@ export function scoreItem(item) {
   if (item.impact_area === "Shipping")    { score += 20; tags.push("BLOCKS_DELIVERY"); reasons.push("Shipping impact"); }
   if (item.impact_area === "Erection")    { score += 25; tags.push("BLOCKS_ERECTION"); reasons.push("Erection impact"); }
   if (item.impact_area === "Cost")        { score += 20; tags.push("COST_EXPOSURE"); reasons.push("Cost exposure"); }
+  if (item.impact_area === "GC Approval") { score += 15; tags.push("EXTERNAL_WAIT"); reasons.push("GC approval impact"); }
 
   // 4. RFI-specific scoring
   if (item.type === "RFI") {
@@ -222,6 +232,13 @@ export function scoreItem(item) {
     if (item.status === "Blocked" || item.status === "On Hold") { score += 25; tags.push("SCHEDULE_RISK"); reasons.push("Blocked task"); }
   }
 
+  if (item.type === "ActionItem") {
+    if (item.priority === "Critical") { score += 24; reasons.push("Critical action"); }
+    else if (item.priority === "High") { score += 16; reasons.push("High priority action"); }
+    if (item.created_from === "production_meeting_parser") { score += 8; reasons.push("Generated from meeting"); }
+    if (item.status === "In Progress") { score += 6; reasons.push("In progress"); }
+  }
+
   const externalWait = item.external_wait_days || 0;
   if (externalWait > 14) { score += 20; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d waiting on external`); }
   else if (externalWait > 7) { score += 10; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d external wait`); }
@@ -249,7 +266,7 @@ export function scoreItem(item) {
       status: item.status || item.stage,
       overdueDays,
       waitingOnExternal: externalWait > 7,
-      blocksPhase: tags.includes("BLOCKS_ERECTION") ? "Erection" : tags.includes("BLOCKS_DELIVERY") ? "Delivery" : null,
+      blocksPhase: tags.includes("BLOCKS_ERECTION") ? "Erection" : tags.includes("BLOCKS_DELIVERY") ? "Delivery" : tags.includes("BLOCKS_FAB") ? "Fabrication" : null,
     }),
   };
 }
@@ -440,6 +457,41 @@ export function mapChangeOrdersToPCCItems(cos) {
 }
 
 // ─── Build scored + sorted priority feed ─────────────────────────────────────
+export function mapActionItemsToPCCItems(actionItems) {
+  return actionItems
+    .filter((a) => a.status !== "Complete" && a.status !== "Cancelled")
+    .map((a) => {
+      const metadata = a.metadata || {};
+      const text = `${a.title || ""} ${a.description || ""}`;
+      const impactArea = metadata.impact_area || (
+        /\b(ship|deliver|load list|truck)\b/i.test(text) ? "Shipping"
+        : /\b(erect|install|field|crane|site)\b/i.test(text) ? "Erection"
+        : /\b(co|change order|cost|notice|exposure|backcharge)\b/i.test(text) ? "Cost"
+        : /\b(gc|architect|engineer|eor|aor|approval|rfi)\b/i.test(text) ? "GC Approval"
+        : /\b(fab|shop|release|vif|drawing|galv|paint)\b/i.test(text) ? "Fabrication"
+        : null
+      );
+
+      return {
+        id: `action-${a.id}`,
+        entityId: a.id,
+        type: "ActionItem",
+        title: a.title || "Untitled Action Item",
+        subtitle: metadata.task_type || a.meeting_reference || "Action Item",
+        status: a.status,
+        due_date: a.due_date,
+        target_date: a.due_date,
+        priority: a.priority,
+        assigned_to: a.assigned_to,
+        waiting_on: metadata.waiting_on || null,
+        impact_area: impactArea,
+        created_from: metadata.created_from,
+        project_id: a.project_id,
+        project_name: a.project_name,
+      };
+    });
+}
+
 export function buildPriorityFeed(allItems) {
   return allItems
     .map(scoreItem)

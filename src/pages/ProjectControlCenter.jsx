@@ -14,6 +14,7 @@ import {
   mapDeliveriesToPCCItems,
   mapChangeOrdersToPCCItems,
   mapScheduleTasksToPCCItems,
+  mapActionItemsToPCCItems,
   buildPriorityFeed,
   buildSignalKPIs,
   buildWaitingOnBoard,
@@ -32,6 +33,7 @@ const TYPE_PAGE_MAP = {
   Delivery:    "Deliveries",
   ChangeOrder: "ChangeOrders",
   ScheduleTask: "Schedule",
+  ActionItem: "ActionItems",
 };
 
 // ─── Type icon map ────────────────────────────────────────────────────────────
@@ -42,6 +44,7 @@ const TYPE_CONFIG = {
   Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
   ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "var(--status-review)" },
   ScheduleTask: { icon: "T",  label: "TASK",          color: "var(--accent)" },
+  ActionItem:  { icon: "A",  label: "ACTION",        color: "var(--status-info)" },
 };
 
 // ─── Signal KPI Card ─────────────────────────────────────────────────────────
@@ -984,13 +987,15 @@ export default function ProjectControlCenter() {
   const delQ  = useQuery({ queryKey: ["pcc-deliveries", activeProject?.id], queryFn: () => base44.entities.Delivery.filter({ project_id: activeProject.id }),    enabled });
   const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
   const taskQ = useQuery({ queryKey: ["pcc-schedule-tasks", activeProject?.id], queryFn: () => base44.entities.ScheduleTask.filter({ project_id: activeProject.id }), enabled });
+  const actionQ = useQuery({ queryKey: ["pcc-action-items", activeProject?.id], queryFn: () => base44.entities.ActionItem.filter({ project_id: activeProject.id }), enabled });
   const rfis = rfiQ.data ?? [];
   const drawings = dwgQ.data ?? [];
   const workPackages = wpQ.data ?? [];
   const deliveries = delQ.data ?? [];
   const changeOrders = coQ.data ?? [];
   const scheduleTasks = taskQ.data ?? [];
-  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading);
+  const actionItems = actionQ.data ?? [];
+  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading || actionQ.isLoading);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
@@ -1000,7 +1005,8 @@ export default function ProjectControlCenter() {
     ...mapDeliveriesToPCCItems(deliveries),
     ...mapChangeOrdersToPCCItems(changeOrders),
     ...mapScheduleTasksToPCCItems(scheduleTasks),
-  ], [rfis, drawings, workPackages, deliveries, changeOrders, scheduleTasks]);
+    ...mapActionItemsToPCCItems(actionItems),
+  ], [rfis, drawings, workPackages, deliveries, changeOrders, scheduleTasks, actionItems]);
 
   const scoredFeed = useMemo(() => buildPriorityFeed(allRaw), [allRaw]);
 
