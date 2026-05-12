@@ -2,10 +2,12 @@ import React, { useState, useMemo, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import WPFormModal from "../components/workpackages/WPFormModal";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 
 const FAB_STAGES = [
   { id: "drawings_approved", label: "Drawings Approved", short: "DWG APRVD", color: "var(--accent)" },
@@ -56,6 +58,7 @@ const formatDateUTC = (d) =>
 export default function FabRelease() {
   const [searchParams] = useSearchParams();
   const projectId = useProjectId();
+  const { activeProject } = useProjectContext();
 
   const [view, setView] = useState("pipeline");
   const [stageFilter, setStageFilter] = useState("all");

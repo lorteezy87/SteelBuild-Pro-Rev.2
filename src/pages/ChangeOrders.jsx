@@ -17,6 +17,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -46,7 +47,8 @@ const LIFECYCLE = [
 
 export default function ChangeOrders() {
   const qc = useQueryClient();
-  const { projectId, activeProject } = useProjectContext();
+  const projectId = useProjectId();
+  const { activeProject } = useProjectContext();
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");

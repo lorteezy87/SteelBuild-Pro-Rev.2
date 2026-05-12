@@ -13,9 +13,12 @@ import {
   mapWorkPackagesToPCCItems,
   mapDeliveriesToPCCItems,
   mapChangeOrdersToPCCItems,
+  mapScheduleTasksToPCCItems,
   buildPriorityFeed,
   buildSignalKPIs,
   buildWaitingOnBoard,
+  buildExecutionWindows,
+  buildOwnerLoad,
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
@@ -27,6 +30,7 @@ const TYPE_PAGE_MAP = {
   WorkPackage: "WorkPackages",
   Delivery:    "Deliveries",
   ChangeOrder: "ChangeOrders",
+  ScheduleTask: "Schedule",
 };
 
 // ─── Type icon map ────────────────────────────────────────────────────────────
@@ -36,6 +40,7 @@ const TYPE_CONFIG = {
   WorkPackage: { icon: "▤",  label: "WORK PKG",      color: "var(--status-review)" },
   Delivery:    { icon: "📦", label: "DELIVERY",      color: "var(--status-success)" },
   ChangeOrder: { icon: "$",  label: "CHANGE ORDER",  color: "var(--status-review)" },
+  ScheduleTask: { icon: "T",  label: "TASK",          color: "var(--accent)" },
 };
 
 // ─── Signal KPI Card ─────────────────────────────────────────────────────────
@@ -611,6 +616,93 @@ function RiskWatchlist({ items, onSelect }) {
   );
 }
 
+function ExecutionWindow({ title, subtitle, items, empty, onSelect }) {
+  if (!items.length) {
+    return (
+      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+        {empty}
+      </div>
+    );
+  }
+  return (
+    <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--divider)" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 800 }}>{title}</div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>{subtitle}</div>
+      </div>
+      {items.map((item) => {
+        const tc = TYPE_CONFIG[item.type] || { label: item.type, color: "var(--text-muted)" };
+        return (
+          <div
+            key={item.id}
+            onClick={() => onSelect?.(item)}
+            style={{ display: "flex", gap: 10, padding: "10px 20px", borderBottom: "1px solid var(--divider)", cursor: "pointer", alignItems: "center" }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--hover-bg)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <div style={{ width: 4, alignSelf: "stretch", background: item.severity.color, borderRadius: 3, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                <SeverityBadge severity={item.severity} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: tc.color, letterSpacing: "0.08em" }}>{tc.label}</span>
+                {item.daysOut != null && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: item.daysOut <= 2 ? "var(--status-warning)" : "var(--text-muted)" }}>
+                    {item.daysOut === 0 ? "TODAY" : `${item.daysOut}D`}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.title}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                {(item.reasons || []).slice(0, 2).map((reason, i) => (
+                  <span key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{reason}</span>
+                ))}
+              </div>
+            </div>
+            <ActionBadge action={item.nextAction} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OwnerLoadBoard({ rows }) {
+  if (!rows.length) {
+    return (
+      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+        No owner workload items
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: 16, overflowY: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px 80px 80px", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
+        <div>OWNER</div><div>TODAY</div><div>48 HRS</div><div>OVERDUE</div><div>BLOCKED</div><div>TOTAL</div>
+      </div>
+      {rows.map((row) => (
+        <div key={row.owner} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px 80px 80px", gap: 8, padding: "10px", borderBottom: "1px solid var(--divider)", alignItems: "center" }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: row.owner === "Unassigned" ? "var(--status-error)" : "var(--text-primary)" }}>{row.owner}</div>
+          <LoadCell value={row.dueToday} tone="var(--accent)" />
+          <LoadCell value={row.due48} tone="var(--status-warning)" />
+          <LoadCell value={row.overdue} tone="var(--status-error)" />
+          <LoadCell value={row.blocked} tone="var(--status-review)" />
+          <LoadCell value={row.total} tone="var(--text-secondary)" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LoadCell({ value, tone }) {
+  return (
+    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800, color: value > 0 ? tone : "var(--text-muted)" }}>
+      {value}
+    </div>
+  );
+}
+
 // ─── AI Summary Banner ───────────────────────────────────────────────────────
 function AISummaryBanner({ kpis }) {
   const coDisplay = kpis.coExposure >= 1000
@@ -759,12 +851,14 @@ export default function ProjectControlCenter() {
   const wpQ   = useQuery({ queryKey: ["pcc-wps",        activeProject?.id], queryFn: () => base44.entities.WorkPackage.filter({ project_id: activeProject.id }), enabled });
   const delQ  = useQuery({ queryKey: ["pcc-deliveries", activeProject?.id], queryFn: () => base44.entities.Delivery.filter({ project_id: activeProject.id }),    enabled });
   const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
+  const taskQ = useQuery({ queryKey: ["pcc-schedule-tasks", activeProject?.id], queryFn: () => base44.entities.ScheduleTask.filter({ project_id: activeProject.id }), enabled });
   const rfis = rfiQ.data ?? [];
   const drawings = dwgQ.data ?? [];
   const workPackages = wpQ.data ?? [];
   const deliveries = delQ.data ?? [];
   const changeOrders = coQ.data ?? [];
-  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading);
+  const scheduleTasks = taskQ.data ?? [];
+  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
@@ -773,7 +867,8 @@ export default function ProjectControlCenter() {
     ...mapWorkPackagesToPCCItems(workPackages),
     ...mapDeliveriesToPCCItems(deliveries),
     ...mapChangeOrdersToPCCItems(changeOrders),
-  ], [rfis, drawings, workPackages, deliveries, changeOrders]);
+    ...mapScheduleTasksToPCCItems(scheduleTasks),
+  ], [rfis, drawings, workPackages, deliveries, changeOrders, scheduleTasks]);
 
   const scoredFeed = useMemo(() => buildPriorityFeed(allRaw), [allRaw]);
 
@@ -787,6 +882,8 @@ export default function ProjectControlCenter() {
 
   const kpis        = useMemo(() => buildSignalKPIs(scoredFeed, deliveries), [scoredFeed, deliveries]);
   const waitingBoard = useMemo(() => buildWaitingOnBoard(scoredFeed), [scoredFeed]);
+  const executionWindows = useMemo(() => buildExecutionWindows(scoredFeed), [scoredFeed]);
+  const ownerLoad = useMemo(() => buildOwnerLoad(scoredFeed), [scoredFeed]);
 
   const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
 
@@ -886,8 +983,11 @@ export default function ProjectControlCenter() {
 
   const tabs = [
     { id: "morning", label: "MORNING SCAN",    count: criticalHighCount },
+    { id: "gate",    label: "48-HR GATE",      count: executionWindows.releaseGate.length },
+    { id: "next10",  label: "10-DAY WATCH",    count: executionWindows.next10.length },
     { id: "feed",    label: "PRIORITY FEED",   count: filteredFeed.length },
     { id: "waiting", label: "WAITING ON",      count: waitingBoard.reduce((s, g) => s + g.count, 0) },
+    { id: "owners",  label: "OWNER LOAD",      count: ownerLoad.length },
     { id: "risk",    label: "RISK WATCHLIST",  count: criticalHighCount },
   ];
 
@@ -1115,6 +1215,26 @@ export default function ProjectControlCenter() {
               </div>
             )}
 
+            {!noProject && !isLoading && activeTab === "gate" && (
+              <ExecutionWindow
+                title="48-HOUR RELEASE GATE"
+                subtitle="Release-blocking confirmations before fabrication, shipping, delivery, or installation."
+                items={executionWindows.releaseGate}
+                empty="No release-gate blockers detected"
+                onSelect={setDrawerItem}
+              />
+            )}
+
+            {!noProject && !isLoading && activeTab === "next10" && (
+              <ExecutionWindow
+                title="NEXT 10-DAY RISK WATCH"
+                subtitle="Near-term work that can disrupt fabrication, shipping, erection, or cost."
+                items={executionWindows.next10}
+                empty="No 10-day risk-window items detected"
+                onSelect={setDrawerItem}
+              />
+            )}
+
             {/* Priority Feed — card layout (no grid header) */}
             {!noProject && !isLoading && !isEmpty && activeTab === "feed" && (
               <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
@@ -1150,6 +1270,10 @@ export default function ProjectControlCenter() {
                   <WaitingOnBoard board={waitingBoard} />
                 )}
               </div>
+            )}
+
+            {!noProject && !isLoading && activeTab === "owners" && (
+              <OwnerLoadBoard rows={ownerLoad} />
             )}
 
             {/* Risk Watchlist */}
