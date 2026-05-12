@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -21,6 +22,7 @@ import {
   buildExecutionWindows,
   buildOwnerLoad,
   buildDailyBriefing,
+  buildReleaseGateActionDrafts,
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
@@ -751,11 +753,101 @@ function BriefingSection({ title, subtitle, items, empty, onSelect }) {
   );
 }
 
-function ExecutionWindow({ title, subtitle, items, empty, onSelect }) {
+function ReleaseGateActionDrafts({ drafts, onCreate, creatingKey }) {
+  if (!drafts.length) {
+    return (
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--divider)", background: "rgba(63,185,80,0.04)" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-success)", letterSpacing: "0.10em", fontWeight: 800 }}>
+          ACTION DRAFTS CLEAR
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+          No unassigned release-gate tasks need to be created from the current PCC data.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--divider)", background: "rgba(86,176,255,0.04)" }}>
+      <div style={{ padding: "12px 20px 8px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 800 }}>
+          SUGGESTED ACTION ITEMS
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>
+          These are generated from missing release confirmations. Creating one adds an Action Item; it does not auto-approve or change the source record.
+        </div>
+      </div>
+      {drafts.slice(0, 8).map((draft) => (
+        <div
+          key={draft.key}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr auto",
+            gap: 12,
+            alignItems: "center",
+            margin: "0 20px 8px",
+            padding: "10px 12px",
+            border: "1px solid var(--accent-border)",
+            borderRadius: 10,
+            background: "var(--bg-surface)",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 800, letterSpacing: "0.10em", color: draft.priority === "Critical" ? "var(--status-error)" : "var(--status-warning)" }}>
+                {draft.priority}
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                DUE {draft.due_date || "TBD"}
+              </span>
+              {draft.assigned_to && (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>
+                  OWNER {draft.assigned_to}
+                </span>
+              )}
+            </div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {draft.title}
+            </div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {draft.metadata?.missing_confirmation}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onCreate?.(draft)}
+            disabled={creatingKey === draft.key}
+            style={{
+              minHeight: 36,
+              padding: "0 12px",
+              borderRadius: 8,
+              border: "1px solid var(--accent)",
+              background: creatingKey === draft.key ? "var(--bg-surface)" : "var(--accent)",
+              color: creatingKey === draft.key ? "var(--text-muted)" : "#06101d",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 900,
+              letterSpacing: "0.08em",
+              cursor: creatingKey === draft.key ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {creatingKey === draft.key ? "CREATING..." : "CREATE TASK"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExecutionWindow({ title, subtitle, items, empty, onSelect, beforeList = null }) {
   if (!items.length) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        {empty}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {beforeList}
+        <div style={{ padding: "32px 20px", textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+          {empty}
+        </div>
       </div>
     );
   }
@@ -765,6 +857,7 @@ function ExecutionWindow({ title, subtitle, items, empty, onSelect }) {
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: "0.12em", fontWeight: 800 }}>{title}</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginTop: 3 }}>{subtitle}</div>
       </div>
+      {beforeList}
       {items.map((item) => {
         const tc = TYPE_CONFIG[item.type] || { label: item.type, color: "var(--text-muted)" };
         return (
@@ -971,12 +1064,14 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
 export default function ProjectControlCenter() {
   const { activeProject } = useProjectContext();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState("morning");
   const [typeFilter, setTypeFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [drawerItem, setDrawerItem] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [creatingReleaseGateKey, setCreatingReleaseGateKey] = useState(null);
 
   const enabled = !!activeProject?.id;
 
@@ -1023,6 +1118,37 @@ export default function ProjectControlCenter() {
   const executionWindows = useMemo(() => buildExecutionWindows(scoredFeed), [scoredFeed]);
   const ownerLoad = useMemo(() => buildOwnerLoad(scoredFeed), [scoredFeed]);
   const dailyBriefing = useMemo(() => buildDailyBriefing(scoredFeed, executionWindows, waitingBoard), [scoredFeed, executionWindows, waitingBoard]);
+  const releaseGateActionDrafts = useMemo(
+    () => buildReleaseGateActionDrafts(scoredFeed, actionItems),
+    [scoredFeed, actionItems]
+  );
+
+  const createReleaseGateActionMut = useMutation({
+    mutationFn: async (draft) => {
+      setCreatingReleaseGateKey(draft.key);
+      return base44.entities.ActionItem.create({
+        project_id: draft.project_id || activeProject?.id,
+        project_name: draft.project_name || activeProject?.name || null,
+        title: draft.title,
+        description: draft.description,
+        assigned_to: draft.assigned_to || null,
+        due_date: draft.due_date || null,
+        priority: draft.priority || "High",
+        status: "Open",
+        category: "PCC_RELEASE_GATE",
+        metadata: draft.metadata,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pcc-action-items", activeProject?.id] });
+      qc.invalidateQueries({ queryKey: ["action-items"] });
+      toast.success("Release-gate action item created");
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Could not create release-gate action item");
+    },
+    onSettled: () => setCreatingReleaseGateKey(null),
+  });
 
   const criticalHighCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL" || i.severityKey === "HIGH").length;
 
@@ -1366,6 +1492,13 @@ export default function ProjectControlCenter() {
                 items={executionWindows.releaseGate}
                 empty="No release-gate blockers detected"
                 onSelect={setDrawerItem}
+                beforeList={(
+                  <ReleaseGateActionDrafts
+                    drafts={releaseGateActionDrafts}
+                    creatingKey={creatingReleaseGateKey}
+                    onCreate={(draft) => createReleaseGateActionMut.mutate(draft)}
+                  />
+                )}
               />
             )}
 

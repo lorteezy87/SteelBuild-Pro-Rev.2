@@ -41,6 +41,44 @@ const RELEASE_CONFIRMATIONS = [
   ["site_ready", "Site readiness not confirmed"],
 ];
 
+const RELEASE_CONFIRMATION_ACTIONS = {
+  vif_confirmed: {
+    title: "Confirm VIF",
+    impact_area: "Fabrication",
+    description: "Verify VIF / field dimensions against the current shop drawing and erection sheet before release.",
+  },
+  field_dimensions_confirmed: {
+    title: "Confirm field dimensions",
+    impact_area: "Fabrication",
+    description: "Confirm field dimensions are received, current, and reflected in the release package.",
+  },
+  shop_drawing_revision_checked: {
+    title: "Verify current shop drawing revision",
+    impact_area: "Fabrication",
+    description: "Check the active shop drawing revision before fabrication, shipping, or erection release.",
+  },
+  e_sheet_checked: {
+    title: "Verify E sheet",
+    impact_area: "Erection",
+    description: "Confirm the erection sheet / E sheet matches the work package and latest approved drawings.",
+  },
+  load_list_complete: {
+    title: "Complete load list",
+    impact_area: "Shipping",
+    description: "Confirm the load list is complete, checked, and aligned with the planned shipment or delivery.",
+  },
+  sequence_aligned: {
+    title: "Confirm erection sequence",
+    impact_area: "Erection",
+    description: "Verify fabrication, loading, delivery, and erection sequence are aligned before release.",
+  },
+  site_ready: {
+    title: "Confirm site readiness",
+    impact_area: "Erection",
+    description: "Confirm access, laydown, crane window, and GC readiness before delivery or installation.",
+  },
+};
+
 function dateValue(date) {
   if (!date) return null;
   const parsed = new Date(`${String(date).slice(0, 10)}T00:00:00`);
@@ -628,4 +666,82 @@ export function buildDailyBriefing(scoredItems, executionWindows, waitingBoard) 
       scheduleRisk.length +
       costExposure.length,
   };
+}
+
+export function buildReleaseGateActionDrafts(scoredItems, existingActionItems = []) {
+  const existingKeys = new Set(
+    (existingActionItems || [])
+      .map((item) => item?.metadata?.pcc_release_gate_key)
+      .filter(Boolean)
+  );
+
+  return (scoredItems || [])
+    .filter((item) => item?.confirmations && (item.tags || []).includes("RELEASE_GATE"))
+    .flatMap((item) => {
+      const targetDate = item.target_date || item.due_date || null;
+      const daysOut = daysFromToday(targetDate);
+
+      return RELEASE_CONFIRMATIONS
+        .filter(([key]) => item.confirmations[key] === false)
+        .map(([key, missingLabel]) => {
+          const action = RELEASE_CONFIRMATION_ACTIONS[key] || {
+            title: missingLabel,
+            impact_area: item.impact_area || null,
+            description: missingLabel,
+          };
+          const releaseKey = `${item.type}:${item.entityId || item.id}:${key}`;
+          if (existingKeys.has(releaseKey)) return null;
+
+          const priority =
+            daysOut !== null && daysOut <= 2 ? "Critical"
+            : item.severityKey === "CRITICAL" ? "Critical"
+            : item.severityKey === "HIGH" ? "High"
+            : "Medium";
+
+          const due_date = targetDate || new Date().toISOString().slice(0, 10);
+          const scope = item.subtitle ? `${item.title} (${item.subtitle})` : item.title;
+
+          return {
+            key: releaseKey,
+            sourceItemId: item.id,
+            sourceType: item.type,
+            sourceEntityId: item.entityId,
+            confirmationKey: key,
+            title: `${action.title}: ${item.title}`,
+            description: [
+              action.description,
+              `Source: ${scope}.`,
+              `Reason: ${missingLabel}.`,
+              targetDate ? `Target date: ${targetDate}.` : null,
+            ].filter(Boolean).join("\n"),
+            assigned_to: item.assigned_to || "",
+            due_date,
+            priority,
+            status: "Open",
+            project_id: item.project_id,
+            project_name: item.project_name,
+            metadata: {
+              created_from: "pcc_release_gate",
+              pcc_release_gate_key: releaseKey,
+              source_type: item.type,
+              source_id: item.entityId || item.id,
+              confirmation_key: key,
+              missing_confirmation: missingLabel,
+              impact_area: action.impact_area || item.impact_area || null,
+              source_title: item.title,
+              source_subtitle: item.subtitle || null,
+              target_date: targetDate,
+              pcc_score: item.score,
+              pcc_severity: item.severityKey,
+            },
+          };
+        })
+        .filter(Boolean);
+    })
+    .sort((a, b) => {
+      const priorityRank = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+      return (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0)
+        || String(a.due_date || "").localeCompare(String(b.due_date || ""))
+        || String(a.title || "").localeCompare(String(b.title || ""));
+    });
 }
