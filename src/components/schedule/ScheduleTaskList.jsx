@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
-import { PHASES, PHASE_COLORS, sortByPhase, derivePhase } from "../../utils/phases";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { PHASES, PHASE_COLORS, PHASE_NUMBER, derivePhase } from "../../utils/phases";
 import { formatDateShort } from "../shared/formatters";
 import DateOrTbdInput from "./DateOrTbdInput";
+import { buildTreeOrder } from "./scheduleTree";
 
 const PRIORITY_COLORS = {
   Critical: "var(--status-error)",
@@ -65,6 +66,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({});
   const [saving, setSaving] = useState(false);
+  const [collapsedTasks, setCollapsedTasks] = useState({});
   const nameRef = useRef(null);
 
   // Focus name input when entering edit mode
@@ -75,6 +77,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
   const startEdit = (task, e) => {
     // Don't activate if clicking a button/checkbox/select
     if (e?.target?.closest("button,input[type='checkbox'],select")) return;
+    // Summary rows display child-derived dates/duration/progress. Keep inline
+    // editing on leaf rows so users do not accidentally edit stale stored dates.
+    if (task._hasChildren) return;
     if (editingId === task.id) return;
     setEditingId(task.id);
     // Seed inline-edit drafts from STORED values, not the effective
@@ -119,6 +124,9 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
   };
 
   const patch = (key, val) => setEditDraft((prev) => ({ ...prev, [key]: val }));
+  const toggleTask = (taskId) => {
+    setCollapsedTasks((current) => ({ ...current, [taskId]: !current[taskId] }));
+  };
 
   // Apply filters
   const filtered = tasks.filter((t) => {
@@ -127,19 +135,36 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     return prioMatch && statusMatch;
   });
 
-  const sortTasks = (arr) => {
-    if (sortBy === "phase") return sortByPhase(arr);
-    if (sortBy === "priority") {
-      const order = ["Critical", "High", "Normal", "Low"];
-      return [...arr].sort((a, b) => order.indexOf(a.priority) - order.indexOf(b.priority));
-    }
-    return [...arr].sort(sortByDate);
-  };
+  const grouped = useMemo(() => {
+    const priorityOrder = ["Critical", "High", "Normal", "Low"];
+    const orderSource = [...filtered];
 
-  const grouped = PHASES.map((phase) => ({
-    phase,
-    tasks: sortTasks(filtered.filter((t) => derivePhase(t) === phase)),
-  })).filter((g) => g.tasks.length > 0);
+    if (sortBy === "priority") {
+      orderSource.sort((a, b) => priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority));
+    } else if (sortBy === "start_date") {
+      orderSource.sort(sortByDate);
+    }
+
+    return PHASES.map((phase) => {
+      const ordered = buildTreeOrder(
+        orderSource.filter((t) => derivePhase(t) === phase),
+        { rootPrefix: PHASE_NUMBER[phase] ?? null }
+      );
+      const taskById = new Map(ordered.map((task) => [task.id, task]));
+      const visibleTasks = ordered.filter((task) => {
+        let parentId = task.parent_task_id;
+        while (parentId) {
+          if (collapsedTasks[parentId]) return false;
+          const parent = taskById.get(parentId);
+          if (!parent) break;
+          parentId = parent.parent_task_id;
+        }
+        return true;
+      });
+
+      return { phase, tasks: visibleTasks, totalTasks: ordered.length };
+    }).filter((g) => g.tasks.length > 0);
+  }, [collapsedTasks, filtered, sortBy]);
 
   const selectStyle = {
     background: "var(--bg-input)",
@@ -152,7 +177,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
     outline: "none",
   };
 
-  const GRID = "28px 2fr 90px 90px 1fr 80px 90px 130px";
+  const GRID = "28px 70px 2fr 90px 90px 1fr 80px 90px 130px";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -205,7 +230,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                 {group.phase}
               </span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", background: "var(--bg-surface-high)", padding: "1px 7px", borderRadius: 4 }}>
-                {group.tasks.length} tasks
+                {group.totalTasks} tasks
               </span>
               <div style={{ flex: 1, height: 1, background: "var(--divider)" }} />
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
@@ -224,7 +249,7 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                 display: "grid", gridTemplateColumns: GRID, gap: 12,
                 background: "var(--bg-surface-secondary)",
               }}>
-                {["", "Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
+                {["", "WBS", "Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
                   <div key={col} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
                     {col}
                   </div>
@@ -263,6 +288,21 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                       />
                     </div>
 
+                    {/* WBS */}
+                    <div
+                      className="sbd-num"
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        fontWeight: task._hasChildren ? 800 : 600,
+                        color: task._hasChildren ? "var(--accent)" : "var(--text-muted)",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={task._stored_wbs_code && task._stored_wbs_code !== task.wbs_code ? `Stored WBS: ${task._stored_wbs_code}` : undefined}
+                    >
+                      {task.wbs_code || "-"}
+                    </div>
+
                     {/* Task name */}
                     <div>
                       {isEditing ? (
@@ -276,7 +316,45 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                         />
                       ) : (
                         <>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{task.task_name}</div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: task._hasChildren ? 800 : 600,
+                              color: "var(--text-primary)",
+                              paddingLeft: `${Math.min(task._depth || 0, 4) * 14}px`,
+                              textTransform: task._hasChildren ? "uppercase" : "none",
+                            }}
+                          >
+                            {task._hasChildren ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }}
+                                aria-label={collapsedTasks[task.id] ? "Expand summary task" : "Collapse summary task"}
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  marginRight: 6,
+                                  border: "1px solid var(--border-default)",
+                                  borderRadius: 5,
+                                  background: "var(--bg-surface-high)",
+                                  color: "var(--accent)",
+                                  fontFamily: "var(--font-mono)",
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  lineHeight: "14px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {collapsedTasks[task.id] ? "+" : "-"}
+                              </button>
+                            ) : null}
+                            {task.task_name}
+                          </div>
+                          {task._hasChildren && (
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 2, letterSpacing: "0.08em", paddingLeft: `${Math.min(task._depth || 0, 4) * 14}px`, textTransform: "uppercase" }}>
+                              Rollup · {task._directChildrenCount || 0} direct · {task._summaryTaskCount || 0} total
+                            </div>
+                          )}
                           {task.task_number && (
                             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{task.task_number}</div>
                           )}

@@ -65,6 +65,33 @@ function generateWBS(phase, existingTasks) {
   return `${phaseNum}.${maxIdx + 1}`;
 }
 
+function sanitizeScheduleTaskUpdatePayload(data) {
+  const {
+    id,
+    created_at: _createdAt,
+    updated_at: _updatedAt,
+    created_date: _createdDate,
+    updated_date: _updatedDate,
+    ...rawFields
+  } = data || {};
+  const fields = {};
+  const isSummaryRow = Boolean(data?._hasChildren || data?._isRolledUpSummary);
+
+  Object.entries(rawFields).forEach(([key, value]) => {
+    if (key.startsWith("_") || value === undefined) return;
+    fields[key] = value;
+  });
+
+  if (isSummaryRow) {
+    if ("_stored_start_date" in data) fields.start_date = data._stored_start_date || null;
+    if ("_stored_end_date" in data) fields.end_date = data._stored_end_date || null;
+    if ("_stored_duration" in data) fields.duration = data._stored_duration;
+    if ("_stored_percent_complete" in data) fields.percent_complete = data._stored_percent_complete;
+  }
+
+  return { id, fields };
+}
+
 export default function Schedule() {
   const [searchParams] = useSearchParams();
   const projectId = useProjectId();
@@ -222,7 +249,7 @@ export default function Schedule() {
 
   const updateTaskMut = useMutation({
     mutationFn: (data) => {
-      const { id, created_at: _c, updated_at: _u, created_date: _cd, updated_date: _ud, ...fields } = data;
+      const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
       return base44.entities.ScheduleTask.update(id, fields);
     },
     onSuccess: () => {
@@ -619,7 +646,17 @@ export default function Schedule() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* CommandBar */}
-      <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "16px 24px 0",
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+          background: "linear-gradient(180deg, var(--bg-page) 0%, color-mix(in srgb, var(--bg-page) 92%, transparent) 100%)",
+          backdropFilter: "blur(18px)",
+        }}
+      >
         <CommandBar
           eyebrow={`PROJECT MANAGEMENT · ${(selectedProject?.name || "ALL PROJECTS").toUpperCase()}`}
           title="Schedule"
@@ -798,9 +835,10 @@ export default function Schedule() {
         phaseFilter={phaseFilter}
         onSetPhaseFilter={setPhaseFilter}
         onSetView={setView}
-        onSetGanttFocus={(filter) => {
+        onSetGanttFocus={(request) => {
+          const focusRequest = typeof request === "string" ? { filter: request } : (request || {});
           setView("gantt");
-          setGanttFocus({ filter, requestedAt: Date.now() });
+          setGanttFocus({ ...focusRequest, requestedAt: Date.now() });
         }}
       />
 
@@ -816,7 +854,7 @@ export default function Schedule() {
               setExpandedTask={setExpandedTask}
               onTaskClick={(task) => { setSelectedTask(task); setShowDrawer(true); }}
               onSave={async (data) => {
-                const { id, ...fields } = data;
+                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
                   await base44.entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
@@ -860,7 +898,7 @@ export default function Schedule() {
               }}
               onDelete={(task) => setDeleteTarget(task)}
               onSave={async (data) => {
-                const { id, ...fields } = data;
+                const { id, fields } = sanitizeScheduleTaskUpdatePayload(data);
                 try {
                   await base44.entities.ScheduleTask.update(id, fields);
                   invalidateEntity(qc, "schedule_task", projectId);
