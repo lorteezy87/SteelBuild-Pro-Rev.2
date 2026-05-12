@@ -10,6 +10,20 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Search } from "lucide-react";
 import { ACTION_ITEM_STATUS, PRIORITY } from "@/lib/enums";
 
+const priorities = [
+  PRIORITY.CRITICAL,
+  PRIORITY.HIGH,
+  PRIORITY.MEDIUM,
+  PRIORITY.LOW,
+];
+
+const PRIORITY_COLORS = {
+  [PRIORITY.CRITICAL]: "var(--status-error)",
+  [PRIORITY.HIGH]: "var(--status-warning)",
+  [PRIORITY.MEDIUM]: "var(--status-info)",
+  [PRIORITY.LOW]: "var(--text-muted)",
+};
+
 export default function ActionItems() {
   const projectId = useProjectId();
   const qc = useQueryClient();

@@ -47,17 +47,29 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 998 }} />
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(1, 5, 12, 0.86)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 998,
+        }}
+      />
       <div style={{
         position: 'fixed',
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
         width: 580,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--accent-border)',
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: 'calc(100vh - 32px)',
+        overflowY: 'auto',
+        background: 'linear-gradient(180deg, rgba(10, 16, 27, 0.99), rgba(5, 8, 14, 1))',
+        border: '1px solid rgba(86, 176, 255, 0.42)',
         borderRadius: 16,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+        boxShadow: '0 28px 90px rgba(0,0,0,0.92), inset 0 1px 0 rgba(255,255,255,0.08)',
         zIndex: 999,
         padding: 24,
       }}>

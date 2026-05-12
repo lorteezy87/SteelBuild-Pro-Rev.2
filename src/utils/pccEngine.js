@@ -27,7 +27,37 @@ export const IMPACT_TAGS = {
   LONG_LEAD:         { label: "LONG LEAD",           color: "var(--status-warning)" },
   FIELD_COORD:       { label: "FIELD COORD",         color: "var(--status-success-bright)" },
   SCHEDULE_RISK:     { label: "SCHEDULE RISK",       color: "var(--status-review)" },
+  OWNER_MISSING:     { label: "OWNER MISSING",       color: "var(--status-error)" },
+  RELEASE_GATE:      { label: "RELEASE GATE",        color: "var(--accent)" },
 };
+
+const RELEASE_CONFIRMATIONS = [
+  ["vif_confirmed", "VIF missing"],
+  ["field_dimensions_confirmed", "Field dimensions missing"],
+  ["shop_drawing_revision_checked", "Current shop drawing revision not verified"],
+  ["e_sheet_checked", "E sheet not checked"],
+  ["load_list_complete", "Load list incomplete"],
+  ["sequence_aligned", "Erection sequence not aligned"],
+  ["site_ready", "Site readiness not confirmed"],
+];
+
+function dateValue(date) {
+  if (!date) return null;
+  const parsed = new Date(`${String(date).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function daysFromToday(date) {
+  const parsed = dateValue(date);
+  if (!parsed) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((parsed.getTime() - today.getTime()) / 86400000);
+}
+
+function ownerOf(item) {
+  return item.assigned_to || item.owner || item.waiting_on || null;
+}
 
 // ─── Recommended next actions by record type / state ─────────────────────────
 export function recommendNextAction(item) {
@@ -62,6 +92,13 @@ export function recommendNextAction(item) {
     if (status === "Submitted") return "FOLLOW UP";
     return "REVIEW";
   }
+  if (type === "ScheduleTask") {
+    if (blocksPhase === "Delivery") return "CLEAR RELEASE GATE";
+    if (blocksPhase === "Erection") return "VERIFY FIELD READY";
+    if (status === "Blocked" || status === "On Hold") return "RESOLVE BLOCKER";
+    if (status === "Not Started") return "ASSIGN OWNER";
+    return "REVIEW TASK";
+  }
   return "REVIEW";
 }
 
@@ -86,6 +123,7 @@ export function scoreItem(item) {
     WorkPackage: 28,
     Delivery: 32,
     ChangeOrder: 20,
+    ScheduleTask: 18,
   };
   score += typeBase[item.type] || 10;
 
@@ -113,13 +151,41 @@ export function scoreItem(item) {
     }
   }
 
+  if (item.confirmations) {
+    const targetDays = daysFromToday(item.target_date || item.due_date);
+    const missing = RELEASE_CONFIRMATIONS
+      .filter(([key]) => item.confirmations[key] === false)
+      .map(([, label]) => label);
+
+    if (missing.length > 0) {
+      score += Math.min(45, missing.length * 12);
+      tags.push("RELEASE_GATE");
+      reasons.push(missing[0]);
+      if (targetDays !== null && targetDays <= 2) {
+        score += 25;
+        tags.push("BLOCKS_DELIVERY");
+        reasons.push("48-hour release gate");
+      }
+    }
+  }
+
+  if (!ownerOf(item)) {
+    score += 10;
+    tags.push("OWNER_MISSING");
+    reasons.push("No owner assigned");
+  }
+
+  if (item.impact_area === "Fabrication") { score += 25; tags.push("BLOCKS_FAB"); reasons.push("Fabrication impact"); }
+  if (item.impact_area === "Shipping")    { score += 20; tags.push("BLOCKS_DELIVERY"); reasons.push("Shipping impact"); }
+  if (item.impact_area === "Erection")    { score += 25; tags.push("BLOCKS_ERECTION"); reasons.push("Erection impact"); }
+  if (item.impact_area === "Cost")        { score += 20; tags.push("COST_EXPOSURE"); reasons.push("Cost exposure"); }
+
   // 4. RFI-specific scoring
   if (item.type === "RFI") {
     if (item.affects_fabrication) { score += 25; tags.push("BLOCKS_FAB"); reasons.push("Affects fabrication"); }
     if (item.affects_drawings)    { score += 15; tags.push("BLOCKS_DETAILING"); reasons.push("Affects drawings"); }
     if (item.affects_erection)    { score += 20; tags.push("BLOCKS_ERECTION"); reasons.push("Affects erection"); }
     if (item.priority === "Critical" || item.priority === "High") { score += 15; reasons.push("High priority"); }
-    if (!item.assigned_to)        { score += 8;  reasons.push("No owner assigned"); }
   }
 
   // 5. Drawing / Submittal scoring
@@ -150,6 +216,12 @@ export function scoreItem(item) {
   }
 
   // 9. External wait penalty — aging
+  if (item.type === "ScheduleTask") {
+    if (item.task_kind === "Gate") { score += 18; tags.push("RELEASE_GATE"); reasons.push("Gate item"); }
+    if (item.task_kind === "Milestone") { score += 12; tags.push("SCHEDULE_RISK"); reasons.push("Milestone"); }
+    if (item.status === "Blocked" || item.status === "On Hold") { score += 25; tags.push("SCHEDULE_RISK"); reasons.push("Blocked task"); }
+  }
+
   const externalWait = item.external_wait_days || 0;
   if (externalWait > 14) { score += 20; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d waiting on external`); }
   else if (externalWait > 7) { score += 10; tags.push("EXTERNAL_WAIT"); reasons.push(`${externalWait}d external wait`); }
@@ -235,21 +307,87 @@ export function mapDrawingsToPCCItems(drawings) {
 export function mapWorkPackagesToPCCItems(wps) {
   return wps
     .filter((w) => w.status !== "Complete" && w.status !== "Cancelled")
-    .map((w) => ({
-      id: `wp-${w.id}`,
-      entityId: w.id,
-      type: "WorkPackage",
-      title: w.name || `WP #${w.id}`,
-      subtitle: w.phase || "",
-      status: w.status,
-      due_date: w.released_date,
-      percent_complete: w.percent_complete || 0,
-      phase: w.phase,
-      assigned_to: w.assigned_to,
-      waiting_on: null,
-      project_id: w.project_id,
-      project_name: w.project_name,
-    }));
+    .map((w) => {
+      const targetDate = w.ship_date || w.delivery_date || w.install_date || w.released_date;
+      const targetDays = daysFromToday(targetDate);
+      const phaseNeedsGate = ["Fabrication", "Delivery", "Erection", "Installation"].includes(w.phase) || (targetDays !== null && targetDays <= 10);
+
+      return {
+        id: `wp-${w.id}`,
+        entityId: w.id,
+        type: "WorkPackage",
+        title: w.name || `WP #${w.id}`,
+        subtitle: w.phase || "",
+        status: w.status,
+        due_date: w.released_date,
+        target_date: targetDate,
+        percent_complete: w.percent_complete || 0,
+        phase: w.phase,
+        assigned_to: w.assigned_to || w.owner || w.crew,
+        waiting_on: null,
+        impact_area: w.phase === "Delivery" ? "Shipping" : w.phase === "Erection" || w.phase === "Installation" ? "Erection" : "Fabrication",
+        confirmations: phaseNeedsGate ? {
+          vif_confirmed: !!(w.vif_confirmed || w.field_dimensions_confirmed),
+          field_dimensions_confirmed: !!(w.field_dimensions_confirmed || w.vif_confirmed),
+          shop_drawing_revision_checked: !!(w.shop_drawing_revision_checked || w.current_drawing_revision_checked || w.drawings_approved),
+          e_sheet_checked: !!(w.e_sheet_checked || w.erection_sheet_checked),
+          load_list_complete: !!(w.load_list_complete || w.load_list_completed),
+          sequence_aligned: !!(w.sequence_aligned || w.erection_sequence_aligned),
+          site_ready: !!w.site_ready,
+        } : null,
+        project_id: w.project_id,
+        project_name: w.project_name,
+      };
+    });
+}
+
+export function mapScheduleTasksToPCCItems(tasks) {
+  return tasks
+    .filter((t) => {
+      const metadata = t.metadata || {};
+      const isSummary = t.is_summary || metadata.is_summary || ["Summary", "Phase"].includes(t.task_type);
+      return !isSummary && t.status !== "Complete" && t.status !== "Cancelled";
+    })
+    .map((t) => {
+      const metadata = t.metadata || {};
+      const dueDate = t.end_date || t.start_date || null;
+      const phase = t.phase || "";
+      const taskType = t.task_type || "Task";
+      const isGate = taskType === "Gate" || /gate|release check|48-hour/i.test(t.task_name || "");
+      const isMilestone = taskType === "Milestone" || t.is_milestone;
+      const impactArea =
+        /deliver|ship|load/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Shipping"
+        : /erect|install|field|crane/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Erection"
+        : /co|change|cost/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Cost"
+        : /fab|shop|release/i.test(`${phase} ${taskType} ${t.task_name || ""}`) ? "Fabrication"
+        : null;
+
+      return {
+        id: `task-${t.id}`,
+        entityId: t.id,
+        type: "ScheduleTask",
+        title: [t.wbs_code, t.task_name || t.name || "Schedule task"].filter(Boolean).join(" - "),
+        subtitle: phase || taskType,
+        status: t.status,
+        due_date: dueDate,
+        target_date: dueDate,
+        assigned_to: t.resource_names || t.assigned_to || t.owner || t.crew,
+        waiting_on: t.ball_in_court || null,
+        task_kind: isGate ? "Gate" : isMilestone ? "Milestone" : taskType,
+        impact_area: impactArea,
+        confirmations: metadata.release_gate ? {
+          vif_confirmed: metadata.release_gate.vif_confirmed !== false,
+          field_dimensions_confirmed: metadata.release_gate.field_dimensions_confirmed !== false,
+          shop_drawing_revision_checked: metadata.release_gate.shop_drawing_revision_checked !== false,
+          e_sheet_checked: metadata.release_gate.e_sheet_checked !== false,
+          load_list_complete: metadata.release_gate.load_list_complete !== false,
+          sequence_aligned: metadata.release_gate.sequence_aligned !== false,
+          site_ready: metadata.release_gate.site_ready !== false,
+        } : null,
+        project_id: t.project_id,
+        project_name: t.project_name,
+      };
+    });
 }
 
 export function mapDeliveriesToPCCItems(deliveries) {
@@ -263,9 +401,20 @@ export function mapDeliveriesToPCCItems(deliveries) {
       subtitle: `Delivery`,
       status: d.status,
       due_date: d.scheduled_date,
+      target_date: d.scheduled_date,
       priority: d.priority,
       assigned_to: d.contact_name,
       waiting_on: d.vendor || d.supplier,
+      impact_area: "Shipping",
+      confirmations: {
+        vif_confirmed: d.vif_confirmed !== false,
+        field_dimensions_confirmed: d.field_dimensions_confirmed !== false,
+        shop_drawing_revision_checked: d.shop_drawing_revision_checked !== false,
+        e_sheet_checked: d.e_sheet_checked !== false,
+        load_list_complete: !!(d.load_list_complete || d.load_list_completed || d.items_confirmed),
+        sequence_aligned: d.sequence_aligned !== false,
+        site_ready: d.site_ready !== false,
+      },
       project_id: d.project_id,
       project_name: d.project_name,
     }));
@@ -324,4 +473,67 @@ export function buildWaitingOnBoard(scoredItems) {
   return Object.entries(grouped)
     .map(([party, items]) => ({ party, items, count: items.length, maxScore: items.length > 0 ? Math.max(...items.map((i) => i.score)) : 0 }))
     .sort((a, b) => b.maxScore - a.maxScore);
+}
+
+export function buildExecutionWindows(scoredItems) {
+  const withWindow = scoredItems
+    .map((item) => ({ ...item, daysOut: daysFromToday(item.target_date || item.due_date) }))
+    .filter((item) => item.daysOut !== null);
+
+  const today = scoredItems
+    .filter((item) => item.overdueDays > 0 || item.dueSoonDays === 0 || item.severityKey === "CRITICAL")
+    .slice(0, 12);
+
+  const next48 = withWindow
+    .filter((item) => item.daysOut >= 0 && item.daysOut <= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 16);
+
+  const next10 = withWindow
+    .filter((item) => item.daysOut >= 0 && item.daysOut <= 10)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 24);
+
+  const releaseGate = withWindow
+    .filter((item) => item.daysOut >= 0 && item.daysOut <= 2 && (item.tags.includes("RELEASE_GATE") || item.tags.includes("BLOCKS_DELIVERY")))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 18);
+
+  return { today, next48, next10, releaseGate };
+}
+
+export function buildOwnerLoad(scoredItems) {
+  const grouped = {};
+  scoredItems.forEach((item) => {
+    const owner = ownerOf(item) || "Unassigned";
+    if (!grouped[owner]) {
+      grouped[owner] = {
+        owner,
+        dueToday: 0,
+        due48: 0,
+        overdue: 0,
+        blocked: 0,
+        critical: 0,
+        total: 0,
+        maxScore: 0,
+      };
+    }
+    const row = grouped[owner];
+    const daysOut = daysFromToday(item.target_date || item.due_date);
+    row.total += 1;
+    row.maxScore = Math.max(row.maxScore, item.score || 0);
+    if (item.overdueDays > 0) row.overdue += 1;
+    if (daysOut === 0) row.dueToday += 1;
+    if (daysOut !== null && daysOut >= 0 && daysOut <= 2) row.due48 += 1;
+    if (item.tags.includes("BLOCKS_FAB") || item.tags.includes("BLOCKS_DELIVERY") || item.tags.includes("BLOCKS_ERECTION") || item.tags.includes("RELEASE_GATE")) row.blocked += 1;
+    if (item.severityKey === "CRITICAL") row.critical += 1;
+  });
+
+  return Object.values(grouped).sort((a, b) =>
+    b.critical - a.critical ||
+    b.blocked - a.blocked ||
+    b.overdue - a.overdue ||
+    b.due48 - a.due48 ||
+    b.maxScore - a.maxScore
+  );
 }

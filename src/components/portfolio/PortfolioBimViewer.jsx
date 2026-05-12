@@ -278,7 +278,12 @@ export default function PortfolioBimViewer({
     const section = sectionRef.current;
     if (!section || hasEnteredViewport) return;
 
+    const fallbackTimer = window.setTimeout(() => {
+      setHasEnteredViewport(true);
+    }, 1200);
+
     if (typeof IntersectionObserver === "undefined") {
+      window.clearTimeout(fallbackTimer);
       setHasEnteredViewport(true);
       return;
     }
@@ -294,7 +299,10 @@ export default function PortfolioBimViewer({
     );
 
     observer.observe(section);
-    return () => observer.disconnect();
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      observer.disconnect();
+    };
   }, [hasEnteredViewport]);
 
   useEffect(() => {
@@ -900,6 +908,7 @@ export default function PortfolioBimViewer({
 
   useEffect(() => {
     setSelectedPiece(null);
+    setModelState({ source: "generated", status: "idle", message: "", count: 0 });
   }, [project?.id, modelDocument?.id]);
 
   const projectName = project?.name || "Select a project";

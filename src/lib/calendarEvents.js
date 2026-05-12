@@ -58,11 +58,18 @@ function eventsFromScheduleTask(t) {
   const end   = iso(t.end_date) || start;
   if (!start) return [];
   const isMilestone = t.task_type === "Milestone" || t.is_milestone === true;
+  const taskTitle =
+    t.task_name ||
+    t.name ||
+    t.title ||
+    t.activity_name ||
+    t.description ||
+    (t.phase ? `${t.phase} task` : "Untitled task");
   return [{
     id:        `task-${t.id}`,
     entityId:  t.id,
     type:      isMilestone ? "milestone" : "task",
-    title:     t.task_name || "Untitled task",
+    title:     taskTitle,
     subtitle:  t.phase || t.status || "",
     start,
     end:       isMilestone ? start : end,
