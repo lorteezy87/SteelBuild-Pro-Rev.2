@@ -645,7 +645,7 @@ export default function PortfolioView({
   }, [enrichedMetrics, allWPs]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 92px)", background: "var(--bg-page)" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 92px)", background: "var(--bg-page)" }}>
       {/* Brand Header */}
       <div
         style={{
@@ -1140,7 +1140,7 @@ export default function PortfolioView({
         </div>
       )}
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, alignItems: "flex-start", overflow: "visible" }}>
       {/* Main content area */}
       <div
         style={{
@@ -1149,7 +1149,7 @@ export default function PortfolioView({
           gridTemplateColumns: "repeat(12, 1fr)",
           gap: 16,
           flex: 1,
-          overflowY: "auto",
+          overflowY: "visible",
           background: "var(--bg-page)",
           alignContent: "start",
         }}
@@ -1924,6 +1924,10 @@ export default function PortfolioView({
         style={{
           width: 280,
           flexShrink: 0,
+          alignSelf: "stretch",
+          position: "sticky",
+          top: 0,
+          maxHeight: "calc(100vh - 92px)",
           background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-low) 78%, #000 22%) 0%, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 100%)",
           borderLeft: "1px solid var(--divider)",
           overflowY: "auto",
@@ -2057,4 +2061,3 @@ export default function PortfolioView({
 </div>
 );
 }
-
