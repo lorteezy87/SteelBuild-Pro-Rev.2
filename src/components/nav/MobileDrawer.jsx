@@ -1,35 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
 
-// ── Hamburger Icon ───────────────────────────────────────────────────
-export function HamburgerMenu({ open, onToggle }) {
-  return (
-    <button
-      onClick={onToggle}
-      style={{
-        width: 32, height: 32, borderRadius: 8,
-        background: "var(--hover-bg)", border: "1px solid var(--border)",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        gap: 4, cursor: "pointer", flexShrink: 0,
-      }}
-    >
-      {open ? (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--text-secondary)" strokeWidth="1.5" strokeLinecap="round">
-          <line x1="2" y1="2" x2="12" y2="12" /><line x1="12" y1="2" x2="2" y2="12" />
-        </svg>
-      ) : (
-        <>
-          <div style={{ width: 14, height: 1.5, background: "var(--text-secondary)", borderRadius: 1 }} />
-          <div style={{ width: 10, height: 1.5, background: "var(--text-muted)", borderRadius: 1, alignSelf: "flex-start", marginLeft: 9 }} />
-          <div style={{ width: 14, height: 1.5, background: "var(--text-secondary)", borderRadius: 1 }} />
-        </>
-      )}
-    </button>
-  );
-}
-
-// ── Mobile Drawer ────────────────────────────────────────────────────
-export default function MobileDrawer({ open, onClose, onNavigate }) {
+export default function MobileDrawer({ open, onClose, onNavigate, currentPageName }) {
   const ref = useRef(null);
   const [mobileCollapsed, setMobileCollapsed] = useState(loadSidebarState);
 
@@ -43,25 +15,78 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
 
   useEffect(() => {
     if (!open) return;
+    const originalOverflow = document.body.style.overflow;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKeyDown = (e) => { if (e.key === "Escape") onClose(); };
+    document.body.style.overflow = "hidden";
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("mousedown", h);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open, onClose]);
 
   return (
     <>
-      {open && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 900 }} />}
-      <div ref={ref} className="sbd-sidebar" style={{
+      {open && <div style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.82)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        zIndex: 900,
+      }} />}
+      <div
+        ref={ref}
+        className="mobile-drawer-panel sbd-sidebar"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mobile navigation"
+        aria-hidden={!open}
+        style={{
         position: "fixed", top: 0, left: 0, bottom: 0,
-        width: "min(280px, 85vw)",
+        width: "min(360px, 92vw)",
         zIndex: 950,
         transform: open ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         overflowY: "auto",
+        background: "linear-gradient(180deg, rgba(5, 9, 18, 0.995) 0%, rgba(7, 13, 24, 0.995) 100%)",
         display: "flex", flexDirection: "column",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
       }}>
-        <div style={{ padding: "16px 16px 8px", borderBottom: "1px solid var(--divider)", display: "flex", alignItems: "center" }}>
+        <div style={{
+          padding: "max(14px, env(safe-area-inset-top)) 16px 10px",
+          borderBottom: "1px solid var(--divider)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}>
           <img src="/logo.png" alt="SteelBuild Pro" style={{ height: 32, width: "auto", objectFit: "contain" }} />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              border: "1px solid var(--border-default)",
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <line x1="4" y1="4" x2="12" y2="12" />
+              <line x1="12" y1="4" x2="4" y2="12" />
+            </svg>
+          </button>
         </div>
         <div style={{ padding: "4px 0 16px" }}>
           {SIDEBAR_GROUPS.map((group, groupIdx) => {
@@ -89,31 +114,39 @@ export default function MobileDrawer({ open, onClose, onNavigate }) {
                   )}
                 </div>
                 <div style={{ display: isCollapsed ? "none" : "block" }}>
-                  {group.items.map((item) => (
-                    <button
-                      key={item.page}
-                      onClick={() => { onNavigate(item.page); onClose(); }}
-                      className="sbd-nav-item"
-                      style={{
-                        width: "100%", textAlign: "left", padding: "7px 16px 7px 24px",
-                        display: "flex", alignItems: "center", gap: 10,
-                        fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)",
-                        background: "none", border: "none", borderRadius: 0, cursor: "pointer",
-                        borderLeft: "2px solid transparent", transition: "all 0.1s",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--hover-bg)";
-                        e.currentTarget.style.color = "var(--accent)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "none";
-                        e.currentTarget.style.color = "var(--text-secondary)";
-                      }}
-                    >
-                      <span style={{ fontSize: 13, width: 16, textAlign: "center", opacity: 0.55, flexShrink: 0 }}>{item.icon}</span>
-                      {item.label}
-                    </button>
-                  ))}
+                  {group.items.map((item) => {
+                    const isActive = item.page === currentPageName;
+                    return (
+                      <button
+                        key={item.page}
+                        onClick={() => { onNavigate(item.page); onClose(); }}
+                        className="sbd-nav-item"
+                        aria-current={isActive ? "page" : undefined}
+                        style={{
+                          width: "100%", textAlign: "left", padding: "10px 16px 10px 22px",
+                          minHeight: 44,
+                          display: "flex", alignItems: "center", gap: 12,
+                          fontFamily: "var(--font-body)", fontSize: 14,
+                          color: isActive ? "var(--accent)" : "var(--text-secondary)",
+                          background: isActive ? "var(--accent-muted)" : "transparent",
+                          border: "none", borderRadius: 0, cursor: "pointer",
+                          borderLeft: isActive ? "3px solid var(--accent)" : "3px solid transparent",
+                          transition: "all 0.1s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--hover-bg)";
+                          e.currentTarget.style.color = "var(--accent)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = isActive ? "var(--accent-muted)" : "transparent";
+                          e.currentTarget.style.color = isActive ? "var(--accent)" : "var(--text-secondary)";
+                        }}
+                      >
+                        <span style={{ fontSize: 15, width: 18, textAlign: "center", opacity: isActive ? 0.9 : 0.62, flexShrink: 0 }}>{item.icon}</span>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -141,7 +141,7 @@ export default function WorkPackageDetailModal({ wp, drawings = [], onClose, onE
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColor} percent={percent} />}
+          {tab === "overview" && <OverviewTab wp={wp} phaseColor={phaseColor} statusColor={statusColorVal} percent={percent} />}
           {tab === "drawings" && <DrawingsTab wp={wp} drawingMap={drawingMap} />}
           {tab === "hours" && <HoursTab wp={wp} />}
           {tab === "notes" && <NotesTab notes={wp.notes} />}

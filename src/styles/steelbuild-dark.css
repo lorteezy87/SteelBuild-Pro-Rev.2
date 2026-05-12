@@ -48,10 +48,32 @@
   --sbd-review:          #D97706;
 
   /* Phase palette (gantt / pipeline) */
-  --sbd-phase-detailing:   #C89B20;
-  --sbd-phase-fabrication: #56B0FF;
+  --sbd-phase-detailing:   #2EA8FF;
+  --sbd-phase-fabrication: #D97706;
   --sbd-phase-delivery:    #34D399;
-  --sbd-phase-erection:    #22C55E;
+  --sbd-phase-erection:    #22D3EE;
+
+  /* Gantt surfaces and lockstep phase palette */
+  --sbd-gantt-bg:              #050910;
+  --sbd-gantt-panel:           #070D16;
+  --sbd-gantt-panel-strong:    #0A1220;
+  --sbd-gantt-header:          #080E18;
+  --sbd-gantt-left:            #080C13;
+  --sbd-gantt-row:             #070B12;
+  --sbd-gantt-row-alt:         #0B1420;
+  --sbd-gantt-row-hover:       rgba(86, 176, 255, 0.08);
+  --sbd-gantt-grid:            rgba(91, 118, 150, 0.16);
+  --sbd-gantt-grid-strong:     rgba(91, 118, 150, 0.26);
+  --sbd-gantt-weekend:         rgba(86, 176, 255, 0.045);
+  --sbd-gantt-today:           #FF6B00;
+  --sbd-gantt-today-soft:      rgba(255, 107, 0, 0.14);
+  --sbd-gantt-preconstruction: #64748B;
+  --sbd-gantt-detailing:       #2EA8FF;
+  --sbd-gantt-procurement:     #F59E0B;
+  --sbd-gantt-fabrication:     #D97706;
+  --sbd-gantt-delivery:        #34D399;
+  --sbd-gantt-installation:    #22D3EE;
+  --sbd-gantt-closeout:        #64748B;
 
   /* Text */
   --sbd-text:            rgba(255,255,255,0.95);

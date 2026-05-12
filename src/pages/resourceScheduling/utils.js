@@ -9,6 +9,8 @@
  */
 
 // ─── Calendar helpers ────────────────────────────────────────────────
+import { GANTT_GRADIENT, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
+
 export const addDays = (date, n) => {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
@@ -37,12 +39,14 @@ export const isThisWeek = (date) => {
 
 // ─── Visual tokens ───────────────────────────────────────────────────
 export const PHASE_COLORS = {
-  Detailing:   "linear-gradient(135deg, var(--accent), var(--secondary))",
-  Fabrication: "linear-gradient(135deg, var(--accent), var(--status-warning))",
-  Delivery:    "linear-gradient(135deg, var(--status-success-bright), #00A86B)",
-  Erection:    "linear-gradient(135deg, #00B8D9, #0090B8)",
-  default:     "linear-gradient(135deg, #475569, #334155)",
+  Detailing:   GANTT_GRADIENT.Detailing,
+  Fabrication: GANTT_GRADIENT.Fabrication,
+  Delivery:    GANTT_GRADIENT.Delivery,
+  Erection:    GANTT_GRADIENT.Erection,
+  default:     GANTT_GRADIENT.default,
 };
+
+export const TODAY_COLOR = GANTT_TODAY_HEX;
 
 // Pixels per day at each zoom level. Used by the timeline header + bar
 // positioning math, so changing these values rescales everything in
@@ -106,9 +110,9 @@ export function injectKeyframes() {
       50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); color: #FF6B6B; }
     }
     @keyframes rsDropGlow {
-      0%   { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
-      50%  { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.35); }
-      100% { box-shadow: inset 0 0 0 1px rgba(200,155,32,0.0); }
+      0%   { box-shadow: inset 0 0 0 1px rgba(46,168,255,0.0); }
+      50%  { box-shadow: inset 0 0 0 1px rgba(46,168,255,0.35); }
+      100% { box-shadow: inset 0 0 0 1px rgba(46,168,255,0.0); }
     }
     @keyframes rsGhostShimmer {
       0%   { opacity: 0.18; }
@@ -116,8 +120,8 @@ export function injectKeyframes() {
       100% { opacity: 0.18; }
     }
     @keyframes rsTodayPulse {
-      0%, 100% { box-shadow: 0 0 6px rgba(200,155,32,0.3); }
-      50%      { box-shadow: 0 0 14px rgba(200,155,32,0.6); }
+      0%, 100% { box-shadow: 0 0 6px rgba(255,107,0,0.3); }
+      50%      { box-shadow: 0 0 14px rgba(255,107,0,0.6); }
     }
   `;
   document.head.appendChild(style);

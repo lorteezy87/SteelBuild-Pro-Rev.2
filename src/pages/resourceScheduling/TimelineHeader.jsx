@@ -21,16 +21,16 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
           style={{
             position: "sticky",
             top: 0,
-            background: "var(--bg-surface-low)",
-            borderBottom: "1px solid var(--bg-surface-high)",
+            background: "var(--sbd-gantt-header)",
+            borderBottom: "1px solid var(--sbd-gantt-grid-strong)",
             display: "flex",
             zIndex: 20,
           }}
         >
           <div style={{
             width: 220, flexShrink: 0,
-            background: "var(--bg-page)",
-            borderRight: "1px solid var(--border-default)",
+            background: "var(--sbd-gantt-left)",
+            borderRight: "1px solid var(--sbd-gantt-grid-strong)",
           }} />
           <div style={{ display: "flex" }}>
             {monthBanners.map((banner, idx) => (
@@ -40,7 +40,7 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
                   width: banner.width,
                   padding: "6px 8px",
                   textAlign: "center",
-                  borderRight: "1px solid var(--border-default)",
+                  borderRight: "1px solid var(--sbd-gantt-grid)",
                   flexShrink: 0,
                 }}
               >
@@ -58,16 +58,16 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
         style={{
           position: "sticky",
           top: zoomMode === "month" ? 32 : 0,
-          background: "var(--bg-surface-low)",
-          borderBottom: "1px solid var(--bg-surface-high)",
+          background: "var(--sbd-gantt-header)",
+          borderBottom: "1px solid var(--sbd-gantt-grid-strong)",
           display: "flex",
           zIndex: 19,
         }}
       >
         <div style={{
           width: 220, flexShrink: 0,
-          background: "var(--bg-page)",
-          borderRight: "1px solid var(--border-default)",
+          background: "var(--sbd-gantt-left)",
+          borderRight: "1px solid var(--sbd-gantt-grid-strong)",
         }} />
         <div ref={timelineRef} style={{ display: "flex" }}>
           {headers.map((h, idx) => (
@@ -75,17 +75,17 @@ const TimelineHeader = React.forwardRef(function TimelineHeader(
               key={idx}
               style={{
                 width: h.width,
-                borderRight: "1px solid var(--border-default)",
+                borderRight: "1px solid var(--sbd-gantt-grid)",
                 padding: "6px 8px",
                 textAlign: "center",
-                background: h.isToday ? "rgba(245,158,11,0.08)" : "transparent",
-                borderTop: h.isToday ? "2px solid var(--accent)" : "none",
+                background: h.isToday ? "var(--sbd-gantt-today-soft)" : "transparent",
+                borderTop: h.isToday ? "2px solid var(--sbd-gantt-today)" : "none",
                 flexShrink: 0,
               }}
             >
               <div style={{
                 fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-                color: h.isToday ? "var(--status-warning)" : "var(--text-primary)",
+                color: h.isToday ? "var(--sbd-gantt-today)" : "var(--text-primary)",
               }}>
                 {h.label}
               </div>

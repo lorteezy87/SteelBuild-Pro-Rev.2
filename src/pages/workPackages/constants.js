@@ -23,10 +23,10 @@ export const PHASE_COLORS = {
 
 /** Raw hex values — only for building rgba() shadows/glows at runtime. */
 export const PHASE_HEX = {
-  Detailing:   "#C89B20",
-  Fabrication: "#3B82F6",
-  Delivery:    "#0D9488",
-  Erection:    "#22C55E",
+  Detailing:   "#2EA8FF",
+  Fabrication: "#D97706",
+  Delivery:    "#34D399",
+  Erection:    "#22D3EE",
 };
 
 export const STATUS_COLORS = {

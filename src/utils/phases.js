@@ -29,11 +29,11 @@ export const PHASE_ORDER = {
 };
 
 export const PHASE_COLORS = {
-  'Pre-Construction': 'var(--accent)',
+  'Pre-Construction': 'var(--sbd-gantt-preconstruction)',
   'Detailing':        'var(--phase-detailing)',
-  'Procurement':      'var(--secondary)',
+  'Procurement':      'var(--sbd-gantt-procurement)',
   'Fabrication':      'var(--phase-fab)',
-  'Delivery':         'var(--warning)',
+  'Delivery':         'var(--phase-delivery)',
   'Erection':         'var(--phase-erection)',
   'Installation':     'var(--phase-erection)',
   'Closeout':         'var(--phase-closeout)',

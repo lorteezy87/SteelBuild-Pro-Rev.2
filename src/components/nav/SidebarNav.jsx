@@ -41,6 +41,7 @@ import {
   ChevronsLeft, ChevronsRight, Search, Clock, ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
+import { prefetchRoute } from "@/lib/routePrefetch";
 
 // ── Page → lucide icon map ──────────────────────────────────────────
 //
@@ -519,9 +520,11 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
                     transition: "all 120ms",
                   }}
                   onMouseEnter={(e) => {
+                    prefetchRoute(it.page);
                     e.currentTarget.style.background = "var(--nav-hover-bg, rgba(255,255,255,0.04))";
                     e.currentTarget.style.color = "var(--text-secondary)";
                   }}
+                  onFocus={() => prefetchRoute(it.page)}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "none";
                     e.currentTarget.style.color = "var(--text-muted)";
@@ -545,6 +548,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
 function SidebarLink({ item, active, railMode, onClick }) {
   const [hovered, setHovered] = useState(false);
   const Icon = PAGE_ICON[item.page] || FallbackIcon;
+  const warmRoute = () => prefetchRoute(item.page);
 
   // Common colors per state — keeps hover + active feeling consistent
   // across rail and expanded modes.
@@ -564,8 +568,9 @@ function SidebarLink({ item, active, railMode, onClick }) {
           aria-label={item.label}
           aria-current={active ? "page" : undefined}
           className={`sbd-nav-item${active ? " is-active" : ""}`}
-          onMouseEnter={() => setHovered(true)}
+          onMouseEnter={() => { setHovered(true); warmRoute(); }}
           onMouseLeave={() => setHovered(false)}
+          onFocus={warmRoute}
           style={{
             width: 44, height: 36,
             margin: "0 auto",
@@ -633,8 +638,9 @@ function SidebarLink({ item, active, railMode, onClick }) {
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={`sbd-nav-item${active ? " is-active" : ""}`}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => { setHovered(true); warmRoute(); }}
       onMouseLeave={() => setHovered(false)}
+      onFocus={warmRoute}
       style={{
         position: "relative",
         width: "calc(100% - 12px)",

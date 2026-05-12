@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../shared/ProjectContext";
 
-export default function ProjectPillDropdown() {
+export default function ProjectPillDropdown({ compact = false }) {
   const { projects, activeProject, setActiveProject, loading } = useProjectContext();
   // Pages resolve the project id via useProjectId() which checks the URL
   // FIRST (?projectId= / ?project=), then falls back to the active project
@@ -86,6 +86,7 @@ export default function ProjectPillDropdown() {
     [setActiveProject, searchParams, setSearchParams]
   );
 
+  const projectNameLimit = compact ? 14 : 20;
   const label =
     loading
       ? "Loading..."
@@ -112,9 +113,16 @@ export default function ProjectPillDropdown() {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div
+      ref={ref}
+      className="project-pill-dropdown"
+      data-compact={compact ? "true" : "false"}
+      data-name-limit={projectNameLimit}
+      style={{ position: "relative", minWidth: 0 }}
+    >
       {/* Pill trigger */}
       <div
+        className="project-pill-trigger"
         onClick={() => setOpen((o) => !o)}
         style={{
           display: "flex",
@@ -123,7 +131,8 @@ export default function ProjectPillDropdown() {
           background: "var(--accent-muted)",
           border: "1px solid var(--accent-border)",
           borderRadius: 20,
-          padding: "5px 12px",
+          minHeight: compact ? 34 : undefined,
+          padding: compact ? "6px 10px" : "5px 12px",
           fontFamily: "var(--font-mono)",
           fontSize: 9,
           color: "var(--status-warning)",
@@ -132,7 +141,7 @@ export default function ProjectPillDropdown() {
           whiteSpace: "nowrap",
           transition: "all 0.15s",
           userSelect: "none",
-          maxWidth: 280,
+          maxWidth: compact ? "min(44vw, 190px)" : 280,
           overflow: "hidden",
           textOverflow: "ellipsis",
         }}
@@ -171,13 +180,14 @@ export default function ProjectPillDropdown() {
       {/* Dropdown panel */}
       {open && (
         <div
-          className="sbd-card"
+          className="project-pill-dropdown-panel sbd-card"
           style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            right: 0,
-            width: 360,
-            maxHeight: 300,
+            position: compact ? "fixed" : "absolute",
+            top: compact ? 58 : "calc(100% + 6px)",
+            right: compact ? 12 : 0,
+            left: compact ? 12 : undefined,
+            width: compact ? "auto" : 360,
+            maxHeight: compact ? "min(70dvh, 420px)" : 300,
             overflowY: "auto",
             background: "linear-gradient(180deg, rgba(7, 13, 24, 0.995) 0%, rgba(4, 9, 18, 0.995) 100%)",
             border: "1px solid color-mix(in srgb, var(--accent) 30%, var(--border-default))",

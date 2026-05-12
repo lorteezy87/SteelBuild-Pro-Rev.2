@@ -17,6 +17,7 @@ dist-ssr
 **/.next
 .claude
 steelbuild-pro
+SteelBuild-Pro-Rev.2/
 *.local
 
 # Editor directories and files
@@ -35,6 +36,9 @@ steelbuild-pro
 
 # temp commit-message files used by automation
 .git-commit-msg.tmp
+
+# local agent/session configuration
+.codex/config.toml
 
 # extracted theme handoff (preview/reference only)
 .theme-reference/

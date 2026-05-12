@@ -23,6 +23,7 @@ import ReportShell from "./ReportShell";
 import { FilterBar, SelectFilter, SearchInput } from "./ReportFilters";
 import { exportTableCSV, formatDate } from "./utils";
 import { mono, body, CARD, PROJECT_HEALTH_COLORS } from "./constants";
+import { GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 const ROW_HEIGHT = 32;
 const HEADER_HEIGHT = 40;
@@ -94,7 +95,7 @@ function GanttRow({ row, from, to, onClick }) {
         height: ROW_HEIGHT,
         borderBottom: "1px solid var(--divider)",
         cursor: "pointer",
-        background: "transparent",
+          background: "var(--sbd-gantt-row)",
       }}
       onMouseEnter={(e) =>
         (e.currentTarget.style.background = "var(--bg-row-hover)")
@@ -287,7 +288,7 @@ export default function ProjectStatusGantt() {
             : "No projects match the current filters."}
         </div>
       ) : (
-        <div style={{ ...CARD, padding: 0, overflow: "hidden" }}>
+        <div style={{ ...CARD, padding: 0, overflow: "hidden", background: "var(--sbd-gantt-panel)" }}>
           <div style={{ overflowX: "auto" }}>
             <div style={{ display: "flex", minWidth: LEFT_LABEL_W + MIN_TIMELINE_W }}>
               {/* Left labels column */}
@@ -305,7 +306,7 @@ export default function ProjectStatusGantt() {
                     display: "flex",
                     alignItems: "center",
                     paddingLeft: 12,
-                    background: "var(--bg-surface-low)",
+                    background: "var(--sbd-gantt-header)",
                     ...mono,
                     fontSize: 8,
                     fontWeight: 700,
@@ -383,7 +384,7 @@ export default function ProjectStatusGantt() {
                     height: HEADER_HEIGHT,
                     position: "relative",
                     borderBottom: "1px solid var(--divider)",
-                    background: "var(--bg-surface-low)",
+                    background: "var(--sbd-gantt-header)",
                   }}
                 >
                   {ticks.map((t, i) => (
@@ -421,7 +422,7 @@ export default function ProjectStatusGantt() {
                         left: `${t.fraction * 100}%`,
                         top: 0,
                         bottom: 0,
-                        borderLeft: "1px dashed var(--divider)",
+                        borderLeft: "1px dashed var(--sbd-gantt-grid)",
                         opacity: 0.5,
                       }}
                     />
@@ -434,7 +435,8 @@ export default function ProjectStatusGantt() {
                         left: `${todayPct}%`,
                         top: 0,
                         bottom: 0,
-                        borderLeft: "2px solid var(--accent)",
+                        borderLeft: `2px solid ${GANTT_TODAY_HEX}`,
+                        boxShadow: "0 0 10px rgba(255,107,0,0.35)",
                         zIndex: 3,
                       }}
                     />
@@ -526,7 +528,7 @@ function Legend() {
           style={{
             width: 2,
             height: 14,
-            background: "var(--accent)",
+            background: GANTT_TODAY_HEX,
           }}
         />
         Today

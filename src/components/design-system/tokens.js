@@ -22,10 +22,10 @@ export const PHASE_COLOR = {
  * Keep synchronized with the dark-theme block of `tokens.css`.
  */
 export const PHASE_HEX = {
-  Detailing:   "#C89B20",
-  Fabrication: "#3B82F6",
-  Delivery:    "#14B8A6",
-  Erection:    "#22C55E",
+  Detailing:   "#2EA8FF",
+  Fabrication: "#D97706",
+  Delivery:    "#34D399",
+  Erection:    "#22D3EE",
 };
 
 /**

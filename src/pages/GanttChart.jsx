@@ -11,22 +11,23 @@ import { PHASES, derivePhase, groupByPhase } from "../utils/phases";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import GanttContextMenu from "../components/gantt/GanttContextMenu";
 import { createPageUrl } from "@/utils";
+import { GANTT_PHASE_HEX, GANTT_GRADIENT, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 const PHASE_COLORS = {
-  "Pre-Construction": { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)", bg: "rgba(0,229,255,0.10)" },
-  Detailing:          { bar: "linear-gradient(90deg, var(--secondary), #2ABFAC)", solid: "var(--secondary)", bg: "rgba(68,226,205,0.10)" },
-  Procurement:        { bar: "linear-gradient(90deg, var(--secondary), #2ABFAC)", solid: "var(--secondary)", bg: "rgba(68,226,205,0.12)" },
-  Fabrication:        { bar: "linear-gradient(90deg, var(--status-warning), var(--status-warning))", solid: "var(--status-warning)", bg: "rgba(245,158,11,0.10)" },
-  Delivery:           { bar: "linear-gradient(90deg, var(--accent), #4DA8D8)", solid: "var(--accent)",  bg: "rgba(0,229,255,0.10)" },
-  Installation:       { bar: "linear-gradient(90deg, var(--success), #4AE176)",  solid: "#4AE176",  bg: "rgba(74,225,118,0.10)" },
-  Closeout:           { bar: "linear-gradient(90deg, #909095, #6B6F78)",  solid: "#909095",  bg: "rgba(144,144,149,0.10)" },
+  "Pre-Construction": { bar: GANTT_GRADIENT.default, solid: GANTT_PHASE_HEX["Pre-Construction"], bg: `${GANTT_PHASE_HEX["Pre-Construction"]}14` },
+  Detailing:          { bar: GANTT_GRADIENT.Detailing, solid: GANTT_PHASE_HEX.Detailing, bg: `${GANTT_PHASE_HEX.Detailing}14` },
+  Procurement:        { bar: GANTT_GRADIENT.Procurement, solid: GANTT_PHASE_HEX.Procurement, bg: `${GANTT_PHASE_HEX.Procurement}18` },
+  Fabrication:        { bar: GANTT_GRADIENT.Fabrication, solid: GANTT_PHASE_HEX.Fabrication, bg: `${GANTT_PHASE_HEX.Fabrication}16` },
+  Delivery:           { bar: GANTT_GRADIENT.Delivery, solid: GANTT_PHASE_HEX.Delivery, bg: `${GANTT_PHASE_HEX.Delivery}16` },
+  Installation:       { bar: GANTT_GRADIENT.Installation, solid: GANTT_PHASE_HEX.Installation, bg: `${GANTT_PHASE_HEX.Installation}16` },
+  Closeout:           { bar: GANTT_GRADIENT.Closeout, solid: GANTT_PHASE_HEX.Closeout, bg: `${GANTT_PHASE_HEX.Closeout}14` },
 };
 
 const STATUS_COLORS = {
 "Not Started": "var(--text-muted)",
-"In Progress": "var(--accent)",
-"Complete":    "var(--status-success)",
-"Delayed":     "var(--status-error)",
+"In Progress": GANTT_STATUS_HEX.inProgress,
+"Complete":    GANTT_STATUS_HEX.complete,
+"Delayed":     GANTT_STATUS_HEX.delayed,
 };
 
 const ROW_HEIGHT = 40;
@@ -81,7 +82,7 @@ function getMonthLabel(d) { return d.toLocaleDateString("en-US", { month: "short
 function TaskList({ tasks, selectedId, onSelect, onHover, hoveredId, collapsedPhases, onTogglePhase, smartMode, cutId, dependencyPickSourceId }) {
   return (
     <div style={{ width: TASK_LIST_WIDTH, flexShrink: 0, borderRight: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
-      <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--bg-surface-low)", borderBottom: "1px solid var(--accent-border)" }}>
+      <div style={{ height: HEADER_HEIGHT, display: "grid", gridTemplateColumns: "1fr 70px 70px 60px", alignItems: "center", padding: "0 12px", gap: 4, background: "var(--sbd-gantt-header)", borderBottom: "1px solid var(--sbd-gantt-grid-strong)" }}>
         {["Activity", "Start", "End", "Status"].map(h => (
           <span key={h} style={{ fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", fontWeight: 700 }}>{h}</span>
         ))}
@@ -289,7 +290,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
   return (
     <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "hidden", position: "relative" }}>
       <div style={{ width: timelineWidth, minHeight: "100%" }}>
-        <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--bg-surface-low)" }}>
+        <div style={{ height: HEADER_HEIGHT, position: "sticky", top: 0, zIndex: 5, background: "var(--sbd-gantt-header)" }}>
           <div style={{ display: "flex", height: 24, borderBottom: "1px solid var(--divider)" }}>
             {monthHeaders.map((h, i) => (
               <div key={i} style={{ width: h.width, padding: "0 6px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.08em", display: "flex", alignItems: "center", borderRight: "1px solid var(--divider)" }}>{h.label}</div>
@@ -297,7 +298,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
           </div>
           <div style={{ display: "flex", height: HEADER_HEIGHT - 24, borderBottom: "1px solid var(--accent-border)" }}>
             {days.map((d, i) => (
-              <div key={i} style={{ width: pxPerDay, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: pxPerDay >= 20 ? 7 : 0, color: isToday(d) ? "var(--accent)" : isWeekend(d) ? "var(--text-muted)" : "var(--text-muted)", fontWeight: isToday(d) ? 700 : 400, borderRight: "1px solid var(--hover-bg)" }}>
+              <div key={i} style={{ width: pxPerDay, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: pxPerDay >= 20 ? 7 : 0, color: isToday(d) ? GANTT_TODAY_HEX : "var(--text-muted)", fontWeight: isToday(d) ? 700 : 400, borderRight: "1px solid var(--sbd-gantt-grid)" }}>
                 {pxPerDay >= 20 ? d.getDate() : ""}
               </div>
             ))}
@@ -307,7 +308,7 @@ function Timeline({ tasks, selectedId, hoveredId, onHover, zoom, dateRange, smar
         <div style={{ position: "relative" }}>
           {days.map((d, i) => isWeekend(d) ? <div key={`we-${i}`} style={{ position: "absolute", top: 0, left: i * pxPerDay, width: pxPerDay, height: totalHeight, background: "var(--hover-bg)", pointerEvents: "none" }} /> : null)}
           {todayLine > 0 && todayLine < timelineWidth && (
-            <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: "linear-gradient(180deg, var(--accent), rgba(0,229,255,0.06))", zIndex: 3, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: 0, left: todayLine, width: 2, height: totalHeight, background: `linear-gradient(180deg, ${GANTT_TODAY_HEX}, rgba(255,107,0,0.06))`, zIndex: 3, pointerEvents: "none" }} />
           )}
 
           {tasks.map((task) => {
@@ -1140,7 +1141,7 @@ export default function GanttChart() {
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>Slippage</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 2, height: 12, background: "var(--accent)" }} />
+          <div style={{ width: 2, height: 12, background: GANTT_TODAY_HEX }} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>Today</span>
         </div>
         {smartMode && (

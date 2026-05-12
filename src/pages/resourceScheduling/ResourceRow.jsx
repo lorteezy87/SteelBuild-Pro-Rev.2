@@ -1,6 +1,6 @@
 import React from "react";
 import WorkPackageBar from "./WorkPackageBar";
-import { extractSkillsRS, getRowCapacityBg } from "./utils";
+import { TODAY_COLOR, extractSkillsRS, getRowCapacityBg } from "./utils";
 import { wpBudgetHoursForResource, wpActualHoursForResource } from "@/lib/wpHoursForResource";
 
 /**
@@ -196,8 +196,8 @@ export default function ResourceRow({
             top: 0,
             bottom: 0,
             width: 2,
-            background: "var(--accent)",
-            boxShadow: "0 0 10px rgba(200,155,32,0.6), 0 0 20px rgba(200,155,32,0.2)",
+            background: TODAY_COLOR,
+            boxShadow: "0 0 10px rgba(255,107,0,0.6), 0 0 20px rgba(255,107,0,0.2)",
             zIndex: 20,
             pointerEvents: "none",
             animation: "rsTodayPulse 3s ease-in-out infinite",
@@ -207,7 +207,7 @@ export default function ResourceRow({
             position: "absolute",
             top: -1, left: "50%", transform: "translateX(-50%)",
             fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-            color: "#07090E", background: "var(--accent)",
+            color: "#fff", background: TODAY_COLOR,
             borderRadius: 3, padding: "1px 5px", letterSpacing: "0.08em",
             whiteSpace: "nowrap", lineHeight: 1.4,
           }}>

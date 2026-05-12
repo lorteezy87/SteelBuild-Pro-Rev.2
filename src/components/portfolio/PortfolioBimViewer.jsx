@@ -225,6 +225,7 @@ export default function PortfolioBimViewer({
   const [mode, setMode] = useState("model");
   const [isolated, setIsolated] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
+  const [hasEnteredViewport, setHasEnteredViewport] = useState(false);
   const [modelState, setModelState] = useState({ source: "generated", status: "idle", message: "", count: 0 });
   const [uploading, setUploading] = useState(false);
 
@@ -274,6 +275,31 @@ export default function PortfolioBimViewer({
   }, []);
 
   useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || hasEnteredViewport) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setHasEnteredViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting || entry?.intersectionRatio > 0) {
+          setHasEnteredViewport(true);
+          observer.disconnect();
+        }
+      },
+      { root: null, rootMargin: "240px 0px", threshold: 0.01 },
+    );
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [hasEnteredViewport]);
+
+  useEffect(() => {
+    if (!hasEnteredViewport) return;
+
     let disposed = false;
     let cleanup = () => {};
 
@@ -866,7 +892,7 @@ export default function PortfolioBimViewer({
       disposed = true;
       cleanup();
     };
-  }, [pieces, mode, modelDocument]);
+  }, [hasEnteredViewport, pieces, mode, modelDocument]);
 
   useEffect(() => {
     apiRef.current?.applyIsolation(isolated);

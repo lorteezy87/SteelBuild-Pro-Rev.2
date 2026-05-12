@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { getDaysBetween } from './scheduleUtils';
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from '@/lib/ganttTheme';
 
 const TASK_TYPE_COLORS = {
-  Fabrication: 'var(--accent)',
-  Delivery: '#00B8D9',
-  Install: 'var(--status-success-bright)',
-  Submittal: '#0D9488',
-  RFI: 'var(--status-warning-bright)',
-  Milestone: 'var(--status-warning-bright)',
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Install: GANTT_PHASE_HEX.Installation,
+  Submittal: GANTT_PHASE_HEX.Detailing,
+  RFI: GANTT_PHASE_HEX.Procurement,
+  Milestone: GANTT_STATUS_HEX.inProgress,
   Task: 'rgba(160,175,210,0.5)',
 };
 
@@ -185,7 +186,7 @@ export default function CalendarView({ tasks = [], onSelectTask, selectedDate, o
                   justifyContent: 'center',
                   width: 22,
                   height: 22,
-                  background: cellIsToday ? 'var(--accent)' : 'transparent',
+                  background: cellIsToday ? GANTT_TODAY_HEX : 'transparent',
                   borderRadius: cellIsToday ? '50%' : '0',
                   color: cellIsToday ? 'white' : 'var(--text-muted)',
                 }}

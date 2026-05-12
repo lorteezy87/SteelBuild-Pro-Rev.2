@@ -12,16 +12,13 @@
  * All sub-components live in src/components/nav/.
  */
 
-import React, { useState, useEffect, useContext } from "react";
+import React, { Suspense, lazy, useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Toaster } from "sonner";
 
 // Nav components (extracted from Layout)
-import ModulesDropdown from "./components/nav/ModulesDropdown";
 import BellDropdown from "./components/nav/BellDropdown";
-import SidebarNav from "./components/nav/SidebarNav";
-import MobileDrawer, { HamburgerMenu } from "./components/nav/MobileDrawer";
+import HamburgerMenu from "./components/nav/HamburgerMenu";
 import ThemeToggleButton from "./components/nav/ThemeToggleButton";
 import ProjectErrorBanner from "./components/nav/ProjectErrorBanner";
 import TopBarSearchButton from "./components/nav/TopBarSearchButton";
@@ -36,7 +33,11 @@ import { useFocusMainOnRouteChange } from "./components/nav/useFocusMainOnRouteC
 import { useDocumentTitleForRoute } from "./components/nav/useDocumentTitleForRoute";
 
 // Shared components
-import GlobalSearchModal from "./components/search/GlobalSearchModal";
+const ModulesDropdown = lazy(() => import("./components/nav/ModulesDropdown"));
+const GlobalSearchModal = lazy(() => import("./components/search/GlobalSearchModal"));
+const MobileDrawer = lazy(() => import("./components/nav/MobileDrawer"));
+const Toaster = lazy(() => import("sonner").then((mod) => ({ default: mod.Toaster })));
+const SidebarNav = lazy(() => import("./components/nav/SidebarNav"));
 // QuickAddFAB intentionally not imported — the floating "+" shortcut at
 // bottom-right was hidden per user request. Component file is preserved
 // in src/components/shared/QuickAddFAB.jsx; uncomment this import + its
@@ -55,6 +56,26 @@ import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
 
 // ─────────────────────────────────────────────────────────────────────
+function sidebarFallbackWidth() {
+  try { return localStorage.getItem("sbp-sidebar-rail") === "1" ? 56 : 240; } catch { return 240; }
+}
+
+function SidebarNavFallback() {
+  const width = sidebarFallbackWidth();
+  return (
+    <aside
+      aria-hidden="true"
+      className="sbd-sidebar"
+      style={{
+        width, minWidth: width,
+        flexShrink: 0,
+        height: "100%",
+        borderRight: "1px solid var(--divider)",
+      }}
+    />
+  );
+}
+
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
 
@@ -80,15 +101,14 @@ export default function Layout({ children, currentPageName }) {
   useGlobalSearchShortcut(setSearchOpen);
 
   // ── Nav badge data ───────────────────────────────────────────────
-  // useLayoutNavData owns the four cross-module count queries, the
-  // overdue derivations, and the mark-all-read mutation. Keeping them
-  // out of this file lets the chrome JSX stay focused on rendering.
+  // Keep the bell alert stream live, but defer heavier module badge
+  // count queries until the user opens the modules menu.
   const {
     unreadAlerts,
     unreadCount,
     alertCounts,
     markAllRead,
-  } = useLayoutNavData(activeProjectId);
+  } = useLayoutNavData(activeProjectId, { includeModuleCounts: gridOpen });
 
   // Page tracking (non-critical)
   useEffect(() => {
@@ -114,7 +134,7 @@ export default function Layout({ children, currentPageName }) {
   // the new SBD palette without touching individual components. Per-page
   // sweeps add `.sbd-*` utility classes for full glass-morphism + KPI tiles.
   return (
-    <div className="steelbuild-dark sbd-mesh-bg" style={{
+    <div className="app-shell steelbuild-dark sbd-mesh-bg" data-mobile-shell={isMobile ? "true" : "false"} style={{
       minHeight: "100vh", width: "100%",
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       padding: 0, background: "var(--bg-base)",
@@ -124,9 +144,18 @@ export default function Layout({ children, currentPageName }) {
       <SkipToMainContentLink />
 
       {/* Mobile Drawer */}
-      <MobileDrawer open={mobileOpen} onClose={() => setMobileOpen(false)} onNavigate={handleNavigate} />
+      {isMobile && (
+        <Suspense fallback={null}>
+          <MobileDrawer
+            open={mobileOpen}
+            onClose={() => setMobileOpen(false)}
+            onNavigate={handleNavigate}
+            currentPageName={currentPageName}
+          />
+        </Suspense>
+      )}
 
-      <div style={{
+      <div className="app-frame" style={{
         background: "var(--bg-surface)", borderRadius: 0,
         width: "100%", maxWidth: "100%", minHeight: "100vh",
         overflow: "hidden", boxShadow: "none",
@@ -140,17 +169,20 @@ export default function Layout({ children, currentPageName }) {
         }} />
 
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
-        <nav aria-label="Primary" className="nav-glass sbd-topbar" style={{
-          height: 36,
-          padding: "0 12px",
+        <nav aria-label="Primary" className="app-topbar nav-glass sbd-topbar" style={{
+          height: isMobile ? 52 : 36,
+          minHeight: isMobile ? 52 : 36,
+          padding: isMobile
+            ? "0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left))"
+            : "0 12px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0, position: "relative", zIndex: 100, gap: 8,
+          flexShrink: 0, position: "relative", zIndex: 100, gap: isMobile ? 6 : 8,
         }}>
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
             <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: 26, width: "auto", objectFit: "contain" }} />
+              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
             </div>
             {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
             {!isMobile && (
@@ -163,7 +195,7 @@ export default function Layout({ children, currentPageName }) {
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {/* Search trigger \u2014 see TopBarSearchButton for context. */}
-            {!isMobile && <TopBarSearchButton onClick={() => setSearchOpen(true)} />}
+            <TopBarSearchButton onClick={() => setSearchOpen(true)} />
 
             {/* Density toggle + Modules grid — desktop only */}
             {!isMobile && (
@@ -191,18 +223,22 @@ export default function Layout({ children, currentPageName }) {
                   </svg>
                 </div>
 
-                <ModulesDropdown
-                  open={gridOpen}
-                  onClose={() => setGridOpen(false)}
-                  onNavigate={handleNavigate}
-                  userRole={user?.role}
-                  alertCounts={alertCounts}
-                />
+                {gridOpen && (
+                  <Suspense fallback={null}>
+                    <ModulesDropdown
+                      open={gridOpen}
+                      onClose={() => setGridOpen(false)}
+                      onNavigate={handleNavigate}
+                      userRole={user?.role}
+                      alertCounts={alertCounts}
+                    />
+                  </Suspense>
+                )}
               </div>
             )}
 
             {/* Theme Toggle */}
-            <ThemeToggleButton />
+            {!isMobile && <ThemeToggleButton />}
 
             {/* Bell */}
             <BellDropdown
@@ -213,25 +249,27 @@ export default function Layout({ children, currentPageName }) {
             />
 
             {/* User + Sign Out */}
-            <UserSignOutBlock user={user} onLogout={logout} />
+            {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
 
             {/* Project pill dropdown */}
-            <ProjectPillDropdown />
+            <ProjectPillDropdown compact={isMobile} />
           </div>
         </nav>
 
         {/* ── SIDEBAR + CONTENT ───────────────────────────────────── */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div className="app-body" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
           {!isMobile && (
-            <SidebarNav
-              currentPageName={currentPageName}
-              onNavigate={handleNavigate}
-              visible={!isMobile}
-            />
+            <Suspense fallback={<SidebarNavFallback />}>
+              <SidebarNav
+                currentPageName={currentPageName}
+                onNavigate={handleNavigate}
+                visible={!isMobile}
+              />
+            </Suspense>
           )}
 
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-            <main id="main-content" aria-label="Main content" tabIndex={-1} style={{
+            <main id="main-content" className="app-main-content" aria-label="Main content" tabIndex={-1} style={{
               flex: 1, overflowY: "auto", padding: 0,
               background: "var(--bg-base)", color: "var(--text-primary)",
               display: "flex", flexDirection: "column",
@@ -243,7 +281,11 @@ export default function Layout({ children, currentPageName }) {
         </div>
 
         {/* ── OVERLAYS ────────────────────────────────────────────── */}
-        <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+        {searchOpen && (
+          <Suspense fallback={null}>
+            <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+          </Suspense>
+        )}
         {/* QuickAddFAB removed per user request — the bottom-right "+"
             shortcut was hidden site-wide. Re-enable by restoring the
             import at the top of this file and the <QuickAddFAB /> render
@@ -251,25 +293,27 @@ export default function Layout({ children, currentPageName }) {
         {/* <AiAssistantLauncher /> — hidden until the schedule-assistant
             edge function returns reliable answers. Underlying code kept
             in src/components/ai-assistant/* for re-enable. */}
-        <Toaster
-          theme="dark"
-          richColors
-          closeButton
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              background: "var(--sbd-bg-elevated, var(--bg-elevated, rgba(15,22,38,0.95)))",
-              border: "1px solid var(--sbd-border, var(--border-strong, rgba(255,255,255,0.08)))",
-              color: "var(--sbd-text, var(--text-primary, rgba(255,255,255,0.95)))",
-              fontFamily: "'Inter', sans-serif",
-              fontSize: 13, borderRadius: 10,
-              boxShadow: "var(--shadow-lg)",
-              backdropFilter: "blur(20px) saturate(140%)",
-              WebkitBackdropFilter: "blur(20px) saturate(140%)",
-            },
-            className: "sbd-card",
-          }}
-        />
+        <Suspense fallback={null}>
+          <Toaster
+            theme="dark"
+            richColors
+            closeButton
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                background: "var(--sbd-bg-elevated, var(--bg-elevated, rgba(15,22,38,0.95)))",
+                border: "1px solid var(--sbd-border, var(--border-strong, rgba(255,255,255,0.08)))",
+                color: "var(--sbd-text, var(--text-primary, rgba(255,255,255,0.95)))",
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 13, borderRadius: 10,
+                boxShadow: "var(--shadow-lg)",
+                backdropFilter: "blur(20px) saturate(140%)",
+                WebkitBackdropFilter: "blur(20px) saturate(140%)",
+              },
+              className: "sbd-card",
+            }}
+          />
+        </Suspense>
       </div>
     </div>
   );

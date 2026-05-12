@@ -1,10 +1,11 @@
 import React from "react";
+import { GANTT_PHASE_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 export const PHASE_DOT = {
-  Detailing: "var(--status-info)",
-  Fabrication: "var(--accent)",
-  Delivery: "var(--status-warning)",
-  "Erection/Installation": "#0D9488",
+  Detailing: GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  "Erection/Installation": GANTT_PHASE_HEX.Erection,
   Closeout: "var(--status-success)",
 };
 
@@ -26,13 +27,13 @@ export const TIMELINE_PHASES = [
   "Closeout",
 ];
 export const TIMELINE_PHASE_COLOR = {
-  "Pre-Construction": "#0d9488",
-  Detailing:          "#0EA5E9",
-  Procurement:        "#F97316",
-  Fabrication:        "#C89B20",
-  Delivery:           "#F59E0B",
-  Installation:       "#0D9488",
-  Closeout:           "#10B981",
+  "Pre-Construction": GANTT_PHASE_HEX["Pre-Construction"],
+  Detailing:          GANTT_PHASE_HEX.Detailing,
+  Procurement:        GANTT_PHASE_HEX.Procurement,
+  Fabrication:        GANTT_PHASE_HEX.Fabrication,
+  Delivery:           GANTT_PHASE_HEX.Delivery,
+  Installation:       GANTT_PHASE_HEX.Installation,
+  Closeout:           GANTT_PHASE_HEX.Closeout,
 };
 
 // Year clamp matches what ScheduleGantt uses — one rogue typo'd year
@@ -112,8 +113,8 @@ export function MiniProjectTimeline({ summary, width = 170, height = 22, onPhase
       style={{
         width, height,
         position: "relative",
-        background: "var(--bg-page)",
-        border: "1px solid var(--divider)",
+        background: "var(--sbd-gantt-bg)",
+        border: "1px solid var(--sbd-gantt-grid)",
         borderRadius: 3,
         overflow: "hidden",
         cursor: onTimelineClick ? "pointer" : "default",
@@ -163,7 +164,7 @@ export function MiniProjectTimeline({ summary, width = 170, height = 22, onPhase
           top: 0, bottom: 0,
           left: Math.max(0, Math.min(width - 1, todayX)),
           width: 1.5,
-          background: "#FF6B00",
+          background: GANTT_TODAY_HEX,
           boxShadow: "0 0 0 1px rgba(255,107,0,0.35)",
           pointerEvents: "none",
         }} />
