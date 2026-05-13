@@ -18,6 +18,7 @@ import { base44 } from "@/api/base44Client";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 
 import { useProjectId } from "@/hooks/useProjectId";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { isOverdue } from "./constraints/utils";
 import KpiStrip from "./constraints/KpiStrip";
 import PriorityBar from "./constraints/PriorityBar";
@@ -27,15 +28,16 @@ import EmptyState from "./constraints/EmptyState";
 import ListView from "./constraints/ListView";
 import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
-import { CONSTRAINT_TYPES, TYPE_COLORS } from "./constraints/constants";
+import { CONSTRAINT_TYPES, TYPE_COLORS, inputStyle } from "./constraints/constants";
 import { CommandBar } from "@/components/design-system";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 import { setDraft } from "@/lib/draftStorage";
 
 export default function Constraints() {
   const qc = useQueryClient();
   const projectId = useProjectId();
+  const { activeProject } = useProjectContext();
   const navigate = useNavigate();
 
   const [view, setView] = useState("list");

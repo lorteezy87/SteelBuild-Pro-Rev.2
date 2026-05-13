@@ -3,6 +3,7 @@ import { STAGE_MAP, mono } from "./drawingsConfig";
 import StageChip from "./StageChip";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue } from "./drawingsUtils";
+import { compareDrawingSetPackages, formatDrawingSetNumber, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 
 const UNGROUPED_KEY = "__ungrouped__";
 const UNGROUPED_LABEL = "UNGROUPED SHEETS";
@@ -74,6 +75,7 @@ function buildGroups(drawings, drawingSets) {
         key,
         setId,
         name: (parent?.set_name || legacyName || UNGROUPED_LABEL).trim(),
+        setNumber: getDrawingSetNumber(parent || { name: legacyName }),
         parent,
         isUngrouped: key === UNGROUPED_KEY,
         sheets: [],
@@ -89,6 +91,7 @@ function buildGroups(drawings, drawingSets) {
       key,
       setId: parent.id,
       name: (parent.set_name || "").trim() || UNGROUPED_LABEL,
+      setNumber: getDrawingSetNumber(parent),
       parent,
       isUngrouped: false,
       sheets: [],
@@ -128,7 +131,7 @@ function buildGroups(drawings, drawingSets) {
     .sort((a, b) => {
       if (a.isUngrouped && !b.isUngrouped) return 1;
       if (!a.isUngrouped && b.isUngrouped) return -1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      return compareDrawingSetPackages(a, b);
     });
 }
 
@@ -383,6 +386,25 @@ function SetSection({
               >
                 {group.isUngrouped ? "Sheet Group" : "Drawing Set"}
               </span>
+              {!group.isUngrouped && (
+                <span
+                  title="Drawing set number"
+                  style={{
+                    ...mono,
+                    fontSize: 8,
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    color: "var(--accent)",
+                    padding: "2px 6px",
+                    borderRadius: 999,
+                    border: "1px solid var(--accent-border)",
+                    background: "var(--accent-muted)",
+                  }}
+                >
+                  SET # {formatDrawingSetNumber(group)}
+                </span>
+              )}
               <ApprovalPill approval={aggregates.approval} />
             </div>
 

@@ -6,6 +6,7 @@ import PriorityDot from "./PriorityDot";
 import { OverdueBadge, RFILinkBadge, SupersededBadge } from "./DrawingBadges";
 import { isOverdue, daysLate, urgencyClass } from "./drawingsUtils";
 import { hasTitleblockTemplate } from "@/lib/titleblock";
+import { compareDrawingSetPackages, formatDrawingSetNumber, getDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import { Lock } from "lucide-react";
 
 // ─── AI extraction / upload status badge ───────────────────────────────────
@@ -263,6 +264,7 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
       key: group.key,
       setId: group.setId,
       name: group.name,
+      setNumber: getDrawingSetNumber(parent || group),
       isUngrouped: group.key === UNGROUPED_KEY,
       setOnly,
       parent,
@@ -292,12 +294,9 @@ function groupByDrawingSet(drawings, drawingSetMap = {}) {
     });
   }
 
-  // Order: named sets alphabetical, ungrouped last
-  groups.sort((a, b) => {
-    if (a.isUngrouped && !b.isUngrouped) return 1;
-    if (!a.isUngrouped && b.isUngrouped) return -1;
-    return a.name.localeCompare(b.name);
-  });
+  // Order: named sets by drawing-set/package number first, then natural name;
+  // ungrouped stays last so loose sheets do not break package order.
+  groups.sort(compareDrawingSetPackages);
 
   return groups;
 }
@@ -448,6 +447,26 @@ function GroupRow({
               display: "inline-flex", alignItems: "center", gap: 6,
             }}>
               {group.name}
+              {!group.isUngrouped && (
+                <span
+                  title="Drawing set number"
+                  style={{
+                    ...mono,
+                    fontSize: 9,
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    color: "var(--accent)",
+                    background: "var(--accent-muted)",
+                    border: "1px solid var(--accent-border)",
+                    borderRadius: 999,
+                    padding: "2px 7px",
+                    textTransform: "uppercase",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  SET # {formatDrawingSetNumber(group)}
+                </span>
+              )}
               {/* Lock indicator (migration 071). Shown to everyone — admin
                   unlock lives on the viewer header. */}
               {group.parent?.is_locked && (
