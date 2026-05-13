@@ -27,6 +27,7 @@ import { computeFabReady } from "@/lib/submittalAnalytics";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import CycleTimeCard from "@/components/submittals/CycleTimeCard";
 import AgingReportTable from "@/components/submittals/AgingReportTable";
+import SubmittalVisualBoard from "@/components/submittals/SubmittalVisualBoard";
 import {
   AlertTriangle,
   ArrowRight,
@@ -68,6 +69,7 @@ const review      = "var(--status-review)";
 
 const TABS = [
   { key: "overview",   label: "Control Board", icon: Gauge },
+  { key: "process",    label: "Process Board", icon: Layers3 },
   { key: "drawings",   label: "Drawing Register", icon: FileStack },
   { key: "submittals", label: "Submittal Register", icon: ClipboardList },
   { key: "matrix",     label: "Approval Matrix", icon: Workflow },
@@ -443,10 +445,11 @@ export default function DrawingSubmittalHub() {
 
   const tabCounts = useMemo(() => ({
     overview: triage.openItems.length,
+    process: setPackages.length + triage.unlinkedSubmittalItems.length,
     drawings: drawingKpis.totalSets,
     submittals: kpis.total,
     matrix: drawingSets.filter((set) => !set?.is_deleted).length,
-  }), [triage.openItems.length, drawingKpis.totalSets, kpis.total, drawingSets]);
+  }), [triage.openItems.length, triage.unlinkedSubmittalItems.length, setPackages.length, drawingKpis.totalSets, kpis.total, drawingSets]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -571,6 +574,14 @@ export default function DrawingSubmittalHub() {
             {activeTab === "overview" && (
               <TriageBoard
                 triage={triage}
+                isLoading={isLoading}
+                onOpenTab={setActiveTab}
+              />
+            )}
+            {activeTab === "process" && (
+              <SubmittalVisualBoard
+                setPackages={setPackages}
+                submittals={submittals}
                 isLoading={isLoading}
                 onOpenTab={setActiveTab}
               />
