@@ -18,9 +18,9 @@ describe("filterDrawingSets", () => {
     { id: "d", set_name: "MEP Coordination", discipline: "Mechanical", revision: "1" },
   ];
 
-  it("returns only live (non-deleted) sets when query is empty", () => {
+  it("returns live (non-deleted) sets in package sort order when query is empty", () => {
     const out = filterDrawingSets(sets, "");
-    expect(out.map((s) => s.id)).toEqual(["a", "b", "d"]);
+    expect(out.map((s) => s.id)).toEqual(["b", "d", "a"]);
   });
 
   it("filters by name (case-insensitive substring)", () => {
