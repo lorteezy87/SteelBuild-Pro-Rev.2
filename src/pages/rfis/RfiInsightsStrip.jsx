@@ -239,9 +239,9 @@ export default function RfiInsightsStrip({ rfis, collapsed, onToggleCollapsed })
   }, [rfis]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="rfi-insights-strip">
       {/* Header strip: 5 KPI tiles + collapse toggle */}
-      <div style={{ display: "grid", gridTemplateColumns: "auto repeat(5, 1fr)", gap: 8, alignItems: "stretch" }}>
+      <div className="rfi-insights-kpis">
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -282,7 +282,7 @@ export default function RfiInsightsStrip({ rfis, collapsed, onToggleCollapsed })
 
       {/* Charts panel */}
       {!collapsed && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr)", gap: 10 }}>
+        <div className="rfi-insights-charts">
           {/* Aging buckets — re-used directly from rfiAgingBuckets */}
           <div style={CARD}>
             <PaneTitle>AGING BUCKETS</PaneTitle>

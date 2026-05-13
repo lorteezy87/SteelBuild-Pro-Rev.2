@@ -1,32 +1,34 @@
-/**
- * RfiDetailModal — detail view for a single RFI, opened from any row.
- *
- * Rebuilt against the design-system Modal (fixed-overlay, no Radix).
- * Shows: status strip (status chip + BIC pill + priority + age),
- * meta grid (submitted / required / submitter / cost impact), the
- * lifecycle PhaseChevron, the question body, and attachments.
- *
- * `rfi` is the full row data. `onClose` dismisses. `onMutate` handler
- * receives a `{ status }` patch when the user advances the status via
- * the lifecycle chevron footer actions.
- */
-
 import React from "react";
 import { Modal, Button, StatusPill, BicPill, PhaseChevron, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue } from "./utils";
 
-// "Incomplete Response" = GC replied but response was insufficient; sits
-// between REVIEW and ANSWERED in the pipeline. Treated as still-open by
-// downstream closed-state filters.
 const STAGE_INDEX = { Open: 0, "Under Review": 1, "Incomplete Response": 2, Answered: 3, Closed: 4 };
 
 const STAGES = [
   { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
-  { id: "rev",   label: "REVIEW",     color: "var(--status-review)"  },
-  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)"   },
+  { id: "rev",   label: "REVIEW",     color: "var(--status-review)" },
+  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)" },
   { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
-  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)"     },
+  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)" },
 ];
+
+function formatDate(value) {
+  if (!value) return "No date";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function impactValue(rfi) {
+  const parts = [];
+  if (rfi.cost_impact) {
+    parts.push(rfi.cost_impact_amount ? `$${Number(rfi.cost_impact_amount).toLocaleString()}` : "Cost impact");
+  }
+  if (rfi.schedule_impact) {
+    parts.push(rfi.schedule_impact_days ? `${rfi.schedule_impact_days} days` : "Schedule impact");
+  }
+  return parts.join(" / ") || "No known impact";
+}
 
 export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, onNudge }) {
   if (!rfi) return null;
@@ -34,243 +36,116 @@ export default function RfiDetailModal({ rfi, onClose, onAdvanceStatus, onEdit, 
   const age = daysOpen(rfi);
   const overdue = isOverdue(rfi);
   const activeIdx = STAGE_INDEX[rfi.status] ?? 0;
-
   const priorityColor =
     rfi.priority === "Critical" ? "#FF6B35" :
-    rfi.priority === "High"     ? "var(--status-warning)" :
-    rfi.priority === "Medium"   ? "var(--status-info)" :
-                                  "var(--text-muted)";
+    rfi.priority === "High" ? "var(--status-warning)" :
+    rfi.priority === "Medium" ? "var(--status-info)" :
+    "var(--text-muted)";
 
   return (
     <Modal
       open={!!rfi}
       onClose={onClose}
-      eyebrow={`${rfi.rfi_number || rfi.id} · ${(rfi.discipline || "").toUpperCase()}`}
+      eyebrow={`${rfi.rfi_number || rfi.id} / ${(rfi.discipline || "GENERAL").toUpperCase()}`}
       title={rfi.title || "Untitled RFI"}
-      width={760}
+      width={920}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>CLOSE</Button>
-          {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>NUDGE BIC</Button>}
-          {onEdit && <Button variant="outline" icon="ai" onClick={onEdit}>EDIT</Button>}
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          {onNudge && <Button variant="secondary" icon="bell" onClick={onNudge}>Nudge BIC</Button>}
+          {onEdit && <Button variant="outline" icon="ai" onClick={onEdit}>Edit</Button>}
           {onAdvanceStatus && rfi.status !== "Answered" && rfi.status !== "Closed" && (
             <Button variant="primary" icon="check" onClick={() => onAdvanceStatus("Answered")}>
-              MARK ANSWERED
+              Mark Answered
             </Button>
           )}
         </>
       }
     >
-      {/* Status strip */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-          padding: "10px 12px",
-          marginBottom: 16,
-          background: "var(--bg-surface-low)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-        }}
-      >
-        <StatusPill label={rfi.status || "Open"} />
-        <BicPill bic={rfi.ball_in_court || "Contractor"} />
-        <StatusPill label={rfi.priority || "Medium"} size="xs" color={priorityColor} />
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-              color: "var(--text-muted)",
-              letterSpacing: "0.10em",
-            }}
-          >
-            AGE
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 15,
-              fontWeight: 700,
-              color: overdue ? "var(--danger)" : age > 7 ? "var(--status-warning)" : "var(--text-primary)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {age}d
-          </span>
-        </div>
-      </div>
-
-      {/* Meta grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 18 }}>
-        <MetaCell label="SUBMITTED"   value={rfi.submitted_date} />
-        <MetaCell label="REQUIRED"    value={rfi.date_required} highlight={overdue} />
-        <MetaCell label="SUBMITTER"   value={rfi.submitted_by} />
-        <MetaCell
-          label="COST IMPACT"
-          value={rfi.cost_impact && rfi.cost_impact_amount ? `$${Number(rfi.cost_impact_amount).toLocaleString()}` : "—"}
-          color={rfi.cost_impact ? "var(--status-warning)" : "var(--text-muted)"}
-        />
-      </div>
-
-      {/* Lifecycle pipeline */}
-      <div style={{ marginBottom: 18 }}>
-        <SectionLabel>LIFECYCLE</SectionLabel>
-        <PhaseChevron stages={STAGES} activeIdx={activeIdx} showIcons={false} />
-      </div>
-
-      {/* Question body */}
-      <div style={{ marginBottom: 18 }}>
-        <SectionLabel>QUESTION</SectionLabel>
-        <div
-          style={{
-            padding: "12px 14px",
-            background: "var(--bg-surface-low)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-card)",
-            fontFamily: "var(--font-body)",
-            fontSize: 13,
-            lineHeight: 1.55,
-            color: "var(--text-primary)",
-          }}
-        >
-          {rfi.question || rfi.description || rfi.title || <i style={{ color: "var(--text-muted)" }}>No question text recorded.</i>}
-        </div>
-      </div>
-
-      {/* Answer (if present) */}
-      {rfi.answer && (
-        <div style={{ marginBottom: 18 }}>
-          <SectionLabel>ANSWER</SectionLabel>
-          <div
-            style={{
-              padding: "12px 14px",
-              background: "var(--success-muted)",
-              border: "1px solid var(--success-border)",
-              borderLeft: "3px solid var(--status-success)",
-              borderRadius: "var(--radius-card)",
-              fontFamily: "var(--font-body)",
-              fontSize: 13,
-              lineHeight: 1.55,
-              color: "var(--text-primary)",
-            }}
-          >
-            {rfi.answer}
+      <div className="rfi-detail-status">
+        <section className="rfi-detail-card">
+          <div className="rfi-detail-chip-row">
+            <StatusPill label={rfi.status || "Open"} />
+            <BicPill bic={rfi.ball_in_court || "Contractor"} />
+            <StatusPill label={rfi.priority || "Medium"} size="xs" color={priorityColor} />
           </div>
+          <div className="rfi-detail-age">
+            <Metric label="Age" value={`${age}d`} alert={overdue || age > 14} />
+            <Metric label="Required" value={formatDate(rfi.date_required)} alert={overdue} />
+            <Metric label="Impact" value={impactValue(rfi)} alert={rfi.cost_impact || rfi.schedule_impact} />
+          </div>
+        </section>
+
+        <section className="rfi-detail-card">
+          <div className="rfi-detail-meta-grid">
+            <MetaCell label="Submitted" value={formatDate(rfi.submitted_date)} />
+            <MetaCell label="Submitter" value={rfi.submitted_by || "Not recorded"} />
+            <MetaCell label="Assigned To" value={rfi.assigned_to || "Not assigned"} />
+            <MetaCell label="Answered" value={rfi.date_answered ? formatDate(rfi.date_answered) : "Pending"} />
+          </div>
+        </section>
+      </div>
+
+      <section className="rfi-detail-section">
+        <SectionLabel>Lifecycle</SectionLabel>
+        <PhaseChevron stages={STAGES} activeIdx={activeIdx} showIcons={false} />
+      </section>
+
+      <section className="rfi-detail-section">
+        <SectionLabel>Question</SectionLabel>
+        <div className="rfi-detail-body-text">
+          {rfi.question || rfi.description || rfi.title || "No question text recorded."}
+        </div>
+      </section>
+
+      {rfi.answer && (
+        <section className="rfi-detail-section">
+          <SectionLabel>Answer</SectionLabel>
+          <div className="rfi-detail-body-text">{rfi.answer}</div>
           {rfi.answered_by && (
-            <div
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 9,
-                color: "var(--text-muted)",
-                marginTop: 6,
-                letterSpacing: "0.08em",
-              }}
-            >
-              Answered by {rfi.answered_by} on {rfi.date_answered || "—"}
+            <div className="rfi-row-date-sub">
+              Answered by {rfi.answered_by} on {rfi.date_answered ? formatDate(rfi.date_answered) : "No date"}
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      {/* Drawing / spec reference */}
       {(rfi.drawing_reference || rfi.spec_section) && (
-        <div style={{ marginBottom: 12 }}>
-          <SectionLabel>REFERENCE</SectionLabel>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <section className="rfi-detail-section">
+          <SectionLabel>Reference</SectionLabel>
+          <div className="rfi-reference-row">
             {rfi.drawing_reference && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 10px",
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-badge)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                <Icon name="drawings" size={11} color="var(--accent)" />
+              <div className="rfi-reference-chip">
+                <Icon name="drawings" size={12} color="var(--accent)" />
                 {rfi.drawing_reference}
               </div>
             )}
-            {rfi.spec_section && (
-              <div
-                style={{
-                  padding: "6px 10px",
-                  background: "var(--bg-surface-low)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: "var(--radius-badge)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  color: "var(--text-secondary)",
-                }}
-              >
-                SPEC · {rfi.spec_section}
-              </div>
-            )}
+            {rfi.spec_section && <div className="rfi-reference-chip">Spec / {rfi.spec_section}</div>}
           </div>
-        </div>
+        </section>
       )}
     </Modal>
   );
 }
 
 function SectionLabel({ children }) {
+  return <div className="rfi-small-label">{children}</div>;
+}
+
+function Metric({ label, value, alert }) {
   return (
-    <div
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        color: "var(--text-muted)",
-        letterSpacing: "0.14em",
-        marginBottom: 6,
-      }}
-    >
-      {children}
+    <div className="rfi-detail-metric">
+      <div className="rfi-small-label">{label}</div>
+      <strong style={{ color: alert ? "var(--danger)" : "var(--text-primary)" }}>{value}</strong>
     </div>
   );
 }
 
-function MetaCell({ label, value, color, highlight }) {
+function MetaCell({ label, value }) {
   return (
-    <div
-      style={{
-        padding: "8px 10px",
-        background: "var(--bg-surface-low)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          color: "var(--text-muted)",
-          letterSpacing: "0.14em",
-          marginBottom: 3,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          fontWeight: 600,
-          color: color || (highlight ? "var(--danger)" : "var(--text-primary)"),
-          fontVariantNumeric: "tabular-nums",
-          letterSpacing: "0.04em",
-        }}
-      >
-        {value || "—"}
-      </div>
+    <div className="rfi-detail-meta-cell">
+      <div className="rfi-small-label">{label}</div>
+      <div className="rfi-detail-value">{value}</div>
     </div>
   );
 }

@@ -1,27 +1,13 @@
 /**
- * RFIs — Request for Information hub, rebuilt on the Claude Design
- * industrial-OS design system.
+ * RFIs page shell.
  *
- * Page shell owns: React-Query data + mutations, URL state, search +
- * filter state, bulk selection, number-repair logic, overdue-alert
- * effect. Every visual component comes from `@/components/design-system`
- * or `src/pages/rfis/*`.
- *
- * Key redesigned surfaces:
- *   - CommandBar header with action buttons (Export / Import Log /
- *     AI Draft / New RFI)
- *   - 6-tile KPI row (ALL / OPEN / UNDER REVIEW / ANSWERED / OVERDUE
- *     / CRITICAL), click-to-filter
- *   - RFI Lifecycle Pipeline chevron (signature element — OPEN →
- *     REVIEW → ANSWERED → CLOSED, active stage highlighted)
- *   - Compact search + discipline pill bar
- *   - Dense sortable table with age-ramped colors, BIC chips, critical
- *     priority dot, hover-revealed actions
- *   - Fixed-overlay RFI detail modal with lifecycle chevron
- *   - Bottom-fixed bulk action bar
+ * Owns React Query data, mutations, URL state, search and filter state,
+ * bulk selection, attachment upload, and overdue-alert creation. The
+ * visible module is split into focused presentation components under
+ * `src/pages/rfis/*`.
  */
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./rfis/RFIs.css";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -44,12 +30,8 @@ import {
 import { batchProcess } from "@/utils/batchProcess";
 
 import {
-  CommandBar,
-  KpiTile,
-  PhaseChevron,
   BulkActionBar,
   EmptyState,
-  Button,
   Icon,
 } from "@/components/design-system";
 
@@ -57,6 +39,7 @@ import { extractRfiSequence, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
+import RfiCommandCenter from "./rfis/RfiCommandCenter";
 
 const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor Bolts"];
 
@@ -66,9 +49,9 @@ const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor 
 // RfiRow reads for its row height.
 const DENSITY_LS_KEY = "sbp-rfi-density";
 const DENSITY_PRESETS = {
-  compact:     { rowHeight: 28, label: "COMPACT" },
-  normal:      { rowHeight: 38, label: "NORMAL" },
-  comfortable: { rowHeight: 50, label: "COMFORTABLE" },
+  compact:     { rowHeight: 44, label: "COMPACT" },
+  normal:      { rowHeight: 58, label: "NORMAL" },
+  comfortable: { rowHeight: 72, label: "COMFORTABLE" },
 };
 function loadDensity() {
   try {
@@ -81,16 +64,6 @@ const INSIGHTS_LS_KEY = "sbp-rfi-insights-collapsed";
 function loadInsightsCollapsed() {
   try { return localStorage.getItem(INSIGHTS_LS_KEY) === "1"; } catch { return false; }
 }
-
-const LIFECYCLE_STAGES_BASE = [
-  { id: "open",  label: "OPEN",       color: "var(--status-warning)" },
-  { id: "rev",   label: "REVIEW",     color: "var(--status-review)"  },
-  // GC replied but the answer was incomplete — needs another round.
-  // Still treated as open by closed-state filters.
-  { id: "incmp", label: "INCOMPLETE", color: "var(--status-error)"   },
-  { id: "ans",   label: "ANSWERED",   color: "var(--status-success)" },
-  { id: "cls",   label: "CLOSED",     color: "var(--text-muted)"     },
-];
 
 export default function RFIs() {
   const [searchParams] = useSearchParams();
@@ -287,26 +260,6 @@ export default function RFIs() {
       });
   }, [rfis, filter, disciplineFilter, search]);
 
-  /* ── Lifecycle pipeline stages (with live counts + active index) ── */
-  const lifecycleStages = useMemo(() => [
-    { ...LIFECYCLE_STAGES_BASE[0], count: counts.open },
-    { ...LIFECYCLE_STAGES_BASE[1], count: counts.review },
-    { ...LIFECYCLE_STAGES_BASE[2], count: counts.incomplete },
-    { ...LIFECYCLE_STAGES_BASE[3], count: counts.answered },
-    { ...LIFECYCLE_STAGES_BASE[4], count: counts.closed },
-  ], [counts]);
-
-  // Active stage = the first non-empty stage walking the pipeline backwards from
-  // the action-needed end. Incomplete-response RFIs demand attention so they
-  // win over Open/Review.
-  const activeStageIdx = useMemo(() => {
-    if (counts.incomplete > 0) return 2;
-    if (counts.review > 0) return 1;
-    if (counts.open > 0) return 0;
-    if (counts.answered > 0) return 3;
-    return 4;
-  }, [counts]);
-
   /* ── Overdue → Alert background effect ── */
   const projectMap = useMemo(() => {
     const m = {};
@@ -424,238 +377,80 @@ export default function RFIs() {
 
   return (
     <div
+      className="rfi-page"
       style={{
-        padding: 18,
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-        // Density mutates the row height that RfiRow reads via
-        // var(--density-row-height, 38px). Set on the page wrapper
-        // so every RfiRow underneath inherits it without prop drilling.
         "--density-row-height": `${densityPreset.rowHeight}px`,
-      }}>
-      <CommandBar
-        eyebrow={`PROJECT MANAGEMENT · ${activeProjectName.toUpperCase()}`}
-        title="RFIs"
-        count={counts.open}
-        unit=" OPEN"
-        subtitle="Requests for Information · aging tracked · click tiles to filter"
-      >
-        <Button variant="secondary" icon="download" onClick={() => exportRFIsToCSV(filtered)}>
-          EXPORT
-        </Button>
-        <Button variant="secondary" icon="upload" onClick={() => setShowLogImport(true)}>
-          IMPORT LOG
-        </Button>
-        <Button
-          variant="primary"
-          icon="plus"
-          onClick={() => { setEditingRFI(null); setShowForm(true); }}
-        >
-          NEW RFI
-        </Button>
-      </CommandBar>
+        "--rfi-row-grid": RFI_ROW_GRID,
+      }}
+    >
+      <RfiCommandCenter
+        projectName={activeProjectName}
+        counts={counts}
+        rfis={rfis}
+        filter={filter}
+        onFilterChange={setFilter}
+        onOpenRfi={setSelectedRFI}
+        onExport={() => exportRFIsToCSV(filtered)}
+        onImport={() => setShowLogImport(true)}
+        onCreate={() => {
+          setEditingRFI(null);
+          setShowForm(true);
+        }}
+      />
 
-      {/* Insights strip — KPI tiles + aging buckets + ball-in-court
-          donut + monthly-volume bar chart. Collapsible so a list-first
-          PM can hide it after they've digested the health view. */}
       <RfiInsightsStrip
         rfis={rfis}
         collapsed={insightsCollapsed}
         onToggleCollapsed={handleToggleInsights}
       />
-
-      {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
-        <KpiTile compact label="ALL"          value={counts.all}        color="var(--text-secondary)" active={filter === "all"}        onClick={() => setFilter("all")} />
-        <KpiTile compact label="OPEN"         value={counts.open}       color="var(--status-warning)" active={filter === "open"}       onClick={() => setFilter("open")} />
-        <KpiTile compact label="UNDER REVIEW" value={counts.review}     color="var(--status-review)"  active={filter === "review"}     onClick={() => setFilter("review")} />
-        <KpiTile compact label="INCOMPLETE"   value={counts.incomplete} color="var(--status-error)"   active={filter === "incomplete"} onClick={() => setFilter("incomplete")} />
-        <KpiTile compact label="ANSWERED"     value={counts.answered}   color="var(--status-success)" active={filter === "answered"}   onClick={() => setFilter("answered")} />
-        <KpiTile compact label="OVERDUE"      value={counts.overdue}    color="var(--status-error)"   active={filter === "overdue"}    onClick={() => setFilter("overdue")} />
-        <KpiTile compact label="CRITICAL"     value={counts.critical}   color="#FF6B35"               active={filter === "critical"}   onClick={() => setFilter("critical")} />
-      </div>
-
-      {/* RFI Lifecycle Pipeline */}
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          padding: "12px 14px",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.14em",
-            marginBottom: 8,
-          }}
-        >
-          RFI LIFECYCLE PIPELINE
-        </div>
-        <PhaseChevron stages={lifecycleStages} activeIdx={activeStageIdx} showIcons={false} />
-      </div>
-
-      {/* Filter bar — sticky so it stays anchored as the user scrolls
-          a long table. zIndex above row content but below modals. */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "8px 12px",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          flexWrap: "wrap",
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
-        }}
-      >
-        <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
-          <div style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}>
-            <Icon name="search" size={12} />
+      <div className="rfi-filter-toolbar">
+        <div className="rfi-search-box">
+          <div className="rfi-search-icon">
+            <Icon name="search" size={13} />
           </div>
           <input
+            className="rfi-search-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search RFI # or title…"
-            style={{
-              width: "100%",
-              height: 30,
-              padding: "0 12px 0 30px",
-              background: "var(--bg-input)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "var(--radius-input)",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-body)",
-              fontSize: 12,
-              outline: "none",
-            }}
+            placeholder="Search RFI number, title, drawing, question, or answer"
           />
         </div>
-        <div style={{ width: 1, height: 20, background: "var(--divider)" }} />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 8,
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-          }}
-        >
-          DISCIPLINE
-        </span>
-        {DISCIPLINES.map((d) => {
-          const active = disciplineFilter === d;
-          return (
+
+        <div className="rfi-filter-group">
+          <span className="rfi-filter-label">Discipline</span>
+          {DISCIPLINES.map((d) => (
             <button
               key={d}
+              type="button"
+              className={`rfi-chip${disciplineFilter === d ? " is-active" : ""}`}
               onClick={() => setDisciplineFilter(d)}
-              style={{
-                padding: "3px 8px",
-                borderRadius: "var(--radius-btn)",
-                border: active ? "1px solid var(--accent)" : "1px solid transparent",
-                background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
-                color: active ? "var(--accent)" : "var(--text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 8,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                textTransform: "uppercase",
-              }}
             >
               {d}
             </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-        {/* Density picker — three preset rows. Persists to
-            localStorage so the user's choice sticks across sessions. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 8,
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-              marginRight: 4,
-            }}
-          >
-            DENSITY
-          </span>
-          {Object.entries(DENSITY_PRESETS).map(([id, preset]) => {
-            const active = density === id;
-            return (
-              <button
-                key={id}
-                onClick={() => handleDensityChange(id)}
-                title={preset.label.toLowerCase()}
-                style={{
-                  padding: "3px 8px",
-                  borderRadius: "var(--radius-btn)",
-                  border: active ? "1px solid var(--accent)" : "1px solid transparent",
-                  background: active ? "var(--accent-muted)" : "var(--bg-surface-low)",
-                  color: active ? "var(--accent)" : "var(--text-secondary)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  cursor: "pointer",
-                }}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
+          ))}
         </div>
-        <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 4px" }} />
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            color: "var(--text-muted)",
-            letterSpacing: "0.10em",
-          }}
-        >
-          {filtered.length} of {rfis.length}
-        </span>
+
+        <div className="rfi-filter-group">
+          <span className="rfi-filter-label">Density</span>
+          {Object.entries(DENSITY_PRESETS).map(([id, preset]) => (
+            <button
+              key={id}
+              type="button"
+              className={`rfi-chip${density === id ? " is-active" : ""}`}
+              onClick={() => handleDensityChange(id)}
+              title={preset.label.toLowerCase()}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        <span className="rfi-toolbar-count">{filtered.length} of {rfis.length}</span>
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-card)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: RFI_ROW_GRID,
-            gap: 8,
-            padding: "8px 12px",
-            background: "var(--bg-surface-low)",
-            borderBottom: "1px solid var(--border-default)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 8,
-            fontWeight: 700,
-            color: "var(--text-muted)",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            // Sticky column header — stays pinned beneath the filter
-            // bar (top: 44 leaves room for the filter bar's height).
-            position: "sticky",
-            top: 44,
-            zIndex: 4,
-          }}
-        >
+      <div className="rfi-table-shell">
+        <div className="rfi-table-header">
           <div>
             <input
               type="checkbox"
@@ -663,37 +458,35 @@ export default function RFIs() {
               onChange={(e) => toggleAll(e.target.checked)}
             />
           </div>
-          <div>RFI #</div>
-          <div>Title</div>
-          <div>Discipline</div>
-          <div>BIC</div>
+          <div>RFI</div>
+          <div>Question / Reference</div>
+          <div>Ball in Court</div>
           <div>Status</div>
-          <div>Age</div>
-          <div>Priority</div>
-          <div style={{ textAlign: "right" }}>Cost Impact</div>
+          <div>Due / Age</div>
+          <div>Impact</div>
           <div></div>
         </div>
         {filtered.length > 0 ? (
-          filtered.map((r, i) => (
-            <RfiRow
-              key={r.id}
-              rfi={r}
-              idx={i}
-              density={density}
-              selected={selectedIds.has(r.id)}
-              onToggle={() => toggleSelect(r.id)}
-              onOpen={() => setSelectedRFI(r)}
-            />
-          ))
+          <div className="rfi-table-body">
+            {filtered.map((r) => (
+              <RfiRow
+                key={r.id}
+                rfi={r}
+                selected={selectedIds.has(r.id)}
+                onToggle={() => toggleSelect(r.id)}
+                onOpen={() => setSelectedRFI(r)}
+              />
+            ))}
+          </div>
         ) : (
-          <div style={{ padding: 24 }}>
+          <div className="rfi-empty-wrap">
             <EmptyState
               icon="rfi"
-              title={rfis.length === 0 ? "No RFIs yet — submit your first" : "No RFIs match your filters"}
+              title={rfis.length === 0 ? "No RFIs yet" : "No RFIs match your filters"}
               body={
                 rfis.length === 0
-                  ? "Click NEW RFI to start tracking field questions and clarifications. Use IMPORT LOG to bring an existing RFI log over from CSV in one shot."
-                  : "Try clearing filters or adjusting the search query."
+                  ? "Create the first RFI or import an existing RFI log from CSV."
+                  : "Try clearing filters or widening the search query."
               }
             />
           </div>
