@@ -18,15 +18,15 @@ import WPContextMenu from "./resourceScheduling/WPContextMenu";
 import TimelineHeader from "./resourceScheduling/TimelineHeader";
 import UnscheduledTray from "./resourceScheduling/UnscheduledTray";
 import ResourceRow from "./resourceScheduling/ResourceRow";
-import { CommandBar } from "@/components/design-system";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus } from "lucide-react";
 
-// One-shot keyframe injection — must run at module load, not render.
+// One-shot keyframe injection - must run at module load, not render.
 injectKeyframes();
 
-// ──────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------
 // MAIN COMPONENT
-// ──────────────────────────────────────────────────────────────────────
+// ----------------------------------------------------------------------
 
 export default function ResourceScheduling() {
   const qc = useQueryClient();
@@ -80,7 +80,7 @@ export default function ResourceScheduling() {
     },
   });
 
-  // ── Crew hierarchy ──────────────────────────────────────────────────
+  // -- Crew hierarchy ----------------------------------------------------------------------
   // parent_resource_id (migration 043) lets a crew contain individual
   // members. The board renders ONE row per top-level resource; a crew's
   // effective capacity is its own capacity PLUS the sum of its direct
@@ -315,12 +315,47 @@ export default function ResourceScheduling() {
   }, [workPackages, filterPhase]);
 
   // Separate scheduled vs unscheduled
-  const scheduledWps = filteredWorkPackages.filter(
-    (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
+  const scheduledWps = useMemo(
+    () => filteredWorkPackages.filter(
+      (wp) => (wp.scheduled_start_date || wp.released_date) && wp.scheduled_end_date
+    ),
+    [filteredWorkPackages],
   );
-  const unscheduledWps = filteredWorkPackages.filter(
-    (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
+  const unscheduledWps = useMemo(
+    () => filteredWorkPackages.filter(
+      (wp) => !(wp.scheduled_start_date || wp.released_date) || !wp.scheduled_end_date
+    ),
+    [filteredWorkPackages],
   );
+
+  const scheduleStats = useMemo(() => {
+    const totalBudgetHrs = filteredWorkPackages.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+    const totalActualHrs = filteredWorkPackages.reduce((s, wp) => s + wpActualHoursForResource(wp), 0);
+    const totalShopBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_budget) || 0), 0);
+    const totalShopActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.shop_hours_actual) || 0), 0);
+    const totalFieldBudget = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_budget) || 0), 0);
+    const totalFieldActual = filteredWorkPackages.reduce((s, wp) => s + (Number(wp.field_hours_actual) || 0), 0);
+    const assignedWPCount = scheduledWps.filter(wp => wp.crew).length;
+    const unassignedCount = filteredWorkPackages.filter(wp => !wp.crew).length;
+    const overAllocatedResources = topLevelResources.filter(res => {
+      const resWPs = scheduledWps.filter(wp => wp.crew === res.name);
+      const resBudget = resWPs.reduce((s, wp) => s + wpBudgetHoursForResource(wp), 0);
+      const effCap = effectiveCapacityById[res.id] || 0;
+      return effCap > 0 && resBudget > effCap;
+    }).length;
+
+    return {
+      totalBudgetHrs,
+      totalActualHrs,
+      totalShopBudget,
+      totalShopActual,
+      totalFieldBudget,
+      totalFieldActual,
+      assignedWPCount,
+      unassignedCount,
+      overAllocatedResources,
+    };
+  }, [filteredWorkPackages, scheduledWps, topLevelResources, effectiveCapacityById]);
 
   // Cleanup drag function
   const cleanupDrag = useCallback(() => {
@@ -610,7 +645,7 @@ export default function ResourceScheduling() {
     if (!dateChanged && !resourceChanged) return;
 
     // Optimistic update (local cache only). Writes scheduled_start_date
-    // and scheduled_end_date — the new bar window comes from drop position
+    // and scheduled_end_date - the new bar window comes from drop position
     // plus preserved duration computed above.
     qc.setQueryData(
       ["work-packages", activeProject?.id],
@@ -663,7 +698,7 @@ export default function ResourceScheduling() {
 
     const rect = e.currentTarget.getBoundingClientRect();
     // Derive an initial duration for the dropped WP. Prefer the WP's own
-    // budget hours → workdays. Fall back to tonnage (2T / workday) when
+    // budget hours - workdays. Fall back to tonnage (2T / workday) when
     // hours aren't set. Converted to calendar days so the bar spans the
     // correct calendar window (5 workdays = 7 calendar days, not 5).
     const wpBudgetHrs = wpBudgetHoursForResource(wp);
@@ -706,7 +741,7 @@ export default function ResourceScheduling() {
     };
   };
 
-  // Today line offset — normalize both dates to midnight to avoid DST errors
+  // Today line offset - normalize both dates to midnight to avoid DST errors
   const todayOffset = Math.round(
     (() => {
       const today = new Date();
@@ -725,50 +760,34 @@ export default function ResourceScheduling() {
   }, [todayOffset]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "var(--bg-page)",
-      }}
+    <OperationsPageShell
+      eyebrow={activeProject?.name || "No Project Selected"}
+      title="Crew Scheduling"
+      subtitle="Plan crew lanes, capacity, unscheduled work packages, and drag-to-assign dates in one field-ready scheduling board."
+      fullHeight
+      meta={[
+        { label: "Resources", value: resources.length },
+        { label: "Work Packages", value: filteredWorkPackages.length },
+        { label: "Unscheduled", value: unscheduledWps.length, color: unscheduledWps.length > 0 ? "var(--status-warning)" : "var(--status-success)" },
+        { label: "View", value: viewMode },
+      ]}
+      metrics={[
+        { label: "Estimated Hours", value: `${scheduleStats.totalBudgetHrs.toLocaleString()}h`, sub: `${filterPhase === "all" ? "All phases" : filterPhase}` },
+        { label: "Actual Hours", value: `${scheduleStats.totalActualHrs.toLocaleString()}h`, sub: "Posted labor", color: scheduleStats.totalActualHrs > scheduleStats.totalBudgetHrs ? "var(--status-error)" : "var(--status-success)" },
+        { label: "Assigned", value: `${scheduleStats.assignedWPCount} / ${filteredWorkPackages.length}`, sub: "Work packages", color: scheduleStats.unassignedCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
+        { label: "Over-Allocated", value: scheduleStats.overAllocatedResources, sub: "Resource lanes", color: scheduleStats.overAllocatedResources > 0 ? "var(--status-error)" : "var(--status-success)" },
+      ]}
+      actions={(
+        <OpsActionButton variant="primary" onClick={() => setShowNewResource(true)} icon={<Plus size={13} />}>
+          New Resource
+        </OpsActionButton>
+      )}
     >
-      {/* HEADER */}
-      <div style={{ padding: "16px 20px 0", flexShrink: 0 }}>
-        <CommandBar
-          eyebrow={activeProject?.name || "NO PROJECT SELECTED"}
-          title="Crew Scheduling"
-          count={resources.length}
-          unit={` · ${filteredWorkPackages.length} WP`}
-          subtitle="Drag work packages onto resource lanes · right-click to split or rebalance"
-        >
-          <button
-            onClick={() => setShowNewResource(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            <Plus size={12} /> New Resource
-          </button>
-        </CommandBar>
-      </div>
-
       {/* TOOLBAR */}
-      <div
-        style={{
-          background: "var(--bg-page)",
-          borderBottom: "1px solid var(--border-default)",
-          padding: "8px 20px 12px",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          flexShrink: 0,
-        }}
-      >
+      <OpsFilterPanel>
         {/* View toggle */}
         <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {[{ id: "board", label: "⊞ Board" }, { id: "capacity", label: "◎ Capacity" }].map(v => (
+          {[{ id: "board", label: "Board" }, { id: "capacity", label: "Capacity" }].map(v => (
             <button key={v.id} onClick={() => setViewMode(v.id)} style={{
               padding: "6px 12px",
               border: "none",
@@ -839,7 +858,7 @@ export default function ResourceScheduling() {
             );
           })}
         </div>
-      </div>
+      </OpsFilterPanel>
 
       {/* New Resource Modal */}
       <NewResourceDialog
@@ -851,15 +870,15 @@ export default function ResourceScheduling() {
         onClose={() => setShowNewResource(false)}
       />
 
-      {/* ── CAPACITY VIEW ── */}
+      {/* Capacity view */}
       {viewMode === "capacity" && (
         <CapacityView capacity={capacity} workPackages={workPackages} />
       )}
 
-      {/* ── BOARD VIEW ── */}
+      {/* Board view */}
       {viewMode === "board" && (
       <>
-      {/* HERO EMPTY STATE — no resources or WPs yet */}
+      {/* HERO EMPTY STATE ? no resources or WPs yet */}
       {resources.length === 0 && workPackages.length === 0 && (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
@@ -994,7 +1013,7 @@ export default function ResourceScheduling() {
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* LEFT PANEL — Allocation & Unscheduled */}
+        {/* LEFT PANEL ? Allocation & Unscheduled */}
         <div
           style={{
             width: 260,
@@ -1022,7 +1041,7 @@ export default function ResourceScheduling() {
           </div>
 
           {["Labor", "Equipment", "Subcontractor", "Material", "Crew"].map(type => {
-            // Only show top-level resources in the capacity stack — members
+            // Only show top-level resources in the capacity stack - members
             // are rolled up into their crew's effective capacity.
             const typeResources = topLevelResources.filter(r => (r.resource_type || "Labor") === type);
             if (typeResources.length === 0) return null;
@@ -1033,7 +1052,7 @@ export default function ResourceScheduling() {
                     letterSpacing: "0.14em", textTransform: "uppercase", padding: "8px 0 4px",
                   borderBottom: "1px solid var(--border-default)", marginBottom: 6,
                 }}>
-                  {type === "Equipment" ? "⚙" : type === "Subcontractor" ? "🔨" : type === "Material" ? "📦" : "👷"} {type} ({typeResources.length})
+                  {type === "Equipment" ? "?" : type === "Subcontractor" ? "??" : type === "Material" ? "??" : "??"} {type} ({typeResources.length})
                 </div>
                 {typeResources.map(res => {
                   const assignedWPs = scheduledWps.filter(wp => wp.crew === res.name);
@@ -1106,7 +1125,7 @@ export default function ResourceScheduling() {
           />
         </div>
 
-        {/* RIGHT PANEL — Timeline Board */}
+        {/* RIGHT PANEL ? Timeline Board */}
         <div
           ref={boardRef}
           onPointerMove={onBoardPointerMove}
@@ -1116,7 +1135,7 @@ export default function ResourceScheduling() {
             flex: 1,
             overflow: "auto",
             // Previously --bg-sidebar, which is a near-black in dark mode
-            // but navy (#1E293B) in light mode — painted the whole timeline
+            // but navy (#1E293B) in light mode - painted the whole timeline
             // board dark blue and swallowed every work-package bar.
             // bg-surface-low reads as a distinct-but-light chart backdrop
             // in both themes.
@@ -1260,6 +1279,6 @@ export default function ResourceScheduling() {
       )}
       </>
       )}
-    </div>
+    </OperationsPageShell>
   );
 }
