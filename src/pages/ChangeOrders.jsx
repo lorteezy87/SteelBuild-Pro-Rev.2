@@ -26,14 +26,13 @@ import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportM
 import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
 import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 
 import {
-  CommandBar,
   KpiTile,
   PhaseChevron,
   BulkActionBar,
   EmptyState,
-  Button,
   Icon,
 } from "@/components/design-system";
 import CoRow, { CO_ROW_GRID } from "./changeOrders/CoRow";
@@ -70,7 +69,7 @@ export default function ChangeOrders() {
     return () => clearTimeout(t);
   }, [search]);
 
-  /* ── Data ── */
+  /* -- Data -- */
   const { data: cos = [], isLoading } = useQuery({
     queryKey: ["change-orders", projectId],
     queryFn: () =>
@@ -86,7 +85,7 @@ export default function ChangeOrders() {
     staleTime: 5 * 60 * 1000,
   });
 
-  /* ── Mutations ── */
+  /* -- Mutations -- */
   const createMut = useMutation({
     mutationFn: async (d) => {
       // RFI-style numbering: if the user typed a CO number in the form,
@@ -156,7 +155,7 @@ export default function ChangeOrders() {
     else createMut.mutate(d);
   };
 
-  /* ── Derived counts + values ── */
+  /* -- Derived counts + values -- */
   const counts = useMemo(() => ({
     all:       cos.length,
     draft:     cos.filter((c) => c.status === "Draft").length,
@@ -204,7 +203,7 @@ export default function ChangeOrders() {
   const baseContract = Number(liveProject?.original_contract_value) || 0;
   const revisedContract = baseContract + totalApproved;
 
-  /* ── Filtered list ── */
+  /* -- Filtered list -- */
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     return cos.filter((c) => {
@@ -219,7 +218,7 @@ export default function ChangeOrders() {
     });
   }, [cos, filter, debouncedSearch]);
 
-  /* ── Pipeline chevron ── */
+  /* -- Pipeline chevron -- */
   const pipelineStages = useMemo(() => [
     { ...LIFECYCLE[0], count: counts.draft },
     { ...LIFECYCLE[1], count: counts.submitted },
@@ -234,7 +233,7 @@ export default function ChangeOrders() {
     return 3;
   }, [counts]);
 
-  /* ── Selection ── */
+  /* -- Selection -- */
   const toggleSelect = (id) =>
     setSelectedIds((prev) => {
       const n = new Set(prev);
@@ -245,7 +244,7 @@ export default function ChangeOrders() {
   const toggleAll = (checked) =>
     setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set());
 
-  /* ── Guards ── */
+  /* -- Guards -- */
   if (!projectId) {
     return (
       <div style={{ padding: 32, textAlign: "center" }}>
@@ -278,63 +277,39 @@ export default function ChangeOrders() {
   const formatMoney = (n) => formatCurrency(n, 0);
 
   return (
-    <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
-      <CommandBar
-        eyebrow={`FINANCIAL · ${projectName.toUpperCase()}`}
-        title="Change Orders"
-        count={counts.all}
-        unit={` · ${formatMoney(atRiskValue)} AT RISK`}
-        subtitle="Draft → Submitted → Under Review → Approved. Deducts and credits supported."
-      >
-        <Button
-          variant="secondary"
-          icon="upload"
-          onClick={() => setImportOpen(true)}
-          title="Bulk import change orders from a CSV (Sage / Vista / Procore / Excel)"
-        >
-          IMPORT CSV
-        </Button>
-        <Button
-          variant="primary"
-          icon="plus"
-          onClick={() => { setEditing(null); setModalOpen(true); }}
-        >
-          NEW CO
-        </Button>
-      </CommandBar>
-
-      {/* Financial KPI row (revised contract + deltas) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-        <KpiTile
-          label="APPROVED VALUE"
-          value={formatMoney(totalApproved)}
-          sub={`${counts.approved} CO${counts.approved === 1 ? "" : "s"}`}
-          color="var(--status-success)"
-          icon="check"
-        />
-        <KpiTile
-          label="PENDING VALUE"
-          value={formatMoney(totalPending)}
-          sub={`${counts.submitted + counts.review} CO${(counts.submitted + counts.review) === 1 ? "" : "s"}`}
-          color="var(--status-warning)"
-          icon="clock"
-        />
-        <KpiTile
-          label="AT RISK"
-          value={formatMoney(atRiskValue)}
-          sub="Draft + Pending"
-          color="var(--status-review)"
-          icon="alert"
-        />
-        <KpiTile
-          label="REVISED CONTRACT"
-          value={formatMoney(revisedContract)}
-          sub={`Base: ${formatMoney(baseContract)}`}
-          color="var(--accent)"
-          icon="financials"
-        />
-      </div>
-
+    <OperationsPageShell
+      eyebrow={`Financial · ${projectName || activeProject?.project_number || "Project"}`}
+      title="Change Orders"
+      subtitle="Track contract exposure from draft pricing through approval with cost, schedule impact, and review status visible at a glance."
+      meta={[
+        { label: "Total COs", value: counts.all },
+        { label: "At Risk", value: formatMoney(atRiskValue), color: "var(--status-review)" },
+        { label: "Approved", value: counts.approved, color: "var(--status-success)" },
+        { label: "Revised Contract", value: formatMoney(revisedContract), color: "var(--accent)" },
+      ]}
+      metrics={[
+        { label: "Approved Value", value: formatMoney(totalApproved), sub: `${counts.approved} CO${counts.approved === 1 ? "" : "s"}`, color: "var(--status-success)" },
+        { label: "Pending Value", value: formatMoney(totalPending), sub: `${counts.submitted + counts.review} pending`, color: "var(--status-warning)" },
+        { label: "At Risk", value: formatMoney(atRiskValue), sub: "Draft + pending", color: "var(--status-review)" },
+        { label: "Base Contract", value: formatMoney(baseContract), sub: "Original value" },
+      ]}
+      actions={(
+        <>
+          <OpsActionButton
+            onClick={() => setImportOpen(true)}
+            title="Bulk import change orders from a CSV (Sage / Vista / Procore / Excel)"
+          >
+            Import CSV
+          </OpsActionButton>
+          <OpsActionButton
+            variant="primary"
+            onClick={() => { setEditing(null); setModalOpen(true); }}
+          >
+            New CO
+          </OpsActionButton>
+        </>
+      )}
+    >
       {/* CO status filter tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
         <KpiTile compact label="ALL"        value={counts.all}       color="var(--text-secondary)" active={filter === "all"}           onClick={() => setFilter("all")} />
@@ -368,15 +343,7 @@ export default function ChangeOrders() {
       </div>
 
       {/* Search bar */}
-      <div
-        className="sbd-card"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "8px 12px",
-        }}
-      >
+      <OpsFilterPanel>
         <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
           <div
             style={{
@@ -418,7 +385,7 @@ export default function ChangeOrders() {
         >
           {filtered.length} of {cos.length}
         </span>
-      </div>
+      </OpsFilterPanel>
 
       {/* Table */}
       <div
@@ -551,6 +518,6 @@ export default function ChangeOrders() {
         title="Delete Change Order"
         description={`Delete ${deleteTarget?.co_number}?`}
       />
-    </div>
+    </OperationsPageShell>
   );
 }

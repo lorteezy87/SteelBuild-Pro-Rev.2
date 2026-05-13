@@ -7,10 +7,11 @@ import ResourceFormModal from "@/components/resources/ResourceFormModal";
 import ResourceList from "@/components/resources/ResourceList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { toast } from "sonner";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { KpiTile } from "@/components/design-system";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, RefreshCw } from "lucide-react";
 
-// ── Keyframe injection (once) ──
+// -- Keyframe injection (once) --
 const STYLE_ID = "resource-mgmt-keyframes";
 if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
   const style = document.createElement("style");
@@ -37,7 +38,7 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
   document.head.appendChild(style);
 }
 
-// ── Ghost placeholder data for empty state ──
+// -- Ghost placeholder data for empty state --
 const GHOST_RESOURCES = [
   { name: "Welding Team A", type: "Labor", role: "CWI / Fitter", hours: "320h budget" },
   { name: "Trucking Fleet", type: "Equipment", role: "Flatbed / Lowboy", hours: "160h budget" },
@@ -101,7 +102,7 @@ export default function ResourceManagement() {
     overAllocated: resources.filter((r) => getStatus(r) === "Over-Allocated").length,
   };
 
-  // ResourceFormModal.toEntity() already maps UI fields → DB columns, so we
+  // ResourceFormModal.toEntity() already maps UI fields - DB columns, so we
   // pass the payload straight through here.  The DB columns are:
   //   name, resource_type, role, capacity (=budget hrs), unit, cost_rate (=hourly rate),
   //   availability (=status), notes, metadata (JSONB with actual_hours, forecast_hours)
@@ -119,26 +120,26 @@ export default function ResourceManagement() {
   });
 
   const handleSave = (data) => {
-    // data comes from ResourceFormModal.toEntity() — already DB-mapped
+    // data comes from ResourceFormModal.toEntity() - already DB-mapped
     if (editing) updateMut.mutate({ id: editing.id, data });
-    else toast.error("Unexpected save path — use form modal");
+    else toast.error("Unexpected save path - use form modal");
   };
 
-  // ── Company resource sync ────────────────────────────────────────
+  // -- Company resource sync ----------------------------------------------------------------------
   //
   // The `resources` table's RLS policy allows reads+writes on rows
   // with project_id = null ("project_member_access" has an explicit
-  // `project_id IS NULL OR …` branch), so those rows act as a
+  // `project_id IS NULL OR ?` branch), so those rows act as a
   // shared company-wide library. Sync Company copies every library
   // resource into the currently-active project, skipping anything
   // the project already has (matched by name + resource_type).
   //
-  // No-op when the library is empty or when no project is selected —
+  // No-op when the library is empty or when no project is selected ?
   // both surface a gentle toast explaining next steps rather than a
   // bare error.
   const syncMut = useMutation({
     mutationFn: async () => {
-      if (!projectId) throw new Error("Pick a project first — Sync Company copies the library into one specific project.");
+      if (!projectId) throw new Error("Pick a project first - Sync Company copies the library into one specific project.");
       const { data: library, error: libErr } = await supabase
         .from("resources")
         .select("*")
@@ -147,7 +148,7 @@ export default function ResourceManagement() {
       if (!library || library.length === 0) {
         return { inserted: 0, skipped: 0, libraryEmpty: true };
       }
-      // Dedup key: (name|resource_type) lowercased — good enough for
+      // Dedup key: (name|resource_type) lowercased - good enough for
       // MVP given there's no explicit library_resource_id. Two "Welder
       // Crew A" labor rows would collide, which is arguably correct
       // (don't double-add the same crew).
@@ -195,14 +196,14 @@ export default function ResourceManagement() {
       if (res.libraryEmpty) {
         toast.info(
           "No company library yet.",
-          { description: "Create a resource and leave its project empty — those rows become your company library for future syncs." },
+          { description: "Create a resource and leave its project empty - those rows become your company library for future syncs." },
         );
         return;
       }
       const parts = [];
       parts.push(`${res.inserted} added`);
       if (res.skipped > 0) parts.push(`${res.skipped} already in project`);
-      toast.success(`Company library synced — ${parts.join(", ")}`);
+      toast.success(`Company library synced - ${parts.join(", ")}`);
     },
     onError: (e) => toast.error(`Sync failed: ${e?.message || "Unknown error"}`),
   });
@@ -213,49 +214,44 @@ export default function ResourceManagement() {
   const isEmpty = resources.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <CommandBar
-        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
-        title="Resource Management"
-        count={filtered.length}
-        unit=" · RESOURCES"
-        subtitle={`Labor · Equipment · Subcontractors${stats.overAllocated > 0 ? ` · ${stats.overAllocated} over-allocated` : ""}`}
-      >
-        <button
-          onClick={() => syncMut.mutate()}
-          disabled={syncMut.isPending || !projectId}
-          title={projectId
-            ? "Copy every resource from the company library (project_id=null rows) into this project, skipping ones already here."
-            : "Pick a project first — Sync Company adds library resources to a specific project."}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 12px",
-            color: "var(--text-secondary)",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-            cursor: (syncMut.isPending || !projectId) ? "not-allowed" : "pointer",
-            opacity: (syncMut.isPending || !projectId) ? 0.55 : 1,
-            textTransform: "uppercase",
-          }}
-        >
-          <RefreshCw
-            size={12}
-            style={{ animation: syncMut.isPending ? "spin 0.8s linear infinite" : "none" }}
-          />
-          {syncMut.isPending ? "Syncing…" : "Sync Company"}
-        </button>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> Add Resource
-        </button>
-      </CommandBar>
-
+    <OperationsPageShell
+      eyebrow={selectedProject ? selectedProject.name : "All Projects"}
+      title="Resource Management"
+      subtitle="Manage labor, equipment, subcontractors, material resources, project availability, and company library sync in one operational register."
+      meta={[
+        { label: "Showing", value: filtered.length },
+        { label: "Available", value: stats.available, color: "var(--status-success)" },
+        { label: "Allocated", value: stats.allocated, color: "var(--phase-delivery)" },
+        { label: "Over-Allocated", value: stats.overAllocated, color: stats.overAllocated > 0 ? "var(--status-error)" : "var(--status-success)" },
+      ]}
+      metrics={[
+        { label: "Total Resources", value: stats.total, sub: `${stats.labor} labor · ${stats.equipment} equipment`, color: "var(--accent)" },
+        { label: "Subcontractors", value: stats.subcontractor, sub: "External crews", color: "var(--phase-detailing)" },
+        { label: "Material", value: stats.material, sub: "Tracked supply resources", color: "var(--status-warning)" },
+        { label: "Over-Allocated", value: stats.overAllocated, sub: "Needs rebalance", color: stats.overAllocated > 0 ? "var(--status-error)" : "var(--status-success)" },
+      ]}
+      actions={(
+        <>
+          <OpsActionButton
+            onClick={() => syncMut.mutate()}
+            disabled={syncMut.isPending || !projectId}
+            title={projectId
+              ? "Copy every resource from the company library (project_id=null rows) into this project, skipping ones already here."
+              : "Pick a project first - Sync Company adds library resources to a specific project."}
+            icon={<RefreshCw size={13} style={{ animation: syncMut.isPending ? "spin 0.8s linear infinite" : "none" }} />}
+          >
+            {syncMut.isPending ? "Syncing" : "Sync Company"}
+          </OpsActionButton>
+          <OpsActionButton
+            variant="primary"
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            icon={<Plus size={13} />}
+          >
+            Add Resource
+          </OpsActionButton>
+        </>
+      )}
+    >
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
         <KpiTile compact label="Total"          value={stats.total}           color="var(--accent)"
                  active={filterType === "all" && filterStatus === "all"}
@@ -281,7 +277,7 @@ export default function ResourceManagement() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+      <OpsFilterPanel>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <span
             style={{
@@ -357,7 +353,7 @@ export default function ResourceManagement() {
             </button>
           ))}
         </div>
-      </div>
+      </OpsFilterPanel>
 
       {/* Form Modal */}
       {showForm && (
@@ -483,7 +479,6 @@ export default function ResourceManagement() {
         title="Delete Resource"
         description="Delete this resource? This cannot be undone."
       />
-    </div>
+    </OperationsPageShell>
   );
 }
-

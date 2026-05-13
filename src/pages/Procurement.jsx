@@ -35,7 +35,8 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import DeleteDialog from '@/components/shared/DeleteDialog';
 import StatusBadge from '@/components/shared/StatusBadge';
-import { CommandBar, KpiTile } from '@/components/design-system';
+import { KpiTile } from '@/components/design-system';
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from '@/components/operations/OperationsPageShell';
 import { Plus, Download, Printer } from 'lucide-react';
 import { useProjectId } from '@/hooks/useProjectId';
 import { useAutoOpenCreate } from '@/hooks/useAutoOpenCreate';
@@ -67,7 +68,7 @@ const CAT_COLORS = {
   'Other': 'var(--text-muted)',
 };
 
-// Pipeline order — Cancelled is intentionally excluded from the kanban.
+// Pipeline order - Cancelled is intentionally excluded from the kanban.
 const PIPELINE_STATUSES = [
   { id: 'Identified',     label: 'Identified',    short: 'IDENT',     color: 'var(--text-muted)' },
   { id: 'Quoted',         label: 'Quoted',        short: 'QUOTED',    color: 'var(--status-info)' },
@@ -241,7 +242,7 @@ export default function Procurement() {
   });
 
   // Soft-delete mirrors the Budget Hours pattern. Hard delete was
-  // destructive — losing PO history when a user mis-clicked the X
+  // destructive - losing PO history when a user mis-clicked the X
   // button was the original bug report on this page.
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Delivery.update(id, {
@@ -285,7 +286,7 @@ export default function Procurement() {
 
     // Long-lead slip = the implied ship date is later than the required
     // date AND the row isn't already received/cancelled. This is the
-    // signal a PM most cares about — items that won't make their need-by.
+    // signal a PM most cares about - items that won't make their need-by.
     const longLeadSlipping = !!(
       item.is_long_lead
       && effectiveShipDate
@@ -351,7 +352,7 @@ export default function Procurement() {
   const handleSetFilterStatus = (s) => {
     setFilterStatus(s);
     // Update URL so the filter stays deep-linkable but doesn't pollute
-    // history — replace, not push.
+    // history - replace, not push.
     const next = new URLSearchParams(searchParams);
     if (s === 'all') next.delete('status'); else next.set('status', s);
     setSearchParams(next, { replace: true });
@@ -393,7 +394,7 @@ export default function Procurement() {
   if (!projectId) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 24px' }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+        <div style={{ fontSize: 32, marginBottom: 12, fontFamily: "var(--font-mono)", fontWeight: 800 }}>PKG</div>
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700,
           color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -405,76 +406,63 @@ export default function Procurement() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-      <CommandBar
-        eyebrow={selectedProject?.name || "PROCUREMENT"}
-        title="Procurement Tracker"
-        count={kpis.total}
-        unit=" · ITEMS"
-        subtitle={`${kpis.open} open · ${kpis.overdue} overdue · ${kpis.longLead} long-lead${kpis.longLeadSlipping > 0 ? ` · ${kpis.longLeadSlipping} slipping` : ''}`}
-      >
-        <div style={{ display: 'flex', border: '1px solid var(--border-default)', borderRadius: 6, overflow: 'hidden' }}>
-          {[
-            { id: 'pipeline', label: 'Pipeline' },
-            { id: 'list', label: 'List' },
-            { id: 'board', label: 'Board' },
-          ].map((v, i) => (
-            <button
-              key={v.id}
-              onClick={() => handleSetView(v.id)}
-              style={{
-                padding: '6px 12px',
-                border: 'none',
-                borderRight: i < 2 ? '1px solid var(--border-default)' : 'none',
-                background: view === v.id ? 'var(--accent-muted)' : 'transparent',
-                color: view === v.id ? 'var(--accent)' : 'var(--text-secondary)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                cursor: 'pointer',
-                textTransform: 'uppercase',
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={handleExportCSV}
-          style={cmdBtnStyle}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-surface-mid)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-surface)')}
-          title="Export filtered rows as CSV"
-        >
-          <Download size={11} /> Export CSV
-        </button>
-        <button
-          onClick={() => window.print()}
-          style={cmdBtnStyle}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-surface-mid)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-surface)')}
-          title="Print this page"
-        >
-          <Printer size={11} /> Print
-        </button>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'var(--accent)', color: 'var(--bg-base)', border: 'none',
-            borderRadius: 'var(--radius-btn)', padding: '8px 14px',
-            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-            cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--accent)')}
-        >
-          <Plus size={12} /> Add Item
-        </button>
-      </CommandBar>
-
+    <OperationsPageShell
+      eyebrow={selectedProject?.name || "Procurement"}
+      title="Procurement Tracker"
+      subtitle="Track material, vendors, purchase orders, long-lead risk, shipping commitments, and received status from one procurement command board."
+      meta={[
+        { label: "Items", value: kpis.total },
+        { label: "Open", value: kpis.open, color: "var(--status-warning)" },
+        { label: "Overdue", value: kpis.overdue, color: kpis.overdue > 0 ? "var(--status-error)" : "var(--status-success)" },
+        { label: "View", value: view },
+      ]}
+      metrics={[
+        { label: "Total Items", value: kpis.total, sub: `${filtered.length} showing`, color: "var(--accent)" },
+        { label: "Long Lead", value: kpis.longLead, sub: `${kpis.longLeadSlipping} slipping`, color: kpis.longLeadSlipping > 0 ? "var(--status-error)" : "var(--phase-detailing)" },
+        { label: "Overdue", value: kpis.overdue, sub: "Needs follow-up", color: kpis.overdue > 0 ? "var(--status-error)" : "var(--status-success)" },
+        { label: "Total Weight", value: `${kpis.totalWeight.toFixed(1)}T`, sub: "Procurement tons", color: "var(--phase-fabrication)" },
+      ]}
+      actions={(
+        <>
+          <div style={{ display: 'flex', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' }}>
+            {[
+              { id: 'pipeline', label: 'Pipeline' },
+              { id: 'list', label: 'List' },
+              { id: 'board', label: 'Board' },
+            ].map((v, i) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => handleSetView(v.id)}
+                style={{
+                  padding: '8px 12px',
+                  border: 'none',
+                  borderRight: i < 2 ? '1px solid var(--border-default)' : 'none',
+                  background: view === v.id ? 'var(--accent-muted)' : 'transparent',
+                  color: view === v.id ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <OpsActionButton onClick={handleExportCSV} title="Export filtered rows as CSV" icon={<Download size={13} />}>
+            Export CSV
+          </OpsActionButton>
+          <OpsActionButton onClick={() => window.print()} title="Print this page" icon={<Printer size={13} />}>
+            Print
+          </OpsActionButton>
+          <OpsActionButton variant="primary" onClick={() => { setEditing(null); setShowForm(true); }} icon={<Plus size={13} />}>
+            Add Item
+          </OpsActionButton>
+        </>
+      )}
+    >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
         <KpiTile compact label="Total Items"      value={kpis.total}                         color="var(--accent)" />
         <KpiTile compact label="Open"             value={kpis.open}                          color="var(--status-warning)" />
@@ -485,7 +473,7 @@ export default function Procurement() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+      <OpsFilterPanel>
         <input
           placeholder="Search description / vendor / PO..."
           value={search}
@@ -512,7 +500,7 @@ export default function Procurement() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-      </div>
+      </OpsFilterPanel>
 
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 32, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
@@ -569,22 +557,13 @@ export default function Procurement() {
         title="Remove Procurement Item"
         description="The item will be archived (soft-deleted). It can be recovered from the database if needed."
       />
-    </div>
+    </OperationsPageShell>
   );
 }
 
-const cmdBtnStyle = {
-  display: 'flex', alignItems: 'center', gap: 6,
-  background: 'var(--bg-surface)', color: 'var(--text-secondary)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-btn)', padding: '7px 12px',
-  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-  cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em',
-};
-
-/* ──────────────────────────────────────────────────────────────────
+/* ----------------------------------------------------------------------
  * Pipeline (kanban) view
- * ────────────────────────────────────────────────────────────────── */
+ * ---------------------------------------------------------------------- */
 function PipelineView({ items, wpById, onEdit }) {
   return (
     <div style={{
@@ -717,9 +696,9 @@ function Pill({ color, text }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────
- * List view — flat table mirroring schema columns
- * ────────────────────────────────────────────────────────────────── */
+/* ----------------------------------------------------------------------
+ * List view - flat table mirroring schema columns
+ * ---------------------------------------------------------------------- */
 function ListView({ items, wpById, onEdit, onDelete }) {
   // Item · Category · Vendor · PO · Required · Promised · Lead · Weight · Status · Actions
   const GRID = '1.4fr 130px 130px 100px 90px 90px 70px 70px 110px 80px';
@@ -858,9 +837,9 @@ function ListView({ items, wpById, onEdit, onDelete }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────
- * Board view — grouped by procurement_category
- * ────────────────────────────────────────────────────────────────── */
+/* ----------------------------------------------------------------------
+ * Board view - grouped by procurement_category
+ * ---------------------------------------------------------------------- */
 function BoardView({ items, wpById, onEdit }) {
   // Bucket by category. Render only categories that have rows so the
   // board doesn't show 10 empty columns on a small project.
@@ -934,11 +913,11 @@ function BoardView({ items, wpById, onEdit }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────
- * Form drawer — every column the schema offers
- * ────────────────────────────────────────────────────────────────── */
+/* ----------------------------------------------------------------------
+ * Form drawer - every column the schema offers
+ * ---------------------------------------------------------------------- */
 function ProcurementFormModal({ projectId, item, vendors, workPackages, onClose, onSave, isSaving = false }) {
-  void projectId; // unused — Procurement page injects project_id at create
+  void projectId; // unused - Procurement page injects project_id at create
   const initial = item ? {
     ...item,
     metadata: item.metadata || {},
@@ -976,7 +955,7 @@ function ProcurementFormModal({ projectId, item, vendors, workPackages, onClose,
 
   // Sort WPs by wp_number ascending so the dropdown is browsable. Show
   // both number and short name. Once the project has 50+ WPs we'd
-  // swap this for a search input — not yet a problem in practice but
+  // swap this for a search input - not yet a problem in practice but
   // flagged in the rebuild brief.
   const sortedWPs = useMemo(
     () => [...workPackages].sort((a, b) =>
@@ -988,7 +967,7 @@ function ProcurementFormModal({ projectId, item, vendors, workPackages, onClose,
   const handleSave = () => {
     if (isSaving) return;
     if (!form.description?.trim()) return;
-    // Coerce numerics — empty strings should hit the DB as null.
+    // Coerce numerics - empty strings should hit the DB as null.
     const payload = {
       description: form.description?.trim(),
       procurement_category: form.procurement_category || null,
