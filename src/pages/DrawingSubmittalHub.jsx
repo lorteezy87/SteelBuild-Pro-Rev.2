@@ -27,6 +27,22 @@ import { computeFabReady } from "@/lib/submittalAnalytics";
 import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import CycleTimeCard from "@/components/submittals/CycleTimeCard";
 import AgingReportTable from "@/components/submittals/AgingReportTable";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Factory,
+  FileStack,
+  Gauge,
+  Layers3,
+  Link2,
+  Search,
+  ShieldCheck,
+  Workflow,
+} from "lucide-react";
 
 // Lazy-load the existing pages as tab content
 const DrawingsPage = lazy(() => import("@/pages/Drawings"));
@@ -38,7 +54,6 @@ const SubmittalsPage = lazy(() => import("@/pages/Submittals"));
 // (--surface-0, --border) with dark hardcoded fallbacks, which made the
 // Approval Matrix unreadable.
 const accent      = "var(--accent)";
-const surface0    = "var(--bg-surface)";
 const surface1    = "var(--bg-surface-low)";
 const surface2    = "var(--bg-surface-high)";
 const border      = "var(--border-default)";
@@ -48,12 +63,14 @@ const mono        = "var(--font-mono)";
 const success     = "var(--status-success)";
 const warning     = "var(--status-warning)";
 const error       = "var(--status-error)";
+const info        = "var(--status-info)";
+const review      = "var(--status-review)";
 
 const TABS = [
-  { key: "overview",   label: "Triage Board" },
-  { key: "drawings",   label: "Drawing Register" },
-  { key: "submittals", label: "Submittal Register" },
-  { key: "matrix",     label: "Approval Matrix" },
+  { key: "overview",   label: "Control Board", icon: Gauge },
+  { key: "drawings",   label: "Drawing Register", icon: FileStack },
+  { key: "submittals", label: "Submittal Register", icon: ClipboardList },
+  { key: "matrix",     label: "Approval Matrix", icon: Workflow },
 ];
 
 // ── Status colors for matrix ───────────────────────────────────────────────
@@ -242,6 +259,21 @@ function itemUrgency(a, b) {
   return rank(a) - rank(b) || a.due.sort - b.due.sort || a.title.localeCompare(b.title);
 }
 
+function pluralize(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function getStatusColor(status) {
+  return STATUS_COLORS[status] || textMuted;
+}
+
+function getActionTone(item) {
+  if (item?.due?.overdue) return error;
+  if (item?.needsAction) return review;
+  if (item?.due?.dueSoon) return warning;
+  return info;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function DrawingSubmittalHub() {
@@ -409,85 +441,131 @@ export default function DrawingSubmittalHub() {
     };
   }, [submittals, setPackages, fabReady]);
 
+  const tabCounts = useMemo(() => ({
+    overview: triage.openItems.length,
+    drawings: drawingKpis.totalSets,
+    submittals: kpis.total,
+    matrix: drawingSets.filter((set) => !set?.is_deleted).length,
+  }), [triage.openItems.length, drawingKpis.totalSets, kpis.total, drawingSets]);
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: surface0 }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "var(--bg-page)",
+        color: textPrimary,
+        padding: "24px 28px",
+      }}
+    >
       {/* ── Command Bar ──────────────────────────────────────────────── */}
       <CommandBar
-        eyebrow={projectName}
-        title="Drawings & Submittals"
+        eyebrow={projectName ? `Detailing control - ${projectName}` : "Detailing control"}
+        title="Drawing & Submittal Control"
         count={drawingKpis.totalSets}
-        unit="sets"
-        subtitle="Drawing sets tracked by user-created set name, with submittal status and approval risk"
-      />
+        unit={` sets | ${drawingKpis.totalSheets} sheets`}
+        subtitle="Set-level drawing packages, submittal status, due dates, ownership, and fabrication-release readiness."
+      >
+        <HeaderSignal
+          icon={AlertTriangle}
+          label="Overdue"
+          value={triage.overdue.length}
+          tone={triage.overdue.length ? error : success}
+        />
+        <HeaderSignal
+          icon={Factory}
+          label="Fab ready"
+          value={`${fabReady.percent}%`}
+          tone={success}
+        />
+        <HeaderSignal
+          icon={Link2}
+          label="Unlinked"
+          value={triage.unlinkedSubmittalItems.length}
+          tone={triage.unlinkedSubmittalItems.length ? warning : textMuted}
+        />
+      </CommandBar>
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
-      <div className="sbd-mesh-bg" style={{
-        display: "flex", gap: 8, padding: "8px 20px", flexWrap: "wrap",
-        borderBottom: `1px solid ${border}`,
-        background: surface1,
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+        gap: 10,
+        marginBottom: 14,
       }}>
-        {/* Drawing KPIs */}
-        <KpiTile label="Drawing Sets"    value={drawingKpis.totalSets}   sub={`${drawingKpis.totalSheets} sheets`} color={accent} loading={isLoading} />
-        <KpiTile label="Sets Released"   value={drawingKpis.released}    color={success} loading={isLoading} />
-        <KpiTile label="Sets In Review"  value={drawingKpis.inReview}    color={warning} loading={isLoading} />
-
-        <div style={{ width: 1, background: border, margin: "4px 8px" }} />
-
-        {/* Submittal KPIs */}
-        <KpiTile label="Submittals"      value={kpis.total}    color={accent} loading={isLoading} />
-        <KpiTile label="Pending"         value={kpis.pending}  color={warning} loading={isLoading} />
-        <KpiTile label="Approved"        value={kpis.approved} color={success} loading={isLoading} />
-        <KpiTile label="Needs Action"    value={kpis.rejected} color={error} loading={isLoading} />
-        <KpiTile label="Overdue"         value={kpis.overdue}  color={error} loading={isLoading} />
-
-        <div style={{ width: 1, background: border, margin: "4px 8px" }} />
-
-        {/* Fab-Ready KPI: numerator/denominator (percent%) */}
-        <KpiTile
-          label="Fab-Ready"
-          value={`${fabReady.numerator} / ${fabReady.denominator}`}
-          sub={`${fabReady.percent}%`}
-          color={success}
-          loading={isLoading}
-        />
+        <KpiTile compact label="Drawing Sets" value={drawingKpis.totalSets} sub={`${drawingKpis.totalSheets} active sheets`} color={accent} loading={isLoading} />
+        <KpiTile compact label="Sets Released" value={drawingKpis.released} color={success} loading={isLoading} />
+        <KpiTile compact label="Sets In Review" value={drawingKpis.inReview} color={info} loading={isLoading} />
+        <KpiTile compact label="Submittals" value={kpis.total} sub={`${kpis.pending} pending`} color={accent} loading={isLoading} />
+        <KpiTile compact label="Needs Action" value={kpis.rejected} color={review} loading={isLoading} />
+        <KpiTile compact label="Overdue" value={Math.max(kpis.overdue, triage.overdue.length)} color={error} loading={isLoading} />
+        <KpiTile compact label="Fab Ready" value={`${fabReady.numerator}/${fabReady.denominator}`} sub={`${fabReady.percent}% released`} color={success} loading={isLoading} />
       </div>
 
       {/* ── Tab Bar ──────────────────────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 0, padding: "0 20px",
-        borderBottom: `1px solid ${border}`,
-        background: surface1,
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center",
+        padding: 6,
+        marginBottom: 16,
+        background: "color-mix(in srgb, var(--bg-surface) 82%, transparent)",
+        border: `1px solid ${border}`,
+        borderRadius: 14,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}>
         {TABS.map((tab) => {
           const isActive = tab.key === activeTab;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.key}
+              type="button"
               onClick={() => setActiveTab(tab.key)}
               style={{
-                padding: "10px 20px",
-                fontFamily: mono,
-                fontSize: 12,
-                fontWeight: isActive ? 700 : 500,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                minHeight: 40,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: `1px solid ${isActive ? accent : "transparent"}`,
+                background: isActive
+                  ? "color-mix(in srgb, var(--accent) 14%, var(--bg-surface-high) 86%)"
+                  : "transparent",
                 color: isActive ? textPrimary : textMuted,
-                background: "transparent",
-                border: "none",
-                borderBottom: isActive ? `2px solid ${accent}` : "2px solid transparent",
+                fontFamily: mono,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
                 cursor: "pointer",
-                transition: "all 0.15s",
               }}
             >
-              {tab.label}
+              <Icon size={14} />
+              <span>{tab.label}</span>
+              <span
+                className="sbd-num"
+                style={{
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  background: isActive ? "color-mix(in srgb, var(--accent) 18%, transparent)" : surface2,
+                  border: `1px solid ${isActive ? "color-mix(in srgb, var(--accent) 32%, transparent)" : border}`,
+                  color: isActive ? accent : textMuted,
+                  fontSize: 10,
+                  lineHeight: 1.2,
+                }}
+              >
+                {tabCounts[tab.key] ?? 0}
+              </span>
             </button>
           );
         })}
       </div>
 
       {/* ── Tab Content ──────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+      <div style={{ minHeight: 0, position: "relative" }}>
         <ErrorBoundary>
           <Suspense fallback={<LoadingSkeleton />}>
             {activeTab === "overview" && (
@@ -518,76 +596,160 @@ export default function DrawingSubmittalHub() {
 // Approval Matrix — rows: drawing sets, columns show linked submittal status
 // ─────────────────────────────────────────────────────────────────────────────
 
+function HeaderSignal({ icon: Icon, label, value, tone }) {
+  return (
+    <div style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      minHeight: 36,
+      padding: "7px 10px",
+      borderRadius: 10,
+      background: `color-mix(in srgb, ${tone} 12%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
+      color: tone,
+      fontFamily: mono,
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      whiteSpace: "nowrap",
+    }}>
+      <Icon size={14} />
+      <span>{label}</span>
+      <span className="sbd-num" style={{ color: textPrimary, fontSize: 13 }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function TriageBoard({ triage, isLoading, onOpenTab }) {
   if (isLoading) return <LoadingSkeleton />;
 
-  const oldest = triage.overdue[0];
+  const focusItem = triage.overdue[0] || triage.dueSoon[0] || triage.needsAction[0] || triage.noDate[0] || null;
+  const focusTone = getActionTone(focusItem);
   const topStatuses = Object.entries(triage.pipelineCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
+  const focusRoute = focusItem?.routeTab || "matrix";
+  const criticalItems = Array.from(
+    new Map([...triage.overdue, ...triage.needsAction, ...triage.dueSoon].map((item) => [item.id, item])).values()
+  ).slice(0, 12);
 
   return (
-    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-      <section className="sbd-card-strong" style={{
-        padding: 18,
-        borderRadius: 18,
-        border: `1px solid ${triage.overdue.length ? error : border}`,
-        background: triage.overdue.length
-          ? "linear-gradient(135deg, color-mix(in srgb, var(--status-error) 18%, var(--bg-surface) 82%), var(--bg-surface-low))"
-          : surface1,
-        boxShadow: triage.overdue.length ? "0 0 32px rgba(239, 68, 68, 0.14)" : "none",
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <section style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
+        gap: 14,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div>
-            <div style={{
-              fontFamily: mono,
-              fontSize: 10,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              color: triage.overdue.length ? error : success,
-              fontWeight: 800,
-              marginBottom: 8,
-            }}>
-              {triage.overdue.length ? "Immediate attention required" : "No overdue drawing or submittal items"}
-            </div>
-            <h2 style={{ margin: 0, color: textPrimary, fontSize: 24, lineHeight: 1.15 }}>
-              {triage.overdue.length
-                ? `${triage.overdue.length} overdue item${triage.overdue.length === 1 ? "" : "s"} blocking clean handoff`
-                : "Drawing and submittal pipeline is current"}
-            </h2>
-            <p style={{ margin: "8px 0 0", color: "var(--text-secondary)", maxWidth: 920, lineHeight: 1.5 }}>
-              {oldest
-                ? `${triage.overdueDrawingSets} drawing sets and ${triage.overdueUnlinkedSubmittals} unlinked submittals are past due. Oldest: ${oldest.title} (${oldest.due.label}, due ${fmtDate(oldest.dueDate)}).`
-                : "Use the board below to watch drawing sets due this week, missing required dates, and resubmittal/rejection items before they become schedule blockers."}
-            </p>
+        <div className="sbd-card-strong" style={{
+          padding: 20,
+          borderRadius: 16,
+          border: `1px solid ${triage.overdue.length ? "color-mix(in srgb, var(--status-error) 56%, var(--border-default))" : border}`,
+          background: triage.overdue.length
+            ? "linear-gradient(135deg, color-mix(in srgb, var(--status-error) 13%, var(--bg-surface) 87%), var(--bg-surface-low))"
+            : "linear-gradient(135deg, color-mix(in srgb, var(--status-success) 8%, var(--bg-surface) 92%), var(--bg-surface-low))",
+          boxShadow: triage.overdue.length ? "0 16px 42px rgba(248,81,73,0.12)" : "var(--shadow-card)",
+        }}>
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            color: triage.overdue.length ? error : success,
+            fontFamily: mono,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            marginBottom: 12,
+          }}>
+            {triage.overdue.length ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+            {triage.overdue.length ? "Immediate approval risk" : "Pipeline current"}
           </div>
-          <button
-            type="button"
-            className="sbd-btn-primary"
-            onClick={() => onOpenTab(triage.overdueUnlinkedSubmittals > triage.overdueDrawingSets ? "submittals" : "drawings")}
-            style={{ minWidth: 156 }}
-          >
-            Open Register
-          </button>
+          <h2 style={{
+            margin: 0,
+            color: textPrimary,
+            fontFamily: "var(--font-display)",
+            fontSize: 34,
+            lineHeight: 1,
+            fontWeight: 600,
+          }}>
+            {triage.overdue.length
+              ? `${pluralize(triage.overdue.length, "item")} past due`
+              : "No overdue drawing or submittal work"}
+          </h2>
+          <p style={{ margin: "10px 0 0", color: "var(--text-secondary)", maxWidth: 880, lineHeight: 1.5, fontSize: 13 }}>
+            {triage.overdue.length
+              ? `${pluralize(triage.overdueDrawingSets, "drawing set")} and ${pluralize(triage.overdueUnlinkedSubmittals, "unlinked submittal")} need attention before detailing can hand off cleanly.`
+              : "Use this control board to watch due dates, rejected or resubmittal work, missing dates, and fabrication release readiness by drawing set."}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 18 }}>
+            <RiskPill icon={Clock3} label="Due this week" value={triage.dueSoon.length} color={warning} />
+            <RiskPill icon={AlertTriangle} label="Needs action" value={triage.needsAction.length} color={review} />
+            <RiskPill icon={CalendarClock} label="Missing dates" value={triage.noDate.length} color={textMuted} />
+            <RiskPill icon={Factory} label="Fab ready" value={`${triage.fabReady.percent}%`} color={success} />
+          </div>
+        </div>
+
+        <div className="sbd-card" style={{ padding: 18, borderRadius: 16, border: `1px solid ${focusItem ? focusTone : border}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontFamily: mono, color: textMuted, fontSize: 9, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                Next Decision
+              </div>
+              <h3 style={{ margin: "6px 0 0", color: textPrimary, fontSize: 18, lineHeight: 1.2 }}>
+                {focusItem ? focusItem.title : "No open exception"}
+              </h3>
+            </div>
+            <DueChip info={focusItem?.due || dueInfo(null)} compact />
+          </div>
+          {focusItem ? (
+            <>
+              <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
+                {focusItem.group} - {focusItem.status}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+                <MiniMeta label="Owner" value={focusItem.owner} />
+                <MiniMeta label="Required" value={fmtDate(focusItem.dueDate)} warn={focusItem.due.overdue} />
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenTab(focusRoute)}
+                className="sbd-btn-primary"
+                style={{ marginTop: 18, display: "inline-flex", alignItems: "center", gap: 8 }}
+              >
+                Open Work
+                <ArrowRight size={14} />
+              </button>
+            </>
+          ) : (
+            <EmptyState text="No overdue, due-soon, action, or missing-date work is currently flagged." />
+          )}
         </div>
       </section>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-        <TriageMetric label="Overdue Sets" value={triage.overdueDrawingSets} color={error} sub={`${triage.overdueUnlinkedSubmittals} unlinked subs`} />
-        <TriageMetric label="Sets Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
-        <TriageMetric label="Needs Action" value={triage.needsAction.length} color={error} sub="Rejected / resubmit" />
-        <TriageMetric label="Sets Missing Date" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
-        <TriageMetric label="Fab Ready" value={`${triage.fabReady.numerator}/${triage.fabReady.denominator}`} color={success} sub={`${triage.fabReady.percent}% released`} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+        <TriageMetric icon={AlertTriangle} label="Overdue Sets" value={triage.overdueDrawingSets} color={error} sub={`${triage.overdueUnlinkedSubmittals} unlinked subs`} />
+        <TriageMetric icon={Clock3} label="Due This Week" value={triage.dueSoonDrawingSets} color={warning} sub="Next 7 days" />
+        <TriageMetric icon={ShieldCheck} label="Needs Action" value={triage.needsAction.length} color={review} sub="Rejected / resubmit" />
+        <TriageMetric icon={CalendarClock} label="Missing Dates" value={triage.noDateDrawingSets} color={textMuted} sub="Needs cleanup" />
+        <TriageMetric icon={Factory} label="Fab Ready" value={`${triage.fabReady.numerator}/${triage.fabReady.denominator}`} color={success} sub={`${triage.fabReady.percent}% released`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
         <TriageList
-          title="Overdue Now"
-          subtitle="Sorted by drawing set required date, not sheet number."
-          items={triage.overdue.slice(0, 10)}
-          empty="Nothing is overdue."
+          title="Critical Work Queue"
+          subtitle="Overdue, rejected, resubmittal, and near-term items."
+          items={criticalItems}
+          empty="No critical work is currently queued."
           onOpenTab={onOpenTab}
         />
+        <PipelinePanel topStatuses={topStatuses} openCount={triage.openItems.length} onOpenTab={onOpenTab} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
         <TriageList
           title="Due Next 7 Days"
           subtitle="Drawing sets with required dates approaching."
@@ -595,59 +757,103 @@ function TriageBoard({ triage, isLoading, onOpenTab }) {
           empty="No drawing or submittal due dates in the next week."
           onOpenTab={onOpenTab}
         />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))", gap: 16 }}>
-        <TriageList
-          title="Needs Action"
-          subtitle="Drawing sets with rejected or revise-and-resubmit work."
-          items={triage.needsAction.slice(0, 8)}
-          empty="No rejected or resubmit items."
-          onOpenTab={onOpenTab}
-        />
-        <div className="sbd-card" style={{ padding: 16, borderRadius: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
-            <div>
-              <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Open Pipeline</h3>
-              <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
-                Current open status distribution.
-              </p>
-            </div>
-            <button type="button" className="sbd-btn-ghost" onClick={() => onOpenTab("matrix")}>
-              Matrix
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {topStatuses.length === 0 ? (
-              <EmptyState text="No open items to summarize." />
-            ) : (
-              topStatuses.map(([status, count]) => (
-                <PipelineBar key={status} status={status} count={count} total={triage.openItems.length} />
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {triage.noDate.length > 0 && (
         <TriageList
           title="Missing Due Dates"
-          subtitle="These records cannot be reliably managed until a due/required date is assigned."
-          items={triage.noDate.slice(0, 10)}
+          subtitle="Assign dates before these can be managed against schedule."
+          items={triage.noDate.slice(0, 8)}
           empty="All open items have due dates."
           onOpenTab={onOpenTab}
-          compact
         />
-      )}
+      </div>
     </div>
   );
 }
 
-function TriageMetric({ label, value, sub, color }) {
+function RiskPill({ icon: Icon, label, value, color }) {
   return (
-    <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 14, borderTop: `2px solid ${color}` }}>
-      <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: textMuted, fontWeight: 800 }}>
+    <div style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "7px 10px",
+      borderRadius: 999,
+      background: `color-mix(in srgb, ${color} 11%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+      color,
+      fontFamily: mono,
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+    }}>
+      <Icon size={13} />
+      <span>{label}</span>
+      <span className="sbd-num" style={{ color: textPrimary }}>{value}</span>
+    </div>
+  );
+}
+
+function MiniMeta({ label, value, warn = false }) {
+  return (
+    <div style={{
+      padding: "10px 12px",
+      borderRadius: 10,
+      background: surface1,
+      border: `1px solid ${warn ? "color-mix(in srgb, var(--status-error) 46%, transparent)" : border}`,
+    }}>
+      <div style={{ fontFamily: mono, fontSize: 8, color: textMuted, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
         {label}
+      </div>
+      <div style={{
+        color: warn ? error : textPrimary,
+        fontSize: 12,
+        fontWeight: 700,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {value || "-"}
+      </div>
+    </div>
+  );
+}
+
+function PipelinePanel({ topStatuses, openCount, onOpenTab }) {
+  return (
+    <div className="sbd-card" style={{ padding: 16, borderRadius: 16, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <h3 style={{ margin: 0, color: textPrimary, fontSize: 16 }}>Open Pipeline</h3>
+          <p style={{ margin: "4px 0 0", color: textMuted, fontSize: 12 }}>
+            Current approval status distribution.
+          </p>
+        </div>
+        <button type="button" className="sbd-btn-ghost" onClick={() => onOpenTab("matrix")} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          Matrix
+          <ArrowRight size={13} />
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+        {topStatuses.length === 0 ? (
+          <EmptyState text="No open items to summarize." />
+        ) : (
+          topStatuses.map(([status, count]) => (
+            <PipelineBar key={status} status={status} count={count} total={openCount} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TriageMetric({ icon: Icon, label, value, sub, color }) {
+  return (
+    <div className="sbd-card" style={{ padding: "14px 16px", borderRadius: 14, borderTop: `2px solid ${color}`, minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: textMuted, fontWeight: 800 }}>
+          {label}
+        </div>
+        {Icon && <Icon size={15} color={color} />}
       </div>
       <div className="sbd-num" style={{ color, fontFamily: mono, fontSize: 30, lineHeight: 1, fontWeight: 800, marginTop: 10 }}>
         {value}
@@ -681,46 +887,59 @@ function TriageList({ title, subtitle, items, empty, onOpenTab, compact = false 
 }
 
 function TriageItemRow({ item, onOpen }) {
+  const tone = getActionTone(item);
   return (
     <button
       type="button"
       onClick={onOpen}
       style={{
         display: "grid",
-        gridTemplateColumns: "92px minmax(220px, 1fr) 110px 130px",
+        gridTemplateColumns: "minmax(0, 1.5fr) minmax(90px, 0.35fr) minmax(120px, 0.45fr) 28px",
         gap: 12,
         alignItems: "center",
         width: "100%",
         textAlign: "left",
-        padding: "10px 12px",
-        borderRadius: 10,
+        padding: "12px 14px",
+        borderRadius: 12,
         border: `1px solid ${item.due.overdue ? "color-mix(in srgb, var(--status-error) 60%, transparent)" : border}`,
         background: item.due.overdue
-          ? "color-mix(in srgb, var(--status-error) 10%, var(--bg-surface-low) 90%)"
+          ? "color-mix(in srgb, var(--status-error) 11%, var(--bg-surface-low) 89%)"
           : "var(--bg-surface-low)",
         color: textPrimary,
         cursor: "pointer",
       }}
     >
-      <div>
-        <div style={{ fontFamily: mono, fontSize: 9, color: item.kind === "Drawing" ? accent : success, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800 }}>
-          {item.kind}
-        </div>
-        <DueChip info={item.due} />
-      </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ color: textPrimary, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, marginBottom: 5 }}>
+          <span style={{
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: tone,
+            boxShadow: `0 0 12px color-mix(in srgb, ${tone} 45%, transparent)`,
+            flex: "0 0 auto",
+          }} />
+          <span style={{ fontFamily: mono, fontSize: 9, color: item.kind === "Drawing Set" ? accent : success, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 800 }}>
+            {item.kind}
+          </span>
+        </div>
+        <div style={{ color: textPrimary, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}>
           {item.title}
         </div>
         <div style={{ color: textMuted, fontSize: 12, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {item.group} - {item.status}
         </div>
       </div>
-      <div style={{ color: textMuted, fontFamily: mono, fontSize: 11 }}>
-        Due {fmtDate(item.dueDate)}
+      <div>
+        <DueChip info={item.due} compact />
       </div>
       <div style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        Owner: {item.owner}
+        <span style={{ color: textMuted, fontFamily: mono, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em" }}>Owner / Due</span>
+        <br />
+        {item.owner} - {fmtDate(item.dueDate)}
+      </div>
+      <div style={{ color: textMuted, display: "flex", justifyContent: "flex-end" }}>
+        <ArrowRight size={15} />
       </div>
     </button>
   );
@@ -750,13 +969,13 @@ function EmptyState({ text }) {
   );
 }
 
-function DueChip({ info }) {
+function DueChip({ info, compact = false }) {
   return (
     <span style={{
       display: "inline-block",
-      marginTop: 6,
-      padding: "2px 6px",
-      borderRadius: 5,
+      marginTop: compact ? 0 : 6,
+      padding: compact ? "3px 7px" : "2px 6px",
+      borderRadius: 999,
       fontFamily: mono,
       fontSize: 9,
       fontWeight: 800,
@@ -838,63 +1057,87 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading 
   if (isLoading) return <LoadingSkeleton />;
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* ── Analytics (cycle-time + aging) ───────────────────────── */}
-      <CycleTimeCard submittals={submittals} isLoading={isLoading} />
-      <AgingReportTable submittals={submittals} isLoading={isLoading} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 16 }}>
+        <CycleTimeCard submittals={submittals} isLoading={isLoading} />
+        <AgingReportTable submittals={submittals} isLoading={isLoading} />
+      </div>
 
       {/* ── Summary Bar ──────────────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap",
+        display: "flex", gap: 10, flexWrap: "wrap",
         alignItems: "center",
+        padding: 14,
+        borderRadius: 16,
+        border: `1px solid ${border}`,
+        background: surface1,
       }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ flex: "1 1 320px", minWidth: 220 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Layers3 size={15} color={accent} />
+            <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: accent }}>
+              Approval Matrix
+            </div>
+          </div>
+          <label style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            maxWidth: 520,
+            padding: "8px 11px",
+            borderRadius: 10,
+            border: `1px solid ${border}`,
+            background: surface2,
+            color: textMuted,
+          }}>
+          <Search size={15} />
           <input
             type="text"
-            className="sbd-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search sets, submittals..."
             style={{
-              width: "100%", maxWidth: 360,
-              padding: "8px 12px",
-              background: surface2, color: textPrimary,
-              border: `1px solid ${border}`, borderRadius: 4,
+              width: "100%",
+              background: "transparent",
+              color: textPrimary,
+              border: 0,
               fontFamily: mono, fontSize: 12,
               outline: "none",
             }}
           />
+          </label>
         </div>
-        <SummaryChip label="Total Sets" value={summary.total} color={accent} />
-        <SummaryChip label="No Submittal" value={summary.noSubmittal} color={textMuted} />
-        <SummaryChip label="Overdue" value={summary.overdue} color={error} />
-        <SummaryChip label="Due Soon" value={summary.dueSoon} color={warning} />
-        <SummaryChip label="Pending" value={summary.pending} color={warning} />
-        <SummaryChip label="Approved" value={summary.approved} color={success} />
-        <SummaryChip label="Needs Action" value={summary.rejected} color={error} />
+        <SummaryChip icon={Layers3} label="Sets" value={summary.total} color={accent} />
+        <SummaryChip icon={Link2} label="No Submittal" value={summary.noSubmittal} color={textMuted} />
+        <SummaryChip icon={AlertTriangle} label="Overdue" value={summary.overdue} color={error} />
+        <SummaryChip icon={Clock3} label="Due Soon" value={summary.dueSoon} color={warning} />
+        <SummaryChip icon={ClipboardList} label="Pending" value={summary.pending} color={warning} />
+        <SummaryChip icon={ShieldCheck} label="Approved" value={summary.approved} color={success} />
+        <SummaryChip icon={AlertTriangle} label="Needs Action" value={summary.rejected} color={review} />
       </div>
 
       {/* ── Matrix Table ─────────────────────────────────────────── */}
       <div className="sbd-card" style={{
-        borderRadius: 6, border: `1px solid ${border}`,
-        overflow: "hidden",
+        borderRadius: 16, border: `1px solid ${border}`,
+        overflowX: "auto",
         padding: 0,
       }}>
         <table className="sbd-table" style={{
-          width: "100%", borderCollapse: "collapse",
+          width: "100%", minWidth: 980, borderCollapse: "collapse",
           fontFamily: mono, fontSize: 12,
         }}>
           <thead>
             <tr style={{ background: surface2 }}>
-              <Th>Drawing Set</Th>
+              <Th>Drawing Set Package</Th>
               <Th>Set #</Th>
               <Th>Discipline</Th>
               <Th style={{ textAlign: "center" }}>Sheets</Th>
-              <Th>Submittal #</Th>
+              <Th>Linked Submittal</Th>
               <Th>Status</Th>
               <Th>Due Status</Th>
               <Th style={{ textAlign: "center" }}>Round</Th>
-              <Th>BIC</Th>
+              <Th>Ball In Court</Th>
               <Th>Submitted</Th>
               <Th>Required</Th>
               <Th>Returned</Th>
@@ -934,6 +1177,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
   const [expanded, setExpanded] = useState(false);
   const hasMultiple = allSubmittals.length > 1;
   const overdueStyle = due?.overdue ? { color: error, fontWeight: 700 } : {};
+  const rowStatusColor = getStatusColor(sub?.status);
 
   return (
     <>
@@ -941,6 +1185,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
         onClick={hasMultiple ? () => setExpanded(!expanded) : undefined}
         style={{
           borderBottom: `1px solid ${border}`,
+          borderLeft: `3px solid ${sub ? rowStatusColor : warning}`,
           cursor: hasMultiple ? "pointer" : "default",
           transition: "background 0.1s",
         }}
@@ -1124,13 +1369,14 @@ function StatusChip({ status }) {
   );
 }
 
-function SummaryChip({ label, value, color }) {
+function SummaryChip({ icon: Icon, label, value, color }) {
   return (
     <div className="sbd-pill" style={{
       display: "flex", alignItems: "center", gap: 6,
-      padding: "4px 10px", borderRadius: 4,
+      padding: "6px 10px", borderRadius: 999,
       background: surface2, border: `1px solid ${border}`,
     }}>
+      {Icon && <Icon size={13} color={color} />}
       <span style={{ fontFamily: mono, fontSize: 10, color: textMuted, textTransform: "uppercase" }}>
         {label}
       </span>
