@@ -24,6 +24,7 @@ import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { computeFabReady } from "@/lib/submittalAnalytics";
+import { compareDrawingSetPackages, formatDrawingSetNumber } from "@/lib/drawingSetOrdering";
 import CycleTimeCard from "@/components/submittals/CycleTimeCard";
 import AgingReportTable from "@/components/submittals/AgingReportTable";
 
@@ -227,7 +228,7 @@ function buildSetPackages(drawings, drawingSets, submittals) {
 
   return Array.from(packages.values())
     .filter((pkg) => pkg.name && pkg.name !== "Ungrouped drawing set" ? true : pkg.sheets.length || pkg.submittals.length)
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+    .sort(compareDrawingSetPackages);
 }
 
 function itemUrgency(a, b) {
@@ -806,15 +807,14 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading 
         if (!search) return true;
         const q = search.toLowerCase();
         return (
+          formatDrawingSetNumber(set).toLowerCase().includes(q) ||
           (set.set_name || "").toLowerCase().includes(q) ||
           (set.discipline || "").toLowerCase().includes(q) ||
           set.submittals.some((s) => (s.submittal_number || "").toLowerCase().includes(q))
         );
       })
       .sort((a, b) => {
-        if (!a.latestSubmittal && b.latestSubmittal) return 1;
-        if (a.latestSubmittal && !b.latestSubmittal) return -1;
-        return a.due.sort - b.due.sort || (a.set_name || "").localeCompare(b.set_name || "");
+        return compareDrawingSetPackages(a, b);
       });
 
     return activeSets;
@@ -887,6 +887,7 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading 
           <thead>
             <tr style={{ background: surface2 }}>
               <Th>Drawing Set</Th>
+              <Th>Set #</Th>
               <Th>Discipline</Th>
               <Th style={{ textAlign: "center" }}>Sheets</Th>
               <Th>Submittal #</Th>
@@ -902,7 +903,7 @@ function ApprovalMatrix({ drawingSets, submittals, roundsBySubmittal, isLoading 
           <tbody>
             {matrixRows.length === 0 ? (
               <tr>
-                <td colSpan={11} style={{
+                <td colSpan={12} style={{
                   padding: 40, textAlign: "center", color: textMuted,
                 }}>
                   {search ? "No matching drawing sets." : "No drawing sets yet."}
@@ -954,6 +955,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
           )}
           {drawingSet.set_name || "—"}
         </Td>
+        <Td style={{ color: accent, fontWeight: 800 }}>{formatDrawingSetNumber(drawingSet)}</Td>
         <Td style={{ color: textMuted }}>{drawingSet.discipline || "—"}</Td>
         <Td style={{ textAlign: "center" }}>{drawingSet.sheet_count || 0}</Td>
         {sub ? (
@@ -998,6 +1000,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
             <Td style={{ paddingLeft: 32, color: textMuted }}>↳</Td>
             <Td />
             <Td />
+            <Td />
             <Td style={{ color: accent }}>{s.submittal_number}</Td>
             <Td><StatusChip status={s.status} /></Td>
             <Td><DueChip info={dueInfo(getSubmittalDueDate(s), isClosedSubmittal(s))} /></Td>
@@ -1012,7 +1015,7 @@ function MatrixRow({ drawingSet, sub, due, allSubmittals, roundsBySubmittal }) {
       {/* Expanded: show round history for the latest submittal */}
       {expanded && sub && roundsBySubmittal[sub.id]?.length > 0 && (
         <tr style={{ background: surface1 }}>
-          <td colSpan={11} style={{ padding: "8px 32px 12px" }}>
+          <td colSpan={12} style={{ padding: "8px 32px 12px" }}>
             <RoundTimeline rounds={roundsBySubmittal[sub.id]} />
           </td>
         </tr>

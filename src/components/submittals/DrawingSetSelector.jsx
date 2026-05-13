@@ -19,6 +19,7 @@
 // uncovered by tests, which is consistent with the rest of the codebase.
 
 import React from "react";
+import { formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 
 // ── Pure helpers (exported for tests) ──────────────────────────────
 
@@ -30,9 +31,10 @@ import React from "react";
 export function filterDrawingSets(sets, query) {
   const q = String(query || "").trim().toLowerCase();
   const live = (sets || []).filter((s) => s && !s.is_deleted);
-  if (!q) return live;
-  return live.filter((s) => {
+  if (!q) return sortDrawingSetPackages(live);
+  return sortDrawingSetPackages(live.filter((s) => {
     const haystack = [
+      formatDrawingSetNumber(s),
       s.set_name || "",
       s.discipline || "",
       s.revision ? `r${s.revision}` : "",
@@ -40,7 +42,7 @@ export function filterDrawingSets(sets, query) {
       .join(" ")
       .toLowerCase();
     return haystack.includes(q);
-  });
+  }));
 }
 
 /**
@@ -115,7 +117,8 @@ export default function DrawingSetSelector({
         )}
         {filtered.map((set) => {
           const isSelected = selectedSet.has(set.id);
-          const label = `${set.set_name || "(unnamed set)"}${
+          const setNumber = formatDrawingSetNumber(set);
+          const label = `Set # ${setNumber} · ${set.set_name || "(unnamed set)"}${
             set.revision ? ` · R${set.revision}` : ""
           }`;
           return (

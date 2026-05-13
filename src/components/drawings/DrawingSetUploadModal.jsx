@@ -11,6 +11,7 @@ import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } 
 import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
 import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
 import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
 // Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
@@ -264,6 +265,11 @@ function StepMeta({ meta, setMeta, onBack, onNext, projectName, existingSetNames
         </div>
 
         <div>
+          <Label>Drawing Set # (optional)</Label>
+          <Input placeholder="e.g. 1 / 02 / P-03" value={meta.setNumber || ""} onChange={e => set("setNumber", e.target.value)} />
+        </div>
+
+        <div>
           <Label>Default Discipline (optional)</Label>
           <Select value={meta.discipline} onValueChange={v => set("discipline", v)}>
             <SelectTrigger><SelectValue placeholder="Structural" /></SelectTrigger>
@@ -486,6 +492,12 @@ function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFie
               placeholder="e.g. 100% CD Set — Rev 2" />
           </div>
           <div>
+            <label style={metaLabelStyle}>Drawing Set #</label>
+            <input style={metaFieldStyle} value={meta.setNumber || ""}
+              onChange={e => setMetaField("setNumber", e.target.value)}
+              placeholder="e.g. 1 / 02 / P-03" />
+          </div>
+          <div>
             <label style={metaLabelStyle}>Revision{aiBadge(aiFilledFields.revision)}</label>
             <input style={metaFieldStyle} value={meta.revision}
               onChange={e => setMetaField("revision", e.target.value)}
@@ -698,7 +710,7 @@ export default function DrawingSetUploadModal({
   const [step, setStep]                   = useState(0);
   const [files, setFiles]                 = useState([]);
   const [meta, setMeta]                   = useState({
-    setName: "", discipline: "Structural", defaultStage: "Not Started",
+    setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started",
     revision: "0",
     issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "",
   });
@@ -726,7 +738,7 @@ export default function DrawingSetUploadModal({
     setAiFilledFields({});
     setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
-    setMeta({ setName: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
+    setMeta({ setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -919,6 +931,8 @@ export default function DrawingSetUploadModal({
           }
         };
         tryFill("setName",    "setName");
+        tryFill("setNumber",  "setNumber");
+        tryFill("setNumber",  "drawingSetNumber");
         tryFill("revision",   "revision");
         tryFill("issueDate",  "issueDate");
         tryFill("issuedBy",   "issuedBy");
@@ -956,6 +970,7 @@ export default function DrawingSetUploadModal({
 
     const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
     const batchId = uploadBatchId || newUploadBatchId();
+    const setNumber = (meta.setNumber || "").trim();
 
     try {
       // ─────────────────────────────────────────────────────────────
@@ -967,6 +982,7 @@ export default function DrawingSetUploadModal({
       setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
 
       let parentSetId = null;
+      let parentSetMetadata = null;
       try {
         // First check active (non-deleted) sets
         const existing = await base44.entities.DrawingSet.filter({
@@ -975,6 +991,7 @@ export default function DrawingSetUploadModal({
         });
         if (Array.isArray(existing) && existing.length > 0) {
           parentSetId = existing[0].id;
+          parentSetMetadata = existing[0].metadata;
         }
 
         // If none found, check for soft-deleted sets and restore them.
@@ -988,6 +1005,7 @@ export default function DrawingSetUploadModal({
           });
           if (Array.isArray(deleted) && deleted.length > 0) {
             parentSetId = deleted[0].id;
+            parentSetMetadata = deleted[0].metadata;
             // Restore the soft-deleted row
             await base44.entities.DrawingSet.update(parentSetId, {
               is_deleted: false,
@@ -1006,6 +1024,7 @@ export default function DrawingSetUploadModal({
               issued_by:       meta.issuedBy  || "",
               discipline:      meta.discipline || "",
               notes:           meta.notes || "",
+              ...(setNumber ? { metadata: withDrawingSetNumberMetadata(parentSetMetadata, setNumber) } : {}),
               updated_at:      new Date().toISOString(),
             });
           } catch (updErr) {
@@ -1035,6 +1054,7 @@ export default function DrawingSetUploadModal({
           issued_by:       meta.issuedBy || "",
           status:          "Active",
           notes:           meta.notes || "",
+          metadata:        withDrawingSetNumberMetadata({}, setNumber),
           upload_batch_id: batchId,
           sheet_count:        0,
           processed_count:    0,
@@ -1062,6 +1082,7 @@ export default function DrawingSetUploadModal({
           });
           if (Array.isArray(winner) && winner.length > 0) {
             parentSetId = winner[0].id;
+            parentSetMetadata = winner[0].metadata;
           } else {
             // Extremely unlikely: insert failed uniqueness but post-lookup
             // can't find the winner (e.g. it was soft-deleted between the

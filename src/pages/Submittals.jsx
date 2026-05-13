@@ -23,6 +23,7 @@ import DrawingSetSelector from "@/components/submittals/DrawingSetSelector";
 import { batchProcess } from "@/utils/batchProcess";
 import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping";
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
+import { compareDrawingSetPackages, formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 
 /**
  * Submittals — formal transmittal register.
@@ -73,6 +74,23 @@ const STATUS_CFG = {
   "Void":                { color: "#94A3B8", bg: "rgba(148,163,184,0.14)" }, // cool gray — distinct from Draft slate
 };
 
+function compareSubmittalsByDrawingSet(a, b, drawingSetsById) {
+  const aSet = Array.isArray(a.drawing_set_ids) ? drawingSetsById.get(a.drawing_set_ids[0]) : null;
+  const bSet = Array.isArray(b.drawing_set_ids) ? drawingSetsById.get(b.drawing_set_ids[0]) : null;
+  if (aSet && bSet) {
+    const bySet = compareDrawingSetPackages(aSet, bSet);
+    if (bySet !== 0) return bySet;
+  } else if (aSet) {
+    return -1;
+  } else if (bSet) {
+    return 1;
+  }
+  return String(a.submittal_number || "").localeCompare(String(b.submittal_number || ""), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 export default function Submittals() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
@@ -115,6 +133,14 @@ export default function Submittals() {
     enabled: !!projectId,
     staleTime: 60_000,
   });
+
+  const drawingSetsById = useMemo(() => {
+    const map = new Map();
+    for (const set of drawingSets) {
+      if (set?.id) map.set(set.id, set);
+    }
+    return map;
+  }, [drawingSets]);
 
   // ── Rounds for the selected submittal ────────────────────────────
   const { data: allRounds = [] } = useQuery({
@@ -349,8 +375,10 @@ export default function Submittals() {
         (r.spec_section    || "").toLowerCase().includes(q),
       );
     }
-    return list;
-  }, [rows, filterStatus, filterBIC, search]);
+    return list
+      .slice()
+      .sort((a, b) => compareSubmittalsByDrawingSet(a, b, drawingSetsById));
+  }, [rows, filterStatus, filterBIC, search, drawingSetsById]);
 
   const stats = useMemo(() => {
     const total = rows.length;
@@ -498,6 +526,7 @@ export default function Submittals() {
                 checked={selectedIds.has(r.id)}
                 onToggle={() => toggleSelect(r.id)}
                 onClick={() => setSelectedId(r.id)}
+                drawingSetsById={drawingSetsById}
               />
             ))}
           </div>
@@ -649,7 +678,7 @@ export default function Submittals() {
 
 // ── Row ──────────────────────────────────────────────────────────────
 
-function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
+function SubmittalRow({ row, selected, checked, onToggle, onClick, drawingSetsById }) {
   const cfg = STATUS_CFG[row.status] || STATUS_CFG.Draft;
   // Derived workflow stage — gives users IFA/OFA/BFA/OFS/IFC/Released
   // alongside the literal submittal status. R&R outcomes are surfaced
@@ -657,6 +686,10 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
   const stage = submittalStatusToStage(row.status, row.ball_in_court, row.approved_date);
   const stageCfg = stage ? STAGE_MAP[stage] : null;
   const showRR = isRRStatus(row.status);
+  const linkedSets = Array.isArray(row.drawing_set_ids)
+    ? row.drawing_set_ids.map((id) => drawingSetsById?.get(id)).filter(Boolean)
+    : [];
+  const primarySet = linkedSets[0] || null;
   const overdue =
     row.required_date &&
     !["Approved","Approved as Noted","Released for Fabrication","Void"].includes(row.status) &&
@@ -715,6 +748,7 @@ function SubmittalRow({ row, selected, checked, onToggle, onClick }) {
             {row.title}
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+            {primarySet ? `Set # ${formatDrawingSetNumber(primarySet)} · ${primarySet.set_name || "Drawing set"} · ` : ""}
             {row.spec_section ? `Spec ${row.spec_section} · ` : ""}
             {row.discipline || row.submittal_type || ""}
           </div>
@@ -1216,7 +1250,7 @@ function LinkedDrawingSets({ value = [], allSets = [], onChange }) {
 
   // Sets the user can still pick (not already linked, not soft-deleted).
   const available = React.useMemo(
-    () => allSets.filter((s) => !value.includes(s.id) && !s.is_deleted),
+    () => sortDrawingSetPackages(allSets.filter((s) => !value.includes(s.id) && !s.is_deleted)),
     [allSets, value],
   );
 
@@ -1242,7 +1276,7 @@ function LinkedDrawingSets({ value = [], allSets = [], onChange }) {
         {value.map((id) => {
           const set = setsById.get(id);
           const label = set
-            ? `${set.set_name || "(unnamed set)"}${set.revision ? ` · R${set.revision}` : ""}`
+            ? `Set # ${formatDrawingSetNumber(set)} · ${set.set_name || "(unnamed set)"}${set.revision ? ` · R${set.revision}` : ""}`
             : "(missing set)";
           return (
             <span
@@ -1298,7 +1332,7 @@ function LinkedDrawingSets({ value = [], allSets = [], onChange }) {
           )}
           {available.map((s) => (
             <option key={s.id} value={s.id}>
-              {(s.set_name || "(unnamed set)") + (s.revision ? ` · R${s.revision}` : "")}
+              {`Set # ${formatDrawingSetNumber(s)} · ${s.set_name || "(unnamed set)"}${s.revision ? ` · R${s.revision}` : ""}`}
               {s.discipline ? ` · ${s.discipline}` : ""}
             </option>
           ))}
