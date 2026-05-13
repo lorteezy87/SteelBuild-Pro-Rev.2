@@ -39,6 +39,7 @@ import ViewerToolbar from "@/pages/drawingViewer/ViewerToolbar";
 import CalloutOverlay from "@/pages/drawingViewer/CalloutOverlay";
 import PdfLinkHotspotLayer from "@/pages/drawingViewer/PdfLinkHotspotLayer";
 import { useZoneData } from "@/pages/drawingViewer/useZoneData";
+import { drawingViewerStyles } from "@/pages/drawingViewer/drawingViewerStyles";
 import {
   createZone as createZoneSvc,
   updateZone as updateZoneSvc,
@@ -75,6 +76,14 @@ export default function DrawingViewer() {
   const [renderMode, setRenderMode] = useState("canvas");
 
   const annotLayerRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 920px)").matches) return;
+    setSidebarOpen(false);
+    setContextOpen(false);
+    setFilmstripOpen(false);
+  }, []);
 
   // ── Markup (Tier 3 annotations) ─────────────────────────────────────
   const [activeTool, setActiveTool] = useState("select");
@@ -132,7 +141,7 @@ export default function DrawingViewer() {
       if (!setIdForActive) return null;
       const { data, error } = await supabase
         .from("drawing_sets")
-        .select("id, set_name, is_locked, locked_at, locked_by, locked_reason")
+        .select("id, set_name, metadata, is_locked, locked_at, locked_by, locked_reason")
         .eq("id", setIdForActive)
         .maybeSingle();
       if (error) throw error;
@@ -527,7 +536,8 @@ export default function DrawingViewer() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "var(--bg-page)", overflow: "hidden" }}>
+    <div className="drawing-viewer-redesign">
+      <style>{drawingViewerStyles}</style>
 
       {/* ── Sheet List Sidebar (collapsible) ──────────────────────────────── */}
       <SheetListSidebar
@@ -543,7 +553,7 @@ export default function DrawingViewer() {
       />
 
       {/* ── Main Viewer ─────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="drawing-viewer-main">
 
         {/* Breadcrumb + stage pipeline + lock badge */}
         <ViewerHeader
@@ -597,7 +607,7 @@ export default function DrawingViewer() {
             Wrapped in a `position: relative` container so the markup
             toolbar can float over the viewport (see below) and NOT scroll
             away with the content when the user zooms in or pans. */}
-        <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="drawing-viewer-pane">
           {/* Markup toolbar — fixed to the viewer pane, NOT to the scroll
               content. Stays visible no matter how far the user pans the
               sheet. Only shown when we actually have a drawing to mark up. */}
@@ -686,6 +696,7 @@ export default function DrawingViewer() {
             />
           )}
         <div
+          className={`drawing-viewer-canvas-scroll ${spacePan ? "is-panning" : ""}`}
           onWheel={handleCanvasWheel}
           ref={(el) => {
             // Keep a pan drag ref so spacebar-hold → drag pans. This is the
@@ -727,20 +738,24 @@ export default function DrawingViewer() {
           }}
         >
           {!activeDrawing ? (
-            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.2 }}>▦</div>
-              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>SELECT A SHEET FROM THE SIDEBAR</p>
-              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 8 }}>← → to navigate · + − to zoom · 0 to reset</p>
+            <div className="drawing-viewer-empty-state">
+              <div className="drawing-viewer-empty-icon">DWG</div>
+              <p className="drawing-viewer-empty-title">Select a sheet</p>
+              <p className="drawing-viewer-empty-copy">Choose a drawing from the sheet navigator to open the PDF, markups, zones, RFIs, and related set context.</p>
             </div>
           ) : !activeDrawing.file_url ? (
-            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.15 }}>📄</div>
-              <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.15em" }}>NO PDF ATTACHED</p>
-              <p style={{ ...mono, fontSize: 9, color: "var(--border-strong)", marginTop: 6 }}>Edit this sheet to attach a PDF file URL</p>
+            <div className="drawing-viewer-empty-state">
+              <div className="drawing-viewer-empty-icon">PDF</div>
+              <p className="drawing-viewer-empty-title">No PDF attached</p>
+              <p className="drawing-viewer-empty-copy">This sheet exists in the register, but it does not have a file URL attached yet.</p>
             </div>
           ) : renderMode === "iframe" ? (
             !resolvedUrl ? (
-              <div style={{ margin: "auto", ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.2em" }}>RESOLVING FILE…</div>
+              <div className="drawing-viewer-empty-state">
+                <div className="drawing-viewer-empty-icon">...</div>
+                <p className="drawing-viewer-empty-title">Resolving file</p>
+                <p className="drawing-viewer-empty-copy">Preparing the signed drawing URL.</p>
+              </div>
             ) : (
               <iframe
                 key={resolvedUrl}
@@ -750,14 +765,15 @@ export default function DrawingViewer() {
               />
             )
           ) : pdfError ? (
-            <div style={{ margin: "auto", textAlign: "center", padding: 24 }}>
-              <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>⚠</div>
-              <p style={{ ...mono, fontSize: 11, color: "var(--status-error)", letterSpacing: "0.1em" }}>{pdfError}</p>
+            <div className="drawing-viewer-empty-state">
+              <div className="drawing-viewer-empty-icon">!</div>
+              <p className="drawing-viewer-empty-title" style={{ color: "var(--status-error)" }}>{pdfError}</p>
+              <p className="drawing-viewer-empty-copy">Canvas mode could not load this PDF. Browser PDF mode may still open the file.</p>
               <button
                 onClick={() => setRenderMode("iframe")}
-                style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 12, padding: "6px 14px", background: "rgba(200,155,32,0.12)", border: "1px solid var(--accent)", borderRadius: 2, cursor: "pointer" }}
+                style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 12, padding: "7px 14px", background: "rgba(200,155,32,0.12)", border: "1px solid var(--accent)", borderRadius: 6, cursor: "pointer", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}
               >
-                SWITCH TO IFRAME VIEW
+                Switch to browser PDF
               </button>
               {activeDrawing.file_url && (
                 <button
@@ -767,13 +783,13 @@ export default function DrawingViewer() {
                       if (url) window.open(url, "_blank", "noopener,noreferrer");
                     } catch { /* silently fail */ }
                   }}
-                  style={{ ...mono, fontSize: 10, color: "var(--accent)", marginTop: 8, display: "block", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                  OPEN IN NEW TAB →
+                  style={{ ...mono, fontSize: 10, color: "var(--accent)", margin: "8px auto 0", display: "block", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                  Open in new tab
                 </button>
               )}
             </div>
           ) : (
-            <div style={{ position: "relative", padding: 32 }}>
+            <div className="drawing-viewer-paper-wrap">
               {rendering && (
                 <RenderSkeleton label={`Rendering page ${currentPage}${totalPages > 1 ? ` of ${totalPages}` : ""}`} />
               )}
@@ -793,8 +809,6 @@ export default function DrawingViewer() {
                   ref={canvasRef}
                   style={{
                     display: "block",
-                    boxShadow: "0 12px 48px rgba(0,0,0,0.75), 0 2px 6px rgba(0,0,0,0.45)",
-                    border: "1px solid rgba(255,255,255,0.06)",
                     background: "#fff",
                   }}
                 />
@@ -884,10 +898,10 @@ export default function DrawingViewer() {
         )}
 
         {/* Keyboard shortcuts hint */}
-        <div style={{ padding: "6px 16px", borderTop: "1px solid var(--hover-bg)", background: "var(--bg-surface)", display: "flex", gap: 16, alignItems: "center" }}>
-          {[["← →", "Navigate sheets"], ["+ −", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
-            <span key={key} style={{ ...mono, fontSize: 9, color: "var(--border-strong)" }}>
-              <span style={{ color: "var(--text-muted)" }}>{key}</span> {desc}
+        <div className="drawing-viewer-bottom-hints">
+          {[["Left/Right", "Navigate sheets"], ["+/-", "Zoom"], ["0", "Reset zoom"], ["[ ]", "Toggle sidebar"], ["Page Up/Dn", "PDF pages"]].map(([key, desc]) => (
+            <span key={key} className="drawing-viewer-hint">
+              <strong>{key}</strong> {desc}
             </span>
           ))}
           <button
@@ -989,16 +1003,9 @@ export default function DrawingViewer() {
           type="button"
           onClick={() => setExportMarkupOpen(true)}
           title="Export markup summary PDF"
-          style={{
-            position: "fixed", top: 12, right: 16, zIndex: 50,
-            fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-            letterSpacing: "0.12em", padding: "6px 12px", borderRadius: 4,
-            background: "rgba(200,155,32,0.18)", border: "1px solid var(--accent)",
-            color: "var(--accent)", cursor: "pointer", textTransform: "uppercase",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-          }}
+          className="drawing-viewer-export-markups"
         >
-          ↓ EXPORT MARKUPS
+          Export Markups
         </button>
       )}
       <ExportMarkupPDFModal
