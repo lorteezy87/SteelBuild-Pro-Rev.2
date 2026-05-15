@@ -30,6 +30,7 @@ import { CommandBar, KpiTile } from "@/components/design-system";
  */
 
 const STALE_TIME = 60_000;
+const EMPTY_LIST = Object.freeze([]);
 
 // ── Role presets ──────────────────────────────────────────────────────
 //
@@ -120,63 +121,63 @@ export default function CommandCenter() {
   // call to `invalidateEntity(qc, "schedule_task", projectId)` (or any
   // matching prefix invalidation) wakes Command Center up immediately —
   // no special wiring needed per-mutation site, no cache-key drift.
-  const { data: projects = [], isLoading: projLoading } = useQuery({
+  const { data: projects = EMPTY_LIST, isLoading: projLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: rfis = [], isLoading: rfiLoading } = useQuery({
+  const { data: rfis = EMPTY_LIST, isLoading: rfiLoading } = useQuery({
     queryKey: ["rfis"],
     queryFn: () => base44.entities.RFI.list("-submitted_date"),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: drawings = [] } = useQuery({
+  const { data: drawings = EMPTY_LIST } = useQuery({
     queryKey: ["drawings"],
     queryFn: () => base44.entities.Drawing.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: drawingSets = [] } = useQuery({
+  const { data: drawingSets = EMPTY_LIST } = useQuery({
     queryKey: ["drawing-sets"],
     queryFn: () => base44.entities.DrawingSet.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: changeOrders = [] } = useQuery({
+  const { data: changeOrders = EMPTY_LIST } = useQuery({
     queryKey: ["change-orders"],
     queryFn: () => base44.entities.ChangeOrder.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: deliveries = [] } = useQuery({
+  const { data: deliveries = EMPTY_LIST } = useQuery({
     queryKey: ["deliveries"],
     queryFn: () => base44.entities.Delivery.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: workPackages = [] } = useQuery({
+  const { data: workPackages = EMPTY_LIST } = useQuery({
     queryKey: ["work-packages"],
     queryFn: () => base44.entities.WorkPackage.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: sovItems = [] } = useQuery({
+  const { data: sovItems = EMPTY_LIST } = useQuery({
     queryKey: ["sov-items"],
     queryFn: () => base44.entities.SOVItem.list(),
     staleTime: STALE_TIME,
     refetchOnWindowFocus: true,
   });
 
-  const { data: productionNotes = [] } = useQuery({
+  const { data: productionNotes = EMPTY_LIST } = useQuery({
     queryKey: ["production-notes"],
     queryFn: () => base44.entities.ProductionNote.list("-note_date"),
     staleTime: STALE_TIME,
@@ -186,7 +187,7 @@ export default function CommandCenter() {
   // Schedule tasks from the Gantt — feeds Installation / Fabrication /
   // Detailing rows into the 48h + 10d windows so everything the user
   // sees on the Gantt also shows up here.
-  const { data: scheduleTasks = [] } = useQuery({
+  const { data: scheduleTasks = EMPTY_LIST } = useQuery({
     queryKey: ["schedule-tasks"],
     queryFn: () => base44.entities.ScheduleTask.list("-start_date"),
     staleTime: STALE_TIME,

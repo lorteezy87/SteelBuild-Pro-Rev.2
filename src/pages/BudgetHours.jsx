@@ -26,7 +26,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { CommandBar } from "@/components/design-system";
+import { OperationsPageShell, OpsActionButton } from "@/components/operations/OperationsPageShell";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { PRESET_LIST } from "@/lib/budgetHourPresets";
@@ -260,39 +260,6 @@ function TextCell({ value, placeholder, onSave, mono = false }) {
 /* ─────────────────────────────────────────────
    Tile (KPI strip)
 ───────────────────────────────────────────── */
-function Tile({ label, value, sub, color = "var(--text-primary)", tint }) {
-  return (
-    <div style={{
-      padding: "12px 14px",
-      background: tint || "var(--bg-surface-low)",
-      border: "1px solid var(--border-default)",
-      borderRadius: 8,
-    }}>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-        letterSpacing: "0.10em", textTransform: "uppercase",
-        color: "var(--text-muted)", marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700,
-        color, fontVariantNumeric: "tabular-nums",
-      }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: 9,
-          color: "var(--text-muted)", marginTop: 4,
-        }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─────────────────────────────────────────────
    Preset picker dialog
 ───────────────────────────────────────────── */
@@ -646,62 +613,34 @@ export default function BudgetHours() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 24px" }}>
-      <CommandBar
-        eyebrow={activeProject?.project_number || "BUDGET"}
-        title="Budget Hours"
-        count={rows.filter((r) => r.category !== "Misses").length}
-        unit=" · SCOPE ITEMS"
-        subtitle={activeProject?.name || "Project budget vs actual labor hours"}
-      >
-        <button
-          onClick={() => setPresetOpen(true)}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "var(--bg-surface)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          Set Up From Template
-        </button>
-        <button
-          onClick={addBlankRow}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={12} /> Add Item
-        </button>
-      </CommandBar>
-
-      {/* KPI tiles */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-        <Tile label="Shop Budget" value={fmtHours(totals.sb)} sub="hrs" />
-        <Tile label="Shop Actual" value={fmtHours(totals.sa)} sub={fmtPct(shopVarPct)} color={varianceColor(shopVarPct)} />
-        <Tile label="Field Budget" value={fmtHours(totals.fb)} sub="hrs" />
-        <Tile label="Field Actual" value={fmtHours(totals.fa)} sub={fmtPct(fieldVarPct)} color={varianceColor(fieldVarPct)} />
-        <Tile
-          label="Total Hours"
-          value={`${fmtHours(totalActual)} / ${fmtHours(totalBudget)}`}
-          sub={fmtPct(totalVarPct)}
-          color={varianceColor(totalVarPct)}
-        />
-      </div>
-
+    <OperationsPageShell
+      eyebrow={activeProject?.project_number || "Budget Control"}
+      title="Budget Hours"
+      subtitle={`${activeProject?.name || "Project"} labor-hour command center: compare kickoff budget, current actuals, linked work packages, and misses before they become margin problems.`}
+      meta={[
+        { label: "Scope Items", value: rows.filter((r) => r.category !== "Misses").length },
+        { label: "Specialty", value: specialtyRows.length },
+        { label: "Variance", value: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
+        { label: "Actual / Budget", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}` },
+      ]}
+      metrics={[
+        { label: "Shop Budget", value: fmtHours(totals.sb), sub: "hours" },
+        { label: "Shop Actual", value: fmtHours(totals.sa), sub: fmtPct(shopVarPct), color: varianceColor(shopVarPct) },
+        { label: "Field Budget", value: fmtHours(totals.fb), sub: "hours" },
+        { label: "Field Actual", value: fmtHours(totals.fa), sub: fmtPct(fieldVarPct), color: varianceColor(fieldVarPct) },
+        { label: "Total Hours", value: `${fmtHours(totalActual)} / ${fmtHours(totalBudget)}`, sub: fmtPct(totalVarPct), color: varianceColor(totalVarPct) },
+      ]}
+      actions={(
+        <>
+          <OpsActionButton onClick={() => setPresetOpen(true)}>
+            Set Up From Template
+          </OpsActionButton>
+          <OpsActionButton variant="primary" onClick={addBlankRow} icon={<Plus size={13} />}>
+            Add Item
+          </OpsActionButton>
+        </>
+      )}
+    >
       {isLoading && (
         <div style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
           Loading…
@@ -811,7 +750,7 @@ export default function BudgetHours() {
       )}
 
       <PresetDialog open={presetOpen} onClose={() => setPresetOpen(false)} onPick={applyPreset} />
-    </div>
+    </OperationsPageShell>
   );
 }
 

@@ -29,7 +29,7 @@ import ListView from "./constraints/ListView";
 import BoardView from "./constraints/BoardView";
 import ConstraintFormModal from "./constraints/ConstraintFormModal";
 import { CONSTRAINT_TYPES, TYPE_COLORS, inputStyle } from "./constraints/constants";
-import { CommandBar } from "@/components/design-system";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 import { setDraft } from "@/lib/draftStorage";
@@ -50,7 +50,7 @@ export default function Constraints() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
 
-  // ── Data ───────────────────────────────────────────────────────────
+  // -- Data ----------------------------------------------------------------------
   const { data: items = [] } = useQuery({
     queryKey: ["constraints", projectId],
     queryFn: () =>
@@ -75,7 +75,7 @@ export default function Constraints() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // ── Mutations ──────────────────────────────────────────────────────
+  // -- Mutations ----------------------------------------------------------------------
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.ActionItem.create(data),
     onSuccess: () => {
@@ -108,7 +108,7 @@ export default function Constraints() {
     onError: () => toast.error("Delete failed"),
   });
 
-  // ── Derived data ───────────────────────────────────────────────────
+  // -- Derived data ----------------------------------------------------------------------
   const kpis = useMemo(() => {
     const open = items.filter((c) => !RESOLVED_STATUSES.includes(c.status));
     const resolved = items.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
@@ -176,7 +176,7 @@ export default function Constraints() {
   const openCount = kpis.open.length;
   const overdueCount = kpis.overdue.length;
 
-  // ── Handlers ───────────────────────────────────────────────────────
+  // -- Handlers ----------------------------------------------------------------------
   const handleLogMitigation = (c) => {
     setDraft("new-mitigation", {
       issue_source: "Constraint",
@@ -201,11 +201,11 @@ export default function Constraints() {
     }
   };
 
-  // ── No-project early return ────────────────────────────────────────
+  // -- No-project early return ----------------------------------------------------------------------
   if (!projectId) {
     return (
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>◆</div>
+        <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>—</div>
         <div
           style={{
             fontFamily: "var(--font-mono)",
@@ -226,73 +226,74 @@ export default function Constraints() {
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────
+  // -- Render ----------------------------------------------------------------------
   return (
-    <div style={{ padding: "18px 18px 28px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <CommandBar
-        eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "ALL PROJECTS"}
-        title="Constraint Log"
-        count={kpis.total}
-        unit=" · TOTAL"
-        subtitle={`${openCount} open${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""} · upstream blockers to field work`}
-      >
-        <div style={{ position: "relative" }}>
+    <OperationsPageShell
+      eyebrow={activeProject?.name || projects.find((p) => p.id === projectId)?.name || "All Projects"}
+      title="Constraint Log"
+      subtitle="Track upstream blockers, due dates, priority, mitigation, and the work packages they affect before field execution is held up."
+      meta={[
+        { label: "Total", value: kpis.total },
+        { label: "Open", value: openCount, color: openCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
+        { label: "Overdue", value: overdueCount, color: overdueCount > 0 ? "var(--status-error)" : "var(--status-success)" },
+        { label: "View", value: view },
+      ]}
+      metrics={[
+        { label: "Open Constraints", value: openCount, sub: `${kpis.critical.length} critical`, color: kpis.critical.length > 0 ? "var(--status-error)" : "var(--status-warning)" },
+        { label: "Overdue", value: overdueCount, sub: "Past due blockers", color: overdueCount > 0 ? "var(--status-error)" : "var(--status-success)" },
+        { label: "In Progress", value: kpis.inProg.length, sub: "Being mitigated", color: "var(--status-info)" },
+        { label: "Oldest Open", value: `${kpis.agedays}d`, sub: "Age of oldest blocker", color: kpis.agedays > 7 ? "var(--status-warning)" : undefined },
+      ]}
+      actions={(
+        <>
+          <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 8, overflow: "hidden" }}>
+            {[["list", "List"], ["board", "Board"]].map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                style={{
+                  background: view === v ? "var(--accent-muted)" : "transparent",
+                  color: view === v ? "var(--accent)" : "var(--text-secondary)",
+                  border: "none",
+                  borderRight: v === "list" ? "1px solid var(--border-default)" : "none",
+                  padding: "8px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <OpsActionButton
+            variant="primary"
+            onClick={() => { setEditing(null); setShowForm(true); }}
+            icon={<Plus size={13} />}
+          >
+            Log Constraint
+          </OpsActionButton>
+        </>
+      )}
+    >
+      <OpsFilterPanel>
+        <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 340 }}>
           <Search size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search constraints..."
-            style={{ ...inputStyle, paddingLeft: 30, maxWidth: 240 }}
+            style={{ ...inputStyle, paddingLeft: 30, width: "100%" }}
           />
         </div>
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 6, overflow: "hidden" }}>
-          {[["list", "≡ LIST"], ["board", "▦ BOARD"]].map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              style={{
-                background: view === v ? "var(--accent-muted)" : "transparent",
-                color: view === v ? "var(--accent)" : "var(--text-secondary)",
-                border: "none",
-                borderRight: v === "list" ? "1px solid var(--border-default)" : "none",
-                padding: "6px 12px",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => { setEditing(null); setShowForm(true); }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> Log Constraint
-        </button>
-      </CommandBar>
-
+        <div style={{ flex: 1 }} />
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase" }}>
+          {filtered.length} shown
+        </span>
+      </OpsFilterPanel>
       <KpiStrip kpis={kpis} />
 
       {kpis.open.length > 0 && <PriorityBar byPriority={kpis.byPriority} />}
@@ -354,6 +355,6 @@ export default function Constraints() {
         title="Delete Constraint"
         description={`Delete "${deleteTarget?.title || ""}"? This cannot be undone.`}
       />
-    </div>
+    </OperationsPageShell>
   );
 }

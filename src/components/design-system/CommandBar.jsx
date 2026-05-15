@@ -18,6 +18,7 @@ import React from "react";
 export default function CommandBar({ eyebrow, title, count, unit, subtitle, children }) {
   return (
     <div
+      className="sbp-command-bar"
       style={{
         display: "flex",
         alignItems: "flex-start",

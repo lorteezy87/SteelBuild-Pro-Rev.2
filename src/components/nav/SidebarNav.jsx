@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { SIDEBAR_GROUPS, loadSidebarState, saveSidebarState } from "@/config/moduleRegistry";
 import { prefetchRoute } from "@/lib/routePrefetch";
+import { useTheme } from "@/components/shared/ThemeContext";
 
 // ── Page → lucide icon map ──────────────────────────────────────────
 //
@@ -157,10 +158,13 @@ function saveRecents(pages) {
 
 // ── Component ───────────────────────────────────────────────────────
 export default function SidebarNav({ currentPageName, onNavigate, visible }) {
+  const { theme } = useTheme();
+  const isLightTheme = theme === "light";
   const [collapsed, setCollapsed] = useState(loadSidebarState);
-  const [railMode, setRailMode]   = useState(loadRailState);
+  const [railModeState, setRailMode] = useState(loadRailState);
   const [recents, setRecents]     = useState(loadRecents);
   const [showRecents, setShowRecents] = useState(true);
+  const railMode = isLightTheme ? false : railModeState;
 
   // Recent-pages tracking — kept here so reloads remember the last
   // few pages you visited.
@@ -220,12 +224,12 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
 
   if (!visible) return null;
 
-  const width = railMode ? 56 : 240;
+  const width = isLightTheme ? 176 : (railMode ? 56 : 240);
 
   return (
     <aside
       aria-label="Primary navigation"
-      className="sbd-sidebar"
+      className={`sbd-sidebar${isLightTheme ? " is-light-sidebar" : ""}`}
       style={{
         width, minWidth: width,
         display: "flex",
@@ -238,7 +242,48 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
       }}
     >
       {/* ── Top control strip ───────────────────────────────────── */}
-      <div
+      {isLightTheme && (
+        <div
+          className="light-sidebar-brand"
+          style={{
+            height: 48,
+            display: "flex",
+            alignItems: "center",
+            padding: "0 12px",
+            borderBottom: "1px solid var(--divider)",
+          }}
+        >
+          <div
+            aria-hidden
+            style={{
+              width: 24,
+              height: 24,
+              border: "1px solid var(--border-default)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--accent)",
+              marginRight: 7,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+              <path d="M8 2.5 14 13H2L8 2.5Z" />
+              <path d="M8 6.5V10" />
+              <path d="M8 12h.01" />
+            </svg>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 900, letterSpacing: "0.02em", color: "var(--text-primary)", lineHeight: 1 }}>
+              STEELBUILD PRO
+            </div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, fontWeight: 700, letterSpacing: "0.18em", color: "var(--text-muted)", lineHeight: 1.3, marginTop: 3 }}>
+              CONSTRUCTION OPS
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isLightTheme && <div
         style={{
           padding: railMode ? "12px 8px 8px" : "12px 14px 8px",
           display: "flex",
@@ -300,10 +345,10 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
         >
           {railMode ? <ChevronsRight size={14} strokeWidth={1.75} /> : <ChevronsLeft size={14} strokeWidth={1.75} />}
         </button>
-      </div>
+      </div>}
 
       {/* ── Global search trigger ──────────────────────────────── */}
-      <div style={{ padding: railMode ? "10px 8px 4px" : "10px 14px 4px" }}>
+      {!isLightTheme && <div style={{ padding: railMode ? "10px 8px 4px" : "10px 14px 4px" }}>
         <button
           onClick={openGlobalSearch}
           title="Search (⌘K)"
@@ -357,7 +402,7 @@ export default function SidebarNav({ currentPageName, onNavigate, visible }) {
             </>
           )}
         </button>
-      </div>
+      </div>}
 
       {/* ── Navigation groups (scroll area) ────────────────────── */}
       <nav

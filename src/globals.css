@@ -23,9 +23,9 @@
  * Layout.jsx. Token-mapping overlay below picks up new palette for
  * existing inline-style components automatically. */
 @import './styles/steelbuild-dark.css';
+@import './styles/tailwind-compat.css';
+@import './styles/steelbuild-light.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './styles/tailwind-compat.css';
