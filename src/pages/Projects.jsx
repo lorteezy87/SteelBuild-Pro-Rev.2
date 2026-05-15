@@ -154,6 +154,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
   const [hovered, setHovered] = useState(false);
   const phase  = PHASE_CONFIG[project.phase] || PHASE_CONFIG["Detailing"];
   const health = HEALTH_CONFIG[project.health_status] || HEALTH_CONFIG["On Track"];
+  const cardBorderColor = hovered ? "var(--accent-border)" : "var(--border-default)";
 
   const projectWPs = workPackages.filter(w => w.project_id === project.id);
   const projectRFIs = rfis.filter(r => r.project_id === project.id);
@@ -174,8 +175,18 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
       onMouseLeave={() => setHovered(false)}
       style={{
         background: "var(--bg-surface)",
-        border: `1px solid ${hovered ? "var(--accent-border)" : "var(--border-default)"}`,
-        borderLeft: `4px solid ${phase.color}`,
+        borderTopWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 4,
+        borderTopStyle: "solid",
+        borderRightStyle: "solid",
+        borderBottomStyle: "solid",
+        borderLeftStyle: "solid",
+        borderTopColor: cardBorderColor,
+        borderRightColor: cardBorderColor,
+        borderBottomColor: cardBorderColor,
+        borderLeftColor: phase.color,
         borderRadius: 6,
         cursor: "pointer",
         transition: "border-color 0.15s, box-shadow 0.15s, transform 0.12s",
@@ -393,6 +404,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
 ───────────────────────────────────────────── */
 function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-error)", onClick, active = false }) {
   const [hovered, setHovered] = useState(false);
+  const borderColor = active ? "var(--accent-border)" : hovered ? "var(--border-strong)" : "var(--border-default)";
   return (
     <div
       onClick={onClick}
@@ -402,8 +414,18 @@ function KpiCard({ label, value, sub, alert = false, alertColor = "var(--status-
         flex: 1,
         minWidth: 130,
         background: active ? "var(--accent-muted)" : "var(--bg-surface)",
-        border: `1px solid ${active ? "var(--accent-border)" : hovered ? "var(--border-strong)" : "var(--border-default)"}`,
-        borderTop: alert ? `2px solid ${alertColor}` : `1px solid ${active ? "var(--accent-border)" : "var(--border-default)"}`,
+        borderTopWidth: alert ? 2 : 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 1,
+        borderTopStyle: "solid",
+        borderRightStyle: "solid",
+        borderBottomStyle: "solid",
+        borderLeftStyle: "solid",
+        borderTopColor: alert ? alertColor : active ? "var(--accent-border)" : "var(--border-default)",
+        borderRightColor: borderColor,
+        borderBottomColor: borderColor,
+        borderLeftColor: borderColor,
         borderRadius: 4,
         padding: "14px 18px",
         cursor: onClick ? "pointer" : "default",

@@ -33,19 +33,6 @@ the wiring change is isolated to the edge function code itself.
 This is a separate sprint — not blocking the Phase 1 telemetry
 rollout.
 
-### Stale Supabase generated types
-**Where:** `src/types/supabase.ts`
-**What:** Missing rows for `submittal_rounds` and possibly other tables
-added in migrations after the file was last regenerated. Causes
-`npm run typecheck` to fail with `Type '"submittal_rounds"' does not
-satisfy the constraint`.
-**Impact:** TypeScript check is currently non-blocking in CI
-(`continue-on-error: true` in `.github/workflows/ci.yml`). Build still
-passes; runtime works fine. Just lose static-typing safety on a few
-tables.
-**Fix:** Run `npm run types:db` with the Supabase CLI authenticated.
-Then flip the CI step back to blocking.
-
 ### Bypass-able admin gating (localStorage roles) — RESOLVED in RBAC Phase B (079/080)
 **Where:** `src/components/shared/useAppSecurity.jsx`,
 `src/hooks/useProjectRole.ts`, migrations `079_user_project_roles`,
@@ -185,6 +172,10 @@ important lives only there.
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- Supabase generated types / typecheck drift resolved: `npm run typecheck`
+  and `npm run typecheck:js` are passing, and CI treats both checks as
+  blocking.
 
 - ✅ 3D viewer camera snap-back during zoom — fixed via component-level
   refs + disable infinityDolly + bump workPackages staleTime.

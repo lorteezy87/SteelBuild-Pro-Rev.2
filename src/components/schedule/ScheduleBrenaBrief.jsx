@@ -99,6 +99,10 @@ function formatBriefTask(task) {
   return `${taskName(task)} (${phaseOf(task)} / ${task?.status || "No status"} / ${date ? formatDateShort(date) : "TBD"})`;
 }
 
+function formatAnalysisDate(date = new Date()) {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function daysBetween(task, field, min, max) {
   const days = daysFromToday(task?.[field]);
   return days != null && days >= min && days <= max;
@@ -107,6 +111,151 @@ function daysBetween(task, field, min, max) {
 function shiftedByDays(effective) {
   const value = Number(effective?.shiftedBy);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function buildAtRiskEntry(task, effectiveDates) {
+  const name = taskName(task);
+  const startLag = daysFromToday(task?.start_date);
+  const finishLag = daysFromToday(task?.end_date);
+  const effective = effectiveDates[task?.id];
+  const shiftDays = shiftedByDays(effective);
+  const criticalLabel = isCriticalTask(task) ? "critical path " : "";
+
+  if (startLag != null && startLag < 0 && progressValue(task) === 0) {
+    const lateDays = Math.abs(startLag);
+    return {
+      task,
+      label: name,
+      why: `This ${criticalLabel}task was scheduled to start on ${formatDateShort(task.start_date)} but has not begun, creating a ${lateDays}-day start delay.`,
+      fix: `Confirm the root cause, assign an owner, and either mobilize ${phaseOf(task).toLowerCase()} work or re-baseline the start/finish dates.`,
+    };
+  }
+
+  if (finishLag != null && finishLag < 0 && String(task?.status || "").toLowerCase() !== "complete") {
+    const lateDays = Math.abs(finishLag);
+    return {
+      task,
+      label: name,
+      why: `This open task was due to finish on ${formatDateShort(task.end_date)} and is now ${lateDays} day${lateDays === 1 ? "" : "s"} late.`,
+      fix: "Update the status if the work is complete, or reset the finish date and notify downstream owners.",
+    };
+  }
+
+  if (shiftDays > 0) {
+    return {
+      task,
+      label: name,
+      why: `Dependency logic is pushing this task ${shiftDays} day${shiftDays === 1 ? "" : "s"} later than its stored dates.`,
+      fix: "Review predecessor links, lag, and whether the stored dates need to be re-baselined.",
+    };
+  }
+
+  if (!task?.start_date || !task?.end_date) {
+    return {
+      task,
+      label: name,
+      why: "This task is still missing a start date, finish date, or both, so it cannot reliably drive downstream planning.",
+      fix: "Define the work window or keep it intentionally marked TBD until the responsible team can commit dates.",
+    };
+  }
+
+  return {
+    task,
+    label: name,
+    why: "This task carries schedule risk based on current status, dates, dependencies, or critical-path metadata.",
+    fix: "Review owner, dates, dependencies, and current field/shop status before publishing the schedule.",
+  };
+}
+
+function buildScheduleAiNarrative({
+  riskScore,
+  openTasks,
+  delayed,
+  tbd,
+  overdue,
+  critical,
+  stalled,
+  shiftedTasks,
+  effectiveDates,
+  logicGaps,
+  unassignedTasks,
+}) {
+  const atRiskTasks = [
+    ...stalled.filter(isCriticalTask),
+    ...overdue.filter(isCriticalTask),
+    ...delayed.filter(isCriticalTask),
+    ...shiftedTasks.filter(isCriticalTask),
+    ...stalled,
+    ...overdue,
+    ...delayed,
+    ...shiftedTasks,
+    ...tbd,
+  ];
+  const seen = new Set();
+  const atRisk = atRiskTasks
+    .filter((task) => {
+      const key = task?.id || taskName(task);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 4)
+    .map((task) => buildAtRiskEntry(task, effectiveDates));
+
+  const maxCriticalStartDelay = critical.reduce((max, task) => {
+    const startLag = daysFromToday(task?.start_date);
+    return startLag != null && startLag < 0 && progressValue(task) === 0
+      ? Math.max(max, Math.abs(startLag))
+      : max;
+  }, 0);
+  const maxFinishDelay = overdue.reduce((max, task) => {
+    const finishLag = daysFromToday(task?.end_date);
+    return finishLag != null && finishLag < 0 ? Math.max(max, Math.abs(finishLag)) : max;
+  }, 0);
+  const maxCascadeDelay = shiftedTasks.reduce((max, task) => Math.max(max, shiftedByDays(effectiveDates[task.id])), 0);
+  const forecastDelayDays = Math.max(maxCriticalStartDelay, maxFinishDelay, maxCascadeDelay);
+
+  const riskLevel = riskScore >= 70 || (critical.length > 0 && (stalled.length > 0 || overdue.length > 0))
+    ? "HIGH"
+    : riskScore >= 35
+      ? "MEDIUM"
+      : "LOW";
+
+  const undefinedPct = openTasks.length ? Math.round((tbd.length / openTasks.length) * 100) : 0;
+  const primaryAtRisk = atRisk[0];
+  const hasPrimaryDelay = Boolean(primaryAtRisk && forecastDelayDays > 0);
+  const summary = riskLevel === "HIGH"
+    ? `The project is at high risk because ${primaryAtRisk ? `'${primaryAtRisk.label}' is driving the current schedule pressure` : "multiple schedule controls are outside tolerance"}. ${tbd.length ? `${undefinedPct}% of open tasks still have TBD dates, which limits reliable downstream planning.` : "The next step is to verify the critical path and publish recovery dates."}`
+    : riskLevel === "MEDIUM"
+      ? `The project has moderate schedule risk. ${primaryAtRisk ? `'${primaryAtRisk.label}' needs attention first.` : "The main work is to clean up dates, owners, and dependency logic before the lookahead hardens."}`
+      : "The project has low visible schedule risk. Keep the lookahead clean by confirming dates, owners, and dependency links before they become blockers.";
+
+  const blockers = [
+    primaryAtRisk && hasPrimaryDelay ? `The '${primaryAtRisk.label}' task is the primary schedule blocker right now.` : null,
+    tbd.length ? `${tbd.length} open task${tbd.length === 1 ? "" : "s"} still have TBD dates, blocking a complete forecast.` : null,
+    logicGaps.length ? `${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} have missing predecessor or successor logic.` : null,
+    unassignedTasks.length ? `${unassignedTasks.length} open task${unassignedTasks.length === 1 ? "" : "s"} have no owner assigned.` : null,
+  ].filter(Boolean).slice(0, 4);
+
+  const sequenceSuggestions = [
+    primaryAtRisk ? `Resolve or re-baseline '${primaryAtRisk.label}' before relying on downstream dates.` : null,
+    tbd.length ? `Define scope, duration, and dependencies for the ${tbd.length} TBD task${tbd.length === 1 ? "" : "s"}.` : null,
+    logicGaps.length ? "Tighten predecessor/successor links so critical-path movement is visible before work slips." : null,
+    forecastDelayDays > 0 ? `Communicate the current +${forecastDelayDays}d forecast pressure to affected detailing, fabrication, delivery, and field stakeholders.` : null,
+    unassignedTasks.length ? "Assign accountable owners to open work before the next coordination meeting." : null,
+  ].filter(Boolean).slice(0, 4);
+
+  return {
+    riskLevel,
+    riskScore,
+    forecastDelayDays,
+    summary,
+    atRisk,
+    blockers,
+    sequenceSuggestions,
+    modelLabel: "schedule-risk-v1",
+    analyzedAt: formatAnalysisDate(),
+  };
 }
 
 function buildBrief(tasks) {
@@ -328,10 +477,27 @@ function buildBrief(tasks) {
     logicGaps.length ? `7. Logic cleanup: review ${logicGaps.length} open task${logicGaps.length === 1 ? "" : "s"} missing predecessor or successor context.` : null,
   ].filter(Boolean);
 
+  const aiNarrative = buildScheduleAiNarrative({
+    riskScore,
+    openTasks,
+    delayed,
+    tbd,
+    overdue,
+    critical,
+    stalled,
+    shiftedTasks,
+    effectiveDates,
+    logicGaps,
+    unassignedTasks,
+  });
+
   const clipboardText = [
     `Brena Schedule Brief - ${new Date().toLocaleDateString()}`,
     `Project: ${tasks[0]?.project_name || "Selected Project"}`,
     `Pressure: ${riskScore}%`,
+    `Risk: ${aiNarrative.riskLevel}`,
+    `Forecast Pressure: +${aiNarrative.forecastDelayDays}d`,
+    aiNarrative.summary,
     `Open: ${openTasks.length}`,
     `Delayed: ${delayed.length}`,
     `Overdue: ${overdue.length}`,
@@ -370,7 +536,7 @@ function buildBrief(tasks) {
     ...(nextCritical.length ? nextCritical.map((task, index) => `${index + 1}. ${formatBriefTask(task)}`) : ["No open critical path tasks are marked."]),
   ].join("\n");
 
-  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore };
+  return { openTasks, delayed, tbd, overdue, critical, stalled, nearTerm, startsSoon, dueSoon, activeNow, handoffCount, unassignedTasks, shiftedTasks, effectiveDates, totalShiftDays, logicGaps, successorCountById, unlinked, nextCritical, phaseRows, recoveryActions, morningPlan, clipboardText, riskScore, aiNarrative };
 }
 
 export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, onSetPhaseFilter, onSetView, onSetGanttFocus }) {
@@ -428,6 +594,8 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
       </div>
 
       <div style={gridStyle}>
+        <ScheduleAiRiskCard insight={brief.aiNarrative} />
+
         <Metric icon={AlertTriangle} label="Delayed" value={brief.delayed.length} tone={brief.delayed.length ? "var(--status-error)" : "var(--status-success)"} />
         <Metric icon={CalendarClock} label="Overdue" value={brief.overdue.length} tone={brief.overdue.length ? "var(--status-warning)" : "var(--status-success)"} />
         <Metric icon={Target} label="TBD Dates" value={brief.tbd.length} tone={brief.tbd.length ? "var(--status-info)" : "var(--status-success)"} />
@@ -703,6 +871,219 @@ export default function ScheduleBrenaBrief({ tasks = [], project, phaseFilter, o
         </div>
       </div>
     </section>
+  );
+}
+
+function riskTone(level) {
+  if (level === "HIGH") return "var(--status-error)";
+  if (level === "MEDIUM") return "var(--status-warning)";
+  return "var(--status-success)";
+}
+
+function ScheduleAiRiskCard({ insight }) {
+  if (!insight) return null;
+
+  const tone = riskTone(insight.riskLevel);
+
+  function aiRiskPanelStyle(tone) {
+    return {
+      gridColumn: "span 6",
+      border: `1px solid color-mix(in srgb, ${tone} 34%, var(--border-default))`,
+      borderRadius: 16,
+      background: `linear-gradient(135deg, color-mix(in srgb, ${tone} 10%, rgba(255,255,255,0.035)), rgba(255,255,255,0.025))`,
+      boxShadow: `inset 3px 0 0 ${tone}, 0 16px 34px rgba(0,0,0,0.18)`,
+      padding: 14,
+    };
+  }
+
+  const aiRiskHeaderStyle = {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    marginBottom: 10,
+  };
+
+  const aiRiskEyebrowStyle = {
+    fontFamily: "var(--font-mono)",
+    fontSize: 9,
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+    color: "var(--status-info)",
+  };
+
+  const aiRiskTitleStyle = {
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "var(--text-primary)",
+  };
+
+  function aiRiskDelayStyle(tone) {
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      minHeight: 22,
+      padding: "0 8px",
+      borderRadius: 999,
+      border: `1px solid color-mix(in srgb, ${tone} 42%, transparent)`,
+      background: `color-mix(in srgb, ${tone} 12%, transparent)`,
+      color: tone,
+      whiteSpace: "nowrap",
+    };
+  }
+
+  function aiRiskScoreStyle(tone) {
+    return {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      display: "grid",
+      placeItems: "center",
+      border: `1px solid color-mix(in srgb, ${tone} 45%, transparent)`,
+      background: `color-mix(in srgb, ${tone} 12%, var(--bg-surface-high))`,
+      color: tone,
+      fontFamily: "var(--font-mono)",
+      fontSize: 13,
+      fontWeight: 900,
+      flexShrink: 0,
+    };
+  }
+
+  const aiRiskSummaryStyle = {
+    margin: "0 0 12px",
+    color: "var(--text-secondary)",
+    fontFamily: "var(--font-body)",
+    fontSize: 13,
+    lineHeight: 1.48,
+  };
+
+  const aiRiskColumnsStyle = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr)",
+    gap: 10,
+    alignItems: "stretch",
+  };
+
+  const aiRiskSectionStyle = {
+    border: "1px solid var(--border-default)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.025)",
+    padding: 11,
+    minWidth: 0,
+  };
+
+  const aiRiskSectionTitleStyle = {
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+    marginBottom: 8,
+  };
+
+  const aiRiskTaskStyle = {
+    borderTop: "1px solid var(--border-default)",
+    paddingTop: 8,
+  };
+
+  const aiRiskTextStyle = {
+    marginTop: 5,
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+    lineHeight: 1.38,
+    color: "var(--text-secondary)",
+  };
+
+  const aiRiskListStyle = {
+    margin: 0,
+    paddingLeft: 17,
+    display: "grid",
+    gap: 7,
+  };
+
+  const aiRiskListItemStyle = {
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+    lineHeight: 1.38,
+    color: "var(--text-secondary)",
+  };
+
+  const aiRiskFooterStyle = {
+    marginTop: 10,
+    paddingTop: 9,
+    borderTop: "1px solid var(--border-default)",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    fontWeight: 800,
+    letterSpacing: "0.10em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+  };
+
+  return (
+    <div style={aiRiskPanelStyle(tone)}>
+      <div style={aiRiskHeaderStyle}>
+        <div style={{ minWidth: 0 }}>
+          <div style={aiRiskEyebrowStyle}>Schedule AI - Planning Engine</div>
+          <div style={aiRiskTitleStyle}>
+            <span>RISK: {insight.riskLevel}</span>
+            <span style={aiRiskDelayStyle(tone)}>+{insight.forecastDelayDays}d forecast pressure</span>
+          </div>
+        </div>
+        <div style={aiRiskScoreStyle(tone)}>{insight.riskScore}%</div>
+      </div>
+
+      <p style={aiRiskSummaryStyle}>{insight.summary}</p>
+
+      <div style={aiRiskColumnsStyle}>
+        <div style={aiRiskSectionStyle}>
+          <div style={aiRiskSectionTitleStyle}>At-Risk Tasks ({insight.atRisk.length})</div>
+          <div style={{ display: "grid", gap: 9 }}>
+            {insight.atRisk.length ? insight.atRisk.map((entry) => (
+              <div key={entry.task?.id || entry.label} style={aiRiskTaskStyle}>
+                <div style={taskNameStyle}>{entry.label}</div>
+                <div style={aiRiskTextStyle}><strong>Why:</strong> {entry.why}</div>
+                <div style={aiRiskTextStyle}><strong>Fix:</strong> {entry.fix}</div>
+              </div>
+            )) : (
+              <div style={emptyStyle}>No dated critical task risk is currently visible.</div>
+            )}
+          </div>
+        </div>
+
+        <div style={aiRiskSectionStyle}>
+          <div style={aiRiskSectionTitleStyle}>Blockers</div>
+          <ul style={aiRiskListStyle}>
+            {(insight.blockers.length ? insight.blockers : ["No explicit blocker is visible from current schedule data."]).map((item) => (
+              <li key={item} style={aiRiskListItemStyle}>{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div style={aiRiskSectionStyle}>
+          <div style={aiRiskSectionTitleStyle}>Sequence Suggestions</div>
+          <ol style={aiRiskListStyle}>
+            {(insight.sequenceSuggestions.length ? insight.sequenceSuggestions : ["Keep monitoring the 14-day handoff and update dates as work firms up."]).map((item) => (
+              <li key={item} style={aiRiskListItemStyle}>{item}</li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      <div style={aiRiskFooterStyle}>
+        Model: {insight.modelLabel} - Analyzed: {insight.analyzedAt}
+      </div>
+    </div>
   );
 }
 
