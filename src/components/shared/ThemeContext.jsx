@@ -104,12 +104,10 @@ export function ThemeProvider({ children }) {
     root.setAttribute("data-contrast", contrast);
     root.setAttribute("data-motion", motion);
     root.style.setProperty("--font-scale", String(FONT_SCALE_VALUE[fontScale] ?? 1));
-    // SteelBuild Dark — apply the wrapper class to <html> too so the
-    // token overlay cascades to every descendant before Layout mounts.
-    // This kills the "very faint" effect where light-mode tokens were
-    // winning because the .steelbuild-dark class was buried two
-    // levels deep in the React tree.
-    root.classList.add("steelbuild-dark");
+    // SteelBuild Dark is intentionally scoped. Light mode must not carry
+    // the dark overlay class or it inherits the frosted dark palette.
+    if (theme === "dark") root.classList.add("steelbuild-dark");
+    else root.classList.remove("steelbuild-dark");
     try {
       localStorage.setItem(KEY.theme,     theme);
       localStorage.setItem(KEY.accent,    accent);

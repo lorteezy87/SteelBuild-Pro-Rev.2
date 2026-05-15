@@ -454,6 +454,7 @@ export default function DrawingSubmittalHub() {
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div
+      className="drawing-submittal-hub"
       style={{
         minHeight: "100vh",
         background: "var(--bg-page)",
@@ -490,7 +491,7 @@ export default function DrawingSubmittalHub() {
       </CommandBar>
 
       {/* ── KPI Strip ────────────────────────────────────────────────── */}
-      <div style={{
+      <div className="sbp-hub-kpi-strip" style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
         gap: 10,
@@ -506,7 +507,7 @@ export default function DrawingSubmittalHub() {
       </div>
 
       {/* ── Tab Bar ──────────────────────────────────────────────────── */}
-      <div style={{
+      <div className="sbp-hub-tabbar" style={{
         display: "flex",
         gap: 8,
         flexWrap: "wrap",
@@ -523,6 +524,7 @@ export default function DrawingSubmittalHub() {
           const Icon = tab.icon;
           return (
             <button
+              className={`sbp-hub-tab${isActive ? " is-active" : ""}`}
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
@@ -550,6 +552,7 @@ export default function DrawingSubmittalHub() {
               <span>{tab.label}</span>
               <span
                 className="sbd-num"
+                data-hub-tab-count="true"
                 style={{
                   padding: "2px 7px",
                   borderRadius: 999,
@@ -609,7 +612,7 @@ export default function DrawingSubmittalHub() {
 
 function HeaderSignal({ icon: Icon, label, value, tone }) {
   return (
-    <div style={{
+    <div className="sbp-header-signal" style={{
       display: "inline-flex",
       alignItems: "center",
       gap: 8,

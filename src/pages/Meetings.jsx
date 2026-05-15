@@ -5,12 +5,13 @@ import { toast } from "sonner";
 import MeetingFormModal from "@/components/meetings/MeetingFormModal";
 import MeetingList from "@/components/meetings/MeetingList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { CommandBar, KpiTile } from "@/components/design-system";
+import { KpiTile } from "@/components/design-system";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
 import { CheckSquare, Plus } from "lucide-react";
 import { useProjectId } from "@/hooks/useProjectId";
 import { parseProductionMeetingNotes } from "@/utils/productionMeetingParser";
 
-/* ── Meeting type templates for Quick Start empty state ── */
+/* -- Meeting type templates for Quick Start empty state -- */
 const MEETING_TEMPLATES = [
   {
     key: "oac",
@@ -358,7 +359,7 @@ export default function Meetings() {
     [meetings],
   );
 
-  /* ── Type distribution for badge counts ── */
+  /* -- Type distribution for badge counts -- */
   const typeCounts = useMemo(() => {
     const counts = {};
     types.forEach((t) => {
@@ -367,7 +368,7 @@ export default function Meetings() {
     return counts;
   }, [meetings]);
 
-  /* ── Interactive KPI tile click: filter by status ── */
+  /* -- Interactive KPI tile click: filter by status -- */
   const handleStatClick = (statusValue) => {
     if (statusValue === "all") {
       setFilterStatus("all");
@@ -385,60 +386,46 @@ export default function Meetings() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <CommandBar
-        eyebrow={selectedProject ? selectedProject.name : "ALL PROJECTS"}
-        title="Meetings"
-        count={filtered.length}
-        unit=" · MEETINGS"
-        subtitle={`${stats.upcoming || 0} upcoming · ${stats.complete || 0} complete · OAC / Foreman / Pre-Con templates`}
-      >
-        <button
-          onClick={() => setShowParser((v) => !v)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: showParser ? "var(--accent-muted)" : "var(--bg-surface)",
-            color: showParser ? "var(--accent)" : "var(--text-secondary)",
-            border: `1px solid ${showParser ? "var(--accent)" : "var(--border-default)"}`,
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-        >
-          <CheckSquare size={12} /> Parse Notes
-        </button>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setTemplateDefaults(null);
-            setShowForm(true);
-          }}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "var(--accent)",
-            color: "var(--bg-base)",
-            border: "none",
-            borderRadius: "var(--radius-btn)",
-            padding: "8px 14px",
-            fontFamily: "var(--font-mono)",
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: "pointer",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-        >
-          <Plus size={12} /> New Meeting
-        </button>
-      </CommandBar>
-
+    <OperationsPageShell
+      eyebrow={selectedProject ? selectedProject.name : "All Projects"}
+      title="Meetings"
+      subtitle="Plan coordination meetings, capture minutes, parse production notes into reviewed action items, and keep meeting follow-up visible."
+      meta={[
+        { label: "Showing", value: filtered.length },
+        { label: "Upcoming", value: stats.upcoming || 0, color: "var(--status-info)" },
+        { label: "In Progress", value: stats.inProgress, color: stats.inProgress > 0 ? "var(--status-warning)" : undefined },
+        { label: "Complete", value: stats.complete || 0, color: "var(--status-success)" },
+      ]}
+      metrics={kpiTiles.map((stat) => ({
+        key: stat.label,
+        label: stat.label,
+        value: stat.value,
+        color: stat.color,
+        active: filterStatus === stat.statusFilter,
+        onClick: () => handleStatClick(stat.statusFilter),
+      }))}
+      actions={(
+        <>
+          <OpsActionButton
+            onClick={() => setShowParser((v) => !v)}
+            icon={<CheckSquare size={13} />}
+          >
+            {showParser ? "Hide Parser" : "Parse Notes"}
+          </OpsActionButton>
+          <OpsActionButton
+            variant="primary"
+            onClick={() => {
+              setEditing(null);
+              setTemplateDefaults(null);
+              setShowForm(true);
+            }}
+            icon={<Plus size={13} />}
+          >
+            New Meeting
+          </OpsActionButton>
+        </>
+      )}
+    >
       {showParser && (
         <ProductionMeetingParserPanel
           notes={meetingNotes}
@@ -478,7 +465,7 @@ export default function Meetings() {
       </div>
 
       {/* Filters with type badge counts */}
-      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
+      <OpsFilterPanel>
         <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
           <span
             style={{
@@ -616,7 +603,7 @@ export default function Meetings() {
             );
           })}
         </div>
-      </div>
+      </OpsFilterPanel>
 
       {/* Form Modal */}
       {showForm && (
@@ -705,13 +692,13 @@ export default function Meetings() {
       >
         +
       </button>
-    </div>
+    </OperationsPageShell>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ----------------------------------------------------------------------
    Empty State with Quick Start Templates
-   ═══════════════════════════════════════════════════════════════ */
+   =============================================================== */
 function MeetingsEmptyState({ onTemplate }) {
   return (
     <div

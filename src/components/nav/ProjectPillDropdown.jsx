@@ -95,6 +95,9 @@ export default function ProjectPillDropdown({ compact = false }) {
         : projects.length === 0
           ? "NO PROJECTS"
           : "SELECT PROJECT";
+  const displayLabel = activeProject && !loading
+    ? `${activeProject.project_number || "----"} \u00B7 ${(activeProject.name || "Project").slice(0, 24).toUpperCase()}`
+    : label;
 
   // Filter projects by search
   const filtered = projects.filter((p) => {
@@ -145,7 +148,7 @@ export default function ProjectPillDropdown({ compact = false }) {
           overflow: "hidden",
           textOverflow: "ellipsis",
         }}
-        title={label}
+        title={displayLabel}
       >
         {activeProject && (
           <span
@@ -164,7 +167,7 @@ export default function ProjectPillDropdown({ compact = false }) {
             }}
           />
         )}
-        {label}
+        {displayLabel}
         <span
           style={{
             marginLeft: 4,

@@ -54,6 +54,7 @@ import ProjectPillDropdown from "./components/nav/ProjectPillDropdown";
 // Context
 import { useProjectContext } from "./components/shared/ProjectContext";
 import { AuthContext } from "@/lib/AuthContext";
+import { useTheme } from "@/components/shared/ThemeContext";
 
 // ─────────────────────────────────────────────────────────────────────
 function sidebarFallbackWidth() {
@@ -78,6 +79,9 @@ function SidebarNavFallback() {
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isDarkTheme = theme === "dark";
+  const appShellClassName = `app-shell ${isDarkTheme ? "steelbuild-dark " : ""}sbd-mesh-bg`;
 
   // Auth
   const authCtx = useContext(AuthContext);
@@ -127,14 +131,10 @@ export default function Layout({ children, currentPageName }) {
   const handleNavigate = (page) => navigate(createPageUrl(page));
 
   // ── Render ───────────────────────────────────────────────────────
-  // The `steelbuild-dark` class on the outermost element activates the
-  // industrial dark theme — a self-contained stylesheet (steelbuild-dark.css)
-  // plus a token-mapping overlay in tokens.css that retargets every existing
-  // `var(--accent)` / `var(--bg-surface)` / etc. inline-style reference at
-  // the new SBD palette without touching individual components. Per-page
-  // sweeps add `.sbd-*` utility classes for full glass-morphism + KPI tiles.
+  // The theme class is scoped here so light mode can use the reference
+  // grid-and-panel styling without inheriting dark overlay tokens.
   return (
-    <div className="app-shell steelbuild-dark sbd-mesh-bg" data-mobile-shell={isMobile ? "true" : "false"} style={{
+    <div className={appShellClassName} data-mobile-shell={isMobile ? "true" : "false"} style={{
       minHeight: "100vh", width: "100%",
       display: "flex", alignItems: "flex-start", justifyContent: "center",
       padding: 0, background: "var(--bg-base)",
@@ -165,7 +165,7 @@ export default function Layout({ children, currentPageName }) {
         <div style={{
           position: "absolute", top: 0, left: 0, right: 0, height: 2,
           background: "linear-gradient(90deg, transparent, var(--accent), transparent)",
-          zIndex: 200, opacity: 0.6,
+          zIndex: 200, opacity: isDarkTheme ? 0.6 : 0, display: isDarkTheme ? "block" : "none",
         }} />
 
         {/* ── TOP UTILITY BAR ─────────────────────────────────────── */}
@@ -181,11 +181,19 @@ export default function Layout({ children, currentPageName }) {
           {/* LEFT: Brand + Hamburger */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isMobile && <HamburgerMenu open={mobileOpen} onToggle={() => setMobileOpen((o) => !o)} />}
-            <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
-              <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
-            </div>
-            {!isMobile && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
-            {!isMobile && (
+            {(isDarkTheme || isMobile) && (
+              <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={() => handleNavigate("Dashboard")}>
+                <img src="/logo.png" alt="SteelBuild Pro" style={{ height: isMobile ? 30 : 26, width: "auto", objectFit: "contain" }} />
+              </div>
+            )}
+            {!isMobile && isDarkTheme && <div style={{ width: 1, height: 16, background: "var(--divider)", margin: "0 6px" }} />}
+            {!isMobile && !isDarkTheme && <ProjectPillDropdown />}
+            {!isMobile && !isDarkTheme && (
+              <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Home
+              </span>
+            )}
+            {!isMobile && isDarkTheme && (
               <span className="sbd-topbar-eyebrow" style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 {currentPageName?.replace(/([A-Z])/g, " $1").trim() || "Dashboard"}
               </span>
@@ -195,7 +203,7 @@ export default function Layout({ children, currentPageName }) {
           {/* RIGHT: Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             {/* Search trigger \u2014 see TopBarSearchButton for context. */}
-            <TopBarSearchButton onClick={() => setSearchOpen(true)} />
+            <TopBarSearchButton onClick={() => setSearchOpen(true)} compact={isMobile} />
 
             {/* Density toggle + Modules grid — desktop only */}
             {!isMobile && (
@@ -252,7 +260,7 @@ export default function Layout({ children, currentPageName }) {
             {!isMobile && <UserSignOutBlock user={user} onLogout={logout} />}
 
             {/* Project pill dropdown */}
-            <ProjectPillDropdown compact={isMobile} />
+            {(isDarkTheme || isMobile) && <ProjectPillDropdown compact={isMobile} />}
           </div>
         </nav>
 
@@ -295,15 +303,15 @@ export default function Layout({ children, currentPageName }) {
             in src/components/ai-assistant/* for re-enable. */}
         <Suspense fallback={null}>
           <Toaster
-            theme="dark"
+            theme={isDarkTheme ? "dark" : "light"}
             richColors
             closeButton
             position="bottom-right"
             toastOptions={{
               style: {
-                background: "var(--sbd-bg-elevated, var(--bg-elevated, rgba(15,22,38,0.95)))",
-                border: "1px solid var(--sbd-border, var(--border-strong, rgba(255,255,255,0.08)))",
-                color: "var(--sbd-text, var(--text-primary, rgba(255,255,255,0.95)))",
+                background: "var(--bg-elevated, var(--sbd-bg-elevated, rgba(15,22,38,0.95)))",
+                border: "1px solid var(--border-strong, var(--sbd-border, rgba(255,255,255,0.08)))",
+                color: "var(--text-primary, var(--sbd-text, rgba(255,255,255,0.95)))",
                 fontFamily: "'Inter', sans-serif",
                 fontSize: 13, borderRadius: 10,
                 boxShadow: "var(--shadow-lg)",
