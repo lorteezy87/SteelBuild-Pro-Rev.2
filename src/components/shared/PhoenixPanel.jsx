@@ -3,7 +3,7 @@ import React from "react";
 // Phoenix standard panel with orange left-border header
 export function PhoenixPanel({ title, count, actions, children, style = {} }) {
   return (
-    <div className="sbd-card" style={{
+    <div className="sbd-card sbp-phoenix-panel" style={{
       background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 90%, #000 10%) 0%, color-mix(in srgb, var(--bg-surface-low) 86%, #000 14%) 100%)",
       border: "1px solid color-mix(in srgb, var(--border-default) 88%, white 12%)",
       borderRadius: "16px",

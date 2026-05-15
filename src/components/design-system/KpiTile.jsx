@@ -81,6 +81,7 @@ export default function KpiTile({
 
   return (
     <div
+      className="sbd-kpi"
       onClick={onClick}
       onMouseEnter={() => clickable && setHover(true)}
       onMouseLeave={() => setHover(false)}
