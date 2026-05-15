@@ -77,7 +77,7 @@ const ROUTE_DOMAINS = {
     Drawings:         r(lazyWithRetry(() => import("@/pages/Drawings")),         "Drawings",            { projectScoped: true }),
     DrawingAnalysis:  r(lazyWithRetry(() => import("@/pages/DrawingAnalysis")),  "Drawing Analysis",    { projectScoped: true }),
     DrawingViewer:    r(lazyWithRetry(() => import("@/pages/DrawingViewer")),    "Drawing Viewer",      { projectScoped: true }),
-    Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents"),
+    Documents:        r(lazyWithRetry(() => import("@/pages/Documents")),        "Documents",           { projectScoped: true }),
     ModelViewer:      r(lazyWithRetry(() => import("@/pages/ModelViewer")),      "3D Model Viewer",     { projectScoped: true }),
     Submittals:       r(lazyWithRetry(() => import("@/pages/Submittals")),       "Submittal Register",  { projectScoped: true }),
   },
@@ -89,7 +89,7 @@ const ROUTE_DOMAINS = {
     FabRelease:         r(lazyWithRetry(() => import("@/pages/FabRelease")),         "Fab Release",         { projectScoped: true }),
     BudgetHours:        r(lazyWithRetry(() => import("@/pages/BudgetHours")),        "Budget Hours",        { projectScoped: true }),
     Procurement:        r(lazyWithRetry(() => import("@/pages/Procurement")),        "Procurement",         { projectScoped: true }),
-    LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule"),
+    LookAheadSchedule:  r(lazyWithRetry(() => import("@/pages/LookAheadSchedule")),  "Look-Ahead Schedule", { projectScoped: true }),
   },
 
   // ── Scheduling & Resources ──
@@ -97,7 +97,7 @@ const ROUTE_DOMAINS = {
     Schedule:             r(lazyWithRetry(() => import("@/pages/Schedule")),            "Schedule",             { projectScoped: true }),
     GanttChart:           r(lazyWithRetry(() => import("@/pages/GanttChart")),          "Gantt Chart",          { projectScoped: true }),
     ProjectCalendar:      r(lazyWithRetry(() => import("@/pages/ProjectCalendar")),     "Project Calendar",     { projectScoped: true }),
-    FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan"),
+    FieldPlan:            r(lazyWithRetry(() => import("@/pages/FieldPlan")),           "Field Plan",          { projectScoped: true }),
     ResourceManagement:   r(lazyWithRetry(() => import("@/pages/ResourceManagement")),  "Resource Management"),
     ResourceScheduling:   r(lazyWithRetry(() => import("@/pages/ResourceScheduling")),  "Crew Scheduling"),
   },
@@ -107,7 +107,7 @@ const ROUTE_DOMAINS = {
     Field:           r(lazyWithRetry(() => import("@/pages/Field")),           "Field",               { projectScoped: true }),
     DailyLogs:       r(lazyWithRetry(() => import("@/pages/DailyLogs")),       "Daily Logs",          { projectScoped: true }),
     Photos:          r(lazyWithRetry(() => import("@/pages/Photos")),          "Photos",              { projectScoped: true }),
-    LEMs:            r(lazyWithRetry(() => import("@/pages/LEMs")),            "LEMs"),
+    LEMs:            r(lazyWithRetry(() => import("@/pages/LEMs")),            "LEMs",                { projectScoped: true }),
     Inspections:     r(lazyWithRetry(() => import("@/pages/Inspections")),     "Inspections",         { projectScoped: true }),
     Safety:          r(lazyWithRetry(() => import("@/pages/Safety")),          "Safety",              { projectScoped: true }),
     Punchlist:       r(lazyWithRetry(() => import("@/pages/Punchlist")),       "Punchlist",           { projectScoped: true }),
@@ -121,7 +121,7 @@ const ROUTE_DOMAINS = {
     ChangeOrders:        r(lazyWithRetry(() => import("@/pages/ChangeOrders")),        "Change Orders",        { projectScoped: true }),
     SOV:                 r(lazyWithRetry(() => import("@/pages/SOV")),                 "Schedule of Values",   { projectScoped: true }),
     Expenses:            r(lazyWithRetry(() => import("@/pages/Expenses")),            "Expenses",             { projectScoped: true }),
-    ContractManagement:  r(lazyWithRetry(() => import("@/pages/ContractManagement")),  "Contract Management"),
+    ContractManagement:  r(lazyWithRetry(() => import("@/pages/ContractManagement")),  "Contract Management", { projectScoped: true }),
   },
 
   // ── Logistics ──
@@ -131,16 +131,16 @@ const ROUTE_DOMAINS = {
 
   // ── Risk & Compliance ──
   risk: {
-    Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations"),
-    ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests"),
+    Mitigations:     r(lazyWithRetry(() => import("@/pages/Mitigations")),     "Mitigations",         { projectScoped: true }),
+    ChangeRequests:  r(lazyWithRetry(() => import("@/pages/ChangeRequests")),  "Change Requests",     { projectScoped: true }),
     DecisionLog:     r(lazyWithRetry(() => import("@/pages/DecisionLog")),     "Decision Log"),
     AlertsCenter:    r(lazyWithRetry(() => import("@/pages/AlertsCenter")),    "Alerts Center"),
   },
 
   // ── Closeout ──
   closeout: {
-    ProjectCloseout: r(lazyWithRetry(() => import("@/pages/ProjectCloseout")), "Project Closeout"),
-    Warranty:        r(lazyWithRetry(() => import("@/pages/Warranty")),        "Warranty"),
+    ProjectCloseout: r(lazyWithRetry(() => import("@/pages/ProjectCloseout")), "Project Closeout",    { projectScoped: true }),
+    Warranty:        r(lazyWithRetry(() => import("@/pages/Warranty")),        "Warranty",            { projectScoped: true }),
   },
 
   // ── Admin & Setup ──
@@ -167,7 +167,7 @@ const ROUTE_DOMAINS = {
 
   // ── Reporting ──
   reporting: {
-    JobStatusReport: r(lazyWithRetry(() => import("@/pages/JobStatusReport")), "Job Status Report"),
+    JobStatusReport: r(lazyWithRetry(() => import("@/pages/JobStatusReport")), "Job Status Report",   { projectScoped: true }),
     Reports:         r(lazyWithRetry(() => import("@/pages/Reports")),         "Reports"),
     Activity:        r(lazyWithRetry(() => import("@/pages/Activity")),        "Activity Log"),
   },
