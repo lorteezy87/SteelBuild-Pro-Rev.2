@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useProjectContext } from "../components/shared/ProjectContext";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import DonutChart from "@/components/shared/DonutChart";
 import TrendIndicator from "@/components/shared/TrendIndicator";
 import { Download } from "lucide-react";
@@ -1247,6 +1248,15 @@ export default function ProjectControlCenter() {
     submittalQ.isLoading ||
     dailyLogQ.isLoading
   );
+
+  const pid = activeProject?.id;
+  useRealtimeInvalidation("rfis", pid, [["pcc-rfis", pid]]);
+  useRealtimeInvalidation("drawings", pid, [["pcc-drawings", pid]]);
+  useRealtimeInvalidation("work_packages", pid, [["pcc-wps", pid]]);
+  useRealtimeInvalidation("deliveries", pid, [["pcc-deliveries", pid]]);
+  useRealtimeInvalidation("change_orders", pid, [["pcc-cos", pid]]);
+  useRealtimeInvalidation("schedule_tasks", pid, [["pcc-schedule-tasks", pid]]);
+  useRealtimeInvalidation("action_items", pid, [["pcc-action-items", pid]]);
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [

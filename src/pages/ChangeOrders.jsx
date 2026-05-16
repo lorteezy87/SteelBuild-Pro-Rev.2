@@ -18,6 +18,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -78,6 +79,8 @@ export default function ChangeOrders() {
         : [],
     enabled: !!projectId,
   });
+
+  useRealtimeInvalidation("change_orders", projectId, [["change-orders", projectId]]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
