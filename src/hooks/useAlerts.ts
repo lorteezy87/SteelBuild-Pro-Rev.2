@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import { batchProcess } from "@/utils/batchProcess";
 import { toast } from "sonner";
 
@@ -33,6 +34,8 @@ export function useAlerts() {
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  useRealtimeInvalidation("alerts", projectId, [["alerts", projectId]]);
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
