@@ -16,7 +16,7 @@
 export const PRIMARY_TABS = [
   { label: "DASHBOARD",   pages: ["Dashboard", "CommandCenter"] },
   { label: "PCC",         pages: ["ProjectControlCenter"] },
-  { label: "PROJECTS",    pages: ["Projects", "Onboarding", "ExecutiveView"] },
+  { label: "PROJECTS",    pages: ["Projects", "Onboarding", "Integrations", "ExecutiveView"] },
   { label: "RFIs",        pages: ["RFIs"] },
   { label: "DRAWINGS",    pages: ["DrawingSubmittalHub", "Drawings", "Submittals", "DrawingAnalysis", "DrawingViewer", "Documents"] },
   { label: "FABRICATION", pages: ["WorkPackages", "Constraints", "FabRelease", "BudgetHours", "Procurement", "LookAheadSchedule"] },
@@ -55,6 +55,7 @@ export const ALL_MODULES = [
   { icon: "\u25C9", name: "Executive View",           group: "Overview",      page: "ExecutiveView" },
   { icon: "\u25A4", name: "Projects",                 group: "Overview",      page: "Projects" },
   { icon: "\u25A3", name: "Onboarding",               group: "Setup",         page: "Onboarding" },
+  { icon: "\u25CE", name: "Integrations",             group: "Setup",         page: "Integrations" },
   { icon: "\u2261", name: "Scope & Exclusions",       group: "Setup",         page: "ScopeExclusions" },
   { icon: "\u2630", name: "Contacts",                 group: "Setup",         page: "Contacts" },
   { icon: "\uD83D\uDD14", name: "Alerts",             group: "Setup",         page: "AlertsCenter" },
@@ -128,6 +129,7 @@ export const NAV_GROUPS = [
     items: [
       { label: "Projects",           icon: "\u229F", page: "Projects" },
       { label: "Onboarding",         icon: "\u25A3", page: "Onboarding" },
+      { label: "Integrations",       icon: "\u25CE", page: "Integrations" },
       { label: "Scope & Exclusions", icon: "\u2261", page: "ScopeExclusions" },
       { label: "Contacts",           icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Alerts",             icon: "\uD83D\uDD14", page: "AlertsCenter", badgeKey: "unread" },
@@ -319,6 +321,7 @@ export const SIDEBAR_GROUPS = [
     collapsible: true,
     items: [
       { label: "Onboarding",       icon: "\u25A3", page: "Onboarding" },
+      { label: "Integrations",     icon: "\u25CE", page: "Integrations" },
       { label: "Contacts",         icon: "\uD83D\uDC64", page: "Contacts" },
       { label: "Vendors",          icon: "\uD83C\uDFE2", page: "Vendors" },
       { label: "User Management",  icon: "\uD83D\uDC65", page: "UsersManagement" },
