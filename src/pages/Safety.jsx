@@ -8,6 +8,7 @@ import SafetyIncidentList from "@/components/safety/SafetyIncidentList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 
 export default function Safety() {
   const projectId = useProjectId();
@@ -39,6 +40,11 @@ export default function Safety() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setShowForm(true);
+  });
 
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.SafetyIncident.create({ ...data, project_id: data.project_id || projectId }),

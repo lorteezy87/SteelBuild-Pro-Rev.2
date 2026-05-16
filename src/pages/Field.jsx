@@ -36,6 +36,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { buildDeliveryMetrics } from "./deliveries/analytics";
 import {
   ClipboardList,
   Camera,
@@ -43,6 +44,7 @@ import {
   AlertTriangle,
   TestTube2,
   CheckSquare,
+  Truck,
   Plus,
   ArrowRight,
   CalendarDays,
@@ -141,8 +143,16 @@ export default function Field() {
     staleTime: 30 * 1000,
   });
 
+  const { data: deliveries = [], isLoading: deliveriesLoading } = useQuery({
+    queryKey: ["field-hub-deliveries", projectId],
+    queryFn: () => filterArgs
+      ? base44.entities.Delivery.filter(filterArgs, "-scheduled_date")
+      : base44.entities.Delivery.list("-scheduled_date"),
+    staleTime: 30 * 1000,
+  });
+
   const isLoading = logsLoading || photosLoading || punchlistLoading
-    || inspectionsLoading || safetyLoading || qcLoading;
+    || inspectionsLoading || safetyLoading || qcLoading || deliveriesLoading;
 
   // ── Derived metrics ──
   const todayIso = today();
@@ -159,10 +169,21 @@ export default function Field() {
   const liveInspections = useMemo(() => inspections.filter((r) => !r.is_deleted), [inspections]);
   const liveSafety      = useMemo(() => safety.filter((r) => !r.is_deleted), [safety]);
   const liveQC          = useMemo(() => qc.filter((r) => !r.is_deleted), [qc]);
+  const liveDeliveries  = useMemo(() => deliveries.filter((r) => !r.is_deleted), [deliveries]);
+
+  const deliveryMetrics = useMemo(
+    () => buildDeliveryMetrics(liveDeliveries, []),
+    [liveDeliveries],
+  );
 
   const todayLog = useMemo(
     () => liveLogs.find((l) => String(l.date || "").slice(0, 10) === todayIso) || null,
     [liveLogs, todayIso],
+  );
+
+  const photosToday = useMemo(
+    () => livePhotos.filter((p) => String(p.taken_date || p.created_at || "").slice(0, 10) === todayIso).length,
+    [livePhotos, todayIso],
   );
 
   const photosThisWeek = useMemo(
@@ -194,12 +215,13 @@ export default function Field() {
   const todayActivityCount = useMemo(() => {
     let n = 0;
     n += todayLog ? 1 : 0;
-    n += livePhotos.filter((p) => String(p.taken_date || "").slice(0, 10) === todayIso).length;
+    n += photosToday;
     n += livePunchlist.filter((p) => String(p.created_at || "").slice(0, 10) === todayIso).length;
     n += liveInspections.filter((i) => String(i.inspection_date || "").slice(0, 10) === todayIso).length;
     n += liveSafety.filter((s) => String(s.incident_date || "").slice(0, 10) === todayIso).length;
+    n += deliveryMetrics.dueToday.length;
     return n;
-  }, [todayLog, livePhotos, livePunchlist, liveInspections, liveSafety, todayIso]);
+  }, [todayLog, photosToday, livePunchlist, liveInspections, liveSafety, todayIso, deliveryMetrics.dueToday.length]);
 
   // ── Action Items feed (open punch / open inspections / unresolved safety) ──
   const actionFeed = useMemo(() => {
@@ -248,9 +270,23 @@ export default function Field() {
         onClick: () => navigate("/Safety"),
       });
     }
+    for (const d of deliveryMetrics.exceptions.slice(0, 8)) {
+      items.push({
+        key: `delivery-${d.id}`,
+        type: "delivery",
+        date: d.scheduled_date || d.required_date || d.created_at,
+        title: d.delivery_title || d.load_number || d.vendor || "Delivery exception",
+        sub: d._signals?.flags?.[0]?.label || d.receiving_location || "",
+        status: d.status,
+        color: d._signals?.risk === "high" ? "var(--status-error)"
+          : d._signals?.risk === "medium" ? "var(--status-warning)"
+          : "var(--phase-delivery)",
+        onClick: () => navigate("/Deliveries"),
+      });
+    }
     items.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
     return items;
-  }, [livePunchlist, liveInspections, liveSafety, navigate]);
+  }, [livePunchlist, liveInspections, liveSafety, deliveryMetrics.exceptions, navigate]);
 
   // 7-day activity bars (events per day) for the mini chart in this week section
   const weekDays = useMemo(() => {
@@ -265,10 +301,11 @@ export default function Field() {
       count += livePhotos.filter((p) => String(p.taken_date || "").slice(0, 10) === iso).length;
       count += livePunchlist.filter((p) => String(p.created_at || "").slice(0, 10) === iso).length;
       count += liveInspections.filter((i) => String(i.inspection_date || "").slice(0, 10) === iso).length;
+      count += liveDeliveries.filter((delivery) => String(delivery.scheduled_date || "").slice(0, 10) === iso).length;
       days.push({ iso, day: dayOfWeek, count });
     }
     return days;
-  }, [liveLogs, livePhotos, livePunchlist, liveInspections]);
+  }, [liveLogs, livePhotos, livePunchlist, liveInspections, liveDeliveries]);
 
   const recentLogs = useMemo(
     () => [...liveLogs]
@@ -329,10 +366,64 @@ export default function Field() {
       icon: TestTube2,
       onClick: () => navigate("/QualityControl"),
     },
+    {
+      key: "delivery-today",
+      label: "Loads Today",
+      value: deliveryMetrics.dueToday.length,
+      color: deliveryMetrics.overdue.length > 0 ? "var(--status-error-bright)" : "var(--phase-delivery)",
+      icon: Truck,
+      onClick: () => navigate("/Deliveries"),
+      sub: deliveryMetrics.overdue.length > 0 ? `${deliveryMetrics.overdue.length} late` : `${deliveryMetrics.openCount} open`,
+    },
+  ];
+
+  const fastActions = [
+    {
+      key: "daily-log",
+      label: todayLog ? "Open Log" : "Log Today",
+      sub: todayLog ? `${todayLog.headcount || 0} crew recorded` : "Crew, hours, weather",
+      icon: ClipboardList,
+      color: todayLog ? "var(--status-success-bright)" : "var(--accent)",
+      onClick: () => navigate(todayLog ? "/DailyLogs" : "/DailyLogs?new=1"),
+    },
+    {
+      key: "photo",
+      label: "Add Photo",
+      sub: photosToday ? `${photosToday} today` : "Progress or issue",
+      icon: Camera,
+      color: "var(--accent)",
+      onClick: () => navigate("/Photos?new=1"),
+    },
+    {
+      key: "punch",
+      label: "Punch Item",
+      sub: openPunch ? `${openPunch} open` : "Create close-out item",
+      icon: CheckSquare,
+      color: openPunch ? "var(--status-warning-bright)" : "var(--status-success-bright)",
+      onClick: () => navigate("/Punchlist?new=1"),
+    },
+    {
+      key: "safety",
+      label: "Safety",
+      sub: safetyYTD ? `${safetyYTD} YTD` : "Hazard or incident",
+      icon: AlertTriangle,
+      color: safetyYTD ? "var(--status-error-bright)" : "var(--status-success-bright)",
+      onClick: () => navigate("/Safety?new=1"),
+    },
+    {
+      key: "delivery",
+      label: "Delivery",
+      sub: deliveryMetrics.overdue.length
+        ? `${deliveryMetrics.overdue.length} late`
+        : `${deliveryMetrics.dueToday.length} due today`,
+      icon: Truck,
+      color: deliveryMetrics.overdue.length ? "var(--status-error-bright)" : "var(--phase-delivery)",
+      onClick: () => navigate("/Deliveries"),
+    },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="field-mobile-console" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <CommandBar
         eyebrow={activeProject ? activeProject.name : "ALL PROJECTS"}
         title="Field"
@@ -369,8 +460,19 @@ export default function Field() {
         )}
       </CommandBar>
 
+      <FieldFastCaptureRail actions={fastActions} />
+
+      <TodayExecutionStrip
+        todayLog={todayLog}
+        photosToday={photosToday}
+        openPunch={openPunch}
+        safetyOpen={liveSafety.filter((s) => s.status !== "Closed" && s.status !== "Completed").length}
+        deliveryDueToday={deliveryMetrics.dueToday.length}
+        deliveryLate={deliveryMetrics.overdue.length}
+      />
+
       {/* KPI tile-strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+      <div className="field-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
         {tiles.map((t) => (
           <KpiTile
             key={t.key}
@@ -392,7 +494,7 @@ export default function Field() {
       ) : (
         <>
           {/* Two-column body: Today's Activity / Action Items */}
-          <div style={{
+          <div className="field-hub-grid" style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: 14,
@@ -437,7 +539,7 @@ export default function Field() {
               count={actionFeed.length}
             >
               {actionFeed.length === 0 ? (
-                <EmptyHint text="No open punch, inspections, or safety items." />
+                <EmptyHint text="No open punch, inspections, safety, or delivery exceptions." />
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 360, overflowY: "auto" }}>
                   {actionFeed.slice(0, 12).map((item) => (
@@ -485,9 +587,91 @@ export default function Field() {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
+function FieldFastCaptureRail({ actions }) {
+  return (
+    <div className="field-fast-capture-rail" aria-label="Field quick actions">
+      {actions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <button
+            key={action.key}
+            type="button"
+            className="field-fast-action"
+            onClick={action.onClick}
+            style={{ "--field-action-color": action.color }}
+            aria-label={action.label}
+          >
+            <span className="field-fast-action-icon">
+              <Icon size={18} />
+            </span>
+            <span className="field-fast-action-copy">
+              <strong>{action.label}</strong>
+              <small>{action.sub}</small>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TodayExecutionStrip({
+  todayLog,
+  photosToday,
+  openPunch,
+  safetyOpen,
+  deliveryDueToday,
+  deliveryLate,
+}) {
+  const stats = [
+    {
+      key: "crew",
+      label: "Crew",
+      value: todayLog ? todayLog.headcount || 0 : "TBD",
+      tone: todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
+    },
+    {
+      key: "hours",
+      label: "Hours",
+      value: todayLog ? todayLog.hours_worked || 0 : "TBD",
+      tone: todayLog ? "var(--status-success-bright)" : "var(--text-muted)",
+    },
+    { key: "photos", label: "Photos", value: photosToday, tone: "var(--accent)" },
+    {
+      key: "punch",
+      label: "Open Punch",
+      value: openPunch,
+      tone: openPunch ? "var(--status-warning-bright)" : "var(--status-success-bright)",
+    },
+    {
+      key: "safety",
+      label: "Open Safety",
+      value: safetyOpen,
+      tone: safetyOpen ? "var(--status-error-bright)" : "var(--status-success-bright)",
+    },
+    {
+      key: "delivery",
+      label: "Loads",
+      value: deliveryLate ? `${deliveryLate} late` : deliveryDueToday,
+      tone: deliveryLate ? "var(--status-error-bright)" : "var(--phase-delivery)",
+    },
+  ];
+
+  return (
+    <div className="field-today-strip" aria-label="Today's field execution status">
+      {stats.map((stat) => (
+        <div key={stat.key} className="field-today-stat" style={{ "--field-stat-color": stat.tone }}>
+          <span>{stat.label}</span>
+          <strong>{stat.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SubPanel({ title, icon: IconCmp, count, cta, children }) {
   return (
-    <div style={{
+    <div className="field-sub-panel" style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: 10,
@@ -577,6 +761,7 @@ function DailyLogPreview({ log, onClick }) {
   const photos = safeArray(log.photos);
   return (
     <div
+      className="field-daily-log-preview"
       onClick={onClick}
       style={{
         padding: 12,
@@ -608,7 +793,7 @@ function DailyLogPreview({ log, onClick }) {
           {log.superintendent || "—"}
         </span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+      <div className="field-log-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
         <Stat icon={Users}        label="Crew"     value={log.headcount || 0} />
         <Stat icon={CalendarDays} label="Hours"    value={log.hours_worked || 0} />
         <Stat icon={Cloud}        label="Weather"  value={log.weather_description || "—"} small />
@@ -679,6 +864,7 @@ function Stat({ icon: IconCmp, label, value, small }) {
 function LogFeedRow({ log, onClick }) {
   return (
     <div
+      className="field-log-feed-row"
       onClick={onClick}
       style={{
         display: "flex",
@@ -736,6 +922,7 @@ function LogFeedRow({ log, onClick }) {
 function ActionRow({ item }) {
   return (
     <div
+      className="field-action-row"
       onClick={item.onClick}
       style={{
         display: "flex",
@@ -798,6 +985,7 @@ function PhotoThumb({ photo, onClick }) {
   const url = photo.file_url || photo.path || "";
   return (
     <div
+      className="field-photo-thumb"
       onClick={onClick}
       title={photo.title || photo.file_name || ""}
       style={{
@@ -848,7 +1036,7 @@ function WeekActivityStrip({ days }) {
   const max = Math.max(1, ...days.map((d) => d.count));
   const total = days.reduce((s, d) => s + d.count, 0);
   return (
-    <div style={{
+    <div className="field-week-strip" style={{
       background: "var(--bg-surface)",
       border: "1px solid var(--border-default)",
       borderRadius: 10,

@@ -25,6 +25,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
@@ -128,6 +129,12 @@ export default function Deliveries() {
   const [detail, setDetail] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setDetail(null);
+    setShowForm(true);
+  });
 
   const { data: deliveries = [], isLoading } = useQuery({
     queryKey: ["deliveries", projectId || "all"],
