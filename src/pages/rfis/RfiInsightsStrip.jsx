@@ -39,7 +39,10 @@ function CountBarChart({ data = [], width = 420, height = 170 }) {
   const gridLines = 4;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto" }}>
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ width: "100%", maxWidth: 640, height, maxHeight: height, display: "block", margin: "0 auto" }}
+    >
       {Array.from({ length: gridLines + 1 }, (_, i) => {
         const v = (maxVal * i) / gridLines;
         const y = padding.top + chartH - (chartH * v) / maxVal;

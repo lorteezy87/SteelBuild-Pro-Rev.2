@@ -33,6 +33,16 @@ import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/componen
 import { Plus, Search } from "lucide-react";
 import { CONSTRAINT_STATUS, RESOLVED_STATUSES, PRIORITY, PRIORITY_ORDER } from "@/lib/enums";
 import { setDraft } from "@/lib/draftStorage";
+import { deriveOperationalConstraints } from "@/services/constraintEngine";
+
+const EMPTY_ENGINE_SOURCES = {
+  rfis: [],
+  submittals: [],
+  deliveries: [],
+  scheduleTasks: [],
+  drawings: [],
+  inspections: [],
+};
 
 export default function Constraints() {
   const qc = useQueryClient();
@@ -75,6 +85,28 @@ export default function Constraints() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: engineSources = EMPTY_ENGINE_SOURCES } = useQuery({
+    queryKey: ["constraint-engine-sources", projectId],
+    queryFn: async () => {
+      if (!projectId) return EMPTY_ENGINE_SOURCES;
+      const read = (entity, order) =>
+        order
+          ? entity.filter({ project_id: projectId }, order).catch(() => [])
+          : entity.filter({ project_id: projectId }).catch(() => []);
+      const [rfis, submittals, deliveries, scheduleTasks, drawings, inspections] = await Promise.all([
+        read(base44.entities.RFI, "-submitted_date"),
+        read(base44.entities.Submittal, "-submitted_date"),
+        read(base44.entities.Delivery, "-scheduled_date"),
+        read(base44.entities.ScheduleTask, "start_date"),
+        read(base44.entities.Drawing),
+        read(base44.entities.Inspection, "-inspection_date"),
+      ]);
+      return { rfis, submittals, deliveries, scheduleTasks, drawings, inspections };
+    },
+    enabled: Boolean(projectId),
+    staleTime: 30 * 1000,
+  });
+
   // -- Mutations ----------------------------------------------------------------------
   const createMut = useMutation({
     mutationFn: (data) => base44.entities.ActionItem.create(data),
@@ -109,16 +141,35 @@ export default function Constraints() {
   });
 
   // -- Derived data ----------------------------------------------------------------------
+  const generatedConstraints = useMemo(
+    () =>
+      deriveOperationalConstraints(
+        {
+          ...engineSources,
+          workPackages: wps,
+          existingConstraints: items,
+        },
+        { today: new Date() },
+      ),
+    [engineSources, items, wps],
+  );
+
+  const allConstraints = useMemo(
+    () => [...generatedConstraints, ...items],
+    [generatedConstraints, items],
+  );
+
   const kpis = useMemo(() => {
-    const open = items.filter((c) => !RESOLVED_STATUSES.includes(c.status));
-    const resolved = items.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
-    const closed = items.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
+    const open = allConstraints.filter((c) => !RESOLVED_STATUSES.includes(c.status));
+    const resolved = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.RESOLVED);
+    const closed = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.CLOSED);
     const overdue = open.filter(isOverdue);
     const critical = open.filter((c) => c.priority === PRIORITY.CRITICAL);
-    const inProg = items.filter((c) => c.status === CONSTRAINT_STATUS.IN_PROGRESS);
+    const inProg = allConstraints.filter((c) => c.status === CONSTRAINT_STATUS.IN_PROGRESS);
+    const generated = allConstraints.filter((c) => c._generated);
 
     const oldestOpen = open.reduce((oldest, c) => {
-      const d = new Date(c.created_date || c.due_date || Date.now());
+      const d = new Date(c.created_date || c.created_at || c.due_date || Date.now());
       return !oldest || d < oldest ? d : oldest;
     }, null);
     const agedays = oldestOpen ? Math.floor((Date.now() - oldestOpen) / 86400000) : 0;
@@ -136,12 +187,12 @@ export default function Constraints() {
       count: open.filter((c) => c.priority === p).length,
     }));
 
-    return { open, resolved, closed, overdue, critical, inProg, agedays, byType, byPriority, total: items.length };
-  }, [items]);
+    return { open, resolved, closed, overdue, critical, inProg, generated, agedays, byType, byPriority, total: allConstraints.length };
+  }, [allConstraints]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return items
+    return allConstraints
       .filter((c) => {
         if (filterType !== "all" && c.constraint_type !== filterType) return false;
         if (filterStatus === "open" && RESOLVED_STATUSES.includes(c.status)) return false;
@@ -149,7 +200,7 @@ export default function Constraints() {
         if (filterPriority !== "all" && c.priority !== filterPriority) return false;
         if (
           q &&
-          ![c.title, c.description, c.project_area, c.assigned_to]
+          ![c.title, c.description, c.project_area, c.assigned_to, c.constraint_number, c._source_ref, c._source_type]
             .filter(Boolean)
             .join(" ")
             .toLowerCase()
@@ -171,7 +222,7 @@ export default function Constraints() {
         if (a.due_date && b.due_date) return new Date(a.due_date) - new Date(b.due_date);
         return 0;
       });
-  }, [items, filterType, filterStatus, filterPriority, search]);
+  }, [allConstraints, filterType, filterStatus, filterPriority, search]);
 
   const openCount = kpis.open.length;
   const overdueCount = kpis.overdue.length;
@@ -180,8 +231,8 @@ export default function Constraints() {
   const handleLogMitigation = (c) => {
     setDraft("new-mitigation", {
       issue_source: "Constraint",
-      source_entity_ref: c.constraint_number || "Constraint",
-      source_entity_id: c.id,
+      source_entity_ref: c._source_ref || c.constraint_number || "Constraint",
+      source_entity_id: c._source_id || c.id,
       title: c.title,
       identified_date: new Date().toISOString().split("T")[0],
       status: CONSTRAINT_STATUS.OPEN,
@@ -236,12 +287,13 @@ export default function Constraints() {
         { label: "Total", value: kpis.total },
         { label: "Open", value: openCount, color: openCount > 0 ? "var(--status-warning)" : "var(--status-success)" },
         { label: "Overdue", value: overdueCount, color: overdueCount > 0 ? "var(--status-error)" : "var(--status-success)" },
+        { label: "System", value: kpis.generated.length, color: kpis.generated.length > 0 ? "var(--accent)" : "var(--text-muted)" },
         { label: "View", value: view },
       ]}
       metrics={[
         { label: "Open Constraints", value: openCount, sub: `${kpis.critical.length} critical`, color: kpis.critical.length > 0 ? "var(--status-error)" : "var(--status-warning)" },
         { label: "Overdue", value: overdueCount, sub: "Past due blockers", color: overdueCount > 0 ? "var(--status-error)" : "var(--status-success)" },
-        { label: "In Progress", value: kpis.inProg.length, sub: "Being mitigated", color: "var(--status-info)" },
+        { label: "System Generated", value: kpis.generated.length, sub: "From RFIs, drawings, tasks, deliveries", color: kpis.generated.length > 0 ? "var(--accent)" : "var(--text-muted)" },
         { label: "Oldest Open", value: `${kpis.agedays}d`, sub: "Age of oldest blocker", color: kpis.agedays > 7 ? "var(--status-warning)" : undefined },
       ]}
       actions={(

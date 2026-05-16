@@ -1,3 +1,5 @@
+import { normalizeRfiNumber } from "@/lib/rfiImportUtils";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const PROJECT_TEMPLATES = [
@@ -503,6 +505,7 @@ function aliasMapForTarget(target) {
 function cleanImportValue(field, value) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
+  if (field === "rfi_number") return normalizeRfiNumber(raw);
   if (["pieces", "tonnage", "shop_hours_budget", "field_hours_budget", "weight_tons", "percent_complete"].includes(field)) {
     const parsed = Number(raw.replace(/[$,%]/g, ""));
     return Number.isFinite(parsed) ? parsed : null;

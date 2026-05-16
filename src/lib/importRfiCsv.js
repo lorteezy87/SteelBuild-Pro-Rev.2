@@ -25,10 +25,41 @@
 //
 // Returns an array of row arrays. Pulling in papaparse for 30 lines of
 // parsing would be overkill.
+function firstNonEmptyLine(value) {
+  return String(value || "").split(/\r?\n/).find((line) => line.trim()) || "";
+}
+
+function countDelimiter(line, delimiter) {
+  let count = 0;
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function chooseDelimiter(src) {
+  const line = firstNonEmptyLine(src);
+  const candidates = [",", "\t", ";"];
+  return candidates
+    .map((delimiter) => ({ delimiter, count: countDelimiter(line, delimiter) }))
+    .sort((a, b) => b.count - a.count)[0].delimiter;
+}
+
 export function parseCsv(raw) {
   if (typeof raw !== "string") return [];
   // Strip UTF-8 BOM if present.
   let src = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+  const delimiter = chooseDelimiter(src);
   const rows = [];
   let row = [];
   let field = "";
@@ -45,7 +76,7 @@ export function parseCsv(raw) {
       field += c; i++; continue;
     }
     if (c === '"') { inQuotes = true; i++; continue; }
-    if (c === ",") { row.push(field); field = ""; i++; continue; }
+    if (c === delimiter) { row.push(field); field = ""; i++; continue; }
     if (c === "\r") {
       // Handle \r, \r\n
       row.push(field); field = "";

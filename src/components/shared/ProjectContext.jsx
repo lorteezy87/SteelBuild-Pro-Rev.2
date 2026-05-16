@@ -11,6 +11,7 @@ export const ProjectContext = createContext({
   // `project` prop reflects the new value without waiting on a
   // refetch. Returns the merged project so callers can react to it.
   updateActiveProject: () => null,
+  removeProject: () => {},
   projects: [],
   loading: false,
   projectLoadError: null,
@@ -25,6 +26,18 @@ function readProjectsCache() {
     return [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   } catch {
     return [];
+  }
+}
+
+function writeProjectsCache(projects) {
+  try {
+    if (projects.length > 0) {
+      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(projects));
+    } else {
+      localStorage.removeItem(PROJECTS_CACHE_KEY);
+    }
+  } catch {
+    /* ignore cache writes */
   }
 }
 
@@ -82,11 +95,10 @@ export function ProjectProvider({ children }) {
         const data = await fetchProjects();
         if (cancelled) return;
 
-        if (data.length > 0) {
-          setProjects(data);
-          // Persist to localStorage so next hard refresh is instant
-          try { localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(data)); } catch {}
-        }
+        setProjects(data);
+        // Persist only confirmed live projects. A successful empty response
+        // means the user has no active projects; never resurrect old cache.
+        writeProjectsCache(data);
 
         // Resolution order for the active project:
         //   1. localStorage `activeProjectId` (most-recent explicit pick)
@@ -96,7 +108,7 @@ export function ProjectProvider({ children }) {
         // When the localStorage pick references a project that's been
         // deleted we fall through to the user pref; same when the user
         // pref references a missing project we fall through to portfolio.
-        const list = data.length > 0 ? data : readProjectsCache();
+        const list = data;
         const savedId = localStorage.getItem("activeProjectId");
         if (savedId) {
           const saved = list.find((p) => p.id === savedId);
@@ -121,7 +133,9 @@ export function ProjectProvider({ children }) {
           // that toggling the pref in Settings still takes effect on
           // the next session start.
           const def = list.find((p) => p.id === defaultProjectIdPref);
-          if (def) setActiveProject(def);
+          setActiveProject(def || null);
+        } else {
+          setActiveProject(null);
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
@@ -166,9 +180,21 @@ export function ProjectProvider({ children }) {
     try {
       const cache = readProjectsCache();
       const next = cache.map((p) => (p.id === id ? { ...p, ...patch } : p));
-      localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify(next));
+      writeProjectsCache(next);
     } catch {}
     return merged;
+  };
+
+  const removeProject = (projectId) => {
+    if (!projectId) return;
+    setProjects((list) => {
+      const next = list.filter((p) => p.id !== projectId);
+      writeProjectsCache(next);
+      return next;
+    });
+    if (activeProject?.id === projectId) {
+      handleProjectSelect(null);
+    }
   };
 
   return (
@@ -176,6 +202,7 @@ export function ProjectProvider({ children }) {
       activeProject,
       setActiveProject: handleProjectSelect,
       updateActiveProject,
+      removeProject,
       projects,
       loading,
       projectLoadError,

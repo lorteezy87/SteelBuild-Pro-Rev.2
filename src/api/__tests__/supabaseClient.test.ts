@@ -1,0 +1,116 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+type QueryCall =
+  | { table: string; op: "select"; value: string }
+  | { table: string; op: "eq"; column: string; value: unknown }
+  | { table: string; op: "order"; column: string; value: unknown }
+  | { table: string; op: "update"; value: Record<string, unknown> };
+
+const mocks = vi.hoisted(() => {
+  const calls: QueryCall[] = [];
+
+  const makeChain = (table: string) => {
+    const chain: Record<string, unknown> = {
+      select: vi.fn((value: string) => {
+        calls.push({ table, op: "select", value });
+        return chain;
+      }),
+      eq: vi.fn((column: string, value: unknown) => {
+        calls.push({ table, op: "eq", column, value });
+        return chain;
+      }),
+      order: vi.fn((column: string, value: unknown) => {
+        calls.push({ table, op: "order", column, value });
+        return chain;
+      }),
+      update: vi.fn((value: Record<string, unknown>) => {
+        calls.push({ table, op: "update", value });
+        return chain;
+      }),
+      single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      then: (resolve: (value: { data: unknown[]; error: null }) => void) =>
+        resolve({ data: [], error: null }),
+    };
+    return chain;
+  };
+
+  return {
+    calls,
+    fromMock: vi.fn((table: string) => makeChain(table)),
+    rpcMock: vi.fn().mockResolvedValue({ data: {}, error: null }),
+  };
+});
+
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    from: mocks.fromMock,
+    rpc: mocks.rpcMock,
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+    },
+  },
+}));
+
+import { base44 } from "@/api/supabaseClient";
+
+describe("supabase entity client", () => {
+  beforeEach(() => {
+    mocks.calls.length = 0;
+    mocks.fromMock.mockClear();
+  });
+
+  it("scopes project child list reads to non-archived projects", async () => {
+    await base44.entities.WorkPackage.list();
+
+    expect(mocks.calls).toContainEqual({
+      table: "work_packages",
+      op: "select",
+      value: "*, projects!inner(id)",
+    });
+    expect(mocks.calls).toContainEqual({
+      table: "work_packages",
+      op: "eq",
+      column: "projects.is_deleted",
+      value: false,
+    });
+    expect(mocks.calls).toContainEqual({
+      table: "work_packages",
+      op: "eq",
+      column: "is_deleted",
+      value: false,
+    });
+  });
+
+  it("does not add parent-project joins to project root reads", async () => {
+    await base44.entities.Project.list();
+
+    expect(mocks.calls).toContainEqual({
+      table: "projects",
+      op: "select",
+      value: "*",
+    });
+    expect(mocks.calls).not.toContainEqual({
+      table: "projects",
+      op: "eq",
+      column: "projects.is_deleted",
+      value: false,
+    });
+  });
+
+  it("archives the project root even when cleaning project children", async () => {
+    await base44.entities.Project.delete("project-1");
+
+    expect(mocks.calls).toContainEqual({
+      table: "work_packages",
+      op: "update",
+      value: expect.objectContaining({ is_deleted: true }),
+    });
+    expect(mocks.calls).toContainEqual({
+      table: "projects",
+      op: "update",
+      value: expect.objectContaining({ is_deleted: true }),
+    });
+  });
+});

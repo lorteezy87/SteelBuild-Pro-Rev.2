@@ -63,6 +63,10 @@ const mapColumn = (col: string): string => COLUMN_MAP[col] || col;
 const addAliases = <R>(record: R): R => {
   if (!record || typeof record !== 'object') return record;
   const out: Record<string, unknown> = { ...(record as Record<string, unknown>) };
+  // Project-scoped reads embed the parent project only to enforce
+  // `projects.is_deleted = false`; callers should still receive the
+  // Base44-compatible flat row shape they expect.
+  delete out.projects;
   if (out.created_at !== undefined && out.created_date === undefined) out.created_date = out.created_at;
   if (out.updated_at !== undefined && out.updated_date === undefined) out.updated_date = out.updated_at;
   return out as R;
@@ -226,11 +230,14 @@ class SupabaseOperationError extends Error {
  * list() and filter() will auto-exclude deleted rows unless explicitly included.
  */
 const SOFT_DELETE_TABLES = new Set<string>([
+  // Project roots anchor child records and audit logs, so UI deletes archive.
+  'projects',
   'rfis', 'change_orders', 'deliveries', 'work_packages',
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
   'sov_items', 'contacts', 'meetings',
-  'submittals', 'comments',
+  'submittals', 'submittal_rounds', 'submittal_sheet_responses', 'comments',
+  'document_folders',
   // Field overhaul (migration field_overhaul_soft_delete_and_fks)
   // added is_deleted/deleted_at to these three. Once registered here
   // the entity client auto-filters list/filter/get and turns delete()
@@ -241,6 +248,53 @@ const SOFT_DELETE_TABLES = new Set<string>([
   // tombstoned rows and routes delete() through the is_deleted flag.
   'budget_hour_items', 'risks',
 ]);
+
+/**
+ * Tables whose rows only make business sense when their parent project is
+ * still active. This protects portfolio/global reads from orphaned child rows
+ * after a project archive: KPIs, work packages, RFIs, costs, field records,
+ * and document records all disappear with their project root.
+ */
+const PROJECT_SCOPED_TABLES = new Set<string>([
+  'rfis', 'cost_codes', 'work_packages', 'drawings', 'drawing_sets',
+  'change_orders', 'change_requests', 'schedule_tasks', 'expenses',
+  'deliveries', 'sov_items', 'contacts', 'daily_logs', 'meetings',
+  'action_items', 'inspections', 'photos', 'punchlist_items',
+  'quality_control_records', 'safety_incidents', 'production_notes',
+  'warranties', 'resources', 'look_ahead', 'documents', 'document_folders',
+  'activities', 'uploaded_files', 'scope_items', 'alerts',
+  'pma_assumptions', 'pma_decisions', 'pma_audit_logs', 'project_closeout',
+  'project_handoff_items', 'mitigation_logs', 'mitigation_actions',
+  'drawing_activity', 'drawing_revisions', 'drawing_zones', 'drawing_links',
+  'drawing_signoffs', 'task_dependencies', 'submittals', 'submittal_rounds',
+  'submittal_sheet_responses', 'submittal_activity', 'comments',
+  'budget_hour_items', 'risks',
+]);
+
+const projectScopedSelect = (tableName: string): string =>
+  PROJECT_SCOPED_TABLES.has(tableName)
+    ? '*, projects!inner(id)'
+    : '*';
+
+const applyLiveProjectScope = (query: QueryBuilder, tableName: string): QueryBuilder =>
+  PROJECT_SCOPED_TABLES.has(tableName)
+    ? query.eq('projects.is_deleted', false)
+    : query;
+
+const PROJECT_CHILD_SOFT_DELETE_TABLES = Array.from(SOFT_DELETE_TABLES)
+  .filter((table) => table !== 'projects' && PROJECT_SCOPED_TABLES.has(table));
+
+const softDeleteProjectChildren = async (projectId: string, deletedAt: string): Promise<void> => {
+  await Promise.all(
+    PROJECT_CHILD_SOFT_DELETE_TABLES.map(async (table) => {
+      const { error } = await sbFrom(table)
+        .update({ is_deleted: true, deleted_at: deletedAt })
+        .eq('project_id', projectId)
+        .eq('is_deleted', false);
+      if (error) throw new SupabaseOperationError(table, 'deleteProjectChildren', error);
+    })
+  );
+};
 
 /**
  * Strip undefined values and camelCase keys (Postgres uses snake_case only).
@@ -274,7 +328,8 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
    * Auto-excludes soft-deleted rows.
    */
   list: async (sortBy) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select('*');
+    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+    q = applyLiveProjectScope(q, tableName as string);
     // Soft-delete filter
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
@@ -294,7 +349,8 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
    * Filter records by conditions.
    */
   filter: async (conditions = {}, sortBy, limit) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select('*');
+    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+    q = applyLiveProjectScope(q, tableName as string);
     // Soft-delete filter (unless caller explicitly filters is_deleted)
     if (SOFT_DELETE_TABLES.has(tableName as string) && !('is_deleted' in conditions)) {
       q = q.eq('is_deleted', false);
@@ -323,7 +379,8 @@ const createEntityClient = <T extends TableName>(tableName: T): EntityClient<T> 
    * SupabaseOperationError, so no call-site changes are needed.
    */
   get: async (id) => {
-    let q: QueryBuilder = (sbFrom(tableName)).select('*').eq('id', id);
+    let q: QueryBuilder = (sbFrom(tableName)).select(projectScopedSelect(tableName as string));
+    q = applyLiveProjectScope(q, tableName as string).eq('id', id);
     if (SOFT_DELETE_TABLES.has(tableName as string)) {
       q = q.eq('is_deleted', false);
     }
@@ -426,6 +483,19 @@ export const entities = {
       });
       if (error) throw new SupabaseOperationError('projects', 'create', error);
       return addAliases<RowWithAliases<'projects'>>(data as RowWithAliases<'projects'>);
+    },
+    delete: async (id: string): Promise<{ success: true }> => {
+      const deletedAt = new Date().toISOString();
+      try {
+        await softDeleteProjectChildren(id, deletedAt);
+      } catch (err) {
+        console.warn('[projects.delete] child archival failed; project root will still be archived:', err);
+      }
+      const { error } = await (sbFrom('projects'))
+        .update({ is_deleted: true, deleted_at: deletedAt })
+        .eq('id', id);
+      if (error) throw new SupabaseOperationError('projects', 'delete', error);
+      return { success: true };
     },
   },
   RFI:                   createEntityClient('rfis'),
