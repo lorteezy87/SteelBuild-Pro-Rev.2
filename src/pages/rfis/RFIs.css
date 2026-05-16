@@ -302,8 +302,13 @@
 
 .rfi-insights-charts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr);
-  gap: 10px;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(300px, 1fr) minmax(360px, 1.15fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.rfi-insights-charts > div {
+  min-height: 190px;
 }
 
 .rfi-stage-grid {
@@ -370,21 +375,20 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 98%, #000 2%);
   box-shadow: 0 10px 24px rgba(0,0,0,0.16);
 }
 
 .rfi-search-box {
   position: relative;
-  flex: 1 1 320px;
-  max-width: 500px;
+  min-width: 0;
 }
 
 .rfi-search-icon {
@@ -397,14 +401,14 @@
 
 .rfi-search-input {
   width: 100%;
-  height: 34px;
+  height: 38px;
   padding: 0 12px 0 34px;
   background: var(--bg-input);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-input);
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
 }
 
@@ -416,21 +420,22 @@
 .rfi-filter-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .rfi-chip {
-  height: 28px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 11px;
   border-radius: var(--radius-btn);
   border: 1px solid transparent;
   background: var(--bg-surface-low);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -454,29 +459,31 @@
 }
 
 .rfi-table-shell {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .rfi-table-header,
 .rfi-record-row {
   display: grid;
   grid-template-columns: var(--rfi-row-grid);
-  gap: 10px;
+  gap: 14px;
   align-items: center;
+  min-width: 1180px;
 }
 
 .rfi-table-header {
   position: sticky;
-  top: 56px;
+  top: 64px;
   z-index: 4;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-default);
-  background: var(--bg-surface-low);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-surface-low) 96%, #000 4%);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -487,7 +494,7 @@
 
 .rfi-record-row {
   min-height: var(--density-row-height, 58px);
-  padding: 9px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--divider);
   background: transparent;
   cursor: pointer;
@@ -495,7 +502,7 @@
 }
 
 .rfi-record-row:nth-child(even) {
-  background: rgba(255,255,255,0.012);
+  background: rgba(255,255,255,0.018);
 }
 
 .rfi-record-row:hover,
@@ -517,9 +524,15 @@
   justify-content: center;
 }
 
+.rfi-row-check input,
+.rfi-table-header input {
+  width: 16px;
+  height: 16px;
+}
+
 .rfi-row-number {
   color: var(--accent);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -527,7 +540,7 @@
   margin-top: 5px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -542,8 +555,9 @@
   min-width: 0;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.28;
 }
 
 .rfi-priority-dot {
@@ -559,17 +573,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .rfi-row-meta {
-  margin-top: 6px;
+  margin-top: 7px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   color: var(--text-muted);
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.rfi-row-meta span {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rfi-row-owner,
@@ -581,11 +603,11 @@
 
 .rfi-row-owner-sub,
 .rfi-row-impact-sub {
-  margin-top: 6px;
+  margin-top: 7px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.03em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -593,22 +615,22 @@
 
 .rfi-row-date {
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .rfi-row-date-sub {
-  margin-top: 5px;
+  margin-top: 6px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
 .rfi-row-impact {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -618,7 +640,7 @@
 
 .rfi-row-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   color: var(--text-muted);
 }
 
@@ -747,6 +769,14 @@
   .rfi-insights-charts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .rfi-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .rfi-toolbar-count {
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 900px) {
@@ -767,6 +797,7 @@
   }
 
   .rfi-record-row {
+    min-width: 0;
     grid-template-columns: 34px 90px minmax(0, 1fr);
     grid-template-areas:
       "check number title"

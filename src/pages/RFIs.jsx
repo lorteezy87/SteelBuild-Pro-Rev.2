@@ -49,9 +49,9 @@ const DISCIPLINES = ["All", "Structural", "Connections", "Misc Metals", "Anchor 
 // RfiRow reads for its row height.
 const DENSITY_LS_KEY = "sbp-rfi-density";
 const DENSITY_PRESETS = {
-  compact:     { rowHeight: 44, label: "COMPACT" },
-  normal:      { rowHeight: 58, label: "NORMAL" },
-  comfortable: { rowHeight: 72, label: "COMFORTABLE" },
+  compact:     { rowHeight: 56, label: "COMPACT" },
+  normal:      { rowHeight: 72, label: "NORMAL" },
+  comfortable: { rowHeight: 88, label: "COMFORTABLE" },
 };
 function loadDensity() {
   try {
