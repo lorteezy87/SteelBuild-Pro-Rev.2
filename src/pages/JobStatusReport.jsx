@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { base44, resolveFileUrl } from "@/api/base44Client";
 import { Download, Loader2, CheckCircle2,
   AlertCircle, Building2, RefreshCw, Search, X,
-  Eye, Filter, Clock, AlertTriangle,
+  Eye, Filter, Clock, AlertTriangle, FileSpreadsheet,
 } from "lucide-react";
 import ProjectDrilldownModal from "../components/reports/ProjectDrilldownModal";
+import PsrSpreadsheetImportModal from "@/components/reports/PsrSpreadsheetImportModal";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { CommandBar } from "@/components/design-system";
+import { getPsrReportDate } from "@/lib/importPsrSpreadsheet";
 
 /* ─── Helpers ──────────────────────────────────────────────────── */
 const HEALTH = {
@@ -36,7 +38,7 @@ const today = new Date().toLocaleDateString("en-US", {
 });
 
 function getReportAge(project) {
-  const d = project.last_report_date || project.lastReportDate;
+  const d = getPsrReportDate(project);
   if (!d) return null;
   const ms = Date.now() - new Date(d).getTime();
   return Math.max(0, Math.floor(ms / 86400000));
@@ -486,6 +488,7 @@ export default function JobStatusReport() {
   const [healthFilter, setHealthFilter] = useState("all");
   const [readinessFilter, setReadinessFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [psrImportOpen, setPsrImportOpen] = useState(false);
   const [rowStates, setRowStates] = useState({}); // id → 'idle'|'loading'|'done'|'error'
 
   /* ── Enrich projects with readiness ── */
@@ -502,7 +505,7 @@ export default function JobStatusReport() {
     const atRiskCount       = enriched.filter(p => p.health_status === "At Risk").length;
     const weekAgo           = Date.now() - 7 * 86400000;
     const generatedThisWeek = enriched.filter(p => {
-      const d = p.last_report_date || p.lastReportDate;
+      const d = getPsrReportDate(p);
       return d && new Date(d).getTime() >= weekAgo;
     }).length;
     return { readyCount, needsReviewCount, missingDataCount, atRiskCount, generatedThisWeek };
@@ -609,6 +612,24 @@ export default function JobStatusReport() {
         unit=" · PROJECTS"
         subtitle={`${today} · Next auto-run: Mon 6:00 AM`}
       >
+        <button
+          onClick={() => setPsrImportOpen(true)}
+          disabled={projects.length === 0}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 14px", borderRadius: "var(--radius-btn)",
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
+            color: "var(--text-secondary)",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            cursor: projects.length === 0 ? "not-allowed" : "pointer",
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            opacity: projects.length === 0 ? 0.55 : 1,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <FileSpreadsheet size={12} /> Import PSR
+        </button>
         <button
           onClick={handleGenerateAll}
           disabled={bulkStatus === "loading" || projects.length === 0}
@@ -912,6 +933,12 @@ export default function JobStatusReport() {
           onClose={() => setDrilldownProject(null)}
         />
       )}
+
+      <PsrSpreadsheetImportModal
+        open={psrImportOpen}
+        projects={projects}
+        onClose={() => setPsrImportOpen(false)}
+      />
     </div>
   );
 }
