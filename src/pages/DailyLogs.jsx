@@ -10,6 +10,7 @@ import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus, Copy } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 
 function getDateCutoff(preset) {
   const now = new Date();
@@ -43,6 +44,11 @@ export default function DailyLogs() {
   const [dateRange, setDateRange] = useState("all");
 
   const qc = useQueryClient();
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setShowForm(true);
+  });
 
   const { data: rawLogs = [], isLoading } = useQuery({
     queryKey: ["daily-logs", projectId],
