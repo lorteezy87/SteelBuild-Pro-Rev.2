@@ -129,9 +129,9 @@ export function useDrawings(projectId: string | null | undefined) {
     },
   });
 
-  // ── UPDATE single drawing ───────────────────────────────────────────
+  // ── UPDATE single drawing (optimistic) ──────────────────────────────
   type UpdateInput = { id: string } & Record<string, unknown>;
-  const updateMut = useMutation<Drawing, Error, UpdateInput>({
+  const updateMut = useMutation<Drawing, Error, UpdateInput, { previous: Drawing[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
       if (data.drawing_set_name !== undefined) {
@@ -143,12 +143,25 @@ export function useDrawings(projectId: string | null | undefined) {
       }
       return await base44.entities.Drawing.update(id, record as Update<'drawings'>);
     },
-    onSuccess: async () => {
-      await invalidateAll();
-      toast.success("Drawing updated");
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<Drawing[]>(queryKey);
+      qc.setQueryData<Drawing[]>(queryKey, (old) =>
+        (old || []).map((d) =>
+          d.id === vars.id ? { ...d, ...vars } : d
+        )
+      );
+      return { previous };
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKey, context.previous);
       toast.error(`Failed to update drawing: ${err.message}`);
+    },
+    onSettled: async () => {
+      await invalidateAll();
+    },
+    onSuccess: () => {
+      toast.success("Drawing updated");
     },
   });
 
@@ -168,9 +181,9 @@ export function useDrawings(projectId: string | null | undefined) {
     },
   });
 
-  // ── BULK stage update ───────────────────────────────────────────────
+  // ── BULK stage update (optimistic) ──────────────────────────────────
   type BulkStageVars = { ids: string[]; stage: string };
-  const bulkUpdateStageMut = useMutation<BulkResult, Error, BulkStageVars>({
+  const bulkUpdateStageMut = useMutation<BulkResult, Error, BulkStageVars, { previous: Drawing[] | undefined }>({
     mutationFn: async ({ ids, stage }) => {
       const results: BulkResult = { succeeded: 0, failed: [] };
       for (const id of ids) {
@@ -187,17 +200,30 @@ export function useDrawings(projectId: string | null | undefined) {
       }
       return results;
     },
-    onSuccess: async (results) => {
+    onMutate: async ({ ids, stage }) => {
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<Drawing[]>(queryKey);
+      const idSet = new Set(ids);
+      qc.setQueryData<Drawing[]>(queryKey, (old) =>
+        (old || []).map((d) =>
+          idSet.has(d.id as string) ? { ...d, stage } : d
+        )
+      );
+      return { previous };
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKey, context.previous);
+      toast.error(`Bulk update failed: ${err.message}`);
+    },
+    onSettled: async () => {
       await invalidateAll();
+    },
+    onSuccess: (results) => {
       if (results.failed.length > 0) {
         toast.warning(`${results.succeeded} updated, ${results.failed.length} failed`);
       } else {
         toast.success(`${results.succeeded} drawing(s) updated`);
       }
-    },
-    onError: (err) => {
-      invalidateAll(); // always show real state
-      toast.error(`Bulk update failed: ${err.message}`);
     },
   });
 

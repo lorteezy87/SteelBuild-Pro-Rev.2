@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { mono } from "./drawingsConfig";
 import { STAGE_MAP, STAGE_ORDER } from "./drawingsConfig";
 import StageChip from "./StageChip";
@@ -1141,78 +1142,125 @@ export default function DrawingsTable({
   // don't have to juggle colSpan — every row just silently hides the cell.
   const hideOnCompact = compact ? { display: "none" } : undefined;
 
+  // ── Flatten groups into a virtual row list ───────────────────────────
+  const flatRows = useMemo(() => {
+    const rows = [];
+    for (const group of sortedGroups) {
+      const isExpanded = expanded.has(group.key);
+      rows.push({ type: "group", group, isExpanded });
+      if (isExpanded && group.setOnly) {
+        rows.push({ type: "setOnlyInfo", group });
+      }
+      if (isExpanded && !group.setOnly) {
+        for (const d of group.sheets) {
+          rows.push({ type: "sheet", drawing: d, group });
+        }
+      }
+    }
+    return rows;
+  }, [sortedGroups, expanded]);
+
+  const scrollRef = useRef(null);
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (i) => flatRows[i].type === "group" ? 62 : flatRows[i].type === "setOnlyInfo" ? 120 : 48,
+    overscan: 12,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0
+    ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end
+    : 0;
+
   return (
     <div
       ref={containerRef}
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-badge)", overflowX: "auto" }}
     >
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ ...thStyle, width: 36 }}>
-              <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
-            </th>
-            <SortableTh field="sheet_number"    label="SET / SHEET #" />
-            <SortableTh field="title"           label="TITLE" />
-            <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={hideOnCompact} />
-            <SortableTh field="revision_number" label="REV" />
-            <SortableTh field="stage"           label="STAGE" />
-            <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
-            <SortableTh field="due_date"        label="DUE DATE" />
-            <SortableTh field="reviewer"        label="REVIEWER" extraStyle={hideOnCompact} />
-            <SortableTh field={null}            label="APPROVAL" />
-            <SortableTh field={null}            label="" />
-          </tr>
-        </thead>
-        <tbody>
-          {sortedGroups.map((group) => {
-            const isExpanded = expanded.has(group.key);
-            const ids = group.sheets.map((s) => s.id);
-            const selectedInGroup = ids.filter((id) => selected.has(id)).length;
-            const groupAllSelected = selectedInGroup === ids.length && ids.length > 0;
-            const groupIndeterminate = selectedInGroup > 0 && selectedInGroup < ids.length;
-
-            return (
-              <React.Fragment key={group.key}>
-                <GroupRow
-                  group={group}
-                  expanded={isExpanded}
-                  onToggleExpand={() => toggleExpand(group.key)}
-                  groupSelected={groupAllSelected}
-                  groupIndeterminate={groupIndeterminate}
-                  onToggleGroupSelect={() => toggleGroupSelect(group)}
-                  onSetApproval={onSetApproval}
-                  onDeleteSet={onDeleteSet}
-                  onRenameSet={onRenameSet}
-                  onMarkTitleblock={onMarkTitleblock}
-                  hideOnCompact={hideOnCompact}
-                  submittalCounts={group.setId ? submittalsBySetId[group.setId] : undefined}
-                />
-                {isExpanded && group.setOnly && (
-                  <SetOnlyInfoRow group={group} />
-                )}
-                {isExpanded && !group.setOnly && group.sheets.map((d) => (
-                  <SheetRow
-                    key={d.id}
-                    d={d}
-                    isSel={selected.has(d.id)}
-                    onToggleSelect={onToggleSelect}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onAdvance={onAdvance}
-                    onView={onView}
-                    setContextMenu={setContextMenu}
+      <div
+        ref={scrollRef}
+        style={{ maxHeight: "calc(100vh - 260px)", overflow: "auto" }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--bg-surface)" }}>
+            <tr>
+              <th style={{ ...thStyle, width: 36 }}>
+                <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
+              </th>
+              <SortableTh field="sheet_number"    label="SET / SHEET #" />
+              <SortableTh field="title"           label="TITLE" />
+              <SortableTh field="discipline"      label="DISCIPLINE" extraStyle={hideOnCompact} />
+              <SortableTh field="revision_number" label="REV" />
+              <SortableTh field="stage"           label="STAGE" />
+              <SortableTh field="submitted_date"  label="SUBMITTED" extraStyle={hideOnCompact} />
+              <SortableTh field="due_date"        label="DUE DATE" />
+              <SortableTh field="reviewer"        label="REVIEWER" extraStyle={hideOnCompact} />
+              <SortableTh field={null}            label="APPROVAL" />
+              <SortableTh field={null}            label="" />
+            </tr>
+          </thead>
+          <tbody>
+            {paddingTop > 0 && (
+              <tr><td style={{ height: paddingTop, padding: 0, border: "none" }} /></tr>
+            )}
+            {virtualItems.map((vItem) => {
+              const row = flatRows[vItem.index];
+              if (row.type === "group") {
+                const group = row.group;
+                const ids = group.sheets.map((s) => s.id);
+                const selectedInGroup = ids.filter((id) => selected.has(id)).length;
+                const groupAllSelected = selectedInGroup === ids.length && ids.length > 0;
+                const groupIndeterminate = selectedInGroup > 0 && selectedInGroup < ids.length;
+                return (
+                  <GroupRow
+                    key={group.key}
+                    group={group}
+                    expanded={row.isExpanded}
+                    onToggleExpand={() => toggleExpand(group.key)}
+                    groupSelected={groupAllSelected}
+                    groupIndeterminate={groupIndeterminate}
+                    onToggleGroupSelect={() => toggleGroupSelect(group)}
                     onSetApproval={onSetApproval}
-                    rfiMap={rfiMap}
-                    isChild={!group.isUngrouped}
+                    onDeleteSet={onDeleteSet}
+                    onRenameSet={onRenameSet}
+                    onMarkTitleblock={onMarkTitleblock}
                     hideOnCompact={hideOnCompact}
+                    submittalCounts={group.setId ? submittalsBySetId[group.setId] : undefined}
                   />
-                ))}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                );
+              }
+              if (row.type === "setOnlyInfo") {
+                return (
+                  <SetOnlyInfoRow key={`${row.group.key}-info`} group={row.group} />
+                );
+              }
+              const d = row.drawing;
+              return (
+                <SheetRow
+                  key={d.id}
+                  d={d}
+                  isSel={selected.has(d.id)}
+                  onToggleSelect={onToggleSelect}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onAdvance={onAdvance}
+                  onView={onView}
+                  setContextMenu={setContextMenu}
+                  onSetApproval={onSetApproval}
+                  rfiMap={rfiMap}
+                  isChild={!row.group.isUngrouped}
+                  hideOnCompact={hideOnCompact}
+                />
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr><td style={{ height: paddingBottom, padding: 0, border: "none" }} /></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
