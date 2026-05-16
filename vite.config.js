@@ -8,31 +8,39 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 function vendorChunk(id) {
-  const normalizedId = id.replace(/\\/g, '/')
-  if (!normalizedId.includes('/node_modules/')) return undefined
+  const n = id.replace(/\\/g, '/')
+  if (!n.includes('/node_modules/')) return undefined
 
-  if (normalizedId.includes('/node_modules/web-ifc/')) return 'vendor-bim-ifc'
-  if (normalizedId.includes('/node_modules/@thatopen/')) return 'vendor-bim-thatopen'
-  if (normalizedId.includes('/node_modules/camera-controls/')) return 'vendor-three-controls'
-  if (normalizedId.includes('/node_modules/three/build/three.webgpu')) return 'vendor-three-webgpu'
-  if (normalizedId.includes('/node_modules/three/build/three.tsl')) return 'vendor-three-webgpu'
-  if (normalizedId.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
-  if (normalizedId.includes('/node_modules/three/')) return 'vendor-three-core'
+  // BIM / 3D
+  if (n.includes('/node_modules/web-ifc/')) return 'vendor-bim-ifc'
+  if (n.includes('/node_modules/@thatopen/')) return 'vendor-bim-thatopen'
+  if (n.includes('/node_modules/camera-controls/')) return 'vendor-three-controls'
+  if (n.includes('/node_modules/three/build/three.webgpu')) return 'vendor-three-webgpu'
+  if (n.includes('/node_modules/three/build/three.tsl')) return 'vendor-three-webgpu'
+  if (n.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
+  if (n.includes('/node_modules/three/')) return 'vendor-three-core'
 
-  if (normalizedId.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
-  if (normalizedId.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
+  // Heavy export libs
+  if (n.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
+  if (n.includes('/node_modules/jspdf/')) return 'vendor-pdf'
+  if (n.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
 
-  if (normalizedId.includes('/node_modules/recharts/')) return 'vendor-charts'
-  if (normalizedId.includes('/node_modules/d3-')) return 'vendor-charts'
-  if (normalizedId.includes('/node_modules/decimal.js-light/')) return 'vendor-charts'
-  if (normalizedId.includes('/node_modules/react-smooth/')) return 'vendor-charts'
+  // Charts (recharts + transitive deps)
+  if (n.includes('/node_modules/recharts/')) return 'vendor-charts'
+  if (n.includes('/node_modules/d3-')) return 'vendor-charts'
+  if (n.includes('/node_modules/decimal.js-light/')) return 'vendor-charts'
+  if (n.includes('/node_modules/react-smooth/')) return 'vendor-charts'
 
-  if (normalizedId.includes('/node_modules/@supabase/')) return 'vendor-supabase'
-  if (normalizedId.includes('/node_modules/react-router')) return 'vendor-react-router'
-  if (normalizedId.includes('/node_modules/react-dom/')) return 'vendor-react'
-  if (normalizedId.includes('/node_modules/react/')) return 'vendor-react'
-  if (normalizedId.includes('/node_modules/scheduler/')) return 'vendor-react'
-  if (normalizedId.includes('/node_modules/@tanstack/react-query/')) return 'vendor-react-query'
+  // Core framework
+  if (n.includes('/node_modules/@supabase/')) return 'vendor-supabase'
+  if (n.includes('/node_modules/react-router')) return 'vendor-react-router'
+  if (n.includes('/node_modules/react-dom/')) return 'vendor-react'
+  if (n.includes('/node_modules/react/')) return 'vendor-react'
+  if (n.includes('/node_modules/scheduler/')) return 'vendor-react'
+  if (n.includes('/node_modules/@tanstack/react-query/')) return 'vendor-react-query'
+
+  // Radix UI primitives
+  if (n.includes('/node_modules/@radix-ui/')) return 'vendor-radix'
 
   return undefined
 }
@@ -49,32 +57,6 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
   ],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-radix': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-tooltip',
-            '@radix-ui/react-accordion',
-            '@radix-ui/react-checkbox',
-            '@radix-ui/react-switch',
-            '@radix-ui/react-toast',
-          ],
-          'vendor-charts': ['recharts'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-pdf': ['jspdf', 'pdfjs-dist'],
-          'vendor-xlsx': ['xlsx'],
-        },
-      },
-    },
-  },
   optimizeDeps: {
     // Exclude web-ifc from Vite's dependency pre-bundling to avoid
     // circular-reference errors ("Cannot access 'Ct' before initialization")
