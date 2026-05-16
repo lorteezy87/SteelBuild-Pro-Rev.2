@@ -1,9 +1,9 @@
 import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
 
-const modalSurface = "linear-gradient(180deg, rgba(11,16,24,0.98) 0%, rgba(7,10,16,0.99) 100%)";
-const modalPanel = "rgba(18,25,36,0.96)";
-const modalPanelMuted = "rgba(255,255,255,0.035)";
+const modalSurface = "linear-gradient(180deg, rgb(11,16,24) 0%, rgb(7,10,16) 100%)";
+const modalPanel = "rgb(18,25,36)";
+const modalPanelMuted = "rgb(19,26,38)";
 const modalBorder = "rgba(135,154,180,0.22)";
 const modalBorderMuted = "rgba(135,154,180,0.14)";
 const modalText = "rgba(238,244,252,0.96)";
@@ -59,6 +59,8 @@ export const inputStyle = {
   color: modalText,
   fontFamily: "var(--font-body)",
   fontSize: 12,
+  lineHeight: "18px",
+  minHeight: 38,
   outline: "none",
   boxSizing: "border-box",
   colorScheme: "dark",
@@ -139,7 +141,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
             justifyContent: "space-between",
             padding: "20px 24px 16px",
             borderBottom: `1px solid ${modalBorderMuted}`,
-            background: "rgba(12,17,25,0.72)",
+            background: "rgb(12,17,25)",
             flexShrink: 0,
           }}
         >
@@ -185,7 +187,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
               display: "flex",
               justifyContent: "flex-end",
               gap: 10,
-              background: "rgba(255,255,255,0.025)",
+              background: "rgb(10,15,23)",
               flexShrink: 0,
             }}
           >

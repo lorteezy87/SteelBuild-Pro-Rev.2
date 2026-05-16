@@ -44,17 +44,34 @@ const HEADER_ALIASES = {
 
 // Canonical column order for the preview table header
 const PREVIEW_COLUMNS = [
-  { key: "wp_number", label: "WP #", width: 80 },
-  { key: "name", label: "Name", width: 220 },
-  { key: "phase", label: "Phase", width: 100 },
-  { key: "status", label: "Status", width: 100 },
-  { key: "tonnage", label: "Tons", width: 60, numeric: true },
-  { key: "percent_complete", label: "%", width: 50, numeric: true },
-  { key: "crew", label: "Crew", width: 90 },
-  { key: "shop_hours_budget", label: "Shop Bud", width: 70, numeric: true },
-  { key: "shop_hours_actual", label: "Shop Act", width: 70, numeric: true },
-  { key: "notes", label: "Notes", width: 160 },
+  { key: "wp_number", label: "WP #", width: 96 },
+  { key: "name", label: "Name", width: 260 },
+  { key: "phase", label: "Phase", width: 124 },
+  { key: "status", label: "Status", width: 128 },
+  { key: "tonnage", label: "Tons", width: 82, numeric: true },
+  { key: "percent_complete", label: "%", width: 72, numeric: true },
+  { key: "crew", label: "Crew", width: 126 },
+  { key: "shop_hours_budget", label: "Shop Bud", width: 104, numeric: true },
+  { key: "shop_hours_actual", label: "Shop Act", width: 104, numeric: true },
+  { key: "notes", label: "Notes", width: 200 },
 ];
+
+const PREVIEW_MIN_WIDTH = PREVIEW_COLUMNS.reduce((sum, col) => sum + col.width, 46);
+const PASTE_INPUT_STYLE = {
+  ...inputStyle,
+  background: "rgb(14,20,31)",
+  border: "1px solid rgba(135,154,180,0.28)",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  lineHeight: "20px",
+  minHeight: 160,
+  maxHeight: 240,
+  whiteSpace: "pre",
+  overflow: "auto",
+  resize: "vertical",
+  tabSize: 4,
+};
 
 // Strip an optional wrapping "" quote pair, and collapse escaped "".
 const unquote = (s) => {
@@ -324,16 +341,8 @@ export default function WPBulkAddModal({
             placeholder={"WP #\tName\tPhase\tStatus\tTonnage\t% Complete\tCrew\tShop Hrs Budget\tShop Hrs Actual\tNotes\nWP-001\tShop A - Main Steel\tFabrication\tNot Started\t42.5\t0%\t\t120\t0\t"}
             spellCheck={false}
             style={{
-              ...inputStyle,
+              ...PASTE_INPUT_STYLE,
               width: "100%",
-              minHeight: 140,
-              maxHeight: 220,
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              lineHeight: 1.45,
-              whiteSpace: "pre",
-              overflow: "auto",
-              resize: "vertical",
             }}
           />
         </div>
@@ -372,24 +381,27 @@ export default function WPBulkAddModal({
         {rows.length > 0 && (
           <div
             style={{
-              border: "1px solid var(--border-default)",
+              border: "1px solid rgba(135,154,180,0.28)",
               borderRadius: 8,
               overflow: "auto",
               maxHeight: 320,
+              background: "rgb(10,15,23)",
             }}
           >
             <table
               className="sbd-table"
               style={{
-                width: "100%",
+                width: "max(100%, var(--wp-preview-min-width))",
+                minWidth: PREVIEW_MIN_WIDTH,
                 borderCollapse: "collapse",
                 fontFamily: "var(--font-body)",
-                fontSize: 11,
+                fontSize: 12,
+                "--wp-preview-min-width": `${PREVIEW_MIN_WIDTH}px`,
               }}
             >
               <thead
                 style={{
-                  background: "var(--bg-surface-low)",
+                  background: "rgb(12,17,25)",
                   position: "sticky",
                   top: 0,
                   zIndex: 1,
@@ -420,12 +432,13 @@ export default function WPBulkAddModal({
                         fontFamily: "var(--font-mono)",
                         fontSize: 8,
                         letterSpacing: "0.1em",
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                        borderBottom: "1px solid var(--divider)",
-                        minWidth: col.width,
-                      }}
-                    >
+                      color: "var(--text-muted)",
+                      textTransform: "uppercase",
+                      borderBottom: "1px solid var(--divider)",
+                      minWidth: col.width,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                       {col.label}
                     </th>
                   ))}
@@ -439,10 +452,10 @@ export default function WPBulkAddModal({
                       key={row.__index}
                       style={{
                         background: hasErrors
-                          ? "rgba(239,68,68,0.06)"
+                          ? "rgb(41,19,24)"
                           : row.isDuplicate
-                          ? "rgba(245,158,11,0.06)"
-                          : "transparent",
+                          ? "rgb(37,26,11)"
+                          : "rgb(10,15,23)",
                         borderBottom: "1px solid var(--divider)",
                       }}
                     >
@@ -475,11 +488,12 @@ export default function WPBulkAddModal({
                               fontFamily: col.numeric || col.key === "wp_number"
                                 ? "var(--font-mono)"
                                 : "var(--font-body)",
-                              fontSize: col.numeric ? 10 : 11,
+                              fontSize: col.numeric ? 11 : 12,
+                              lineHeight: "18px",
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
-                              maxWidth: col.width + 40,
+                              maxWidth: col.width + 60,
                             }}
                           >
                             {col.key === "wp_number" && !val ? (
