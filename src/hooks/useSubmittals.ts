@@ -258,27 +258,37 @@ export function useSubmittals(projectId: string | null | undefined) {
     },
   });
 
-  // ── UPDATE submittal ─────────────────────────────────────────────
+  // ── UPDATE submittal (optimistic) ────────────────────────────────
   type UpdateInput = { id: string } & Record<string, unknown>;
-  const updateMut = useMutation<Submittal, Error, UpdateInput>({
+  const updateMut = useMutation<Submittal, Error, UpdateInput, { previous: Submittal[] | undefined }>({
     mutationFn: async ({ id, ...data }) => {
       if (!id) throw new Error("Update requires an id.");
       const updated = await base44.entities.Submittal.update(
         id,
         data as Update<"submittals">
       );
-      // Lock linked drawing sets if this update transitions the submittal
-      // into a terminal-approved status. Submittal is workflow source of
-      // truth; drawing-set locks are a side effect of approval.
       await lockLinkedSetsIfApproved(updated);
       return updated;
     },
-    onSuccess: async () => {
-      await invalidateAll();
-      toast.success("Submittal updated");
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<Submittal[]>(queryKey);
+      qc.setQueryData<Submittal[]>(queryKey, (old) =>
+        (old || []).map((s) =>
+          s.id === vars.id ? { ...s, ...vars } : s
+        )
+      );
+      return { previous };
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(queryKey, context.previous);
       toast.error(`Failed to update submittal: ${err.message}`);
+    },
+    onSettled: async () => {
+      await invalidateAll();
+    },
+    onSuccess: () => {
+      toast.success("Submittal updated");
     },
   });
 
