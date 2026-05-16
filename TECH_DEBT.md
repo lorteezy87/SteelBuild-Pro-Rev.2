@@ -54,59 +54,27 @@ Phase C deferred items (call out as future sprints):
 fell through to `"viewer"`, and `can()` denied every action. Fixed in
 the same sprint as 079/080.
 
-### Pg_cron not installed for AI extraction reconciler
-**Where:** Migration `076_ai_extraction_reconciler.sql`
-**What:** The `reconcile_stuck_extractions()` function exists and is
-callable, but the pg_cron schedule was conditional on the extension
-being installed. The extension is *available* on Supabase but not
-*installed*.
-**Impact:** Drawings stuck in `Extracting` status for >5 minutes won't
-auto-reset until either (a) `CREATE EXTENSION pg_cron;` is run on the
-project, or (b) an edge function is wired to call the reconciler on
-a schedule.
-**Fix:** Pick one of (a) or (b). (a) is simpler if your Supabase plan
-permits the extension.
-
-### Existing pdf_page=1 rows after thumbnail bug fix
-**Where:** Production data — ~380 drawings across multiple sets.
-**What:** Pre-fix uploads assigned `pdf_page=1` to every sheet in a
-multi-sheet PDF, so thumbnails and viewer renders show the wrong page.
-The bug is fixed for new uploads (deterministic
-`pdf_page = index + 1` for one-sheet-per-page case, plus a manual
-override field on `SheetFormModal`), but existing rows still have the
-wrong values.
-**Impact:** Affected sheets show the cover page in the viewer; user
-must manually click each one and use the new "PDF Page" input on
-SheetFormModal to enter the correct page number, OR re-upload the set.
-**Fix:** No automated backfill — the LLM extraction would need to
-re-run on the source PDF for each set. Per user direction
-("I will reupload"), users handle this themselves on a per-set basis.
-
-### Locked windows in main worktree
-**Where:** `C:\dev\SteelBuild-Pro-Rev.2\` working tree (Windows)
-**What:** Several directories (`src/components/workflow/`,
-`src/entities/`, `src/components/constraints/`) are locked by an
-unidentified Windows process when stash operations run, producing
-"failed to remove" warnings. Stash itself succeeds; warnings are
-harmless.
-**Impact:** Cosmetic. Deploy dance still works.
-**Fix:** Identify and close the process holding the lock (likely a
-file watcher or open editor). Or move to using only the worktree
-path for all git operations.
-
-### Stray nested directory in main worktree
-**Where:** `C:\dev\SteelBuild-Pro-Rev.2\SteelBuild-Pro-Rev.2\`
-**What:** A nested copy of the project, likely created by a paste
-artifact. Contains stale snapshots of files that don't match what's
-in git.
-**Impact:** Confusing — "is this real?" — but doesn't affect builds
-or deploys.
-**Fix:** Delete the nested directory after confirming nothing
-important lives only there.
-
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- AI extraction reconciler scheduling resolved: migration
+  `20260516003546_enable_ai_extraction_pg_cron.sql` installs
+  `pg_cron` and schedules `public.reconcile_stuck_extractions()` every
+  5 minutes. Production verification found 0 stale `Extracting` rows
+  before enabling the schedule.
+
+- Existing `pdf_page=1` rows after the thumbnail bug are now classified
+  as a known data-reupload cleanup, not active code debt. The product
+  fix remains in place for new uploads, the manual `PDF Page` editor
+  remains available, and production still has candidate legacy rows
+  that require reupload or explicit sheet-by-sheet correction rather
+  than an unsafe guessed backfill.
+
+- Main worktree hygiene items resolved: the nested
+  `C:\dev\SteelBuild-Pro-Rev.2\SteelBuild-Pro-Rev.2\` directory is no
+  longer present, and no active locked-window issue reproduced during
+  the current cleanup pass.
 
 - Drawings schema/stage cleanup resolved: migration
   `20260516001543_resolve_drawings_tech_debt.sql` drops the dead
