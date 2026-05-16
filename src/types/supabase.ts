@@ -3648,6 +3648,7 @@ export type Database = {
           contingency_amount: number | null
           contract_type: string | null
           created_at: string | null
+          deleted_at: string | null
           deck_installer: string | null
           deck_manufacturer: string | null
           detailer_contact_id: string | null
@@ -3659,6 +3660,7 @@ export type Database = {
           general_contractor: string | null
           health_status: string
           id: string
+          is_deleted: boolean
           job_type: string | null
           joist_manufacturer: string | null
           kickoff_complete: boolean | null
@@ -3687,6 +3689,7 @@ export type Database = {
           contingency_amount?: number | null
           contract_type?: string | null
           created_at?: string | null
+          deleted_at?: string | null
           deck_installer?: string | null
           deck_manufacturer?: string | null
           detailer_contact_id?: string | null
@@ -3698,6 +3701,7 @@ export type Database = {
           general_contractor?: string | null
           health_status?: string
           id?: string
+          is_deleted?: boolean
           job_type?: string | null
           joist_manufacturer?: string | null
           kickoff_complete?: boolean | null
@@ -3726,6 +3730,7 @@ export type Database = {
           contingency_amount?: number | null
           contract_type?: string | null
           created_at?: string | null
+          deleted_at?: string | null
           deck_installer?: string | null
           deck_manufacturer?: string | null
           detailer_contact_id?: string | null
@@ -3737,6 +3742,7 @@ export type Database = {
           general_contractor?: string | null
           health_status?: string
           id?: string
+          is_deleted?: boolean
           job_type?: string | null
           joist_manufacturer?: string | null
           kickoff_complete?: boolean | null

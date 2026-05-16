@@ -226,6 +226,8 @@ class SupabaseOperationError extends Error {
  * list() and filter() will auto-exclude deleted rows unless explicitly included.
  */
 const SOFT_DELETE_TABLES = new Set<string>([
+  // Project roots anchor child records and audit logs, so UI deletes archive.
+  'projects',
   'rfis', 'change_orders', 'deliveries', 'work_packages',
   'documents', 'drawings', 'drawing_sets', 'expenses', 'inspections',
   'punchlist_items', 'safety_incidents', 'scope_items',
