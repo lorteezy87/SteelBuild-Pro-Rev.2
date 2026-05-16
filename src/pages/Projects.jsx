@@ -7,6 +7,7 @@ import ProjectDetailView from "@/components/projects/ProjectDetailView";
 import { toast } from "sonner";
 import { calcWpProgress, calcLaborBurn, calcContractValue, calcDaysToDeadline, calcRfiHealth } from "@/utils/projectKpis";
 import { CommandBar } from "@/components/design-system";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { Plus } from "lucide-react";
 
 /* ─────────────────────────────────────────────
@@ -380,7 +381,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         >
           EDIT
         </button>
-        {/* Delete button */}
+        {/* Archive button */}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(project); }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--danger-border)"; e.currentTarget.style.color = "var(--danger)"; }}
@@ -392,7 +393,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
             textTransform: "uppercase", transition: "border-color 0.12s, color 0.12s",
           }}
         >
-          DEL
+          ARCHIVE
         </button>
       </div>
     </div>
@@ -513,6 +514,7 @@ function FilterPill({ label, color, active, onClick }) {
 ───────────────────────────────────────────── */
 export default function Projects() {
   const qc         = useQueryClient();
+  const { removeProject } = useProjectContext();
   const [search,        setSearch]        = useState("");
   const [phaseFilter,   setPhaseFilter]   = useState("all");
   const [healthFilter,  setHealthFilter]  = useState("all");
@@ -524,9 +526,23 @@ export default function Projects() {
 
   /* ── Data fetching ── */
   const { data: projects     = [] } = useQuery({ queryKey: ["projects"],          queryFn: () => base44.entities.Project.list("-created_at"),    staleTime: 5 * 60 * 1000 });
-  const { data: workPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list() });
-  const { data: rfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list() });
-  const { data: changeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list() });
+  const { data: rawWorkPackages = [] } = useQuery({ queryKey: ["work-packages-all"], queryFn: () => base44.entities.WorkPackage.list() });
+  const { data: rawRfis         = [] } = useQuery({ queryKey: ["rfis"],              queryFn: () => base44.entities.RFI.list() });
+  const { data: rawChangeOrders = [] } = useQuery({ queryKey: ["change-orders-all"], queryFn: () => base44.entities.ChangeOrder.list() });
+
+  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const workPackages = useMemo(
+    () => rawWorkPackages.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    [liveProjectIds, rawWorkPackages]
+  );
+  const rfis = useMemo(
+    () => rawRfis.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    [liveProjectIds, rawRfis]
+  );
+  const changeOrders = useMemo(
+    () => rawChangeOrders.filter((row) => row?.project_id && liveProjectIds.has(row.project_id)),
+    [liveProjectIds, rawChangeOrders]
+  );
 
   /* ── Mutations ── */
   const createMut = useMutation({
@@ -541,7 +557,12 @@ export default function Projects() {
   });
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Project.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Project deleted"); },
+    onSuccess: (_result, id) => {
+      removeProject(id);
+      qc.invalidateQueries();
+      if (detailProject?.id === id) setDetailProject(null);
+      toast.success("Project archived");
+    },
     onError: (err) => toast.error(err.message),
   });
   const handleSave = (d) => {
@@ -549,7 +570,7 @@ export default function Projects() {
     else createMut.mutate(d);
   };
   const handleDelete = (project) => {
-    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
+    if (window.confirm(`Archive "${project.name}"? It will be hidden from active project lists, but its data and audit history will be retained.`)) {
       deleteMut.mutate(project.id);
     }
   };

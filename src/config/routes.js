@@ -149,6 +149,7 @@ const ROUTE_DOMAINS = {
     ScopeExclusions:  r(lazyWithRetry(() => import("@/pages/ScopeExclusions")),  "Scope & Exclusions"),
     Contacts:         r(lazyWithRetry(() => import("@/pages/Contacts")),         "Contacts"),
     Vendors:          r(lazyWithRetry(() => import("@/pages/Vendors")),          "Vendors"),
+    DataExchange:     r(lazyWithRetry(() => import("@/pages/DataExchange")),     "Data Exchange",       { projectScoped: true }),
     Integrations:     r(lazyWithRetry(() => import("@/pages/Integrations")),     "Integrations"),
     Settings:         r(lazyWithRetry(() => import("@/pages/Settings")),         "Settings"),
     UsersManagement:  r(lazyWithRetry(() => import("@/pages/UsersManagement")),  "User Management"),

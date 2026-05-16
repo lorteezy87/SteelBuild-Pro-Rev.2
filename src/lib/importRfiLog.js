@@ -14,6 +14,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { base44 } from "@/api/base44Client";
+import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
 
 const STORAGE_BUCKET  = "app-files";
 const MAX_PDF_BYTES   = 32 * 1024 * 1024;
@@ -230,16 +231,29 @@ export async function commitRfiLog({
     .eq("project_id", projectId);
   const existingNumbers = new Set(
     (existing.data || [])
-      .map((r) => String(r.rfi_number || "").replace(/\D/g, ""))
+      .map((r) => rfiNumberDedupKey(r.rfi_number))
       .filter(Boolean),
   );
 
+  const { rows, skipped } = buildRfiImportRows({ rfis, projectId, projectName, existingNumbers });
+
+  if (rows.length === 0) return { created: 0, skipped };
+
+  const { error } = await supabase.from("rfis").insert(rows);
+  if (error) throw new Error(`rfis insert failed: ${error.message}`);
+  return { created: rows.length, skipped };
+}
+
+export function buildRfiImportRows({ rfis = [], projectId, projectName, existingNumbers = new Set() }) {
   const rows = [];
+  const seenNumbers = new Set(existingNumbers);
   let skipped = 0;
+
   for (const r of rfis) {
-    const num = String(r.rfi_number || "").replace(/\D/g, "");
-    if (!num) continue;
-    if (existingNumbers.has(num)) { skipped++; continue; }
+    const dedupKey = rfiNumberDedupKey(r.rfi_number);
+    if (!dedupKey) continue;
+    if (seenNumbers.has(dedupKey)) { skipped++; continue; }
+    seenNumbers.add(dedupKey);
 
     const submitted = normalizeDate(r.iso_submitted || r.date_submitted);
     const required  = normalizeDate(r.iso_required  || r.date_required);
@@ -248,24 +262,20 @@ export async function commitRfiLog({
     rows.push({
       project_id:     projectId,
       project_name:   projectName || null,
-      rfi_number:     `RFI #${num.padStart(3, "0")}`,
+      rfi_number:     normalizeRfiNumber(r.rfi_number),
       title:          (r.title || "").slice(0, 200),
       question:       (r.title || "").slice(0, 4000),
       assigned_to:    (r.assigned_to || "").slice(0, 200) || null,
       submitted_date: submitted,
       date_required:  required,
       date_answered:  answered,
-      status:         answered ? "Closed" : (submitted ? "Open" : "Draft"),
+      status:         answered ? "Closed" : "Open",
       priority:       "Medium",
       ball_in_court:  answered ? "Contractor" : (r.assigned_to || "Engineer"),
     });
   }
 
-  if (rows.length === 0) return { created: 0, skipped };
-
-  const { error } = await supabase.from("rfis").insert(rows);
-  if (error) throw new Error(`rfis insert failed: ${error.message}`);
-  return { created: rows.length, skipped };
+  return { rows, skipped };
 }
 
 function normalizeDate(v) {

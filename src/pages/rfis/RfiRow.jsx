@@ -2,7 +2,7 @@ import React from "react";
 import { StatusPill, BicPill, Icon } from "@/components/design-system";
 import { daysOpen, isOverdue, rfiStatusShortLabel } from "./utils";
 
-export const RFI_ROW_GRID = "42px 116px minmax(280px, 1fr) minmax(132px, 0.6fr) minmax(124px, 0.62fr) minmax(136px, 0.65fr) minmax(112px, 0.55fr) 48px";
+export const RFI_ROW_GRID = "46px 108px minmax(360px, 1.45fr) minmax(156px, 0.58fr) minmax(142px, 0.5fr) minmax(148px, 0.5fr) minmax(148px, 0.5fr) 44px";
 
 function formatDate(value) {
   if (!value) return "No date";

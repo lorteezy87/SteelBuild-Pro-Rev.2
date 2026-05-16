@@ -7,6 +7,36 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+function vendorChunk(id) {
+  const normalizedId = id.replace(/\\/g, '/')
+  if (!normalizedId.includes('/node_modules/')) return undefined
+
+  if (normalizedId.includes('/node_modules/web-ifc/')) return 'vendor-bim-ifc'
+  if (normalizedId.includes('/node_modules/@thatopen/')) return 'vendor-bim-thatopen'
+  if (normalizedId.includes('/node_modules/camera-controls/')) return 'vendor-three-controls'
+  if (normalizedId.includes('/node_modules/three/build/three.webgpu')) return 'vendor-three-webgpu'
+  if (normalizedId.includes('/node_modules/three/build/three.tsl')) return 'vendor-three-webgpu'
+  if (normalizedId.includes('/node_modules/three/examples/')) return 'vendor-three-examples'
+  if (normalizedId.includes('/node_modules/three/')) return 'vendor-three-core'
+
+  if (normalizedId.includes('/node_modules/pdfjs-dist/')) return 'vendor-pdf'
+  if (normalizedId.includes('/node_modules/xlsx/')) return 'vendor-xlsx'
+
+  if (normalizedId.includes('/node_modules/recharts/')) return 'vendor-charts'
+  if (normalizedId.includes('/node_modules/d3-')) return 'vendor-charts'
+  if (normalizedId.includes('/node_modules/decimal.js-light/')) return 'vendor-charts'
+  if (normalizedId.includes('/node_modules/react-smooth/')) return 'vendor-charts'
+
+  if (normalizedId.includes('/node_modules/@supabase/')) return 'vendor-supabase'
+  if (normalizedId.includes('/node_modules/react-router')) return 'vendor-react-router'
+  if (normalizedId.includes('/node_modules/react-dom/')) return 'vendor-react'
+  if (normalizedId.includes('/node_modules/react/')) return 'vendor-react'
+  if (normalizedId.includes('/node_modules/scheduler/')) return 'vendor-react'
+  if (normalizedId.includes('/node_modules/@tanstack/react-query/')) return 'vendor-react-query'
+
+  return undefined
+}
+
 export default defineConfig({
   logLevel: 'info',
   resolve: {
@@ -53,6 +83,13 @@ export default defineConfig({
   worker: {
     format: 'es',
     plugins: () => [wasm(), topLevelAwait()],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
   test: {
     globals: true,

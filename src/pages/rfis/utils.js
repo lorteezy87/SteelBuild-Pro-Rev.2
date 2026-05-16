@@ -9,27 +9,39 @@ import { RFI_NUMBER_PATTERN } from "./constants";
 export const extractRfiSequence = (value) => {
   if (!value) return null;
   const match = String(value).trim().match(RFI_NUMBER_PATTERN);
-  return match ? Number(match[1]) : null;
+  if (!match) return null;
+  const sequence = Number(match[1]);
+  return Number.isFinite(sequence) ? sequence : null;
 };
 
-export const sortRfisForRepair = (a, b) => {
-  const numericDiff =
-    (extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER) -
-    (extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER);
-  if (numericDiff !== 0) return numericDiff;
-
-  // Use created_date (full timestamp) for precise ordering of bulk-uploaded RFIs
-  const createdA = new Date(a.created_date || 0).getTime();
-  const createdB = new Date(b.created_date || 0).getTime();
-  if (createdA !== createdB) return createdA - createdB;
-
-  // Fall back to submitted_date, then id
-  const dateA = new Date(a.submitted_date || 0).getTime();
-  const dateB = new Date(b.submitted_date || 0).getTime();
-  if (dateA !== dateB) return dateA - dateB;
-
-  return String(a.id).localeCompare(String(b.id));
+const rfiSortTimestamp = (record) => {
+  const time = new Date(record?.created_date || record?.created_at || record?.submitted_date || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
 };
+
+export const compareRfisByNumber = (a = {}, b = {}) => {
+  const numA = extractRfiSequence(a.rfi_number);
+  const numB = extractRfiSequence(b.rfi_number);
+  const hasNumA = numA !== null;
+  const hasNumB = numB !== null;
+
+  if (hasNumA && hasNumB && numA !== numB) return numA - numB;
+  if (hasNumA !== hasNumB) return hasNumA ? -1 : 1;
+
+  const labelDiff = String(a.rfi_number || "").localeCompare(
+    String(b.rfi_number || ""),
+    undefined,
+    { numeric: true, sensitivity: "base" },
+  );
+  if (labelDiff !== 0) return labelDiff;
+
+  const dateDiff = rfiSortTimestamp(a) - rfiSortTimestamp(b);
+  if (dateDiff !== 0) return dateDiff;
+
+  return String(a.id || "").localeCompare(String(b.id || ""), undefined, { numeric: true, sensitivity: "base" });
+};
+
+export const sortRfisForRepair = compareRfisByNumber;
 
 export const buildRfiNumberRepairs = (records) => {
   const groups = records.reduce((acc, record) => {
