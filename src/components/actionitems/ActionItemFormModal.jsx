@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useFormValidation } from "@/hooks/useFormValidation";
 import RelatedScheduleTasksChips from "@/components/shared/RelatedScheduleTasksChips";
 
 const PRIORITY_OPTIONS = [
@@ -19,6 +21,8 @@ const tomorrow = () => {
 
 export default function ActionItemFormModal({ projectId, onClose, onSave, actionItem = null }) {
   const qc = useQueryClient();
+  const trapRef = useFocusTrap(true);
+  const { fieldErrors, runValidation, clearField } = useFormValidation("action_item", actionItem ? "update" : "create");
   const titleRef = useRef(null);
   const [formData, setFormData] = useState({
     project_id:       projectId || "",
@@ -72,7 +76,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
   });
 
   const handleSubmit = () => {
-    if (!formData.title.trim() || !formData.project_id) return;
+    if (!runValidation(formData)) return;
     if (actionItem && onSave) { onSave(formData); onClose(); return; }
     mutation.mutate(formData);
   };
@@ -121,7 +125,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={modalStyle}>
+      <div ref={trapRef} role="dialog" aria-modal="true" style={modalStyle}>
         {/* Header */}
         <div style={{ padding: "18px 24px 12px", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>
@@ -142,11 +146,12 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
               ref={titleRef}
               type="text"
               value={formData.title}
-              onChange={e => field("title", e.target.value)}
+              onChange={e => { field("title", e.target.value); clearField("title"); }}
               placeholder="e.g., Fix anchor bolt alignment at Grid A-4"
-              style={inputStyle}
+              style={{ ...inputStyle, ...(fieldErrors.title ? { borderColor: "var(--status-error)" } : {}) }}
               required
             />
+            {fieldErrors.title && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.title}</p>}
           </div>
 
           {/* Priority toggle buttons + Due Date */}
@@ -201,10 +206,11 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
           {/* Project */}
           <div>
             <label style={labelStyle}>Project *</label>
-            <select value={formData.project_id} onChange={e => field("project_id", e.target.value)} style={inputStyle} required>
+            <select value={formData.project_id} onChange={e => { field("project_id", e.target.value); clearField("project_id"); }} style={{ ...inputStyle, ...(fieldErrors.project_id ? { borderColor: "var(--status-error)" } : {}) }} required>
               <option value="">Select project...</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
+            {fieldErrors.project_id && <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--status-error)", marginTop: 4 }}>{fieldErrors.project_id}</p>}
           </div>
 
           {/* Description */}

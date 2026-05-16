@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useAppSecurity }      from './useAppSecurity';
 import { useDestructiveAudit } from './useDestructiveAudit';
 
@@ -23,6 +24,7 @@ export default function SecureDeleteDialog({
   requireTyped = false,
   typedValue   = 'DELETE',
 }) {
+  const trapRef = useFocusTrap(open);
   const { can, isAdmin } = useAppSecurity();
   const { logAction } = useDestructiveAudit();
   const userEmail = typeof window !== 'undefined' ? localStorage.getItem('current_user_email') : null;
@@ -159,7 +161,7 @@ export default function SecureDeleteDialog({
 
   return (
     <div style={S.overlay} onClick={onClose} onKeyDown={handleKey}>
-      <div className="sbd-card-strong" style={S.dialog} onClick={e => e.stopPropagation()}>
+      <div ref={trapRef} className="sbd-card-strong" role="alertdialog" aria-modal="true" style={S.dialog} onClick={e => e.stopPropagation()}>
 
         <div style={S.header}>
           <span style={{ fontSize: 18, color: 'var(--status-error)', lineHeight: 1 }}>⚠</span>

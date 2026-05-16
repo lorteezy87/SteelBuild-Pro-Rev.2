@@ -217,6 +217,44 @@ const RULES = {
     return errors.filter(Boolean);
   },
 
+  action_item: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.due_date, "due_date", "Due Date"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    return errors.filter(Boolean);
+  },
+
+  inspection: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.inspection_type, "inspection_type", "Inspection Type"));
+    errors.push(validDate(data.scheduled_date, "scheduled_date", "Scheduled Date"));
+    errors.push(validDate(data.completed_date, "completed_date", "Completed Date"));
+    errors.push(dateNotBefore(data.completed_date, data.scheduled_date, "completed_date", "Completed Date", "Scheduled Date"));
+    return errors.filter(Boolean);
+  },
+
+  safety_incident: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.incident_type, "incident_type", "Incident Type"));
+    errors.push(required(data.severity, "severity", "Severity"));
+    errors.push(validDate(data.incident_date, "incident_date", "Incident Date"));
+    errors.push(maxLength(data.description, 2000, "description", "Description"));
+    return errors.filter(Boolean);
+  },
+
+  punchlist_item: (data, mode) => {
+    const errors = [];
+    errors.push(required(data.project_id, "project_id", "Project"));
+    errors.push(required(data.title, "title", "Title"));
+    errors.push(validDate(data.due_date, "due_date", "Due Date"));
+    errors.push(maxLength(data.title, 200, "title", "Title"));
+    return errors.filter(Boolean);
+  },
+
   project: (data, mode) => {
     const errors = [];
     errors.push(required(data.project_number, "project_number", "Project Number"));

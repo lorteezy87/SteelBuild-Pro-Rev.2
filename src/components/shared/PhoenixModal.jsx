@@ -1,5 +1,6 @@
 import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const modalSurface = "linear-gradient(180deg, rgb(11,16,24) 0%, rgb(7,10,16) 100%)";
 const modalPanel = "rgb(18,25,36)";
@@ -87,6 +88,7 @@ export const labelStyle = {
 
 export default function PhoenixModal({ open, onClose, title, children, footer, maxWidth = 680 }) {
   const titleId = useId();
+  const trapRef = useFocusTrap(open);
 
   useEffect(() => {
     if (!open) return;
@@ -116,6 +118,7 @@ export default function PhoenixModal({ open, onClose, title, children, footer, m
       }}
     >
       <div
+        ref={trapRef}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
