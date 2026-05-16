@@ -8,55 +8,35 @@ exactly what's needed.
 
 ## Active items
 
-### Bypass-able admin gating (localStorage roles) — RESOLVED in RBAC Phase B (079/080)
-**Where:** `src/components/shared/useAppSecurity.jsx`,
-`src/hooks/useProjectRole.ts`, migrations `079_user_project_roles`,
-`080_rbac_rls_tightening`.
-**What:** Roles are now read from `user_projects.role` via the SECURITY
-DEFINER `get_my_project_role(uuid)` RPC (Phase B). RLS on
-`drawing_sets`, `drawings`, `drawing_signoffs`, `drawing_zones`,
-`drawing_links`, and `drawing_zone_dependencies` consults
-`user_has_project_role_at_least(project_id, 'admin')` for delete /
-unlock / void / lock-bypass writes. `'owner'` is a synonym for `'admin'`
-(level 3) so the existing 15 owner rows keep their full access.
-LocalStorage roles still exist as a legacy fallback when there's no
-active project (settings, login chrome).
-**Remaining (Phase C):** RESOLVED. `src/pages/ProjectMembers.jsx` ships
-the per-project member-management UI. System admins (gated via
-`<AdminRoute>`) can pick any project, change member roles inline, remove
-members, and add existing users by email. Writes go through
-`base44.entities.UserProject` and are gated at the DB by the existing
-`admins_*` RLS policies on `user_projects` (so even a non-admin who
-bypasses the AdminRoute would 42501 on write).
-
-Phase C deferred items (call out as future sprints):
-  - **Member-activity audit table.** Role changes are not currently
-    logged anywhere — there is no `member_activity` table yet, and the
-    existing `drawing_activity` is the wrong shape for membership
-    events. Add a dedicated table + write a row from the page when
-    role changes / member additions / member removals happen.
-  - **Bulk role edits.** Today every change is one row at a time. A
-    "select N members, set role to X" path would be useful for
-    onboarding a whole subcontractor crew.
-  - **Inviting users by email.** Phase C only allows adding *existing*
-    `user_profiles` rows. Sending an actual email invite needs email
-    infrastructure (Sprint 3 — currently blocked).
-  - **Per-project-admin gate.** The page is wrapped in `<AdminRoute>`
-    (system admin only). The doc-comment in the page calls out the
-    future path: also let `useProjectRole(activeProjectId).role ===
-    'admin' | 'owner'` through, scoped to projects they admin.
-
-### permissions.js usePermissions silent-deny — RESOLVED in RBAC Phase B
-**Where:** `src/services/permissions.js`
-**What:** `fetchUserRole` queried `user_profiles` with
-`.eq("user_id", user.id)`, but the table's PK is `id` (mirrors
-`auth.users.id`). The lookup always returned null, the hook silently
-fell through to `"viewer"`, and `can()` denied every action. Fixed in
-the same sprint as 079/080.
+_No active items currently tracked._
 
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- RBAC Phase C project-member management resolved: migration
+  `20260516012000_resolve_project_members_phase_c.sql` adds the
+  `member_activity` audit table, logs `user_projects` membership adds,
+  role changes, and removals from a database trigger, aligns
+  `user_projects` RLS with both system-admin and per-project-admin
+  management, and gives system admins project-picker read access. The
+  Project Members page now allows system admins and per-project admins
+  through the page-level gate, supports bulk role updates, shows recent
+  member activity, and continues to add only existing `user_profiles`
+  users until email invite infrastructure exists.
+
+- `permissions.js` silent-deny resolved in RBAC Phase B: `fetchUserRole`
+  now looks up `user_profiles.id` instead of the nonexistent
+  `user_profiles.user_id`, so `usePermissions.can()` no longer falls
+  through to `"viewer"` for every authenticated user.
+
+- Bypass-able localStorage admin gating resolved in RBAC Phase B:
+  `src/hooks/useProjectRole.ts` reads per-project roles through the
+  SECURITY DEFINER `get_my_project_role(uuid)` RPC; RLS on protected
+  drawing workflows uses `user_has_project_role_at_least(project_id,
+  'admin')`; and `'owner'` remains a level-3 synonym for `'admin'`.
+  LocalStorage roles remain only as a legacy fallback for screens with no
+  active project.
 
 - AI extraction reconciler scheduling resolved: migration
   `20260516003546_enable_ai_extraction_pg_cron.sql` installs
@@ -106,19 +86,26 @@ the same sprint as 079/080.
   and `npm run typecheck:js` are passing, and CI treats both checks as
   blocking.
 
-- ✅ 3D viewer camera snap-back during zoom — fixed via component-level
-  refs + disable infinityDolly + bump workPackages staleTime.
-- ✅ Drawings stage workflow corrected (Migration 077): Not Started →
-  IFA → OFA → BFA → OFS → IFC → Released.
-- ✅ Thumbnail bug — multi-sheet PDFs now correctly assign pdf_page
+- 3D viewer camera snap-back during zoom fixed via component-level refs,
+  `infinityDolly` disabled, and `workPackages` staleTime increased.
+
+- Drawings stage workflow corrected in migration 077:
+  `Not Started -> IFA -> OFA -> BFA -> OFS -> IFC -> Released`.
+
+- Thumbnail bug fixed: multi-sheet PDFs now correctly assign `pdf_page`
   per drawing.
-- ✅ Submittal-driven workflow source of truth — KPIs, Stage Pipeline,
-  and group headers all read from submittals (not drawings.stage).
-- ✅ Auto-lock trigger re-pointed from `set_approval_status` to
-  submittal terminal-approved status.
-- ✅ Lock + sign-off + markup status (migrations 071/072/073).
-- ✅ Component-rendering test infrastructure — React Testing Library +
-  jsdom wired in (May 2026). Smoke tests for Layout, Drawings, Submittals
-  in `src/__tests__/components/`. Default vitest env stays `node` for the
-  pure-helper suite; component tests opt into jsdom with a
-  `// @vitest-environment jsdom` pragma. See ARCHITECTURE.md → Testing.
+
+- Submittal-driven workflow source of truth resolved: KPIs, Stage
+  Pipeline, and group headers all read from submittals instead of
+  `drawings.stage`.
+
+- Auto-lock trigger re-pointed from `set_approval_status` to submittal
+  terminal-approved status.
+
+- Lock, sign-off, and markup status resolved in migrations 071/072/073.
+
+- Component-rendering test infrastructure added: React Testing Library
+  and jsdom are wired in. Smoke tests for Layout, Drawings, and
+  Submittals live in `src/__tests__/components/`. Default vitest env
+  stays `node` for pure-helper suites; component tests opt into jsdom
+  with `// @vitest-environment jsdom`. See `ARCHITECTURE.md` Testing.

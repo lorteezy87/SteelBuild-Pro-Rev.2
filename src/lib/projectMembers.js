@@ -43,6 +43,14 @@ export function formatRole(role) {
 }
 
 /**
+ * Returns true for roles that can administer a project membership roster.
+ * Mirrors the SQL role level where owner and admin are both level 3.
+ */
+export function isProjectAdminRole(role) {
+  return role === "owner" || role === "admin";
+}
+
+/**
  * Returns true if the membership row's user_id matches the currently
  * logged-in user's id. Used to disable the "remove" button for self
  * (you can demote yourself but you can't kick yourself).
