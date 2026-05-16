@@ -294,6 +294,10 @@ body {
 }
 
 @media (max-width: 900px) {
+  .resource-guru-strip {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
   .field-mobile-console {
     padding-bottom: max(72px, env(safe-area-inset-bottom));
   }
