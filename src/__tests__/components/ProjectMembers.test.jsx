@@ -2,8 +2,7 @@
 /**
  * ProjectMembers smoke test — renders the real page inside a router +
  * QueryClient + ProjectContext stack with an admin user mocked into
- * AuthContext (so AdminRoute lets us through). base44 entity reads
- * are mocked to return empty arrays so the page renders the
+ * AuthContext. base44 entity reads are mocked to return empty arrays so the page renders the
  * "pick a project" empty state without any network traffic.
  *
  * Mirrors the Drawings / Layout smoke-test idiom — proof of life that
@@ -17,9 +16,8 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 
-// AdminRoute calls useAuth(); the page itself also calls useAuth() to
-// figure out who the current user is for the self-edit guard. Mock the
-// hook to return a system admin so we land past the gate.
+// The page calls useAuth() for the system-admin gate and self-edit guard.
+// Mock the hook to return a system admin so we land past the gate.
 vi.mock("@/lib/AuthContext", () => ({
   useAuth: () => ({
     user: { id: "test-admin-id", email: "admin@example.com", role: "admin" },
@@ -61,6 +59,7 @@ vi.mock("@/lib/supabase", () => ({
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
         order: vi.fn(() => chain),
+        limit: vi.fn(() => chain),
         single: vi.fn().mockResolvedValue({ data: null, error: null }),
         then: (resolve) => resolve({ data: [], error: null }),
       };

@@ -15,7 +15,7 @@ export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compa
           colorScheme: 'dark',
           boxSizing: 'border-box',
           ...inputStyle,
-          ...(hasValue ? {} : { opacity: 0.5 }),
+          ...(hasValue ? {} : { opacity: 0.78 }),
         }}
       />
       <button
@@ -23,7 +23,7 @@ export default function DateOrTbdInput({ value, onChange, inputStyle = {}, compa
         onClick={() => onChange('')}
         title={hasValue ? 'Clear date (mark as TBD)' : 'Date is TBD'}
         style={{
-          background: hasValue ? 'transparent' : 'rgba(200,155,32,0.12)',
+          background: hasValue ? (inputStyle.background || 'var(--bg-input)') : 'rgba(200,155,32,0.16)',
           border: hasValue ? '1px solid var(--border-default)' : '1px solid rgba(200,155,32,0.4)',
           borderRadius: compact ? 3 : 4,
           padding: compact ? '1px 5px' : '3px 7px',

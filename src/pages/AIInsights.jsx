@@ -59,6 +59,13 @@ const cardStyle = {
   overflow: "hidden",
 };
 
+const chartFrameStyle = (height) => ({
+  width: "100%",
+  minWidth: 0,
+  height,
+  minHeight: height,
+});
+
 function n(value) {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
@@ -315,6 +322,10 @@ export default function PortfolioOverview() {
     if (!selected) return;
     navigate(`${createPageUrl("Dashboard")}?project=${selected.id}`);
   };
+  const openSelectedWorkPackages = () => {
+    if (!selected) return;
+    navigate(`${createPageUrl("WorkPackages")}?project=${selected.id}`);
+  };
 
   const uploadModelForSelected = async (file) => {
     if (!selected?.id) {
@@ -385,7 +396,7 @@ export default function PortfolioOverview() {
         <MetricCard icon={Truck} label="Late deliveries" value={portfolio.totals.lateDeliveries} sub={`${portfolio.totals.overdueActions} overdue actions`} color={portfolio.totals.lateDeliveries ? RISK_COLORS.risk : RISK_COLORS.healthy} />
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(360px, 0.9fr) minmax(0, 1.1fr)", gap: 16 }}>
+      <section style={{ display: "grid", gridTemplateColumns: "minmax(360px, 0.9fr) minmax(0, 1.1fr)", gap: 16, minWidth: 0 }}>
         <div style={cardStyle}>
           <PanelHeader title="Project Stack Rank" meta="Click a project to drive the model and detail panes" />
           <div style={{ padding: 14, display: "flex", gap: 8, borderBottom: "1px solid var(--border-default)", flexWrap: "wrap" }}>
@@ -428,50 +439,56 @@ export default function PortfolioOverview() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateRows: "minmax(240px, 0.9fr) minmax(220px, 0.8fr)", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateRows: "minmax(240px, 0.9fr) minmax(220px, 0.8fr)", gap: 16, minWidth: 0 }}>
           <div style={cardStyle}>
             <PanelHeader title="Financial Exposure" meta="Budget, committed cost, revised contract" />
-            <ResponsiveContainer width="100%" height="82%">
-              <BarChart data={portfolio.budgetData} margin={{ top: 10, right: 16, bottom: 0, left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
-                <Tooltip {...tooltipStyle} formatter={(value) => formatCurrency(value, 0)} />
-                <Bar dataKey="value" name="Contract" fill="#334155" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="budget" name="Budget" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="committed" name="Committed" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div style={chartFrameStyle(220)}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={160}>
+                <BarChart data={portfolio.budgetData} margin={{ top: 10, right: 16, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={formatCurrencyShort} />
+                  <Tooltip {...tooltipStyle} formatter={(value) => formatCurrency(value, 0)} />
+                  <Bar dataKey="value" name="Contract" fill="#334155" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="budget" name="Budget" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="committed" name="Committed" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, minWidth: 0 }}>
             <div style={cardStyle}>
               <PanelHeader title="Health Mix" meta="Portfolio status" compact />
-              <ResponsiveContainer width="100%" height={170}>
-                <PieChart>
-                  <Pie data={portfolio.healthData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={4}>
-                    {portfolio.healthData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip {...tooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div style={chartFrameStyle(170)}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
+                  <PieChart>
+                    <Pie data={portfolio.healthData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={4}>
+                      {portfolio.healthData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip {...tooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
             <div style={cardStyle}>
               <PanelHeader title="Risk Pulse" meta="8 week pressure" compact />
-              <ResponsiveContainer width="100%" height={170}>
-                <AreaChart data={portfolio.riskTrend} margin={{ top: 10, right: 12, bottom: 0, left: -18 }}>
-                  <defs>
-                    <linearGradient id="riskGradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#ef4444" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="week" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <Tooltip {...tooltipStyle} />
-                  <Area type="monotone" dataKey="risk" stroke="#ef4444" fill="url(#riskGradient)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div style={chartFrameStyle(170)}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
+                  <AreaChart data={portfolio.riskTrend} margin={{ top: 10, right: 12, bottom: 0, left: -18 }}>
+                    <defs>
+                      <linearGradient id="riskGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.45} />
+                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="week" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={false} tickLine={false} />
+                    <Tooltip {...tooltipStyle} />
+                    <Area type="monotone" dataKey="risk" stroke="#ef4444" fill="url(#riskGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -485,6 +502,7 @@ export default function PortfolioOverview() {
         modelDocument={selectedModelDocument}
         onUploadModel={uploadModelForSelected}
         onOpenProject={openSelectedProject}
+        onOpenWorkPackages={openSelectedWorkPackages}
       />
 
       <PlanningStudio
@@ -497,14 +515,16 @@ export default function PortfolioOverview() {
         <ProjectDetailCard project={selected} onOpenProject={openSelectedProject} />
         <div style={cardStyle}>
           <PanelHeader title="Selected Project Risk Shape" meta={selected?.name || "No project"} />
-          <ResponsiveContainer width="100%" height={230}>
-            <RadarChart data={portfolio.radarData}>
-              <PolarGrid stroke="var(--border-default)" />
-              <PolarAngleAxis dataKey="metric" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }} />
-              <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.28} />
-              <Tooltip {...tooltipStyle} />
-            </RadarChart>
-          </ResponsiveContainer>
+          <div style={chartFrameStyle(230)}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+              <RadarChart data={portfolio.radarData}>
+                <PolarGrid stroke="var(--border-default)" />
+                <PolarAngleAxis dataKey="metric" tick={{ fill: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }} />
+                <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.28} />
+                <Tooltip {...tooltipStyle} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
         <div style={cardStyle}>
           <PanelHeader title="Phase Mix" meta="Project count by current phase" />
@@ -696,4 +716,3 @@ const searchInputStyle = {
   fontFamily: "var(--font-body)",
   fontSize: 12,
 };
-

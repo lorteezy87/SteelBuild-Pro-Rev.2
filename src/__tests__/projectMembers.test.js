@@ -14,6 +14,7 @@ import {
   formatRole,
   getRoleOptions,
   isCurrentUser,
+  isProjectAdminRole,
   isValidEmail,
 } from "@/lib/projectMembers";
 
@@ -112,5 +113,19 @@ describe("projectMembers — isValidEmail", () => {
     expect(isValidEmail(null)).toBe(false);
     expect(isValidEmail(undefined)).toBe(false);
     expect(isValidEmail(123)).toBe(false);
+  });
+});
+
+describe("projectMembers - isProjectAdminRole", () => {
+  it("treats owner and admin as project administrators", () => {
+    expect(isProjectAdminRole("owner")).toBe(true);
+    expect(isProjectAdminRole("admin")).toBe(true);
+  });
+
+  it("does not elevate standard project roles", () => {
+    expect(isProjectAdminRole("pm")).toBe(false);
+    expect(isProjectAdminRole("field")).toBe(false);
+    expect(isProjectAdminRole("viewer")).toBe(false);
+    expect(isProjectAdminRole(null)).toBe(false);
   });
 });

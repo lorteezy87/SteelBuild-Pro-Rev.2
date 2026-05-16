@@ -40,9 +40,9 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
 
 // -- Ghost placeholder data for empty state --
 const GHOST_RESOURCES = [
-  { name: "Welding Team A", type: "Labor", role: "CWI / Fitter", hours: "320h budget" },
-  { name: "Trucking Fleet", type: "Equipment", role: "Flatbed / Lowboy", hours: "160h budget" },
-  { name: "Ironworkers Local 86", type: "Subcontractor", role: "Erection Crew", hours: "480h budget" },
+  { name: "Jordan Lee", type: "Person", role: "Foreman", hours: "40h capacity" },
+  { name: "Erection Crew A", type: "Crew", role: "Ironworkers", hours: "320h capacity" },
+  { name: "Bay 3 Crane", type: "Bay", role: "Shop equipment", hours: "160h capacity" },
 ];
 
 export default function ResourceManagement() {
@@ -93,8 +93,11 @@ export default function ResourceManagement() {
 
   const stats = {
     total: resources.length,
+    people: resources.filter((r) => r.resource_type === "Person").length,
+    crews: resources.filter((r) => r.resource_type === "Crew").length,
     labor: resources.filter((r) => r.resource_type === "Labor").length,
     equipment: resources.filter((r) => r.resource_type === "Equipment").length,
+    bays: resources.filter((r) => r.resource_type === "Bay").length,
     subcontractor: resources.filter((r) => r.resource_type === "Subcontractor").length,
     material: resources.filter((r) => r.resource_type === "Material").length,
     available: resources.filter((r) => getStatus(r) === "Available").length,
@@ -179,7 +182,7 @@ export default function ResourceManagement() {
             metadata: {
               ...(metadata || {}),
               synced_from_library: true,
-              source_library_resource_id: id,
+              source_library_resource_id: _id,
               synced_at: new Date().toISOString(),
             },
           };
@@ -208,8 +211,8 @@ export default function ResourceManagement() {
     onError: (e) => toast.error(`Sync failed: ${e?.message || "Unknown error"}`),
   });
 
-  const types = ["Labor", "Equipment", "Subcontractor", "Material"];
-  const statuses = ["Available", "Allocated", "Over-Allocated", "On Leave"];
+  const types = ["Person", "Crew", "Labor", "Equipment", "Bay", "Subcontractor", "Material"];
+  const statuses = ["Available", "Partially Available", "Committed", "Allocated", "Over-Allocated", "On Leave", "Unavailable"];
 
   const isEmpty = resources.length === 0;
 
@@ -217,7 +220,7 @@ export default function ResourceManagement() {
     <OperationsPageShell
       eyebrow={selectedProject ? selectedProject.name : "All Projects"}
       title="Resource Management"
-      subtitle="Manage labor, equipment, subcontractors, material resources, project availability, and company library sync in one operational register."
+      subtitle="Manage people, crews, equipment, subcontractors, project availability, and company library sync in one operational register."
       meta={[
         { label: "Showing", value: filtered.length },
         { label: "Available", value: stats.available, color: "var(--status-success)" },
@@ -225,9 +228,9 @@ export default function ResourceManagement() {
         { label: "Over-Allocated", value: stats.overAllocated, color: stats.overAllocated > 0 ? "var(--status-error)" : "var(--status-success)" },
       ]}
       metrics={[
-        { label: "Total Resources", value: stats.total, sub: `${stats.labor} labor · ${stats.equipment} equipment`, color: "var(--accent)" },
-        { label: "Subcontractors", value: stats.subcontractor, sub: "External crews", color: "var(--phase-detailing)" },
-        { label: "Material", value: stats.material, sub: "Tracked supply resources", color: "var(--status-warning)" },
+        { label: "Total Resources", value: stats.total, sub: `${stats.people} people / ${stats.crews} crews`, color: "var(--accent)" },
+        { label: "Labor Pool", value: stats.people + stats.crews + stats.labor, sub: "People, crews, labor", color: "var(--phase-fabrication)" },
+        { label: "Equipment", value: stats.equipment + stats.bays, sub: "Equipment and bays", color: "var(--status-warning)" },
         { label: "Over-Allocated", value: stats.overAllocated, sub: "Needs rebalance", color: stats.overAllocated > 0 ? "var(--status-error)" : "var(--status-success)" },
       ]}
       actions={(
@@ -256,12 +259,21 @@ export default function ResourceManagement() {
         <KpiTile compact label="Total"          value={stats.total}           color="var(--accent)"
                  active={filterType === "all" && filterStatus === "all"}
                  onClick={() => { setFilterType("all"); setFilterStatus("all"); }} />
+        <KpiTile compact label="People"         value={stats.people}          color="var(--accent)"
+                 active={filterType === "Person"}
+                 onClick={() => setFilterType(filterType === "Person" ? "all" : "Person")} />
+        <KpiTile compact label="Crews"          value={stats.crews}           color="var(--phase-erection)"
+                 active={filterType === "Crew"}
+                 onClick={() => setFilterType(filterType === "Crew" ? "all" : "Crew")} />
         <KpiTile compact label="Labor"          value={stats.labor}           color="var(--phase-fabrication)"
                  active={filterType === "Labor"}
                  onClick={() => setFilterType(filterType === "Labor" ? "all" : "Labor")} />
         <KpiTile compact label="Equipment"      value={stats.equipment}       color="var(--status-warning)"
                  active={filterType === "Equipment"}
                  onClick={() => setFilterType(filterType === "Equipment" ? "all" : "Equipment")} />
+        <KpiTile compact label="Bays"           value={stats.bays}            color="var(--phase-delivery)"
+                 active={filterType === "Bay"}
+                 onClick={() => setFilterType(filterType === "Bay" ? "all" : "Bay")} />
         <KpiTile compact label="Subs"           value={stats.subcontractor}   color="var(--phase-detailing)"
                  active={filterType === "Subcontractor"}
                  onClick={() => setFilterType(filterType === "Subcontractor" ? "all" : "Subcontractor")} />

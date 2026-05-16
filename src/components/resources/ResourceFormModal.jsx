@@ -13,7 +13,7 @@ function fromEntity(e) {
   return {
     project_id: e.project_id || "",
     name: e.name || "",
-    resource_type: e.resource_type || "Labor",
+    resource_type: e.resource_type || "Person",
     role: e.role || "",
     budget_hours: e.capacity ?? "",
     actual_hours: meta.actual_hours ?? "0",
@@ -50,7 +50,7 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
     editing ? fromEntity(editing) : {
       project_id: projectId,
       name: "",
-      resource_type: "Labor",
+      resource_type: "Person",
       role: "",
       budget_hours: "",
       actual_hours: "0",
@@ -128,11 +128,13 @@ export default function ResourceFormModal({ projectId, editing, onClose, onSave 
             <div>
               <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Type</label>
               <select value={formData.resource_type} onChange={(e) => setFormData({ ...formData, resource_type: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
+                <option value="Person">Person</option>
+                <option value="Crew">Crew</option>
                 <option value="Labor">Labor</option>
                 <option value="Equipment">Equipment</option>
+                <option value="Bay">Bay</option>
                 <option value="Subcontractor">Subcontractor</option>
                 <option value="Material">Material</option>
-                <option value="Crew">Crew</option>
               </select>
             </div>
             <div>

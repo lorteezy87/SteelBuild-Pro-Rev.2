@@ -77,12 +77,23 @@ function getStatusColor(status, progress = 0) {
 // re-enable depth writes, and double-side so back-faces aren't dropped.
 // We also run this on every tile streaming update because @thatopen/fragments
 // builds new BIMMesh tiles asynchronously after load() resolves.
+function materialList(material) {
+  if (!material) return [];
+  return Array.isArray(material) ? material.filter(Boolean) : [material];
+}
+
+function isRenderableMesh(child) {
+  if (!child?.isMesh) return false;
+  const position = child.geometry?.attributes?.position;
+  return Boolean(position?.array && typeof position.count === "number" && position.count > 0);
+}
+
 function normalizeMaterials(root) {
-  if (!root) return;
+  if (!root?.traverse) return;
   const seen = new WeakSet();
   root.traverse((child) => {
     if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    const mats = materialList(child.material);
     for (const m of mats) {
       if (!m || seen.has(m)) continue;
       seen.add(m);
@@ -112,8 +123,9 @@ const DEFAULT_STEEL_COLOR = new THREE.Color(0.45, 0.52, 0.58); // blue-grey stee
 const GREY_THRESHOLD = 0.08; // how close r/g/b must be to count as "grey"
 
 function isUncoloredMaterial(mat) {
-  if (!mat || !mat.color) return true;
+  if (!mat?.color) return true;
   const { r, g, b } = mat.color;
+  if (![r, g, b].every(Number.isFinite)) return true;
   const avg = (r + g + b) / 3;
   if (avg < 0.05 || avg > 0.95) return true;
   const spread = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
@@ -124,12 +136,12 @@ function isUncoloredMaterial(mat) {
 // (near-black, near-white, or pure grey). Called during model load before
 // status-based coloring so the baseline isn't white/black ghosts.
 function applyDefaultSteelColor(root) {
-  if (!root) return;
+  if (!root?.traverse) return;
   root.traverse((child) => {
     if (!child.isMesh) return;
-    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    const mats = materialList(child.material);
     for (const mat of mats) {
-      if (mat && isUncoloredMaterial(mat)) {
+      if (mat?.color?.copy && isUncoloredMaterial(mat)) {
         mat.color.copy(DEFAULT_STEEL_COLOR);
         mat.needsUpdate = true;
       }
@@ -138,6 +150,7 @@ function applyDefaultSteelColor(root) {
 }
 
 function applyStatusBasedColor(root, workPackages, currentMembers = []) {
+  if (!root?.traverse) return;
   root.traverse((child) => {
     if (!child.isMesh) return;
 
@@ -145,18 +158,18 @@ function applyStatusBasedColor(root, workPackages, currentMembers = []) {
     const memberData = currentMembers.find(m => m.mesh === child);
     if (memberData?.workPackage) {
       const statusColor = getStatusColor(memberData.workPackage.status, memberData.workPackage.percent_complete);
-      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      const mats = materialList(child.material);
       for (const mat of mats) {
-        if (mat && mat.color) {
+        if (mat?.color?.setStyle) {
           mat.color.setStyle(statusColor);
           mat.needsUpdate = true;
         }
       }
     } else if (isUncoloredMaterial(child.material)) {
       // Apply default steel color for uncolored, unlinked elements
-      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      const mats = materialList(child.material);
       for (const mat of mats) {
-        if (mat) {
+        if (mat?.color?.copy) {
           mat.color.copy(DEFAULT_STEEL_COLOR);
           mat.needsUpdate = true;
         }
@@ -866,7 +879,7 @@ export default function ModelViewer() {
       const extracted = [];
       let idx = 0;
       model.traverse((child) => {
-        if (child.isMesh) {
+        if (isRenderableMesh(child)) {
           const name = child.name || `Element ${idx + 1}`;
           const type = inferType(name);
           extracted.push({ id: idx, name, type, color: TYPE_COLORS[type], mesh: child });
@@ -937,9 +950,13 @@ export default function ModelViewer() {
       try {
         model.onViewUpdated?.add?.(() => {
           if (modelObject) {
-            normalizeMaterials(modelObject);
-            applyDefaultSteelColor(modelObject);
-            enableShadows(modelObject);
+            try {
+              normalizeMaterials(modelObject);
+              applyDefaultSteelColor(modelObject);
+              enableShadows(modelObject);
+            } catch (e) {
+              console.warn("Model tile material update skipped", e);
+            }
           }
         });
       } catch (e) { console.warn("onViewUpdated hook failed", e); }
@@ -960,7 +977,7 @@ export default function ModelViewer() {
 
       const traverseTarget = modelObject || world.scene.three;
       traverseTarget.traverse((child) => {
-        if (child.isMesh) {
+        if (isRenderableMesh(child)) {
           const name = child.name || `Element ${idx + 1}`;
           const type = inferType(name);
           const workPackage = matchElementToWorkPackage(name, workPackages);
@@ -995,12 +1012,17 @@ export default function ModelViewer() {
       // so the detach was a no-op and the listener stayed attached forever.
       let didFitOnce = false;
       const tryFit = () => {
-        if (!modelObject) return false;
-        const box = new THREE.Box3().setFromObject(modelObject);
-        if (box.isEmpty()) return false;
-        normalizeMaterials(modelObject);
-        applyStatusBasedColor(modelObject, workPackages);
-        enableShadows(modelObject);
+        try {
+          if (!modelObject) return false;
+          const box = new THREE.Box3().setFromObject(modelObject);
+          if (box.isEmpty()) return false;
+          normalizeMaterials(modelObject);
+          applyStatusBasedColor(modelObject, workPackages);
+          enableShadows(modelObject);
+        } catch (e) {
+          console.warn("Model tile update skipped", e);
+          return false;
+        }
         // One-shot — bounded box exists, fit + capture only the first time.
         // Material/shadow re-apply still runs on every call so freshly
         // streamed tiles get the correct steel colour without re-zooming.
@@ -1019,7 +1041,7 @@ export default function ModelViewer() {
         const fresh = [];
         let i = 0;
         modelObject.traverse((child) => {
-          if (child.isMesh) {
+          if (isRenderableMesh(child)) {
             const name = child.name || `Element ${i + 1}`;
             const type = inferType(name);
             const workPackage = matchElementToWorkPackage(name, workPackages);
@@ -1210,7 +1232,19 @@ export default function ModelViewer() {
       caster.setFromCamera(ndc, world.camera.three);
 
       const root = loadedModelRef.current || world.scene.three;
-      const hits = caster.intersectObject(root, true).filter((h) => h.object.isMesh && h.object.visible);
+      const pickTargets = [];
+      root.traverse?.((object) => {
+        if (object.visible && isRenderableMesh(object)) pickTargets.push(object);
+      });
+      if (pickTargets.length === 0) return;
+
+      let hits = [];
+      try {
+        hits = caster.intersectObjects(pickTargets, false).filter((h) => h.object.isMesh && h.object.visible);
+      } catch (e) {
+        console.warn("Model pick skipped", e);
+        return;
+      }
       if (hits.length === 0) return;
       const hit = hits[0];
 

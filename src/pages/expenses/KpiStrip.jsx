@@ -15,12 +15,18 @@ const kpiGlow = (active, borderColor = "var(--accent)") =>
   active
     ? {
         cursor: "pointer",
-        border: `1px solid ${borderColor}`,
+        borderTopColor: borderColor,
+        borderRightColor: borderColor,
+        borderBottomColor: borderColor,
+        borderLeftColor: borderColor,
         boxShadow: `0 0 18px color-mix(in srgb, ${borderColor} 20%, transparent), 0 0 36px color-mix(in srgb, ${borderColor} 8%, transparent)`,
       }
     : {
         cursor: "pointer",
-        border: "1px solid var(--border-default)",
+        borderTopColor: borderColor,
+        borderRightColor: "var(--border-default)",
+        borderBottomColor: "var(--border-default)",
+        borderLeftColor: "var(--border-default)",
         boxShadow: "var(--shadow-card)",
       };
 
@@ -131,7 +137,14 @@ function Tile({ onClick, active, borderColor, children }) {
       className="sbd-kpi"
       style={{
         padding: "14px 16px 12px",
-        borderTop: `2px solid ${borderColor}`,
+        borderTopWidth: 2,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 1,
+        borderTopStyle: "solid",
+        borderRightStyle: "solid",
+        borderBottomStyle: "solid",
+        borderLeftStyle: "solid",
         transition: "all 0.15s",
         position: "relative",
         ...kpiGlow(active, borderColor),

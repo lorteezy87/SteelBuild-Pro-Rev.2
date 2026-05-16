@@ -46,16 +46,16 @@ export default function CostCodeFormModal({ open, onClose, onSave, costCode, pro
       }
     }
 
+    const selectedCostCodeMeta = COST_CODES.find((c) => c.code === selectedCode);
     const data = {
       ...form,
       cost_code_number: selectedCode,
-      description: COST_CODES.find((c) => c.code === selectedCode)?.name || "",
-      phase: COST_CODES.find((c) => c.code === selectedCode)?.category || form.phase,
+      description: selectedCostCodeMeta?.name || form.description || "",
+      phase: selectedCostCodeMeta?.category || form.phase || "Materials",
       budget_amount: Number(form.budget_amount) || 0,
       actual_cost: Number(form.actual_cost) || 0,
       committed_cost: Number(form.committed_cost) || 0,
       forecast_to_complete: Number(form.forecast_to_complete) || 0,
-      phase: form.phase || "Materials"
     };
     const proj = projects.find((p) => p.id === form.project_id);
     if (proj) data.project_name = proj.name;

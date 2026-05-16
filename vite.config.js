@@ -8,7 +8,7 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  logLevel: 'error',
+  logLevel: 'info',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

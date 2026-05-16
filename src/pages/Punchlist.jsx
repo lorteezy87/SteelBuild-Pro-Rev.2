@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile, ProgressBar, BulkActionBar } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 
 export default function Punchlist() {
   const projectId = useProjectId();
@@ -23,6 +24,11 @@ export default function Punchlist() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [closeoutOpen, setCloseoutOpen] = useState(false);
   const [closeoutSignature, setCloseoutSignature] = useState("");
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setShowForm(true);
+  });
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);

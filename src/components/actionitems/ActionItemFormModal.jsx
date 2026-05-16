@@ -90,10 +90,24 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
 
   const field = (key, value) => setFormData(prev => ({ ...prev, [key]: value }));
 
+  const modalStyle = {
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: "var(--radius-card)",
+    boxShadow: "0 24px 60px rgba(0,0,0,0.65)",
+    maxWidth: 640,
+    width: "90%",
+    maxHeight: "90vh",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+
   const inputStyle = {
-    width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)",
+    width: "100%", background: "var(--bg-surface-high)", border: "1px solid var(--border-strong)",
     borderRadius: 8, padding: "8px 12px", color: "var(--text-primary)",
     fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   };
 
   const labelStyle = {
@@ -106,7 +120,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", maxWidth: 640, width: "90%", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={modalStyle}>
         {/* Header */}
         <div style={{ padding: "18px 24px 12px", borderBottom: "1px solid var(--divider)", flexShrink: 0 }}>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.10em" }}>
@@ -118,7 +132,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
         </div>
 
         {/* Body */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 24px", flex: 1, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "16px 24px", flex: 1, overflowY: "auto", background: "var(--bg-surface)" }}>
 
           {/* Title — full width, auto-focused */}
           <div>
@@ -224,7 +238,7 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "10px 24px", borderTop: "1px solid var(--divider)", display: "flex", gap: 8, justifyContent: "flex-end", background: "var(--bg-surface)", flexShrink: 0 }}>
+        <div style={{ padding: "10px 24px", borderTop: "1px solid var(--divider)", display: "flex", gap: 8, justifyContent: "flex-end", background: "var(--bg-elevated)", flexShrink: 0 }}>
           <button type="button" onClick={onClose} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 16px", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Cancel
           </button>

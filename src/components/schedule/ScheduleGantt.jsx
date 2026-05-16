@@ -7,6 +7,7 @@ import {
   MIN_YEAR,
   MAX_YEAR,
   parseDateUTC,
+  toDateOnly,
   fmtDate,
   calcDuration,
 } from "./scheduleDateUtils";
@@ -41,6 +42,18 @@ const DELIVERY_STATUS_DOT = {
 const ROW_H   = 40;
 const SUM_H   = 36;
 const HEAD_H  = 40;
+const TASK_DRAG_THRESHOLD_PX = 4;
+
+function addDaysUTC(date, days) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function shiftDateOnly(input, days) {
+  const date = parseDateUTC(input);
+  return date ? toDateOnly(addDaysUTC(date, days)) : null;
+}
 
 // Column widths are now user-adjustable via drag handles on each header.
 // TASK NAME is "flex" (takes remaining space) — represented as 0 in the
@@ -227,6 +240,10 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [showLegend, setShowLegend] = useState(true);
   const [bodyViewport, setBodyViewport] = useState({ scrollTop: 0, height: 720 });
+  const [taskDrag, setTaskDrag] = useState(null);
+  const taskDragRef = useRef(null);
+  const suppressTaskClickRef = useRef(false);
+  const dragBodyStyleRef = useRef(null);
 
   useEffect(() => {
     if (!externalFocus?.filter) return;
@@ -766,6 +783,121 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
   const dayCount = Math.ceil((dateRange.end - dateRange.start) / 86400000);
   const PX_PER_DAY = WEEK_PX / 7;
   const totalW = Math.max(dayCount * PX_PER_DAY, dateRange.weeks.length * WEEK_PX);
+
+  const updateTaskDrag = (nextOrUpdater) => {
+    setTaskDrag((prev) => {
+      const next = typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater;
+      taskDragRef.current = next;
+      return next;
+    });
+  };
+
+  const restoreTaskDragBodyStyle = () => {
+    const prior = dragBodyStyleRef.current;
+    if (!prior) return;
+    document.body.style.cursor = prior.cursor;
+    document.body.style.userSelect = prior.userSelect;
+    dragBodyStyleRef.current = null;
+  };
+
+  const startTaskBarDrag = (event, task, visibleStart, visibleEnd) => {
+    if (!onSave || saving || !isActionableScheduleTask(task)) return;
+    if (event.button != null && event.button !== 0) return;
+
+    const storedStart = parseDateUTC(task.start_date);
+    const storedEnd = parseDateUTC(task.end_date);
+    const displayStart = parseDateUTC(visibleStart);
+    const displayEnd = parseDateUTC(visibleEnd);
+    if (!storedStart || !storedEnd || !displayStart || !displayEnd) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressTaskClickRef.current = false;
+    setTooltip(null);
+    dragBodyStyleRef.current = {
+      cursor: document.body.style.cursor,
+      userSelect: document.body.style.userSelect,
+    };
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+
+    updateTaskDrag({
+      taskId: task.id,
+      taskName: sanitizeTaskName(task),
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      storedStart,
+      storedEnd,
+      displayStart,
+      displayEnd,
+      daysDelta: 0,
+      hasMoved: false,
+    });
+  };
+
+  useEffect(() => {
+    if (!taskDrag?.taskId) return undefined;
+
+    const onMove = (event) => {
+      const current = taskDragRef.current;
+      if (!current) return;
+      const dx = event.clientX - current.startX;
+      const dy = event.clientY - current.startY;
+      const daysDelta = Math.round(dx / PX_PER_DAY);
+      const hasMoved = current.hasMoved ||
+        Math.abs(dx) >= TASK_DRAG_THRESHOLD_PX ||
+        Math.abs(dy) >= TASK_DRAG_THRESHOLD_PX;
+      updateTaskDrag((prev) => prev ? {
+        ...prev,
+        x: event.clientX,
+        y: event.clientY,
+        daysDelta,
+        hasMoved,
+      } : prev);
+      if (hasMoved) suppressTaskClickRef.current = true;
+    };
+
+    const onUp = async () => {
+      const current = taskDragRef.current;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      restoreTaskDragBodyStyle();
+      updateTaskDrag(null);
+      if (!current?.hasMoved || current.daysDelta === 0 || !onSave) return;
+
+      const nextStart = toDateOnly(addDaysUTC(current.storedStart, current.daysDelta));
+      const nextEnd = toDateOnly(addDaysUTC(current.storedEnd, current.daysDelta));
+      if (!nextStart || !nextEnd) return;
+
+      setSaving(true);
+      try {
+        await onSave({
+          id: current.taskId,
+          start_date: nextStart,
+          end_date: nextEnd,
+        });
+      } catch {
+        // The parent onSave path owns the visible failure toast.
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      restoreTaskDragBodyStyle();
+    };
+    // Rebind only when a new row begins dragging or the current zoom changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskDrag?.taskId, PX_PER_DAY, onSave]);
 
   // Stats: one pass over the visible schedule model. This keeps filter/search
   // changes responsive on large imported schedules.
@@ -2159,12 +2291,19 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 const baseBg = overdue ? "rgba(239,68,68,0.04)" : critical ? "rgba(245,158,11,0.04)" : zebra ? "var(--hover-bg)" : parentBg;
                 const hoverBg = `${GANTT_STATUS_HEX.inProgress}12`;
                 const focusedBg = `${GANTT_STATUS_HEX.inProgress}20`;
+                const handleTaskRowClick = () => {
+                  if (suppressTaskClickRef.current) {
+                    suppressTaskClickRef.current = false;
+                    return;
+                  }
+                  onTaskClick?.(task);
+                };
                 if (!task.start_date || !task.end_date) {
                   const tbdLeft = px(today.toISOString().slice(0, 10));
                   return (
                     <div key={`gr-${task.id}`}
                       style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
-                      onClick={() => onTaskClick && onTaskClick(task)}
+                      onClick={handleTaskRowClick}
                       onMouseEnter={() => setHoveredRowId(task.id)}
                       onMouseLeave={() => setHoveredRowId(null)}
                     >
@@ -2194,21 +2333,59 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                 }
                 const taskEffS = effStart(task);
                 const taskEffE = effEnd(task);
+                const isDraggingTask = taskDrag?.taskId === task.id;
+                const dragDays = isDraggingTask ? taskDrag.daysDelta : 0;
+                const displayStart = dragDays ? shiftDateOnly(taskEffS, dragDays) : taskEffS;
+                const displayEnd = dragDays ? shiftDateOnly(taskEffE, dragDays) : taskEffE;
+                const barLeft = px(displayStart);
+                const barWidth = spanPx(displayStart, displayEnd);
+                const canDragTaskBar = Boolean(onSave && !saving && isActionableScheduleTask(task));
+                const isMilestone = isMilestoneTask(task);
+                const dragTargetLeft = isMilestone ? barLeft - 12 : barLeft;
+                const dragTargetWidth = isMilestone ? 24 : Math.max(barWidth, 18);
                 return (
                   <div key={`gr-${task.id}`}
-                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
-                    onClick={() => onTaskClick && onTaskClick(task)}
-                    onMouseEnter={e => { setHoveredRowId(task.id); setTooltip({ task, x: e.clientX, y: e.clientY }); }}
-                    onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                    style={{ position: "absolute", top: rowTop, left: 0, right: 0, height: ROW_H, borderBottom: "1px solid var(--divider)", background: isFocused ? focusedBg : hovered ? hoverBg : baseBg, cursor: canDragTaskBar ? (isDraggingTask ? "grabbing" : "grab") : "pointer", transition: "background 0.08s", boxShadow: isFocused ? `inset 0 0 0 1px ${GANTT_STATUS_HEX.inProgress}55` : "none" }}
+                    onClick={handleTaskRowClick}
+                    onMouseEnter={e => { setHoveredRowId(task.id); if (!taskDrag) setTooltip({ task, x: e.clientX, y: e.clientY }); }}
+                    onMouseMove={e => { if (!taskDrag) setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null); }}
                     onMouseLeave={() => { setHoveredRowId(null); setTooltip(null); }}
                   >
                     {task._hasChildren ? (
-                      <SummaryBar phase={row.phase} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} pctComplete={task.percent_complete || 0} />
+                      <SummaryBar phase={row.phase} leftPx={barLeft} widthPx={barWidth} pctComplete={task.percent_complete || 0} />
                     ) : (
-                      <TaskBar task={task} leftPx={px(taskEffS)} widthPx={spanPx(taskEffS, taskEffE)} />
+                      <>
+                        <TaskBar task={task} leftPx={barLeft} widthPx={barWidth} />
+                        {canDragTaskBar && (
+                          <div
+                            title="Drag to move this task's start and finish dates"
+                            role="button"
+                            aria-label={`Drag ${sanitizeTaskName(task)} to move start and finish dates`}
+                            onPointerDown={(event) => startTaskBarDrag(event, task, taskEffS, taskEffE)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleTaskRowClick();
+                            }}
+                            style={{
+                              position: "absolute",
+                              left: dragTargetLeft,
+                              width: dragTargetWidth,
+                              height: 26,
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              cursor: isDraggingTask ? "grabbing" : "grab",
+                              zIndex: 9,
+                              touchAction: "none",
+                              borderRadius: 6,
+                              background: isDraggingTask ? "rgba(255,255,255,0.08)" : "transparent",
+                              boxShadow: isDraggingTask ? "0 0 0 1px rgba(255,255,255,0.22) inset" : "none",
+                            }}
+                          />
+                        )}
+                      </>
                     )}
                     {/* Detailing stage-gate milestones — color-coded
-                        diamonds (OFA / BFA / FFF / Released) overlayed
+                        diamonds (IFA / OFA / BFA / OFS / IFC / Released) overlayed
                         on the task bar at each filled date. Purely
                         decorative; bar placement comes from the
                         derived start/end. Component short-circuits
@@ -2240,6 +2417,30 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
           panel + subtle inner border) so the hover card matches the
           rest of the SteelBuild dark theme instead of the flat
           background-surface previous version. */}
+      {taskDrag?.hasMoved && (
+        <div
+          className="sbd-card-strong"
+          style={{
+            position: "fixed",
+            left: taskDrag.x + 12,
+            top: taskDrag.y - 12,
+            zIndex: 10000,
+            padding: "8px 10px",
+            pointerEvents: "none",
+            borderRadius: 7,
+            boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+            minWidth: 220,
+          }}
+        >
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>
+            {taskDrag.taskName}
+          </div>
+          <div className="sbd-num" style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.04em" }}>
+            {taskDrag.daysDelta > 0 ? "+" : ""}{taskDrag.daysDelta}d | {fmtDate(addDaysUTC(taskDrag.displayStart, taskDrag.daysDelta))} - {fmtDate(addDaysUTC(taskDrag.displayEnd, taskDrag.daysDelta))}
+          </div>
+        </div>
+      )}
+
       {tooltip && (
         <div className="sbd-card-strong" style={{
           position: "fixed",
