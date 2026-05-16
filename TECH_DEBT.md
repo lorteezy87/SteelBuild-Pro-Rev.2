@@ -8,31 +8,6 @@ exactly what's needed.
 
 ## Active items
 
-### `schedule-assistant` edge function bypasses the LLM gateway
-**Where:** `supabase/functions/schedule-assistant/` (separate edge
-function), routing key `schedule-assist` exists in
-`supabase/functions/llm-proxy/router.ts` but is currently un-wired.
-**What:** Phase 1 of the LLM gateway (migration 081 +
-`llm_telemetry`) instrumented every other AI caller in the codebase
-— `analyzeDrawing`, `compareRevisions`, `pdfSheetExtractor`,
-`aiSuggest`, `importShippingTicket`, `importRfiLog`,
-`FileUploadWithOCR`. The schedule-assistant edge function still has
-its own direct Anthropic call path and does NOT write to
-`llm_telemetry`.
-**Impact:** Token usage, cost, and latency for the schedule
-assistant feature do not show up on any dashboard built from
-`llm_telemetry`. Routing decisions for this caller cannot be made
-centrally; provider switches require editing the schedule-assistant
-edge function directly.
-**Fix:** Consolidate the schedule-assistant function so it calls
-`llm-proxy` internally (or replace its body with a forward to
-`llm-proxy` with `useCase: "schedule-assist"`). The routing key is
-already in `ROUTING_TABLE` and pinned by the
-`schedule-assist` test in `src/__tests__/llmGateway.test.ts`, so
-the wiring change is isolated to the edge function code itself.
-This is a separate sprint — not blocking the Phase 1 telemetry
-rollout.
-
 ### Bypass-able admin gating (localStorage roles) — RESOLVED in RBAC Phase B (079/080)
 **Where:** `src/components/shared/useAppSecurity.jsx`,
 `src/hooks/useProjectRole.ts`, migrations `079_user_project_roles`,
@@ -172,6 +147,13 @@ important lives only there.
 ---
 
 ## Recently-resolved (last 30 days, kept here for context)
+
+- `schedule-assistant` LLM gateway bypass resolved: the edge function
+  now keeps JWT verification, RLS-scoped schedule tool execution, and
+  `ai_audit_log` writes locally, but routes every model turn through
+  `llm-proxy` with `useCase: "schedule-assist"`. Token usage, latency,
+  cost, and failures are now visible through `llm_telemetry`, and
+  provider/model changes live in `supabase/functions/llm-proxy/router.ts`.
 
 - Supabase generated types / typecheck drift resolved: `npm run typecheck`
   and `npm run typecheck:js` are passing, and CI treats both checks as

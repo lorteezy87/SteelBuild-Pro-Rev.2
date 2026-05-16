@@ -58,10 +58,10 @@ describe("router.getProviderForUseCase", () => {
     }
   });
 
-  it("schedule-assist row exists and points at Anthropic Sonnet (forward-looking)", () => {
-    // schedule-assistant is NOT instrumented in Phase 1 (TECH_DEBT.md
-    // tracks the consolidation), but the routing key must already exist
-    // so future callers can pass it without erroring.
+  it("routes schedule-assist to Anthropic Sonnet", () => {
+    // schedule-assistant keeps its local schedule tools, but its model
+    // calls use this route so telemetry and provider switches stay
+    // centralized in llm-proxy.
     expect(getProviderForUseCase("schedule-assist")).toEqual({
       provider: "anthropic",
       model: "claude-sonnet-4-5",
