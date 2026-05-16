@@ -19,6 +19,32 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-radix': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-toast',
+          ],
+          'vendor-charts': ['recharts'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-pdf': ['jspdf', 'pdfjs-dist'],
+          'vendor-xlsx': ['xlsx'],
+        },
+      },
+    },
+  },
   optimizeDeps: {
     // Exclude web-ifc from Vite's dependency pre-bundling to avoid
     // circular-reference errors ("Cannot access 'Ct' before initialization")

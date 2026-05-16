@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "../components/shared/ProjectContext";
@@ -511,25 +512,16 @@ export default function Submittals() {
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
           {/* List */}
-          <div style={{ flex: 1, overflowY: "auto", borderRight: "1px solid var(--divider)" }}>
-            {isLoading ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>Loading…</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                {rows.length === 0 ? "No submittals yet. Click NEW SUBMITTAL to log one." : "No submittals match the current filters."}
-              </div>
-            ) : filtered.map((r) => (
-              <SubmittalRow
-                key={r.id}
-                row={r}
-                selected={r.id === selectedId}
-                checked={selectedIds.has(r.id)}
-                onToggle={() => toggleSelect(r.id)}
-                onClick={() => setSelectedId(r.id)}
-                drawingSetsById={drawingSetsById}
-              />
-            ))}
-          </div>
+          <SubmittalVirtualList
+            filtered={filtered}
+            isLoading={isLoading}
+            rows={rows}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            toggleSelect={toggleSelect}
+            setSelectedId={setSelectedId}
+            drawingSetsById={drawingSetsById}
+          />
 
           {/* Detail panel */}
           <SubmittalDetail
@@ -672,6 +664,69 @@ export default function Submittals() {
           </DialogContent>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+// ── Virtual list wrapper ───────────────────────────────────────────────
+
+function SubmittalVirtualList({ filtered, isLoading, rows, selectedId, selectedIds, toggleSelect, setSelectedId, drawingSetsById }) {
+  const parentRef = useRef(null);
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  });
+
+  if (isLoading) {
+    return (
+      <div style={{ flex: 1, overflowY: "auto", borderRight: "1px solid var(--divider)" }}>
+        <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <div style={{ flex: 1, overflowY: "auto", borderRight: "1px solid var(--divider)" }}>
+        <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+          {rows.length === 0 ? "No submittals yet. Click NEW SUBMITTAL to log one." : "No submittals match the current filters."}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={parentRef} style={{ flex: 1, overflowY: "auto", borderRight: "1px solid var(--divider)" }}>
+      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const r = filtered[virtualRow.index];
+          return (
+            <div
+              key={r.id}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
+            >
+              <SubmittalRow
+                row={r}
+                selected={r.id === selectedId}
+                checked={selectedIds.has(r.id)}
+                onToggle={() => toggleSelect(r.id)}
+                onClick={() => setSelectedId(r.id)}
+                drawingSetsById={drawingSetsById}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

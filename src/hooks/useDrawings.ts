@@ -53,9 +53,9 @@ export function useDrawings(projectId: string | null | undefined) {
     refetch,
   } = useQuery<Drawing[]>({
     queryKey,
-    queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.Drawing.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   // ── Derived: group by set name ──────────────────────────────────────

@@ -37,11 +37,16 @@ export function AiSuggestModal({ zone, sheet, existingItems, onClose, onAccept }
     queryKey: ["zone-ai-candidates", zone.project_id, zone.id],
     queryFn: async () => {
       if (!zone?.project_id) return [];
+      const safeFetch = (promise, label) =>
+        promise.catch((err) => {
+          console.warn(`[AiSuggest] Failed to fetch ${label}:`, err.message);
+          return [];
+        });
       const [rfis, wps, dels, cos] = await Promise.all([
-        base44.entities.RFI.filter({ project_id: zone.project_id }).catch(() => []),
-        base44.entities.WorkPackage.filter({ project_id: zone.project_id }).catch(() => []),
-        base44.entities.Delivery.filter({ project_id: zone.project_id }).catch(() => []),
-        base44.entities.ChangeOrder.filter({ project_id: zone.project_id }).catch(() => []),
+        safeFetch(base44.entities.RFI.filter({ project_id: zone.project_id }), "RFIs"),
+        safeFetch(base44.entities.WorkPackage.filter({ project_id: zone.project_id }), "Work Packages"),
+        safeFetch(base44.entities.Delivery.filter({ project_id: zone.project_id }), "Deliveries"),
+        safeFetch(base44.entities.ChangeOrder.filter({ project_id: zone.project_id }), "Change Orders"),
       ]);
       const isRfiOpen = (r) => !/^(answered|closed|void)$/i.test(r.status || "");
       const isDelOpen = (d) => !/^(delivered|received)$/i.test(d.status || "");
