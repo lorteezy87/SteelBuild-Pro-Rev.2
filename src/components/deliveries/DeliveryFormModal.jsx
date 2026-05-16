@@ -2,9 +2,13 @@ import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useFormValidation } from "@/hooks/useFormValidation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
+  const { fieldErrors, runValidation, clearField } = useFormValidation("delivery");
+  const trapRef = useFocusTrap(true);
   const isEdit = !!delivery;
 
   const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
@@ -95,23 +99,10 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   };
 
   const handleSubmit = () => {
-    if (!formData.description?.trim()) {
-      toast.error("Delivery title/description is required");
+    if (!runValidation(formData)) {
+      toast.error("Please fix the highlighted fields.");
       return;
     }
-    if (!formData.project_id) {
-      toast.error("Select a project");
-      return;
-    }
-    if (!formData.vendor.trim()) {
-      toast.error("Vendor is required");
-      return;
-    }
-    if (!formData.scheduled_date) {
-      toast.error("Scheduled date required");
-      return;
-    }
-    // Guard: cannot mark delivered if linked WP fabrication is not complete
     if (formData.status === "Delivered" && !isFabComplete()) {
       const wp = workPackages.find(w => w.id === formData.work_package_id);
       toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
@@ -180,6 +171,9 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       }}
     >
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
