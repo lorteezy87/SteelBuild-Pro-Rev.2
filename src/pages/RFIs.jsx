@@ -35,7 +35,7 @@ import {
   Icon,
 } from "@/components/design-system";
 
-import { extractRfiSequence, isOverdue, exportRFIsToCSV } from "./rfis/utils";
+import { compareRfisByNumber, isOverdue, exportRFIsToCSV } from "./rfis/utils";
 import RfiRow, { RFI_ROW_GRID } from "./rfis/RfiRow";
 import RfiDetailModal from "./rfis/RfiDetailModal";
 import RfiInsightsStrip from "./rfis/RfiInsightsStrip";
@@ -249,15 +249,7 @@ export default function RFIs() {
           (r.answer || "").toLowerCase().includes(q)
         );
       })
-      .sort((a, b) => {
-        // Default sort is RFI # ascending (1, 2, 3, …) so the list reads
-        // chronologically by issue order. extractRfiSequence pulls the
-        // trailing numeric segment, so RFI-001 / RFI-2 / RFI-10 sort as
-        // 1, 2, 10 rather than the lexicographic 1, 10, 2.
-        const numA = extractRfiSequence(a.rfi_number) ?? Number.MAX_SAFE_INTEGER;
-        const numB = extractRfiSequence(b.rfi_number) ?? Number.MAX_SAFE_INTEGER;
-        return numA - numB;
-      });
+      .sort(compareRfisByNumber);
   }, [rfis, filter, disciplineFilter, search]);
 
   /* ── Overdue → Alert background effect ── */
