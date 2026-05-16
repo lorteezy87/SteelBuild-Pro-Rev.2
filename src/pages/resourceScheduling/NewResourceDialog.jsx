@@ -17,14 +17,14 @@ export default function NewResourceDialog({
   if (!open) return null;
 
   const fields = [
-    { key: "name",               label: "Name",             type: "text",          placeholder: "e.g. Crew Alpha, Bay 3 Crane" },
-    { key: "resource_type",      label: "Type",             type: "select",        options: ["Crew", "Equipment", "Bay", "Subcontractor", "Other"] },
-    { key: "role",               label: "Role / Specialty", type: "text",          placeholder: "e.g. Ironworkers, Welders" },
+    { key: "name",               label: "Name",             type: "text",          placeholder: "e.g. Jordan Lee, Crew Alpha, Bay 3 Crane" },
+    { key: "resource_type",      label: "Type",             type: "select",        options: ["Person", "Crew", "Labor", "Equipment", "Bay", "Subcontractor", "Material", "Other"] },
+    { key: "role",               label: "Role / Specialty", type: "text",          placeholder: "e.g. Foreman, Ironworker, Welder" },
     { key: "parent_resource_id", label: "Parent Crew",      type: "parent-select", help: "Assign to a crew. Crews roll up member capacities." },
     { key: "capacity",           label: "Capacity",         type: "number",        placeholder: "e.g. 40" },
     { key: "unit",               label: "Unit",             type: "select",        options: ["hours", "tons", "pieces", "days"] },
     { key: "cost_rate",          label: "Cost Rate ($/hr)", type: "number",        placeholder: "0.00" },
-    { key: "availability",       label: "Availability",     type: "select",        options: ["Available", "Partially Available", "Committed", "Unavailable"] },
+    { key: "availability",       label: "Availability",     type: "select",        options: ["Available", "Partially Available", "Committed", "On Leave", "Unavailable"] },
     { key: "notes",              label: "Notes",            type: "textarea",      placeholder: "Optional notes..." },
   ];
 
