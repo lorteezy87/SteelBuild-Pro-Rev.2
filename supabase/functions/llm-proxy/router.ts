@@ -38,11 +38,8 @@ export const ROUTING_TABLE: Record<string, RoutingTarget> = {
   "revision-compare":      { provider: "openai",    model: "gpt-4o-mini" },
   "sheet-extraction":      { provider: "openai",    model: "gpt-4o-mini" },
 
-  // Schedule-assistant edge function does NOT route through llm-proxy
-  // in Phase 1 — see TECH_DEBT.md. This row exists so callers can
-  // start passing useCase="schedule-assist" without errors once that
-  // consolidation lands. Default lines up with what the schedule
-  // assistant uses today.
+  // Schedule-assistant routes each model turn through llm-proxy while
+  // keeping schedule tool execution inside its own JWT-scoped function.
   "schedule-assist":       { provider: "anthropic", model: "claude-sonnet-4-5" },
 
   // Bonus callers that the audit found. All currently default to

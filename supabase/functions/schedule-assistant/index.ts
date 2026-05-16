@@ -10,15 +10,53 @@
 //     answer that depends on those signals.
 // ============================================================================
 
-import Anthropic from "npm:@anthropic-ai/sdk@0.40.0";
 // Pinned to npm (not jsr) so we always get the latest v2 release — JSR's
 // mirror lagged behind npm and didn't ship ES256 / asymmetric-JWT support
 // until v2.45+. The Supabase project has since migrated Auth to ES256
 // signing, which produced the "Unsupported JWT algorithm ES256" 401
 // error whenever the edge function called supabase.auth.getUser(token).
-import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2.47";
 import { schedulingTools } from "./tool-schemas.ts";
 import { executeToolCall } from "./tool-handlers.ts";
+
+const LLM_PROXY_USE_CASE = "schedule-assist";
+const DEFAULT_MODEL = "claude-sonnet-4-5";
+const MAX_TOKENS = 4096;
+
+type TextBlock = { type: "text"; text: string };
+type ToolUseBlock = {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+};
+type ToolResultBlock = {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+};
+type AssistantContentBlock = TextBlock | ToolUseBlock;
+type ConversationBlock = AssistantContentBlock | ToolResultBlock | Record<string, unknown>;
+type ScheduleAssistantMessage = {
+  role: "user" | "assistant";
+  content: string | ConversationBlock[];
+};
+type LlmProxyEnvelope = {
+  text?: string;
+  content?: string;
+  tool_use?: { name?: string; input?: unknown; id?: string } | null;
+  raw?: {
+    content?: unknown;
+    stop_reason?: string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
+  };
+  error?: string;
+  protocol_version?: number;
+};
 
 // ---------------------------------------------------------------------------
 // System prompt — role + Safe Answer Contract
@@ -173,17 +211,13 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Invalid or expired session — no user returned" }, 401);
     }
 
-    const anthropic = new Anthropic({
-      apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-    });
-
     const result = await runAgentLoop({
-      anthropic,
+      authHeader,
       supabase,
       messages,
       projectId: project_id,
       userId: userData.id,
-      model: model ?? "claude-sonnet-4-5",
+      model: typeof model === "string" && model.trim() ? model.trim() : DEFAULT_MODEL,
     });
 
     return json(result, 200);
@@ -224,17 +258,17 @@ function createSupabaseClient(authHeader: string): SupabaseClient {
 // Agent loop
 // ---------------------------------------------------------------------------
 interface AgentLoopArgs {
-  anthropic: Anthropic;
+  authHeader: string;
   supabase: SupabaseClient;
-  messages: Anthropic.MessageParam[];
+  messages: ScheduleAssistantMessage[];
   projectId: string;
   userId: string;
   model: string;
 }
 
 async function runAgentLoop(args: AgentLoopArgs) {
-  const { anthropic, supabase, projectId, userId, model } = args;
-  const conversation: Anthropic.MessageParam[] = [...args.messages];
+  const { authHeader, supabase, projectId, userId, model } = args;
+  const conversation: ScheduleAssistantMessage[] = [...args.messages];
   const toolAuditLog: Array<{
     tool: string;
     input: unknown;
@@ -254,39 +288,36 @@ async function runAgentLoop(args: AgentLoopArgs) {
   while (iteration < MAX_ITERATIONS) {
     iteration++;
 
-    const response = await anthropic.messages.create({
+    const response = await callLlmProxy({
+      authHeader,
+      projectId,
       model,
-      max_tokens: 4096,
-      system: systemWithContext,
-      tools: schedulingTools,
       messages: conversation,
+      system: systemWithContext,
     });
 
-    totalUsage.input_tokens += response.usage.input_tokens;
-    totalUsage.output_tokens += response.usage.output_tokens;
+    addUsage(totalUsage, response.raw);
 
-    const textBlocks = response.content.filter(
-      (b): b is Anthropic.TextBlock => b.type === "text",
-    );
+    const responseContent = normalizeAssistantContent(response, iteration);
+    const textBlocks = responseContent.filter(isTextBlock);
     if (textBlocks.length > 0) {
       finalAnswer = textBlocks.map((b) => b.text).join("\n");
     }
 
+    const stopReason = response.raw?.stop_reason;
     if (
-      response.stop_reason === "end_turn" ||
-      response.stop_reason === "stop_sequence"
+      stopReason === "end_turn" ||
+      stopReason === "stop_sequence"
     ) {
       break;
     }
 
-    const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-    );
+    const toolUseBlocks = responseContent.filter(isToolUseBlock);
     if (toolUseBlocks.length === 0) break;
 
-    conversation.push({ role: "assistant", content: response.content });
+    conversation.push({ role: "assistant", content: responseContent });
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    const toolResults: ToolResultBlock[] = [];
     for (const toolUse of toolUseBlocks) {
       const started = Date.now();
       const result = await executeToolCall(
@@ -331,6 +362,128 @@ async function runAgentLoop(args: AgentLoopArgs) {
   };
 }
 
+async function callLlmProxy(args: {
+  authHeader: string;
+  projectId: string;
+  model: string;
+  messages: ScheduleAssistantMessage[];
+  system: string;
+}): Promise<LlmProxyEnvelope> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !supabaseAnon) {
+    throw new Error("Edge function not configured for llm-proxy");
+  }
+
+  const resp = await fetch(`${supabaseUrl}/functions/v1/llm-proxy`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": args.authHeader,
+      "apikey": supabaseAnon,
+    },
+    body: JSON.stringify({
+      useCase: LLM_PROXY_USE_CASE,
+      project_id: args.projectId,
+      model: args.model,
+      maxTokens: MAX_TOKENS,
+      system: args.system,
+      tools: schedulingTools,
+      tool_choice: { type: "auto" },
+      messages: args.messages,
+    }),
+  });
+
+  const rawText = await resp.text();
+  let body: LlmProxyEnvelope;
+  try {
+    body = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    throw new Error(`llm-proxy returned non-JSON (${resp.status}): ${rawText.slice(0, 300)}`);
+  }
+
+  if (!resp.ok || body.error) {
+    throw new Error(`llm-proxy schedule-assist ${resp.status}: ${body.error || rawText.slice(0, 300)}`);
+  }
+
+  return body;
+}
+
+function normalizeAssistantContent(response: LlmProxyEnvelope, iteration: number): AssistantContentBlock[] {
+  const rawContent = response.raw?.content;
+  if (Array.isArray(rawContent)) {
+    const blocks = rawContent
+      .map((block) => normalizeAssistantBlock(block))
+      .filter((block): block is AssistantContentBlock => !!block);
+    if (blocks.length > 0) return blocks;
+  }
+
+  const fallbackBlocks: AssistantContentBlock[] = [];
+  const text = typeof response.text === "string"
+    ? response.text
+    : typeof response.content === "string"
+      ? response.content
+      : "";
+
+  const toolUse = response.tool_use;
+  if (text && !toolUse?.name) fallbackBlocks.push({ type: "text", text });
+
+  if (toolUse?.name) {
+    fallbackBlocks.push({
+      type: "tool_use",
+      id: toolUse.id || `toolu_proxy_${iteration}_0`,
+      name: toolUse.name,
+      input: isRecord(toolUse.input) ? toolUse.input : {},
+    });
+  }
+
+  return fallbackBlocks;
+}
+
+function normalizeAssistantBlock(block: unknown): AssistantContentBlock | null {
+  if (!isRecord(block)) return null;
+
+  if (block.type === "text" && typeof block.text === "string") {
+    return { type: "text", text: block.text };
+  }
+
+  if (block.type === "tool_use" && typeof block.name === "string") {
+    const id = typeof block.id === "string" && block.id
+      ? block.id
+      : `toolu_proxy_${Date.now()}`;
+    return {
+      type: "tool_use",
+      id,
+      name: block.name,
+      input: isRecord(block.input) ? block.input : {},
+    };
+  }
+
+  return null;
+}
+
+function isTextBlock(block: AssistantContentBlock): block is TextBlock {
+  return block.type === "text";
+}
+
+function isToolUseBlock(block: AssistantContentBlock): block is ToolUseBlock {
+  return block.type === "tool_use";
+}
+
+function addUsage(
+  total: { input_tokens: number; output_tokens: number },
+  raw: LlmProxyEnvelope["raw"],
+) {
+  const inputTokens = raw?.usage?.input_tokens;
+  const outputTokens = raw?.usage?.output_tokens;
+  if (Number.isFinite(inputTokens)) total.input_tokens += inputTokens as number;
+  if (Number.isFinite(outputTokens)) total.output_tokens += outputTokens as number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 // ---------------------------------------------------------------------------
 // Audit log (best-effort; failures don't fail the request)
 // ---------------------------------------------------------------------------
@@ -338,7 +491,7 @@ async function persistAuditLog(
   supabase: SupabaseClient,
   projectId: string,
   userId: string,
-  userMessages: Anthropic.MessageParam[],
+  userMessages: ScheduleAssistantMessage[],
   finalAnswer: string,
   toolLog: unknown[],
 ) {

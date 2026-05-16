@@ -13,6 +13,13 @@ Production-oriented implementation with structured reasoning, RLS-by-default, an
 
 ## Architecture
 
+The schedule assistant owns JWT verification, the RLS-scoped Supabase
+client, schedule tool execution, provenance, and the safe-answer
+contract. Each model turn is routed through `llm-proxy` with
+`useCase: "schedule-assist"` so provider selection, token telemetry,
+latency telemetry, and cost reporting stay centralized in
+`llm_telemetry`.
+
 ```
 ┌────────────────────────┐
 │ SteelBuild Pro (PMA)   │ user asks with Bearer JWT
@@ -49,7 +56,7 @@ Production-oriented implementation with structured reasoning, RLS-by-default, an
 | `provenance.ts` | Wraps every tool result with `{ confidence, evidence, staleness_warnings, data_gaps, source_tables, row_counts, as_of }` |
 | `tool-schemas.ts` | 10 Claude tool definitions (unchanged from v1) |
 | `tool-handlers.ts` | Upgraded handlers — call reasoning layer, add provenance, flag gaps |
-| `index.ts` | Edge Function with JWT verification, RLS-scoped client, safe-answer contract in system prompt |
+| `index.ts` | Edge Function with JWT verification, RLS-scoped client, llm-proxy model routing, safe-answer contract in system prompt |
 
 ## Reasoning layer — what it computes
 
@@ -151,10 +158,15 @@ create policy "Users read their org's data"
 ### 4. Edge Function secrets
 
 ```bash
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+# schedule-assistant needs SUPABASE_URL and SUPABASE_ANON_KEY.
+# llm-proxy owns provider keys and telemetry inserts.
 # SUPABASE_URL, SUPABASE_ANON_KEY auto-injected
 # Do NOT set SUPABASE_SERVICE_ROLE_KEY unless you truly need it
 ```
+
+`ANTHROPIC_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` belong on
+`llm-proxy`, not this function, because model calls and
+`llm_telemetry` writes are centralized there.
 
 ### 5. Deploy
 
@@ -222,7 +234,7 @@ Before going live:
 
 ## Next iterations
 
-1. **Streaming** — switch to `anthropic.messages.stream()` for token-by-token UI
+1. **Streaming** — add a streaming-compatible gateway path for token-by-token UI
 2. **Write-proposal tool** — `propose_schedule_update` that writes to a `schedule_proposals` table (never to live schedule)
 3. **pgvector layer** — spec/drawing search for grounded document Q&A
 4. **Weekly narrative cron** — scheduled function using `SERVICE_ROLE_OVERRIDE` for Monday status summaries
