@@ -27,6 +27,7 @@ import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { invalidateEntity } from "@/services/cacheRegistry";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -144,6 +145,8 @@ export default function Deliveries() {
     staleTime: 60000,
     refetchInterval: 60000,
   });
+
+  useRealtimeInvalidation("deliveries", projectId, [["deliveries", projectId || "all"]]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

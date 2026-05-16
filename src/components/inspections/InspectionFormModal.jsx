@@ -2,8 +2,12 @@ import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useFormValidation } from "@/hooks/useFormValidation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export default function InspectionFormModal({ projectId, inspection = null, onClose, onSave, isSaving = false }) {
+  const { fieldErrors, runValidation, clearField } = useFormValidation("inspection");
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({
     project_id: projectId,
     inspection_type: "Steel Fabrication",
@@ -55,24 +59,14 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
 
   const handleSubmit = () => {
     if (isSaving) return;
-    // Explicit toasts instead of a silent bail — this form was
-    // failing to save "silently" before because it returned without
-    // telling the user why. Required fields per the DB schema:
-    //   project_id  NOT NULL (no default)
-    //   status      NOT NULL (defaults to "Scheduled" — we set it)
-    // Everything else is nullable.
-    if (!formData.project_id) {
-      toast.error("Select a project before saving the inspection.");
+    const validationPayload = {
+      ...formData,
+      scheduled_date: formData.inspection_date,
+    };
+    if (!runValidation(validationPayload)) {
+      toast.error("Please fix the highlighted fields.");
       return;
     }
-    if (!formData.inspection_date) {
-      toast.error("Inspection date is required.");
-      return;
-    }
-    // Strip alias + audit fields the entity client wouldn't accept on
-    // update. Virtual aliases (created_date / updated_date) are
-    // filtered server-side too, but trimming here makes the payload
-    // smaller and the intent clearer.
     const {
       created_date: _cd, updated_date: _ud, created_at: _ca, updated_at: _ua,
       is_deleted: _id, deleted_at: _da,
@@ -113,7 +107,10 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
       }}
     >
       <div
+        ref={trapRef}
         className="sbd-card-strong"
+        role="dialog"
+        aria-modal="true"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
@@ -143,19 +140,21 @@ export default function InspectionFormModal({ projectId, inspection = null, onCl
           {/* Project */}
           <div>
             <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Project</label>
-            <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required>
+            <select value={formData.project_id} onChange={(e) => { setFormData({ ...formData, project_id: e.target.value }); clearField("project_id"); }} style={{ width: "100%", background: "var(--bg-input)", border: fieldErrors.project_id ? "1px solid var(--status-error)" : "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }} required>
               <option value="">Select project...</option>
               {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
             </select>
+            {fieldErrors.project_id && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.project_id}</span>}
           </div>
 
           {/* Type & Date */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
             <div>
               <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Type</label>
-              <select value={formData.inspection_type} onChange={(e) => setFormData({ ...formData, inspection_type: e.target.value })} style={{ width: "100%", background: "var(--bg-input)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
+              <select value={formData.inspection_type} onChange={(e) => { setFormData({ ...formData, inspection_type: e.target.value }); clearField("inspection_type"); }} style={{ width: "100%", background: "var(--bg-input)", border: fieldErrors.inspection_type ? "1px solid var(--status-error)" : "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 12px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12, outline: "none", boxSizing: "border-box" }}>
                 {types.map((t) => (<option key={t} value={t}>{t}</option>))}
               </select>
+              {fieldErrors.inspection_type && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.inspection_type}</span>}
             </div>
             <div>
               <label style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Date</label>

@@ -23,6 +23,7 @@ import { getWeatherRiskForProject } from "@/lib/weatherRisk";
 import { applyEffectiveDates } from "@/services/scheduleCascade";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 /**
  * Auto-generate a WBS code for a task. Format is now "<phase>.<n>"
@@ -134,6 +135,8 @@ export default function Schedule() {
         : [],
     enabled: !!projectId,
   });
+
+  useRealtimeInvalidation("schedule_tasks", projectId, [["schedule-tasks", projectId]]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

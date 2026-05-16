@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import ActionItemFormModal from "@/components/actionitems/ActionItemFormModal";
 import ActionItemList from "@/components/actionitems/ActionItemList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
@@ -76,6 +77,8 @@ export default function ActionItems() {
         ? base44.entities.ActionItem.filter({ project_id: projectId }, "-due_date")
         : base44.entities.ActionItem.list("-due_date"),
   });
+
+  useRealtimeInvalidation("action_items", projectId, [["action-items", projectId]]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],

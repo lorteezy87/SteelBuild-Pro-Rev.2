@@ -3,6 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import PhotoStripUploader from "@/components/shared/PhotoStripUploader";
 import { MapPin } from "lucide-react";
+import { useFormValidation } from "@/hooks/useFormValidation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 const emptyForm = {
   project_id: "",
@@ -57,6 +59,8 @@ const labelStyle = {
 };
 
 export default function PunchlistFormModal({ projectId, item = null, onClose, onSave, isSaving = false }) {
+  const { fieldErrors, runValidation, clearField } = useFormValidation("punchlist_item");
+  const trapRef = useFocusTrap(true);
   const [formData, setFormData] = useState({ ...emptyForm, project_id: projectId || "" });
   const isEditing = !!item;
 
@@ -96,12 +100,13 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
   });
 
   const handleSubmit = () => {
-    if (isSaving || !formData.project_id || !formData.description?.trim()) return;
+    if (isSaving) return;
+    const validationPayload = { ...formData, title: formData.description, due_date: formData.target_completion_date };
+    if (!runValidation(validationPayload)) return;
     onSave?.({
       ...formData,
       percent_complete: parseInt(formData.percent_complete) || 0,
       photos: asArray(formData.photos),
-      // Empty strings → null so PostgREST doesn't reject the FK columns
       drawing_id: formData.drawing_id || null,
       inspection_id: formData.inspection_id || null,
     });
@@ -111,21 +116,23 @@ export default function PunchlistFormModal({ projectId, item = null, onClose, on
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}>
-      <div className="sbd-card-strong" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "600px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+      <div ref={trapRef} className="sbd-card-strong" role="dialog" aria-modal="true" style={{ background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderRadius: "16px", padding: "24px", maxWidth: "600px", width: "90%", maxHeight: "90vh", overflowY: "auto" }}>
         <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 20px 0", textTransform: "uppercase", letterSpacing: "0.10em" }}>{isEditing ? "Edit Punchlist Item" : "Add Punchlist Item"}</h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label style={labelStyle}>Project</label>
-            <select value={formData.project_id} onChange={(e) => setFormData({ ...formData, project_id: e.target.value })} style={inputStyle}>
+            <select value={formData.project_id} onChange={(e) => { setFormData({ ...formData, project_id: e.target.value }); clearField("project_id"); }} style={{ ...inputStyle, borderColor: fieldErrors.project_id ? "var(--status-error)" : undefined }}>
               <option value="">Select project...</option>
               {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
             </select>
+            {fieldErrors.project_id && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.project_id}</span>}
           </div>
 
           <div>
             <label style={labelStyle}>Description</label>
-            <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="What needs to be done?" style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} />
+            <textarea value={formData.description} onChange={(e) => { setFormData({ ...formData, description: e.target.value }); clearField("title"); }} placeholder="What needs to be done?" style={{ ...inputStyle, minHeight: "60px", resize: "vertical", borderColor: fieldErrors.title ? "var(--status-error)" : undefined }} />
+            {fieldErrors.title && <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error)", marginTop: 2, display: "block" }}>{fieldErrors.title}</span>}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

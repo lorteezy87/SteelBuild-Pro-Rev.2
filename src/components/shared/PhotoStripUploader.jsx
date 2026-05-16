@@ -17,6 +17,7 @@
 import React, { useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { compressImage } from "@/utils/compressImage";
 
 const labelStyle = {
   fontFamily: "var(--font-mono)",
@@ -50,8 +51,9 @@ export default function PhotoStripUploader({
     setUploading(true);
     try {
       const uploaded = [];
-      for (const file of files) {
+      for (const rawFile of files) {
         try {
+          const file = await compressImage(rawFile);
           const result = await base44.integrations.Core.UploadFile({ file });
           uploaded.push({
             file_url: result.file_url || result.path,
@@ -61,7 +63,7 @@ export default function PhotoStripUploader({
           });
         } catch (err) {
           console.error("[PhotoStripUploader] upload failed:", err);
-          toast.error(`Upload failed: ${file.name}`);
+          toast.error(`Upload failed: ${rawFile.name}`);
         }
       }
       if (uploaded.length > 0) {
