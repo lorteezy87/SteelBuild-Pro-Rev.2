@@ -12,6 +12,7 @@ export default function KpiStrip({ kpis }) {
     { label: "Open",        value: kpis.open.length,     color: kpis.open.length     ? "var(--status-warning)" : "var(--status-success)" },
     { label: "Overdue",     value: kpis.overdue.length,  color: kpis.overdue.length  ? "var(--status-error)"   : "var(--text-muted)" },
     { label: "Critical",    value: kpis.critical.length, color: kpis.critical.length ? "var(--status-error)"   : "var(--text-muted)" },
+    { label: "System",      value: kpis.generated.length, color: kpis.generated.length ? "var(--accent)"        : "var(--text-muted)" },
     { label: "In Progress", value: kpis.inProg.length,   color: "var(--accent)" },
     { label: "Resolved",    value: kpis.resolved.length, color: "var(--status-success)" },
     { label: "Total",       value: kpis.total,           color: "var(--text-muted)" },

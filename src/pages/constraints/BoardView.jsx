@@ -63,6 +63,7 @@ export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete,
                   const overdue = isOverdue(c);
                   const statusCfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.Open;
                   const wp = wps.find((w) => w.id === c.work_package_id);
+                  const generated = Boolean(c._generated);
                   return (
                     <div
                       key={c.id}
@@ -95,23 +96,41 @@ export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete,
                             {abbreviateType(c.constraint_type)}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onEdit(c)}
-                          style={{
-                            background: "transparent",
-                            border: "1px solid var(--border-default)",
-                            borderRadius: "var(--radius-btn)",
-                            padding: "3px 7px",
-                            color: "var(--text-secondary)",
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 8,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          EDIT
-                        </button>
+                        {generated ? (
+                          <span
+                            style={{
+                              background: "var(--accent-muted)",
+                              border: "1px solid var(--accent-border)",
+                              borderRadius: "var(--radius-badge)",
+                              color: "var(--accent)",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 8,
+                              fontWeight: 800,
+                              letterSpacing: "0.08em",
+                              padding: "3px 7px",
+                            }}
+                          >
+                            SYSTEM
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onEdit(c)}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid var(--border-default)",
+                              borderRadius: "var(--radius-btn)",
+                              padding: "3px 7px",
+                              color: "var(--text-secondary)",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 8,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            EDIT
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onLogMitigation(c); }}
@@ -192,16 +211,21 @@ export default function BoardView({ items, wps, onQuickUpdate, onEdit, onDelete,
                       </div>
 
                       <div style={{ display: "flex", gap: 4, borderTop: "1px solid var(--divider)", paddingTop: 8 }}>
-                        {c.status === "Open" && (
+                        {generated && (
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                            Clear source condition
+                          </div>
+                        )}
+                        {!generated && c.status === "Open" && (
                           <MiniBtn label="▶ Start" tone="accent" onClick={() => onQuickUpdate(c.id, { status: "In Progress" })} />
                         )}
-                        {!isResolved(c) && (
+                        {!generated && !isResolved(c) && (
                           <MiniBtn label="✓ Resolve" tone="success" onClick={() => onQuickUpdate(c.id, { status: "Resolved" })} />
                         )}
-                        {c.status === "Resolved" && (
+                        {!generated && c.status === "Resolved" && (
                           <MiniBtn label="↺ Reopen" tone="warning" onClick={() => onQuickUpdate(c.id, { status: "Open" })} />
                         )}
-                        <MiniBtn label="×" tone="muted" onClick={() => onDelete(c)} />
+                        {!generated && <MiniBtn label="×" tone="muted" onClick={() => onDelete(c)} />}
                       </div>
                     </div>
                   );

@@ -8,6 +8,14 @@
  */
 export function abbreviateType(type) {
   const map = {
+    "Engineering Hold":          "ENGINEER",
+    "Approval Hold":             "APPROVAL",
+    "Procurement Hold":          "PROCURE",
+    "Quality Hold":              "QUALITY",
+    "Schedule Hold":             "SCHEDULE",
+    "Resource Hold":             "RESOURCE",
+    "Production Hold":           "PROD",
+    "IFC Hold":                  "IFC",
     "Missing Embeds":             "EMBEDS",
     "Anchor Bolt Issue":          "ANCHOR BOLT",
     "Approved Submittal Missing": "SUBMITTAL",
