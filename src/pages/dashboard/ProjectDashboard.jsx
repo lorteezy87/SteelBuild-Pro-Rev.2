@@ -26,6 +26,7 @@
  */
 
 import React from "react";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import ScheduleTimelineSection from "./sections/ScheduleTimelineSection";
 import FieldActivitySection from "./sections/FieldActivitySection";
 import FinancialControlsSection from "./sections/FinancialControlsSection";
@@ -64,15 +65,17 @@ export default function ProjectDashboard({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
-        <ScheduleTimelineSection
-          project={project}
-          wps={wps}
-          scheduleTasks={scheduleTasks}
-          deliveries={deliveries}
-          rfis={rfis}
-          actionItems={actionItems}
-          onNavigate={onNavigate}
-        />
+        <ErrorBoundary label="Schedule & Timeline">
+          <ScheduleTimelineSection
+            project={project}
+            wps={wps}
+            scheduleTasks={scheduleTasks}
+            deliveries={deliveries}
+            rfis={rfis}
+            actionItems={actionItems}
+            onNavigate={onNavigate}
+          />
+        </ErrorBoundary>
       </div>
 
       <div
@@ -83,22 +86,26 @@ export default function ProjectDashboard({
           alignItems: "start",
         }}
       >
-        <FinancialControlsSection
-          project={project}
-          cos={cos}
-          expenses={expenses}
-          wps={wps}
-          sovItems={sovItems}
-          budgetHourItems={budgetHourItems}
-          onNavigate={onNavigate}
-        />
-        <DocumentHubSection
-          rfis={rfis}
-          submittals={submittals}
-          drawings={drawings}
-          drawingActivity={drawingActivity}
-          onNavigate={onNavigate}
-        />
+        <ErrorBoundary label="Financial Controls">
+          <FinancialControlsSection
+            project={project}
+            cos={cos}
+            expenses={expenses}
+            wps={wps}
+            sovItems={sovItems}
+            budgetHourItems={budgetHourItems}
+            onNavigate={onNavigate}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary label="Document Hub">
+          <DocumentHubSection
+            rfis={rfis}
+            submittals={submittals}
+            drawings={drawings}
+            drawingActivity={drawingActivity}
+            onNavigate={onNavigate}
+          />
+        </ErrorBoundary>
       </div>
 
       <div
@@ -109,21 +116,25 @@ export default function ProjectDashboard({
           alignItems: "start",
         }}
       >
-        <FieldActivitySection
-          dailyLogs={dailyLogs}
-          photos={photos}
-          punchlistItems={punchlistItems}
-          inspections={inspections}
-          safetyIncidents={safetyIncidents}
-          qualityRecords={qualityRecords}
-          onNavigate={onNavigate}
-        />
-        <TeamWorkflowSection
-          project={project}
-          actionItems={actionItems}
-          scheduleTasks={scheduleTasks}
-          onNavigate={onNavigate}
-        />
+        <ErrorBoundary label="Field Activity">
+          <FieldActivitySection
+            dailyLogs={dailyLogs}
+            photos={photos}
+            punchlistItems={punchlistItems}
+            inspections={inspections}
+            safetyIncidents={safetyIncidents}
+            qualityRecords={qualityRecords}
+            onNavigate={onNavigate}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary label="Team & Workflow">
+          <TeamWorkflowSection
+            project={project}
+            actionItems={actionItems}
+            scheduleTasks={scheduleTasks}
+            onNavigate={onNavigate}
+          />
+        </ErrorBoundary>
       </div>
     </div>
   );

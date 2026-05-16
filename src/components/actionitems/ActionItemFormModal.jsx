@@ -245,10 +245,10 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={mutation.isPending && !actionItem}
-            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending && !actionItem ? 0.5 : 1 }}
+            disabled={mutation.isPending}
+            style={{ background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 16px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em", opacity: mutation.isPending ? 0.5 : 1 }}
           >
-            {actionItem ? "Update" : mutation.isPending ? "Creating..." : "Create Item"}
+            {mutation.isPending ? "Saving…" : actionItem ? "Update" : "Create Item"}
           </button>
         </div>
       </div>
