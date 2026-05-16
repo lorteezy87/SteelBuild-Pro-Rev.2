@@ -14,6 +14,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useProjectId } from "@/hooks/useProjectId";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import RFIFormModal from "@/components/rfis/RFIFormModal";
@@ -110,6 +111,7 @@ export default function RFIs() {
     enabled: !!projectId,
   });
   const rfiQueryKeys = [["rfis", projectId], ["rfis"]];
+  useRealtimeInvalidation("rfis", projectId, rfiQueryKeys);
 
   /* ── URL-driven selection (from cross-page deep links) ── */
   const urlRfiId = searchParams.get("id");
