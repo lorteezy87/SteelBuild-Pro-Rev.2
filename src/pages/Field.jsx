@@ -281,7 +281,7 @@ export default function Field() {
         color: d._signals?.risk === "high" ? "var(--status-error)"
           : d._signals?.risk === "medium" ? "var(--status-warning)"
           : "var(--phase-delivery)",
-        onClick: () => navigate("/Deliveries"),
+        onClick: () => navigate("/Deliveries?receive=1"),
       });
     }
     items.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
@@ -372,7 +372,7 @@ export default function Field() {
       value: deliveryMetrics.dueToday.length,
       color: deliveryMetrics.overdue.length > 0 ? "var(--status-error-bright)" : "var(--phase-delivery)",
       icon: Truck,
-      onClick: () => navigate("/Deliveries"),
+      onClick: () => navigate("/Deliveries?receive=1"),
       sub: deliveryMetrics.overdue.length > 0 ? `${deliveryMetrics.overdue.length} late` : `${deliveryMetrics.openCount} open`,
     },
   ];
@@ -418,7 +418,7 @@ export default function Field() {
         : `${deliveryMetrics.dueToday.length} due today`,
       icon: Truck,
       color: deliveryMetrics.overdue.length ? "var(--status-error-bright)" : "var(--phase-delivery)",
-      onClick: () => navigate("/Deliveries"),
+      onClick: () => navigate("/Deliveries?receive=1"),
     },
   ];
 

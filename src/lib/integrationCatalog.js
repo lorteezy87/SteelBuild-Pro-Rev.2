@@ -195,14 +195,14 @@ export const INTEGRATION_BUILD_ORDER = [
     reason: "Every provider needs ownership, scopes, source ids, audit behavior, and human approval before writes.",
   },
   {
-    phase: "Documents",
-    title: "External document storage links",
-    reason: "Files are already central to drawings, RFIs, photos, and submittals, and the app has private storage patterns to extend.",
-  },
-  {
     phase: "Email",
     title: "Outlook shared mailbox intake",
-    reason: "Most construction coordination starts in email, but it needs duplicate detection and review queues before mutation.",
+    reason: "RFIs, submittals, logs, and action items usually arrive by email, and every parsed item needs duplicate detection and a review queue before mutation.",
+  },
+  {
+    phase: "Documents",
+    title: "External document storage links",
+    reason: "Drawings, specs, PDFs, photos, and email attachments need stable file identity before downstream accounting or schedule sync is useful.",
   },
   {
     phase: "Cost",

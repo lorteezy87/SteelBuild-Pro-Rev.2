@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  INTEGRATION_BUILD_ORDER,
   INTEGRATION_AREAS,
   filterIntegrations,
   getIntegrationByKey,
@@ -18,6 +19,14 @@ describe("integrationCatalog", () => {
       "scheduling",
       "autodesk-bim",
     ]));
+  });
+
+  it("starts integration buildout with email and document storage before accounting", () => {
+    const phases = INTEGRATION_BUILD_ORDER.map((item) => item.phase);
+
+    expect(phases.indexOf("Email")).toBeGreaterThan(phases.indexOf("Foundation"));
+    expect(phases.indexOf("Documents")).toBeGreaterThan(phases.indexOf("Email"));
+    expect(phases.indexOf("Cost")).toBeGreaterThan(phases.indexOf("Documents"));
   });
 
   it("reports a useful integration readiness summary", () => {

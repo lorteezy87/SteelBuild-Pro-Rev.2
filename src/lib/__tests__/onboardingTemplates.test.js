@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  IMPORT_TARGETS,
+  PROJECT_TEMPLATES,
   SAMPLE_PROJECT_TEMPLATE_KEY,
+  TEMPLATE_LIBRARY,
   buildProjectPayload,
   buildSeedPayloads,
   parseDelimitedImport,
@@ -9,6 +12,34 @@ import {
 } from "../onboardingTemplates";
 
 describe("onboardingTemplates", () => {
+  it("covers the onboarding MVP template and library choices", () => {
+    expect(PROJECT_TEMPLATES.map((template) => template.key)).toEqual(expect.arrayContaining([
+      "fabrication_erection",
+      "field_execution",
+      "drawing_submittal",
+      "blank",
+    ]));
+    expect(TEMPLATE_LIBRARY.map((template) => template.title)).toEqual(expect.arrayContaining([
+      "Daily Log Starter",
+      "Safety Categories",
+      "Punchlist Categories",
+      "Delivery Statuses",
+      "RFI/Submittal Defaults",
+      "Steel Schedule Phases",
+    ]));
+  });
+
+  it("stages imports for the starter data types users need during setup", () => {
+    expect(Object.keys(IMPORT_TARGETS)).toEqual(expect.arrayContaining([
+      "rfis",
+      "scheduleTasks",
+      "workPackages",
+      "deliveries",
+      "punchlist",
+      "contacts",
+    ]));
+  });
+
   it("builds a demo project payload with explicit onboarding metadata", () => {
     const payload = buildProjectPayload(
       { project_number: "", name: "", client: "", start_date: "2026-06-01" },

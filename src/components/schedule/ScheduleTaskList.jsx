@@ -39,6 +39,24 @@ const sortByDate = (a, b) => {
   return new Date(a.start_date) - new Date(b.start_date);
 };
 
+export function getScheduleTaskRowKey(task, index, phase = "task") {
+  const id = String(task?.id || "").trim();
+  if (id) return id;
+
+  const fallback = [
+    phase,
+    task?._stored_wbs_code || task?.wbs_code,
+    task?.task_number,
+    task?.task_name,
+    index,
+  ]
+    .filter((part) => part !== null && part !== undefined && String(part).trim() !== "")
+    .map((part) => String(part).trim())
+    .join(":");
+
+  return fallback || `${phase}:task:${index}`;
+}
+
 const fmtDate = (d) => {
   if (!d) return "TBD";
   return formatDateShort(d);
@@ -268,11 +286,11 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
               </div>
 
               {/* Rows */}
-              {group.tasks.map((task) => {
+              {group.tasks.map((task, index) => {
                 const isEditing = editingId === task.id;
                 return (
                   <div
-                    key={task.id}
+                    key={getScheduleTaskRowKey(task, index, group.phase)}
                     onClick={(e) => startEdit(task, e)}
                     style={{
                       padding: "9px 16px",
