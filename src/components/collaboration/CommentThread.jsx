@@ -313,9 +313,11 @@ function CommentRow({ c, onDelete, onCycleStatus }) {
           type="button"
           onClick={() => onCycleStatus?.(c)}
           title={`Status: ${statusLabel.toLowerCase()} — click to cycle`}
+          aria-label={`Comment status: ${statusKey} — click to cycle`}
           style={{
             display: "inline-flex",
             alignItems: "center",
+            gap: 3,
             padding: "1px 7px",
             borderRadius: 8,
             background: statusColor,
@@ -328,6 +330,7 @@ function CommentRow({ c, onDelete, onCycleStatus }) {
             letterSpacing: "0.08em",
           }}
         >
+          <span aria-hidden="true">{statusKey === "addressed" ? "✓" : statusKey === "rejected" ? "✗" : statusKey === "clarification" ? "?" : "○"}</span>
           {statusLabel}
         </button>
         {hovering && (

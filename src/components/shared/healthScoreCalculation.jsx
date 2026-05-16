@@ -8,16 +8,26 @@ export async function calculateProjectHealthScore(projectId, base44) {
   if (!projectId) return 0;
   try {
     // Load all data in parallel
+    let fetchFailures = 0;
+    const safeFetch = (promise, label) =>
+      promise.catch((err) => {
+        fetchFailures++;
+        console.warn(`[HealthScore] Failed to fetch ${label}:`, err.message);
+        return [];
+      });
     const [rfis, changeOrders, deliveries, actionItems, costCodes, tasks, dailyLogs] =
       await Promise.all([
-        base44.entities.RFI.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ChangeOrder.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.Delivery.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ActionItem.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.CostCode.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ScheduleTask.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.DailyLog.filter({ project_id: projectId }).catch(() => []),
+        safeFetch(base44.entities.RFI.filter({ project_id: projectId }), "RFIs"),
+        safeFetch(base44.entities.ChangeOrder.filter({ project_id: projectId }), "Change Orders"),
+        safeFetch(base44.entities.Delivery.filter({ project_id: projectId }), "Deliveries"),
+        safeFetch(base44.entities.ActionItem.filter({ project_id: projectId }), "Action Items"),
+        safeFetch(base44.entities.CostCode.filter({ project_id: projectId }), "Cost Codes"),
+        safeFetch(base44.entities.ScheduleTask.filter({ project_id: projectId }), "Schedule Tasks"),
+        safeFetch(base44.entities.DailyLog.filter({ project_id: projectId }), "Daily Logs"),
       ]);
+    if (fetchFailures > 0) {
+      console.warn(`[HealthScore] ${fetchFailures}/7 data sources failed — score may be inaccurate`);
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

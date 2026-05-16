@@ -754,7 +754,11 @@ export default function PortfolioView({
                 return (
                   <div
                     key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${p.name || p.project_name || "project"} dashboard — ${p.effectiveHealth}`}
                     onClick={() => openProjectDashboard(p.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProjectDashboard(p.id); } }}
                     className="sbd-card sbd-card-hover"
                     style={{
                       background: "linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 76%, #000 24%) 0%, var(--bg-surface) 100%)",
@@ -1086,7 +1090,11 @@ export default function PortfolioView({
       {/* Stale RFI Bottleneck Alert — open RFIs >30 days old */}
       {portfolioKPIs.staleRFIs30 && portfolioKPIs.staleRFIs30.length > 0 && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label={`${portfolioKPIs.staleRFIs30.length} stale RFIs open more than 30 days — click to review`}
           onClick={() => navigate(createPageUrl("RFIs"))}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(createPageUrl("RFIs")); } }}
           style={{
             background: "rgba(248,81,73,0.10)",
             borderBottom: "2px solid var(--status-error)",

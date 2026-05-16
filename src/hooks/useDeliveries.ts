@@ -66,10 +66,9 @@ export function useDeliveries(projectId: string | null | undefined, filters: Del
     refetch,
   } = useQuery<Delivery[]>({
     queryKey,
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }, "-scheduled_date", 2000),
     enabled: !!projectId,
     staleTime: 60_000,
-    refetchInterval: 60_000,
   });
 
   // ── Derived: filtered + sorted ──────────────────────────────────────

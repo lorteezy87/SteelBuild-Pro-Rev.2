@@ -133,10 +133,11 @@ export function useSubmittals(projectId: string | null | undefined) {
     queryFn: () =>
       base44.entities.Submittal.filter(
         { project_id: projectId },
-        "-submitted_date"
+        "-submitted_date",
+        2000
       ),
     enabled: !!projectId,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   // ── Rounds query ─────────────────────────────────────────────────
@@ -147,10 +148,11 @@ export function useSubmittals(projectId: string | null | undefined) {
     queryFn: () =>
       base44.entities.SubmittalRound.filter(
         { project_id: projectId },
-        "-round_number"
+        "-round_number",
+        2000
       ),
     enabled: !!projectId,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   // ── Derived: group by status ─────────────────────────────────────

@@ -103,33 +103,38 @@ export function useFinancials(projectId: string | null | undefined, project: Pro
   // ── Queries ─────────────────────────────────────────────────────────
   const { data: costCodes = [], isLoading: loadingCC } = useQuery<CostCode[]>({
     queryKey: getQueryKey("cost_code", projectId),
-    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.CostCode.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
+    staleTime: 60_000,
   });
 
   const { data: expenses = [], isLoading: loadingExp } = useQuery<Expense[]>({
     queryKey: getQueryKey("expense", projectId),
-    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.Expense.filter({ project_id: projectId }, "-created_at", 2000),
     enabled: !!projectId,
+    staleTime: 60_000,
   });
 
   const { data: sovItems = [], isLoading: loadingSOV } = useQuery<SOVItem[]>({
     queryKey: getQueryKey("sov_item", projectId),
-    queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.SOVItem.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
+    staleTime: 60_000,
   });
 
   const { data: changeOrders = [], isLoading: loadingCO } = useQuery<ChangeOrder[]>({
     queryKey: getQueryKey("change_order", projectId),
-    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.ChangeOrder.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
+    staleTime: 60_000,
   });
 
   // Work packages — needed for EVM-derived scope % in Labor Utilization KPI
   const { data: workPackages = [], isLoading: loadingWP } = useQuery<WorkPackage[]>({
     queryKey: getQueryKey("work_package", projectId),
-    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }),
+    queryFn: () => base44.entities.WorkPackage.filter({ project_id: projectId }, undefined, 2000),
     enabled: !!projectId,
+    staleTime: 60_000,
   });
 
   const isLoading = loadingCC || loadingExp || loadingSOV || loadingCO || loadingWP;
