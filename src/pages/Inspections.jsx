@@ -8,6 +8,7 @@ import InspectionList from "@/components/inspections/InspectionList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 const TYPES = [
   "Steel Fabrication",
@@ -51,7 +52,9 @@ export default function Inspections() {
         ? base44.entities.Inspection.filter({ project_id: projectId })
         : base44.entities.Inspection.list("-inspection_date"),
   });
-  // Defensive soft-delete filter (entity layer also does this at fetch).
+
+  useRealtimeInvalidation("inspections", projectId, [["inspections", projectId]]);
+
   const inspections = React.useMemo(() => rawInspections.filter((r) => !r.is_deleted), [rawInspections]);
 
   const { data: projects = [] } = useQuery({
