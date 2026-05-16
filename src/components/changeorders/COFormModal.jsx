@@ -15,7 +15,7 @@ const empty = {
   co_number: "",
 };
 
-export default function COFormModal({ open, onClose, onSave, co, projects = [], nextNumber }) {
+export default function COFormModal({ open, onClose, onSave, isSaving, co, projects = [], nextNumber }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
 
@@ -70,7 +70,9 @@ export default function COFormModal({ open, onClose, onSave, co, projects = [], 
       title={co ? `Edit ${co.co_number || "CO"}` : "New Change Order"}
       footer={<>
         <button style={btnSecondary} onClick={onClose}>Cancel</button>
-        <button style={btnPrimary} onClick={handleSave}>{co ? "Update" : "Create"}</button>
+        <button style={btnPrimary} onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving…" : co ? "Update" : "Create"}
+        </button>
       </>}
     >
       <div style={grid}>

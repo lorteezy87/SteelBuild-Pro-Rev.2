@@ -496,6 +496,7 @@ export default function ChangeOrders() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
         co={editing}
         projects={projects}
         // Heuristic preview of the auto-assigned number for the modal
