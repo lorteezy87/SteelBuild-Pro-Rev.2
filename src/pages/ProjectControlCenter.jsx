@@ -26,6 +26,10 @@ import {
   SEVERITY,
   IMPACT_TAGS,
 } from "../utils/pccEngine";
+import {
+  buildOperationalGraphHealth,
+  GRAPH_SEVERITY,
+} from "../utils/operationalGraph";
 
 // ─── Type → page routing map ──────────────────────────────────────────────────
 const TYPE_PAGE_MAP = {
@@ -959,7 +963,140 @@ function AISummaryBanner({ kpis }) {
 }
 
 // ─── Health Summary Panel ────────────────────────────────────────────────────
-function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
+function ProductionGraphHealth({ graphHealth }) {
+  if (!graphHealth) return null;
+
+  const score = graphHealth.score ?? 100;
+  const scoreColor =
+    score < 60 ? "var(--status-error)"
+    : score < 85 ? "var(--status-warning-bright)"
+    : "var(--status-success)";
+  const topOwner = Object.entries(graphHealth.countsByOwner || {})
+    .sort((a, b) => b[1] - a[1])[0];
+  const topDomains = Object.entries(graphHealth.countsByDomain || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+  const topGaps = graphHealth.topGaps || [];
+
+  return (
+    <div style={{
+      border: "1px solid var(--divider)",
+      borderRadius: 8,
+      background: "var(--bg-surface-low)",
+      padding: 12,
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Production Graph Health
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginTop: 3, lineHeight: 1.35 }}>
+            S&H single-source linkage and no-duplicate-entry discipline.
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 900, color: scoreColor, lineHeight: 1 }}>
+            {score}%
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em", marginTop: 3 }}>
+            {graphHealth.recordsReviewed || 0} RECORDS
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>GAPS</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.gapCount > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
+            {graphHealth.gapCount}
+          </div>
+        </div>
+        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>HIGH</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.highImpactCount > 0 ? "var(--status-error)" : "var(--text-muted)" }}>
+            {graphHealth.highImpactCount}
+          </div>
+        </div>
+        <div style={{ padding: "8px 10px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.10em" }}>DUP RISK</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: graphHealth.duplicateRiskCount > 0 ? "var(--status-review)" : "var(--text-muted)" }}>
+            {graphHealth.duplicateRiskCount}
+          </div>
+        </div>
+      </div>
+
+      {topOwner && (
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+          Most cleanup sits in <strong style={{ color: "var(--text-primary)" }}>{topOwner[0]}</strong> with {topOwner[1]} open linkage {topOwner[1] === 1 ? "gap" : "gaps"}.
+        </div>
+      )}
+
+      {topDomains.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {topDomains.map(([domain, count]) => (
+            <span key={domain} style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 8,
+              fontWeight: 800,
+              letterSpacing: "0.08em",
+              color: "var(--accent)",
+              background: "var(--accent-muted)",
+              border: "1px solid rgba(200,155,32,0.22)",
+              borderRadius: 4,
+              padding: "3px 6px",
+            }}>
+              {domain.toUpperCase()}: {count}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {topGaps.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {topGaps.slice(0, 5).map((gap) => {
+            const sev = GRAPH_SEVERITY[gap.severity] || GRAPH_SEVERITY.Medium;
+            return (
+              <div key={gap.id} style={{
+                display: "grid",
+                gridTemplateColumns: "4px 1fr",
+                gap: 8,
+                padding: "8px 0",
+                borderTop: "1px solid var(--divider)",
+              }}>
+                <div style={{ background: sev.color, borderRadius: 3 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: sev.color, fontWeight: 800, letterSpacing: "0.10em" }}>
+                      {gap.severity.toUpperCase()}
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em" }}>
+                      {gap.ownerSystem}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
+                    {gap.title}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {gap.sourceLabel}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ padding: "10px 12px", border: "1px solid var(--divider)", borderRadius: 6, background: "var(--hover-bg)", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-secondary)" }}>
+          No source-of-truth linkage gaps detected in the loaded project data.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis, operationalGraphHealth }) {
   const total = scoredFeed.length;
   const critCount = scoredFeed.filter((i) => i.severityKey === "CRITICAL").length;
   const highCount = scoredFeed.filter((i) => i.severityKey === "HIGH").length;
@@ -1030,6 +1167,8 @@ function HealthSummaryPanel({ scoredFeed, waitingBoard, kpis }) {
         </div>
       </div>
 
+      <ProductionGraphHealth graphHealth={operationalGraphHealth} />
+
       {/* Top waiting-on parties */}
       {topWaiting.length > 0 && (
         <div>
@@ -1070,7 +1209,7 @@ export default function ProjectControlCenter() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
   const [drawerItem, setDrawerItem] = useState(null);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [lastRefresh] = useState(new Date());
   const [creatingReleaseGateKey, setCreatingReleaseGateKey] = useState(null);
 
   const enabled = !!activeProject?.id;
@@ -1083,14 +1222,31 @@ export default function ProjectControlCenter() {
   const coQ   = useQuery({ queryKey: ["pcc-cos",        activeProject?.id], queryFn: () => base44.entities.ChangeOrder.filter({ project_id: activeProject.id }), enabled });
   const taskQ = useQuery({ queryKey: ["pcc-schedule-tasks", activeProject?.id], queryFn: () => base44.entities.ScheduleTask.filter({ project_id: activeProject.id }), enabled });
   const actionQ = useQuery({ queryKey: ["pcc-action-items", activeProject?.id], queryFn: () => base44.entities.ActionItem.filter({ project_id: activeProject.id }), enabled });
-  const rfis = rfiQ.data ?? [];
-  const drawings = dwgQ.data ?? [];
-  const workPackages = wpQ.data ?? [];
-  const deliveries = delQ.data ?? [];
-  const changeOrders = coQ.data ?? [];
-  const scheduleTasks = taskQ.data ?? [];
-  const actionItems = actionQ.data ?? [];
-  const isLoading = enabled && (rfiQ.isLoading || dwgQ.isLoading || wpQ.isLoading || delQ.isLoading || coQ.isLoading || taskQ.isLoading || actionQ.isLoading);
+  const drawingSetQ = useQuery({ queryKey: ["pcc-drawing-sets", activeProject?.id], queryFn: () => base44.entities.DrawingSet.filter({ project_id: activeProject.id }), enabled });
+  const submittalQ = useQuery({ queryKey: ["pcc-submittals", activeProject?.id], queryFn: () => base44.entities.Submittal.filter({ project_id: activeProject.id }, "-submitted_date"), enabled });
+  const dailyLogQ = useQuery({ queryKey: ["pcc-daily-logs", activeProject?.id], queryFn: () => base44.entities.DailyLog.filter({ project_id: activeProject.id }, "-date"), enabled });
+  const rfis = useMemo(() => rfiQ.data ?? [], [rfiQ.data]);
+  const drawings = useMemo(() => dwgQ.data ?? [], [dwgQ.data]);
+  const workPackages = useMemo(() => wpQ.data ?? [], [wpQ.data]);
+  const deliveries = useMemo(() => delQ.data ?? [], [delQ.data]);
+  const changeOrders = useMemo(() => coQ.data ?? [], [coQ.data]);
+  const scheduleTasks = useMemo(() => taskQ.data ?? [], [taskQ.data]);
+  const actionItems = useMemo(() => actionQ.data ?? [], [actionQ.data]);
+  const drawingSets = useMemo(() => drawingSetQ.data ?? [], [drawingSetQ.data]);
+  const submittals = useMemo(() => submittalQ.data ?? [], [submittalQ.data]);
+  const dailyLogs = useMemo(() => dailyLogQ.data ?? [], [dailyLogQ.data]);
+  const isLoading = enabled && (
+    rfiQ.isLoading ||
+    dwgQ.isLoading ||
+    wpQ.isLoading ||
+    delQ.isLoading ||
+    coQ.isLoading ||
+    taskQ.isLoading ||
+    actionQ.isLoading ||
+    drawingSetQ.isLoading ||
+    submittalQ.isLoading ||
+    dailyLogQ.isLoading
+  );
 
   // ── Build scored feed ──────────────────────────────────────────
   const allRaw = useMemo(() => [
@@ -1121,6 +1277,19 @@ export default function ProjectControlCenter() {
   const releaseGateActionDrafts = useMemo(
     () => buildReleaseGateActionDrafts(scoredFeed, actionItems),
     [scoredFeed, actionItems]
+  );
+  const operationalGraphHealth = useMemo(
+    () => buildOperationalGraphHealth({
+      drawingSets,
+      drawings,
+      submittals,
+      rfis,
+      workPackages,
+      deliveries,
+      dailyLogs,
+      scheduleTasks,
+    }),
+    [drawingSets, drawings, submittals, rfis, workPackages, deliveries, dailyLogs, scheduleTasks]
   );
 
   const createReleaseGateActionMut = useMutation({
@@ -1259,6 +1428,7 @@ export default function ProjectControlCenter() {
 
   const noProject = !activeProject;
   const isEmpty   = scoredFeed.length === 0;
+  const hasOperationalGraphData = operationalGraphHealth.recordsReviewed > 0 || operationalGraphHealth.gapCount > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg-page)" }}>
@@ -1388,6 +1558,12 @@ export default function ProjectControlCenter() {
           sub="open COs"
           previous={previousKpis?.coExposure != null ? (previousKpis.coExposure > 0 ? parseInt((previousKpis.coExposure / 1000).toFixed(0), 10) : 0) : undefined}
           invertTrend
+        />
+        <SignalCard
+          label="GRAPH HEALTH"
+          value={`${operationalGraphHealth.score}%`}
+          color={operationalGraphHealth.highImpactCount > 0 ? "var(--status-warning-bright)" : "var(--status-success)"}
+          sub={`${operationalGraphHealth.gapCount} gaps`}
         />
       </div>
 
@@ -1564,8 +1740,13 @@ export default function ProjectControlCenter() {
 
         {/* ─── RIGHT COLUMN: Health Summary ─── */}
         <div className="pcc-split-right" style={{ overflow: "auto", padding: 12 }}>
-          {!noProject && !isLoading && !isEmpty ? (
-            <HealthSummaryPanel scoredFeed={scoredFeed} waitingBoard={waitingBoard} kpis={kpis} />
+          {!noProject && !isLoading && (!isEmpty || hasOperationalGraphData) ? (
+            <HealthSummaryPanel
+              scoredFeed={scoredFeed}
+              waitingBoard={waitingBoard}
+              kpis={kpis}
+              operationalGraphHealth={operationalGraphHealth}
+            />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em" }}>
