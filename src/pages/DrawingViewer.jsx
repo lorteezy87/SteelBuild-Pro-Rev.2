@@ -45,6 +45,7 @@ import {
   updateZone as updateZoneSvc,
   deleteZone as deleteZoneSvc,
   createNewRevisionAndCarryZones,
+  unlockSet as unlockSetSvc,
 } from "@/lib/drawingHub";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -562,8 +563,7 @@ export default function DrawingViewer() {
           drawingSet={activeDrawingSet}
           onUnlock={async () => {
             try {
-              const { unlockSet } = await import("@/lib/drawingHub");
-              await unlockSet({ setId: activeDrawingSet.id });
+              await unlockSetSvc({ setId: activeDrawingSet.id });
               await qc.invalidateQueries({ queryKey: ["drawing_set", activeDrawingSet.id] });
               toast.success("Set unlocked. Edits are now allowed.");
             } catch (err) {

@@ -78,7 +78,6 @@ export default function ShortcutsOverlay({ open, onClose }) {
           width: 480,
           maxWidth: "100%",
           maxHeight: "90vh",
-          overflow: "auto",
           background: "var(--bg-surface)",
           border: "1px solid var(--border-strong)",
           borderRadius: 8,
@@ -125,7 +124,7 @@ export default function ShortcutsOverlay({ open, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "calc(90vh - 112px)", overflowY: "auto" }}>
           {SHORTCUTS.map((section) => (
             <div key={section.group}>
               <div
