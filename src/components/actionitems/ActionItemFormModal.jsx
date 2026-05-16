@@ -77,12 +77,13 @@ export default function ActionItemFormModal({ projectId, onClose, onSave, action
     mutation.mutate(formData);
   };
 
-  // Cmd/Ctrl+Enter to save
+  // Cmd/Ctrl+Enter to save, Escape to close
   const handleSubmitRef = useRef(handleSubmit);
   handleSubmitRef.current = handleSubmit;
   useEffect(() => {
     const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmitRef.current();
+      if (e.key === "Escape") onClose();
+      else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmitRef.current();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);

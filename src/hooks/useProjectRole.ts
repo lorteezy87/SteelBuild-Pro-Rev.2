@@ -28,15 +28,19 @@ export function useProjectRole(projectId: string | null | undefined): {
     enabled: !!userId && !!projectId,
     staleTime: STALE,
     refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_my_project_role", {
         p_project_id: projectId as string,
       });
-      if (error) throw error;
+      if (error) {
+        console.error("[useProjectRole] RPC failed:", error.message);
+        throw error;
+      }
       return ((data as ProjectRole) ?? null) as ProjectRole;
     },
   });
-  return { role: (data ?? null) as ProjectRole, isLoading };
+  return { role: (data ?? "viewer") as ProjectRole, isLoading };
 }
 
 /**

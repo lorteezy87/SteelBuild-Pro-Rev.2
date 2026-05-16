@@ -1,15 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 
-export default function WorkflowBlockingModal({ 
-  open, 
-  onClose, 
-  reason, 
-  action, 
-  currentStep, 
+export default function WorkflowBlockingModal({
+  open,
+  onClose,
+  reason,
+  action,
+  currentStep,
   blockedStep,
   deliveries = null
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
