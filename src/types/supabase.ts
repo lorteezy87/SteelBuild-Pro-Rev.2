@@ -1729,6 +1729,7 @@ export type Database = {
       drawing_sets: {
         Row: {
           created_at: string | null
+          current_submittal_id: string | null
           deleted_at: string | null
           description: string | null
           discipline: string | null
@@ -1759,6 +1760,7 @@ export type Database = {
           sheet_count: number | null
           stage_summary: string | null
           status: string | null
+          submittal_status: string | null
           titleblock_number_rect: Json | null
           titleblock_title_rect: Json | null
           updated_at: string | null
@@ -1766,6 +1768,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          current_submittal_id?: string | null
           deleted_at?: string | null
           description?: string | null
           discipline?: string | null
@@ -1796,6 +1799,7 @@ export type Database = {
           sheet_count?: number | null
           stage_summary?: string | null
           status?: string | null
+          submittal_status?: string | null
           titleblock_number_rect?: Json | null
           titleblock_title_rect?: Json | null
           updated_at?: string | null
@@ -1803,6 +1807,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          current_submittal_id?: string | null
           deleted_at?: string | null
           description?: string | null
           discipline?: string | null
@@ -1833,6 +1838,7 @@ export type Database = {
           sheet_count?: number | null
           stage_summary?: string | null
           status?: string | null
+          submittal_status?: string | null
           titleblock_number_rect?: Json | null
           titleblock_title_rect?: Json | null
           updated_at?: string | null
@@ -1840,10 +1846,55 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "drawing_sets_current_submittal_id_fkey"
+            columns: ["current_submittal_id"]
+            isOneToOne: false
+            referencedRelation: "submittals"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "drawing_sets_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drawing_sheets: {
+        Row: {
+          analysis_id: string | null
+          created_at: string | null
+          id: string
+          page_index: number | null
+          sheet_category: string | null
+          sheet_number: string
+          sheet_title: string | null
+        }
+        Insert: {
+          analysis_id?: string | null
+          created_at?: string | null
+          id?: string
+          page_index?: number | null
+          sheet_category?: string | null
+          sheet_number: string
+          sheet_title?: string | null
+        }
+        Update: {
+          analysis_id?: string | null
+          created_at?: string | null
+          id?: string
+          page_index?: number | null
+          sheet_category?: string | null
+          sheet_number?: string
+          sheet_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawing_sheets_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "drawing_analyses"
             referencedColumns: ["id"]
           },
         ]
@@ -1944,44 +1995,6 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      drawing_sheets: {
-        Row: {
-          analysis_id: string | null
-          created_at: string | null
-          id: string
-          page_index: number | null
-          sheet_category: string | null
-          sheet_number: string
-          sheet_title: string | null
-        }
-        Insert: {
-          analysis_id?: string | null
-          created_at?: string | null
-          id?: string
-          page_index?: number | null
-          sheet_category?: string | null
-          sheet_number: string
-          sheet_title?: string | null
-        }
-        Update: {
-          analysis_id?: string | null
-          created_at?: string | null
-          id?: string
-          page_index?: number | null
-          sheet_category?: string | null
-          sheet_number?: string
-          sheet_title?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "drawing_sheets_analysis_id_fkey"
-            columns: ["analysis_id"]
-            isOneToOne: false
-            referencedRelation: "drawing_analyses"
             referencedColumns: ["id"]
           },
         ]
@@ -2394,7 +2407,6 @@ export type Database = {
         Row: {
           ai_extraction_error: string | null
           ai_extraction_status: string | null
-          annotations: Json | null
           callouts: Json | null
           created_at: string | null
           deleted_at: string | null
@@ -2443,7 +2455,6 @@ export type Database = {
         Insert: {
           ai_extraction_error?: string | null
           ai_extraction_status?: string | null
-          annotations?: Json | null
           callouts?: Json | null
           created_at?: string | null
           deleted_at?: string | null
@@ -2492,7 +2503,6 @@ export type Database = {
         Update: {
           ai_extraction_error?: string | null
           ai_extraction_status?: string | null
-          annotations?: Json | null
           callouts?: Json | null
           created_at?: string | null
           deleted_at?: string | null
@@ -2778,6 +2788,57 @@ export type Database = {
           },
         ]
       }
+      llm_telemetry: {
+        Row: {
+          cost_usd: number | null
+          error_kind: string | null
+          id: string
+          input_tokens: number | null
+          latency_ms: number | null
+          metadata: Json
+          model: string
+          occurred_at: string
+          output_tokens: number | null
+          project_id: string | null
+          provider: string
+          success: boolean
+          use_case: string
+          user_id: string | null
+        }
+        Insert: {
+          cost_usd?: number | null
+          error_kind?: string | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          metadata?: Json
+          model: string
+          occurred_at?: string
+          output_tokens?: number | null
+          project_id?: string | null
+          provider: string
+          success?: boolean
+          use_case?: string
+          user_id?: string | null
+        }
+        Update: {
+          cost_usd?: number | null
+          error_kind?: string | null
+          id?: string
+          input_tokens?: number | null
+          latency_ms?: number | null
+          metadata?: Json
+          model?: string
+          occurred_at?: string
+          output_tokens?: number | null
+          project_id?: string | null
+          provider?: string
+          success?: boolean
+          use_case?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       look_ahead: {
         Row: {
           constraints: string | null
@@ -2889,6 +2950,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meetings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_activity: {
+        Row: {
+          actor_email: string | null
+          actor_user_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          new_role: string | null
+          old_role: string | null
+          project_id: string
+          target_email: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          new_role?: string | null
+          old_role?: string | null
+          project_id: string
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          new_role?: string | null
+          old_role?: string | null
+          project_id?: string
+          target_email?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_activity_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -4222,6 +4333,7 @@ export type Database = {
           end_date: string | null
           id: string
           is_milestone: boolean | null
+          is_summary: boolean
           metadata: Json | null
           milestone: boolean | null
           notes: string | null
@@ -4256,6 +4368,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_milestone?: boolean | null
+          is_summary?: boolean
           metadata?: Json | null
           milestone?: boolean | null
           notes?: string | null
@@ -4290,6 +4403,7 @@ export type Database = {
           end_date?: string | null
           id?: string
           is_milestone?: boolean | null
+          is_summary?: boolean
           metadata?: Json | null
           milestone?: boolean | null
           notes?: string | null
@@ -4496,125 +4610,6 @@ export type Database = {
           },
         ]
       }
-      submittals: {
-        Row: {
-          approved_date: string | null
-          ball_in_court: string | null
-          created_at: string | null
-          current_round_id: string | null
-          days_in_review: number | null
-          deleted_at: string | null
-          discipline: string | null
-          distributed_to: string | null
-          drawing_set_ids: string[] | null
-          file_url: string | null
-          id: string
-          is_deleted: boolean | null
-          linked_rfi_ids: string[] | null
-          linked_task_ids: string[] | null
-          metadata: Json | null
-          notes: string | null
-          project_id: string
-          project_name: string | null
-          required_date: string | null
-          returned_date: string | null
-          reviewer: string | null
-          revision: string | null
-          round_number: number | null
-          received_from: string | null
-          spec_section: string | null
-          status: string
-          submittal_number: string
-          submittal_type: string | null
-          submitted_by: string | null
-          submitted_date: string | null
-          title: string
-          total_rounds: number
-          transmittal_number: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          approved_date?: string | null
-          ball_in_court?: string | null
-          created_at?: string | null
-          current_round_id?: string | null
-          days_in_review?: number | null
-          deleted_at?: string | null
-          discipline?: string | null
-          distributed_to?: string | null
-          drawing_set_ids?: string[] | null
-          file_url?: string | null
-          id?: string
-          is_deleted?: boolean | null
-          linked_rfi_ids?: string[] | null
-          linked_task_ids?: string[] | null
-          metadata?: Json | null
-          notes?: string | null
-          project_id: string
-          project_name?: string | null
-          required_date?: string | null
-          returned_date?: string | null
-          reviewer?: string | null
-          revision?: string | null
-          round_number?: number | null
-          received_from?: string | null
-          spec_section?: string | null
-          status?: string
-          submittal_number: string
-          submittal_type?: string | null
-          submitted_by?: string | null
-          submitted_date?: string | null
-          title: string
-          total_rounds?: number
-          transmittal_number?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          approved_date?: string | null
-          ball_in_court?: string | null
-          created_at?: string | null
-          current_round_id?: string | null
-          days_in_review?: number | null
-          deleted_at?: string | null
-          discipline?: string | null
-          distributed_to?: string | null
-          drawing_set_ids?: string[] | null
-          file_url?: string | null
-          id?: string
-          is_deleted?: boolean | null
-          linked_rfi_ids?: string[] | null
-          linked_task_ids?: string[] | null
-          metadata?: Json | null
-          notes?: string | null
-          project_id?: string
-          project_name?: string | null
-          required_date?: string | null
-          returned_date?: string | null
-          reviewer?: string | null
-          revision?: string | null
-          round_number?: number | null
-          received_from?: string | null
-          spec_section?: string | null
-          status?: string
-          submittal_number?: string
-          submittal_type?: string | null
-          submitted_by?: string | null
-          submitted_date?: string | null
-          title?: string
-          total_rounds?: number
-          transmittal_number?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "submittals_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       submittal_activity: {
         Row: {
           actor_id: string | null
@@ -4805,10 +4800,143 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "submittal_sheet_responses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "submittal_sheet_responses_submittal_round_id_fkey"
             columns: ["submittal_round_id"]
             isOneToOne: false
             referencedRelation: "submittal_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submittals: {
+        Row: {
+          approved_date: string | null
+          ball_in_court: string | null
+          created_at: string | null
+          current_round_id: string | null
+          days_in_review: number | null
+          deleted_at: string | null
+          discipline: string | null
+          distributed_to: string | null
+          drawing_set_ids: string[] | null
+          file_url: string | null
+          id: string
+          is_deleted: boolean | null
+          linked_rfi_ids: string[] | null
+          linked_task_ids: string[] | null
+          metadata: Json | null
+          notes: string | null
+          project_id: string
+          project_name: string | null
+          received_from: string | null
+          required_date: string | null
+          returned_date: string | null
+          reviewer: string | null
+          revision: string | null
+          round_number: number | null
+          spec_section: string | null
+          status: string
+          submittal_number: string
+          submittal_type: string | null
+          submitted_by: string | null
+          submitted_date: string | null
+          title: string
+          total_rounds: number
+          transmittal_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_date?: string | null
+          ball_in_court?: string | null
+          created_at?: string | null
+          current_round_id?: string | null
+          days_in_review?: number | null
+          deleted_at?: string | null
+          discipline?: string | null
+          distributed_to?: string | null
+          drawing_set_ids?: string[] | null
+          file_url?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          linked_rfi_ids?: string[] | null
+          linked_task_ids?: string[] | null
+          metadata?: Json | null
+          notes?: string | null
+          project_id: string
+          project_name?: string | null
+          received_from?: string | null
+          required_date?: string | null
+          returned_date?: string | null
+          reviewer?: string | null
+          revision?: string | null
+          round_number?: number | null
+          spec_section?: string | null
+          status?: string
+          submittal_number: string
+          submittal_type?: string | null
+          submitted_by?: string | null
+          submitted_date?: string | null
+          title: string
+          total_rounds?: number
+          transmittal_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_date?: string | null
+          ball_in_court?: string | null
+          created_at?: string | null
+          current_round_id?: string | null
+          days_in_review?: number | null
+          deleted_at?: string | null
+          discipline?: string | null
+          distributed_to?: string | null
+          drawing_set_ids?: string[] | null
+          file_url?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          linked_rfi_ids?: string[] | null
+          linked_task_ids?: string[] | null
+          metadata?: Json | null
+          notes?: string | null
+          project_id?: string
+          project_name?: string | null
+          received_from?: string | null
+          required_date?: string | null
+          returned_date?: string | null
+          reviewer?: string | null
+          revision?: string | null
+          round_number?: number | null
+          spec_section?: string | null
+          status?: string
+          submittal_number?: string
+          submittal_type?: string | null
+          submitted_by?: string | null
+          submitted_date?: string | null
+          title?: string
+          total_rounds?: number
+          transmittal_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submittals_current_round_id_fkey"
+            columns: ["current_round_id"]
+            isOneToOne: false
+            referencedRelation: "submittal_rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submittals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -5276,16 +5404,35 @@ export type Database = {
         Args: { p_project_id: string; p_record_type: string }
         Returns: number
       }
+      reconcile_stuck_extractions: { Args: never; Returns: number }
       seed_project_handoff_items: {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      set_for_drawing_is_locked: {
+        Args: { p_drawing_id: string }
+        Returns: boolean
+      }
+      set_for_zone_is_locked: { Args: { p_zone_id: string }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       user_has_project_access: {
         Args: { p_project_id: string }
         Returns: boolean
       }
+      user_has_project_role: {
+        Args: { p_project_id: string; p_role: string }
+        Returns: boolean
+      }
+      user_has_project_role_at_least: {
+        Args: { p_min_role: string; p_project_id: string }
+        Returns: boolean
+      }
+      user_is_project_admin: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
+      user_is_system_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
@@ -5418,4 +5565,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

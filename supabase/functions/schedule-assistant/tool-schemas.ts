@@ -148,9 +148,9 @@ export const schedulingTools: Anthropic.Tool[] = [
         },
         stage: {
           type: "string",
-          enum: ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"],
+          enum: ["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"],
           description:
-            "Filter by stage (SBP drawing workflow: Not Started → OFA → BFA → OFS → BFS → FFF → Released).",
+            "Filter by stage (SBP drawing workflow: Not Started → IFA → OFA → BFA → OFS → IFC → Released).",
         },
       },
       required: ["project_id"],

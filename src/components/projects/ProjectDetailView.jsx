@@ -268,25 +268,25 @@ function ScheduleTab({ scheduleTasks }) {
 // ── DRAWINGS TAB ──
 function DrawingsTab({ drawings }) {
   const STAGE_COLOR = {
-    'Released':     'var(--status-success)',
-    'BFS':          'var(--status-success)',
-    'OFS':          'var(--accent)',
-    'BFA':          'var(--accent)',
-    'OFA':          'var(--status-warning)',
-    'Not Started':  'var(--text-muted)',
-    'FFF':          'var(--status-info)',
+    'Released':    'var(--status-success)',
+    'IFC':         'var(--status-success)',
+    'OFS':         'var(--accent)',
+    'BFA':         'var(--accent)',
+    'OFA':         'var(--status-warning)',
+    'IFA':         'var(--status-info)',
+    'Not Started': 'var(--text-muted)',
   };
 
   if (!drawings.length) return <EmptyState label="No Drawings" />;
 
-  const overdue = drawings.filter(d => d.due_date && parseUTCDate(d.due_date) < new Date() && !['Released','BFS'].includes(d.stage)).length;
+  const overdue = drawings.filter(d => d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released').length;
 
   return (
     <div>
       <KpiStrip items={[
         { label: 'Total', value: drawings.length },
-        { label: 'Released', value: drawings.filter(d => ['Released','BFS'].includes(d.stage)).length, color: 'var(--status-success)' },
-        { label: 'In Review', value: drawings.filter(d => ['OFA','BFA','OFS'].includes(d.stage)).length, color: 'var(--accent)' },
+        { label: 'Released', value: drawings.filter(d => d.stage === 'Released').length, color: 'var(--status-success)' },
+        { label: 'In Review', value: drawings.filter(d => ['IFA','OFA','BFA','OFS','IFC'].includes(d.stage)).length, color: 'var(--accent)' },
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
       ]} />
       <SectionCard>
@@ -296,7 +296,7 @@ function DrawingsTab({ drawings }) {
           ))}
         </div>
         {drawings.map(d => {
-          const od = d.due_date && parseUTCDate(d.due_date) < new Date() && !['Released','BFS'].includes(d.stage);
+          const od = d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released';
           return (
             <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : '3px solid transparent' }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{d.sheet_number || '—'}</div>

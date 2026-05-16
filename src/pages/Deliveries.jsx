@@ -25,6 +25,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { useProjectContext } from "@/components/shared/ProjectContext";
 import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
 import { invalidateEntity } from "@/services/cacheRegistry";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
 import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
@@ -116,6 +117,7 @@ export default function Deliveries() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const receiveMode = searchParams.get("receive") === "1";
 
   const [view, setView] = useState("dispatch");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -128,6 +130,12 @@ export default function Deliveries() {
   const [detail, setDetail] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setDetail(null);
+    setShowForm(true);
+  });
 
   const { data: deliveries = [], isLoading } = useQuery({
     queryKey: ["deliveries", projectId || "all"],
@@ -177,6 +185,21 @@ export default function Deliveries() {
     () => buildDeliveryMetrics(activeDeliveries, workPackages),
     [activeDeliveries, workPackages]
   );
+
+  useEffect(() => {
+    if (!receiveMode) return;
+    setView("schedule");
+    setRiskFilter("all");
+    setScheduleFilter(
+      metrics.overdue.length
+        ? "late"
+        : metrics.dueToday.length
+          ? "today"
+          : metrics.readyToReceive.length
+            ? "ready"
+            : "all"
+    );
+  }, [metrics.dueToday.length, metrics.overdue.length, metrics.readyToReceive.length, receiveMode]);
 
   const invalidateDeliveries = () => invalidateEntity(qc, "delivery", projectId);
 
@@ -332,6 +355,12 @@ export default function Deliveries() {
     setSearchParams(next);
   };
 
+  const clearReceiveMode = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("receive");
+    setSearchParams(next, { replace: true });
+  };
+
   const setDeliveryStatus = (delivery, status) => {
     if (!delivery || transitMut.isPending) return;
     if (status === "Delivered" && !isFabComplete(delivery, workPackages)) {
@@ -445,6 +474,26 @@ export default function Deliveries() {
           />
         </div>
       </section>
+
+      {receiveMode && (
+        <ReceivingQuickPanel
+          metrics={metrics}
+          projectMap={projectMap}
+          workPackageMap={workPackageMap}
+          onOpen={setDetail}
+          onExit={clearReceiveMode}
+          onFilter={(filter) => {
+            setView("schedule");
+            setScheduleFilter(filter);
+            setRiskFilter("all");
+          }}
+          onScheduleLoad={() => {
+            setEditing(null);
+            setDetail(null);
+            setShowForm(true);
+          }}
+        />
+      )}
 
       <section className="delivery-flow-strip">
         <div className="delivery-flow-header">
@@ -686,6 +735,83 @@ function HeroMetric({ label, value, sub, color, icon: Icon }) {
       <div className="delivery-metric-value" style={mono}>{value}</div>
       <div className="delivery-metric-sub">{sub}</div>
     </div>
+  );
+}
+
+function mergeDeliveryLists(...lists) {
+  const seen = new Set();
+  const merged = [];
+  for (const list of lists) {
+    for (const delivery of list || []) {
+      const key = delivery.id || [
+        delivery.delivery_number,
+        delivery.load_number,
+        delivery.po_number,
+        delivery.description,
+      ].filter(Boolean).join(":");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(delivery);
+    }
+  }
+  return merged;
+}
+
+function ReceivingQuickPanel({ metrics, projectMap, workPackageMap, onOpen, onExit, onFilter, onScheduleLoad }) {
+  const focusLoads = mergeDeliveryLists(metrics.overdue, metrics.dueToday, metrics.readyToReceive).slice(0, 6);
+  return (
+    <section className="delivery-receive-panel" aria-label="Delivery receiving quick workflow">
+      <div className="delivery-receive-copy">
+        <div className="delivery-section-label">Field Receiving</div>
+        <h2 style={display}>Confirm trucks without hunting through the register.</h2>
+        <p>
+          Review late, due-today, and ready-to-receive loads. Opening a load keeps the human approval step in the
+          detail drawer before any status change is written.
+        </p>
+      </div>
+
+      <div className="delivery-receive-actions">
+        <button type="button" onClick={() => onFilter("late")}>
+          <span>Late</span>
+          <strong>{metrics.overdue.length}</strong>
+        </button>
+        <button type="button" onClick={() => onFilter("today")}>
+          <span>Due Today</span>
+          <strong>{metrics.dueToday.length}</strong>
+        </button>
+        <button type="button" onClick={() => onFilter("ready")}>
+          <span>Ready</span>
+          <strong>{metrics.readyToReceive.length}</strong>
+        </button>
+        <button type="button" onClick={onScheduleLoad}>
+          <span>New</span>
+          <strong>+</strong>
+        </button>
+      </div>
+
+      <div className="delivery-receive-list">
+        {focusLoads.length > 0 ? (
+          focusLoads.map((delivery, index) => {
+            const wp = workPackageMap[delivery.work_package_id];
+            return (
+              <button key={delivery.id || `${delivery.po_number}-${delivery.description}-${index}`} type="button" onClick={() => onOpen(delivery)}>
+                <div>
+                  <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                  <span>{delivery.vendor || "Vendor TBD"} - {projectMap[delivery.project_id] || delivery.project_name || "Project TBD"}</span>
+                </div>
+                <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+              </button>
+            );
+          })
+        ) : (
+          <div className="delivery-receive-empty">No late, due-today, or ready loads in the current project.</div>
+        )}
+      </div>
+
+      <button type="button" className="delivery-receive-exit" onClick={onExit}>
+        Exit receiving mode
+      </button>
+    </section>
   );
 }
 
@@ -1219,6 +1345,110 @@ const deliveryStyles = `
 .delivery-metric-sub {
   margin-top: 6px;
   font-size: 11px;
+}
+.delivery-receive-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--phase-delivery) 38%, var(--border-default));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--phase-delivery) 8%, var(--bg-surface));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.delivery-receive-copy h2 {
+  margin: 7px 0 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.15;
+}
+.delivery-receive-copy p {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.delivery-receive-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.delivery-receive-actions button,
+.delivery-receive-list button,
+.delivery-receive-exit {
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.delivery-receive-actions button {
+  min-height: 58px;
+  padding: 9px;
+  text-align: left;
+}
+.delivery-receive-actions span,
+.delivery-receive-exit {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.delivery-receive-actions strong {
+  display: block;
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--phase-delivery);
+}
+.delivery-receive-list {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.delivery-receive-list button {
+  min-height: 58px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  text-align: left;
+}
+.delivery-receive-list strong,
+.delivery-receive-list span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-receive-list strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.delivery-receive-list span,
+.delivery-receive-empty {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.delivery-receive-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
+  text-align: center;
+}
+.delivery-receive-exit {
+  grid-column: 1 / -1;
+  justify-self: flex-end;
+  min-height: 36px;
+  padding: 0 12px;
 }
 .delivery-flow-strip,
 .delivery-toolbar,
@@ -1797,6 +2027,7 @@ const deliveryStyles = `
 }
 @media (max-width: 1180px) {
   .delivery-hero,
+  .delivery-receive-panel,
   .delivery-layout,
   .delivery-schedule {
     grid-template-columns: minmax(0, 1fr);
@@ -1822,7 +2053,9 @@ const deliveryStyles = `
   .delivery-rail-kpis,
   .delivery-detail-grid,
   .delivery-card-grid,
-  .delivery-status-flow {
+  .delivery-status-flow,
+  .delivery-receive-actions,
+  .delivery-receive-list {
     grid-template-columns: minmax(0, 1fr);
   }
   .delivery-toolbar {
@@ -1849,6 +2082,11 @@ const deliveryStyles = `
   }
   .delivery-detail {
     width: 100vw;
+  }
+  .delivery-detail-actions {
+    position: sticky;
+    bottom: -18px;
+    background: var(--bg-elevated);
   }
 }
 `;

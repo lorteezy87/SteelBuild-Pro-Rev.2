@@ -34,6 +34,24 @@ const REALISTIC_STEEL_COLORS = {
   MEMBER: "#9cc5df",
 };
 
+const CLICK_SELECT_MAX_MOVEMENT_PX = 5;
+const PROJECTED_SELECTION_PADDING_PX = 30;
+const ISOLATED_CONTEXT_OPACITY = 0.38;
+const COMMON_LINK_TOKENS = new Set([
+  "MODEL",
+  "IFC",
+  "STEEL",
+  "MEMBER",
+  "BEAM",
+  "COLUMN",
+  "GIRDER",
+  "PLATE",
+  "SLAB",
+  "DECK",
+  "HSS",
+  "W",
+]);
+
 function inferMemberType(name) {
   const n = String(name || "").toUpperCase();
   if (/COL|COLUMN|PILLAR|POST/.test(n)) return "COLUMN";
@@ -57,29 +75,243 @@ function modelDocumentName(doc) {
   return doc?.display_name || doc?.file_name || doc?.title || "Uploaded model";
 }
 
-function firstMaterial(mesh) {
-  return Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+function modelDocumentIdentity(doc) {
+  if (!doc) return "";
+  return [
+    doc.id,
+    doc.file_url,
+    doc.display_name,
+    doc.file_name,
+    doc.title,
+  ].filter(Boolean).join("|");
 }
 
-function cloneMeshMaterials(mesh) {
+function workPackageModelIdentity(workPackages = []) {
+  return (workPackages || []).slice(0, 42).map((wp) => [
+    wp.id,
+    wp.wp_number,
+    wp.package_number,
+    wp.work_package_number,
+    wp.mark,
+    wp.piece_mark,
+    wp.name,
+    wp.title,
+    wp.status,
+    wp.release_status,
+    wp.phase,
+    wp.percent_complete,
+    wp.progress,
+    wp.tonnage,
+    wp.lbs,
+    wp.weight_lbs,
+    wp.sequence_number,
+  ].map((value) => value ?? "").join("~")).join("|");
+}
+
+function normalizeLinkText(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
+function extractLinkTokens(...values) {
+  const tokens = new Set();
+  values.filter(Boolean).forEach((value) => {
+    const text = String(value).toUpperCase();
+    const full = normalizeLinkText(text);
+    if (full.length >= 5 && !COMMON_LINK_TOKENS.has(full)) tokens.add(full);
+
+    const matches = text.match(/[A-Z]{1,8}[-_ ]?\d{1,6}[A-Z0-9-_]*|\d{2,6}[A-Z]{0,4}/g) || [];
+    matches.forEach((match) => {
+      const token = normalizeLinkText(match);
+      if (token.length >= 3 && !COMMON_LINK_TOKENS.has(token)) tokens.add(token);
+    });
+  });
+  return [...tokens];
+}
+
+function workPackageLinkValues(wp) {
+  if (!wp) return [];
+  return [
+    wp.id,
+    wp.wp_number,
+    wp.package_number,
+    wp.work_package_number,
+    wp.mark,
+    wp.piece_mark,
+    wp.sequence_number,
+    wp.name,
+    wp.title,
+    wp.description,
+  ].filter(Boolean);
+}
+
+function modelElementIdentity(mesh, material) {
+  const data = mesh?.userData || {};
+  const values = [
+    mesh?.name,
+    material?.name,
+    data.name,
+    data.Name,
+    data.ObjectType,
+    data.Tag,
+    data.GlobalId,
+    data.globalId,
+    data.guid,
+    data.expressID,
+    data.ifcType,
+    data.type,
+    data.material,
+  ].filter(Boolean);
+  const label = values.find((value) => String(value).trim()) || "Model element";
+  return {
+    label: String(label),
+    values,
+    search: normalizeLinkText(values.join(" ")),
+    tokens: extractLinkTokens(...values),
+  };
+}
+
+function matchElementToWorkPackage(identity, workPackages = []) {
+  if (!identity || !workPackages.length) return null;
+
+  let best = null;
+  let bestScore = 0;
+  const elementTokens = new Set(identity.tokens || []);
+  const elementSearch = identity.search || "";
+
+  workPackages.forEach((wp) => {
+    const values = workPackageLinkValues(wp);
+    const strongValues = [
+      wp.wp_number,
+      wp.package_number,
+      wp.work_package_number,
+      wp.mark,
+      wp.piece_mark,
+      wp.sequence_number,
+    ].filter(Boolean).map(normalizeLinkText).filter((value) => value.length >= 3);
+    const packageSearch = normalizeLinkText(values.join(" "));
+    const packageTokens = extractLinkTokens(...values);
+    let score = 0;
+
+    strongValues.forEach((token) => {
+      if (elementSearch.includes(token) || elementTokens.has(token)) {
+        score = Math.max(score, 120 + token.length);
+      }
+    });
+
+    packageTokens.forEach((token) => {
+      if (elementSearch.includes(token) || elementTokens.has(token)) {
+        score = Math.max(score, 60 + token.length);
+      }
+    });
+
+    const packageName = normalizeLinkText(wp.name || wp.title || "");
+    if (packageName.length >= 8 && elementSearch.length >= 8 && (elementSearch.includes(packageName) || packageName.includes(elementSearch))) {
+      score = Math.max(score, 80 + Math.min(packageName.length, 40));
+    }
+
+    if (score > bestScore) {
+      best = wp;
+      bestScore = score;
+    }
+  });
+
+  return bestScore >= 60 ? best : null;
+}
+
+function pieceReferenceTokens(piece) {
+  if (!piece) return [];
+  return extractLinkTokens(
+    piece.id,
+    piece.linkedWorkPackageId,
+    piece.mark,
+    piece.name,
+    piece.modelElementName,
+  );
+}
+
+function firstMaterial(mesh) {
+  return Array.isArray(mesh?.material) ? mesh.material[0] : mesh?.material;
+}
+
+function materialList(material) {
+  if (!material) return [];
+  return Array.isArray(material) ? material.filter(Boolean) : [material];
+}
+
+function isLodModelMesh(mesh) {
+  if (!mesh?.isMesh) return false;
+  return Boolean(
+    mesh.geometry?.isLODGeometry ||
+    materialList(mesh.material).some((mat) => mat?.isLodMaterial || mat?.uniforms?.lodSize)
+  );
+}
+
+function isRenderableModelMesh(mesh) {
+  if (!mesh?.isMesh || !mesh.geometry) return false;
+  if (isLodModelMesh(mesh)) return false;
+  const position = mesh.geometry.attributes?.position;
+  return Boolean(position?.array && typeof position.count === "number" && position.count > 0);
+}
+
+function patchLodRenderHook(mesh) {
+  if (!isLodModelMesh(mesh)) return;
+  mesh.onBeforeRender = (renderer) => {
+    const lodMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+    const lodSize = lodMaterial?.lodSize || lodMaterial?.uniforms?.lodSize?.value;
+    if (lodSize?.set) renderer.getSize(lodSize);
+  };
+}
+
+function createModelMaterial(THREE, sourceMaterial, typeKey = "MEMBER", viewMode = "model") {
+  const material = new THREE.MeshStandardMaterial({
+    color: viewMode === "material"
+      ? TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER
+      : REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER,
+    metalness: viewMode === "material" ? 0.38 : 0.72,
+    roughness: viewMode === "material" ? 0.5 : 0.3,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+  });
+  material.name = sourceMaterial?.name || "";
+  return material;
+}
+
+function cloneMaterialSafely(THREE, material, typeKey = "MEMBER", viewMode = "model") {
+  if (!material?.clone) return createModelMaterial(THREE, material, typeKey, viewMode);
+  try {
+    return material.clone();
+  } catch {
+    return createModelMaterial(THREE, material, typeKey, viewMode);
+  }
+}
+
+function cloneMeshMaterials(THREE, mesh, typeKey = "MEMBER", viewMode = "model") {
+  if (!mesh) return;
   if (mesh.userData?.materialsCloned) return;
-  mesh.material = Array.isArray(mesh.material)
-    ? mesh.material.map((mat) => mat?.clone?.() || mat)
-    : mesh.material?.clone?.() || mesh.material;
+  if (Array.isArray(mesh.material)) {
+    const sourceMaterials = mesh.material.length > 0 ? mesh.material : [null];
+    mesh.material = sourceMaterials.map((mat) =>
+      mat
+        ? cloneMaterialSafely(THREE, mat, typeKey, viewMode)
+        : createModelMaterial(THREE, null, typeKey, viewMode)
+    );
+  } else {
+    mesh.material = mesh.material
+      ? cloneMaterialSafely(THREE, mesh.material, typeKey, viewMode)
+      : createModelMaterial(THREE, null, typeKey, viewMode);
+  }
   mesh.userData = { ...mesh.userData, materialsCloned: true };
 }
 
-function ensureModelMaterial(THREE, mesh, typeKey = "MEMBER") {
-  const fallbackMaterial = () => new THREE.MeshStandardMaterial({
-    color: REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER,
-    metalness: 0.72,
-    roughness: 0.28,
-  });
+function ensureModelMaterial(THREE, mesh, typeKey = "MEMBER", viewMode = "model") {
+  const fallbackMaterial = () => createModelMaterial(THREE, null, typeKey, viewMode);
 
   if (Array.isArray(mesh.material)) {
     mesh.material = mesh.material.length > 0
       ? mesh.material.map((mat) => mat || fallbackMaterial())
-      : fallbackMaterial();
+      : [fallbackMaterial()];
     return;
   }
 
@@ -89,7 +321,7 @@ function ensureModelMaterial(THREE, mesh, typeKey = "MEMBER") {
 }
 
 function normalizeModelMaterial(THREE, mesh, typeKey = "MEMBER", viewMode = "model") {
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const materials = materialList(mesh.material);
   const realisticColor = new THREE.Color(REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
   const materialMapColor = new THREE.Color(TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER);
   materials.forEach((mat) => {
@@ -111,9 +343,9 @@ function normalizeModelMaterial(THREE, mesh, typeKey = "MEMBER", viewMode = "mod
 }
 
 function styleRenderableMaterial(THREE, object, typeKey = "MEMBER", viewMode = "model") {
-  if (!object?.material) return;
-  cloneMeshMaterials(object);
-  const materials = Array.isArray(object.material) ? object.material : [object.material];
+  if (!isRenderableModelMesh(object) || !object.material) return;
+  cloneMeshMaterials(THREE, object, typeKey, viewMode);
+  const materials = materialList(object.material);
   const realisticColor = new THREE.Color(REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
   const materialMapColor = new THREE.Color(TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER);
   materials.forEach((mat) => {
@@ -167,7 +399,7 @@ function pieceFromWorkPackage(wp, index, fallbackProjectName) {
 
   return {
     id: wp?.id || `generated-${index}`,
-    mark: wp?.wp_number || `WP-${String(index + 1).padStart(3, "0")}`,
+    mark: wp?.wp_number || wp?.package_number || wp?.work_package_number || `WP-${String(index + 1).padStart(3, "0")}`,
     name: wp?.name || `${fallbackProjectName || "Project"} member ${index + 1}`,
     phase: wp?.phase || "Fabrication",
     status: wp?.status || "Planned",
@@ -181,6 +413,8 @@ function pieceFromWorkPackage(wp, index, fallbackProjectName) {
     crew: wp?.crew || "Unassigned",
     start: wp?.scheduled_start_date || wp?.released_date || null,
     end: wp?.scheduled_end_date || null,
+    linkedWorkPackageId: wp?.id || null,
+    linkStatus: wp?.id ? "Linked work package" : "Generated preview",
     shape: kind,
     position: {
       x: (gridX - 2) * 3.2,
@@ -207,6 +441,57 @@ function fallbackPieces(project) {
   );
 }
 
+function pieceFromUploadedMesh({
+  mesh,
+  material,
+  index,
+  typeKey,
+  materialColor,
+  baseColor,
+  modelDocument,
+  workPackages,
+  projectName,
+  sourceLabel = "uploaded",
+}) {
+  const identity = modelElementIdentity(mesh, material);
+  const linkedWorkPackage = matchElementToWorkPackage(identity, workPackages);
+
+  if (linkedWorkPackage) {
+    return {
+      ...pieceFromWorkPackage(linkedWorkPackage, index, projectName),
+      id: linkedWorkPackage.id || `${sourceLabel}-linked-${index}`,
+      type: typeKey.charAt(0) + typeKey.slice(1).toLowerCase(),
+      grade: material?.name || mesh.userData?.material || "Model material",
+      finish: modelDocumentName(modelDocument),
+      baseColor,
+      specColor: materialColor,
+      source: `${sourceLabel}-linked`,
+      modelElementName: identity.label,
+      linkStatus: "Linked work package",
+    };
+  }
+
+  return {
+    id: `${sourceLabel}-${index}`,
+    mark: identity.label || `${sourceLabel.toUpperCase()}-${String(index + 1).padStart(3, "0")}`,
+    name: mesh.userData?.name || mesh.name || `${sourceLabel === "ifc" ? "IFC" : "Model"} element ${index + 1}`,
+    phase: "Model",
+    status: "Unlinked model element",
+    progress: null,
+    tons: null,
+    type: typeKey.charAt(0) + typeKey.slice(1).toLowerCase(),
+    grade: material?.name || mesh.userData?.material || "Model material",
+    finish: modelDocumentName(modelDocument),
+    baseColor,
+    specColor: materialColor,
+    crew: "Model",
+    source: sourceLabel,
+    modelElementName: identity.label,
+    linkedWorkPackageId: null,
+    linkStatus: "No work package match",
+  };
+}
+
 export default function PortfolioBimViewer({
   project,
   workPackages = [],
@@ -215,6 +500,7 @@ export default function PortfolioBimViewer({
   modelDocument = null,
   onUploadModel,
   onOpenProject,
+  onOpenWorkPackages,
 }) {
   const sectionRef = useRef(null);
   const mountRef = useRef(null);
@@ -228,6 +514,14 @@ export default function PortfolioBimViewer({
   const [hasEnteredViewport, setHasEnteredViewport] = useState(false);
   const [modelState, setModelState] = useState({ source: "generated", status: "idle", message: "", count: 0 });
   const [uploading, setUploading] = useState(false);
+  const modelDocumentKey = useMemo(() => modelDocumentIdentity(modelDocument), [
+    modelDocument?.id,
+    modelDocument?.file_url,
+    modelDocument?.display_name,
+    modelDocument?.file_name,
+    modelDocument?.title,
+  ]);
+  const workPackageModelKey = useMemo(() => workPackageModelIdentity(workPackages), [workPackages]);
 
   useEffect(() => {
     isolatedRef.current = isolated;
@@ -238,24 +532,44 @@ export default function PortfolioBimViewer({
     return source.length > 0
       ? source.map((wp, index) => pieceFromWorkPackage(wp, index, project?.name))
       : fallbackPieces(project);
-  }, [project, workPackages]);
+  }, [project?.id, project?.name, workPackageModelKey]);
 
   const selectedOpenRfis = useMemo(() => {
     if (!selectedPiece) return [];
-    const token = String(selectedPiece.mark || selectedPiece.name || "").toLowerCase();
+    const tokens = pieceReferenceTokens(selectedPiece);
+    const linkedId = String(selectedPiece.linkedWorkPackageId || selectedPiece.id || "");
     return (rfis || [])
       .filter((r) => {
-        const haystack = `${r.title || ""} ${r.description || ""} ${r.drawing_reference || ""}`.toLowerCase();
-        return haystack.includes(token) || !["Answered", "Closed"].includes(r.status);
+        if (["Answered", "Closed", "Void"].includes(r.status)) return false;
+        const directIds = [
+          r.work_package_id,
+          r.wp_id,
+          r.package_id,
+          r.linked_work_package_id,
+        ].filter(Boolean).map(String);
+        if (linkedId && directIds.includes(linkedId)) return true;
+
+        const haystack = normalizeLinkText(`${r.rfi_number || ""} ${r.title || ""} ${r.description || ""} ${r.drawing_reference || ""}`);
+        return tokens.some((token) => haystack.includes(token));
       })
       .slice(0, 3);
   }, [rfis, selectedPiece]);
 
   const deliveryForPiece = useMemo(() => {
     if (!selectedPiece) return null;
+    const tokens = pieceReferenceTokens(selectedPiece);
+    const linkedId = String(selectedPiece.linkedWorkPackageId || selectedPiece.id || "");
     return (deliveries || []).find((d) => {
-      const text = `${d.description || ""} ${d.po_number || ""} ${d.vendor || ""}`.toLowerCase();
-      return text.includes(String(selectedPiece.mark || "").toLowerCase());
+      const directIds = [
+        d.work_package_id,
+        d.wp_id,
+        d.package_id,
+        d.linked_work_package_id,
+      ].filter(Boolean).map(String);
+      if (linkedId && directIds.includes(linkedId)) return true;
+
+      const text = normalizeLinkText(`${d.description || ""} ${d.po_number || ""} ${d.vendor || ""}`);
+      return tokens.some((token) => text.includes(token));
     });
   }, [deliveries, selectedPiece]);
 
@@ -361,9 +675,15 @@ export default function PortfolioBimViewer({
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.08;
+      controls.dampingFactor = 0.12;
+      controls.rotateSpeed = 0.42;
+      controls.zoomSpeed = 0.52;
+      controls.panSpeed = 0.48;
+      controls.keyPanSpeed = 5;
       controls.target.set(0, 2, 0);
       controls.maxPolarAngle = Math.PI * 0.48;
+      controls.minDistance = 1.2;
+      controls.maxDistance = 90;
 
       scene.add(new THREE.HemisphereLight("#e8f2ff", "#172033", 1.05));
       const keyLight = new THREE.DirectionalLight("#ffffff", 2.4);
@@ -396,6 +716,7 @@ export default function PortfolioBimViewer({
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
       let selectedMesh = null;
+      let pointerStart = null;
       let frameId = 0;
 
       const makeGeometry = (piece) => {
@@ -417,6 +738,7 @@ export default function PortfolioBimViewer({
 
       const edges = new THREE.Group();
       const pickProxies = new THREE.Group();
+      let fitTarget = group;
 
       const addEdgesForMesh = (mesh) => {
         const edge = new THREE.LineSegments(
@@ -428,9 +750,9 @@ export default function PortfolioBimViewer({
         edges.add(edge);
       };
 
-      const addUploadedEdgesForMesh = (mesh, typeKey) => {
-        if (mesh.userData.uploadedEdgeOverlay || !mesh.geometry) return;
-        const color = mode === "material"
+      const addUploadedEdgesForMesh = (mesh, typeKey, viewMode = mode) => {
+        if (mesh.userData.uploadedEdgeOverlay || !isRenderableModelMesh(mesh)) return;
+        const color = viewMode === "material"
           ? TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER
           : REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER;
         const edge = new THREE.LineSegments(
@@ -438,7 +760,7 @@ export default function PortfolioBimViewer({
           new THREE.LineBasicMaterial({
             color,
             transparent: true,
-            opacity: mode === "material" ? 1 : 0.9,
+            opacity: viewMode === "material" ? 1 : 0.9,
           })
         );
         mesh.updateWorldMatrix(true, false);
@@ -450,7 +772,7 @@ export default function PortfolioBimViewer({
       group.add(pickProxies);
 
       const addPickProxy = (mesh) => {
-        if (mesh.userData.pickProxy || !mesh.userData?.piece) return;
+        if (mesh.userData.pickProxy || !mesh.userData?.piece || !isRenderableModelMesh(mesh)) return;
         const box = new THREE.Box3().setFromObject(mesh);
         if (box.isEmpty()) return;
         const size = box.getSize(new THREE.Vector3());
@@ -516,6 +838,7 @@ export default function PortfolioBimViewer({
           message: fallbackMessage,
           count: pieces.length,
         });
+        fitTarget = group;
         fitToObject(group);
       };
 
@@ -523,6 +846,7 @@ export default function PortfolioBimViewer({
       let fragmentsManager = null;
       let ifcComponents = null;
       let streamPoll = 0;
+      let didFitUploadedModelOnce = false;
       const addUploadedModel = async () => {
         const ext = modelDocumentExtension(modelDocument);
         if (!modelDocument || !["glb", "gltf", "ifc"].includes(ext)) {
@@ -560,12 +884,15 @@ export default function PortfolioBimViewer({
             try { ifcModel.useCamera(camera); } catch { /* camera binding is best-effort for preview */ }
             uploadedRoot = ifcModel.object;
             if (!uploadedRoot) throw new Error("IFC loaded without a scene object");
+            fitTarget = uploadedRoot;
             group.add(uploadedRoot);
 
             const registerIfcMeshes = () => {
               const seen = new Set(meshes);
               uploadedRoot.traverse((child) => {
+                patchLodRenderHook(child);
                 try {
+                  if (!isRenderableModelMesh(child)) return;
                   const typeKey = inferMemberType(child.name || firstMaterial(child)?.name);
                   styleRenderableMaterial(THREE, child, typeKey, mode);
                 } catch (error) {
@@ -573,12 +900,13 @@ export default function PortfolioBimViewer({
                 }
               });
               uploadedRoot.traverse((child) => {
-                if (!child.isMesh || seen.has(child)) return;
+                patchLodRenderHook(child);
+                if (!isRenderableModelMesh(child) || seen.has(child)) return;
                 try {
-                  cloneMeshMaterials(child);
                   let mat = firstMaterial(child);
                   const typeKey = inferMemberType(child.name || mat?.name);
-                  ensureModelMaterial(THREE, child, typeKey);
+                  cloneMeshMaterials(THREE, child, typeKey, mode);
+                  ensureModelMaterial(THREE, child, typeKey, mode);
                   mat = firstMaterial(child);
                   const materialColor = new THREE.Color(TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER);
                   const baseColor = new THREE.Color(REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
@@ -586,24 +914,21 @@ export default function PortfolioBimViewer({
                   child.castShadow = true;
                   child.receiveShadow = true;
                   const index = meshes.length;
+                  const piece = pieceFromUploadedMesh({
+                    mesh: child,
+                    material: mat,
+                    index,
+                    typeKey,
+                    materialColor,
+                    baseColor,
+                    modelDocument,
+                    workPackages,
+                    projectName: project?.name,
+                    sourceLabel: "ifc",
+                  });
                   child.userData = {
                     ...child.userData,
-                    piece: {
-                      id: `ifc-${index}`,
-                      mark: child.name || `IFC-${String(index + 1).padStart(3, "0")}`,
-                      name: child.userData?.name || child.name || `IFC element ${index + 1}`,
-                      phase: "Model",
-                      status: "Uploaded IFC",
-                      progress: null,
-                      tons: null,
-                      type: typeKey.charAt(0) + typeKey.slice(1).toLowerCase(),
-                      grade: mat?.name || child.userData?.material || "IFC material",
-                      finish: modelDocumentName(modelDocument),
-                      baseColor,
-                      specColor: materialColor,
-                      crew: "Model",
-                      source: "uploaded",
-                    },
+                    piece,
                     baseColor: mode === "material" ? materialColor.clone() : baseColor.clone(),
                   };
                   meshes.push(child);
@@ -619,7 +944,10 @@ export default function PortfolioBimViewer({
                 message: modelDocumentName(modelDocument),
                 count: meshes.length,
               });
-              if (meshes.length > 0) fitToObject(group);
+              if (meshes.length > 0 && !didFitUploadedModelOnce) {
+                didFitUploadedModelOnce = true;
+                fitToObject(fitTarget || uploadedRoot || group);
+              }
             };
 
             try { await fragmentsManager.core.update(true); } catch { /* ignore initial streaming errors */ }
@@ -646,6 +974,7 @@ export default function PortfolioBimViewer({
           });
 
           uploadedRoot = gltf.scene;
+          fitTarget = uploadedRoot;
           const box = new THREE.Box3().setFromObject(uploadedRoot);
           if (!box.isEmpty()) {
             const center = box.getCenter(new THREE.Vector3());
@@ -660,7 +989,9 @@ export default function PortfolioBimViewer({
           group.add(uploadedRoot);
           uploadedRoot.updateMatrixWorld(true);
           uploadedRoot.traverse((child) => {
+            patchLodRenderHook(child);
             try {
+              if (!isRenderableModelMesh(child)) return;
               const typeKey = inferMemberType(child.name || firstMaterial(child)?.name);
               styleRenderableMaterial(THREE, child, typeKey, mode);
             } catch (error) {
@@ -668,12 +999,13 @@ export default function PortfolioBimViewer({
             }
           });
           uploadedRoot.traverse((child) => {
-            if (!child.isMesh) return;
-            cloneMeshMaterials(child);
+            patchLodRenderHook(child);
+            if (!isRenderableModelMesh(child)) return;
 
             let mat = firstMaterial(child);
             const typeKey = inferMemberType(child.name || mat?.name);
-            ensureModelMaterial(THREE, child, typeKey);
+            cloneMeshMaterials(THREE, child, typeKey, mode);
+            ensureModelMaterial(THREE, child, typeKey, mode);
             mat = firstMaterial(child);
             const materialColor = new THREE.Color(TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER);
             const baseColor = new THREE.Color(REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
@@ -681,22 +1013,18 @@ export default function PortfolioBimViewer({
             child.castShadow = true;
             child.receiveShadow = true;
 
-            const piece = {
-              id: `model-${index}`,
-              mark: child.name || `MODEL-${String(index + 1).padStart(3, "0")}`,
-              name: child.userData?.name || child.name || `Model element ${index + 1}`,
-              phase: "Model",
-              status: "Uploaded model",
-              progress: null,
-              tons: null,
-              type: typeKey.charAt(0) + typeKey.slice(1).toLowerCase(),
-              grade: mat?.name || child.userData?.material || "Model material",
-              finish: modelDocumentName(modelDocument),
+            const piece = pieceFromUploadedMesh({
+              mesh: child,
+              material: mat,
+              index,
+              typeKey,
+              materialColor,
               baseColor,
-              specColor: materialColor,
-              crew: "Model",
-              source: "uploaded",
-            };
+              modelDocument,
+              workPackages,
+              projectName: project?.name,
+              sourceLabel: "model",
+            });
             child.userData = { ...child.userData, piece, baseColor: mode === "material" ? materialColor.clone() : baseColor.clone() };
             meshes.push(child);
             addPickProxy(child);
@@ -710,7 +1038,7 @@ export default function PortfolioBimViewer({
             message: modelDocumentName(modelDocument),
             count: meshes.length,
           });
-          fitToObject(group);
+          fitToObject(fitTarget || uploadedRoot || group);
         } catch (error) {
           console.error("Portfolio model load failed:", error);
           addGeneratedModel(`Could not load ${modelDocumentName(modelDocument)} (${error?.message || "unknown error"}); using work-package preview.`);
@@ -774,10 +1102,10 @@ export default function PortfolioBimViewer({
 
           const xs = visibleCorners.map((corner) => ((corner.x + 1) / 2) * rect.width);
           const ys = visibleCorners.map((corner) => ((-corner.y + 1) / 2) * rect.height);
-          const minX = Math.min(...xs);
-          const maxX = Math.max(...xs);
-          const minY = Math.min(...ys);
-          const maxY = Math.max(...ys);
+          const minX = Math.min(...xs) - PROJECTED_SELECTION_PADDING_PX;
+          const maxX = Math.max(...xs) + PROJECTED_SELECTION_PADDING_PX;
+          const minY = Math.min(...ys) - PROJECTED_SELECTION_PADDING_PX;
+          const maxY = Math.max(...ys) + PROJECTED_SELECTION_PADDING_PX;
           const clampedX = Math.max(minX, Math.min(clickX, maxX));
           const clampedY = Math.max(minY, Math.min(clickY, maxY));
           const distance = Math.hypot(clickX - clampedX, clickY - clampedY);
@@ -788,24 +1116,30 @@ export default function PortfolioBimViewer({
           }
         });
 
-        const selectionTolerance = Math.max(160, Math.min(rect.width, rect.height) * 0.9);
-        return bestDistance <= selectionTolerance ? best : null;
+        return bestDistance <= PROJECTED_SELECTION_PADDING_PX ? best : null;
       };
 
       const setMeshSelected = (mesh) => {
         selectedMesh = mesh;
         meshes.forEach((m) => {
+          const hidden = isolatedRef.current && mesh && m !== mesh;
           forEachMaterial(m, (mat) => {
             if (mat.color && m.userData.baseColor) mat.color.copy(m.userData.baseColor);
             mat.emissive?.set?.("#000000");
-            mat.opacity = isolatedRef.current && mesh && m !== mesh ? 0.12 : 1;
-            mat.transparent = isolatedRef.current && mesh && m !== mesh;
+            mat.opacity = hidden ? ISOLATED_CONTEXT_OPACITY : 1;
+            mat.transparent = hidden;
+            mat.depthWrite = !hidden;
+            mat.needsUpdate = true;
           });
         });
         if (mesh) {
           forEachMaterial(mesh, (mat) => {
             mat.color?.set?.("#fbbf24");
             mat.emissive?.set?.("#422006");
+            mat.opacity = 1;
+            mat.transparent = false;
+            mat.depthWrite = true;
+            mat.needsUpdate = true;
           });
           setSelectedPiece(mesh.userData.piece);
         }
@@ -816,26 +1150,60 @@ export default function PortfolioBimViewer({
         pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, camera);
-        const hit = raycaster.intersectObjects(group.children, true)
-          .map((intersection) => findSelectableMesh(intersection.object))
-          .find(Boolean) || findNearestProjectedMesh(event);
+        let hit = null;
+        try {
+          hit = raycaster.intersectObjects(pickProxies.children.filter(isRenderableModelMesh), false)
+            .map((intersection) => findSelectableMesh(intersection.object))
+            .find(Boolean) || null;
+        } catch (error) {
+          console.warn("Skipped BIM pick raycast:", error);
+        }
+        hit = hit || findNearestProjectedMesh(event);
         renderer.domElement.style.cursor = hit ? "pointer" : "grab";
         if (!commit) return;
         setMeshSelected(hit);
       };
 
-      const onPointerMove = (event) => pick(event, false);
-      const onMouseDown = (event) => {
-        if (event.button === 0) pick(event, true);
+      const onPointerDown = (event) => {
+        if (event.button !== 0) return;
+        pointerStart = {
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+        };
+        renderer.domElement.style.cursor = "grabbing";
       };
-      const onClick = (event) => pick(event, true);
+      const onPointerMove = (event) => {
+        if (pointerStart) {
+          const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+          renderer.domElement.style.cursor = distance > CLICK_SELECT_MAX_MOVEMENT_PX ? "grabbing" : "pointer";
+          return;
+        }
+        pick(event, false);
+      };
+      const onPointerUp = (event) => {
+        if (!pointerStart || event.button !== 0) return;
+        const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
+        pointerStart = null;
+        if (distance <= CLICK_SELECT_MAX_MOVEMENT_PX) {
+          pick(event, true);
+        } else {
+          pick(event, false);
+        }
+      };
+      const onPointerCancel = () => {
+        pointerStart = null;
+        renderer.domElement.style.cursor = "grab";
+      };
+      renderer.domElement.addEventListener("pointerdown", onPointerDown);
       renderer.domElement.addEventListener("pointermove", onPointerMove);
-      renderer.domElement.addEventListener("mousedown", onMouseDown);
-      renderer.domElement.addEventListener("click", onClick);
+      renderer.domElement.addEventListener("pointerup", onPointerUp);
+      renderer.domElement.addEventListener("pointercancel", onPointerCancel);
+      renderer.domElement.addEventListener("pointerleave", onPointerCancel);
 
       apiRef.current = {
         fit: () => {
-          fitToObject(group);
+          fitToObject(fitTarget || group);
         },
         clear: () => {
           setSelectedPiece(null);
@@ -845,10 +1213,46 @@ export default function PortfolioBimViewer({
           meshes.forEach((m) => {
             const hidden = nextIsolated && selectedMesh && m !== selectedMesh;
             forEachMaterial(m, (mat) => {
-              mat.opacity = hidden ? 0.12 : 1;
+              mat.opacity = hidden ? ISOLATED_CONTEXT_OPACITY : 1;
               mat.transparent = hidden;
+              mat.depthWrite = !hidden;
+              mat.needsUpdate = true;
             });
           });
+        },
+        applyMode: (nextMode) => {
+          meshes.forEach((mesh) => {
+            const piece = mesh.userData?.piece;
+            const typeKey = inferMemberType(piece?.type || mesh.name || firstMaterial(mesh)?.name);
+            if (String(piece?.source || "").startsWith("uploaded") || ["ifc", "model"].some((prefix) => String(piece?.source || "").startsWith(prefix))) {
+              normalizeModelMaterial(THREE, mesh, typeKey, nextMode);
+              const realisticColor = new THREE.Color(REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
+              const materialColor = new THREE.Color(TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER);
+              mesh.userData.baseColor = nextMode === "material" ? materialColor : realisticColor;
+            } else {
+              const nextColor = nextMode === "material" ? piece?.specColor : piece?.baseColor;
+              if (nextColor) {
+                forEachMaterial(mesh, (mat) => {
+                  mat.color?.set?.(nextColor);
+                  mat.needsUpdate = true;
+                });
+                mesh.userData.baseColor = new THREE.Color(nextColor);
+              }
+            }
+          });
+
+          edges.children.forEach((edge) => {
+            const sourceMesh = meshes.find((mesh) => mesh.userData?.uploadedEdgeOverlay === edge);
+            if (!sourceMesh) return;
+            const typeKey = inferMemberType(sourceMesh.userData?.piece?.type || sourceMesh.name || firstMaterial(sourceMesh)?.name);
+            edge.material.color.set(nextMode === "material"
+              ? TYPE_COLORS[typeKey] || TYPE_COLORS.MEMBER
+              : REALISTIC_STEEL_COLORS[typeKey] || REALISTIC_STEEL_COLORS.MEMBER);
+            edge.material.opacity = nextMode === "material" ? 1 : 0.9;
+            edge.material.needsUpdate = true;
+          });
+
+          if (selectedMesh) setMeshSelected(selectedMesh);
         },
       };
 
@@ -874,9 +1278,11 @@ export default function PortfolioBimViewer({
         if (streamPoll) window.clearInterval(streamPoll);
         observer?.disconnect?.();
         if (!observer) window.removeEventListener("resize", resize);
+        renderer.domElement.removeEventListener("pointerdown", onPointerDown);
         renderer.domElement.removeEventListener("pointermove", onPointerMove);
-        renderer.domElement.removeEventListener("mousedown", onMouseDown);
-        renderer.domElement.removeEventListener("click", onClick);
+        renderer.domElement.removeEventListener("pointerup", onPointerUp);
+        renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
+        renderer.domElement.removeEventListener("pointerleave", onPointerCancel);
         controls.dispose();
         meshes.forEach((mesh) => {
           mesh.geometry.dispose();
@@ -900,16 +1306,20 @@ export default function PortfolioBimViewer({
       disposed = true;
       cleanup();
     };
-  }, [hasEnteredViewport, pieces, mode, modelDocument]);
+  }, [hasEnteredViewport, pieces, modelDocumentKey]);
 
   useEffect(() => {
     apiRef.current?.applyIsolation(isolated);
   }, [isolated]);
 
   useEffect(() => {
+    apiRef.current?.applyMode(mode);
+  }, [mode]);
+
+  useEffect(() => {
     setSelectedPiece(null);
     setModelState({ source: "generated", status: "idle", message: "", count: 0 });
-  }, [project?.id, modelDocument?.id]);
+  }, [project?.id, modelDocumentKey]);
 
   const projectName = project?.name || "Select a project";
   const modelTonnage = pieces.reduce((sum, piece) => sum + (Number(piece.tons) || 0), 0);
@@ -1104,6 +1514,14 @@ export default function PortfolioBimViewer({
               <InfoRow label="Material" value={`${selectedPiece.type} / ${selectedPiece.grade}`} />
               <InfoRow label="Finish" value={selectedPiece.finish} />
               <InfoRow label="Status" value={selectedPiece.status} tone={statusColor(selectedPiece.status)} />
+              <InfoRow
+                label="Link"
+                value={selectedPiece.linkStatus || "Model element"}
+                tone={selectedPiece.linkedWorkPackageId ? "var(--status-success)" : "var(--status-warning)"}
+              />
+              {selectedPiece.modelElementName && selectedPiece.modelElementName !== selectedPiece.mark && (
+                <InfoRow label="Model element" value={selectedPiece.modelElementName} />
+              )}
               <InfoRow label="Phase" value={selectedPiece.phase} />
               <InfoRow label="Crew" value={selectedPiece.crew} />
               <InfoRow label="Tonnage" value={Number.isFinite(selectedPiece.tons) ? `${selectedPiece.tons.toFixed(2)} tons` : "Model element"} />
@@ -1122,8 +1540,12 @@ export default function PortfolioBimViewer({
                 <button type="button" onClick={() => apiRef.current?.clear()} style={actionButtonStyle}>
                   Clear
                 </button>
-                <button type="button" onClick={() => onOpenProject?.()} style={{ ...actionButtonStyle, color: "var(--accent)", borderColor: "var(--accent-border)" }}>
-                  Open project
+                <button
+                  type="button"
+                  onClick={() => (selectedPiece.linkedWorkPackageId ? onOpenWorkPackages?.(selectedPiece) : onOpenProject?.())}
+                  style={{ ...actionButtonStyle, color: "var(--accent)", borderColor: "var(--accent-border)" }}
+                >
+                  {selectedPiece.linkedWorkPackageId ? "Open WPs" : "Open project"}
                 </button>
               </div>
               <SignalBlock title="Linked RFIs" empty="No direct RFI match">

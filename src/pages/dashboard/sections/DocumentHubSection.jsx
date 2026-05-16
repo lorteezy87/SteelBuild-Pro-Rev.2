@@ -3,7 +3,7 @@
  *
  * Two columns:
  *   RFI Status (Draft / Submitted / Pending / Responded / Closed)
- *   Submittal Pipeline (OFA → BFA → OFS → BFS → FFF → Released)
+ *   Submittal Pipeline (IFA → OFA → BFA → OFS → IFC → Released)
  *
  * Then a wide row:
  *   Ball in Court (Open RFIs) — 5 cards: Architect / Engineer / GC /
@@ -38,27 +38,25 @@ const RFI_STATUS_COLOR = {
 
 // Stage colours mirror the canonical drawingsConfig.STAGES palette so
 // the dashboard's mini-pipeline reads consistently with the Drawings
-// page chips. Adjacent stages alternate cool/warm so no two collide
-// at a glance: BFA (orange) and BFS (red) are now properly distinct
-// — both previously rendered as the same warning-yellow.
+// page chips.
 const STAGE_COLOR = {
+  IFA:      "#60A5FA", // sky
   OFA:      "#2563EB", // blue
   BFA:      "#F97316", // orange
   OFS:      "#0D9488", // teal
-  BFS:      "#DC2626", // red
-  FFF:      "#EAB308", // yellow (a.k.a. IFC)
+  IFC:      "#34D399", // mint
   Released: "#10B981", // emerald
 };
 
 // Canonical steel-detailing pipeline. "Scrub" is the in-house QA review
-// where corrections are applied between EOR rounds. FFF is the approved
-// final package; Released = released for fabrication.
+// where corrections are applied after EOR comments; IFC is the record
+// copy issued to the GC; Released = released for fabrication.
 const STAGE_CAPTION = {
+  IFA:      "In for Approval",
   OFA:      "Out for Approval",
   BFA:      "Back from Approval",
   OFS:      "Out for Scrub",
-  BFS:      "Back from Scrub",
-  FFF:      "Final for Fab",
+  IFC:      "Issued for Construction",
   Released: "Released for Fabrication",
 };
 
@@ -77,7 +75,7 @@ export default function DocumentHubSection({
   // Sprint 2: workflow source of truth is the `submittals` table.
   // Pipeline counts are now derived from submittals only — drawings
   // contribute a sheet count via the stats strip below but no longer
-  // drive the OFA/BFA/OFS/BFS/FFF/Released rollup.
+  // drive the IFA/OFA/BFA/OFS/IFC/Released rollup.
   const submittalRollup = useMemo(
     () => submittalPipelineRollupFromSubmittals(submittals),
     [submittals],

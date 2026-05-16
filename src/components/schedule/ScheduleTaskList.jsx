@@ -21,12 +21,41 @@ const STATUS_COLORS = {
 
 const STATUSES = ["Not Started", "In Progress", "Complete", "Delayed", "On Hold", "Cancelled"];
 const PRIORITIES = ["Critical", "High", "Normal", "Low"];
+const TASK_LIST_COLUMNS = [
+  { key: "select", label: "" },
+  { key: "wbs", label: "WBS" },
+  { key: "task", label: "Task" },
+  { key: "start", label: "Start" },
+  { key: "finish", label: "Finish" },
+  { key: "assigned-to", label: "Assigned To" },
+  { key: "priority", label: "Priority" },
+  { key: "status", label: "Status" },
+  { key: "actions", label: "" },
+];
 
 const sortByDate = (a, b) => {
   if (!a.start_date) return 1;
   if (!b.start_date) return -1;
   return new Date(a.start_date) - new Date(b.start_date);
 };
+
+export function getScheduleTaskRowKey(task, index, phase = "task") {
+  const id = String(task?.id || "").trim();
+  if (id) return id;
+
+  const fallback = [
+    phase,
+    task?._stored_wbs_code || task?.wbs_code,
+    task?.task_number,
+    task?.task_name,
+    index,
+  ]
+    .filter((part) => part !== null && part !== undefined && String(part).trim() !== "")
+    .map((part) => String(part).trim())
+    .join(":");
+
+  return fallback || `${phase}:task:${index}`;
+}
 
 const fmtDate = (d) => {
   if (!d) return "TBD";
@@ -249,19 +278,19 @@ export default function ScheduleTaskList({ tasks, onEdit, onDelete, onSave, sele
                 display: "grid", gridTemplateColumns: GRID, gap: 12,
                 background: "var(--bg-surface-secondary)",
               }}>
-                {["", "WBS", "Task", "Start", "Finish", "Assigned To", "Priority", "Status", ""].map((col) => (
-                  <div key={col} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                    {col}
+                {TASK_LIST_COLUMNS.map((col) => (
+                  <div key={col.key} style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                    {col.label}
                   </div>
                 ))}
               </div>
 
               {/* Rows */}
-              {group.tasks.map((task) => {
+              {group.tasks.map((task, index) => {
                 const isEditing = editingId === task.id;
                 return (
                   <div
-                    key={task.id}
+                    key={getScheduleTaskRowKey(task, index, group.phase)}
                     onClick={(e) => startEdit(task, e)}
                     style={{
                       padding: "9px 16px",

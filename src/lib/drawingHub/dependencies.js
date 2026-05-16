@@ -375,7 +375,7 @@ export function computeDependencyImpact(
   const visited = new Set([zoneId]);
   const contributors = [];
 
-  // BFS so closer ancestors are visited first; if cycles fire later
+  // Breadth-first traversal so closer ancestors are visited first; if cycles fire later
   // they're just skipped via the visited set.
   const queue = [{ id: zoneId, distance: 0, viaRelationship: null, viaWeight: 1 }];
   while (queue.length > 0) {

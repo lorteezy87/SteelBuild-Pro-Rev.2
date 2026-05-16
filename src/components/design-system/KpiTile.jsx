@@ -78,6 +78,14 @@ export default function KpiTile({
   // value; the side effect is the re-render itself.
   void tick;
   const clickable = !!onClick;
+  const borderColor = active
+    ? color
+    : hover && clickable
+      ? "var(--accent-border)"
+      : "var(--border-default)";
+  const topBorderColor = active
+    ? color
+    : "color-mix(in srgb, var(--border-default) 80%, white 20%)";
 
   return (
     <div
@@ -90,13 +98,18 @@ export default function KpiTile({
         backdropFilter: "blur(20px) saturate(150%)",
         WebkitBackdropFilter: "blur(20px) saturate(150%)",
         borderRadius: 16,
-        border: active
-          ? `1px solid ${color}`
-          : hover && clickable
-          ? "1px solid var(--accent-border)"
-          : "1px solid var(--border-default)",
+        borderTopStyle: "solid",
+        borderRightStyle: "solid",
+        borderBottomStyle: "solid",
+        borderLeftStyle: "solid",
         borderTopWidth: 1,
-        borderTopColor: active ? color : "color-mix(in srgb, var(--border-default) 80%, white 20%)",
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 1,
+        borderTopColor: topBorderColor,
+        borderRightColor: borderColor,
+        borderBottomColor: borderColor,
+        borderLeftColor: borderColor,
         padding: compact ? "12px 14px" : "18px 18px 16px",
         cursor: clickable ? "pointer" : "default",
         boxShadow: active

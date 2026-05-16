@@ -21,7 +21,7 @@
  * Backward compatibility: rows written under the old single-date shape
  * (`{ OFA: "2026-01-15" }`) are read as `{ start: null, end: "2026-01-15" }`,
  * since the original semantics treated the value as the gate's
- * clearance date. Legacy rows under the dropped FFF / BFS gates are
+ * clearance date. Legacy rows under the pre-077 dropped gates are
  * still readable (their dates are preserved on the task) but the UI
  * doesn't surface them as gates anymore — coerce/migrate to the
  * canonical list when re-saving via applyStageDatesToTask.

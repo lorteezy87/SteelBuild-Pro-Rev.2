@@ -285,14 +285,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
               style={inputStyle}
             />
             {showDrawingDropdown && filteredDrawings.length > 0 && (
-               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10 }}>
+               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgb(12,17,25)", border: "1px solid rgba(135,154,180,0.28)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "0 16px 34px rgba(0,0,0,0.55)" }}>
                  {filteredDrawings.map(d => (
                    <div
                      key={d.id}
                      onMouseDown={() => addDrawing(d.id)}
                      style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                     onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                     onMouseEnter={e => e.currentTarget.style.background = "rgb(18,25,38)"}
+                     onMouseLeave={e => e.currentTarget.style.background = "rgb(12,17,25)"}
                    >
                      <span>[{d.sheet_number}] {d.title}</span>
                      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--text-muted)" }}>{d.stage}</span>

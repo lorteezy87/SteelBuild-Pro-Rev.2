@@ -56,6 +56,23 @@ describe("PROJECT_SCOPED_PAGES", () => {
     expect(PROJECT_SCOPED_PAGES.has("RFIs")).toBe(true);
   });
 
+  it("contains operational pages that read the active project context", () => {
+    [
+      "Documents",
+      "LEMs",
+      "LookAheadSchedule",
+      "FieldPlan",
+      "ContractManagement",
+      "Mitigations",
+      "ChangeRequests",
+      "ProjectCloseout",
+      "Warranty",
+      "JobStatusReport",
+    ].forEach((page) => {
+      expect(PROJECT_SCOPED_PAGES.has(page), `${page} should require an active project`).toBe(true);
+    });
+  });
+
   it("excludes admin pages that are project-agnostic", () => {
     expect(PROJECT_SCOPED_PAGES.has("Settings")).toBe(false);
     expect(PROJECT_SCOPED_PAGES.has("UsersManagement")).toBe(false);

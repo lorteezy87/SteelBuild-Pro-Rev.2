@@ -19,7 +19,7 @@
  *   - WP phases (Detailing → Fabrication → Delivery → Erection)
  *   - RFI lifecycle (Open → Under Review → Answered → Closed)
  *   - Delivery status (Scheduled → Loading → In Transit → Delivered)
- *   - Drawing stages (Not Started → OFA → BFA → OFS → BFS → FFF → Released)
+ *   - Drawing stages (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
  *   - Change Order lifecycle (Draft → Submitted → Under Review → Approved)
  *
  * Set `showIcons` to true to render `PhaseIcon` glyphs inside the
