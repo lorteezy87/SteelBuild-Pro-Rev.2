@@ -10,6 +10,7 @@ import { CommandBar, KpiTile, ProgressBar, BulkActionBar } from "@/components/de
 import { Plus } from "lucide-react";
 import { logActivity } from "@/services/auditLogger";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Punchlist() {
   const projectId = useProjectId();
@@ -42,7 +43,9 @@ export default function Punchlist() {
         ? base44.entities.PunchlistItem.filter({ project_id: projectId })
         : base44.entities.PunchlistItem.list(),
   });
-  // Defensive soft-delete filter (entity layer also does this at fetch).
+
+  useRealtimeInvalidation("punchlist_items", projectId, [["punchlist", projectId]]);
+
   const punchlist = React.useMemo(() => rawPunchlist.filter((r) => !r.is_deleted), [rawPunchlist]);
 
   const { data: projects = [] } = useQuery({

@@ -27,6 +27,7 @@ import UploadModal from "@/components/dms/UploadModal";
 import DocumentEditModal from "@/components/dms/DocumentEditModal";
 import FolderPicker, { collectFolderAndDescendants } from "@/components/dms/FolderPicker";
 import { batchProcess } from "@/utils/batchProcess";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 import { STATUS_TABS } from "./documents/constants";
 import { normalizeDocument, exportDocsCsv } from "./documents/utils";
@@ -91,6 +92,8 @@ export default function Documents() {
         : [],
     enabled: !!activeProject?.id,
   });
+
+  useRealtimeInvalidation("documents", activeProject?.id, [["documents", activeProject?.id]]);
 
   const allDocuments = useMemo(() => (rawDocuments || []).map(normalizeDocument), [rawDocuments]);
 
