@@ -46,10 +46,13 @@ export function useAlerts() {
   });
 
   const markRead = (alert: Alert) => {
-    // Try is_read first; if column doesn't exist yet, fail silently
     updateMut.mutate(
       { id: alert.id, data: { is_read: true } },
-      { onError: () => { /* is_read column may not exist yet */ } }
+      { onError: (err) => {
+        if (!String(err?.message).includes("column")) {
+          toast.error(`Failed to mark alert as read`);
+        }
+      }}
     );
   };
 
@@ -73,11 +76,13 @@ export function useAlerts() {
   };
 
   const dismiss = (alert: Alert) => {
-    // Use dismissed_at (original schema column) as the primary dismiss mechanism.
-    // Also try is_dismissed for when the migration has been applied.
     updateMut.mutate(
       { id: alert.id, data: { dismissed_at: new Date().toISOString() } },
-      { onError: () => { /* suppress */ } }
+      { onError: (err) => {
+        if (!String(err?.message).includes("column")) {
+          toast.error(`Failed to dismiss alert`);
+        }
+      }}
     );
   };
 

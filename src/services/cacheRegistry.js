@@ -393,6 +393,96 @@ const REGISTRY = {
       ["user-settings"],
     ],
   },
+
+  // ── Drawing sub-entities ─────────────────────────────────────────────
+
+  drawing_activity: {
+    primary:  (pid) => ["drawing-activity", pid],
+    families: (pid) => [
+      ["drawing-activity", pid],
+      ["drawing-activity"],
+    ],
+  },
+
+  drawing_link: {
+    primary:  (pid) => ["drawing-links", pid],
+    families: (pid) => [
+      ["drawing-links", pid],
+      ["drawing-links"],
+      ["drawings", pid],
+    ],
+  },
+
+  drawing_revision: {
+    primary:  (pid) => ["drawing-revisions", pid],
+    families: (pid) => [
+      ["drawing-revisions", pid],
+      ["drawing-revisions"],
+      ["drawings", pid],
+    ],
+  },
+
+  drawing_signoff: {
+    primary:  (pid) => ["drawing-signoffs", pid],
+    families: (pid) => [
+      ["drawing-signoffs", pid],
+      ["drawing-signoffs"],
+      ["drawings", pid],
+    ],
+  },
+
+  // ── Scheduling sub-entities ──────────────────────────────────────────
+
+  task_dependency: {
+    primary:  (pid) => ["task-dependencies", pid],
+    families: (pid) => [
+      ["task-dependencies", pid],
+      ["task-dependencies"],
+      ["schedule-tasks", pid],
+    ],
+  },
+
+  // ── Submittal sub-entities ───────────────────────────────────────────
+
+  submittal_sheet_response: {
+    primary:  (pid) => ["submittal-sheet-responses", pid],
+    families: (pid) => [
+      ["submittal-sheet-responses", pid],
+      ["submittal-sheet-responses"],
+      ["submittals", pid],
+    ],
+  },
+
+  // ── File management ──────────────────────────────────────────────────
+
+  uploaded_file: {
+    primary:  (pid) => ["uploaded-files", pid],
+    families: (pid) => [
+      ["uploaded-files", pid],
+      ["uploaded-files"],
+      ["documents", pid],
+    ],
+  },
+
+  // ── Mitigation & governance ──────────────────────────────────────────
+
+  mitigation_log: {
+    primary:  (pid) => ["mitigation-logs", pid],
+    families: (pid) => [
+      ["mitigation-logs", pid],
+      ["mitigation-logs"],
+      ["mitigations", pid],
+    ],
+  },
+
+  mitigation_action: {
+    primary:  (pid) => ["mitigation-actions", pid],
+    families: (pid) => [
+      ["mitigation-actions", pid],
+      ["mitigation-actions"],
+      ["mitigations", pid],
+    ],
+  },
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────
