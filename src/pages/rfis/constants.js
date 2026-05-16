@@ -37,7 +37,10 @@ export const STATUS_CFG = {
 
 export const statusColumns = ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"];
 
-export const RFI_NUMBER_PATTERN = /^RFI #(\d+)$/i;
+// RFI numbers arrive from several paths: app-created values use "RFI #001",
+// older imports may store "001", and vendor logs often use "RFI-001".
+// Sorting should treat all of those as the same numeric sequence.
+export const RFI_NUMBER_PATTERN = /(\d+)/;
 
 export const KPI_ACCENT_MAP = {
   "var(--status-success)": "rgba(34,197,94,0.10)",
