@@ -127,7 +127,7 @@ export function MilestoneDiamond({ leftPx, task }) {
 }
 
 // ── Task gantt bar ────────────────────────────────────────────────────────
-// Detailing stage-gate visualisation. Each gate (OFA / BFA / FFF /
+// Detailing stage-gate visualisation. Each gate (IFA / OFA / BFA / OFS / IFC /
 // Released) now carries its own start AND end date, so we render a
 // thin coloured ribbon spanning [start, end] for each filled gate plus
 // small diamond markers at the start and end. The currently-active

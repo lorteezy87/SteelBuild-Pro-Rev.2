@@ -716,7 +716,7 @@ export default function Drawings() {
         title="Drawings & Submittals"
         count={stats.total}
         unit={` · ${stats.sheetCount} SHEETS`}
-        subtitle="Not Started → OFA → BFA → OFS → BFS → IFC → Released"
+        subtitle="Not Started → IFA → OFA → BFA → OFS → IFC → Released"
       >
         <Button variant="secondary" icon="download" onClick={() => exportTransmittal(filtered, activeProject?.name)}>
           TRANSMITTAL
@@ -1069,4 +1069,3 @@ export default function Drawings() {
     </div>
   );
 }
-

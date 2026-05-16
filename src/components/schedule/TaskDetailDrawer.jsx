@@ -394,7 +394,7 @@ export default function TaskDetailDrawer({ task, open, onClose, onUpdate, allTas
 
               {/* Dates section — full-width so date pickers don't get
                   squished. Detailing tasks render the four-gate panel
-                  (OFA / BFA / FFF / Released, each with start + end);
+                  (IFA / OFA / BFA / OFS / IFC / Released, each with start + end);
                   every other phase gets the simple Start / End / Duration
                   trio. The Gantt bar still renders from start_date /
                   end_date, derived from the filled gates at save time. */}
@@ -759,7 +759,7 @@ function ScheduleFlag({ label, checked, onChange, hint }) {
 // ── Detailing stage-gate date panel ───────────────────────────────────
 //
 // Two date pickers per gate (Start + End), one row each for OFA → BFA →
-// FFF → Released, plus a read-only derived Bar-Start/Finish line so the
+// IFC → Released, plus a read-only derived Bar-Start/Finish line so the
 // user can see the Gantt bar anchors that will land on save. Each gate
 // row shows its caption ("Back from Approval") so new PMs don't have to
 // memorise the acronyms. The currently-active gate (the one the

@@ -34,15 +34,13 @@ export const STATUS_COLORS = {
 // the previous AI_ACCENT-spammed map did).
 export const STAGE_ACCENT = {
   "Not Started": "#64748B", // slate
+  IFA:           "#60A5FA", // sky
   OFA:           "#2563EB", // blue
   BFA:           "#F97316", // orange
   OFS:           "#0D9488", // teal
-  BFS:           "#DC2626", // red
-  FFF:           "#EAB308", // yellow (a.k.a. IFC)
+  IFC:           "#34D399", // mint
   Released:      "#10B981", // emerald
   // Auxiliary states still seen in some legacy analysis rows:
-  IFA:           "var(--text-muted)",
-  IFC:           "#EAB308",
   Shop:          "var(--accent)",
   Revision:      "#F97316",
 };

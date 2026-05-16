@@ -21,7 +21,7 @@ import { derivedSetStage, isStageInReview } from "@/lib/submittalStageMapping";
  *   • Staying put (no-op)
  *
  * The one transition we reject is moving to an unknown target stage
- * (e.g. legacy rows with the dropped BFS / FFF strings). This is the
+ * (e.g. legacy rows with dropped pre-077 stage strings). This is the
  * F13 fix — before, any string could overwrite any other stage silently.
  *
  * @param {string} from - Current stage

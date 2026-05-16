@@ -2385,7 +2385,7 @@ export default function ScheduleGantt({ tasks: rawTasks = [], submittals = [], d
                       </>
                     )}
                     {/* Detailing stage-gate milestones — color-coded
-                        diamonds (OFA / BFA / FFF / Released) overlayed
+                        diamonds (IFA / OFA / BFA / OFS / IFC / Released) overlayed
                         on the task bar at each filled date. Purely
                         decorative; bar placement comes from the
                         derived start/end. Component short-circuits
