@@ -88,7 +88,7 @@ describe("onboardingTemplates", () => {
     expect(staged.validRecords[0]).toMatchObject({
       project_id: "project-1",
       project_name: "Import Project",
-      rfi_number: "001",
+      rfi_number: "RFI #001",
       title: "Grid conflict",
       question: "Confirm beam depth",
     });

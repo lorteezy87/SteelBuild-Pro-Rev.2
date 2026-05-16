@@ -25,6 +25,7 @@ import {
   makeExportFilename,
   recordsToCsv,
 } from "@/lib/dataExchange";
+import { normalizeRfiNumber, rfiNumberDedupKey } from "@/lib/rfiImportUtils";
 
 const DATASET_KEYS = Object.keys(IMPORT_TARGETS);
 
@@ -223,26 +224,54 @@ export default function DataExchange() {
       if (!stagedImport.validRecords.length) throw new Error("No valid rows are ready to import.");
       if (!importApproved) throw new Error("Review and approve the import before committing records.");
 
-      const recordsToCreate = stagedImport.validRecords.map((record) => {
+      let skippedDuplicates = 0;
+      const existingRfiNumbers = targetKey === "rfis"
+        ? new Set(records.map((record) => rfiNumberDedupKey(record.rfi_number)).filter(Boolean))
+        : null;
+      const stagedRfiNumbers = new Set();
+
+      const recordsToCreate = stagedImport.validRecords.flatMap((record) => {
+        const nextRecord = targetKey === "rfis" && record.rfi_number
+          ? { ...record, rfi_number: normalizeRfiNumber(record.rfi_number) }
+          : record;
+        const rfiKey = targetKey === "rfis" ? rfiNumberDedupKey(nextRecord.rfi_number) : null;
+        if (rfiKey) {
+          if (existingRfiNumbers.has(rfiKey) || stagedRfiNumbers.has(rfiKey)) {
+            skippedDuplicates += 1;
+            return [];
+          }
+          stagedRfiNumbers.add(rfiKey);
+        }
         const metadata = { ...(record.metadata || {}) };
         delete metadata.onboarding_import;
-        return {
-          ...record,
+        return [{
+          ...nextRecord,
           metadata: {
             ...metadata,
             data_exchange_import: true,
             import_source_name: importSourceName,
           },
-        };
+        }];
       });
 
-      return bulkCreateWithFallback(selectedEntity, recordsToCreate);
+      if (!recordsToCreate.length) {
+        return { rows: [], skippedDuplicates };
+      }
+
+      const rows = await bulkCreateWithFallback(selectedEntity, recordsToCreate);
+      return { rows, skippedDuplicates };
     },
-    onSuccess: (rows) => {
+    onSuccess: ({ rows, skippedDuplicates }) => {
       queryClient.invalidateQueries({ queryKey: ["data-exchange", selectedTarget.entityKey, selectedProjectId] });
       queryClient.invalidateQueries({ queryKey: [selectedTarget.entityKey] });
       setImportApproved(false);
-      toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}`);
+      if (rows.length > 0) {
+        toast.success(`Imported ${rows.length} ${selectedTarget.label.toLowerCase()}${skippedDuplicates ? `, ${skippedDuplicates} duplicate skipped` : ""}`);
+      } else if (skippedDuplicates) {
+        toast.warning(`${skippedDuplicates} duplicate ${selectedTarget.label.toLowerCase()} skipped; no new rows imported`);
+      } else {
+        toast.info("No rows were imported");
+      }
     },
     onError: (err) => toast.error(err?.message || "Import failed"),
   });
@@ -250,6 +279,7 @@ export default function DataExchange() {
   const exportDisabled = !selectedProject?.id || recordsQuery.isFetching || records.length === 0;
   const importDisabled = !selectedProject?.id
     || importMutation.isPending
+    || recordsQuery.isFetching
     || stagedImport.validRecords.length === 0
     || stagedImport.invalidRows.length > 0
     || !importApproved;
