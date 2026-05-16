@@ -380,7 +380,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
         >
           EDIT
         </button>
-        {/* Delete button */}
+        {/* Archive button */}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(project); }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--danger-border)"; e.currentTarget.style.color = "var(--danger)"; }}
@@ -392,7 +392,7 @@ function ProjectCard({ project, workPackages, rfis, changeOrders, onClick, onEdi
             textTransform: "uppercase", transition: "border-color 0.12s, color 0.12s",
           }}
         >
-          DEL
+          ARCHIVE
         </button>
       </div>
     </div>
@@ -541,7 +541,7 @@ export default function Projects() {
   });
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Project.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Project deleted"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Project archived"); },
     onError: (err) => toast.error(err.message),
   });
   const handleSave = (d) => {
@@ -549,7 +549,7 @@ export default function Projects() {
     else createMut.mutate(d);
   };
   const handleDelete = (project) => {
-    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
+    if (window.confirm(`Archive "${project.name}"? It will be hidden from active project lists, but its data and audit history will be retained.`)) {
       deleteMut.mutate(project.id);
     }
   };
