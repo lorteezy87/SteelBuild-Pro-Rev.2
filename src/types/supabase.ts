@@ -2394,7 +2394,6 @@ export type Database = {
         Row: {
           ai_extraction_error: string | null
           ai_extraction_status: string | null
-          annotations: Json | null
           callouts: Json | null
           created_at: string | null
           deleted_at: string | null
@@ -2443,7 +2442,6 @@ export type Database = {
         Insert: {
           ai_extraction_error?: string | null
           ai_extraction_status?: string | null
-          annotations?: Json | null
           callouts?: Json | null
           created_at?: string | null
           deleted_at?: string | null
@@ -2492,7 +2490,6 @@ export type Database = {
         Update: {
           ai_extraction_error?: string | null
           ai_extraction_status?: string | null
-          annotations?: Json | null
           callouts?: Json | null
           created_at?: string | null
           deleted_at?: string | null

@@ -26,9 +26,6 @@ const STAGE_FROM_ANALYSIS = {
   "OFS":         "OFS",        // Out For Scrub
   "IFC":         "IFC",        // Issued For Construction
   "Released":    "Released",
-  // Legacy stages dropped by migration 077 — coerce to closest match
-  "BFS":         "BFA",
-  "FFF":         "IFC",
   "Shop":        "OFS",        // Shop drawings sit at OFS (post-approval scrub)
   "Revision":    "IFA",        // Revision re-issued — back to internal prep
 };

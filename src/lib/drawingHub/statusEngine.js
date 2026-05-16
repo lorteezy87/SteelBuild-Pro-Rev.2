@@ -300,11 +300,10 @@ export function computeZoneDensity(hydrated) {
 const READINESS_DRAWING_STAGE_SCORES = {
   Released: 100,
   IFC:      100, // alias for Released per elsewhere in app
-  FFF:       85,
-  BFS:       70,
   OFS:       60,
   BFA:       40,
   OFA:       20,
+  IFA:       10,
   "Not Started": 0,
 };
 

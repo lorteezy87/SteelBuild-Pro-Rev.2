@@ -6,7 +6,7 @@
  *
  * Verified against pg_constraint on 2026-05-04 (migration 077).
  * Canonical 7-stage flow: Not Started → IFA → OFA → BFA → OFS → IFC →
- * Released. Old stages BFS and FFF were removed by migration 077.
+ * Released. Legacy pre-077 stage names were removed by migration 077.
  *
  * Usage:
  *   import { assertDrawingStage, coerceDrawingStage } from "@/lib/drawingEnums";
@@ -96,10 +96,6 @@ const stageGuard = makeGuard("drawing stage", DRAWING_STAGES, {
     "issued_for_construction": "IFC",
     "notstarted": "Not Started",
     "not_started": "Not Started",
-    // Legacy stages dropped in migration 077 — coerce to closest match
-    // for any in-flight code paths still passing the old strings.
-    "bfs": "BFA",
-    "fff": "IFC",
     "void": null,                // handled via is_superseded=true, not a stage value
   },
 });

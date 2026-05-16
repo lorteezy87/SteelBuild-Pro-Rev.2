@@ -486,97 +486,6 @@ export function rfiStatusRollup(rfis = []) {
 }
 
 /**
- * Submittal pipeline rollup — 6 detailing-stage buckets:
- *   IFA = In For Approval         · internal prep
- *   OFA = Out For Approval        · with EOR/Architect/AOR
- *   BFA = Back From Approval      · returned with verdict
- *   OFS = Out For Scrub           · post-approval cleanup (detailer)
- *   IFC = Issued For Construction · record copy to GC
- *   Released                      · S&H internal release to fab shop
- *
- * Workflow source of truth is the `submittals` table (Sprint 1+).
- * This rollup derives display stages from `status` + `ball_in_court`.
- *
- * The function still accepts the legacy "drawings + drawing_sets"
- * shape for back-compat with any caller that hasn't migrated yet,
- * but new callers should use `submittalPipelineRollupFromSubmittals`
- * directly. Mixed input is detected and bucketed correctly.
- *
- * @deprecated for drawing-shaped input — read submittals instead.
- */
-export function submittalPipelineRollup(rows = []) {
-  // Canonical 7-stage flow (corrected May 2026): IFA → OFA → BFA → OFS
-  // → IFC → Released. Mapping kept in sync with submittalStageMapping.js.
-  const stages = ["IFA", "OFA", "BFA", "OFS", "IFC", "Released"];
-  const counts = stages.reduce((acc, s) => { acc[s] = 0; return acc; }, {});
-
-  // 1. If any rows look like drawings (have drawing_set_id), bucket
-  //    by set_id rather than per-drawing.
-  const drawings = rows.filter((r) => r && !r.is_deleted && r.drawing_set_id);
-  const setIdsSeen = new Set();
-  if (drawings.length) {
-    const bySet = new Map();
-    for (const d of drawings) {
-      const key = d.drawing_set_id;
-      if (!bySet.has(key)) bySet.set(key, []);
-      bySet.get(key).push(d);
-    }
-    for (const [setId, sheets] of bySet.entries()) {
-      setIdsSeen.add(setId);
-      const setStage = pickDominantStage(sheets.map((s) => s?.stage), stages);
-      if (setStage && counts[setStage] !== undefined) counts[setStage]++;
-    }
-  }
-
-  // 2. Legacy / non-drawing rows — submittals records, drawing_sets
-  //    rows passed directly, etc. Skip drawings rows already counted.
-  for (const r of rows) {
-    if (!r || r.is_deleted) continue;
-    if (r.drawing_set_id) continue;             // already counted above
-    if (r.id && setIdsSeen.has(r.id)) continue; // a drawing_set we already saw via drawings
-
-    // a) drawing_sets table row — uses stage_summary
-    if (r.stage_summary && counts[r.stage_summary] !== undefined) {
-      counts[r.stage_summary]++;
-      continue;
-    }
-    // b) legacy submittals row with explicit stage
-    const explicit = r?.stage || r?.current_stage;
-    if (explicit && counts[explicit] !== undefined) {
-      counts[explicit]++;
-      continue;
-    }
-    // c) legacy submittals fallback — derive from status + ball_in_court.
-    //    BIC discriminator classes (synced with submittalStageMapping.js):
-    //      Detailer-class:  Detailer / S&H / Contractor
-    //      Approver-class:  EOR / Architect / AOR
-    //      Downstream-class: GC / Owner
-    const status = r?.status;
-    const bic    = r?.ball_in_court;
-    const isDetailerClass  = bic === "Detailer" || bic === "S&H" || bic === "Contractor" || bic === "Subcontractor";
-    const isApproverClass  = bic === "EOR" || bic === "Architect" || bic === "AOR";
-    const isDownstreamClass = bic === "GC" || bic === "Owner";
-
-    if (status === "Released for Fabrication") counts["Released"]++;
-    else if (status === "Approved" || status === "Approved as Noted") {
-      if (isApproverClass)        counts["BFA"]++;
-      else if (isDetailerClass)   counts["OFS"]++;
-      else if (isDownstreamClass) counts["IFC"]++;
-      else                        counts["BFA"]++; // unknown bic → just-returned
-    }
-    else if (status === "Revise and Resubmit" || status === "Rejected") counts["IFA"]++; // R&R loops back
-    else if (status === "Submitted" || status === "Under Review") {
-      if (isDetailerClass) counts["IFA"]++;
-      else                 counts["OFA"]++;
-    }
-    else if (status === "Draft") counts["IFA"]++;
-    // Void / unknown → skipped.
-  }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return { stages, counts, total };
-}
-
-/**
  * Submittal pipeline rollup driven exclusively by the `submittals`
  * table — NEW canonical path (Sprint 2). Submittals are workflow
  * source of truth; drawings columns (stage / set_approval_status)
@@ -623,30 +532,6 @@ export function submittalPipelineRollupFromSubmittals(submittals = []) {
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   return { stages, counts, total };
-}
-
-/**
- * For a set whose sheets sit at varying stages, pick the canonical
- * stage to display. Strategy: most-common; on ties, pick the EARLIEST
- * stage in the canonical workflow order so a partially-progressed set
- * shows up in the upstream bucket (better-PMs-want-to-finish-it
- * principle than over-counting it as released).
- *
- * @deprecated — derives stage from drawings.stage. Read submittals instead.
- */
-function pickDominantStage(stageList, canonicalOrder) {
-  const tally = {};
-  for (const s of stageList) {
-    if (!s) continue;
-    tally[s] = (tally[s] || 0) + 1;
-  }
-  const counts = Object.entries(tally);
-  if (!counts.length) return null;
-  const max = Math.max(...counts.map(([, n]) => n));
-  const top = counts.filter(([, n]) => n === max).map(([s]) => s);
-  // Tie-break by canonical workflow order (OFA earliest, Released latest).
-  top.sort((a, b) => canonicalOrder.indexOf(a) - canonicalOrder.indexOf(b));
-  return top[0];
 }
 
 /**

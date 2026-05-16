@@ -73,8 +73,8 @@ export default function Icon({ name, size = 14, color = "currentColor", strokeWi
 
 /**
  * StageIcon — letterform badge for drawing-stage chips. Draws a 2px
- * rounded rect outline with the stage code inside (OFA, BFA, OFS, BFS,
- * FFF, or R for Released). Used inline in drawing-status badges.
+ * rounded rect outline with the stage code inside (IFA, OFA, BFA, OFS,
+ * IFC, or R for Released). Used inline in drawing-status badges.
  */
 export function StageIcon({ stage, size = 14, color = "currentColor" }) {
   const label = stage === "Released" ? "R" : stage;
