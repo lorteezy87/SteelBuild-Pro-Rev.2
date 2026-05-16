@@ -1,5 +1,6 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
@@ -11,18 +12,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import AdminRoute from "../components/shared/AdminRoute";
 import LoadingSkeleton from "../components/shared/LoadingSkeleton";
 import DeleteDialog from "../components/shared/DeleteDialog";
 import { ProjectContext } from "@/components/shared/ProjectContext";
 import { useAuth } from "@/lib/AuthContext";
-import { RefreshCw, Plus, Trash2, Users } from "lucide-react";
+import { useProjectRole, roleAtLeast } from "@/hooks/useProjectRole";
+import { RefreshCw, Plus, Trash2, Users, History } from "lucide-react";
 import { toast } from "sonner";
 import {
   DEFAULT_ROLE,
   formatRole,
   getRoleOptions,
   isCurrentUser,
+  isProjectAdminRole,
   isValidEmail,
 } from "@/lib/projectMembers";
 
@@ -35,17 +37,15 @@ import {
  * but `user_profiles.id` mirrors `auth.users.id` so a single .in() lookup
  * is enough).
  *
- * Writes (role updates, removals, additions) go through the standard
- * `base44.entities.UserProject` wrapper. RLS gates them at the DB layer:
+ * Writes (role updates, removals, additions, and bulk edits) go through
+ * the standard `base44.entities.UserProject` wrapper. RLS gates them at the DB layer:
  * only system admins or per-project admins can write to user_projects, so
- * even if a non-admin somehow lands here the writes will fail with 42501.
- * The page is wrapped in <AdminRoute> for the global-admin path.
+ * even if a non-admin lands here the writes will fail with 42501. The DB
+ * logs membership changes into member_activity.
+ * System admins and per-project admins pass the page-level gate.
  *
- * Deferred (flagged in TECH_DEBT.md):
- *   - member-activity audit table (no schema for it yet)
- *   - bulk role edits
- *   - inviting users by email (no email infra yet — only existing users
- *     can be added).
+ * Email invites stay blocked until email infrastructure exists. This page
+ * only adds existing user_profiles rows.
  */
 
 // ── small style helpers (mirrors FeatureFlagsAdmin idiom) ─────────────
@@ -88,6 +88,16 @@ function ProjectMembersContent() {
     () => projectCtx?.activeProject?.id || "",
   );
 
+  const isSystemAdmin = currentUser?.role === "admin";
+  const {
+    role: selectedProjectRole,
+    isLoading: projectRoleLoading,
+  } = useProjectRole(selectedProjectId || null);
+  const canManageSelectedProject =
+    isSystemAdmin || roleAtLeast(selectedProjectRole, "admin");
+  const accessCheckLoading =
+    !!selectedProjectId && !isSystemAdmin && projectRoleLoading;
+
   // ── members ───────────────────────────────────────────────────────
   const {
     data: memberRows = [],
@@ -95,7 +105,7 @@ function ProjectMembersContent() {
     refetch,
   } = useQuery({
     queryKey: ["project-members", selectedProjectId],
-    enabled: !!selectedProjectId,
+    enabled: !!selectedProjectId && canManageSelectedProject,
     queryFn: () =>
       base44.entities.UserProject.filter(
         { project_id: selectedProjectId },
@@ -114,7 +124,7 @@ function ProjectMembersContent() {
 
   const { data: profilesById = {} } = useQuery({
     queryKey: ["user-profiles-by-ids", userIds],
-    enabled: userIds.length > 0,
+    enabled: canManageSelectedProject && userIds.length > 0,
     queryFn: async () => {
       const profiles = await base44.entities.User.filter({ id: userIds });
       const byId = {};
@@ -142,9 +152,27 @@ function ProjectMembersContent() {
     [members],
   );
 
+  const { data: memberActivity = [], isLoading: activityLoading } = useQuery({
+    queryKey: ["member-activity", selectedProjectId],
+    enabled: !!selectedProjectId && canManageSelectedProject,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("member_activity")
+        .select("*")
+        .eq("project_id", selectedProjectId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 30 * 1000,
+  });
+
   // ── invalidation helper ───────────────────────────────────────────
-  const invalidate = () =>
+  const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["project-members", selectedProjectId] });
+    qc.invalidateQueries({ queryKey: ["member-activity", selectedProjectId] });
+  };
 
   // ── mutations ─────────────────────────────────────────────────────
   const updateRoleMut = useMutation({
@@ -168,6 +196,30 @@ function ProjectMembersContent() {
     },
     onError: (err) => {
       toast.error(err?.message || "Failed to remove member");
+    },
+  });
+
+  const bulkRoleMut = useMutation({
+    mutationFn: async ({ membersToUpdate, role }) => {
+      const changedMembers = membersToUpdate.filter((member) => member.role !== role);
+      await Promise.all(
+        changedMembers.map((member) =>
+          base44.entities.UserProject.update(member.id, { role }),
+        ),
+      );
+      return changedMembers.length;
+    },
+    onSuccess: (changedCount) => {
+      invalidate();
+      setSelectedMemberIds(new Set());
+      toast.success(
+        changedCount === 1
+          ? "Updated 1 member"
+          : `Updated ${changedCount} members`,
+      );
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Failed to update selected members");
     },
   });
 
@@ -209,9 +261,53 @@ function ProjectMembersContent() {
   // ── form state ────────────────────────────────────────────────────
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [removeTarget, setRemoveTarget] = useState(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState(() => new Set());
+  const [bulkRole, setBulkRole] = useState(DEFAULT_ROLE);
+
+  useEffect(() => {
+    setSelectedMemberIds((prev) => {
+      const liveIds = new Set(members.map((member) => member.id));
+      const next = new Set([...prev].filter((id) => liveIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [members]);
+
+  const selectedMembers = useMemo(
+    () => members.filter((member) => selectedMemberIds.has(member.id)),
+    [members, selectedMemberIds],
+  );
+
+  const allMembersSelected =
+    members.length > 0 && selectedMemberIds.size === members.length;
+
+  const wouldLeaveProjectWithoutAdmin = (targetMembers, nextRole) => {
+    if (isProjectAdminRole(nextRole)) return false;
+    const targetIds = new Set(targetMembers.map((member) => member.id));
+    const remainingAdminCount = members.filter(
+      (member) => isProjectAdminRole(member.role) && !targetIds.has(member.id),
+    ).length;
+    return remainingAdminCount === 0;
+  };
+
+  const toggleMemberSelection = (memberId, checked) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(memberId);
+      else next.delete(memberId);
+      return next;
+    });
+  };
+
+  const toggleAllMembers = (checked) => {
+    setSelectedMemberIds(checked ? new Set(members.map((member) => member.id)) : new Set());
+  };
 
   const handleRoleChange = (member, nextRole) => {
     if (nextRole === member.role) return;
+    if (wouldLeaveProjectWithoutAdmin([member], nextRole)) {
+      toast.error("A project must keep at least one admin or owner.");
+      return;
+    }
     updateRoleMut.mutate({ id: member.id, role: nextRole });
   };
 
@@ -225,6 +321,41 @@ function ProjectMembersContent() {
       return;
     }
     addMemberMut.mutate(newMemberEmail);
+  };
+
+  const handleBulkRoleUpdate = () => {
+    if (selectedMembers.length === 0) {
+      toast.error("Select at least one member");
+      return;
+    }
+    if (wouldLeaveProjectWithoutAdmin(selectedMembers, bulkRole)) {
+      toast.error("A project must keep at least one admin or owner.");
+      return;
+    }
+    bulkRoleMut.mutate({ membersToUpdate: selectedMembers, role: bulkRole });
+  };
+
+  const handleRemoveMember = () => {
+    if (!removeTarget) return;
+    if (isProjectAdminRole(removeTarget.role) && adminCount <= 1) {
+      toast.error("A project must keep at least one admin or owner.");
+      return;
+    }
+    removeMemberMut.mutate(removeTarget.id);
+  };
+
+  const formatActivityEvent = (activity) => {
+    const target = activity.target_email || activity.target_user_id || "Member";
+    if (activity.event_type === "member_added") {
+      return `${target} added as ${formatRole(activity.new_role)}`;
+    }
+    if (activity.event_type === "role_changed") {
+      return `${target} changed from ${formatRole(activity.old_role)} to ${formatRole(activity.new_role)}`;
+    }
+    if (activity.event_type === "member_removed") {
+      return `${target} removed from the project`;
+    }
+    return `${target} updated`;
   };
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -244,7 +375,7 @@ function ProjectMembersContent() {
       >
         <button
           onClick={refetch}
-          disabled={!selectedProjectId}
+          disabled={!selectedProjectId || !canManageSelectedProject}
           title="Refresh"
           style={{
             display: "flex",
@@ -259,9 +390,9 @@ function ProjectMembersContent() {
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: "0.08em",
-            cursor: selectedProjectId ? "pointer" : "not-allowed",
+            cursor: selectedProjectId && canManageSelectedProject ? "pointer" : "not-allowed",
             textTransform: "uppercase",
-            opacity: selectedProjectId ? 1 : 0.5,
+            opacity: selectedProjectId && canManageSelectedProject ? 1 : 0.5,
           }}
         >
           <RefreshCw size={12} /> Refresh
@@ -295,7 +426,10 @@ function ProjectMembersContent() {
         </span>
         <select
           value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
+          onChange={(e) => {
+            setSelectedProjectId(e.target.value);
+            setSelectedMemberIds(new Set());
+          }}
           disabled={projectsLoading}
           style={{ ...inputStyle, minWidth: 280 }}
           aria-label="Select project to manage members for"
@@ -309,7 +443,47 @@ function ProjectMembersContent() {
         </select>
       </div>
 
-      {!membersLoading && selectedProjectId && members.length > 0 && (
+      {selectedProjectId && accessCheckLoading && (
+        <div
+          style={{
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 12,
+            padding: 18,
+            color: "var(--text-secondary)",
+            fontSize: 13,
+          }}
+        >
+          Checking project role...
+        </div>
+      )}
+
+      {selectedProjectId && !accessCheckLoading && !canManageSelectedProject && (
+        <div
+          style={{
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 12,
+            padding: 18,
+          }}
+        >
+          <div
+            style={{
+              color: "var(--nc-accent-red)",
+              fontWeight: 700,
+              fontSize: 14,
+              marginBottom: 6,
+            }}
+          >
+            Project admin access required
+          </div>
+          <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+            Select a project where your role is Admin or Owner.
+          </div>
+        </div>
+      )}
+
+      {!membersLoading && selectedProjectId && canManageSelectedProject && members.length > 0 && (
         <div
           style={{
             display: "grid",
@@ -329,7 +503,7 @@ function ProjectMembersContent() {
       )}
 
       {/* Add-member form */}
-      {selectedProjectId && (
+      {selectedProjectId && canManageSelectedProject && (
         <div
           style={{
             background: "var(--bg-surface-low)",
@@ -374,8 +548,54 @@ function ProjectMembersContent() {
         </div>
       )}
 
+      {selectedProjectId && canManageSelectedProject && members.length > 0 && (
+        <div
+          style={{
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 12,
+            padding: 14,
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+            }}
+          >
+            Bulk role
+          </span>
+          <select
+            value={bulkRole}
+            onChange={(e) => setBulkRole(e.target.value)}
+            style={{ ...inputStyle, minWidth: 140 }}
+            aria-label="Bulk role"
+          >
+            {getRoleOptions(DEFAULT_ROLE).map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            onClick={handleBulkRoleUpdate}
+            disabled={bulkRoleMut.isPending || selectedMembers.length === 0}
+          >
+            Apply to {selectedMembers.length || 0}
+          </Button>
+        </div>
+      )}
+
       {/* Members table */}
-      {selectedProjectId && (
+      {selectedProjectId && canManageSelectedProject && (
         <div
           style={{
             background: "var(--bg-surface-low)",
@@ -392,6 +612,14 @@ function ProjectMembersContent() {
                   borderBottom: "1px solid var(--border-default)",
                 }}
               >
+                <TableHead style={{ ...cellLabelStyle, width: 44 }}>
+                  <input
+                    type="checkbox"
+                    checked={allMembersSelected}
+                    onChange={(e) => toggleAllMembers(e.target.checked)}
+                    aria-label="Select all members"
+                  />
+                </TableHead>
                 <TableHead style={cellLabelStyle}>Email</TableHead>
                 <TableHead style={cellLabelStyle}>Name</TableHead>
                 <TableHead style={cellLabelStyle}>Role</TableHead>
@@ -401,14 +629,14 @@ function ProjectMembersContent() {
             <TableBody>
               {membersLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} style={{ padding: 0 }}>
+                  <TableCell colSpan={5} style={{ padding: 0 }}>
                     <LoadingSkeleton variant="table" rows={4} />
                   </TableCell>
                 </TableRow>
               ) : members.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={5}
                     style={{ textAlign: "center", padding: "48px 0", color: "var(--text-muted)" }}
                   >
                     <div
@@ -438,12 +666,24 @@ function ProjectMembersContent() {
               ) : (
                 members.map((member) => {
                   const isSelf = isCurrentUser(member.user_id, currentUser?.id);
+                  const isLastAdmin =
+                    isProjectAdminRole(member.role) && adminCount <= 1;
                   const options = getRoleOptions(member.role);
                   return (
                     <TableRow
                       key={member.id}
                       style={{ borderBottom: "1px solid var(--hover-bg)" }}
                     >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedMemberIds.has(member.id)}
+                          onChange={(e) =>
+                            toggleMemberSelection(member.id, e.target.checked)
+                          }
+                          aria-label={`Select ${member.email || member.user_id}`}
+                        />
+                      </TableCell>
                       <TableCell
                         style={{
                           fontFamily: "var(--font-body)",
@@ -498,21 +738,23 @@ function ProjectMembersContent() {
                       <TableCell>
                         <button
                           onClick={() => setRemoveTarget(member)}
-                          disabled={isSelf}
+                          disabled={isSelf || isLastAdmin}
                           title={
                             isSelf
                               ? "You can't remove yourself"
+                              : isLastAdmin
+                                ? "A project must keep at least one admin or owner"
                               : `Remove ${member.email || member.user_id}`
                           }
                           style={{
                             background: "none",
                             border: "1px solid var(--border-default)",
-                            color: isSelf
+                            color: isSelf || isLastAdmin
                               ? "var(--text-muted)"
                               : "var(--nc-accent-red, #ff6b6b)",
                             borderRadius: "var(--radius-btn)",
                             padding: "6px 10px",
-                            cursor: isSelf ? "not-allowed" : "pointer",
+                            cursor: isSelf || isLastAdmin ? "not-allowed" : "pointer",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 4,
@@ -521,7 +763,7 @@ function ProjectMembersContent() {
                             fontWeight: 700,
                             letterSpacing: "0.08em",
                             textTransform: "uppercase",
-                            opacity: isSelf ? 0.5 : 1,
+                            opacity: isSelf || isLastAdmin ? 0.5 : 1,
                           }}
                         >
                           <Trash2 size={12} /> Remove
@@ -536,10 +778,75 @@ function ProjectMembersContent() {
         </div>
       )}
 
+      {selectedProjectId && canManageSelectedProject && (
+        <div
+          style={{
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 12,
+            padding: 14,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+              color: "var(--text-primary)",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            <History size={14} />
+            Recent member activity
+          </div>
+          {activityLoading ? (
+            <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
+              Loading activity...
+            </div>
+          ) : memberActivity.length === 0 ? (
+            <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
+              No membership changes logged yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {memberActivity.map((activity) => (
+                <div
+                  key={activity.id}
+                  style={{
+                    borderTop: "1px solid var(--hover-bg)",
+                    paddingTop: 8,
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: 12,
+                    alignItems: "start",
+                  }}
+                >
+                  <div>
+                    <div style={{ color: "var(--text-primary)", fontSize: 12 }}>
+                      {formatActivityEvent(activity)}
+                    </div>
+                    <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      By {activity.actor_email || "system"}
+                    </div>
+                  </div>
+                  <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                    {activity.created_at
+                      ? new Date(activity.created_at).toLocaleString()
+                      : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <DeleteDialog
         open={!!removeTarget}
         onClose={() => setRemoveTarget(null)}
-        onConfirm={() => removeTarget && removeMemberMut.mutate(removeTarget.id)}
+        onConfirm={handleRemoveMember}
         title="Remove member"
         description={
           removeTarget
@@ -552,9 +859,5 @@ function ProjectMembersContent() {
 }
 
 export default function ProjectMembers() {
-  return (
-    <AdminRoute>
-      <ProjectMembersContent />
-    </AdminRoute>
-  );
+  return <ProjectMembersContent />;
 }
