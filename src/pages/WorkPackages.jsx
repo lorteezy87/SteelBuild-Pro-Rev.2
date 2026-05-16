@@ -135,7 +135,7 @@ export default function WorkPackages() {
   const [selectedWPs, setSelectedWPs] = useState(new Set());
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
 
-  const { data: workPackages = [], isLoading: wpLoading } = useQuery({
+  const { data: rawWorkPackages = [], isLoading: wpLoading } = useQuery({
     queryKey: ["work-packages", projectId],
     queryFn: async () => {
       if (projectId) return base44.entities.WorkPackage.filter({ project_id: projectId });
@@ -149,6 +149,16 @@ export default function WorkPackages() {
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
+
+  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const selectedProject = projects.find((p) => p.id === projectId) || null;
+  const effectiveProjectId = selectedProject?.id || null;
+  const workPackages = useMemo(
+    () => projectId
+      ? (selectedProject ? rawWorkPackages : [])
+      : rawWorkPackages.filter((wp) => wp?.project_id && liveProjectIds.has(wp.project_id)),
+    [liveProjectIds, projectId, rawWorkPackages, selectedProject]
+  );
 
   const { data: drawings = [] } = useQuery({
     queryKey: ["drawings", projectId],
@@ -211,12 +221,12 @@ export default function WorkPackages() {
   const bulkCreateMut = useMutation({
     mutationFn: async (rows) => {
       if (!rows?.length) throw new Error("No rows to add");
-      if (!projectId) throw new Error("Select a project first");
+      if (!effectiveProjectId) throw new Error("Select a project first");
       const needsNumbers = rows.filter((row) => !row.wp_number);
       let nextStart = null;
       if (needsNumbers.length > 0) {
         try {
-          nextStart = await getNextNumber(projectId, "wp_number");
+          nextStart = await getNextNumber(effectiveProjectId, "wp_number");
         } catch (err) {
           console.warn("[WorkPackages] getNextNumber fallback:", err?.message);
           const maxNum = workPackages
@@ -233,7 +243,7 @@ export default function WorkPackages() {
           wpNumber = `WP-${String(cursor).padStart(3, "0")}`;
           cursor += 1;
         }
-        return { ...row, wp_number: wpNumber, project_id: projectId, project_name: row.project_name || undefined };
+        return { ...row, wp_number: wpNumber, project_id: effectiveProjectId, project_name: row.project_name || undefined };
       });
       return batchProcess(prepared, (data) => base44.entities.WorkPackage.create(data), 5);
     },
@@ -305,8 +315,7 @@ export default function WorkPackages() {
     [filtered, selectedWPs]
   );
 
-  const selectedProject = projects.find((p) => p.id === projectId) || null;
-  const projectName = selectedProject?.name || "All Projects";
+  const projectName = selectedProject?.name || (projectId ? "No active project" : "All Projects");
 
   const toggleSelect = (id) =>
     setSelectedWPs((prev) => {
@@ -323,8 +332,8 @@ export default function WorkPackages() {
   const handleWPCreate = React.useCallback(async () => {
     let wpNumber = "";
     try {
-      if (projectId) {
-        const n = await getNextNumber(projectId, "wp_number");
+      if (effectiveProjectId) {
+        const n = await getNextNumber(effectiveProjectId, "wp_number");
         wpNumber = `WP-${String(n).padStart(3, "0")}`;
       }
     } catch (err) {
@@ -335,11 +344,11 @@ export default function WorkPackages() {
         .reduce((max, n) => Math.max(max, n), 0);
       wpNumber = `WP-${String(maxNum + 1).padStart(3, "0")}`;
     }
-    setEditingWP({ wp_number: wpNumber, project_id: projectId });
+    setEditingWP({ wp_number: wpNumber, project_id: effectiveProjectId });
     setWPModalOpen(true);
-  }, [projectId, workPackages]);
+  }, [effectiveProjectId, workPackages]);
 
-  useAutoOpenCreate(handleWPCreate, { enabled: !!projectId });
+  useAutoOpenCreate(handleWPCreate, { enabled: !!effectiveProjectId });
 
   if (wpLoading) {
     return (
@@ -354,13 +363,13 @@ export default function WorkPackages() {
       <style>{RESPONSIVE_CSS}</style>
       <Hero
         projectName={projectName}
-        projectId={projectId}
         metrics={metrics}
         view={view}
         onViewChange={setView}
         onExport={() => exportWorkPackagesCSV(filtered)}
         onBulkAdd={() => setBulkAddOpen(true)}
         onCreate={handleWPCreate}
+        canCreate={!!effectiveProjectId}
       />
 
       <SummaryStrip metrics={metrics} onPhaseFilter={setPhaseFilter} phaseFilter={phaseFilter} />
@@ -456,7 +465,7 @@ export default function WorkPackages() {
         open={bulkAddOpen}
         onClose={() => setBulkAddOpen(false)}
         onCommit={(rows) => bulkCreateMut.mutate(rows)}
-        projectId={projectId}
+        projectId={effectiveProjectId}
         projectName={projectName}
         existingWPs={workPackages}
         isSaving={bulkCreateMut.isPending}
@@ -497,7 +506,7 @@ export default function WorkPackages() {
   );
 }
 
-function Hero({ projectName, projectId, metrics, view, onViewChange, onExport, onBulkAdd, onCreate }) {
+function Hero({ projectName, metrics, view, onViewChange, onExport, onBulkAdd, onCreate, canCreate }) {
   return (
     <section className="wp-hero" style={heroStyle}>
       <div style={{ minWidth: 0 }}>
@@ -526,8 +535,8 @@ function Hero({ projectName, projectId, metrics, view, onViewChange, onExport, o
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Button variant="secondary" icon="download" onClick={onExport}>CSV</Button>
-          <Button variant="outline" icon="upload" onClick={onBulkAdd} disabled={!projectId}>Bulk Add</Button>
-          <Button variant="primary" icon="plus" onClick={onCreate} disabled={!projectId}>New WP</Button>
+          <Button variant="outline" icon="upload" onClick={onBulkAdd} disabled={!canCreate}>Bulk Add</Button>
+          <Button variant="primary" icon="plus" onClick={onCreate} disabled={!canCreate}>New WP</Button>
         </div>
       </div>
     </section>

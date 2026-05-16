@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo } from "react";
+import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -46,6 +46,18 @@ export default function Dashboard() {
     queryFn: () => base44.entities.Project.list(),
     staleTime: 5 * 60 * 1000,
   });
+  const liveProjectIds = useMemo(() => new Set(projects.map((p) => p.id).filter(Boolean)), [projects]);
+  const activeProjectIsLive = !pid || projectsLoading || liveProjectIds.has(pid);
+
+  useEffect(() => {
+    if (pid && !projectsLoading && !activeProjectIsLive) {
+      setActiveProject(null);
+    }
+  }, [activeProjectIsLive, pid, projectsLoading, setActiveProject]);
+
+  const scopePortfolioRows = (rows) =>
+    pid ? rows : rows.filter((row) => row?.project_id && liveProjectIds.has(row.project_id));
+
   const { data: allRFIs = [], isLoading: rfisLoading } = useQuery({
     queryKey: ["rfis-dashboard", projectScope],
     queryFn: () => listForDashboard(base44.entities.RFI),
@@ -204,14 +216,14 @@ export default function Dashboard() {
         <Suspense fallback={<LoadingSkeleton variant="page" />}>
           <PortfolioView
             projects={projects}
-            allRFIs={allRFIs}
-            allCOs={allCOs}
-            allCodes={allCodes}
-            allWPs={allWPs}
-            allDeliveries={allDeliveries}
-            allActionItems={allActionItems}
-            allExpenses={allExpenses}
-            allScheduleTasks={allScheduleTasks}
+            allRFIs={scopePortfolioRows(allRFIs)}
+            allCOs={scopePortfolioRows(allCOs)}
+            allCodes={scopePortfolioRows(allCodes)}
+            allWPs={scopePortfolioRows(allWPs)}
+            allDeliveries={scopePortfolioRows(allDeliveries)}
+            allActionItems={scopePortfolioRows(allActionItems)}
+            allExpenses={scopePortfolioRows(allExpenses)}
+            allScheduleTasks={scopePortfolioRows(allScheduleTasks)}
           />
         </Suspense>
       </ErrorBoundary>
