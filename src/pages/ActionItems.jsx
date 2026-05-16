@@ -70,7 +70,7 @@ export default function ActionItems() {
     onError: (e) => toast.error("Failed: " + (e?.message || "Delete failed")),
   });
 
-  const { data: actionItems = [] } = useQuery({
+  const { data: actionItems = [], isLoading } = useQuery({
     queryKey: ["action-items", projectId],
     queryFn: () =>
       projectId
@@ -363,8 +363,13 @@ export default function ActionItems() {
         />
       )}
 
-      {/* Empty state */}
-      {actionItems.length === 0 ? (
+      {isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 0" }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "16px 20px", height: 56, animation: "pulse 1.5s ease-in-out infinite", opacity: 0.5 }} />
+          ))}
+        </div>
+      ) : actionItems.length === 0 ? (
         <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "64px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>No Action Items Yet</div>

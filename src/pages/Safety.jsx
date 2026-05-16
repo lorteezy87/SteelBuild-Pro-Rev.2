@@ -9,6 +9,7 @@ import DeleteDialog from "@/components/shared/DeleteDialog";
 import { CommandBar, KpiTile } from "@/components/design-system";
 import { Plus } from "lucide-react";
 import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 
 export default function Safety() {
   const projectId = useProjectId();
@@ -24,7 +25,9 @@ export default function Safety() {
         ? base44.entities.SafetyIncident.filter({ project_id: projectId })
         : base44.entities.SafetyIncident.list("-incident_date"),
   });
-  // Defensive soft-delete filter (entity layer also does this at fetch).
+
+  useRealtimeInvalidation("safety_incidents", projectId, [["safety-incidents", projectId]]);
+
   const incidents = React.useMemo(() => rawIncidents.filter((r) => !r.is_deleted), [rawIncidents]);
 
   const { data: projects = [] } = useQuery({
