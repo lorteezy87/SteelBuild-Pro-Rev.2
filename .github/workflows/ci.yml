@@ -44,6 +44,13 @@ jobs:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # CI placeholders for Vite/Vitest. Real values live in Vercel project env
+    # for production builds; CI only needs non-empty values so src/lib/supabase.ts
+    # passes its import-time guard. No test should hit this URL — anything that
+    # touches the network is expected to mock the supabase client.
+    env:
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
     steps:
       - name: Checkout
