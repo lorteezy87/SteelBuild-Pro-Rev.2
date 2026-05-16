@@ -137,8 +137,8 @@ export default function Drawings() {
   // Reconciliation now handled server-side by reconcile_stuck_extractions()
   // (migration 076). The Postgres function flips any row stuck in
   // 'Extracting' for >5 minutes back to 'Failed' regardless of whether
-  // a user has the page open. Wire it to pg_cron or an edge function
-  // for periodic execution.
+  // a user has the page open. Migration 20260516003546 schedules it
+  // through pg_cron every 5 minutes.
 
   // H9: keep the search box in sync with ?sheet= / ?search= query params.
   // Without this, in-app deep links (e.g. PCC → /drawings?sheet=S-001) just
