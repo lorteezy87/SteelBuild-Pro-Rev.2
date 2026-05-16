@@ -8,6 +8,14 @@
  */
 
 export const CONSTRAINT_TYPES = [
+  "Engineering Hold",
+  "Approval Hold",
+  "Procurement Hold",
+  "Quality Hold",
+  "Schedule Hold",
+  "Resource Hold",
+  "Production Hold",
+  "IFC Hold",
   "Missing Embeds",
   "Anchor Bolt Issue",
   "Approved Submittal Missing",
@@ -22,6 +30,14 @@ export const CONSTRAINT_TYPES = [
 ];
 
 export const TYPE_COLORS = {
+  "Engineering Hold":           "var(--status-error)",
+  "Approval Hold":              "var(--status-warning)",
+  "Procurement Hold":           "var(--status-warning)",
+  "Quality Hold":               "var(--status-error)",
+  "Schedule Hold":              "var(--status-warning)",
+  "Resource Hold":              "var(--accent)",
+  "Production Hold":            "var(--status-error)",
+  "IFC Hold":                   "var(--accent)",
   "Missing Embeds":              "var(--status-error)",
   "Anchor Bolt Issue":           "var(--status-error)",
   "Approved Submittal Missing":  "var(--status-warning)",
@@ -36,6 +52,14 @@ export const TYPE_COLORS = {
 };
 
 export const TYPE_ICONS = {
+  "Engineering Hold":           "\u2699",
+  "Approval Hold":              "\u2709",
+  "Procurement Hold":           "\u{1F4E6}",
+  "Quality Hold":               "\u26A0",
+  "Schedule Hold":              "\u23F1",
+  "Resource Hold":              "\u{1F465}",
+  "Production Hold":            "\u{1F3ED}",
+  "IFC Hold":                   "\u{1F4D0}",
   "Missing Embeds":              "\u2B1C",
   "Anchor Bolt Issue":           "\u2693",
   "Approved Submittal Missing":  "\u2709",

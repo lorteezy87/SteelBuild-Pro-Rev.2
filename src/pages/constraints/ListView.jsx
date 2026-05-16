@@ -63,6 +63,7 @@ export default function ListView({ items, wps, expandedId, setExpandedId, onQuic
         const statusCfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.Open;
         const wp = wps.find((w) => w.id === c.work_package_id);
         const resolved = isResolved(c);
+        const generated = Boolean(c._generated);
         return (
           <React.Fragment key={c.id}>
             <div
@@ -106,6 +107,23 @@ export default function ListView({ items, wps, expandedId, setExpandedId, onQuic
                   {overdue && (
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)" }}>
                       ⚠ OVERDUE
+                    </span>
+                  )}
+                  {generated && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 8,
+                        fontWeight: 800,
+                        color: "var(--accent)",
+                        background: "var(--accent-muted)",
+                        border: "1px solid var(--accent-border)",
+                        borderRadius: "var(--radius-badge)",
+                        padding: "1px 6px",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      SYSTEM
                     </span>
                   )}
                   <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)" }}>
@@ -165,7 +183,7 @@ export default function ListView({ items, wps, expandedId, setExpandedId, onQuic
                 {c.due_date ? formatShortDate(c.due_date) : "—"}
               </div>
               <div style={{ display: "flex", gap: 4, justifyContent: "flex-start" }}>
-                {!resolved && (
+                {!generated && !resolved && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onQuickUpdate(c.id, { status: "Resolved" }); }}
@@ -184,40 +202,44 @@ export default function ListView({ items, wps, expandedId, setExpandedId, onQuic
                     ✓
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onEdit(c); }}
-                  style={{
-                    background: "var(--bg-surface-high)",
-                    border: "1px solid var(--border-default)",
-                    borderRadius: "var(--radius-btn)",
-                    padding: "3px 8px",
-                    color: "var(--text-secondary)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  EDIT
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDelete(c); }}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--danger-border)",
-                    borderRadius: "var(--radius-btn)",
-                    padding: "3px 7px",
-                    color: "var(--status-error)",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  ×
-                </button>
+                {!generated && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onEdit(c); }}
+                      style={{
+                        background: "var(--bg-surface-high)",
+                        border: "1px solid var(--border-default)",
+                        borderRadius: "var(--radius-btn)",
+                        padding: "3px 8px",
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 8,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      EDIT
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDelete(c); }}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid var(--danger-border)",
+                        borderRadius: "var(--radius-btn)",
+                        padding: "3px 7px",
+                        color: "var(--status-error)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 8,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onLogMitigation(c); }}
@@ -255,6 +277,7 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
   const statusCfg = STATUS_CONFIG[c.status] || STATUS_CONFIG.Open;
   const typeColor = TYPE_COLORS[c.constraint_type] || "var(--text-muted)";
   const wp = wps.find((w) => w.id === c.work_package_id);
+  const generated = Boolean(c._generated);
   return (
     <div
       style={{
@@ -274,6 +297,7 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         <Meta label="Assigned To" value={c.assigned_to || "—"} />
         <Meta label="Due Date" value={c.due_date ? formatDate(c.due_date) : "—"} />
+        {generated && <Meta label="Source" value={c._source_ref || c._source_type || "System"} />}
         <Meta
           label="Priority"
           value={
@@ -310,20 +334,25 @@ function ExpandedRow({ constraint: c, wps, onQuickUpdate, onEdit }) {
       </div>
 
       <div style={{ display: "flex", gap: 6, borderTop: "1px solid var(--divider)", paddingTop: 12, alignItems: "center" }}>
-        {c.status === "Open" && (
+        {generated && (
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            System-generated blocker. Clear the source condition to remove it.
+          </div>
+        )}
+        {!generated && c.status === "Open" && (
           <ActionBtn label="▶ Start Progress" onClick={() => onQuickUpdate(c.id, { status: "In Progress" })} />
         )}
-        {!isResolved(c) && (
+        {!generated && !isResolved(c) && (
           <ActionBtn label="✓ Mark Resolved" tone="success" onClick={() => onQuickUpdate(c.id, { status: "Resolved" })} />
         )}
-        {c.status === "Resolved" && (
+        {!generated && c.status === "Resolved" && (
           <ActionBtn label="↺ Reopen" tone="warning" onClick={() => onQuickUpdate(c.id, { status: "Open" })} />
         )}
-        {c.status !== "Closed" && (
+        {!generated && c.status !== "Closed" && (
           <ActionBtn label="⊘ Close" tone="muted" onClick={() => onQuickUpdate(c.id, { status: "Closed" })} />
         )}
         <div style={{ flex: 1 }} />
-        <ActionBtn label="Edit Details" onClick={() => onEdit(c)} tone="neutral" />
+        {!generated && <ActionBtn label="Edit Details" onClick={() => onEdit(c)} tone="neutral" />}
       </div>
     </div>
   );
