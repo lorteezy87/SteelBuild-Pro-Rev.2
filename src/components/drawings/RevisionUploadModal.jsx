@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { extractSheetsFromPdf, validatePdfPage } from "@/lib/pdfSheetExtractor";
 
 const MAX_PDF_SIZE_MB = 32;
 
@@ -16,11 +17,6 @@ function isPdfFile(file) {
 function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(d) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function normalizeRevisionNumber(value, fallback = "0") {
@@ -40,6 +36,27 @@ function getRevisionSuggestions(currentRev) {
     return [`IFC Rev ${num + 1}`, `IFC Rev ${num + 1} — Addendum`, "FINAL IFC"];
   }
   if (rev === "BID SET") return ["IFC", "ADDENDUM 1", "ADDENDUM 2"];
+  // Numeric revisions: "1" → "2", "3" → "4"
+  if (/^\d+$/.test(rev)) {
+    const next = parseInt(rev) + 1;
+    return [String(next), `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // Letter revisions: "A" → "B", "C" → "D"
+  if (/^[A-Z]$/.test(rev)) {
+    const next = String.fromCharCode(rev.charCodeAt(0) + 1);
+    return [next, `Rev ${next}`, `IFC Rev ${next}`];
+  }
+  // "Rev X" numeric pattern: "Rev 1" → "Rev 2"
+  if (/^REV\s+(\d+)$/i.test(rev)) {
+    const num = parseInt(rev.match(/\d+/)[0]) + 1;
+    return [`Rev ${num}`, `Rev ${num} — Final`, `IFC Rev ${num}`];
+  }
+  // "Rev X" letter pattern: "Rev A" → "Rev B"
+  if (/^REV\s+([A-Z])$/i.test(rev)) {
+    const letter = rev.match(/[A-Z]$/i)[0].toUpperCase();
+    const next = String.fromCharCode(letter.charCodeAt(0) + 1);
+    return [`Rev ${next}`, `IFC`, `Final`];
+  }
   return ["Rev 1", "Rev 2", "IFC", "Final"];
 }
 
@@ -61,26 +78,32 @@ function matchSheets(oldSheets, newSheets) {
 }
 
 const CHANGE_STYLE = {
-  revised: { color: "#FFB020", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
-  added:   { color: "#00D68F", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
-  removed: { color: "#FF3D3D", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
+  revised: { color: "var(--status-warning-bright)", label: "✎ REVISED", bg: "rgba(255,176,32,0.06)" },
+  added:   { color: "var(--status-success-bright)", label: "+ ADDED",   bg: "rgba(0,214,143,0.06)" },
+  removed: { color: "var(--status-error-bright)", label: "— REMOVED", bg: "rgba(255,61,61,0.05)" },
   same:    { color: "var(--text-muted)", label: "≡ SAME", bg: "transparent" },
 };
 
-async function extractSheetsFromPDF(file, fileUrl) {
-  const raw = await base44.integrations.Core.InvokeLLM({
-    prompt: `Extract every sheet from this drawing set PDF. For each sheet return JSON:
-{ "sheetNumber":"S-001", "sheetTitle":"Foundation Plan", "discipline":"Structural", "revision":"0" }
-Return ONLY a JSON array starting with [. Nothing else.`,
-    file_urls: [fileUrl],
-  });
-  const clean = String(raw || "[]").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  try {
-    const sheets = JSON.parse(clean);
-    return Array.isArray(sheets) ? sheets : [];
-  } catch {
-    return [];
+// Extract every sheet from a revision PDF using the shared extractor
+// (columnar pdfjs + Anthropic tool-use + post-processing fixup).
+// Returns a flat `sheets` array so the comparison step can match on
+// sheetNumber; swallow `extractFailed` cases so the caller can show an
+// empty diff rather than crashing.
+//
+// `options.titleblockTemplate` (optional) lets the caller pass the
+// drawing-set's saved {titleRect, numberRect} so the extractor does the
+// per-page OCR override before falling back to the LLM. Coordinates are
+// parsed inside the extractor — pass the raw JSON columns straight from
+// the drawing_sets row.
+async function extractRevisionSheets(file, options = {}) {
+  const result = await extractSheetsFromPdf(file, options);
+  if (result?.extractFailed) {
+    // Surface the failure; let the caller decide how to react.
+    const err = new Error(result.error || "AI extraction failed");
+    err.extractFailed = true;
+    throw err;
   }
+  return Array.isArray(result?.sheets) ? result.sheets : [];
 }
 
 // ── Step A: Select existing drawing set ────────────────────────────
@@ -107,8 +130,8 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
           style={{
             width: "100%",
             height: 38,
-            background: "var(--bg-sidebar)",
-            border: "1px solid rgba(255,255,255,0.10)",
+            background: "var(--bg-surface-low)",
+            border: "1px solid var(--border-default)",
             borderRadius: 8,
             padding: "0 12px 0 36px",
             color: "var(--text-primary)",
@@ -121,7 +144,7 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
             e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.08)";
           }}
           onBlur={e => {
-            e.target.style.border = "1px solid rgba(255,255,255,0.10)";
+            e.target.style.border = "1px solid var(--border-default)";
             e.target.style.boxShadow = "none";
           }}
         />
@@ -148,8 +171,8 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
               <div key={getSetIdentity(ds)} onClick={() => setSelected(ds)} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "0 12px", height: 48,
-                background: isSelected ? "var(--warning-muted)" : "rgba(255,255,255,0.03)",
-                border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.06)"}`,
+                background: isSelected ? "var(--warning-muted)" : "var(--hover-bg)",
+                border: `1px solid ${isSelected ? "rgba(245,158,11,0.35)" : "var(--divider)"}`,
                 borderRadius: 8, cursor: "pointer",
                 transition: "all 0.1s"
               }}
@@ -161,14 +184,14 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
               }}
               onMouseLeave={e => {
                 if (!isSelected) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                  e.currentTarget.style.background = "var(--hover-bg)";
+                  e.currentTarget.style.borderColor = "var(--divider)";
                 }
               }}>
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{ds.set_name}</div>
                   <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.08em", marginTop: 2 }}>
-                    {ds.sheet_count || 0} sheets · REV {ds.current_revision || "—"}
+                    {ds.sheet_count || 0} sheets · REV {ds.revision || "—"}
                   </div>
                 </div>
                 {isSelected && <span style={{ color: "var(--accent)", fontSize: 14 }}>✓</span>}
@@ -178,15 +201,15 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--divider)", paddingTop: 12 }}>
         <button onClick={onClose} style={{
-          height: 34, padding: "0 16px", background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8,
+          height: 34, padding: "0 16px", background: "var(--hover-bg)",
+          border: "1px solid var(--border-default)", borderRadius: 8,
           color: "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer"
         }}>Cancel</button>
         <button onClick={() => selected && onSelect(selected)} disabled={!selected || loading} style={{
           height: 34, padding: "0 18px", borderRadius: 8, cursor: selected && !loading ? "pointer" : "not-allowed",
-          background: selected && !loading ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: selected && !loading ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: selected && !loading ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600,
           display: "flex", alignItems: "center", gap: 6, opacity: selected && !loading ? 1 : 0.4
@@ -200,30 +223,45 @@ function StepSelectSet({ drawingSets, preSelectedSet, onSelect, onClose, loading
 
 // ── Step B: Revision Metadata ──────────────────────────────────────
 function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
-  const suggestions = getRevisionSuggestions(selectedSet.current_revision);
+  const suggestions = getRevisionSuggestions(selectedSet.revision);
   const set = (k, v) => setRevMeta(p => ({ ...p, [k]: v }));
+  const [autoFilled, setAutoFilled] = useState(false);
+
+  useEffect(() => {
+    if (!revMeta.revisionLabel && suggestions.length > 0) {
+      set("revisionLabel", suggestions[0]);
+      setAutoFilled(true);
+    }
+  }, [revMeta.revisionLabel, suggestions, set]);
 
   return (
     <div>
       {/* Current state */}
-      <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 16 }}>
+      <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 4 }}>UPDATING</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{selectedSet.set_name}</div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 2, letterSpacing: "0.06em" }}>
-          {selectedSet.current_revision || "—"} → <span style={{ color: revMeta.revisionLabel || "var(--text-muted)" }}>{revMeta.revisionLabel || "new revision"}</span>
+          {selectedSet.revision || "—"} → <span style={{ color: revMeta.revisionLabel || "var(--text-muted)" }}>{revMeta.revisionLabel || "new revision"}</span>
         </div>
       </div>
 
       {/* Revision label */}
       <div style={{ marginBottom: 14 }}>
-        <label>New Revision Label *</label>
-        <input value={revMeta.revisionLabel} onChange={e => set("revisionLabel", e.target.value)} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <label style={{ margin: 0 }}>New Revision Label *</label>
+          {autoFilled && (
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#0284C7", background: "rgba(2,132,199,0.10)", border: "1px solid rgba(2,132,199,0.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.08em", fontWeight: 700 }}>
+              AUTO
+            </span>
+          )}
+        </div>
+        <input value={revMeta.revisionLabel} onChange={e => { set("revisionLabel", e.target.value); setAutoFilled(false); }} placeholder="e.g. IFC Rev 1" style={{ width: "100%", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {suggestions.map(s => (
-            <button key={s} onClick={() => set("revisionLabel", s)} style={{
+            <button key={s} onClick={() => { set("revisionLabel", s); setAutoFilled(false); }} style={{
               padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-              background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "rgba(255,255,255,0.04)",
-              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.10)"}`,
+              background: revMeta.revisionLabel === s ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${revMeta.revisionLabel === s ? "rgba(245,158,11,0.35)" : "var(--border-default)"}`,
               color: revMeta.revisionLabel === s ? "var(--status-warning)" : "var(--text-muted)",
               fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: "0.06em"
             }}>{s}</button>
@@ -238,7 +276,7 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
         </div>
         <div>
           <label>Issued By</label>
-          <input value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.current_issued_by || "Smith Engineering"} style={{ width: "100%" }} />
+          <input value={revMeta.issuedBy} onChange={e => set("issuedBy", e.target.value)} placeholder={selectedSet.issued_by || "Smith Engineering"} style={{ width: "100%" }} />
         </div>
       </div>
 
@@ -256,8 +294,8 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
           ].map(opt => (
             <div key={opt.value} onClick={() => set("disposition", opt.value)} style={{
               padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-              background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "rgba(255,255,255,0.02)",
-              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "rgba(255,255,255,0.07)"}`,
+              background: revMeta.disposition === opt.value ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${revMeta.disposition === opt.value ? "rgba(245,158,11,0.25)" : "var(--divider)"}`,
               display: "flex", alignItems: "center", gap: 10
             }}>
               <div style={{
@@ -275,12 +313,12 @@ function StepRevMeta({ selectedSet, revMeta, setRevMeta, onBack, onNext }) {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onNext} disabled={!revMeta.revisionLabel} style={{
           padding: "7px 16px", borderRadius: 8, cursor: revMeta.revisionLabel ? "pointer" : "not-allowed",
-          background: revMeta.revisionLabel ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: revMeta.revisionLabel ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: revMeta.revisionLabel ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
@@ -314,11 +352,11 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
 
   return (
     <div>
-      <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
+      <div style={{ padding: "8px 12px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>
         <span style={{ color: "var(--status-warning)" }}>{selectedSet.set_name}</span>
-        {" · "}Previous: {selectedSet.current_revision || "—"} ({selectedSet.sheet_count || 0} sheets)
+        {" · "}Previous: {selectedSet.revision || "—"} ({selectedSet.sheet_count || 0} sheets)
         {" → "}
-        <span style={{ color: "#00D68F" }}>{revMeta.revisionLabel}</span>
+        <span style={{ color: "var(--status-success-bright)" }}>{revMeta.revisionLabel}</span>
       </div>
 
       <div
@@ -336,7 +374,7 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
         {file ? (
           <>
             <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#00D68F", fontWeight: 600, marginBottom: 2 }}>{file.name}</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--status-success-bright)", fontWeight: 600, marginBottom: 2 }}>{file.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{formatBytes(file.size)} · Click to change</div>
           </>
         ) : (
@@ -356,12 +394,12 @@ function StepDropPDF({ selectedSet, revMeta, file, setFile, onBack, onExtract })
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onExtract} disabled={!file} style={{
           padding: "7px 16px", borderRadius: 8, cursor: file ? "pointer" : "not-allowed",
-          background: file ? "var(--accent)" : "rgba(255,255,255,0.05)",
+          background: file ? "var(--accent)" : "var(--hover-bg)",
           border: "none", color: file ? "#fff" : "var(--text-muted)",
           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
           display: "flex", alignItems: "center", gap: 6
@@ -392,20 +430,20 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
   return (
     <div>
       {/* Summary bar */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderRadius: 8, background: "var(--hover-bg)", border: "1px solid var(--divider)", marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.06em" }}>{totalOld} → {totalNew} sheets</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FFB020", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning-bright)", letterSpacing: "0.06em" }}>{counts.revised} revised</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#00D68F", letterSpacing: "0.06em" }}>{counts.added} added</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-success-bright)", letterSpacing: "0.06em" }}>{counts.added} added</span>
         <span style={{ color: "var(--text-muted)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF3D3D", letterSpacing: "0.06em" }}>{counts.removed} removed</span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", letterSpacing: "0.06em" }}>{counts.removed} removed</span>
       </div>
 
       {/* Removed warning */}
       {removedSheets.length > 0 && (
         <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(255,61,61,0.07)", border: "1px solid rgba(255,61,61,0.20)", marginBottom: 12 }}>
-          <AlertTriangle style={{ width: 14, height: 14, color: "#FF3D3D", flexShrink: 0, marginTop: 1 }} />
+          <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-error-bright)", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
             {removedSheets.length} sheet{removedSheets.length > 1 ? "s" : ""} from the previous revision
             {" "}({removedSheets.map(m => m.sheetNumber).join(", ")}) will be marked superseded.
@@ -414,25 +452,25 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       )}
 
       {/* Comparison table */}
-      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 300, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--divider)", borderRadius: 8, marginBottom: 14 }}>
         {/* Header */}
-        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid rgba(255,255,255,0.07)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.current_revision || "—"})</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
+        <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "7px 12px", background: "var(--bg-surface-low)", borderBottom: "1px solid var(--divider)", position: "sticky", top: 0, zIndex: 1, gap: 8 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>PREV ({selectedSet.revision || "—"})</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>TITLE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>CHANGE</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.12em" }}>NEW ({revMeta.revisionLabel})</div>
         </div>
         {matchedSheets.map((m, i) => {
           const cs = CHANGE_STYLE[m.change] || CHANGE_STYLE.same;
           return (
-            <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: cs.bg, gap: 8 }}>
+            <div key={m.sheetNumber} style={{ display: "grid", gridTemplateColumns: "80px 1fr 80px 1fr", alignItems: "center", padding: "5px 12px", borderBottom: "1px solid var(--divider)", background: cs.bg, gap: 8 }}>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: m.oldSheet ? "var(--text-muted)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetNumber || "—"}
               </span>
               <span style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.oldSheet?.sheetTitle || "—"}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: cs.color, letterSpacing: "0.06em", fontWeight: 700 }}>{cs.label}</span>
               <div>
                 {m.newSheet ? (
                   <input
@@ -452,7 +490,7 @@ function StepSheetComparison({ selectedSet, revMeta, matchedSheets, setMatchedSh
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
+        <button onClick={onBack} style={{ padding: "7px 14px", borderRadius: 8, cursor: "pointer", background: "transparent", border: "1px solid var(--border-default)", color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 5 }}>
           <ChevronLeft style={{ width: 13, height: 13 }} /> Back
         </button>
         <button onClick={onConfirm} style={{
@@ -475,7 +513,7 @@ function StepProcessing({ message, progress }) {
       <div style={{ fontSize: 32, marginBottom: 12 }}>✦</div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Applying Revision Update</div>
       <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 24 }}>{message}</div>
-      <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 360, margin: "0 auto" }}>
+      <div style={{ background: "var(--bg-surface-high)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 360, margin: "0 auto" }}>
         <div style={{ height: "100%", background: "var(--accent)", borderRadius: 20, width: `${progress}%`, transition: "width 0.4s ease" }} />
       </div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 6 }}>{progress}%</div>
@@ -488,12 +526,12 @@ function StepSuccess({ selectedSet, revMeta, stats, onClose }) {
   return (
     <div style={{ textAlign: "center", padding: "30px 0" }}>
       <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(0,214,143,0.12)", border: "2px solid rgba(0,214,143,0.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-        <Check style={{ width: 22, height: 22, color: "#00D68F" }} />
+        <Check style={{ width: 22, height: 22, color: "var(--status-success-bright)" }} />
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Revision Applied</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "14px 16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start", maxWidth: 340, margin: "0 auto 24px", background: "var(--hover-bg)", border: "1px solid var(--divider)", borderRadius: 10, padding: "14px 16px" }}>
         {[
-          `✓ "${selectedSet.set_name}" updated ${selectedSet.current_revision || "—"} → ${revMeta.revisionLabel}`,
+          `✓ "${selectedSet.set_name}" updated ${selectedSet.revision || "—"} → ${revMeta.revisionLabel}`,
           `✓ ${stats.updated} drawing records updated`,
           stats.added > 0 && `✓ ${stats.added} new sheet${stats.added > 1 ? "s" : ""} created`,
           stats.removed > 0 && `✓ ${stats.removed} sheet${stats.removed > 1 ? "s" : ""} marked superseded`,
@@ -528,10 +566,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             byName[d.drawing_set_name] = {
               id: null,
               set_name: d.drawing_set_name,
-              current_revision: d.revision_number != null ? String(d.revision_number) : "—",
-              current_issue_date: d.issue_date || null,
-              current_issued_by: d.issued_by || "",
-              current_file_url: d.file_url || null,
+              revision: d.revision_number != null ? String(d.revision_number) : "—",
+              issued_date: d.issue_date || null,
+              issued_by: d.issued_by || "",
+              file_url: d.file_url || null,
               sheet_count: 0,
               revision_history: "[]",
             };
@@ -540,7 +578,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         }
       });
       setDerivedSets(Object.values(byName));
-    }).catch(() => {});
+    }).catch((e) => { console.error("Failed to load drawing sets:", e); });
   }, [open, activeProject?.id, drawingSets]);
   const [step, setStep] = useState("selectSet");
   const [selectedSet, setSelectedSet] = useState(preSelectedSet || null);
@@ -566,7 +604,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       setStep("selectSet");
       setSelectedSet(null);
     }
-  }, [open]);
+  }, [open, preSelectedSet]);
 
   const handleExtract = async () => {
     try {
@@ -577,7 +615,17 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       const res = await base44.integrations.Core.UploadFile({ file: pdfFile });
       setProcessingMsg("AI is reading the drawing set...");
       setProcessingPct(40);
-      const newSheets = await extractSheetsFromPDF(pdfFile, res.file_url);
+      // Forward the set's saved titleblock template (if any) so the
+      // extractor pulls title + sheet# from the user-marked rectangles
+      // instead of asking the LLM to guess. Sets without a template
+      // pass NULL on both sides; the extractor falls through to its
+      // existing LLM-only path.
+      const newSheets = await extractRevisionSheets(pdfFile, {
+        titleblockTemplate: {
+          titleRect:  selectedSet?.titleblock_title_rect  ?? null,
+          numberRect: selectedSet?.titleblock_number_rect ?? null,
+        },
+      });
       setProcessingMsg("Comparing sheets...");
       setProcessingPct(80);
 
@@ -588,7 +636,20 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
       oldSheets = existing.filter(d => !d.is_superseded).map(d => ({ sheetNumber: d.sheet_number, sheetTitle: d.title, fileUrl: d.file_url }));
     } catch (e) { console.error("Failed to fetch existing drawings:", e); }
 
-      const matched = matchSheets(oldSheets, newSheets.map(s => ({ sheetNumber: s.sheetNumber, sheetTitle: s.sheetTitle })));
+      // Carry pdfPage and discipline/revision through matchSheets so the
+      // apply step can write per-sheet pdf_page on every revised/added
+      // drawing — without this the new revision keeps the file_url but
+      // every row points at page 1 of the new master PDF.
+      const matched = matchSheets(
+        oldSheets,
+        newSheets.map(s => ({
+          sheetNumber: s.sheetNumber,
+          sheetTitle:  s.sheetTitle,
+          pdfPage:     s.pdfPage,
+          discipline:  s.discipline,
+          revision:    s.revision,
+        })),
+      );
       // Store uploaded fileUrl on each new sheet match
       matched.forEach(m => { if (m.newSheet) m.newSheet.fileUrl = res.file_url; m.newSheet && (m.newSheet.sourceFileUrl = res.file_url); });
       setMatchedSheets(matched);
@@ -613,10 +674,10 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     let history = [];
     try { history = JSON.parse(selectedSet.revision_history || "[]"); } catch {}
     const snapshot = {
-      revisionLabel: selectedSet.current_revision,
-      issueDate: selectedSet.current_issue_date,
-      issuedBy: selectedSet.current_issued_by,
-      fileUrl: selectedSet.current_file_url,
+      revisionLabel: selectedSet.revision,
+      issueDate: selectedSet.issued_date,
+      issuedBy: selectedSet.issued_by,
+      fileUrl: selectedSet.file_url,
       sheetCount: selectedSet.sheet_count,
       notes: selectedSet.notes || "",
       uploadedAt: new Date().toISOString(),
@@ -625,18 +686,18 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
     history.push(snapshot);
 
     const newSheetCount = matchedSheets.filter(m => m.newSheet).length;
-    const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.current_file_url;
+    const newFileUrl = matchedSheets.find(m => m.newSheet?.sourceFileUrl)?.newSheet?.sourceFileUrl || selectedSet.file_url;
 
     // Update DrawingSet (only if a real DrawingSet record exists)
     if (selectedSet.id) {
       await base44.entities.DrawingSet.update(selectedSet.id, {
-        current_revision: revMeta.revisionLabel,
-        current_issue_date: revMeta.issueDate,
-        current_issued_by: revMeta.issuedBy || selectedSet.current_issued_by,
-        current_file_url: newFileUrl,
+        revision: revMeta.revisionLabel,
+        issued_date: revMeta.issueDate,
+        issued_by: revMeta.issuedBy || selectedSet.issued_by,
+        file_url: newFileUrl,
         sheet_count: newSheetCount,
         revision_history: JSON.stringify(history),
-        approval_status: "pending",
+        set_approval_status: "pending_review",
         notes: revMeta.notes || selectedSet.notes,
       });
     }
@@ -656,6 +717,12 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
         if (match.change === "removed") {
           if (existing) { await base44.entities.Drawing.update(existing.id, { is_superseded: true }); removed++; }
         } else if (match.change === "added") {
+          const addedPage = validatePdfPage(match.newSheet?.pdfPage);
+          if (addedPage === null) {
+            console.warn(
+              `[RevisionUploadModal] Added sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
+            );
+          }
           await base44.entities.Drawing.create({
             sheet_number: match.newSheet.sheetNumber,
             title: match.newSheet.sheetTitle,
@@ -667,6 +734,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             issue_date: revMeta.issueDate,
             issued_by: revMeta.issuedBy,
             file_url: newFileUrl,
+            pdf_page: addedPage ?? 1,
             drawing_set_name: selectedSet.set_name,
             ifc_status: revMeta.revisionLabel.toUpperCase().includes("IFC") ? "IFC" : undefined,
             is_superseded: false,
@@ -674,11 +742,23 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
           added++;
         } else {
           if (existing) {
+            // Per-sheet pdf_page MUST be re-derived from the new PDF —
+            // the old value pointed at a page in the *previous* master
+            // PDF, which is no longer the file behind file_url. If the
+            // extractor didn't surface a page for this sheet, fall back
+            // to 1 with a warning so the user can hand-fix.
+            const updatedPage = validatePdfPage(match.newSheet?.pdfPage);
+            if (updatedPage === null) {
+              console.warn(
+                `[RevisionUploadModal] Updated sheet "${match.sheetNumber}" has invalid pdfPage=${JSON.stringify(match.newSheet?.pdfPage)} — defaulting to 1.`,
+              );
+            }
             await base44.entities.Drawing.update(existing.id, {
               revision_number: normalizeRevisionNumber(match.newSheet?.revision ?? revMeta.revisionLabel ?? existing.revision_number),
               issue_date: revMeta.issueDate,
               issued_by: revMeta.issuedBy || existing.issued_by,
               file_url: newFileUrl,
+              pdf_page: updatedPage ?? 1,
               is_superseded: false,
             });
             updated++;
@@ -717,13 +797,11 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
 
   const handleClose = () => { reset(); onClose(); };
 
-  const STEP_LABELS = { selectSet: "Select Set", revMeta: "Revision Info", dropPDF: "Upload PDF", comparison: "Review Changes", success: "Done" };
   const STEP_ORDER = ["selectSet", "revMeta", "dropPDF", "comparison", "success"];
-  const stepIdx = STEP_ORDER.indexOf(step);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -731,7 +809,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
               {step !== "processing" && (
                 <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
                   {STEP_ORDER.filter(s => s !== "processing").map((s, i) => (
-                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: STEP_ORDER.indexOf(step) >= i ? "var(--accent)" : "rgba(255,255,255,0.08)" }} />
+                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: STEP_ORDER.indexOf(step) >= i ? "var(--accent)" : "var(--bg-surface-high)" }} />
                   ))}
                 </div>
               )}
@@ -755,7 +833,7 @@ export default function RevisionUploadModal({ open, onClose, onComplete, activeP
             </div>
           )}
           {step === "selectSet" && (
-            <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.current_issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
+            <StepSelectSet drawingSets={[...drawingSets, ...derivedSets]} preSelectedSet={preSelectedSet} onSelect={s => { setSelectedSet(s); setRevMeta(p => ({ ...p, issuedBy: s.issued_by || "" })); setStep("revMeta"); }} onClose={handleClose} loading={false} error={null} />
           )}
           {step === "revMeta" && selectedSet && (
             <StepRevMeta selectedSet={selectedSet} revMeta={revMeta} setRevMeta={setRevMeta} onBack={() => preSelectedSet ? handleClose() : setStep("selectSet")} onNext={() => setStep("dropPDF")} />

@@ -7,11 +7,11 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
 
   const getSeverityColor = (severity) => {
     const colors = {
-      critical: "#FF3D3D",
+      critical: "var(--status-error-bright)",
       high: "var(--status-warning)",
-      medium: "#FFB020",
+      medium: "var(--status-warning-bright)",
       low: "#00B8D9",
-      info: "rgba(160,175,210,0.50)"
+      info: "var(--text-muted)"
     };
     return colors[severity] || colors.info;
   };
@@ -56,8 +56,8 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
     <div
       style={{
         width: 320,
-        background: "var(--bg-sidebar)",
-        borderLeft: "2px solid rgba(139,92,246,0.30)",
+        background: "var(--bg-surface-low)",
+        borderLeft: "2px solid rgba(13,148,136,0.30)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden"
@@ -67,7 +67,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
       <div
         style={{
           padding: 12,
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          borderBottom: "1px solid var(--bg-surface-high)",
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between"
@@ -77,7 +77,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
           <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
             ✦ AI ANALYSIS
           </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(160,175,210,0.50)", marginTop: 2 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
             Overall Score: {results.overallScore}/100
           </div>
         </div>
@@ -86,7 +86,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
           style={{
             background: "none",
             border: "none",
-            color: "rgba(220,225,240,0.60)",
+            color: "var(--text-secondary)",
             cursor: "pointer",
             fontSize: 20,
             padding: 0
@@ -103,7 +103,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
           gap: 8,
-          borderBottom: "1px solid rgba(255,255,255,0.08)"
+          borderBottom: "1px solid var(--bg-surface-high)"
         }}
       >
         {[
@@ -119,7 +119,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
                 width: "100%",
                 aspectRatio: "1",
                 borderRadius: "50%",
-                background: "rgba(255,255,255,0.06)",
+                background: "var(--bg-surface-high)",
                 border: "2px solid var(--warning-border)",
                 display: "flex",
                 alignItems: "center",
@@ -132,7 +132,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
             >
               {item.score || "—"}
             </div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "rgba(160,175,210,0.50)", marginTop: 4 }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>
               {item.label}
             </div>
           </div>
@@ -153,8 +153,8 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
                   padding: 12,
                   background: "none",
                   border: "none",
-                  borderBottom: "1px solid rgba(255,255,255,0.08)",
-                  color: "rgba(220,225,240,0.80)",
+                  borderBottom: "1px solid var(--bg-surface-high)",
+                  color: "var(--text-primary)",
                   fontFamily: "var(--font-body)",
                   fontSize: 11,
                   fontWeight: 600,
@@ -165,7 +165,7 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
                   justifyContent: "space-between",
                   transition: "background 0.15s"
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
               >
                 <span>
@@ -175,9 +175,9 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
               </button>
 
               {expandedSection === section.id && (
-                <div style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ padding: 12, borderBottom: "1px solid var(--bg-surface-high)" }}>
                   {section.items.map((item) => (
-                    <div key={item.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <div key={item.id} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--hover-bg)" }}>
                       <div
                         style={{
                           display: "flex",
@@ -197,11 +197,11 @@ export default function AIAnalysisPanel({ results, document, onClose, onCreateRF
                           }}
                         />
                         <div>
-                          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(220,225,240,0.80)", fontWeight: 600 }}>
+                          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-primary)", fontWeight: 600 }}>
                             {item.title || item}
                           </div>
                           {item.description && (
-                            <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "rgba(160,175,210,0.60)", marginTop: 4 }}>
+                            <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", marginTop: 4 }}>
                               {item.description}
                             </div>
                           )}

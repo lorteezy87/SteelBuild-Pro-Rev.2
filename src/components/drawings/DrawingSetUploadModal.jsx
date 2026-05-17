@@ -5,14 +5,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ChevronRight, ChevronLeft, Check, AlertTriangle } from "lucide-react";
+import { extractSheetsFromPdf, EMPTY_SET_META, parseFilename, validatePdfPage } from "@/lib/pdfSheetExtractor";
+import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
+import { sanitizeDrawingPayload, sanitizeDrawingSetPayload } from "@/lib/drawingEnums";
+import { STAGE_ORDER as CANONICAL_STAGE_ORDER } from "@/components/drawings/drawingsConfig";
+import { withDrawingSetNumberMetadata } from "@/lib/drawingSetOrdering";
 
 const DISCIPLINES = ["Structural", "Arch", "MEP", "Civil", "Misc Metals"];
+// Canonical 7-stage flow (Not Started → IFA → OFA → BFA → OFS → IFC → Released)
+const STAGES      = CANONICAL_STAGE_ORDER;
 const MAX_PDF_SIZE_MB = 32;
 const UPLOAD_TIMEOUT_MS  = 90_000;   // 90 s
-const EXTRACT_TIMEOUT_MS = 150_000;  // 2.5 min
+const EXTRACT_TIMEOUT_MS = 300_000;  // 5 min — includes rate-limit retry backoff time
+
+// Generate a random upload batch id (one per wizard session).
+// Each file in the batch carries this id so the UI can later group/aggregate.
+function newUploadBatchId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `batch_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function withTimeout(promise, ms, label = "Operation") {
   return Promise.race([
@@ -41,91 +56,37 @@ function normalizeRevisionNumber(value, fallback = "0") {
   return String(value).trim() || fallback;
 }
 
-// ─── Native Claude PDF extraction via Base44 proxy ───────────────────
-async function extractSheetsFromPDF(file, uploadedFileUrl) {
-  const systemPrompt = `You are a drawing log parser for a structural steel construction management application.
-You will be given a structural drawing set PDF.
-Extract every sheet from the title block or sheet index.
-Return ONLY a valid JSON array. No explanation, no markdown, no preamble. Just the raw JSON array starting with [`;
+// ─── PDF → sheets extraction ──────────────────────────────────────────
+//
+// All the heavy lifting (columnar pdfjs text extraction, Anthropic
+// tool-use schema, post-processing fixup, de-dup) lives in the shared
+// `src/lib/pdfSheetExtractor.js` module so this modal and
+// RevisionUploadModal share a single code path.
 
-  const userPrompt = `Extract every sheet from this drawing set PDF. Look for:
-- A sheet index or drawing list page
-- Individual title blocks on each sheet
-- Any table of contents page
-
-For each sheet found return:
-{
-  "sheetNumber":  "S-001",
-  "sheetTitle":   "Foundation Plan",
-  "discipline":   "Structural|Architectural|Civil|MEP|General|Misc",
-  "sheetType":    "Plan|Elevation|Section|Detail|Schedule|General|Cover",
-  "revision":     "0",
-  "scale":        "",
-  "date":         ""
-}
-
-Rules:
-- Extract real data only — no guessing
-- revision: use "0" if not shown; scale/date: empty string if not shown
-- discipline: infer from sheet number prefix (S=Structural, A=Arch, C=Civil, M/P/E=MEP, G=General)
-- Return [] if no sheets can be identified
-
-Return ONLY the JSON array. Nothing else.`;
-
-  const raw = await base44.integrations.Core.InvokeLLM({
-    prompt: userPrompt,
-    system: systemPrompt,
-    file_urls: [uploadedFileUrl],
-  });
-
-  const clean = String(raw || "[]").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-  try {
-    const sheets = JSON.parse(clean);
-    return { sheets: Array.isArray(sheets) ? sheets : [], scanned: false };
-  } catch (parseErr) {
-    console.error("JSON parse failed:", parseErr, "\nRaw:", raw);
-    const isScanned = String(raw).toLowerCase().includes("scanned") ||
-      String(raw).toLowerCase().includes("cannot read") ||
-      String(raw).toLowerCase().includes("no text");
-    return {
-      sheets: [{
-        sheetNumber: "", sheetTitle: `Sheets from ${file.name}`,
-        discipline: "Structural", sheetType: "General",
-        revision: "0", scale: "", date: "", _note: "Manual entry required",
-      }],
-      scanned: isScanned,
-    };
-  }
-}
-
-// ─── Filename fallback for oversized PDFs ─────────────────────────────
-function extractSheetsFromFilename(fileName) {
-  const name = fileName.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
-  return {
-    sheets: [{
-      sheetNumber: "",
-      sheetTitle:  name,
-      discipline:  "Structural",
-      sheetType:   "General",
-      revision:    "0",
-      scale:       "",
-      date:        "",
-      _note:       "File too large for AI extraction. Please fill in sheet details manually.",
-    }],
-    scanned: false,
-    tooLarge: true,
-  };
-}
-
-// ─── Router: pick extraction method based on size ─────────────────────
-async function validateAndExtract(file, uploadedFileUrl) {
+// Router: short-circuit on oversize files (skip the LLM round-trip);
+// otherwise delegate to the shared extractor.
+async function validateAndExtract(file, options = {}) {
   const sizeMB = file.size / (1024 * 1024);
   if (sizeMB > MAX_PDF_SIZE_MB) {
     console.warn(`PDF too large (${sizeMB.toFixed(1)}MB). Using filename fallback.`);
-    return extractSheetsFromFilename(file.name);
+    const parsed = parseFilename(file.name);
+    return {
+      setMeta: { ...EMPTY_SET_META },
+      sheets: [{
+        sheetNumber: parsed.sheetNumber,
+        sheetTitle:  parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " "),
+        discipline:  "Structural",
+        sheetType:   "General",
+        revision:    parsed.revision || "0",
+        scale:       "",
+        date:        "",
+        _note:       "File too large for AI extraction." + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in sheet details manually."),
+      }],
+      scanned:  false,
+      tooLarge: true,
+    };
   }
-  return extractSheetsFromPDF(file, uploadedFileUrl);
+  return extractSheetsFromPdf(file, options);
 }
 
 // ─── Step 0: New Set vs New Revision choice ───────────────────────────
@@ -147,8 +108,8 @@ function StepChoice({ onNewSet, onNewRevision, onClose }) {
             onMouseLeave={() => setHovered(null)}
             style={{
               padding: "16px 18px", borderRadius: 10, cursor: "pointer",
-              background: hovered === opt.id ? "var(--warning-muted)" : "rgba(255,255,255,0.02)",
-              border: `1px solid ${hovered === opt.id ? "var(--warning-border)" : "rgba(255,255,255,0.08)"}`,
+              background: hovered === opt.id ? "var(--warning-muted)" : "var(--hover-bg)",
+              border: `1px solid ${hovered === opt.id ? "var(--warning-border)" : "var(--bg-surface-high)"}`,
               transition: "all 0.12s", display: "flex", alignItems: "flex-start", gap: 14
             }}>
             <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>{opt.icon}</span>
@@ -167,8 +128,10 @@ function StepChoice({ onNewSet, onNewRevision, onClose }) {
   );
 }
 
-// ─── Step 1: File Queue ───────────────────────────────────────────────
-function StepFiles({ files, setFiles, onNext, onClose }) {
+// ─── Step 2: File Queue ───────────────────────────────────────────────
+// Kicking "Upload & Extract" starts AI processing immediately — no extra
+// click required per the new flow.
+function StepFiles({ files, setFiles, onBack, onUpload, setName }) {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef();
 
@@ -182,6 +145,16 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
 
   return (
     <div>
+      {setName && (
+        <div style={{
+          marginBottom: 12, padding: "8px 12px", borderRadius: 8,
+          background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em" }}>DRAWING SET</span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>{setName}</span>
+        </div>
+      )}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -206,13 +179,13 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
         onChange={e => { addFiles(e.target.files); e.target.value = ""; }} />
 
       {files.length > 0 && (
-        <div style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
           {files.map((f, i) => {
             const tooBig = f.size / (1024 * 1024) > MAX_PDF_SIZE_MB;
             return (
               <div key={f.name} style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
-                borderBottom: i < files.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                borderBottom: i < files.length - 1 ? "1px solid var(--divider)" : "none",
               }}>
                 <span style={{ fontSize: 14 }}>📄</span>
                 <span style={{ flex: 1, fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
@@ -232,60 +205,102 @@ function StepFiles({ files, setFiles, onNext, onClose }) {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={onNext} disabled={files.length === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Next: Set Details <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
+        <Button onClick={onUpload} disabled={files.length === 0}
+          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: files.length === 0 ? 0.5 : 1 }}>
+          Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>
     </div>
   );
 }
 
-// ─── Step 2: Metadata ────────────────────────────────────────────────
-function StepMeta({ meta, setMeta, onBack, onUpload, projectName }) {
+// ─── Step 1: Set Name + optional defaults (BEFORE file selection) ─────
+// The only required field is the Drawing Set Name. All other fields are
+// defaults that get applied per-sheet unless the AI extraction finds
+// something better (or the user edits the child rows on the review step).
+function StepMeta({ meta, setMeta, onBack, onNext, projectName, existingSetNames = [] }) {
   const set = (k, v) => setMeta(p => ({ ...p, [k]: v }));
+  const trimmedName = (meta.setName || "").trim();
+  const canContinue = trimmedName.length > 0;
+  const duplicate = canContinue && existingSetNames
+    .map(s => s.toLowerCase())
+    .includes(trimmedName.toLowerCase());
+
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-        <div>
+      <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.5 }}>
+        Name this drawing package. You can adjust individual sheet details after
+        the AI reads your files.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
           <Label>Project</Label>
           <Input value={projectName || "No project selected"} disabled />
         </div>
-        <div>
-          <Label>Drawing Set Name</Label>
-          <Input placeholder="Issued for Construction — Rev 2" value={meta.setName} onChange={e => set("setName", e.target.value)} />
+
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Label>
+            Drawing Set Name <span style={{ color: "var(--status-error)" }}>*</span>
+          </Label>
+          <Input
+            autoFocus
+            placeholder="e.g. 100% CD Set — Rev 2"
+            value={meta.setName}
+            onChange={e => set("setName", e.target.value)}
+            list="existing-set-names"
+          />
+          {existingSetNames.length > 0 && (
+            <datalist id="existing-set-names">
+              {existingSetNames.map(n => <option key={n} value={n} />)}
+            </datalist>
+          )}
+          {duplicate && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 4, letterSpacing: "0.06em" }}>
+              ⚠ A set with this name already exists in this project — new sheets will be added to it.
+            </div>
+          )}
         </div>
+
         <div>
-          <Label>Default Discipline</Label>
+          <Label>Drawing Set # (optional)</Label>
+          <Input placeholder="e.g. 1 / 02 / P-03" value={meta.setNumber || ""} onChange={e => set("setNumber", e.target.value)} />
+        </div>
+
+        <div>
+          <Label>Default Discipline (optional)</Label>
           <Select value={meta.discipline} onValueChange={v => set("discipline", v)}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Structural" /></SelectTrigger>
             <SelectContent>{DISCIPLINES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+
         <div>
-          <Label>Revision / Issuance</Label>
+          <Label>Default Stage (optional)</Label>
+          <Select value={meta.defaultStage} onValueChange={v => set("defaultStage", v)}>
+            <SelectTrigger><SelectValue placeholder="Not Started" /></SelectTrigger>
+            <SelectContent>{STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Revision / Issuance (optional)</Label>
           <Input placeholder="Rev 2 / IFC / IFB" value={meta.revision} onChange={e => set("revision", e.target.value)} />
         </div>
+
         <div>
-          <Label>Issue Date</Label>
+          <Label>Issue Date (optional)</Label>
           <Input type="date" value={meta.issueDate} onChange={e => set("issueDate", e.target.value)} />
         </div>
-        <div>
-          <Label>Issued By (EOR)</Label>
-          <Input placeholder="Smith Engineering" value={meta.issuedBy} onChange={e => set("issuedBy", e.target.value)} />
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Label>Notes</Label>
-          <Textarea rows={2} value={meta.notes} onChange={e => set("notes", e.target.value)} />
-        </div>
       </div>
+
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button onClick={onUpload}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
-          Upload &amp; Extract <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
+        <Button onClick={onNext} disabled={!canContinue}
+          style={{ background: "var(--accent)", color: "#fff", border: "none", opacity: canContinue ? 1 : 0.5 }}>
+          Next: Add Files <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>
     </div>
@@ -323,7 +338,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
 
       {/* Progress bar */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
+        <div style={{ background: "var(--bg-surface-high)", borderRadius: 20, height: 6, overflow: "hidden", maxWidth: 400, margin: "0 auto" }}>
           <div style={{ height: "100%", background: "var(--accent)", borderRadius: 20, width: `${progress}%`, transition: "width 0.4s ease" }} />
         </div>
         <div style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", marginTop: 5 }}>{progress}%</div>
@@ -340,7 +355,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
               display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px",
               borderRadius: 8,
               background: isActive ? "var(--warning-muted)" : isDone ? "rgba(0,214,143,0.04)" : "transparent",
-              border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "rgba(255,255,255,0.04)"}`,
+              border: `1px solid ${isActive ? "rgba(245,158,11,0.2)" : isDone ? "rgba(0,214,143,0.12)" : "var(--hover-bg)"}`,
               transition: "all 0.2s",
             }}>
               <span style={{
@@ -371,7 +386,7 @@ function StepProcessing({ processingStatus, onCancel, error }) {
         <button
           onClick={onCancel}
           style={{
-            background: "none", border: "none", color: "rgba(160,175,210,0.35)",
+            background: "none", border: "none", color: "var(--text-muted)",
             fontFamily: "var(--font-mono)", fontSize: 9, cursor: "pointer",
             letterSpacing: "0.08em", textDecoration: "underline",
           }}
@@ -384,10 +399,13 @@ function StepProcessing({ processingStatus, onCancel, error }) {
 }
 
 // ─── Step 4: Review Sheets ────────────────────────────────────────────
-function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) {
+function StepReview({ sheets, setSheets, fileResults, meta, setMeta, aiFilledFields = {}, onBack, onCreate, existingDrawings = [] }) {
   const [search, setSearch]         = useState("");
   const [discFilter, setDiscFilter] = useState("all");
   const [fileFilter, setFileFilter] = useState("all");
+
+  const setMetaField = (k, v) => setMeta(prev => ({ ...prev, [k]: v }));
+  const anyAiFilled = Object.values(aiFilledFields).some(Boolean);
 
   const multiFile = fileResults.length > 1;
 
@@ -410,11 +428,103 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
   };
 
   const uniqueFiles = [...new Set(sheets.map(s => s.sourceFile).filter(Boolean))];
-  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge);
+  // Every soft problem (scanned, too large, extraction timed out) shows the
+  // same amber "manual entry required" warning. Uploads are still allowed —
+  // extractFailed PDFs produce a single pre-populated sheet row the user can
+  // edit inline, so blocking the Create button here would dead-end them.
+  const warnedFiles = fileResults.filter(r => r.scanned || r.tooLarge || r.extractFailed);
+
+  const aiBadge = (filled) => filled ? (
+    <span title="Auto-filled by AI — edit if wrong" style={{
+      fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.1em",
+      padding: "1px 4px", borderRadius: 3, marginLeft: 6,
+      background: "rgba(132,204,22,0.12)", color: "#84CC16",
+      border: "1px solid rgba(132,204,22,0.3)", verticalAlign: "middle",
+    }}>✦ AI</span>
+  ) : null;
+
+  const metaFieldStyle = {
+    width: "100%",
+    background: "var(--bg-surface-low)",
+    border: "1px solid var(--bg-surface-high)",
+    borderRadius: 6,
+    padding: "5px 8px",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+    boxSizing: "border-box",
+  };
+  const metaLabelStyle = {
+    display: "block",
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    letterSpacing: "0.12em",
+    color: "var(--text-muted)",
+    marginBottom: 3,
+    textTransform: "uppercase",
+  };
 
   return (
     <div>
-      {/* Warnings */}
+      {/* AI-detected set metadata — editable */}
+      <div style={{
+        padding: "10px 12px",
+        border: `1px solid ${anyAiFilled ? "rgba(132,204,22,0.30)" : "var(--bg-surface-high)"}`,
+        background: anyAiFilled ? "rgba(132,204,22,0.05)" : "var(--bg-surface-low)",
+        borderRadius: 8,
+        marginBottom: 10,
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, marginBottom: 8,
+          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em",
+          color: anyAiFilled ? "#84CC16" : "var(--text-muted)", textTransform: "uppercase", fontWeight: 700,
+        }}>
+          {anyAiFilled ? "✦ AI-DETECTED SET METADATA" : "SET METADATA"}
+          <span style={{ fontWeight: 400, color: "var(--text-muted)", letterSpacing: "0.04em", textTransform: "none" }}>
+            — verify before creating
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div style={{ gridColumn: "1 / 3" }}>
+            <label style={metaLabelStyle}>Drawing Set Name{aiBadge(aiFilledFields.setName)}</label>
+            <input style={metaFieldStyle} value={meta.setName}
+              onChange={e => setMetaField("setName", e.target.value)}
+              placeholder="e.g. 100% CD Set — Rev 2" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Drawing Set #</label>
+            <input style={metaFieldStyle} value={meta.setNumber || ""}
+              onChange={e => setMetaField("setNumber", e.target.value)}
+              placeholder="e.g. 1 / 02 / P-03" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Revision{aiBadge(aiFilledFields.revision)}</label>
+            <input style={metaFieldStyle} value={meta.revision}
+              onChange={e => setMetaField("revision", e.target.value)}
+              placeholder="Rev 2 / IFC" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Issue Date{aiBadge(aiFilledFields.issueDate)}</label>
+            <input type="date" style={metaFieldStyle} value={meta.issueDate}
+              onChange={e => setMetaField("issueDate", e.target.value)} />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Issued By{aiBadge(aiFilledFields.issuedBy)}</label>
+            <input style={metaFieldStyle} value={meta.issuedBy}
+              onChange={e => setMetaField("issuedBy", e.target.value)}
+              placeholder="Smith Engineering" />
+          </div>
+          <div>
+            <label style={metaLabelStyle}>Default Discipline{aiBadge(aiFilledFields.discipline)}</label>
+            <select style={metaFieldStyle} value={meta.discipline}
+              onChange={e => setMetaField("discipline", e.target.value)}>
+              {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Warnings — all soft failures share the amber "fill in manually" treatment */}
       {warnedFiles.map(r => (
         <div key={r.fileName} style={{
           display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
@@ -422,8 +532,17 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
           borderRadius: 8, marginBottom: 10,
         }}>
           <AlertTriangle style={{ width: 14, height: 14, color: "var(--status-warning)", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)" }}>
-          {r.scanned ? (
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-secondary)", flex: 1 }}>
+            {r.extractFailed ? (
+              <>
+                <span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> could not be auto-extracted by AI. A blank sheet row has been added below — please fill in the sheet details manually, then click Create.
+                {r.error && (
+                  <div style={{ marginTop: 4, padding: "4px 6px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "rgba(0,0,0,0.2)", borderRadius: 4, letterSpacing: "0.04em" }}>
+                    {r.error}
+                  </div>
+                )}
+              </>
+            ) : r.scanned ? (
               <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> appears to be a scanned image PDF. AI text extraction is not available. Please enter sheet details manually or upload a digitally-created PDF.</>
             ) : (
               <><span style={{ color: "var(--status-warning)", fontWeight: 600 }}>{r.fileName}</span> is too large ({r.sizeMB?.toFixed(1)}MB) for AI extraction. Please fill in sheet details manually.</>
@@ -435,17 +554,17 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
       {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <button onClick={() => toggleAll(true)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-warning)", background: "none", border: "1px solid var(--warning-border)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☑ ALL</button>
-        <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
+        <button onClick={() => toggleAll(false)} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)", background: "none", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.08em" }}>☐ NONE</button>
         <input placeholder="Search sheets..." value={search} onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 100, background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
+          style={{ flex: 1, minWidth: 100, background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 10px", color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 12 }} />
         <select value={discFilter} onChange={e => setDiscFilter(e.target.value)}
-          style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+          style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
           <option value="all">All Disciplines</option>
           {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         {multiFile && (
           <select value={fileFilter} onChange={e => setFileFilter(e.target.value)}
-            style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
+            style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 6, padding: "4px 8px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9, maxWidth: 140 }}>
             <option value="all">All Files</option>
             {uniqueFiles.map(f => <option key={f} value={f}>{f.replace(/\.pdf$/i, "")}</option>)}
           </select>
@@ -456,7 +575,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
       </div>
 
       {/* Table */}
-      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, marginBottom: 14 }}>
+      <div style={{ maxHeight: 320, overflowY: "auto", background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 8, marginBottom: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "var(--bg-surface-low)", position: "sticky", top: 0, zIndex: 1 }}>
@@ -470,15 +589,22 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
           </thead>
           <tbody>
             {filtered.map((s, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
+              <tr key={i} style={{ borderBottom: "1px solid var(--divider)", background: s.selected ? "var(--warning-muted)" : "transparent" }}>
                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
                   <input type="checkbox" checked={!!s.selected} onChange={() => toggleOne(i)} style={{ accentColor: "var(--accent)", cursor: "pointer" }} />
                 </td>
                 <td style={{ padding: "6px 10px" }}>
-                  <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
-                    style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
-                    onBlur={e => e.target.style.borderColor = "transparent"} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input value={s.sheetNumber || ""} onChange={e => updateSheet(i, "sheetNumber", e.target.value)}
+                      style={{ background: "transparent", border: "1px solid transparent", borderRadius: 4, padding: "2px 6px", color: "var(--status-warning)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, width: 76 }}
+                      onFocus={e => e.target.style.borderColor = "rgba(245,158,11,0.4)"}
+                      onBlur={e => e.target.style.borderColor = "transparent"} />
+                    {s.sheetNumber && existingDrawings.some(d => d.sheet_number === s.sheetNumber) && (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#D97706", background: "rgba(217,119,6,0.10)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", letterSpacing: "0.06em", fontWeight: 600 }}>
+                        ⚠ EXISTS IN PROJECT
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <input value={s.sheetTitle || ""} onChange={e => updateSheet(i, "sheetTitle", e.target.value)}
@@ -488,7 +614,7 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
                 </td>
                 <td style={{ padding: "6px 10px" }}>
                   <select value={s.discipline || "Structural"} onChange={e => updateSheet(i, "discipline", e.target.value)}
-                    style={{ background: "var(--bg-sidebar)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+                    style={{ background: "var(--bg-surface-low)", border: "1px solid var(--bg-surface-high)", borderRadius: 4, padding: "2px 6px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }}>
                     {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </td>
@@ -512,10 +638,13 @@ function StepReview({ sheets, setSheets, fileResults, meta, onBack, onCreate }) 
         )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Button variant="outline" onClick={onBack}><ChevronLeft style={{ width: 14, height: 14, marginRight: 4 }} /> Back</Button>
-        <Button onClick={() => onCreate(sheets.filter(s => s.selected))} disabled={selectedCount === 0}
-          style={{ background: "var(--accent)", color: "#fff", border: "none" }}>
+        <Button
+          onClick={() => onCreate(sheets.filter(s => s.selected))}
+          disabled={selectedCount === 0}
+          style={{ background: "var(--accent)", color: "#fff", border: "none" }}
+        >
           Create {selectedCount} {selectedCount === 1 ? "Entry" : "Entries"} <ChevronRight style={{ width: 14, height: 14, marginLeft: 4 }} />
         </Button>
       </div>
@@ -533,7 +662,7 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
       <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Upload Complete</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center", marginBottom: 24 }}>
         {fileResults.map(r => (
-          <div key={r.fileName} style={{ fontFamily: "var(--font-body)", fontSize: 12, color: r.status === "failed" ? "#FF3D3D" : "var(--text-muted)" }}>
+          <div key={r.fileName} style={{ fontFamily: "var(--font-body)", fontSize: 12, color: r.status === "failed" ? "var(--status-error-bright)" : "var(--text-muted)" }}>
             {r.status === "failed" ? "✗" : "✓"} {r.fileName} — {r.status === "failed" ? `failed: ${r.error}` : `${r.sheetCount} sheets`}
           </div>
         ))}
@@ -553,12 +682,36 @@ function StepSuccess({ createdCount, fileResults, onViewLog, onUploadAnother }) 
 }
 
 // ─── Main Modal ──────────────────────────────────────────────────────
-export default function DrawingSetUploadModal({ open, onClose, onComplete, activeProject, onNewRevision }) {
+//
+// Wizard flow (new parent/child model):
+//   0: Choice         — new drawing set vs new revision
+//   1: Meta           — set name (required) + optional defaults
+//   2: Files          — drag/drop multi-file picker
+//   3: Processing     — upload + AI extraction (auto-started, no extra click)
+//   4: Review         — verify AI-extracted sheets
+//   5: Success        — report with per-file status
+//
+// On commit (handleCreate) we:
+//   1. Create a single parent `drawing_sets` row via DrawingSet.create(...)
+//   2. Create each child `drawings` row with drawing_set_id FK + upload_batch_id
+//      + upload_status + ai_extraction_status set accurately
+//   3. The DB trigger sync_drawing_set_counts() keeps parent aggregates fresh.
+//
+export default function DrawingSetUploadModal({
+  open,
+  onClose,
+  onComplete,
+  activeProject,
+  onNewRevision,
+  existingDrawings = [],
+  existingSetNames = [],
+}) {
   const qc = useQueryClient();
   const [step, setStep]                   = useState(0);
   const [files, setFiles]                 = useState([]);
   const [meta, setMeta]                   = useState({
-    setName: "", discipline: "Structural", revision: "0",
+    setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started",
+    revision: "0",
     issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "",
   });
   const [processingStatus, setProcessingStatus] = useState({ steps: [], currentStepId: null, progress: 0, message: "" });
@@ -566,22 +719,26 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
   const [fileResults, setFileResults]     = useState([]);
   const [createdCount, setCreatedCount]   = useState(0);
   const [processError, setProcessError]   = useState(null);
+  const [aiFilledFields, setAiFilledFields] = useState({}); // { setName: true, ... }
+  const [uploadBatchId, setUploadBatchId] = useState(null); // set once per upload attempt
   const cancelledRef                      = useRef(false);
 
   const makeSteps = (activeId, doneIds = [], warnings = {}) => [
-    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload"),  id: "upload"  },
-    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode"),  id: "encode"  },
-    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"], id: "extract" },
-    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse"),   id: "parse"   },
-    { id: "done",    label: null,                                    done: doneIds.includes("done"),    id: "done"    },
-  ].map(s => ({ ...s, id: s.id }));
+    { id: "upload",  label: "Uploading files to storage...",        done: doneIds.includes("upload")  },
+    { id: "encode",  label: "Preparing PDF for AI reading...",       done: doneIds.includes("encode")  },
+    { id: "extract", label: "✦ Claude is reading your drawing set...", detail: "Scanning title blocks and sheet index", done: doneIds.includes("extract"), warning: warnings["extract"] },
+    { id: "parse",   label: "Building sheet list...",                done: doneIds.includes("parse")   },
+    { id: "done",    label: null,                                    done: doneIds.includes("done")    },
+  ];
 
   const reset = () => {
     cancelledRef.current = true;  // abort any in-progress operation
     setStep(0); setFiles([]); setSheets([]); setFileResults([]); setCreatedCount(0);
     setProcessError(null);
+    setAiFilledFields({});
+    setUploadBatchId(null);
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: "" });
-    setMeta({ setName: "", discipline: "Structural", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
+    setMeta({ setName: "", setNumber: "", discipline: "Structural", defaultStage: "Not Started", revision: "0", issueDate: new Date().toISOString().split("T")[0], issuedBy: "", notes: "" });
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -590,9 +747,38 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     cancelledRef.current = false;
     setProcessError(null);
     setStep(3);
+    // Generate a fresh batch id for this upload attempt so every child sheet
+    // carries the same id — makes it trivial to group or rollback later.
+    const batchId = newUploadBatchId();
+    setUploadBatchId(batchId);
     const allSheets  = [];
     const results    = [];
     const totalFiles = files.length;
+    const aggregateSetMeta = { ...EMPTY_SET_META };
+    const aiFilled = {};
+
+    // If the user typed a set name that matches an existing set with a saved
+    // titleblock template, fetch it so extraction uses rect-based OCR instead
+    // of asking the LLM to guess sheet titles/numbers.
+    let titleblockTemplate = null;
+    try {
+      const setName = (meta.setName || "").trim();
+      if (setName && activeProject?.id) {
+        const existing = await base44.entities.DrawingSet.filter({
+          project_id: activeProject.id,
+          set_name:   setName,
+        });
+        if (Array.isArray(existing) && existing.length > 0) {
+          const tRect = existing[0].titleblock_title_rect;
+          const nRect = existing[0].titleblock_number_rect;
+          if (tRect && nRect) {
+            titleblockTemplate = { titleRect: tRect, numberRect: nRect };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Titleblock template lookup failed — extraction will use LLM fallback:", e);
+    }
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -645,18 +831,36 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
         let extractResult;
         try {
           extractResult = await withTimeout(
-            validateAndExtract(file, fileUrl),
+            validateAndExtract(file, {
+              ...(titleblockTemplate ? { titleblockTemplate } : {}),
+              onStatus: (status) => {
+                if (status.phase === 'rate-limit-wait') {
+                  setProcessingStatus(prev => ({
+                    ...prev,
+                    message: `Rate limit cooldown — ${status.remainingSec}s before reading ${file.name}… (${i + 1} of ${totalFiles})`,
+                  }));
+                } else if (status.phase === 'llm-calling') {
+                  setProcessingStatus(prev => ({
+                    ...prev,
+                    message: `Claude is reading ${file.name}… (${i + 1} of ${totalFiles})`,
+                  }));
+                }
+              },
+            }),
             EXTRACT_TIMEOUT_MS,
             "AI extraction"
           );
         } catch (err) {
-          // On timeout/extract failure, fall back to a single manual-entry row
+          // On timeout/extract failure, fall back to filename-parsed row
+          const parsed = parseFilename(file.name);
           extractResult = {
+            setMeta: { ...EMPTY_SET_META },
             sheets: [{
-              sheetNumber: "", sheetTitle: file.name.replace(/\.pdf$/i, ""),
+              sheetNumber: parsed.sheetNumber,
+              sheetTitle: parsed.sheetNumber ? "" : file.name.replace(/\.pdf$/i, ""),
               discipline: meta.discipline, sheetType: "General",
-              revision: "0", scale: "", date: "",
-              _note: `Extraction failed: ${err.message}. Please fill in manually.`,
+              revision: parsed.revision || "0", scale: "", date: "",
+              _note: `Extraction failed: ${err.message}.` + (parsed.sheetNumber ? ` Sheet # "${parsed.sheetNumber}" extracted from filename.` : " Please fill in manually."),
             }],
             scanned: false,
             extractFailed: true,
@@ -673,6 +877,13 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           progress: baseProgress + 20,
           message: `Building sheet list for ${file.name}…`,
         });
+
+        // Aggregate set-level metadata across files (first non-empty wins)
+        const extractedSetMeta = extractResult.setMeta || {};
+        for (const key of Object.keys(aggregateSetMeta)) {
+          const v = String(extractedSetMeta[key] ?? "").trim();
+          if (v && !aggregateSetMeta[key]) aggregateSetMeta[key] = v;
+        }
 
         const tagged = extractResult.sheets.map(s => ({
           ...s,
@@ -694,12 +905,41 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
           sizeMB,
         });
 
+        // Small UI buffer; main inter-call pacing lives in pdfSheetExtractor
         if (i < files.length - 1) {
-          await new Promise(r => setTimeout(r, 600));
+          await new Promise(r => setTimeout(r, 200));
         }
       }
 
       if (cancelledRef.current) return;  // user cancelled — stay at step 0 (reset already called)
+
+      // ── Merge AI-detected set metadata into meta state ──
+      // Only fill fields the user left blank; never overwrite user input.
+      const defaultIssueDate = new Date().toISOString().split("T")[0];
+      setMeta(prev => {
+        const merged = { ...prev };
+        const tryFill = (prevKey, aiKey) => {
+          const current = String(prev[prevKey] ?? "").trim();
+          const aiVal = String(aggregateSetMeta[aiKey] ?? "").trim();
+          // Treat today's default issueDate as "blank" so AI can overwrite it
+          const isDefault = prevKey === "issueDate" && current === defaultIssueDate;
+          // Treat "0" revision as "blank" so AI can overwrite it
+          const isDefaultRev = prevKey === "revision" && (current === "0" || current === "");
+          if (aiVal && (!current || isDefault || isDefaultRev)) {
+            merged[prevKey] = aiVal;
+            aiFilled[prevKey] = true;
+          }
+        };
+        tryFill("setName",    "setName");
+        tryFill("setNumber",  "setNumber");
+        tryFill("setNumber",  "drawingSetNumber");
+        tryFill("revision",   "revision");
+        tryFill("issueDate",  "issueDate");
+        tryFill("issuedBy",   "issuedBy");
+        tryFill("discipline", "discipline");
+        return merged;
+      });
+      setAiFilledFields(aiFilled);
 
       // ── Done ──
       setProcessingStatus({
@@ -729,45 +969,306 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
     setProcessingStatus({ steps: [], currentStepId: null, progress: 0, message: `Creating ${selectedSheets.length} drawing entries…` });
 
     const resolvedSetName = (meta.setName || "").trim() || meta.revision || "Drawing Set";
+    const batchId = uploadBatchId || newUploadBatchId();
+    const setNumber = (meta.setNumber || "").trim();
 
     try {
-      let created = 0;
-      let failed = 0;
-      for (const sheet of selectedSheets) {
-        if (cancelledRef.current) break;
-        try {
-          await base44.entities.Drawing.create({
-            sheet_number:     sheet.sheetNumber,
-            title:            sheet.sheetTitle,
-            project_id:       activeProject?.id,
-            project_name:     activeProject?.name,
-            discipline:       sheet.discipline || meta.discipline,
-            revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
-            stage:            "Not Started",
-            issue_date:       sheet.date || meta.issueDate,
-            issued_by:        meta.issuedBy,
-            file_url:         sheet.sourceFileUrl,
-            drawing_set_name: resolvedSetName,
-            notes:            [meta.notes, sheet.scale ? `Scale: ${sheet.scale}` : ""].filter(Boolean).join(" · "),
-          });
-          created++;
-        } catch (err) {
-          console.error("Failed to create sheet:", sheet.sheetNumber, err);
-          failed++;
+      // ─────────────────────────────────────────────────────────────
+      // STEP 1 — Find or create the parent drawing_sets record.
+      //
+      // We check first so re-uploading into an existing named set just
+      // appends children to the same parent (idempotent across sessions).
+      // ─────────────────────────────────────────────────────────────
+      setProcessingStatus(prev => ({ ...prev, progress: 5, message: "Creating drawing set…" }));
+
+      let parentSetId = null;
+      let parentSetMetadata = null;
+      try {
+        // First check active (non-deleted) sets
+        const existing = await base44.entities.DrawingSet.filter({
+          project_id: activeProject?.id,
+          set_name:   resolvedSetName,
+        });
+        if (Array.isArray(existing) && existing.length > 0) {
+          parentSetId = existing[0].id;
+          parentSetMetadata = existing[0].metadata;
         }
-        setProcessingStatus(prev => ({
-          ...prev,
-          progress: Math.round(((created + failed) / selectedSheets.length) * 100),
-          message: `Creating entries… ${created + failed} of ${selectedSheets.length}`,
-        }));
+
+        // If none found, check for soft-deleted sets and restore them.
+        // The DB unique index covers ALL rows (including is_deleted=true),
+        // so creating a new row with the same name would violate the constraint.
+        if (!parentSetId) {
+          const deleted = await base44.entities.DrawingSet.filter({
+            project_id: activeProject?.id,
+            set_name:   resolvedSetName,
+            is_deleted:  true,
+          });
+          if (Array.isArray(deleted) && deleted.length > 0) {
+            parentSetId = deleted[0].id;
+            parentSetMetadata = deleted[0].metadata;
+            // Restore the soft-deleted row
+            await base44.entities.DrawingSet.update(parentSetId, {
+              is_deleted: false,
+              deleted_at: null,
+            });
+          }
+        }
+
+        // Refresh the parent's metadata to reflect this upload
+        if (parentSetId) {
+          try {
+            await base44.entities.DrawingSet.update(parentSetId, {
+              upload_batch_id: batchId,
+              revision:        meta.revision || "",
+              issued_date:     meta.issueDate || null,
+              issued_by:       meta.issuedBy  || "",
+              discipline:      meta.discipline || "",
+              notes:           meta.notes || "",
+              ...(setNumber ? { metadata: withDrawingSetNumberMetadata(parentSetMetadata, setNumber) } : {}),
+              updated_at:      new Date().toISOString(),
+            });
+          } catch (updErr) {
+            console.warn("Could not refresh existing drawing_set:", updErr);
+          }
+        }
+      } catch (lookupErr) {
+        console.warn("DrawingSet lookup failed, will create new:", lookupErr);
       }
 
-      if (cancelledRef.current) return;
-      setCreatedCount(created);
-      if (failed > 0) {
-        setProcessError(`${failed} sheet(s) failed to upload. ${created} created successfully.`);
+      if (!parentSetId) {
+        // The DB enforces UNIQUE(project_id, set_name) on drawing_sets
+        // (migration 020 / see memory/supabase_drawings_constraints.md).
+        // If a concurrent upload from another session wrote the same
+        // set_name between our lookup above and this CREATE, Postgres
+        // raises 23505 and the whole batch would die with a cryptic
+        // error. Recover: on unique_violation, re-query and attach to
+        // whichever row won the race. Only if even that lookup is empty
+        // do we surface the error to the user.
+        const { record: sanitizedSet } = sanitizeDrawingSetPayload({
+          project_id:      activeProject?.id,
+          project_name:    activeProject?.name,
+          set_name:        resolvedSetName,
+          revision:        meta.revision || "",
+          discipline:      meta.discipline || "",
+          issued_date:     meta.issueDate || null,
+          issued_by:       meta.issuedBy || "",
+          status:          "Active",
+          notes:           meta.notes || "",
+          metadata:        withDrawingSetNumberMetadata({}, setNumber),
+          upload_batch_id: batchId,
+          sheet_count:        0,
+          processed_count:    0,
+          needs_review_count: 0,
+          failed_count:       0,
+        });
+        try {
+          const created = await base44.entities.DrawingSet.create(sanitizedSet);
+          parentSetId = created?.id;
+        } catch (createErr) {
+          const msg = String(createErr?.message || createErr || "").toLowerCase();
+          const isUniqueViolation =
+            msg.includes("duplicate key") ||
+            msg.includes("unique constraint") ||
+            msg.includes("uq_drawing_sets_project_set_name") ||
+            msg.includes("23505");
+          if (!isUniqueViolation) throw createErr;
+
+          console.warn(
+            `[DrawingSetUploadModal] race on set "${resolvedSetName}" — another session created it first; re-looking up.`,
+          );
+          const winner = await base44.entities.DrawingSet.filter({
+            project_id: activeProject?.id,
+            set_name:   resolvedSetName,
+          });
+          if (Array.isArray(winner) && winner.length > 0) {
+            parentSetId = winner[0].id;
+            parentSetMetadata = winner[0].metadata;
+          } else {
+            // Extremely unlikely: insert failed uniqueness but post-lookup
+            // can't find the winner (e.g. it was soft-deleted between the
+            // insert attempt and this query). Surface a clear message
+            // instead of the raw Postgres error.
+            throw new Error(
+              `A drawing set named "${resolvedSetName}" already exists on this project but could not be loaded. ` +
+              `Refresh the page and try again, or pick a different set name.`,
+            );
+          }
+        }
+
+        if (!parentSetId) {
+          throw new Error("Drawing set was created but no id returned — cannot attach children.");
+        }
       }
+
+      // ─────────────────────────────────────────────────────────────
+      // STEP 2 — Create every child drawing row with FK + status cols.
+      //
+      // Each child gets ai_extraction_status === 'Processed' because by
+      // the time we reach this step, AI has already run and the user has
+      // reviewed the results. Rows whose AI pass failed upstream get
+      // marked 'NeedsReview' so the UI can flag them.
+      //
+      // F16: single bulk insert instead of N serial requests. An N-sheet
+      // set used to mean N round-trips; now one. If the bulk insert fails
+      // we fall back to the per-row loop so a single bad row still lets
+      // the rest land — matching the original "never abort the batch"
+      // acceptance criterion.
+      // ─────────────────────────────────────────────────────────────
+      const now = new Date().toISOString();
+      const buildRecord = (sheet) => {
+        const sourceResult = fileResults.find(r => r.fileName === sheet.sourceFile);
+        const needsReview =
+          sourceResult?.extractFailed ||
+          sourceResult?.scanned ||
+          sourceResult?.tooLarge ||
+          !!sheet._note;
+        // Validate pdf_page — must be a positive integer. Anything else
+        // falls back to 1 with a warning so the user can hand-fix via
+        // SheetFormModal. The extractor's assignPdfPages() should have
+        // populated this correctly; if we're falling back here, something
+        // upstream regressed.
+        const validatedPage = validatePdfPage(sheet.pdfPage);
+        if (validatedPage === null) {
+          console.warn(
+            `[DrawingSetUploadModal] Sheet "${sheet.sheetNumber || "?"}" has invalid pdfPage=${JSON.stringify(sheet.pdfPage)} — defaulting to 1.`,
+          );
+        }
+        return {
+          sheet_number:     sheet.sheetNumber || "",
+          title:            sheet.sheetTitle  || "",
+          project_id:       activeProject?.id,
+          project_name:     activeProject?.name,
+          drawing_set_id:   parentSetId,
+          drawing_set_name: resolvedSetName, // kept for back-compat reads
+          discipline:       sheet.discipline || meta.discipline,
+          revision_number:  normalizeRevisionNumber(sheet.revision ?? meta.revision),
+          stage:            meta.defaultStage || "Not Started",
+          file_url:         sheet.sourceFileUrl,
+          pdf_page:         validatedPage ?? 1,
+          callouts:         Array.isArray(sheet.callouts) ? sheet.callouts : [],
+          upload_batch_id:      batchId,
+          upload_status:        "Uploaded",
+          ai_extraction_status: needsReview ? "NeedsReview" : "Processed",
+          ai_extraction_error:  sourceResult?.error || null,
+          extracted_text:       sheet.extractedText || null,
+          hyperlinks:           Array.isArray(sheet.hyperlinks) ? sheet.hyperlinks : [],
+          last_extracted_at:    now,
+          notes: [
+            meta.notes,
+            sheet.scale ? `Scale: ${sheet.scale}` : "",
+            sheet._note || "",
+          ].filter(Boolean).join(" · "),
+        };
+      };
+
+      let createdRows = 0;
+      let failedRows  = 0;
+      const records = selectedSheets.map(buildRecord);
+
+      // Sanity check per source PDF: if a multi-page PDF ended up with
+      // pdf_page=1 across every one of its sheets, that's the original
+      // bug regressing. Log loud per source file so QA can spot it in
+      // DevTools without inspecting every record.
+      const recordsBySource = new Map();
+      selectedSheets.forEach((sheet, i) => {
+        const key = sheet.sourceFile || "?";
+        if (!recordsBySource.has(key)) recordsBySource.set(key, []);
+        recordsBySource.get(key).push(records[i]);
+      });
+      for (const [sourceFile, group] of recordsBySource) {
+        if (group.length <= 1) continue;
+        const fileResult = fileResults.find(r => r.fileName === sourceFile);
+        const pageCount = fileResult?.pageCount;
+        if (Number.isFinite(pageCount) && pageCount > 1 && group.every(r => r.pdf_page === 1)) {
+          console.warn(
+            `[DrawingSetUploadModal] All ${group.length} sheets from "${sourceFile}" (a ${pageCount}-page PDF) have pdf_page=1. ` +
+            `This looks like the multi-sheet pdf_page bug regressing — check that the extractor schema includes pdfPage and that assignPdfPages ran.`,
+          );
+        }
+      }
+
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 40,
+        message:  `Creating ${records.length} drawing entries…`,
+      }));
+
+      // Collect the inserted drawing rows (with DB IDs) so we can
+      // fan out matching Detailing schedule tasks after.
+      //
+      // Defensive enum pass: every record's stage / upload_status /
+      // ai_extraction_status is coerced to a DB-CHECK-valid value so a
+      // typo / stale constant / future schema drift doesn't silently
+      // fail the INSERT and lose the user's upload.
+      const sanitizedRecords = records.map((r) => sanitizeDrawingPayload(r).record);
+
+      const insertedRows = [];
+      try {
+        const inserted = await base44.entities.Drawing.bulkCreate(sanitizedRecords);
+        if (Array.isArray(inserted)) insertedRows.push(...inserted);
+        createdRows = Array.isArray(inserted) ? inserted.length : sanitizedRecords.length;
+      } catch (bulkErr) {
+        // Bulk failed — fall back to per-row so one bad sheet doesn't lose
+        // the whole batch. This is the slow path; the common case is the
+        // bulk insert above succeeding.
+        console.warn("[drawings] bulkCreate failed, falling back to per-row:", bulkErr);
+        for (let i = 0; i < selectedSheets.length; i++) {
+          if (cancelledRef.current) break;
+          const sheet = selectedSheets[i];
+          try {
+            const row = await base44.entities.Drawing.create(sanitizedRecords[i]);
+            if (row) insertedRows.push(row);
+            createdRows++;
+          } catch (err) {
+            console.error("Failed to create sheet:", sheet.sheetNumber, err);
+            failedRows++;
+          }
+          setProcessingStatus(prev => ({
+            ...prev,
+            progress: 40 + Math.round(((createdRows + failedRows) / selectedSheets.length) * 50),
+            message:  `Recovering… ${createdRows + failedRows} of ${selectedSheets.length}`,
+          }));
+        }
+      }
+
+      // Auto-create matching Detailing/Submittal schedule tasks. Idempotent —
+      // re-running the upload won't double-insert because the helper dedupes
+      // by drawing_id in metadata.
+      if (insertedRows.length > 0 && !cancelledRef.current) {
+        setProcessingStatus(prev => ({
+          ...prev,
+          progress: 92,
+          message:  `Linking ${insertedRows.length} schedule tasks…`,
+        }));
+        try {
+          const { created: taskCount } = await autoCreateDetailingTasks(
+            insertedRows,
+            { projectName: insertedRows[0]?.project_name }
+          );
+          if (taskCount > 0) {
+            qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
+          }
+        } catch (err) {
+          console.warn("[drawings] auto-schedule tasks failed:", err);
+        }
+      }
+
+      setProcessingStatus(prev => ({
+        ...prev,
+        progress: 95,
+        message:  `Created ${createdRows} of ${selectedSheets.length} entries`,
+      }));
+
+      if (cancelledRef.current) return;
+      setCreatedCount(createdRows);
+      if (failedRows > 0) {
+        setProcessError(`${failedRows} sheet(s) failed to save. ${createdRows} created successfully.`);
+      }
+
+      // The sync_drawing_set_counts() DB trigger auto-updates the parent
+      // aggregate counts, so we just need to refresh the UI caches.
       qc.invalidateQueries({ queryKey: ["drawings"] });
+      qc.invalidateQueries({ queryKey: ["drawing_sets"] });
       setStep(5);
       if (onComplete) onComplete();
     } catch (err) {
@@ -778,7 +1279,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
+      <DialogContent className="sbd-card-strong" style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
         <DialogHeader>
           <DialogTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -786,7 +1287,7 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
               {step !== 3 && (
                 <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
                   {[0, 1, 2, 4, 5].map(s => (
-                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: step >= s ? "var(--accent)" : "rgba(255,255,255,0.08)" }} />
+                    <div key={s} style={{ width: 18, height: 4, borderRadius: 2, background: step >= s ? "var(--accent)" : "var(--bg-surface-high)" }} />
                   ))}
                 </div>
               )}
@@ -796,10 +1297,10 @@ export default function DrawingSetUploadModal({ open, onClose, onComplete, activ
 
         <div style={{ paddingTop: 8 }}>
           {step === 0 && <StepChoice onNewSet={() => setStep(1)} onNewRevision={() => { handleClose(); if (onNewRevision) onNewRevision(); }} onClose={handleClose} />}
-          {step === 1 && <StepFiles files={files} setFiles={setFiles} onNext={() => setStep(2)} onClose={handleClose} />}
-          {step === 2 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} projectName={activeProject?.name} />}
+          {step === 1 && <StepMeta meta={meta} setMeta={setMeta} onBack={() => setStep(0)} onNext={() => setStep(2)} projectName={activeProject?.name} existingSetNames={existingSetNames} />}
+          {step === 2 && <StepFiles files={files} setFiles={setFiles} onBack={() => setStep(1)} onUpload={handleUploadAndProcess} setName={meta.setName} />}
           {step === 3 && <StepProcessing processingStatus={processingStatus} onCancel={reset} error={processError} />}
-          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} onBack={() => setStep(1)} onCreate={handleCreate} />}
+          {step === 4 && <StepReview sheets={sheets} setSheets={setSheets} fileResults={fileResults} meta={meta} setMeta={setMeta} aiFilledFields={aiFilledFields} onBack={() => setStep(2)} onCreate={handleCreate} existingDrawings={existingDrawings} />}
           {step === 5 && <StepSuccess createdCount={createdCount} fileResults={fileResults} onViewLog={handleClose} onUploadAnother={reset} />}
         </div>
       </DialogContent>

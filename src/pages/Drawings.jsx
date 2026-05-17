@@ -1,260 +1,77 @@
+/**
+ * Drawings.jsx — Drawings & Submittals page orchestrator
+ *
+ * Thin composition shell. All presentation lives in:
+ *   components/drawings/DrawingsTable.jsx   — list view
+ *   components/drawings/DrawingsGrid.jsx    — card grid view
+ *   components/drawings/DrawingsToolbar.jsx — stats, filters, bulk actions
+ *   components/drawings/StagePipeline.jsx   — chevron pipeline
+ *   components/drawings/SheetFormModal.jsx  — create/edit modal
+ *   components/drawings/AlertBanner.jsx     — revision-control alerts
+ *   components/drawings/drawingsConfig.js   — constants & shared styles
+ *   components/drawings/drawingsUtils.js    — pure helper functions
+ */
+
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
 import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
+import { batchProcess } from "@/utils/batchProcess";
+import { autoCreateDetailingTasks } from "@/lib/autoScheduleDetailing";
+
+// ── Domain config & utils ───────────────────────────────────────────────────
+import {
+  STAGE_ORDER, DISCIPLINES, EMPTY_FORM, IN_REVIEW_STAGES, STAGES,
+  mono, surface,
+} from "@/components/drawings/drawingsConfig";
+import {
+  isOverdue, exportTransmittal, computeStatsFromSubmittals, computeDisciplineCounts, buildRevisionAlerts,
+  validateStageTransition,
+} from "@/components/drawings/drawingsUtils";
+import { submittalPipelineRollupFromSubmittals } from "@/pages/dashboard/projectMetrics";
+import { derivedSetStage, stageToSubmittalStatus } from "@/lib/submittalStageMapping";
+
+// ── Presentation components ─────────────────────────────────────────────────
+import DrawingsTable from "@/components/drawings/DrawingsTable";
+import DrawingsGrid from "@/components/drawings/DrawingsGrid";
+import { DisciplineChips, FilterBar, BulkActionsBar } from "@/components/drawings/DrawingsToolbar";
+import AlertBanner from "@/components/drawings/AlertBanner";
+import ActiveFilterPills from "@/components/drawings/ActiveFilterPills";
+import DrawingContextMenu from "@/components/drawings/DrawingContextMenu";
+import SheetFormModal from "@/components/drawings/SheetFormModal";
 import SetApprovalModal from "@/components/drawings/SetApprovalModal";
-import { syncDrawingScheduleTasks } from "@/utils/syncDrawingScheduleTasks";
+import AdvanceStageDialog from "@/components/drawings/AdvanceStageDialog";
+import RenameSetModal from "@/components/drawings/RenameSetModal";
+import TitleblockMarkerModal from "@/components/drawings/TitleblockMarkerModal";
+import BulkEditModal from "@/components/drawings/BulkEditModal";
+import DrawingSetUploadModal from "@/components/drawings/DrawingSetUploadModal";
+import RevisionUploadModal from "@/components/drawings/RevisionUploadModal";
+import ExportFabReleaseModal from "@/components/drawings/ExportFabReleaseModal";
+import DeleteDialog from "@/components/shared/DeleteDialog";
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ── Design-system chrome (Claude Design redesign) ─────────────────────────
+import {
+  CommandBar,
+  KpiTile,
+  PhaseChevron,
+  Button,
+} from "@/components/design-system";
 
-const STAGES = [
-  { key: "Not Started", label: "NOT STARTED", color: "#6B7280", bg: "rgba(107,114,128,0.15)" },
-  { key: "OFA",         label: "OFA",         color: "#3B82F6", bg: "rgba(59,130,246,0.15)" },
-  { key: "BFA",         label: "BFA",         color: "#06B6D4", bg: "rgba(6,182,212,0.15)" },
-  { key: "OFS",         label: "OFS",         color: "#F59E0B", bg: "rgba(245,158,11,0.15)" },
-  { key: "BFS",         label: "BFS",         color: "#8B5CF6", bg: "rgba(139,92,246,0.15)" },
-  { key: "FFF",         label: "FFF",         color: "#EC4899", bg: "rgba(236,72,153,0.15)" },
-  { key: "Released",    label: "IFC",         color: "#10B981", bg: "rgba(16,185,129,0.15)" },
-];
-const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.key, s]));
-const STAGE_ORDER = STAGES.map(s => s.key);
-
-const DISCIPLINES = ["Structural", "Misc Metals", "Connections", "Anchor Bolts", "Erection", "MEP", "Civil", "Architectural"];
-
-const EMPTY_FORM = {
-  drawing_set_name: "",
-  sheet_number: "", title: "", discipline: "Structural",
-  revision_number: "0", stage: "Not Started",
-  submitted_date: "", return_date: "", due_date: "",
-  reviewer: "", spec_section: "", notes: "",
-  linked_rfi_ids: "", priority_flag: false,
-};
-
-const mono = { fontFamily: "var(--font-mono)" };
-const surface = { background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StageChip({ stage, size = "sm" }) {
-  const cfg = STAGE_MAP[stage] || STAGE_MAP["Not Started"];
-  const pad = size === "sm" ? "2px 7px" : "4px 10px";
-  const fs = size === "sm" ? 9 : 10;
-  return (
-    <span style={{
-      ...mono, padding: pad, borderRadius: 2, fontSize: fs, fontWeight: 700,
-      letterSpacing: "0.1em", color: cfg.color, background: cfg.bg,
-      border: `1px solid ${cfg.color}44`, whiteSpace: "nowrap",
-    }}>{cfg.label}</span>
-  );
-}
-
-function PriorityDot({ active }) {
-  if (!active) return null;
-  return <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "var(--status-error)", flexShrink: 0 }} />;
-}
-
-function OverdueBadge() {
-  return (
-    <span style={{ ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.1em", color: "var(--status-error)", background: "var(--danger-muted)", border: "1px solid var(--danger-border, rgba(239,68,68,0.3))", borderRadius: 2, padding: "1px 5px" }}>
-      OVERDUE
-    </span>
-  );
-}
-
-function isOverdue(drawing) {
-  if (!drawing.due_date) return false;
-  if (drawing.stage === "Released") return false;
-  return new Date(drawing.due_date) < new Date();
-}
-
-// ─── Stage Pipeline ───────────────────────────────────────────────────────────
-
-function StagePipeline({ drawings }) {
-  const total = drawings.length || 1;
-  return (
-    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-      {STAGES.slice(1).map(s => {
-        const count = drawings.filter(d => d.stage === s.key).length;
-        const pct = Math.round((count / total) * 100);
-        return (
-          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 90 }}>
-            <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: s.color, letterSpacing: "0.08em", width: 34 }}>{s.label}</span>
-            <div style={{ flex: 1, height: 5, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden", minWidth: 50 }}>
-              <div style={{ height: "100%", width: `${pct}%`, background: s.color, borderRadius: 3, transition: "width 0.4s ease" }} />
-            </div>
-            <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)", width: 22, textAlign: "right" }}>{count}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Sheet Form Modal ─────────────────────────────────────────────────────────
-
-function SheetFormModal({ initial, onSave, onClose, saving }) {
-  const [form, setForm] = useState(initial || EMPTY_FORM);
-  const [uploadFile, setUploadFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const labelStyle = { ...mono, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: "var(--text-muted)", display: "block", marginBottom: 5 };
-  const inputStyle = { width: "100%", padding: "8px 10px", background: "var(--bg-page)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13, boxSizing: "border-box" };
-  const selectStyle = { ...inputStyle };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ ...surface, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", padding: 28 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <span style={{ ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--accent)" }}>
-            {initial?.id ? "EDIT SHEET" : "ADD SHEET"}
-          </span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Drawing Set Name *</label>
-            <input style={inputStyle} value={form.drawing_set_name || ""} onChange={e => set("drawing_set_name", e.target.value)} placeholder="e.g. Structural Steel Package A" />
-          </div>
-          <div>
-            <label style={labelStyle}>Sheet Number *</label>
-            <input style={inputStyle} value={form.sheet_number} onChange={e => set("sheet_number", e.target.value)} placeholder="S1-001" />
-          </div>
-          <div>
-            <label style={labelStyle}>Revision</label>
-            <input style={inputStyle} value={form.revision_number} onChange={e => set("revision_number", e.target.value)} placeholder="0" />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Title *</label>
-            <input style={inputStyle} value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Foundation Plan" />
-          </div>
-          <div>
-            <label style={labelStyle}>Discipline</label>
-            <select style={selectStyle} value={form.discipline} onChange={e => set("discipline", e.target.value)}>
-              {DISCIPLINES.map(d => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Stage</label>
-            <select style={selectStyle} value={form.stage} onChange={e => set("stage", e.target.value)}>
-              {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Submitted Date</label>
-            <input type="date" style={inputStyle} value={form.submitted_date || ""} onChange={e => set("submitted_date", e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>Due Date</label>
-            <input type="date" style={inputStyle} value={form.due_date || ""} onChange={e => set("due_date", e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>Return Date</label>
-            <input type="date" style={inputStyle} value={form.return_date || ""} onChange={e => set("return_date", e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>Reviewer</label>
-            <input style={inputStyle} value={form.reviewer || ""} onChange={e => set("reviewer", e.target.value)} placeholder="Reviewer name" />
-          </div>
-          <div>
-            <label style={labelStyle}>Spec Section</label>
-            <input style={inputStyle} value={form.spec_section || ""} onChange={e => set("spec_section", e.target.value)} placeholder="05 12 00" />
-          </div>
-          <div>
-            <label style={labelStyle}>Linked RFI Numbers</label>
-            <input style={inputStyle} value={form.linked_rfi_ids || ""} onChange={e => set("linked_rfi_ids", e.target.value)} placeholder="RFI #001, RFI #002" />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>PDF Attachment</label>
-            {form.file_url && !uploadFile && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ ...mono, fontSize: 10, color: "#10B981" }}>FILE ATTACHED</span>
-                <button onClick={() => set("file_url", "")} style={{ background: "none", border: "none", color: "var(--status-error)", fontSize: 10, cursor: "pointer", ...mono }}>REMOVE</button>
-              </div>
-            )}
-            <input
-              type="file"
-              accept=".pdf,.dwg,.dxf"
-              onChange={e => { if (e.target.files?.[0]) setUploadFile(e.target.files[0]); }}
-              style={{ ...inputStyle, padding: "6px 10px", fontSize: 11 }}
-            />
-            {uploadFile && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)</div>}
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Notes</label>
-            <textarea style={{ ...inputStyle, height: 72, resize: "vertical" }} value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
-          </div>
-          <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 10 }}>
-            <input type="checkbox" id="pflag" checked={!!form.priority_flag} onChange={e => set("priority_flag", e.target.checked)} />
-            <label htmlFor="pflag" style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: "var(--text-muted)", textTransform: "uppercase", cursor: "pointer" }}>
-              Priority Flag — mark as critical path
-            </label>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 24, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "8px 20px", background: "none", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-muted)", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer" }}>
-            CANCEL
-          </button>
-          <button onClick={async () => {
-              let fileUrl = form.file_url || "";
-              if (uploadFile) {
-                setUploading(true);
-                try {
-                  const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
-                  fileUrl = file_url;
-                } catch (err) {
-                  toast.error("File upload failed: " + (err?.message || "Unknown error"));
-                  setUploading(false);
-                  return;
-                }
-                setUploading(false);
-              }
-              onSave({ ...form, file_url: fileUrl });
-            }} disabled={saving || uploading || !form.drawing_set_name || !form.sheet_number || !form.title}
-            style={{ padding: "8px 24px", background: "var(--accent)", border: "none", borderRadius: 2, color: "#000", ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", cursor: (saving || uploading) ? "not-allowed" : "pointer", opacity: (saving || uploading) ? 0.7 : 1 }}>
-            {uploading ? "UPLOADING..." : saving ? "SAVING..." : "SAVE SHEET"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Transmittal Export ───────────────────────────────────────────────────────
-
-function exportTransmittal(drawings, projectName) {
-  const headers = ["Sheet Number", "Title", "Discipline", "Revision", "Stage", "Submitted Date", "Due Date", "Return Date", "Reviewer", "Priority", "Linked RFIs", "Notes"];
-  const rows = drawings.map(d => [
-    d.sheet_number, d.title, d.discipline, d.revision_number, d.stage,
-    d.submitted_date || "", d.due_date || "", d.return_date || "",
-    d.reviewer || "", d.priority_flag ? "YES" : "", d.linked_rfi_ids || "", d.notes || "",
-  ]);
-  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${projectName || "project"}_transmittal_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Drawings() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const projectId = activeProject?.id;
 
-  const [view, setView] = useState("list");          // "list" | "grid"
-  const [search, setSearch] = useState("");
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [view, setView] = useState("list");
+  const [search, setSearch] = useState(searchParams.get("search") || searchParams.get("sheet") || "");
   const [discipline, setDiscipline] = useState("ALL");
   const [stageFilter, setStageFilter] = useState("ALL");
   const [selected, setSelected] = useState(new Set());
@@ -262,15 +79,28 @@ export default function Drawings() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [bulkStage, setBulkStage] = useState("");
-  const [contextMenu, setContextMenu] = useState(null); // { x, y, drawing }
-  const [showStageMenu, setShowStageMenu] = useState(false);
-  const [approvalSet, setApprovalSet] = useState(null);   // { setName, sheets }
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [advanceTarget, setAdvanceTarget] = useState(null); // { drawingId, setId, currentStage, targetStage }
+  const [approvalSet, setApprovalSet] = useState(null);
   const [savingApproval, setSavingApproval] = useState(false);
+  const [renameSet, setRenameSet] = useState(null);   // { setId, setName, sheets }
+  const [savingRename, setSavingRename] = useState(false);
+  // Titleblock marker modal target. Holds the merged set record (parent
+  // drawing_sets row + the group's sheets) so the modal can render the
+  // PDF preview and persist the rectangles via DrawingSet.update().
+  const [markerSet, setMarkerSet] = useState(null);
+  const [uploadSetOpen, setUploadSetOpen] = useState(false);
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  // Sprint 4 — package export modal. `kind` is "fab_release" | "turnover" | "claims".
+  const [exportPkgKind, setExportPkgKind] = useState(null);
+  // F18: replace window.confirm() with a styled DeleteDialog. Shape:
+  //   { title, description, run: () => void }
+  // run() is what fires when the user hits "Delete" in the dialog.
+  const [confirmState, setConfirmState] = useState(null);
   const contextRef = useRef(null);
-  const syncSignatureRef = useRef("");
 
-  // ── Queries ────────────────────────────────────────────────────────────────
-
+  // ── Queries ───────────────────────────────────────────────────────────────
   const { data: drawings = [], isLoading } = useQuery({
     queryKey: ["drawings", projectId],
     queryFn: () => projectId ? base44.entities.Drawing.filter({ project_id: projectId }) : [],
@@ -278,23 +108,172 @@ export default function Drawings() {
     staleTime: 30000,
   });
 
-  // ── Mutations ──────────────────────────────────────────────────────────────
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => projectId ? base44.entities.RFI.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 60000,
+  });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+  // Submittals — read-only here; we just want a per-set count to
+  // surface "N SUBMITTALS" on each drawing-set group header. Doesn't
+  // need to refetch aggressively, so a long staleTime is fine.
+  const { data: submittals = [] } = useQuery({
+    queryKey: ["submittals", projectId],
+    queryFn: () => projectId ? base44.entities.Submittal.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 60000,
+  });
 
-  const syncScheduleFromDrawings = async (drawingsToSync, options = {}) => {
-    if (!projectId) return;
-    const result = await syncDrawingScheduleTasks({
-      projectId,
-      projectName: activeProject?.name || "",
-      drawings: drawingsToSync,
+  // Parent drawing_sets rows — used for aggregate badges (sheet_count,
+  // processed_count, etc.) and to keep set names in sync with the upload modal.
+  const { data: drawingSetRecords = [] } = useQuery({
+    queryKey: ["drawing_sets", projectId],
+    queryFn: () => projectId ? base44.entities.DrawingSet.filter({ project_id: projectId }) : [],
+    enabled: !!projectId,
+    staleTime: 30000,
+  });
+
+  // Reconciliation now handled server-side by reconcile_stuck_extractions()
+  // (migration 076). The Postgres function flips any row stuck in
+  // 'Extracting' for >5 minutes back to 'Failed' regardless of whether
+  // a user has the page open. Migration 20260516003546 schedules it
+  // through pg_cron every 5 minutes.
+
+  // H9: keep the search box in sync with ?sheet= / ?search= query params.
+  // Without this, in-app deep links (e.g. PCC → /drawings?sheet=S-001) just
+  // change the URL without remounting the page, so the useState initializer
+  // above would never re-read the new param.
+  useEffect(() => {
+    const next = searchParams.get("search") || searchParams.get("sheet") || "";
+    setSearch(next);
+     
+  }, [searchParams]);
+
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const rfiMap = useMemo(() => {
+    const map = {};
+    rfis.forEach(r => { if (r.rfi_number) map[r.rfi_number] = r; });
+    return map;
+  }, [rfis]);
+
+  // Reverse index: drawing_set_id -> { total, open, latestStatus, latestId }.
+  // The submittal table holds the link as a uuid[] column
+  // (drawing_set_ids), so each submittal can fan out into multiple sets.
+  // We tally both total and "open" (not Approved/Approved-as-Noted/Void)
+  // so the group header can call out work-in-flight without a
+  // click-through. `latestStatus` is the status of the most recently
+  // touched (-submitted_date order in the query) submittal that
+  // references the set, so the table badge can show the live workflow
+  // state — submittals are workflow source of truth post-Sprint 1.
+  const submittalsBySetId = useMemo(() => {
+    const CLOSED = new Set(["Approved", "Approved as Noted", "Void"]);
+    const map = {};
+    // submittals come pre-sorted by -submitted_date from useSubmittals,
+    // so the FIRST encountered status for a set is the latest.
+    (submittals || []).forEach((s) => {
+      if (s.is_deleted) return;
+      const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+      const open = !CLOSED.has(s.status);
+      ids.forEach((id) => {
+        if (!id) return;
+        if (!map[id]) {
+          map[id] = {
+            total: 0,
+            open: 0,
+            latestStatus: s.status || null,
+            latestId: s.id || null,
+          };
+        }
+        map[id].total += 1;
+        if (open) map[id].open += 1;
+      });
     });
-    if (result.created || result.updated || result.deleted) {
-      qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
-      if (options.toastOnChange) {
-        toast.success("Schedule updated from drawing sets");
-      }
+    return map;
+  }, [submittals]);
+
+  const filtered = useMemo(() => {
+    let list = [...drawings];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(d =>
+        d.sheet_number?.toLowerCase().includes(q) ||
+        d.title?.toLowerCase().includes(q) ||
+        d.reviewer?.toLowerCase().includes(q) ||
+        d.spec_section?.toLowerCase().includes(q)
+      );
     }
+    if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
+    if (stageFilter !== "ALL") {
+      if (stageFilter === "_overdue") list = list.filter(d => isOverdue(d));
+      else if (stageFilter === "_inReview") list = list.filter(d => IN_REVIEW_STAGES.includes(d.stage));
+      else if (stageFilter === "_priority") list = list.filter(d => d.priority_flag);
+      else list = list.filter(d => d.stage === stageFilter);
+    }
+    return list;
+  }, [drawings, search, discipline, stageFilter]);
+
+  // Sprint 5: KPI tiles read submittal status (RELEASED, IN REVIEW) where
+  // a submittal exists, falling back to dominant sheet.stage for
+  // legacy sets without a submittal yet. PACKAGES / PRIORITY / OVERDUE
+  // remain sheet-derived (document facets, not workflow assertions).
+  const stats = useMemo(
+    () => computeStatsFromSubmittals(drawings, drawingSetRecords, submittals),
+    [drawings, drawingSetRecords, submittals],
+  );
+  const disciplineCounts = useMemo(() => computeDisciplineCounts(drawings, DISCIPLINES), [drawings]);
+  const revisionAlerts = useMemo(() => buildRevisionAlerts(drawings, rfiMap), [drawings, rfiMap]);
+
+  // ── Drawing set grouping ──────────────────────────────────────────────────
+  const drawingSets = useMemo(() => {
+    const map = {};
+    drawings.forEach(d => {
+      const name = d.drawing_set_name?.trim();
+      if (!name) return;
+      if (!map[name]) map[name] = [];
+      map[name].push(d);
+    });
+    return map;
+  }, [drawings]);
+
+  // Names from real drawing_sets parent rows + legacy string column on drawings,
+  // deduped. The upload modal uses this for autocomplete + duplicate detection.
+  const existingSetNames = useMemo(() => {
+    const names = new Set(Object.keys(drawingSets));
+    drawingSetRecords.forEach(ds => {
+      if (ds?.set_name?.trim()) names.add(ds.set_name.trim());
+    });
+    return [...names].sort();
+  }, [drawingSets, drawingSetRecords]);
+
+  // id → parent set record lookup. DrawingsTable groups by drawing_set_id and
+  // pulls display names from this map so the FK is the source of truth for
+  // grouping, not the legacy denormalized drawing_set_name string. (F8)
+  const drawingSetMap = useMemo(() => {
+    const map = {};
+    drawingSetRecords.forEach(ds => { if (ds?.id) map[ds.id] = ds; });
+    return map;
+  }, [drawingSetRecords]);
+
+  const selectedSetName = useMemo(() => {
+    if (selected.size === 0) return null;
+    const names = new Set();
+    for (const id of selected) {
+      const d = drawings.find(x => x.id === id);
+      if (d?.drawing_set_name?.trim()) names.add(d.drawing_set_name.trim());
+    }
+    return names.size === 1 ? [...names][0] : null;
+  }, [selected, drawings]);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  // Any drawings mutation must also invalidate the parent drawing_sets query,
+  // because a child INSERT/UPDATE/DELETE fires the sync_drawing_set_counts
+  // trigger which updates sheet_count / processed_count / needs_review_count
+  // / failed_count on the parent row. Without invalidating both, the group
+  // summary badge lies for up to staleTime (30s) after every action.
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["drawings", projectId] });
+    qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
   };
 
   const createMut = useMutation({
@@ -303,39 +282,18 @@ export default function Drawings() {
       invalidate();
       toast.success("Sheet added");
       setShowModal(false);
-      try {
-        await syncScheduleFromDrawings([...drawings, created], { toastOnChange: true });
-      } catch (err) {
-        console.warn("Drawing schedule sync failed:", err);
-      }
-
-      // Auto-create a ScheduleTask so drawing dates appear on the schedule
-      if (false && created && (created.due_date || created.submitted_date)) {
-        try {
-          const startDate = created.submitted_date || created.due_date;
-          const endDate = created.due_date || created.submitted_date;
-          await base44.entities.ScheduleTask.create({
-            project_id: projectId,
-            project_name: activeProject?.name || "",
-            task_name: `${created.sheet_number || "DWG"} — ${created.title || "Drawing Review"}`,
-            task_type: "Submittal",
-            phase: "Detailing",
-            start_date: startDate,
-            end_date: endDate,
-            status: "Not Started",
-            priority: created.priority_flag ? "High" : "Normal",
-            percent_complete: 0,
-            notes: [
-              created.discipline ? `Discipline: ${created.discipline}` : "",
-              created.reviewer ? `Reviewer: ${created.reviewer}` : "",
-              created.spec_section ? `Spec: ${created.spec_section}` : "",
-            ].filter(Boolean).join(" | "),
-          });
+      // Always auto-create the matching Detailing/Submittal schedule task.
+      // Dates are optional — missing dates render as "—" in the schedule.
+      if (created?.id) {
+        const { created: n, failed } = await autoCreateDetailingTasks(
+          [created],
+          { projectName: activeProject?.name }
+        );
+        if (n > 0) {
           qc.invalidateQueries({ queryKey: ["schedule-tasks"] });
           toast.success("Schedule task auto-created");
-        } catch (err) {
-          // Non-blocking — drawing was already created successfully
-          console.warn("Auto-schedule failed:", err);
+        } else if (failed) {
+          toast.error("Schedule task failed to create");
         }
       }
     },
@@ -344,124 +302,97 @@ export default function Drawings() {
 
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }) => base44.entities.Drawing.update(id, data),
-    onSuccess: async () => {
+    // Close the modal AND clear editing on success — leaving the modal
+    // open while editing was cleared caused a second save click to route
+    // into the create path with the edited row's id still in form state,
+    // triggering a drawings_pkey duplicate.
+    onSuccess: () => {
       invalidate();
-      try {
-        const refreshedDrawings = await base44.entities.Drawing.filter({ project_id: projectId });
-        await syncScheduleFromDrawings(refreshedDrawings, { toastOnChange: false });
-      } catch (err) {
-        console.warn("Drawing schedule sync failed:", err);
-      }
       toast.success("Sheet updated");
       setEditing(null);
+      setShowModal(false);
     },
     onError: (e) => toast.error("Failed to update: " + (e?.message || "unknown")),
   });
 
+  // F19: soft-delete with undo. The id is a single drawing row; we can flip
+  // is_deleted=false to restore it. The sonner toast exposes an "Undo"
+  // action button that does exactly that.
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Drawing.delete(id),
-    onSuccess: async () => {
+    onSuccess: (_data, id) => {
       invalidate();
-      try {
-        const refreshedDrawings = await base44.entities.Drawing.filter({ project_id: projectId });
-        await syncScheduleFromDrawings(refreshedDrawings, { toastOnChange: false });
-      } catch (err) {
-        console.warn("Drawing schedule sync failed:", err);
-      }
-      toast.success("Sheet deleted");
       setSelected(new Set());
+      toast.success("Sheet deleted", {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null });
+              invalidate();
+              toast.success("Sheet restored");
+            } catch (err) {
+              toast.error("Restore failed: " + (err?.message || "unknown"));
+            }
+          },
+        },
+      });
     },
     onError: (e) => toast.error("Failed to delete: " + (e?.message || "unknown")),
   });
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
+  // Cascade-delete an entire drawing set (parent + all child sheets) in one
+  // transaction via the delete_drawing_set(p_set_id) RPC shipped in migration
+  // 022. Falls back to a client-side loop if the child sheets reference the
+  // set only by legacy drawing_set_name (no FK yet).
+  const deleteSetMut = useMutation({
+    mutationFn: async ({ setId, sheetIds }) => {
+      // Set-only (parent row, no child sheets): soft-delete parent directly
+      if (setId && sheetIds.length === 0) {
+        await base44.entities.DrawingSet.delete(setId);
+        return { deleted: 0, parentOnly: true };
+      }
+      // Normal cascade: parent + children in one transaction
+      if (setId) {
+        const result = await base44.entities.DrawingSet.deleteCascade(setId);
+        return { deleted: result.deletedChildCount ?? sheetIds.length };
+      }
+      // Legacy fallback: no parent row, just sweep the children.
+      const { succeeded } = await batchProcess(sheetIds, (id) => base44.entities.Drawing.delete(id));
+      return { deleted: succeeded.length };
+    },
+    onSuccess: ({ deleted, parentOnly }, { setId, sheetIds, setName }) => {
+      invalidate();
+      setSelected(new Set());
+      const msg = parentOnly
+        ? `Deleted set "${setName}"`
+        : `Deleted "${setName}" and ${deleted} sheet${deleted === 1 ? "" : "s"}`;
+      toast.success(msg, {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              if (setId) {
+                await base44.entities.DrawingSet.update(setId, { is_deleted: false, deleted_at: null });
+              }
+              if (sheetIds.length > 0) {
+                await batchProcess(sheetIds, (id) =>
+                  base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                );
+              }
+              invalidate();
+              toast.success(`Restored "${setName}"`);
+            } catch (err) {
+              toast.error("Restore failed: " + (err?.message || "unknown"));
+            }
+          },
+        },
+      });
+    },
+    onError: (e) => toast.error("Failed to delete set: " + (e?.message || "unknown")),
+  });
 
-  const filtered = useMemo(() => {
-    let list = [...drawings];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(d =>
-        d.drawing_set_name?.toLowerCase().includes(q) ||
-        d.sheet_number?.toLowerCase().includes(q) ||
-        d.title?.toLowerCase().includes(q) ||
-        d.reviewer?.toLowerCase().includes(q) ||
-        d.spec_section?.toLowerCase().includes(q)
-      );
-    }
-    if (discipline !== "ALL") list = list.filter(d => d.discipline === discipline);
-    if (stageFilter !== "ALL") list = list.filter(d => d.stage === stageFilter);
-    return list;
-  }, [drawings, search, discipline, stageFilter]);
-
-  const disciplineCounts = useMemo(() => {
-    const counts = { ALL: drawings.length };
-    DISCIPLINES.forEach(d => { counts[d] = drawings.filter(x => x.discipline === d).length; });
-    return counts;
-  }, [drawings]);
-
-
-  // ── Drawing set grouping (for set approval) ────────────────────────────────
-
-  const drawingSets = useMemo(() => {
-    const map = {};
-    drawings.forEach(d => {
-      const name = d.drawing_set_name?.trim() || "Ungrouped Drawings";
-      if (!map[name]) map[name] = [];
-      map[name].push(d);
-    });
-    return map; // { "Set A": [drawing, ...], ... }
-  }, [drawings]);
-
-  const filteredDrawingSets = useMemo(() => {
-    const map = {};
-    filtered.forEach((drawing) => {
-      const name = drawing.drawing_set_name?.trim() || "Ungrouped Drawings";
-      if (!map[name]) map[name] = [];
-      map[name].push(drawing);
-    });
-
-    return Object.entries(map)
-      .map(([setName, sheets]) => ({
-        setName,
-        sheets: [...sheets].sort((a, b) => (a.sheet_number || "").localeCompare(b.sheet_number || "")),
-      }))
-      .sort((a, b) => a.setName.localeCompare(b.setName));
-  }, [filtered]);
-
-  const stats = useMemo(() => ({
-    sets: Object.keys(drawingSets).length,
-    total: drawings.length,
-    released: drawings.filter(d => d.stage === "Released").length,
-    inReview: drawings.filter(d => ["OFA", "BFA", "OFS", "BFS"].includes(d.stage)).length,
-    overdue: drawings.filter(d => isOverdue(d)).length,
-    priority: drawings.filter(d => d.priority_flag).length,
-  }), [drawings, drawingSets]);
-
-  useEffect(() => {
-    if (!projectId || !drawings.length) return;
-    const signature = drawings
-      .filter((drawing) => !drawing.is_superseded)
-      .map((drawing) => [
-        drawing.id,
-        drawing.drawing_set_name || "",
-        drawing.sheet_number || "",
-        drawing.submitted_date || "",
-        drawing.due_date || "",
-        drawing.stage || "",
-      ].join(":"))
-      .sort()
-      .join("|");
-
-    if (!signature || syncSignatureRef.current === signature) return;
-    syncSignatureRef.current = signature;
-
-    syncScheduleFromDrawings(drawings).catch((err) => {
-      console.warn("Initial drawing schedule sync failed:", err);
-    });
-  }, [drawings, projectId]);
-
-  // ── Save handlers ──────────────────────────────────────────────────────────
-
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSave = async (form) => {
     setSaving(true);
     try {
@@ -476,43 +407,204 @@ export default function Drawings() {
   };
 
   const handleDelete = (id) => {
-    if (!confirm("Delete this sheet? This cannot be undone.")) return;
-    deleteMut.mutate(id);
     setContextMenu(null);
+    const d = drawings.find(x => x.id === id);
+    const label = d?.sheet_number ? `"${d.sheet_number}"` : "this sheet";
+    setConfirmState({
+      title: `Delete ${label}?`,
+      description: "The sheet will be removed from the project. You can undo this from the toast that appears after deletion.",
+      run: () => deleteMut.mutate(id),
+    });
+  };
+
+  const handleDeleteSet = (group) => {
+    if (group.isUngrouped) return;
+    const total = group.sheets.length;
+    // For set-only groups (imported from Drive, no child sheets yet) the
+    // parent id lives on group.setId or group.parent.id directly.
+    // For groups with child sheets, derive from the children's FK.
+    const setIdCandidates = group.sheets.map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
+    const sheetIds = group.sheets.map(s => s.id);
+    const desc = total > 0
+      ? `The set and all ${total} sheet${total === 1 ? "" : "s"} inside it will be removed. You can undo this from the toast that appears after deletion.`
+      : "This drawing set will be removed. You can undo this from the toast that appears after deletion.";
+    setConfirmState({
+      title: `Delete drawing set "${group.name}"?`,
+      description: desc,
+      run: () => deleteSetMut.mutate({ setId, sheetIds, setName: group.name }),
+    });
   };
 
   const handleAdvanceStage = (drawing) => {
     const idx = STAGE_ORDER.indexOf(drawing.stage);
-    if (idx < STAGE_ORDER.length - 1) {
-      updateMut.mutate({ id: drawing.id, stage: STAGE_ORDER[idx + 1] });
+    if (idx < 0) {
+      toast.error(`Cannot advance sheet: unknown current stage "${drawing.stage || "∅"}"`);
+      setContextMenu(null);
+      return;
     }
+    if (idx >= STAGE_ORDER.length - 1) {
+      toast.info("Already at final stage (IFC)");
+      setContextMenu(null);
+      return;
+    }
+    const target = STAGE_ORDER[idx + 1];
+    const v = validateStageTransition(drawing.stage, target);
+    if (!v.ok) { toast.error(v.reason); setContextMenu(null); return; }
+    // Submittal-driven flow: open the dialog so the user can choose
+    // between the canonical "via submittal" path and the legacy direct
+    // sheet-stage mutation. The legacy fallback preserves the original
+    // behaviour for pre-Sprint-2 cleanup; the via-submittal path is the
+    // new primary action.
+    setAdvanceTarget({
+      drawingId: drawing.id,
+      setId: drawing.drawing_set_id || null,
+      currentStage: drawing.stage,
+      targetStage: target,
+    });
     setContextMenu(null);
   };
 
-  const handleBulkStageApply = () => {
+  const handleBulkStageApply = async () => {
     if (!bulkStage || selected.size === 0) return;
-    Promise.all([...selected].map(id => base44.entities.Drawing.update(id, { stage: bulkStage })))
-      .then(() => { invalidate(); setSelected(new Set()); setBulkStage(""); toast.success(`Updated ${selected.size} sheets`); })
-      .catch(err => { invalidate(); toast.error("Bulk update failed: " + (err?.message || "Unknown error")); });
+    // Guard against typo'd or dropped stages before we touch the DB.
+    if (!STAGE_ORDER.includes(bulkStage)) {
+      toast.error(`Cannot apply unknown stage "${bulkStage}"`);
+      return;
+    }
+    // Bulk-via-submittal isn't well-defined when the selection spans
+    // multiple drawing sets (which submittal would we touch?), so we
+    // keep the direct-mutation handler here and surface the workflow
+    // boundary as an info toast instead. The single-row "advance stage"
+    // flow does prompt the user to use a submittal — see handleAdvanceStage.
+    toast.info(
+      "Bulk apply updates sheet stages directly. For workflow status, use the Submittals page.",
+      { duration: 4000 },
+    );
+    const ids = [...selected];
+    const { succeeded, failed } = await batchProcess(
+      ids,
+      (id) => {
+        const current = drawings.find(d => d.id === id);
+        if (current) {
+          const v = validateStageTransition(current.stage, bulkStage);
+          if (!v.ok) throw new Error(v.reason);
+        }
+        return base44.entities.Drawing.update(id, { stage: bulkStage });
+      },
+    );
+    invalidate();
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} updated, ${failed.length} failed`);
+    } else {
+      setSelected(new Set());
+      setBulkStage("");
+      toast.success(`Updated ${succeeded.length} sheets`);
+    }
   };
 
-  const handleSetApproval = async ({ status, revision, approvedBy, approvalDate, applyToSheets, notes }) => {
+  const handleBulkDelete = () => {
+    const count = selected.size;
+    if (count === 0) return;
+    setConfirmState({
+      title: `Delete ${count} sheet${count === 1 ? "" : "s"}?`,
+      description: "The selected sheets will be removed from the project. You can undo this from the toast that appears after deletion.",
+      run: async () => {
+        const ids = [...selected];
+        const { succeeded, failed } = await batchProcess(ids, (id) => base44.entities.Drawing.delete(id));
+        invalidate();
+        if (failed.length > 0) {
+          toast.warning(`${succeeded.length} deleted, ${failed.length} failed`);
+        } else {
+          setSelected(new Set());
+          // F19: bulk undo. Restore every id we successfully soft-deleted.
+          toast.success(`Deleted ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`, {
+            action: {
+              label: "Undo",
+              onClick: async () => {
+                try {
+                  await batchProcess(succeeded, (id) =>
+                    base44.entities.Drawing.update(id, { is_deleted: false, deleted_at: null })
+                  );
+                  invalidate();
+                  toast.success(`Restored ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
+                } catch (err) {
+                  toast.error("Restore failed: " + (err?.message || "unknown"));
+                }
+              },
+            },
+          });
+        }
+      },
+    });
+  };
+
+  const handleBulkEdit = async (payload) => {
+    if (selected.size === 0 || Object.keys(payload).length === 0) return;
+    setBulkEditOpen(false);
+    const ids = [...selected];
+    const fieldCount = Object.keys(payload).length;
+    const { succeeded, failed } = await batchProcess(
+      ids,
+      (id) => base44.entities.Drawing.update(id, payload),
+    );
+    invalidate();
+    if (failed.length > 0) {
+      toast.warning(`${succeeded.length} updated, ${failed.length} failed (${fieldCount} field${fieldCount === 1 ? "" : "s"})`);
+    } else {
+      setSelected(new Set());
+      toast.success(`Updated ${fieldCount} field${fieldCount === 1 ? "" : "s"} on ${succeeded.length} sheet${succeeded.length === 1 ? "" : "s"}`);
+    }
+  };
+
+  const handleSetApproval = async ({ status, revision, _approvedBy, approvalDate, applyToSheets, notes }) => {
     if (!approvalSet) return;
     setSavingApproval(true);
     try {
-      const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
-      await Promise.all(
-        sheetsToUpdate.map(s =>
-          base44.entities.Drawing.update(s.id, {
+      const effectiveDate = approvalDate || new Date().toISOString().split("T")[0];
+      // F11: write approval state to the parent drawing_sets row so it's
+      // stored in one canonical place. The per-sheet mirror below stays for
+      // back-compat until migration 026 drops those columns.
+      const parentSetId =
+        approvalSet.setId ||
+        approvalSet.sheets.map(s => s.drawing_set_id).find(Boolean);
+      if (parentSetId) {
+        try {
+          await base44.entities.DrawingSet.update(parentSetId, {
             set_approval_status: status,
-            set_approved_date: approvalDate || new Date().toISOString().split("T")[0],
-            ...(revision ? { revision_number: revision } : {}),
-            ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
-          })
-        )
+            set_approved_date:   effectiveDate,
+            set_approved_by:     _approvedBy || null,
+            set_approval_notes:  notes || null,
+            ...(revision ? { revision } : {}),
+          });
+        } catch (parentErr) {
+          // Don't fail the whole operation on a parent-row update glitch —
+          // the per-sheet writes below still record the intent.
+          console.warn("Parent drawing_set approval update failed:", parentErr);
+        }
+      }
+
+      const sheetsToUpdate = applyToSheets ? approvalSet.sheets : [approvalSet.sheets[0]];
+      const { succeeded, failed } = await batchProcess(
+        sheetsToUpdate,
+        (s) => base44.entities.Drawing.update(s.id, {
+          set_approval_status: status,
+          set_approved_date: effectiveDate,
+          ...(revision ? { revision_number: revision } : {}),
+          ...(notes ? { notes: (s.notes ? s.notes + "\n" : "") + `[${status.toUpperCase()}] ${notes}` } : {}),
+        }),
       );
+      // Locking is now driven by submittal status, not document-side
+      // approval. When a submittal linked to this set reaches a
+      // terminal-approved status, useSubmittals.ts will lock the set
+      // automatically. The document-side approval here just records the
+      // legacy set_approval_status mirror.
       invalidate();
-      toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+      if (failed.length > 0) {
+        toast.warning(`${succeeded.length} sheets updated, ${failed.length} failed`);
+      } else {
+        toast.success(`Set "${approvalSet.setName}" marked as ${status}`);
+      }
       setApprovalSet(null);
     } catch (err) {
       toast.error("Approval update failed: " + (err?.message || "Unknown error"));
@@ -521,22 +613,73 @@ export default function Drawings() {
     }
   };
 
-  // Determine the set name for the current selection (for bulk set approval)
-  const selectedSetName = useMemo(() => {
-    if (selected.size === 0) return null;
-    const names = new Set();
-    for (const id of selected) {
-      const d = drawings.find(x => x.id === id);
-      if (d?.drawing_set_name?.trim()) names.add(d.drawing_set_name.trim());
-    }
-    // Only offer set approval when all selected drawings share the same set name
-    return names.size === 1 ? [...names][0] : null;
-  }, [selected, drawings]);
-
   const openSetApproval = (setName) => {
     const sheets = drawingSets[setName] || [];
     if (!sheets.length) return;
-    setApprovalSet({ setName, sheets });
+    // Prefer the parent FK if any child sheet has one — that's what we'll
+    // write approval state to.
+    const setId = sheets.map(s => s.drawing_set_id).find(Boolean) || null;
+    setApprovalSet({ setName, setId, sheets });
+  };
+
+  const openRenameSet = (group) => {
+    // Group is what DrawingsTable passes to onDeleteSet — same shape works:
+    //   { name, sheets, setId?, parent? }
+    if (!group || group.isUngrouped) return;
+    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
+    setRenameSet({ setId, setName: group.name, sheets: group.sheets || [] });
+  };
+
+  const openMarkTitleblock = (group) => {
+    // Same shape resolution as openRenameSet — we need the setId so the
+    // modal can persist the rectangles to drawing_sets, plus the sheets
+    // and the parent's file_url so we can render a preview PDF.
+    if (!group || group.isUngrouped) return;
+    const setIdCandidates = (group.sheets || []).map(s => s.drawing_set_id).filter(Boolean);
+    const setId = setIdCandidates[0] || group.setId || group.parent?.id || null;
+    if (!setId) {
+      toast.error("This group has no parent drawing-set record yet — upload it as a set first.");
+      return;
+    }
+    setMarkerSet({
+      id: setId,
+      set_name: group.name,
+      // Carry across what the parent row stores so the modal can pre-seed
+      // existing rectangles + the source file URL.
+      file_url: group.parent?.file_url || (group.sheets || [])[0]?.file_url || null,
+      titleblock_title_rect:  group.parent?.titleblock_title_rect  ?? null,
+      titleblock_number_rect: group.parent?.titleblock_number_rect ?? null,
+      sheets: group.sheets || [],
+    });
+  };
+
+  const handleRenameSet = async (newName) => {
+    if (!renameSet) return;
+    const { setId, setName: oldName, sheets } = renameSet;
+    setSavingRename(true);
+    try {
+      // Update the parent drawing_sets row when one exists.
+      if (setId) {
+        await base44.entities.DrawingSet.update(setId, { set_name: newName });
+      }
+      // Also update every child sheet's denormalized drawing_set_name so the
+      // table grouping follows the rename even for legacy rows that don't
+      // have a parent FK. Uses the same batch helper as bulk stage apply.
+      const sheetIds = (sheets || []).map(s => s.id);
+      if (sheetIds.length > 0) {
+        await batchProcess(sheetIds, (id) =>
+          base44.entities.Drawing.update(id, { drawing_set_name: newName })
+        );
+      }
+      invalidate();
+      toast.success(`Renamed "${oldName}" → "${newName}"`);
+      setRenameSet(null);
+    } catch (err) {
+      toast.error("Rename failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setSavingRename(false);
+    }
   };
 
   const toggleSelect = (id) => {
@@ -550,205 +693,304 @@ export default function Drawings() {
     else setSelected(new Set(filtered.map(d => d.id)));
   };
 
-  // ── Styles ─────────────────────────────────────────────────────────────────
-
-  const btnBase = { ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", borderRadius: 2, cursor: "pointer", border: "none", padding: "6px 14px", textTransform: "uppercase" };
-  const btnPrimary = { ...btnBase, background: "var(--accent)", color: "#000" };
-  const btnGhost = { ...btnBase, background: "none", border: "1px solid var(--border-default)", color: "var(--text-muted)" };
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (!projectId) {
     return (
       <div style={{ padding: 48, textAlign: "center" }}>
-        <p style={{ ...mono, fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.15em" }}>SELECT A PROJECT TO VIEW DRAWINGS</p>
+        <p style={{ ...mono, fontSize: 12, color: "var(--text-muted)", letterSpacing: "0.15em" }}>
+          SELECT A PROJECT TO VIEW DRAWINGS
+        </p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
-      onClick={() => { setContextMenu(null); setShowStageMenu(false); }}>
+    <div
+      style={{ padding: "24px 28px", minHeight: "100vh", background: "var(--bg-page)" }}
+      onClick={() => { setContextMenu(null); }}
+    >
+      {/* ── CommandBar ─────────────────────────────────────────────────────── */}
+      <CommandBar
+        eyebrow={`DESIGN & DOCUMENTS · ${(activeProject?.name || "").toUpperCase()}`}
+        title="Drawings & Submittals"
+        count={stats.total}
+        unit={` · ${stats.sheetCount} SHEETS`}
+        subtitle="Not Started → IFA → OFA → BFA → OFS → IFC → Released"
+      >
+        <Button variant="secondary" icon="download" onClick={() => exportTransmittal(filtered, activeProject?.name)}>
+          TRANSMITTAL
+        </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("fab_release")}>
+          EXPORT FAB RELEASE
+        </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("turnover")}>
+          TURNOVER PACKAGE
+        </Button>
+        <Button variant="secondary" icon="download" onClick={() => setExportPkgKind("claims")}>
+          CLAIMS PACKAGE
+        </Button>
+        <Button variant="secondary" icon="plus" onClick={() => { setEditing(null); setShowModal(true); }}>
+          ADD SHEET
+        </Button>
+        <Button
+          variant="outline"
+          icon="arrow"
+          onClick={() => setRevisionOpen(true)}
+          disabled={drawingSetRecords.length === 0 && existingSetNames.length === 0}
+          title="Upload a new revision of an existing set"
+        >
+          NEW REVISION
+        </Button>
+        <Button variant="primary" icon="upload" onClick={() => setUploadSetOpen(true)}>
+          UPLOAD SET
+        </Button>
+      </CommandBar>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <div style={{ ...mono, fontSize: 10, color: "var(--accent)", letterSpacing: "0.25em", textTransform: "uppercase", marginBottom: 4 }}>
-            DRAWINGS & SUBMITTALS
-          </div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-            {activeProject?.name}
-          </h1>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={btnGhost} onClick={() => exportTransmittal(filtered, activeProject?.name)}>
-            ↓ TRANSMITTAL
-          </button>
-          <button style={btnPrimary} onClick={() => { setEditing(null); setShowModal(true); }}>
-            + ADD SHEET
-          </button>
-        </div>
+      {/* ── KPI Row ────────────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 14 }}>
+        <KpiTile compact label="PACKAGES"  value={stats.total}    color="var(--accent)"          active={stageFilter === "ALL"}        onClick={() => setStageFilter("ALL")} />
+        <KpiTile compact label="RELEASED"  value={stats.released} color="var(--status-success)"  active={stageFilter === "Released"}   onClick={() => setStageFilter("Released")} />
+        <KpiTile compact label="IN REVIEW" value={stats.inReview} color="var(--status-info)"     active={stageFilter === "_inReview"}  onClick={() => setStageFilter(stageFilter === "_inReview" ? "ALL" : "_inReview")} />
+        <KpiTile compact label="OVERDUE"   value={stats.overdue}  color="var(--status-error)"    active={stageFilter === "_overdue"}   onClick={() => setStageFilter(stageFilter === "_overdue" ? "ALL" : "_overdue")} />
+        <KpiTile compact label="PRIORITY"  value={stats.priority} color="var(--status-review)"   active={stageFilter === "_priority"}  onClick={() => setStageFilter(stageFilter === "_priority" ? "ALL" : "_priority")} />
       </div>
 
-      {/* ── Stats Bar ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 20 }}>
-        {[
-          { label: "DRAWING SETS", value: stats.sets, color: "var(--accent)" },
-          { label: "TOTAL SHEETS", value: stats.total, color: "var(--text-primary)" },
-          { label: "IFC / RELEASED", value: stats.released, color: "#10B981" },
-          { label: "IN REVIEW", value: stats.inReview, color: "#3B82F6" },
-          { label: "OVERDUE", value: stats.overdue, color: "var(--status-error)" },
-          { label: "PRIORITY", value: stats.priority, color: "var(--accent)" },
-        ].map(s => (
-          <div key={s.label} style={{ ...surface, padding: "12px 16px" }}>
-            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1, ...mono }}>{s.value}</div>
+      {/* ── Revision Alerts ────────────────────────────────────────────────── */}
+      {revisionAlerts.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 6 }}>
+            REVISION CONTROL — {revisionAlerts.length} ALERT{revisionAlerts.length !== 1 ? "S" : ""}
           </div>
-        ))}
-      </div>
+          {revisionAlerts.map((alert, i) => (
+            <AlertBanner
+              key={i}
+              alert={alert}
+              onFilter={(sheets) => setSelected(new Set(sheets.map(s => s.id)))}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* ── Stage Pipeline ─────────────────────────────────────────────────── */}
+      {/* ── Submittal Stage Pipeline (PhaseChevron) ────────────────────────── */}
       <ErrorBoundary label="Stage Pipeline">
-        <div style={{ ...surface, padding: "14px 18px", marginBottom: 16 }}>
-          <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "var(--text-muted)", marginBottom: 10 }}>SUBMITTAL STAGE PIPELINE</div>
-          <StagePipeline drawings={drawings} />
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-card)",
+            padding: "12px 14px",
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              ...mono,
+              fontSize: 9,
+              color: "var(--text-muted)",
+              letterSpacing: "0.14em",
+              marginBottom: 8,
+            }}
+          >
+            SUBMITTAL STAGE PIPELINE
+          </div>
+          {(() => {
+            // Sprint 5: Stage Pipeline counts derive from submittals via
+            // submittalPipelineRollupFromSubmittals (one count per active
+            // submittal, mapped to a stage by status+BIC+approved_date),
+            // plus a Not-Started bucket counting packages with no
+            // submittal yet AND no released sheet — these are the "haven't
+            // entered the workflow" items the chevron should show.
+            const rollup = submittalPipelineRollupFromSubmittals(submittals);
+            // Count packages with no submittal as Not Started — they're
+            // the inverse of every set that's already represented in the
+            // submittal rollup.
+            const packagesWithSubmittal = new Set();
+            (submittals || []).forEach((s) => {
+              if (!s || s.is_deleted) return;
+              if (s.status === "Void") return;
+              const ids = Array.isArray(s.drawing_set_ids) ? s.drawing_set_ids : [];
+              ids.forEach((id) => packagesWithSubmittal.add(id));
+            });
+            const notStartedCount = drawingSetRecords.filter(
+              (ds) => ds?.id && !packagesWithSubmittal.has(ds.id) &&
+                derivedSetStage([], (drawings || []).filter((d) => d.drawing_set_id === ds.id)) === "Not Started"
+            ).length;
+            const counts = STAGES.reduce((acc, s) => {
+              acc[s.key] = s.key === "Not Started"
+                ? notStartedCount
+                : (rollup.counts[s.key] || 0);
+              return acc;
+            }, {});
+            // Pipeline stages (use only the forward-flow stages; Released is the terminal)
+            const pipeStages = STAGES.map((s) => ({
+              id: s.key,
+              label: s.label,
+              color: s.color,
+              count: counts[s.key] || 0,
+            }));
+            // Active = current stage filter if it's a real stage, else the first
+            // non-empty non-terminal stage (the bottleneck).
+            let activeIdx = 0;
+            const filteredActive = stageFilter !== "ALL" && !stageFilter.startsWith("_")
+              ? STAGES.findIndex((s) => s.key === stageFilter)
+              : -1;
+            if (filteredActive >= 0) {
+              activeIdx = filteredActive;
+            } else {
+              for (let i = STAGES.length - 2; i >= 1; i--) {
+                if (counts[STAGES[i].key] > 0) { activeIdx = i; break; }
+              }
+            }
+            return <PhaseChevron stages={pipeStages} activeIdx={activeIdx} showIcons={false} />;
+          })()}
         </div>
       </ErrorBoundary>
 
-      {/* ── Discipline Chips ───────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        {["ALL", ...DISCIPLINES].map(d => {
-          const count = disciplineCounts[d] || 0;
-          const active = discipline === d;
-          return (
-            <button key={d} onClick={() => setDiscipline(d)} style={{
-              ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", padding: "4px 10px",
-              borderRadius: 2, cursor: "pointer", border: `1px solid ${active ? "var(--accent)" : "var(--border-default)"}`,
-              background: active ? "rgba(200,155,32,0.15)" : "none",
-              color: active ? "var(--accent)" : "var(--text-muted)",
-            }}>
-              {d} <span style={{ opacity: 0.7 }}>({count})</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Filters ────────────────────────────────────────────────────────── */}
+      <DisciplineChips discipline={discipline} setDiscipline={setDiscipline} disciplineCounts={disciplineCounts} />
+      <FilterBar search={search} setSearch={setSearch} stageFilter={stageFilter} setStageFilter={setStageFilter} view={view} setView={setView} />
 
-      {/* ── Toolbar ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-        {/* Search */}
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search set names, sheets, titles, reviewers…"
-          style={{ flex: 1, minWidth: 200, padding: "7px 12px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", fontFamily: "var(--font-body)", fontSize: 13 }} />
+      {/* F22: explicit pills for every active filter so the user can see at
+          a glance what's narrowing the list, plus one-click clear. Renders
+          nothing when no filters are active to keep visual noise down. */}
+      <ActiveFilterPills
+        search={search}
+        discipline={discipline}
+        stageFilter={stageFilter}
+        onClearSearch={() => setSearch("")}
+        onClearDiscipline={() => setDiscipline("ALL")}
+        onClearStage={() => setStageFilter("ALL")}
+        onClearAll={() => { setSearch(""); setDiscipline("ALL"); setStageFilter("ALL"); }}
+      />
 
-        {/* Stage filter */}
-        <select value={stageFilter} onChange={e => setStageFilter(e.target.value)}
-          style={{ padding: "7px 10px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", ...mono, fontSize: 10 }}>
-          <option value="ALL">ALL STAGES</option>
-          {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-        </select>
-
-        {/* View toggle */}
-        <div style={{ display: "flex", border: "1px solid var(--border-default)", borderRadius: 2, overflow: "hidden" }}>
-          {["list", "grid"].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              ...mono, fontSize: 10, fontWeight: 700, padding: "6px 12px", border: "none", cursor: "pointer",
-              background: view === v ? "rgba(200,155,32,0.2)" : "none",
-              color: view === v ? "var(--accent)" : "var(--text-muted)",
-            }}>
-              {v === "list" ? "☰ LIST" : "⊞ GRID"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Bulk Actions Bar ───────────────────────────────────────────────── */}
+      {/* ── Bulk Actions ───────────────────────────────────────────────────── */}
       {selected.size > 0 && (
-        <div style={{ ...surface, padding: "10px 16px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12, background: "rgba(200,155,32,0.08)", borderColor: "rgba(200,155,32,0.3)" }}>
-          <span style={{ ...mono, fontSize: 10, fontWeight: 700, color: "var(--accent)" }}>{selected.size} SELECTED</span>
-          <select value={bulkStage} onChange={e => setBulkStage(e.target.value)}
-            style={{ padding: "5px 10px", background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: 2, color: "var(--text-primary)", ...mono, fontSize: 10 }}>
-            <option value="">— SET STAGE —</option>
-            {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <button style={btnPrimary} onClick={handleBulkStageApply} disabled={!bulkStage}>APPLY</button>
-          {selectedSetName && (
-            <button style={{ ...btnBase, background: "rgba(0,230,118,0.15)", border: "1px solid rgba(0,230,118,0.3)", color: "#00E676" }}
-              onClick={() => openSetApproval(selectedSetName)}>
-              SET APPROVAL
-            </button>
-          )}
-          <button style={btnGhost} onClick={() => {
-            if (!confirm(`Delete ${selected.size} sheets? This cannot be undone.`)) return;
-            Promise.all([...selected].map(id => base44.entities.Drawing.delete(id)))
-              .then(() => { invalidate(); setSelected(new Set()); toast.success("Sheets deleted"); })
-              .catch(err => { invalidate(); toast.error("Some deletions failed: " + (err?.message || "Unknown error")); });
-          }}>DELETE</button>
-          <button style={btnGhost} onClick={() => setSelected(new Set())}>CLEAR</button>
-        </div>
+        <BulkActionsBar
+          selectedCount={selected.size}
+          bulkStage={bulkStage}
+          setBulkStage={setBulkStage}
+          onApplyStage={handleBulkStageApply}
+          selectedSetName={selectedSetName}
+          onSetApproval={openSetApproval}
+          onBulkEdit={() => setBulkEditOpen(true)}
+          onBulkDelete={handleBulkDelete}
+          onClear={() => setSelected(new Set())}
+        />
       )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <ErrorBoundary label="Drawings Content">
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>LOADING SHEETS…</div>
-        ) : filtered.length === 0 ? (
+          <div style={{ padding: 48, textAlign: "center", ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em" }}>
+            LOADING SHEETS…
+          </div>
+        ) : (filtered.length === 0 && drawingSetRecords.length === 0) ? (
+          // Empty state only when there's truly nothing to show — no per-sheet
+          // rows AND no set-level drawing_sets rows. Set-level-only records
+          // (e.g. BFA imports from Drive with no child sheets yet) still want
+          // to render through DrawingsTable so the user sees the group headers.
           <div style={{ ...surface, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
             <p style={{ ...mono, fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.2em", margin: 0 }}>
-              {drawings.length === 0 ? "NO DRAWING SETS YET — ADD YOUR FIRST SHEET" : "NO DRAWING SETS MATCH FILTERS"}
+              {drawings.length === 0 ? "NO SHEETS YET — ADD YOUR FIRST DRAWING" : "NO SHEETS MATCH FILTERS"}
             </p>
           </div>
         ) : view === "list" ? (
-          <SetListView drawingSets={filteredDrawingSets} selected={selected} onToggleSelect={toggleSelect}
-            onToggleAll={toggleSelectAll} onEdit={d => { setEditing(d); setShowModal(true); }}
-            onDelete={handleDelete} onAdvance={handleAdvanceStage}
+          <DrawingsTable
+            drawings={filtered}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+            onToggleAll={toggleSelectAll}
+            onEdit={d => { setEditing(d); setShowModal(true); }}
+            onDelete={handleDelete}
+            onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
             setContextMenu={setContextMenu}
-            onSetApproval={openSetApproval} />
+            onSetApproval={openSetApproval}
+            onDeleteSet={handleDeleteSet}
+            onRenameSet={openRenameSet}
+            onMarkTitleblock={openMarkTitleblock}
+            rfiMap={rfiMap}
+            drawingSetMap={drawingSetMap}
+            submittalsBySetId={submittalsBySetId}
+          />
         ) : (
-          <SetGridView drawingSets={filteredDrawingSets} selected={selected} onToggleSelect={toggleSelect}
+          <DrawingsGrid
+            drawings={filtered}
+            drawingSets={drawingSetRecords}
+            selected={selected}
+            onToggleSelect={toggleSelect}
             onEdit={d => { setEditing(d); setShowModal(true); }}
-            onDelete={handleDelete} onAdvance={handleAdvanceStage}
+            onDelete={handleDelete}
+            onAdvance={handleAdvanceStage}
             onView={d => navigate(`/DrawingViewer?id=${d.id}`)}
-            onSetApproval={openSetApproval} />
+            onSetApproval={openSetApproval}
+            onRenameSet={openRenameSet}
+            onDeleteSet={handleDeleteSet}
+            rfiMap={rfiMap}
+          />
         )}
       </ErrorBoundary>
 
       {/* ── Context Menu ───────────────────────────────────────────────────── */}
-      {contextMenu && (
-        <div ref={contextRef} style={{
-          position: "fixed", left: contextMenu.x, top: contextMenu.y, zIndex: 999,
-          ...surface, padding: "6px 0", minWidth: 180, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-        }} onClick={e => e.stopPropagation()}>
-          {[
-            { label: "View PDF", action: () => { navigate(`/DrawingViewer?id=${contextMenu.drawing.id}`); setContextMenu(null); } },
-            { label: "Edit Sheet", action: () => { setEditing(contextMenu.drawing); setShowModal(true); setContextMenu(null); } },
-            { label: "Advance Stage →", action: () => handleAdvanceStage(contextMenu.drawing) },
-            ...(contextMenu.drawing.drawing_set_name?.trim() ? [{
-              label: "Set Approval ✓",
-              action: () => { openSetApproval(contextMenu.drawing.drawing_set_name.trim()); setContextMenu(null); }
-            }] : []),
-            { label: "Delete Sheet", action: () => handleDelete(contextMenu.drawing.id), danger: true },
-          ].map(item => (
-            <button key={item.label} onClick={item.action} style={{
-              display: "block", width: "100%", textAlign: "left", padding: "8px 16px",
-              background: "none", border: "none", cursor: "pointer", ...mono, fontSize: 10,
-              fontWeight: 700, letterSpacing: "0.08em", color: item.danger ? "var(--status-error)" : "var(--text-primary)",
-              ":hover": { background: "var(--hover-bg)" },
-            }}>{item.label}</button>
-          ))}
-        </div>
-      )}
+      <DrawingContextMenu
+        contextMenu={contextMenu}
+        contextRef={contextRef}
+        onView={(d) => navigate(`/DrawingViewer?id=${d.id}`)}
+        onEdit={(d) => { setEditing(d); setShowModal(true); }}
+        onAdvance={handleAdvanceStage}
+        onSetApproval={openSetApproval}
+        onDelete={handleDelete}
+        onDismiss={() => setContextMenu(null)}
+      />
 
-      {/* ── Modal ──────────────────────────────────────────────────────────── */}
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showModal && (
         <SheetFormModal
           initial={editing || EMPTY_FORM}
           onSave={handleSave}
           onClose={() => { setShowModal(false); setEditing(null); }}
           saving={saving}
+          existingSetNames={existingSetNames}
         />
       )}
 
-      {/* ── Set Approval Modal ────────────────────────────────────────────── */}
+      <BulkEditModal
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        onApply={handleBulkEdit}
+        selectedCount={selected.size}
+      />
+
+      <AdvanceStageDialog
+        open={!!advanceTarget}
+        currentStage={advanceTarget?.currentStage}
+        targetStage={advanceTarget?.targetStage}
+        drawingId={advanceTarget?.drawingId}
+        setId={advanceTarget?.setId}
+        onClose={() => setAdvanceTarget(null)}
+        onLegacy={({ drawingId, targetStage }) => {
+          // Pre-Sprint-2 fallback: mutate drawings.stage directly. The
+          // workflow source of truth is now on submittals; this path is
+          // kept for cleanup of orphan sheets without linked submittals.
+          updateMut.mutate({ id: drawingId, stage: targetStage });
+          setAdvanceTarget(null);
+        }}
+        onViaSubmittal={({ setId, targetStage }) => {
+          // Canonical path: hand the user off to the Submittals page
+          // with a target set + prefilled status. Falls back to
+          // navigating without a status if the stage maps to "Not Started"
+          // or an unknown stage (stageToSubmittalStatus returns null).
+          const mapped = stageToSubmittalStatus(targetStage);
+          const params = new URLSearchParams();
+          if (setId) params.set("targetSetId", setId);
+          if (mapped?.status) params.set("prefilledStatus", mapped.status);
+          navigate(`/Submittals${params.toString() ? `?${params.toString()}` : ""}`);
+          setAdvanceTarget(null);
+        }}
+      />
+
       <SetApprovalModal
         open={!!approvalSet}
         onClose={() => setApprovalSet(null)}
@@ -758,396 +1000,72 @@ export default function Drawings() {
         onConfirm={handleSetApproval}
         saving={savingApproval}
       />
-    </div>
-  );
-}
 
-// ─── List View ────────────────────────────────────────────────────────────────
+      <RenameSetModal
+        open={!!renameSet}
+        initialName={renameSet?.setName || ""}
+        onClose={() => setRenameSet(null)}
+        onSave={handleRenameSet}
+        saving={savingRename}
+      />
 
-function ListView({ drawings, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
-  const allSelected = selected.size === drawings.length && drawings.length > 0;
-  const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
-  const tdStyle = { padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", verticalAlign: "middle" };
+      {markerSet && (
+        <TitleblockMarkerModal
+          set={markerSet}
+          onClose={() => setMarkerSet(null)}
+          onSaved={() => {
+            // Pull fresh set rows so the templated indicator shows up
+            // immediately on the row that was just marked.
+            invalidate();
+          }}
+        />
+      )}
 
-  return (
-    <div style={{ ...surface, overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ ...thStyle, width: 36 }}>
-              <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
-            </th>
-            <th style={thStyle}>SHEET #</th>
-            <th style={thStyle}>TITLE</th>
-            <th style={thStyle}>DISCIPLINE</th>
-            <th style={thStyle}>REV</th>
-            <th style={thStyle}>STAGE</th>
-            <th style={thStyle}>SUBMITTED</th>
-            <th style={thStyle}>DUE DATE</th>
-            <th style={thStyle}>REVIEWER</th>
-            <th style={thStyle}>APPROVAL</th>
-            <th style={thStyle}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {drawings.map(d => {
-            const overdue = isOverdue(d);
-            const isSel = selected.has(d.id);
-            return (
-              <tr key={d.id}
-                onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, drawing: d }); }}
-                style={{ background: isSel ? "rgba(200,155,32,0.06)" : "none", cursor: "default" }}>
-                <td style={tdStyle}>
-                  <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(d.id)} style={{ cursor: "pointer" }} />
-                </td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <PriorityDot active={d.priority_flag} />
-                    {d.sheet_number}
-                  </div>
-                </td>
-                <td style={{ ...tdStyle, maxWidth: 260 }}>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div>
-                  {d.linked_rfi_ids && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{d.linked_rfi_ids}</div>}
-                </td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
-                <td style={{ ...tdStyle }}><StageChip stage={d.stage} /></td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
-                <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ ...mono, fontSize: 10, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>{d.due_date || "—"}</span>
-                    {overdue && <OverdueBadge />}
-                  </div>
-                </td>
-                <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
-                <td style={{ ...tdStyle }}>
-                  {d.set_approval_status ? (
-                    <span style={{
-                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                      color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                      background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                      border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
-                      textTransform: "uppercase",
-                    }}>
-                      {d.set_approval_status}
-                    </span>
-                  ) : d.drawing_set_name?.trim() ? (
-                    <button onClick={() => onSetApproval(d.drawing_set_name.trim())} style={{
-                      ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                      background: "none", border: "1px dashed rgba(255,255,255,0.15)", color: "var(--text-muted)", cursor: "pointer",
-                    }}>
-                      REVIEW
-                    </button>
-                  ) : (
-                    <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</span>
-                  )}
-                </td>
-                <td style={{ ...tdStyle }}>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <ActionBtn label="View" onClick={() => onView(d)} />
-                    <ActionBtn label="Edit" onClick={() => onEdit(d)} />
-                    <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-                    <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+      <DrawingSetUploadModal
+        open={uploadSetOpen}
+        onClose={() => setUploadSetOpen(false)}
+        onComplete={() => {
+          invalidate();
+          qc.invalidateQueries({ queryKey: ["drawing_sets", projectId] });
+        }}
+        activeProject={activeProject}
+        existingDrawings={drawings}
+        existingSetNames={existingSetNames}
+      />
 
-function ActionBtn({ label, onClick, danger, disabled, title }) {
-  return (
-    <button onClick={onClick} disabled={disabled} title={title}
-      style={{ ...mono, fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 2, border: `1px solid ${danger ? "rgba(239,68,68,0.3)" : "var(--border-default)"}`, background: "none", color: danger ? "var(--status-error)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.3 : 1, whiteSpace: "nowrap" }}>
-      {label}
-    </button>
-  );
-}
+      {/* New Revision flow — marks prior sheets is_superseded=true and
+          inserts the replacement revision under the same set. F14. */}
+      <RevisionUploadModal
+        open={revisionOpen}
+        onClose={() => setRevisionOpen(false)}
+        onComplete={() => { invalidate(); setRevisionOpen(false); }}
+        activeProject={activeProject}
+        drawingSets={drawingSetRecords}
+      />
 
-// ─── Grid View ────────────────────────────────────────────────────────────────
+      {/* Sprint 4 — package exports (fab release / turnover / claims). One
+          shared modal switches behavior based on `kind`. */}
+      <ExportFabReleaseModal
+        open={!!exportPkgKind}
+        onClose={() => setExportPkgKind(null)}
+        kind={exportPkgKind || "fab_release"}
+        project={activeProject}
+        drawings={drawings}
+      />
 
-function GridView({ drawings, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
-      {drawings.map(d => {
-        const overdue = isOverdue(d);
-        const isSel = selected.has(d.id);
-        const stage = STAGE_MAP[d.stage] || STAGE_MAP["Not Started"];
-        return (
-          <div key={d.id} onClick={() => onToggleSelect(d.id)}
-            style={{ background: "var(--bg-surface)", border: `1px solid ${isSel ? "var(--accent)" : "var(--border-default)"}`, borderRadius: 2, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
-            {/* Stage color strip */}
-            <div style={{ height: 3, background: stage.color }} />
-
-            {/* Priority indicator */}
-            {d.priority_flag && <div style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)" }} />}
-
-            <div style={{ padding: "12px 14px" }}>
-              {/* Sheet number */}
-              <div style={{ ...mono, fontSize: 15, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {d.sheet_number}
-              </div>
-
-              {/* Title */}
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 10, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
-                {d.title}
-              </div>
-
-              {/* Stage + Rev */}
-              <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-                <StageChip stage={d.stage} />
-                <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>R{d.revision_number ?? "0"}</span>
-                {overdue && <OverdueBadge />}
-              </div>
-
-              {/* Due date */}
-              {d.due_date && (
-                <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>
-                  DUE {d.due_date}
-                </div>
-              )}
-
-              {/* Discipline */}
-              <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, opacity: 0.6 }}>{d.discipline}</div>
-
-              {/* Set approval status */}
-              {d.set_approval_status && (
-                <div style={{ marginTop: 6 }}>
-                  <span style={{
-                    ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 2,
-                    color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                    background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                    border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
-                    textTransform: "uppercase",
-                  }}>{d.set_approval_status}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Actions footer */}
-            <div style={{ borderTop: "1px solid var(--border-default)", padding: "7px 10px", display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-              <ActionBtn label="View" onClick={() => onView(d)} />
-              <ActionBtn label="Edit" onClick={() => onEdit(d)} />
-              {d.drawing_set_name?.trim() && !d.set_approval_status && (
-                <ActionBtn label="Approve" onClick={() => onSetApproval(d.drawing_set_name.trim())} />
-              )}
-              <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-              <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SetListView({ drawingSets, selected, onToggleSelect, onToggleAll, onEdit, onDelete, onAdvance, onView, setContextMenu, onSetApproval }) {
-  const drawings = drawingSets.flatMap(group => group.sheets);
-  const allSelected = selected.size === drawings.length && drawings.length > 0;
-  const thStyle = { ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.15em", color: "var(--text-muted)", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border-default)", whiteSpace: "nowrap", background: "var(--bg-surface)" };
-  const tdStyle = { padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", verticalAlign: "middle" };
-
-  return (
-    <div style={{ ...surface, overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ ...thStyle, width: 36 }}>
-              <input type="checkbox" checked={allSelected} onChange={onToggleAll} style={{ cursor: "pointer" }} />
-            </th>
-            <th style={thStyle}>DRAWING SET / SHEET</th>
-            <th style={thStyle}>DETAIL</th>
-            <th style={thStyle}>DISCIPLINE</th>
-            <th style={thStyle}>REV</th>
-            <th style={thStyle}>STAGE</th>
-            <th style={thStyle}>SUBMITTED</th>
-            <th style={thStyle}>DUE DATE</th>
-            <th style={thStyle}>REVIEWER</th>
-            <th style={thStyle}>APPROVAL</th>
-            <th style={thStyle}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {drawingSets.map(({ setName, sheets }) => {
-            const approvalState = sheets[0]?.set_approval_status;
-            const releasedCount = sheets.filter((sheet) => sheet.stage === "Released").length;
-            const overdueCount = sheets.filter((sheet) => isOverdue(sheet)).length;
-
-            return (
-              <React.Fragment key={setName}>
-                <tr style={{ background: "color-mix(in srgb, var(--bg-surface-secondary) 72%, transparent)" }}>
-                  <td style={tdStyle}></td>
-                  <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 800, color: "var(--text-primary)" }}>{setName}</td>
-                  <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>
-                    {sheets.length} sheets · {releasedCount} released{overdueCount ? ` · ${overdueCount} overdue` : ""}
-                  </td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}>
-                    {approvalState ? (
-                      <span style={{
-                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                        color: approvalState === "approved" ? "#10B981" : approvalState === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                        background: approvalState === "approved" ? "rgba(16,185,129,0.12)" : approvalState === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                        border: `1px solid ${approvalState === "approved" ? "rgba(16,185,129,0.25)" : approvalState === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
-                        textTransform: "uppercase",
-                      }}>
-                        {approvalState}
-                      </span>
-                    ) : (
-                      <button onClick={() => onSetApproval(setName)} style={{
-                        ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                        background: "none", border: "1px dashed rgba(255,255,255,0.15)", color: "var(--text-muted)", cursor: "pointer",
-                      }}>
-                        REVIEW
-                      </button>
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    <ActionBtn label="Approve" onClick={() => onSetApproval(setName)} />
-                  </td>
-                </tr>
-                {sheets.map(d => {
-                  const overdue = isOverdue(d);
-                  const isSel = selected.has(d.id);
-                  return (
-                    <tr key={d.id}
-                      onContextMenu={e => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, drawing: d }); }}
-                      style={{ background: isSel ? "rgba(200,155,32,0.06)" : "none", cursor: "default" }}>
-                      <td style={tdStyle}>
-                        <input type="checkbox" checked={isSel} onChange={() => onToggleSelect(d.id)} style={{ cursor: "pointer" }} />
-                      </td>
-                      <td style={{ ...tdStyle, ...mono, fontSize: 12, fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", paddingLeft: 24 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <PriorityDot active={d.priority_flag} />
-                          {d.sheet_number}
-                        </div>
-                      </td>
-                      <td style={{ ...tdStyle, maxWidth: 260 }}>
-                        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div>
-                        {d.linked_rfi_ids && <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>{d.linked_rfi_ids}</div>}
-                      </td>
-                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.discipline}</td>
-                      <td style={{ ...tdStyle, ...mono, fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textAlign: "center" }}>R{d.revision_number ?? "0"}</td>
-                      <td style={{ ...tdStyle }}><StageChip stage={d.stage} /></td>
-                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{d.submitted_date || "—"}</td>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span style={{ ...mono, fontSize: 10, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>{d.due_date || "—"}</span>
-                          {overdue && <OverdueBadge />}
-                        </div>
-                      </td>
-                      <td style={{ ...tdStyle, ...mono, fontSize: 10, color: "var(--text-muted)" }}>{d.reviewer || "—"}</td>
-                      <td style={tdStyle}>
-                        {d.set_approval_status ? (
-                          <span style={{
-                            ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 2,
-                            color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                            background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                            border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
-                            textTransform: "uppercase",
-                          }}>
-                            {d.set_approval_status}
-                          </span>
-                        ) : (
-                          <span style={{ ...mono, fontSize: 10, color: "var(--text-muted)" }}>—</span>
-                        )}
-                      </td>
-                      <td style={tdStyle}>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <ActionBtn label="View" onClick={() => onView(d)} />
-                          <ActionBtn label="Edit" onClick={() => onEdit(d)} />
-                          <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-                          <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SetGridView({ drawingSets, selected, onToggleSelect, onEdit, onDelete, onAdvance, onView, onSetApproval }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
-      {drawingSets.map(({ setName, sheets }) => (
-        <div key={setName} style={{ ...surface, overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-default)", background: "color-mix(in srgb, var(--bg-surface-secondary) 72%, transparent)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-              <div>
-                <div style={{ ...mono, fontSize: 12, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.08em" }}>{setName}</div>
-                <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4 }}>{sheets.length} sheets</div>
-              </div>
-              <ActionBtn label="Approve" onClick={() => onSetApproval(setName)} />
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {sheets.map(d => {
-              const overdue = isOverdue(d);
-              const isSel = selected.has(d.id);
-              const stage = STAGE_MAP[d.stage] || STAGE_MAP["Not Started"];
-              return (
-                <div key={d.id} onClick={() => onToggleSelect(d.id)}
-                  style={{ background: isSel ? "rgba(200,155,32,0.06)" : "var(--bg-surface)", borderTop: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
-                  <div style={{ height: 3, background: stage.color }} />
-                  {d.priority_flag && <div style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: "50%", background: "var(--status-error)" }} />}
-                  <div style={{ padding: "12px 14px" }}>
-                    <div style={{ ...mono, fontSize: 15, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {d.sheet_number}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--text-muted)", marginBottom: 10, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
-                      {d.title}
-                    </div>
-                    <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-                      <StageChip stage={d.stage} />
-                      <span style={{ ...mono, fontSize: 9, color: "var(--text-muted)" }}>R{d.revision_number ?? "0"}</span>
-                      {overdue && <OverdueBadge />}
-                    </div>
-                    {d.due_date && (
-                      <div style={{ ...mono, fontSize: 9, color: overdue ? "var(--status-error)" : "var(--text-muted)" }}>
-                        DUE {d.due_date}
-                      </div>
-                    )}
-                    <div style={{ ...mono, fontSize: 9, color: "var(--text-muted)", marginTop: 4, opacity: 0.6 }}>{d.discipline}</div>
-                    {d.set_approval_status && (
-                      <div style={{ marginTop: 6 }}>
-                        <span style={{
-                          ...mono, fontSize: 8, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 2,
-                          color: d.set_approval_status === "approved" ? "#10B981" : d.set_approval_status === "rejected" ? "var(--status-error)" : "var(--text-muted)",
-                          background: d.set_approval_status === "approved" ? "rgba(16,185,129,0.12)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)",
-                          border: `1px solid ${d.set_approval_status === "approved" ? "rgba(16,185,129,0.25)" : d.set_approval_status === "rejected" ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.1)"}`,
-                          textTransform: "uppercase",
-                        }}>{d.set_approval_status}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ borderTop: "1px solid var(--border-default)", padding: "7px 10px", display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-                    <ActionBtn label="View" onClick={() => onView(d)} />
-                    <ActionBtn label="Edit" onClick={() => onEdit(d)} />
-                    <ActionBtn label="→" title="Advance stage" onClick={() => onAdvance(d)} disabled={d.stage === "Released"} />
-                    <ActionBtn label="✕" onClick={() => onDelete(d.id)} danger />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      {/* F18: styled confirm replacing window.confirm() for destructive
+          actions. Sits on top of every list/set/bulk delete path. */}
+      <DeleteDialog
+        open={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => {
+          const run = confirmState?.run;
+          setConfirmState(null);
+          if (typeof run === "function") run();
+        }}
+        title={confirmState?.title}
+        description={confirmState?.description}
+      />
     </div>
   );
 }

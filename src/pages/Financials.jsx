@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useFinancials } from "@/hooks/useFinancials";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import PageHeader from "@/components/shared/PageHeader";
+import { CommandBar } from "@/components/design-system";
 import { PhoenixPanel } from "@/components/shared/PhoenixPanel";
+import { Plus, RefreshCw } from "lucide-react";
 import PhoenixTable, { PTR, PTD } from "@/components/shared/PhoenixTable";
 import { formatCurrency, formatCurrencyShort, formatPercent, formatBudgetPercent } from "@/components/shared/formatters";
 import {
@@ -16,189 +17,23 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
-
-const mono = { fontFamily: "var(--font-mono)" };
-const body = { fontFamily: "var(--font-body)" };
-
-const VIEW_TABS = [
-  { key: "summary", label: "Project Summary" },
-  { key: "sov", label: "SOV Analysis" },
-  { key: "budget", label: "Budget Control" },
-  { key: "unmapped", label: "Unmapped Costs" },
-];
-
-const FAMILY_RULES = [
-  { key: "detailing", label: "Detailing / Engineering", direct: true, test: (text) => /detail|engineering/.test(text) },
-  { key: "material_family", label: "Material / Fasteners", direct: true, test: (text) => /anchor|embed|raw material|material|fastener/.test(text) },
-  { key: "joist_deck_family", label: "Joist / Deck Buyout", direct: true, test: (text) => /joist|deck/.test(text) },
-  { key: "shop_fab_family", label: "Shop Labor & Fabrication", direct: true, test: (text) => /shop|fab|fabrication/.test(text) },
-  { key: "field_family", label: "Field Labor", direct: true, test: (text) => /field|erection|install/.test(text) },
-  { key: "equipment_family", label: "Equipment / Crane", direct: true, test: (text) => /equipment|crane/.test(text) },
-  { key: "shipping", label: "Shipping", direct: true, test: (text) => /shipping|freight|truck/.test(text) },
-  { key: "special_coatings", label: "Special Coatings", direct: true, test: (text) => /coat|galv|paint/.test(text) },
-  { key: "travel", label: "Travel / Out-of-Town", direct: false, test: (text) => /travel|hotel|per diem|out of town/.test(text) },
-  { key: "indirect", label: "Indirect / General Conditions", direct: false, test: (text) => /pm\/admin|admin|indirect/.test(text) },
-];
-
-function getFamilyMeta(text) {
-  const normalized = String(text || "").toLowerCase();
-  const match = FAMILY_RULES.find((rule) => rule.test(normalized));
-  return match || { key: "misc_family", label: "Misc / Catch-All", direct: false };
-}
-
-function safeNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function formatSigned(value) {
-  if (value == null || value === "") return "\u2014";
-  const raw = Number(value);
-  if (!Number.isFinite(raw)) return "\u2014";
-  if (raw === 0) return "$0";
-  return `${raw > 0 ? "+" : ""}${formatCurrency(raw)}`;
-}
-
-function varianceColor(value) {
-  if (value < 0) return "var(--status-error)";
-  if (value > 0) return "var(--status-success)";
-  return "var(--text-muted)";
-}
-
-function SummaryCard({ label, value, detail, tone = "var(--accent)" }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-surface)",
-        border: "1px solid var(--border-default)",
-        borderRadius: "var(--radius-card)",
-        padding: "14px 16px",
-        borderTop: `2px solid ${tone}`,
-      }}
-    >
-      <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
-        {label}
-      </div>
-      <div style={{ ...mono, fontSize: 18, fontWeight: 700, color: tone, marginBottom: 4 }}>
-        {value}
-      </div>
-      {detail ? <div style={{ ...body, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>{detail}</div> : null}
-    </div>
-  );
-}
-
-function SectionTabs({ active, onChange }) {
-  return (
-    <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border-default)" }}>
-      {VIEW_TABS.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          onClick={() => onChange(tab.key)}
-          style={{
-            background: "transparent",
-            color: active === tab.key ? "var(--accent)" : "var(--text-muted)",
-            border: "none",
-            borderBottom: active === tab.key ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRadius: 0,
-            padding: "8px 16px",
-            marginBottom: -1,
-            fontFamily: "var(--font-mono)",
-            fontSize: 9,
-            fontWeight: active === tab.key ? 700 : 500,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            cursor: "pointer",
-            transition: "color 0.15s, border-color 0.15s",
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FilterBar({ search, setSearch, filterPhase, setFilterPhase, phases }) {
-  return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search cost buckets, SOV lines, vendors, notes..."
-        style={{
-          minWidth: 280,
-          flex: 1,
-          background: "var(--bg-input)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-input)",
-          padding: "9px 12px",
-          color: "var(--text-primary)",
-          fontFamily: "var(--font-body)",
-          fontSize: 12,
-        }}
-      />
-      <select
-        value={filterPhase}
-        onChange={(event) => setFilterPhase(event.target.value)}
-        style={{
-          background: "var(--bg-input)",
-          border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-input)",
-          padding: "9px 12px",
-          color: "var(--text-primary)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-        }}
-      >
-        <option value="all">ALL COST FAMILIES</option>
-        {phases.map((phase) => (
-          <option key={phase} value={phase}>
-            {phase.toUpperCase()}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function ReviewFlags({ flags }) {
-  return (
-    <PhoenixPanel title="Review Flags" count={flags.length}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "14px 16px" }}>
-        {flags.length === 0 ? (
-          <div style={{ ...mono, fontSize: 9, color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            No immediate financial flags
-          </div>
-        ) : (
-          flags.map((flag) => (
-            <div
-              key={flag.title}
-              style={{
-                background: flag.tone === "error" ? "var(--danger-muted)" : "var(--warning-muted)",
-                border: `1px solid ${flag.tone === "error" ? "var(--danger-border)" : "var(--warning-border)"}`,
-                borderRadius: "var(--radius-card)",
-                padding: "10px 12px",
-              }}
-            >
-              <div style={{ ...mono, fontSize: 8, fontWeight: 700, color: flag.tone === "error" ? "var(--status-error)" : "var(--status-warning)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
-                {flag.title}
-              </div>
-              <div style={{ ...body, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                {flag.body}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </PhoenixPanel>
-  );
-}
+import {
+  mono,
+  body,
+  getFamilyMeta,
+  safeNumber,
+  formatSigned,
+  varianceColor,
+} from "@/pages/financials/utils";
+import { SummaryCard, KPIStrip } from "@/pages/financials/KPIStrip";
+import { SectionTabs, FilterBar, ReviewFlags } from "@/pages/financials/FilterBar";
+import { COImpactDrawer } from "@/pages/financials/drawers/COImpactDrawer";
+import { LaborDrawer } from "@/pages/financials/drawers/LaborDrawer";
+import { BillingDrawer } from "@/pages/financials/drawers/BillingDrawer";
+import { DSODrawer } from "@/pages/financials/drawers/DSODrawer";
 
 export default function Financials() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [filterPhase, setFilterPhase] = useState("all");
   const [search, setSearch] = useState("");
   const [activeView, setActiveView] = useState("summary");
@@ -210,6 +45,7 @@ export default function Financials() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: costCodes = [] } = useQuery({
@@ -271,6 +107,19 @@ export default function Financials() {
   });
 
   const selectedProject = projectId ? projects.find((project) => project.id === projectId) : null;
+
+  // ── Executive KPIs via useFinancials (Phase 4) ─────────────────────
+  // Uses the centralized hook ONLY for the four KPI objects.
+  // Existing local queries + calculations below are intentionally untouched.
+  const {
+    changeOrderImpact,
+    laborUtilization,
+    billingVsCost,
+    daysSalesOutstanding,
+    isLoading: kpiLoading,
+  } = useFinancials(projectId, selectedProject);
+  const [activeDrawer, setActiveDrawer] = useState(null);
+
   const approvedChangeOrders = useMemo(() => changeOrders.filter((changeOrder) => changeOrder.status === "Approved"), [changeOrders]);
   const activeExpenses = useMemo(() => expenses.filter((expense) => expense.payment_status !== "Voided"), [expenses]);
 
@@ -283,15 +132,21 @@ export default function Financials() {
     }, {});
 
     return costCodes.map((costCode) => {
-      const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number || expense.cost_code_id === costCode.id);
+      // expenses.cost_code holds the cost-code NUMBER (text); the schema has
+      // no cost_code_id on expenses, so matching by cost_code_number is the
+      // only path. (change_orders / sov_items DO have cost_code_id — that is
+      // why byCostCodeId on line above is correct for COs.)
+      const relatedExpenses = activeExpenses.filter((expense) => expense.cost_code === costCode.cost_code_number);
       const actual = relatedExpenses
         .filter((expense) => expense.payment_status === "Paid")
         .reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
       const committed = relatedExpenses.reduce((sum, expense) => sum + safeNumber(expense.amount), 0);
       const signedExtras = safeNumber(byCostCodeId[costCode.id]);
-      const revisedBudget = safeNumber(costCode.budget_amount);
-      const originalEstimate = revisedBudget - signedExtras;
-      const exposure = actual + committed;
+      const originalBudget = safeNumber(costCode.budget_amount);
+      const revisedBudget = originalBudget + signedExtras;
+      const originalEstimate = originalBudget;
+      // Committed already includes paid (actual) amounts — don't double-count
+      const exposure = committed;
       const remainingBudget = revisedBudget - exposure;
       const usedPct = revisedBudget > 0 ? (exposure / revisedBudget) * 100 : 0;
       const family = getFamilyMeta(`${costCode.phase || ""} ${costCode.description || ""}`);
@@ -473,20 +328,40 @@ export default function Financials() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <PageHeader
+      <CommandBar
+        eyebrow={selectedProject?.name || "FINANCIALS"}
         title="Budget Control"
-        subtitle={`${selectedProject?.name || "Project"} • workbook-style financial control`}
-        onAdd={() => {
-          setEditingCostCode(null);
-          setModalOpen(true);
-        }}
-        onRefresh={() => {
-          invalidateCrudQueries(qc, costCodeQueryKeys);
-          qc.invalidateQueries({ queryKey: ["expenses", projectId] });
-          qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
-          qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
-        }}
-        addLabel="New Cost Code"
+        count={costCodes.length}
+        unit=" · COST CODES"
+        subtitle={`Workbook-style financial control · ${formatCurrencyShort(summary.revisedBudget)} revised budget`}
+      >
+        <button
+          onClick={() => {
+            invalidateCrudQueries(qc, costCodeQueryKeys);
+            qc.invalidateQueries({ queryKey: ["expenses", projectId] });
+            qc.invalidateQueries({ queryKey: ["sov-items", projectId] });
+            qc.invalidateQueries({ queryKey: ["change-orders", projectId] });
+          }}
+          title="Refresh"
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-btn)", padding: "8px 12px", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+        >
+          <RefreshCw size={12} /> Refresh
+        </button>
+        <button
+          onClick={() => { setEditingCostCode(null); setModalOpen(true); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--accent)", color: "var(--bg-base)", border: "none", borderRadius: "var(--radius-btn)", padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase" }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+        >
+          <Plus size={12} /> New Cost Code
+        </button>
+      </CommandBar>
+
+      {/* ── Executive KPI Strip (Phase 4) ── */}
+      <KPIStrip
+        kpis={{ changeOrderImpact, laborUtilization, billingVsCost, daysSalesOutstanding }}
+        loading={kpiLoading}
+        onCardClick={(drawer) => setActiveDrawer(drawer)}
       />
 
       {reviewFlags.length > 0 && (
@@ -781,6 +656,39 @@ export default function Financials() {
         onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
         title="Delete Cost Code"
         description={`Delete ${deleteTarget?.cost_code_number || "cost code"}?`}
+      />
+
+      {/* ── CO Impact Detail Drawer (Phase 4 Step 2) ── */}
+      <COImpactDrawer
+        open={activeDrawer === "co"}
+        onClose={() => setActiveDrawer(null)}
+        kpi={changeOrderImpact}
+        changeOrders={changeOrders}
+        selectedProject={selectedProject}
+      />
+
+      {/* ── Labor Utilization Detail Drawer (Phase 4 Step 3) ── */}
+      <LaborDrawer
+        open={activeDrawer === "labor"}
+        onClose={() => setActiveDrawer(null)}
+        kpi={laborUtilization}
+        selectedProject={selectedProject}
+      />
+
+      {/* ── Billing vs. Cost Detail Drawer (Phase 4 Step 4) ── */}
+      <BillingDrawer
+        open={activeDrawer === "billing"}
+        onClose={() => setActiveDrawer(null)}
+        kpi={billingVsCost}
+        sovItems={sovItems}
+      />
+
+      {/* ── DSO Detail Drawer (Phase 4 Step 5) ── */}
+      <DSODrawer
+        open={activeDrawer === "dso"}
+        onClose={() => setActiveDrawer(null)}
+        kpi={daysSalesOutstanding}
+        sovItems={sovItems}
       />
     </div>
   );

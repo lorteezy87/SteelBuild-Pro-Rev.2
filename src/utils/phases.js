@@ -1,9 +1,18 @@
+// "Erection" and "Installation" are treated as a single canonical
+// field-execution phase. The user's terminology — and what the live
+// `projects.phase` column stores — is "Erection" (10/15 active
+// projects in production). "Installation" is retained as an alias so
+// scaffolding code that already emits it (wbsBuilder seed templates,
+// pccEngine tag matchers, lib/enums.ts) keeps working without a data
+// migration. Anywhere a phase name is being shown in the UI or used as
+// a filter key, prefer "Erection".
 export const PHASES = [
   'Pre-Construction',
   'Detailing',
   'Procurement',
   'Fabrication',
   'Delivery',
+  'Erection',
   'Installation',
   'Closeout',
 ];
@@ -14,18 +23,61 @@ export const PHASE_ORDER = {
   'Procurement':      2,
   'Fabrication':      3,
   'Delivery':         4,
+  'Erection':         5,
   'Installation':     5,
   'Closeout':         6,
 };
 
 export const PHASE_COLORS = {
-  'Pre-Construction': 'var(--accent)',
+  'Pre-Construction': 'var(--sbd-gantt-preconstruction)',
   'Detailing':        'var(--phase-detailing)',
-  'Procurement':      'var(--secondary)',
+  'Procurement':      'var(--sbd-gantt-procurement)',
   'Fabrication':      'var(--phase-fab)',
-  'Delivery':         'var(--warning)',
+  'Delivery':         'var(--phase-delivery)',
+  'Erection':         'var(--phase-erection)',
   'Installation':     'var(--phase-erection)',
   'Closeout':         'var(--phase-closeout)',
+};
+
+/**
+ * 3-letter abbreviations kept around for compact column labels (the
+ * small phase-badge chip in the Gantt summary row falls back to these
+ * when PHASE_NUMBER is missing). No longer used for WBS codes — those
+ * moved to decimal phase.task format (see PHASE_NUMBER below).
+ */
+export const PHASE_ABBREV = {
+  'Pre-Construction': 'PC',
+  'Detailing':        'DET',
+  'Procurement':      'PRO',
+  'Fabrication':      'FAB',
+  'Delivery':         'DEL',
+  'Erection':         'ERE',
+  'Installation':     'INS',
+  'Closeout':         'CLO',
+};
+
+/**
+ * Phase number used in WBS codes. Matches the Gantt's PHASES array
+ * ids 1-7 so the summary row ("2.0 DETAILING") and the row WBS codes
+ * ("2.1", "2.2", "2.3") share a single numeric identity.
+ *
+ * WBS code format:
+ *   - Phase summary:       "<phase>.0"    e.g. "2.0" for Detailing
+ *   - Flat task:           "<phase>.<n>"  e.g. "2.1", "2.2"
+ *   - Nested child task:   "<phase>.<parent>.<child>" e.g. "2.1.1"
+ *
+ * Erection and Installation share slot 6 — they're aliases for the
+ * same field-execution phase.
+ */
+export const PHASE_NUMBER = {
+  'Pre-Construction': 1,
+  'Detailing':        2,
+  'Procurement':      3,
+  'Fabrication':      4,
+  'Delivery':         5,
+  'Erection':         6,
+  'Installation':     6,
+  'Closeout':         7,
 };
 
 // Derive phase from task fields when not explicitly set
@@ -75,7 +127,7 @@ export function sortByPhase(tasks) {
     const endB = new Date(b.end_date || b.planned_end || '9999-12-31');
     if (endA - endB !== 0) return endA - endB;
 
-    const prioOrder = { Critical: 0, High: 1, Normal: 2, medium: 2, Low: 3, low: 3 };
+    const prioOrder = { Critical: 0, critical: 0, High: 1, high: 1, Normal: 2, Medium: 2, medium: 2, Low: 3, low: 3 };
     return (prioOrder[a.priority] ?? 2) - (prioOrder[b.priority] ?? 2);
   });
 }

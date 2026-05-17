@@ -2,15 +2,16 @@
 import { roundCurrency } from './formatters';
 
 export function getCostCodeSummary(costCode, sovItems = [], expenses = [], costCodes = []) {
-  const budgetFromCostCodes = roundCurrency(costCodes
-    .filter(c => c.cost_code === costCode)
+  const matchingCostCodes = costCodes.filter(c => c.cost_code === costCode);
+  const budgetFromCostCodes = roundCurrency(matchingCostCodes
     .reduce((sum, c) => sum + (Number(c.budget_amount) || 0), 0));
 
   const budgetFromSov = roundCurrency(sovItems
     .filter(s => s.cost_code === costCode)
     .reduce((sum, s) => sum + (Number(s.scheduled_value) || 0), 0));
 
-  const budget = budgetFromCostCodes || budgetFromSov;
+  // Use cost-code budget if any cost codes matched (even if $0), else fall back to SOV
+  const budget = matchingCostCodes.length > 0 ? budgetFromCostCodes : budgetFromSov;
 
   // Committed = sum of non-voided expenses for this cost code
   const committed = roundCurrency(expenses
@@ -94,7 +95,7 @@ export function getWorkPackageCostSummary(wpId, expenses = []) {
 export function getExpensesByCategory(expenses = []) {
   const categoryMap = {
     Labor: ['01', '07', '08'],
-    Materials: ['02', '03', '04', '05', '13'],
+    Materials: ['02', '03', '04', '05'],
     Subcontractor: [], // No specific codes, user-selectable
     Equipment: ['09'],
     'Misc.': ['13', '14'],

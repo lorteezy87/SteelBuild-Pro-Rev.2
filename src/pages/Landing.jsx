@@ -71,7 +71,7 @@ export default function Landing() {
           <button onClick={scrollModules} style={linkBtn}>Platform</button>
           <button onClick={() => navigate(createPageUrl("Projects"))} style={linkBtn}>Projects</button>
           <button onClick={() => navigate(createPageUrl("RFIs"))} style={linkBtn}>RFIs</button>
-          <button onClick={() => navigate(createPageUrl("Documents"))} style={linkBtn}>Drawings</button>
+          <button onClick={() => navigate(createPageUrl("Drawings"))} style={linkBtn}>Drawings</button>
           <button onClick={goDashboard} style={ctaBtn}>Launch App</button>
         </div>
       </header>
@@ -81,7 +81,7 @@ export default function Landing() {
         padding: "96px 28px 64px",
         position: "relative",
         overflow: "hidden",
-        background: "radial-gradient(circle at 20% 20%, rgba(255,107,0,0.18), transparent 40%), radial-gradient(circle at 80% 0%, rgba(0,229,255,0.10), transparent 45%), var(--bg-page)"
+        background: "radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 40%), radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--secondary) 14%, transparent), transparent 45%), var(--bg-page)"
       }}>
         <div style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 32, alignItems: "center" }}>
           <div>
@@ -118,7 +118,7 @@ export default function Landing() {
                   { label: "Erection tasks in flight", value: "58", accent: "var(--accent)" },
                   { label: "QA / QC exceptions open", value: "4", accent: "var(--danger)" },
                 ].map(({ label, value, accent }) => (
-                  <div key={label} style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "rgba(255,255,255,0.02)" }}>
+                  <div key={label} style={{ padding: 12, border: "1px solid var(--border-default)", borderRadius: 8, background: "var(--hover-bg)" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
                     <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 28, color: accent }}>{value}</div>
                   </div>

@@ -4,6 +4,7 @@ export default function CostCodeBreakdown({ costCodes }) {
   if (costCodes.length === 0) {
     return (
       <div
+        className="sbd-card"
         style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
@@ -29,6 +30,7 @@ export default function CostCodeBreakdown({ costCodes }) {
 
   return (
     <div
+      className="sbd-card"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-default)",
@@ -66,7 +68,11 @@ export default function CostCodeBreakdown({ costCodes }) {
 
       {/* Rows */}
       {costCodes.map((cc) => {
-        const variance = (cc.budget_amount || 0) - (cc.actual_cost || 0);
+        // Use enriched fields (revised_budget, exposure/committed_cost) when available,
+        // fall back to raw budget_amount vs actual_cost for non-enriched data.
+        const budget = Number(cc.revised_budget ?? cc.budget_amount) || 0;
+        const spend = Number(cc.exposure ?? cc.committed_cost ?? cc.actual_cost) || 0;
+        const variance = budget - spend;
         const isOverBudget = variance < 0;
 
         return (
@@ -119,7 +125,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--text-secondary)",
               }}
             >
-              ${(cc.budget_amount / 1000).toFixed(0)}K
+              ${(budget / 1000).toFixed(0)}K
             </div>
 
             {/* Actual */}
@@ -130,7 +136,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--accent)",
               }}
             >
-              ${(cc.actual_cost / 1000).toFixed(0)}K
+              ${((Number(cc.actual_cost) || 0) / 1000).toFixed(0)}K
             </div>
 
             {/* Committed */}
@@ -141,7 +147,7 @@ export default function CostCodeBreakdown({ costCodes }) {
                 color: "var(--status-warning)",
               }}
             >
-              ${(cc.committed_cost / 1000).toFixed(0)}K
+              ${(spend / 1000).toFixed(0)}K
             </div>
 
             {/* Variance */}

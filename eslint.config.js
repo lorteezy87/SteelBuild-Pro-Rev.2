@@ -6,12 +6,29 @@ import pluginUnusedImports from "eslint-plugin-unused-imports";
 
 export default [
   {
-    files: [
-      "src/components/**/*.{js,mjs,cjs,jsx}",
-      "src/pages/**/*.{js,mjs,cjs,jsx}",
-      "src/Layout.jsx",
+    ignores: [
+      "**/.claude/**",
+      "**/.next/**",
+      "dist/**",
+      "steelbuild-pro/**",
+      "node_modules/**",
     ],
-    ignores: ["src/lib/**/*", "src/components/ui/**/*", "src/components/shared/THEME_DEVELOPER_GUIDE.jsx"],
+  },
+  {
+    files: [
+      "src/**/*.{js,mjs,cjs,jsx}",
+    ],
+    ignores: [
+      "**/.claude/**",
+      "**/.next/**",
+      "dist/**",
+      "steelbuild-pro/**",
+      "src/lib/**/*",
+      "src/api/**/*",
+      "src/components/ui/**/*",
+      "src/components/shared/THEME_DEVELOPER_GUIDE.jsx",
+      "src/vite-plugins/**/*",
+    ],
     ...pluginJs.configs.recommended,
     ...pluginReact.configs.flat.recommended,
     languageOptions: {
@@ -55,6 +72,7 @@ export default [
         { ignore: ["cmdk-input-wrapper", "toast-close"] },
       ],
       "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 ];

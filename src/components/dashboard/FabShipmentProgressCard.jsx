@@ -22,17 +22,17 @@ function TonBar({ label, tons, totalTons, color }) {
   );
 }
 
-export default function FabShipmentProgressCard({ wps }) {
+export default function FabShipmentProgressCard({ wps = [] }) {
   const navigate = useNavigate();
 
   const totalTons = wps.reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const releasedTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
   const fabTons = wps.filter(w => ["Fabrication","Delivery","Erection"].includes(w.phase) && (w.status === "In Progress" || w.status === "Complete")).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const shippedTons = wps.filter(w => w.phase === "Delivery" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
-  const erectedTons = wps.filter(w => w.phase === "Erection" && w.status === "Complete").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const shippedTons = wps.filter(w => ["Delivery","Erection"].includes(w.phase)).reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
+  const erectedTons = wps.filter(w => w.phase === "Erection").reduce((s, w) => s + (Number(w.tonnage) || 0), 0);
 
   const wpTotal = wps.length;
-  const wpReady = wps.filter(w => w.status === "Complete" || (w.status === "In Progress" && (w.percent_complete || 0) > 75)).length;
+  const wpComplete = wps.filter(w => w.status === "Complete").length;
   const wpInProgress = wps.filter(w => w.status === "In Progress").length;
   const wpOnHold = wps.filter(w => w.status === "On Hold").length;
   const wpNotStarted = wps.filter(w => w.status === "Not Started").length;
@@ -52,17 +52,17 @@ export default function FabShipmentProgressCard({ wps }) {
         {/* Total tonnage hero */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--divider)" }}>
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Total Tonnage</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Total Tonnage</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1 }}>{Math.round(totalTons).toLocaleString()}<span style={{ fontSize: 14, color: "var(--text-muted)", marginLeft: 4 }}>T</span></div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Work Packages</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 2 }}>Work Packages</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--chart-4)", lineHeight: 1 }}>{wpTotal}</div>
           </div>
         </div>
 
         {/* Tonnage progress bars */}
-        <TonBar label="Released" tons={releasedTons} totalTons={totalTons} color="#FFB300" />
+        <TonBar label="Released" tons={releasedTons} totalTons={totalTons} color="var(--status-warning-bright)" />
         <TonBar label="Fabricated" tons={fabTons} totalTons={totalTons} color="var(--accent)" />
         <TonBar label="Shipped" tons={shippedTons} totalTons={totalTons} color="#FF9A60" />
         <TonBar label="Erected" tons={erectedTons} totalTons={totalTons} color="#00E676" />
@@ -71,11 +71,10 @@ export default function FabShipmentProgressCard({ wps }) {
         {totalTons > 0 && (() => {
           const phases = ["Released", "Fabricated", "Shipped", "Erected"];
           const vals = [releasedTons, fabTons, shippedTons, erectedTons];
-          const colors = ["#FFB300", "var(--accent)", "#FF9A60", "#00E676"];
           const chartData = phases.map((p, i) => ({ phase: p, tons: Math.round(vals[i]) }));
           return (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Tonnage Flow</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Tonnage Flow</div>
               <ResponsiveContainer width="100%" height={70}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                   <defs>
@@ -84,7 +83,7 @@ export default function FabShipmentProgressCard({ wps }) {
                       <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="phase" tick={{ fontFamily: "var(--font-mono)", fontSize: 7, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="phase" tick={{ fontFamily: "var(--font-mono)", fontSize: 9, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{ background: "var(--bg-surface-high)", border: "none", borderRadius: 2, fontFamily: "var(--font-mono)", fontSize: 10 }}
                     formatter={v => [`${v.toLocaleString()} T`, "Tonnage"]}
@@ -98,11 +97,11 @@ export default function FabShipmentProgressCard({ wps }) {
 
         {/* WP status breakdown */}
         <div style={{ borderTop: "1px solid var(--divider)", paddingTop: 12, marginTop: 4 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Work Package Status</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10 }}>Work Package Status</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {[
               { label: "In Progress", val: wpInProgress, color: "var(--status-warning)" },
-              { label: "Complete", val: wpReady, color: "var(--status-success)" },
+              { label: "Complete", val: wpComplete, color: "var(--status-success)" },
               { label: "On Hold", val: wpOnHold, color: "var(--status-error)" },
               { label: "Not Started", val: wpNotStarted, color: "var(--text-muted)" },
             ].map(({ label, val, color }) => (

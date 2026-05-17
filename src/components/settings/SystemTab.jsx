@@ -42,7 +42,12 @@ export default function SystemTab({ user }) {
   const handleClearCache = () => {
     try {
       if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
+      // Preserve auth/preference keys while clearing cache data
+      const preserve = ['current_user_email', 'current_user_id', 'activeProjectId', 'sbp-theme', 'sbp_app_roles', 'supabase.auth.token'];
+      const saved = {};
+      preserve.forEach(k => { const v = localStorage.getItem(k); if (v !== null) saved[k] = v; });
       localStorage.clear();
+      Object.entries(saved).forEach(([k, v]) => localStorage.setItem(k, v));
       sessionStorage.clear();
       toast.success('Cache cleared');
     } catch (err) {
@@ -95,10 +100,8 @@ export default function SystemTab({ user }) {
       {/* Support */}
       <div style={sectionStyle}>
         <label style={labelStyle}>Support & Legal</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {['Privacy Policy', 'Terms of Service', 'Support Center'].map(link => (
-            <a key={link} href="#" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}>{link} →</a>
-          ))}
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          Contact your SteelBuild Pro administrator for privacy, terms, or support inquiries.
         </div>
       </div>
     </div>

@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { getDaysBetween } from './scheduleUtils';
+import { GANTT_PHASE_HEX, GANTT_STATUS_HEX, GANTT_TODAY_HEX } from '@/lib/ganttTheme';
 
 const TASK_TYPE_COLORS = {
-  Fabrication: 'var(--accent)',
-  Delivery: '#00B8D9',
-  Install: '#00D68F',
-  Submittal: '#8B5CF6',
-  RFI: '#FFB400',
-  Milestone: '#FFB400',
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery: GANTT_PHASE_HEX.Delivery,
+  Install: GANTT_PHASE_HEX.Installation,
+  Submittal: GANTT_PHASE_HEX.Detailing,
+  RFI: GANTT_PHASE_HEX.Procurement,
+  Milestone: GANTT_STATUS_HEX.inProgress,
   Task: 'rgba(160,175,210,0.5)',
 };
 
-export default function CalendarView({ tasks = [], onSelectTask, onAddTask, selectedDate, onSelectDate }) {
+export default function CalendarView({ tasks = [], onSelectTask, selectedDate, onSelectDate }) {
   const [currentDate, setCurrentDate] = useState(new Date(selectedDate || new Date()));
 
   const year = currentDate.getFullYear();
@@ -60,7 +61,7 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
 
   // Get tasks for a specific date
   const getTasksForDate = (date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const _dateStr = date.toISOString().split('T')[0];
     return tasks.filter(t => {
       const start = new Date(t.start_date);
       const end = new Date(t.end_date);
@@ -156,8 +157,8 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
               key={idx}
               onClick={() => onSelectDate(day.date)}
               style={{
-                background: cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'rgba(255,255,255,0.01)' : 'transparent',
-                border: cellIsToday ? '1px solid rgba(245,158,11,0.30)' : '1px solid rgba(255,255,255,0.05)',
+                background: cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'var(--hover-bg)' : 'transparent',
+                border: cellIsToday ? '1px solid rgba(245,158,11,0.30)' : '1px solid var(--hover-bg)',
                 borderRadius: 8,
                 padding: 8,
                 minHeight: 100,
@@ -167,10 +168,10 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
                 transition: 'background 0.15s',
               }}
               onMouseEnter={(e) => {
-                if (!cellIsToday) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                if (!cellIsToday) e.currentTarget.style.background = 'var(--hover-bg)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'rgba(255,255,255,0.01)' : 'transparent';
+                e.currentTarget.style.background = cellIsToday ? 'var(--warning-muted)' : cellIsWeekend ? 'var(--hover-bg)' : 'transparent';
               }}
             >
               {/* Day number */}
@@ -185,7 +186,7 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
                   justifyContent: 'center',
                   width: 22,
                   height: 22,
-                  background: cellIsToday ? 'var(--accent)' : 'transparent',
+                  background: cellIsToday ? GANTT_TODAY_HEX : 'transparent',
                   borderRadius: cellIsToday ? '50%' : '0',
                   color: cellIsToday ? 'white' : 'var(--text-muted)',
                 }}
@@ -195,11 +196,11 @@ export default function CalendarView({ tasks = [], onSelectTask, onAddTask, sele
 
               {/* Task chips */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
-                {dayTasks.slice(0, 3).map((task, i) => {
+                {dayTasks.slice(0, 3).map((task, _) => {
                   const color = TASK_TYPE_COLORS[task.task_type] || TASK_TYPE_COLORS.Task;
                   const isMultiDay = getDaysBetween(task.start_date, task.end_date) > 1;
                   const taskStart = new Date(task.start_date).toISOString().split('T')[0];
-                  const taskEnd = new Date(task.end_date).toISOString().split('T')[0];
+                  const _taskEnd = new Date(task.end_date).toISOString().split('T')[0];
                   const isFirstDay = taskStart === dateStr;
 
                   return (

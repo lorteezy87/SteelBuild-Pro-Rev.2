@@ -24,12 +24,26 @@
 
 const REGISTRY = {
 
+  // ── Core entities ─────────────────────────────────────────────────────
+
+  project: {
+    primary:  (pid) => ["projects"],
+    families: (pid) => [
+      ["projects"],
+      ["project", pid],           // ProjectDetail.jsx single-project fetch
+    ],
+  },
+
   drawing: {
     primary:  (pid) => ["drawings", pid],
     families: (pid) => [
       ["drawings", pid],
       ["drawings"],
       ["drawings-all"],
+      ["drawings-nav-count", pid], // Layout.jsx nav badge
+      ["draw-detail", pid],        // ProjectDetailView.jsx
+      ["pcc-drawings", pid],       // ProjectControlCenter.jsx
+      ["drawings-for-wp", pid],    // WorkPackageDetailModal.jsx (uses project_id)
     ],
   },
 
@@ -39,13 +53,15 @@ const REGISTRY = {
       ["deliveries", pid],
       ["deliveries"],
       ["deliveries-all"],
-      ["deliveries-nav-count", pid],
-      ["deliveries-cost", pid],
-      ["all-deliveries-portfolio"],
-      ["procurement", pid],
+      ["deliveries-nav-count", pid], // Layout.jsx nav badge
+      ["deliveries-cost", pid],      // CostDashboard.jsx
+      ["all-deliveries-portfolio"],   // AIInsights.jsx, CostDashboard.jsx
+      ["procurement", pid],           // Procurement.jsx (deliveries are procurement)
       ["procurement"],
-      ["pcc-deliveries", pid],
-      ["modal-deliveries", pid],
+      ["pcc-deliveries", pid],        // ProjectControlCenter.jsx
+      ["modal-deliveries", pid],      // ProjectDrilldownModal.jsx
+      ["del-detail", pid],            // ProjectDetailView.jsx
+      ["deliveries-for-wp", pid],     // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
     ],
   },
 
@@ -54,7 +70,7 @@ const REGISTRY = {
     families: (pid) => [
       ["expenses", pid],
       ["expenses"],
-      ["expenses-all"],
+      ["expenses-all"],             // Dashboard.jsx, Reports.jsx
     ],
   },
 
@@ -63,6 +79,12 @@ const REGISTRY = {
     families: (pid) => [
       ["cost-codes", pid],
       ["cost-codes"],
+      ["codes-all"],                // Dashboard.jsx
+      ["all-codes-portfolio"],      // AIInsights.jsx, CostDashboard.jsx
+      ["cost-codes-global"],        // ExecutiveView.jsx, Reports.jsx
+      ["cost-codes-dash", pid],     // CostDashboard.jsx
+      ["cc-detail", pid],           // ProjectDetailView.jsx
+      ["modal-codes", pid],         // ProjectDrilldownModal.jsx
     ],
   },
 
@@ -71,7 +93,15 @@ const REGISTRY = {
     families: (pid) => [
       ["change-orders", pid],
       ["change-orders"],
-      ["projects"],        // CO approval modifies revised contract value
+      ["change-orders-all"],        // Projects.jsx
+      ["change-orders-global"],     // ExecutiveView.jsx, Reports.jsx
+      ["change-orders-dash", pid],  // CostDashboard.jsx
+      ["cos-all"],                  // Dashboard.jsx, ProductionNotes.jsx
+      ["all-cos-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["co-detail", pid],           // ProjectDetailView.jsx
+      ["pcc-cos", pid],             // ProjectControlCenter.jsx
+      ["modal-cos", pid],           // ProjectDrilldownModal.jsx
+      ["projects"],                 // CO approval modifies revised contract value
     ],
   },
 
@@ -81,6 +111,12 @@ const REGISTRY = {
       ["rfis", pid],
       ["rfis"],
       ["rfis-all"],
+      ["rfis", "hub"],              // RFIHub.jsx
+      ["rfis-nav-count", pid],      // Layout.jsx nav badge
+      ["rfi-detail", pid],          // ProjectDetailView.jsx
+      ["pcc-rfis", pid],            // ProjectControlCenter.jsx
+      ["pill-rfis-quick"],          // ProjectPillDropdown.jsx
+      ["modal-rfis", pid],          // ProjectDrilldownModal.jsx
     ],
   },
 
@@ -89,6 +125,11 @@ const REGISTRY = {
     families: (pid) => [
       ["schedule-tasks", pid],
       ["schedule-tasks"],
+      ["schedule-tasks-global"],    // ExecutiveView.jsx
+      ["sched-detail", pid],        // ProjectDetailView.jsx
+      ["schedule-tasks-wp", pid],   // WorkPackageDetailModal.jsx (uses wp.id but pid covers prefix)
+      ["lookahead", pid],           // LookAheadSchedule.jsx
+      ["lookahead-gantt", pid],     // GanttChart.jsx
     ],
   },
 
@@ -97,6 +138,15 @@ const REGISTRY = {
     families: (pid) => [
       ["work-packages", pid],
       ["work-packages"],
+      ["wps-all"],                  // ProductionNotes.jsx, FabRelease.jsx, ResourceScheduling.jsx, WorkPackages.jsx
+      ["work-packages-all"],        // Projects.jsx
+      ["all-wps-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["work-packages-global"],     // ExecutiveView.jsx, Reports.jsx
+      ["wps-cost", pid],            // CostDashboard.jsx
+      ["wps-fab", pid],             // FabRelease.jsx
+      ["wp-detail", pid],           // ProjectDetailView.jsx
+      ["pcc-wps", pid],             // ProjectControlCenter.jsx
+      ["modal-wps", pid],           // ProjectDrilldownModal.jsx
     ],
   },
 
@@ -105,13 +155,7 @@ const REGISTRY = {
     families: (pid) => [
       ["sov-items", pid],
       ["sov-items"],
-    ],
-  },
-
-  project: {
-    primary:  () => ["projects"],
-    families: () => [
-      ["projects"],
+      ["sovs-cost", pid],           // CostDashboard.jsx
     ],
   },
 
@@ -121,6 +165,322 @@ const REGISTRY = {
       ["alerts", pid],
       ["alerts"],
       ["alerts-count"],
+      ["alerts-nav", pid],          // Layout.jsx nav badge
+    ],
+  },
+
+  // ── Entities previously missing from registry ─────────────────────────
+
+  action_item: {
+    primary:  (pid) => ["action-items", pid],
+    families: (pid) => [
+      ["action-items", pid],
+      ["action-items"],
+      ["action-items-all"],          // Dashboard.jsx, Reports.jsx
+      ["all-action-items-portfolio"], // AIInsights.jsx, CostDashboard.jsx
+    ],
+  },
+
+  daily_log: {
+    primary:  (pid) => ["daily-logs", pid],
+    families: (pid) => [
+      ["daily-logs", pid],
+      ["daily-logs"],
+      ["all-logs-portfolio"],        // AIInsights.jsx, CostDashboard.jsx
+      ["modal-logs", pid],           // ProjectDrilldownModal.jsx
+    ],
+  },
+
+  contact: {
+    primary:  (pid) => ["contacts", pid],
+    families: (pid) => [
+      ["contacts", pid],
+      ["contacts"],
+    ],
+  },
+
+  meeting: {
+    primary:  (pid) => ["meetings", pid],
+    families: (pid) => [
+      ["meetings", pid],
+      ["meetings"],
+    ],
+  },
+
+  inspection: {
+    primary:  (pid) => ["inspections", pid],
+    families: (pid) => [
+      ["inspections", pid],
+      ["inspections"],
+    ],
+  },
+
+  safety_incident: {
+    primary:  (pid) => ["safety-incidents", pid],
+    families: (pid) => [
+      ["safety-incidents", pid],
+      ["safety-incidents"],
+    ],
+  },
+
+  photo: {
+    primary:  (pid) => ["photos", pid],
+    families: (pid) => [
+      ["photos", pid],
+      ["photos"],
+    ],
+  },
+
+  resource: {
+    primary:  (pid) => ["resources", pid],
+    families: (pid) => [
+      ["resources", pid],
+      ["resources"],
+    ],
+  },
+
+  vendor: {
+    primary:  () => ["vendors"],
+    families: () => [
+      ["vendors"],
+    ],
+  },
+
+  punchlist: {
+    primary:  (pid) => ["punchlist", pid],
+    families: (pid) => [
+      ["punchlist", pid],
+      ["punchlist"],
+    ],
+  },
+
+  qc_record: {
+    primary:  (pid) => ["qc-records", pid],
+    families: (pid) => [
+      ["qc-records", pid],
+      ["qc-records"],
+    ],
+  },
+
+  closeout: {
+    primary:  (pid) => ["closeouts", pid],
+    families: (pid) => [
+      ["closeouts", pid],
+      ["closeouts"],
+    ],
+  },
+
+  scope_item: {
+    primary:  (pid) => ["scope-items", pid],
+    families: (pid) => [
+      ["scope-items", pid],
+      ["scope-items"],
+    ],
+  },
+
+  production_note: {
+    primary:  () => ["production-notes"],
+    families: () => [
+      ["production-notes"],
+    ],
+  },
+
+  warranty: {
+    primary:  (pid) => ["warranties", pid],
+    families: (pid) => [
+      ["warranties", pid],
+      ["warranties"],
+    ],
+  },
+
+  constraint: {
+    primary:  (pid) => ["constraints", pid],
+    families: (pid) => [
+      ["constraints", pid],
+      ["constraints"],
+    ],
+  },
+
+  procurement: {
+    primary:  (pid) => ["procurement", pid],
+    families: (pid) => [
+      ["procurement", pid],
+      ["procurement"],
+    ],
+  },
+
+  user: {
+    primary:  () => ["users"],
+    families: () => [
+      ["users"],
+      ["all-users"],                 // RolesTab.jsx
+      ["user-permissions"],          // permissions.js
+    ],
+  },
+
+  decision: {
+    primary:  (pid) => ["decisions", pid],
+    families: (pid) => [
+      ["decisions", pid],
+      ["decisions"],
+    ],
+  },
+
+  assumption: {
+    primary:  (pid) => ["assumptions", pid],
+    families: (pid) => [
+      ["assumptions", pid],
+      ["assumptions"],
+    ],
+  },
+
+  activity: {
+    primary:  (pid) => ["activities"],
+    families: (pid) => [
+      ["activities"],
+      ["activity-feed", pid],        // Dashboard.jsx
+    ],
+  },
+
+  document: {
+    primary:  (pid) => ["documents", pid],
+    families: (pid) => [
+      ["documents", pid],
+      ["documents"],
+    ],
+  },
+
+  submittal: {
+    primary:  (pid) => ["submittals", pid],
+    families: (pid) => [
+      ["submittals", pid],
+      ["submittals"],
+      ["submittals-all"],
+      ["submittals-nav-count", pid],
+      ["submittal-detail", pid],
+      ["pcc-submittals", pid],
+    ],
+  },
+
+  submittal_round: {
+    primary:  (pid) => ["submittal-rounds", pid],
+    families: (pid) => [
+      ["submittal-rounds", pid],
+      ["submittal-rounds"],
+    ],
+  },
+
+  submittal_activity: {
+    primary:  (pid) => ["submittal-activity", pid],
+    families: (pid) => [
+      ["submittal-activity", pid],
+      ["submittal-activity"],
+    ],
+  },
+
+  change_request: {
+    primary:  (pid) => ["change-requests", pid],
+    families: (pid) => [
+      ["change-requests", pid],
+      ["change-requests"],
+    ],
+  },
+
+  user_settings: {
+    primary:  (uid) => ["user-settings", uid],
+    families: (uid) => [
+      ["user-settings", uid],
+      ["user-settings"],
+    ],
+  },
+
+  // ── Drawing sub-entities ─────────────────────────────────────────────
+
+  drawing_activity: {
+    primary:  (pid) => ["drawing-activity", pid],
+    families: (pid) => [
+      ["drawing-activity", pid],
+      ["drawing-activity"],
+    ],
+  },
+
+  drawing_link: {
+    primary:  (pid) => ["drawing-links", pid],
+    families: (pid) => [
+      ["drawing-links", pid],
+      ["drawing-links"],
+      ["drawings", pid],
+    ],
+  },
+
+  drawing_revision: {
+    primary:  (pid) => ["drawing-revisions", pid],
+    families: (pid) => [
+      ["drawing-revisions", pid],
+      ["drawing-revisions"],
+      ["drawings", pid],
+    ],
+  },
+
+  drawing_signoff: {
+    primary:  (pid) => ["drawing-signoffs", pid],
+    families: (pid) => [
+      ["drawing-signoffs", pid],
+      ["drawing-signoffs"],
+      ["drawings", pid],
+    ],
+  },
+
+  // ── Scheduling sub-entities ──────────────────────────────────────────
+
+  task_dependency: {
+    primary:  (pid) => ["task-dependencies", pid],
+    families: (pid) => [
+      ["task-dependencies", pid],
+      ["task-dependencies"],
+      ["schedule-tasks", pid],
+    ],
+  },
+
+  // ── Submittal sub-entities ───────────────────────────────────────────
+
+  submittal_sheet_response: {
+    primary:  (pid) => ["submittal-sheet-responses", pid],
+    families: (pid) => [
+      ["submittal-sheet-responses", pid],
+      ["submittal-sheet-responses"],
+      ["submittals", pid],
+    ],
+  },
+
+  // ── File management ──────────────────────────────────────────────────
+
+  uploaded_file: {
+    primary:  (pid) => ["uploaded-files", pid],
+    families: (pid) => [
+      ["uploaded-files", pid],
+      ["uploaded-files"],
+      ["documents", pid],
+    ],
+  },
+
+  // ── Mitigation & governance ──────────────────────────────────────────
+
+  mitigation_log: {
+    primary:  (pid) => ["mitigation-logs", pid],
+    families: (pid) => [
+      ["mitigation-logs", pid],
+      ["mitigation-logs"],
+      ["mitigations", pid],
+    ],
+  },
+
+  mitigation_action: {
+    primary:  (pid) => ["mitigation-actions", pid],
+    families: (pid) => [
+      ["mitigation-actions", pid],
+      ["mitigation-actions"],
+      ["mitigations", pid],
     ],
   },
 };

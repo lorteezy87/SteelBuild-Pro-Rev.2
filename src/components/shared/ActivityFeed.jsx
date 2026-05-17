@@ -1,5 +1,20 @@
 import React, { useMemo } from "react";
 
+// Accessors that tolerate both the snake_case shape that the Supabase
+// activities table ships (entity_type, performed_by, …) and the legacy
+// camelCase shape that older seed scripts + tests sometimes use. The
+// component was previously hard-coded to camelCase, which made every
+// row read `undefined` once the migration moved these columns.
+const A = {
+  timestamp:    (a) => a?.timestamp ?? a?.created_at ?? null,
+  user:         (a) => a?.performed_by ?? a?.userName ?? a?.user_name ?? null,
+  entityType:   (a) => a?.entity_type ?? a?.entityType ?? null,
+  entityName:   (a) => a?.entity_name ?? a?.entityName ?? null,
+  projectName:  (a) => a?.project_name ?? a?.projectName ?? null,
+  action:       (a) => a?.action ?? null,
+  description:  (a) => a?.description ?? null,
+};
+
 const ENTITY_COLORS = {
   RFI: "var(--status-info)",
   Drawing: "var(--status-warning)",
@@ -8,6 +23,15 @@ const ENTITY_COLORS = {
   DailyLog: "var(--chart-4)",
   Photo: "var(--status-warning)",
   Project: "var(--accent)",
+};
+
+const ACTION_COLORS = {
+  created: "var(--status-success)",
+  updated: "var(--status-warning)",
+  deleted: "var(--status-error)",
+  status_changed: "var(--status-info)",
+  moved: "var(--accent)",
+  uploaded: "var(--status-info)",
 };
 
 const ACTION_VERBS = {
@@ -47,7 +71,10 @@ function groupByDate(activities) {
   weekAgo.setDate(weekAgo.getDate() - 7);
 
   activities.forEach((activity) => {
-    const actDate = new Date(activity.timestamp);
+    const ts = A.timestamp(activity);
+    if (!ts) { groups.Older.push(activity); return; }
+    const actDate = new Date(ts);
+    if (Number.isNaN(actDate.getTime())) { groups.Older.push(activity); return; }
     const actDateOnly = new Date(actDate.getFullYear(), actDate.getMonth(), actDate.getDate());
 
     if (actDateOnly.getTime() === today.getTime()) {
@@ -66,6 +93,8 @@ function groupByDate(activities) {
 
 export default function ActivityFeed({ activities = [], compact = false }) {
   const grouped = useMemo(() => groupByDate(activities), [activities]);
+
+  if (activities.length === 0) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 0 : 12 }}>
@@ -90,118 +119,114 @@ export default function ActivityFeed({ activities = [], compact = false }) {
               </div>
             )}
 
-            {items.map((activity) => (
-              <div
-                key={activity.id}
-                style={{
-                  padding: compact ? "8px 0" : "12px 0",
-                  borderLeft: `2px solid ${ENTITY_COLORS[activity.entityType] || "rgba(255,255,255,0.10)"}`,
-                  paddingLeft: 12,
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "flex-start",
-                }}
-              >
-                {/* Dot */}
+            {items.map((activity) => {
+              const entType = A.entityType(activity);
+              const entName = A.entityName(activity);
+              const user    = A.user(activity);
+              const projName = A.projectName(activity);
+              const action   = A.action(activity) || "";
+              const desc     = A.description(activity);
+              const ts       = A.timestamp(activity);
+              return (
                 <div
+                  key={activity.id}
                   style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: ENTITY_COLORS[activity.entityType] || "var(--accent)",
-                    flexShrink: 0,
-                    marginTop: 3,
-                    boxShadow: `0 0 4px ${ENTITY_COLORS[activity.entityType] || "var(--accent)"}`,
+                    padding: compact ? "8px 0" : "12px 0",
+                    borderLeft: `2px solid ${ENTITY_COLORS[entType] || "var(--border-default)"}`,
+                    paddingLeft: 12,
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
                   }}
-                />
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                >
+                  {/* Dot */}
                   <div
                     style={{
-                      fontFamily: "var(--font-body)",
-                      fontSize: compact ? 11 : 12,
-                      color: "var(--text-primary)",
-                      lineHeight: 1.4,
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: ACTION_COLORS[action] || "var(--accent)",
+                      flexShrink: 0,
+                      marginTop: 3,
+                      boxShadow: `0 0 4px ${ACTION_COLORS[action] || "var(--accent)"}`,
                     }}
-                  >
-                    <span style={{ fontWeight: 500 }}>{activity.userName}</span>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      {" "}
-                      {ACTION_VERBS[activity.action] || activity.action}
-                    </span>
-                    <span style={{ fontWeight: 500 }}> {activity.entityName}</span>
-                  </div>
+                  />
 
-                  {activity.description && (
+                  {/* Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
                         fontFamily: "var(--font-body)",
-                        fontSize: 10,
-                        color: "var(--text-muted)",
-                        marginTop: 2,
+                        fontSize: compact ? 11 : 12,
+                        color: "var(--text-primary)",
+                        lineHeight: 1.4,
                       }}
                     >
-                      {activity.description}
+                      <span style={{ fontWeight: 500 }}>{user || "Someone"}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>
+                        {" "}{ACTION_VERBS[action] || action || "updated"}
+                      </span>
+                      {entName && <span style={{ fontWeight: 500 }}> {entName}</span>}
                     </div>
-                  )}
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      alignItems: "center",
-                      marginTop: 4,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 9,
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {timeAgo(activity.timestamp)}
-                    </span>
-
-                    {activity.projectName && (
-                      <span
+                    {desc && (
+                      <div
                         style={{
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 8,
-                          background: "var(--warning-muted)",
-                          border: "1px solid var(--warning-border)",
-                          borderRadius: 4,
-                          padding: "2px 6px",
-                          color: "var(--status-warning)",
-                          letterSpacing: "0.06em",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 10,
+                          color: "var(--text-muted)",
+                          marginTop: 2,
                         }}
                       >
-                        {activity.projectName}
-                      </span>
+                        {desc}
+                      </div>
                     )}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        marginTop: 4,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {ts && (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 9,
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {timeAgo(ts)}
+                        </span>
+                      )}
+
+                      {projName && (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 8,
+                            background: "var(--warning-muted)",
+                            border: "1px solid var(--warning-border)",
+                            borderRadius: 4,
+                            padding: "2px 6px",
+                            color: "var(--status-warning)",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          {projName}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}
-
-      {activities.length === 0 && (
-        <div
-          style={{
-            padding: "24px 0",
-            textAlign: "center",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
-            color: "var(--text-muted)",
-          }}
-        >
-          No activity yet
-        </div>
-      )}
     </div>
   );
 }

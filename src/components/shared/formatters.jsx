@@ -7,14 +7,22 @@ export const roundCurrency = (value) => {
   return Math.round(n * 100) / 100;
 };
 
-export const formatCurrency = (value) => {
+/**
+ * Format a value as USD. `decimals` defaults to 2; pass 0 when you want
+ * whole-dollar display (dashboards, KPI tiles). Intl.NumberFormat handles
+ * negatives correctly (`-$1,234.00` / `-$1,234`) so callers don't need to
+ * Math.abs + prefix their own sign.
+ */
+export const formatCurrency = (value, decimals = 2) => {
   const num = Number(value);
-  if (value == null || isNaN(num)) return "$0.00";
+  if (value == null || isNaN(num)) {
+    return decimals === 0 ? "$0" : "$0.00";
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(num);
 };
 
@@ -91,11 +99,31 @@ export const daysOverdue = (dueDate) => {
 
 export const isOverdue = (dueDate, status, closedStatuses = []) => {
   if (!dueDate) return false;
-  if (closedStatuses.includes(status)) return false;
+  if (statusIn(status, closedStatuses)) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = parseUTCDate(dueDate);
   return due ? due < today : false;
 };
+
+/**
+ * Case-insensitive status comparison
+ * @param {string|null|undefined} value - The status value to check
+ * @param {string} target - The target to compare against
+ * @returns {boolean}
+ */
+export function statusIs(value, target) {
+  if (!value || !target) return false;
+  return String(value).trim().toLowerCase() === String(target).trim().toLowerCase();
+}
+
+/**
+ * Check if status is one of several values (case-insensitive)
+ */
+export function statusIn(value, targets) {
+  if (!value || !targets) return false;
+  const v = String(value).trim().toLowerCase();
+  return targets.some(t => String(t).trim().toLowerCase() === v);
+}
 
 export { todayLocalISO };

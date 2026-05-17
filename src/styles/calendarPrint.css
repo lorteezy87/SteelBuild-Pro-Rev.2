@@ -1,0 +1,58 @@
+/*
+ * calendarPrint.css — print-only stylesheet for the Project Calendar.
+ *
+ * Hides the app shell (sidebar, top bar, command bar action buttons)
+ * and expands the month grid to fill landscape Letter paper.
+ *
+ * Activated by adding `class="printing-calendar"` to <body> while
+ * window.print() runs (via JS toggle in ProjectCalendar.jsx).
+ */
+
+@media print {
+  /* Force landscape orientation + tight margins */
+  @page {
+    size: letter landscape;
+    margin: 0.4in;
+  }
+
+  body.printing-calendar {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide app chrome — sidebar, top bar, and any element opted-out */
+  body.printing-calendar aside[aria-label="Primary navigation"],
+  body.printing-calendar header,
+  body.printing-calendar nav[aria-label="primary"],
+  body.printing-calendar .calendar-no-print {
+    display: none !important;
+  }
+
+  body.printing-calendar .calendar-print-root {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+
+  /* Make day cells slightly shorter so the full month fits one page */
+  body.printing-calendar .calendar-month-grid {
+    grid-template-rows: repeat(6, minmax(105px, 1fr)) !important;
+    background: #ffffff !important;
+    border-color: #888 !important;
+  }
+  body.printing-calendar .calendar-day-cell {
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    border-color: #ccc !important;
+  }
+  body.printing-calendar .calendar-dow-header {
+    background: #f4f4f4 !important;
+  }
+
+  /* Tone down event pills to print-friendly contrast */
+  body.printing-calendar .calendar-day-cell button {
+    color: #000 !important;
+  }
+}

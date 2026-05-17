@@ -5,7 +5,8 @@ import PhoenixModal, { btnPrimary, btnSecondary, inputStyle, inputDisabledStyle,
 
 const empty = {
   name: "", project_id: "", project_name: "", phase: "Detailing",
-  released_date: "", status: "Not Started", tonnage: 0,
+  released_date: "", scheduled_start_date: "", scheduled_end_date: "",
+  status: "Not Started", tonnage: 0,
   shop_hours_budget: 0, shop_hours_actual: 0,
   field_hours_budget: 0, field_hours_actual: 0,
   crew: "", linked_drawing_ids: "", linked_rfi_ids: "", notes: "", percent_complete: 0,
@@ -52,6 +53,12 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const validate = () => {
     const e = {};
     if (!form.name?.trim()) e.name = "Required";
+    // Enforce workflow: Fabrication requires at least one approved linked drawing
+    if (form.phase === "Fabrication" && linkedDrawingIds.length === 0) {
+      e.phase = "Cannot advance to Fabrication without linked drawings";
+    } else if (form.phase === "Fabrication" && !hasApprovedLinkedDrawings) {
+      e.phase = "Linked drawings must be approved (Released/IFC) before Fabrication";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -59,7 +66,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
   const handleSave = () => {
     if (!validate()) return;
     // Strip read-only / server-generated fields before sending
-    const { id, created_at, updated_at, created_date, updated_date, ...rest } = form;
+    const { id: _id, created_at: _ca, updated_at: _ua, created_date: _cd, updated_date: _ud, ...rest } = form;
     const data = {
       ...rest,
       linked_drawing_ids: linkedDrawingIds.join(","),
@@ -99,7 +106,10 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
     )
   );
 
-  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "FFF", "BFS", "Approved"];
+  // "Approved" = drawings past the BFA gate. In the corrected 7-stage flow
+  // (migration 077): OFS, IFC, Released. "Approved" string kept for any
+  // legacy submittal-shape data flowing through here.
+  const APPROVED_STAGES = ["Released", "IFC", "Issued for Construction", "OFS", "Approved", "Approved as Noted"];
   const draftWarning = getDraftDrawingsWarning(linkedDrawingIds.join(","), allDrawings);
   const hasProjectSelected = !!form.project_id;
   const projectDrawingCount = projectDrawings.length;
@@ -153,7 +163,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         <FormField label="Name *" error={errors.name} span2>
           <input style={inputStyle} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Work package name..." />
         </FormField>
-        <FormField label="Phase">
+        <FormField label="Phase" error={errors.phase}>
           <select style={selectStyle} value={form.phase} onChange={e => set("phase", e.target.value)}>
             {["Detailing", "Fabrication", "Delivery", "Erection"].map(o => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -194,6 +204,16 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
         </FormField>
         <FormField label="Released Date">
           <input type="date" style={inputStyle} value={form.released_date} onChange={e => set("released_date", e.target.value)} />
+        </FormField>
+
+        {/* Scheduling window — drives placement on the Resource Scheduling
+            board. Can also be set by drag-and-drop from the scheduling
+            page; this form lets a user set them directly. */}
+        <FormField label="Scheduled Start">
+          <input type="date" style={inputStyle} value={form.scheduled_start_date || ""} onChange={e => set("scheduled_start_date", e.target.value)} />
+        </FormField>
+        <FormField label="Scheduled End">
+          <input type="date" style={inputStyle} value={form.scheduled_end_date || ""} onChange={e => set("scheduled_end_date", e.target.value)} />
         </FormField>
 
         {/* ── Section 3: Labor Budget ── */}
@@ -265,14 +285,14 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
               style={inputStyle}
             />
             {showDrawingDropdown && filteredDrawings.length > 0 && (
-               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface-secondary)", border: "1px solid var(--border-default)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10 }}>
+               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgb(12,17,25)", border: "1px solid rgba(135,154,180,0.28)", borderTop: "none", borderRadius: "0 0 8px 8px", maxHeight: 200, overflowY: "auto", zIndex: 10, boxShadow: "0 16px 34px rgba(0,0,0,0.55)" }}>
                  {filteredDrawings.map(d => (
                    <div
                      key={d.id}
                      onMouseDown={() => addDrawing(d.id)}
                      style={{ padding: "8px 10px", borderBottom: "1px solid var(--divider)", cursor: "pointer", fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                     onMouseEnter={e => e.currentTarget.style.background = "var(--hover-bg)"}
-                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                     onMouseEnter={e => e.currentTarget.style.background = "rgb(18,25,38)"}
+                     onMouseLeave={e => e.currentTarget.style.background = "rgb(12,17,25)"}
                    >
                      <span>[{d.sheet_number}] {d.title}</span>
                      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: "var(--text-muted)" }}>{d.stage}</span>
@@ -301,7 +321,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           {/* Draft drawings warning */}
           {draftWarning && draftWarning.length > 0 && linkedDrawingIds.length > 0 && (
             <div style={{ marginTop: 8, background: "var(--warning-muted)", border: "1px solid var(--warning-border)", borderLeft: "3px solid var(--status-warning)", borderRadius: "0 6px 6px 0", padding: "6px 10px" }}>
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 7, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ DRAWINGS NOT YET IFC</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: "var(--status-warning)", letterSpacing: "0.10em" }}>⚠ DRAWINGS NOT YET IFC</span>
               <p style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--text-secondary)", margin: "3px 0 0" }}>
                 {draftWarning.length} linked drawing(s) are not yet Issued for Construction. Fabrication should not begin until drawings are approved.
               </p>

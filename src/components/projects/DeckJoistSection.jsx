@@ -38,7 +38,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
           alignItems: 'center',
           gap: 10,
           padding: '16px 0 10px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--divider)',
           marginBottom: 16,
         }}
       >
@@ -74,8 +74,8 @@ export default function DeckJoistSection({ project, onUpdate }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--hover-bg)',
+            border: '1px solid var(--divider)',
             borderRadius: 8,
             marginBottom: 12,
             cursor: 'pointer',
@@ -97,7 +97,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.40)',
+                color: 'var(--text-muted)',
                 marginTop: 2,
               }}
             >
@@ -112,10 +112,10 @@ export default function DeckJoistSection({ project, onUpdate }) {
               borderRadius: 12,
               background: project.hasDeck
                 ? 'var(--accent)'
-                : 'rgba(255,255,255,0.10)',
+                : 'var(--border-default)',
               border: project.hasDeck
                 ? '1px solid var(--accent-border)'
-                : '1px solid rgba(255,255,255,0.15)',
+                : '1px solid var(--border-strong)',
               position: 'relative',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -148,7 +148,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 7,
+                    fontSize: 9,
                     color: 'var(--text-muted)',
                     letterSpacing: '0.12em',
                     marginBottom: 8,
@@ -185,7 +185,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 7,
+                    fontSize: 9,
                     color: 'var(--text-muted)',
                     letterSpacing: '0.12em',
                     marginBottom: 8,
@@ -218,7 +218,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,
@@ -261,7 +261,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.deckStatus || 'Pending'}
                   onChange={(e) => handleChange('deckStatus', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -287,7 +287,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.deckLinkedDeliveryId || ''}
                   onChange={(e) => handleChange('deckLinkedDeliveryId', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -320,7 +320,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 rows={2}
                 style={{
                   width: '100%',
-                  background: 'var(--bg-sidebar)',
+                  background: 'var(--bg-surface-low)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 7,
                   color: 'var(--text-primary)',
@@ -344,8 +344,8 @@ export default function DeckJoistSection({ project, onUpdate }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 14px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--hover-bg)',
+            border: '1px solid var(--divider)',
             borderRadius: 8,
             marginBottom: 12,
             cursor: 'pointer',
@@ -367,7 +367,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               style={{
                 fontFamily: 'var(--font-body)',
                 fontSize: 10,
-                color: 'rgba(160,175,210,0.40)',
+                color: 'var(--text-muted)',
                 marginTop: 2,
               }}
             >
@@ -382,10 +382,10 @@ export default function DeckJoistSection({ project, onUpdate }) {
               borderRadius: 12,
               background: project.hasJoist
                 ? 'var(--accent)'
-                : 'rgba(255,255,255,0.10)',
+                : 'var(--border-default)',
               border: project.hasJoist
                 ? '1px solid var(--accent-border)'
-                : '1px solid rgba(255,255,255,0.15)',
+                : '1px solid var(--border-strong)',
               position: 'relative',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -416,7 +416,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,
@@ -453,7 +453,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 7,
+                  fontSize: 9,
                   color: 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: 8,
@@ -496,7 +496,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.joistStatus || 'Pending'}
                   onChange={(e) => handleChange('joistStatus', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -522,7 +522,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                   value={project.joistLinkedDeliveryId || ''}
                   onChange={(e) => handleChange('joistLinkedDeliveryId', e.target.value)}
                   style={{
-                    background: 'var(--bg-sidebar)',
+                    background: 'var(--bg-surface-low)',
                     border: '1px solid var(--border-default)',
                     borderRadius: 7,
                     height: 34,
@@ -555,7 +555,7 @@ export default function DeckJoistSection({ project, onUpdate }) {
                 rows={2}
                 style={{
                   width: '100%',
-                  background: 'var(--bg-sidebar)',
+                  background: 'var(--bg-surface-low)',
                   border: '1px solid var(--border-default)',
                   borderRadius: 7,
                   color: 'var(--text-primary)',
@@ -585,7 +585,7 @@ function DeckJoistInput({ label, value, onChange, required }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
           borderRadius: 7,
           height: 34,
@@ -612,7 +612,7 @@ function DeckJoistDate({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: '100%',
-          background: 'var(--bg-sidebar)',
+          background: 'var(--bg-surface-low)',
           border: '1px solid var(--border-default)',
           borderRadius: 7,
           height: 34,

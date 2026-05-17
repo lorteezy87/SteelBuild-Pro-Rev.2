@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { GANTT_PHASE_HEX, GANTT_TODAY_HEX } from "@/lib/ganttTheme";
 
 // ─── Phase colors (matches page) ────────────────────────────────────
 const PHASE_COLOR = {
-  Detailing:   "#8B5CF6",
-  Fabrication: "var(--accent)",
-  Delivery:    "#00B8D9",
-  Erection:    "#00D68F",
+  Detailing:   GANTT_PHASE_HEX.Detailing,
+  Fabrication: GANTT_PHASE_HEX.Fabrication,
+  Delivery:    GANTT_PHASE_HEX.Delivery,
+  Erection:    GANTT_PHASE_HEX.Erection,
 };
 
 const LEFT_COL = 340;
@@ -29,10 +30,6 @@ function fmtDate(d) {
 }
 function fmtDateLong(d) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-function isWeekend(d) {
-  const day = d.getDay();
-  return day === 0 || day === 6;
 }
 function startOfDay(d) {
   const x = new Date(d);
@@ -249,17 +246,17 @@ export default function WPGantt({ wps, updateMut }) {
   const totalHeight = wps.length * ROW_H;
 
   return (
-    <div style={{ background: "var(--bg-surface-low)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
+    <div style={{ background: "var(--sbd-gantt-panel)", border: "1px solid var(--sbd-gantt-grid-strong)", borderRadius: 12, overflow: "hidden", userSelect: "none" }}>
       {/* ── Toolbar ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "var(--info-muted)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Zoom */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 6, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div style={{ display: "flex", background: "var(--hover-bg)", borderRadius: 6, border: "1px solid var(--bg-surface-high)", overflow: "hidden" }}>
             {ZOOM_LEVELS.map((z, i) => (
               <button
                 key={z.id}
                 onClick={() => setZoomId(z.id)}
-                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "rgba(160,175,210,0.55)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
+                style={{ padding: "4px 10px", background: zoomId === z.id ? "var(--accent-muted)" : "transparent", border: "none", borderRight: i < ZOOM_LEVELS.length - 1 ? "1px solid var(--bg-surface-high)" : "none", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9, color: zoomId === z.id ? "var(--accent)" : "var(--text-secondary)", fontWeight: zoomId === z.id ? 700 : 400, letterSpacing: "0.08em" }}
               >
                 {z.label.toUpperCase()}
               </button>
@@ -279,7 +276,7 @@ export default function WPGantt({ wps, updateMut }) {
         {conflictList.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,23,68,0.10)", border: "1px solid rgba(255,23,68,0.30)", borderRadius: 6, padding: "4px 10px" }}>
             <span style={{ fontSize: 11 }}>⚠</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#FF3D3D", fontWeight: 700 }}>{conflictList.length} CONFLICT{conflictList.length > 1 ? "S" : ""}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--status-error-bright)", fontWeight: 700 }}>{conflictList.length} CONFLICT{conflictList.length > 1 ? "S" : ""}</span>
           </div>
         )}
       </div>
@@ -288,10 +285,10 @@ export default function WPGantt({ wps, updateMut }) {
       <div style={{ display: "flex", overflow: "hidden" }}>
 
         {/* LEFT COLUMN — WP info */}
-        <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ width: LEFT_COL, flexShrink: 0, borderRight: "1px solid var(--border-default)" }}>
           {/* Header spacer */}
-          <div style={{ height: HEADER_H, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", padding: "0 12px" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
+          <div style={{ height: HEADER_H, borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)", display: "flex", alignItems: "center", padding: "0 12px" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase" }}>Work Package</span>
           </div>
           {/* Rows */}
           <div ref={leftRef} style={{ overflowY: "hidden", maxHeight: Math.min(totalHeight, 500) }}>
@@ -301,7 +298,7 @@ export default function WPGantt({ wps, updateMut }) {
               return (
                 <div
                   key={wp.id}
-                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid rgba(255,255,255,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)", borderLeft: isConflict ? "2px solid #FF3D3D" : "2px solid transparent", gap: 8 }}
+                  style={{ height: ROW_H, display: "flex", alignItems: "center", padding: "0 10px 0 12px", borderBottom: "1px solid var(--sbd-gantt-grid)", background: i % 2 === 0 ? "var(--sbd-gantt-row)" : "var(--sbd-gantt-row-alt)", borderLeft: isConflict ? "2px solid var(--status-error-bright)" : "2px solid transparent", gap: 8 }}
                 >
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: "hidden" }}>
@@ -330,12 +327,12 @@ export default function WPGantt({ wps, updateMut }) {
           <div ref={timelineRef} style={{ width: totalWidth, position: "relative" }}>
 
             {/* HEADER — date ticks */}
-            <div style={{ height: HEADER_H, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(0,0,0,0.15)", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ height: HEADER_H, borderBottom: "1px solid var(--sbd-gantt-grid-strong)", background: "var(--sbd-gantt-header)", position: "sticky", top: 0, zIndex: 10 }}>
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
                 return (
                   <div key={i} style={{ position: "absolute", left: x, top: 0, height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <div style={{ width: 1, height: "100%", background: "rgba(255,255,255,0.05)", position: "absolute", left: 0, top: 0 }} />
+                    <div style={{ width: 1, height: "100%", background: "var(--sbd-gantt-grid)", position: "absolute", left: 0, top: 0 }} />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", paddingLeft: 5, whiteSpace: "nowrap" }}>
                       {zoom.fmt(tick)}
                     </span>
@@ -345,7 +342,7 @@ export default function WPGantt({ wps, updateMut }) {
               {/* Today marker in header */}
               {todayOffset >= 0 && todayOffset <= totalWidth && (
                 <div style={{ position: "absolute", left: todayOffset, top: 0, height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 4, zIndex: 2 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent)", fontWeight: 700, background: "var(--bg-page)", padding: "0 3px" }}>TODAY</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#fff", fontWeight: 700, background: GANTT_TODAY_HEX, padding: "0 3px" }}>TODAY</span>
                 </div>
               )}
             </div>
@@ -354,18 +351,18 @@ export default function WPGantt({ wps, updateMut }) {
             <div style={{ position: "relative", height: totalHeight }}>
               {/* Weekend bands */}
               {weekendBands.map((b, i) => (
-                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "rgba(255,255,255,0.015)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: b.x, top: 0, width: b.width, height: totalHeight, background: "var(--sbd-gantt-weekend)", pointerEvents: "none" }} />
               ))}
 
               {/* Vertical tick lines */}
               {ticks.map((tick, i) => {
                 const x = daysBetween(rangeStart, tick) * pxPerDay;
-                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />;
+                return <div key={i} style={{ position: "absolute", left: x, top: 0, width: 1, height: totalHeight, background: "var(--sbd-gantt-grid)", pointerEvents: "none" }} />;
               })}
 
               {/* Today line */}
               {todayOffset >= 0 && todayOffset <= totalWidth && (
-                <div style={{ position: "absolute", left: todayOffset, top: 0, width: 2, height: totalHeight, background: "var(--accent)", opacity: 0.6, pointerEvents: "none", zIndex: 3 }} />
+                <div style={{ position: "absolute", left: todayOffset, top: 0, width: 2, height: totalHeight, background: GANTT_TODAY_HEX, opacity: 0.95, pointerEvents: "none", zIndex: 3, boxShadow: "0 0 12px rgba(255,107,0,0.45)" }} />
               )}
 
               {/* WP bars */}
@@ -390,7 +387,7 @@ export default function WPGantt({ wps, updateMut }) {
                       borderRadius: 5,
                       background: `${phColor}30`,
                       border: isConflict
-                        ? "1.5px dashed #FF3D3D"
+                        ? "1.5px dashed var(--status-error-bright)"
                         : isDragging
                           ? `1.5px solid ${phColor}`
                           : `1px solid ${phColor}60`,
@@ -403,7 +400,7 @@ export default function WPGantt({ wps, updateMut }) {
                       {barW > 60 && (
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 8, gap: 4, overflow: "hidden" }}>
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: phColor, fontWeight: 700, whiteSpace: "nowrap" }}>{wp.wp_number}</span>
-                          {barW > 120 && <span style={{ fontFamily: "var(--font-body)", fontSize: 9, color: "rgba(255,255,255,0.70)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wp.name}</span>}
+                          {barW > 120 && <span style={{ fontFamily: "var(--font-body)", fontSize: 9, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{wp.name}</span>}
                           {barW > 180 && wp.tonnage > 0 && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{Number(wp.tonnage).toLocaleString()}T</span>}
                         </div>
                       )}
@@ -430,12 +427,12 @@ export default function WPGantt({ wps, updateMut }) {
 
               {/* Row separators */}
               {wps.map((_, i) => (
-                <div key={i} style={{ position: "absolute", left: 0, top: (i + 1) * ROW_H, width: "100%", height: 1, background: "rgba(255,255,255,0.035)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: 0, top: (i + 1) * ROW_H, width: "100%", height: 1, background: "var(--hover-bg)", pointerEvents: "none" }} />
               ))}
 
               {/* Row hover bands (even rows) */}
               {wps.map((_, i) => i % 2 === 1 ? (
-                <div key={i} style={{ position: "absolute", left: 0, top: i * ROW_H, width: "100%", height: ROW_H, background: "rgba(255,255,255,0.012)", pointerEvents: "none" }} />
+                <div key={i} style={{ position: "absolute", left: 0, top: i * ROW_H, width: "100%", height: ROW_H, background: "var(--hover-bg)", pointerEvents: "none" }} />
               ) : null)}
             </div>
           </div>
@@ -445,7 +442,7 @@ export default function WPGantt({ wps, updateMut }) {
       {/* Conflicts list */}
       {conflictList.length > 0 && (
         <div style={{ borderTop: "1px solid rgba(255,23,68,0.20)", padding: "8px 14px", background: "rgba(255,23,68,0.05)" }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "#FF3D3D", letterSpacing: "0.12em", marginBottom: 6 }}>SCHEDULING CONFLICTS</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-error-bright)", letterSpacing: "0.12em", marginBottom: 6 }}>SCHEDULING CONFLICTS</div>
           {conflictList.map((c, i) => (
             <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,100,100,0.85)", marginBottom: 3 }}>
               ⚠ <strong>{c.type}</strong> — {c.wp1.name} (Delivery) vs {c.wp2.name} (Erection)

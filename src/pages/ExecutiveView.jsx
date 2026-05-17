@@ -11,6 +11,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import TrueHealthChart from "../components/dashboard/TrueHealthChart";
+import { CommandBar } from "@/components/design-system";
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -55,12 +56,12 @@ const healthColors = [
 
 export default function ExecutiveView() {
   const navigate = useNavigate();
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
-  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list(), initialData: [] });
-  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => base44.entities.ChangeOrder.list(), initialData: [] });
-  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => base44.entities.CostCode.list(), initialData: [] });
-  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => base44.entities.WorkPackage.list(), initialData: [] });
-  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => base44.entities.ScheduleTask.list(), initialData: [] });
+  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), staleTime: 5 * 60 * 1000 });
+  const { data: rfis = [] } = useQuery({ queryKey: ["rfis"], queryFn: () => base44.entities.RFI.list() });
+  const { data: cos = [] } = useQuery({ queryKey: ["change-orders-global"], queryFn: () => base44.entities.ChangeOrder.list() });
+  const { data: codes = [] } = useQuery({ queryKey: ["cost-codes-global"], queryFn: () => base44.entities.CostCode.list() });
+  const { data: wps = [] } = useQuery({ queryKey: ["work-packages-global"], queryFn: () => base44.entities.WorkPackage.list() });
+  const { data: tasks = [] } = useQuery({ queryKey: ['schedule-tasks-global'], queryFn: () => base44.entities.ScheduleTask.list() });
 
   const totalContract = projects.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0);
   const approvedCOVal = cos.filter((c) => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0);
@@ -161,15 +162,13 @@ export default function ExecutiveView() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header */}
-      <div>
-        <h1 style={{ fontFamily: "var(--font-mono)", fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          Executive Roll-Up
-        </h1>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-          Portfolio analytics &middot; {projects.length} projects
-        </p>
-      </div>
+      <CommandBar
+        eyebrow="C-SUITE"
+        title="Executive Roll-Up"
+        count={projects.length}
+        unit=" · PROJECTS"
+        subtitle="Portfolio analytics · phase mix · health · budget vs actual · labor burn"
+      />
 
       <KPIStrip items={kpis} />
 
@@ -337,7 +336,7 @@ export default function ExecutiveView() {
             <div style={{
               display: "grid", gridTemplateColumns: "2fr 80px 90px 120px",
               padding: "9px 16px",
-              background: "var(--bg-sidebar)",
+              background: "var(--bg-surface-low)",
               borderBottom: "1px solid var(--divider)",
             }}>
               {["Project", "Open", "Overdue", "Avg Days Open"].map(col => (

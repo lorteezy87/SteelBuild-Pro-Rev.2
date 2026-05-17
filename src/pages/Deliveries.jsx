@@ -1,115 +1,232 @@
+/**
+ * Deliveries - logistics control surface for shipping tickets, load-out,
+ * in-transit tracking, receiving, and exception follow-up.
+ */
+
 import React, { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Filter,
+  LayoutGrid,
+  List,
+  MapPin,
+  PackageCheck,
+  Search,
+  Truck,
+  Warehouse,
+  Weight,
+} from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import { invalidateEntity } from "@/services/cacheRegistry";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
 import DeliveryFormModal from "@/components/deliveries/DeliveryFormModal";
+import ShippingTicketImportModal from "@/components/deliveries/ShippingTicketImportModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import { batchProcess } from "@/utils/batchProcess";
+import { BulkActionBar, Button, EmptyState, ProgressBar, StatusPill } from "@/components/design-system";
+import { exportDeliveriesCSV, isFabComplete } from "./deliveries/utils";
+import {
+  buildDeliveryMetrics,
+  deliveryLane,
+  getDeliveryDisplayName,
+  sortDeliveriesForDispatch,
+} from "./deliveries/analytics";
 
-const STATUS_COLORS = {
-  Scheduled: { bg: "rgba(234,179,8,0.18)", text: "var(--status-warning)", border: "var(--status-warning)" },
-  "In Transit": { bg: "rgba(0,229,255,0.06)", text: "var(--status-info)", border: "var(--status-info)" },
-  Delivered: { bg: "rgba(34,197,94,0.18)", text: "var(--status-success)", border: "var(--status-success)" },
-  Partial: { bg: "rgba(251,146,60,0.20)", text: "var(--status-warning)", border: "var(--status-warning)" },
-  Rejected: { bg: "rgba(239,68,68,0.20)", text: "var(--status-error)", border: "var(--status-error)" },
+const VIEW_OPTIONS = [
+  { id: "dispatch", label: "Dispatch", icon: LayoutGrid },
+  { id: "schedule", label: "Schedule", icon: CalendarDays },
+  { id: "register", label: "Register", icon: List },
+];
+
+const LANE_ORDER = ["Exceptions", "Scheduled", "Loading", "In Transit", "Delivered"];
+const SCHEDULE_FILTERS = [
+  { id: "all", label: "All Loads" },
+  { id: "late", label: "Late" },
+  { id: "today", label: "Today" },
+  { id: "week", label: "7 Days" },
+  { id: "ready", label: "Ready" },
+  { id: "unscheduled", label: "No Date" },
+  { id: "longLead", label: "Long Lead" },
+];
+const RISK_FILTERS = [
+  { id: "all", label: "All Risk" },
+  { id: "high", label: "Exceptions" },
+  { id: "medium", label: "Warnings" },
+  { id: "clear", label: "Clear" },
+];
+const STATUS_COLOR = {
+  Scheduled: "var(--status-info)",
+  Loading: "var(--status-warning)",
+  "In Transit": "var(--phase-delivery)",
+  Delivered: "var(--status-success)",
+  Partial: "var(--status-warning)",
+  Delayed: "var(--status-error)",
+  Rejected: "var(--status-error)",
+  Exceptions: "var(--status-error)",
 };
+const display = { fontFamily: "var(--font-display)" };
+const mono = { fontFamily: "var(--font-mono)" };
 
-const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected"];
+function num(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-function exportToCSV(deliveries, projectMap = {}, wpMap = {}, filename = "deliveries.csv") {
-  const headers = [
-    "Project",
-    "Delivery Title",
-    "Work Package",
-    "Vendor",
-    "PO Number",
-    "Carrier",
-    "Tracking",
-    "Status",
-    "Scheduled Date",
-    "Required Date",
-    "Actual Date",
-    "Pieces",
-    "Weight (Tons)",
-    "Priority",
-    "Receiving Location",
-    "Received By",
-    "Notes",
-  ];
-  const rows = deliveries.map((d) => [
-    projectMap[d.project_id] || "",
-    d.delivery_title || "",
-    wpMap[d.work_package_id] || "",
-    d.vendor || "",
-    d.po_number || "",
-    d.carrier || "",
-    d.tracking_number || "",
-    d.status || "",
-    d.scheduled_date || "",
-    d.required_date || "",
-    d.actual_date || "",
-    d.pieces || "",
-    d.weight_tons || "",
-    d.priority || "Normal",
-    d.receiving_location || "",
-    d.received_by || "",
-    (d.notes || "").replace(/,/g, ";"),
-  ]);
-  const csv = [headers, ...rows]
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function todayIso() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function dateValue(value) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDate(value, fallback = "TBD") {
+  const parsed = dateValue(value);
+  if (!parsed) return fallback;
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatTons(value) {
+  return `${num(value).toFixed(1)}T`;
+}
+
+function formatPieces(value) {
+  const pieces = num(value);
+  return pieces ? pieces.toLocaleString() : "0";
+}
+
+function riskColor(risk) {
+  if (risk === "high") return "var(--status-error)";
+  if (risk === "medium") return "var(--status-warning)";
+  return "var(--status-success)";
 }
 
 export default function Deliveries() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const qc = useQueryClient();
+  const receiveMode = searchParams.get("receive") === "1";
 
-  const [view, setView] = useState("TABLE");
-  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [view, setView] = useState("dispatch");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [scheduleFilter, setScheduleFilter] = useState("all");
+  const [riskFilter, setRiskFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("DUE");
-  const [overdueFirst, setOverdueFirst] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [collapsedProjects, setCollapsedProjects] = useState({});
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const quickCompleteMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
-      toast.success("Delivery marked delivered");
-    },
-    onError: () => toast.error("Update failed"),
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setDetail(null);
+    setShowForm(true);
   });
+
+  const { data: deliveries = [], isLoading } = useQuery({
+    queryKey: ["deliveries", projectId || "all"],
+    queryFn: () =>
+      projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : base44.entities.Delivery.list(),
+    staleTime: 60000,
+    refetchInterval: 60000,
+  });
+
+  useRealtimeInvalidation("deliveries", projectId, [["deliveries", projectId || "all"]]);
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: workPackages = [] } = useQuery({
+    queryKey: ["work-packages", projectId || "all"],
+    queryFn: () =>
+      projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : base44.entities.WorkPackage.list(),
+    staleTime: 60000,
+  });
+
+  const projectMap = useMemo(() => {
+    const map = {};
+    for (const project of projects) map[project.id] = project.name || project.project_name || "";
+    return map;
+  }, [projects]);
+
+  const workPackageMap = useMemo(() => {
+    const map = {};
+    for (const wp of workPackages) map[wp.id] = wp;
+    return map;
+  }, [workPackages]);
+
+  const wpLabelMap = useMemo(() => {
+    const map = {};
+    for (const wp of workPackages) map[wp.id] = wp.wp_number || wp.name || "";
+    return map;
+  }, [workPackages]);
+
+  const activeDeliveries = useMemo(
+    () => deliveries.filter((delivery) => !delivery?.is_deleted),
+    [deliveries]
+  );
+
+  const metrics = useMemo(
+    () => buildDeliveryMetrics(activeDeliveries, workPackages),
+    [activeDeliveries, workPackages]
+  );
+
+  useEffect(() => {
+    if (!receiveMode) return;
+    setView("schedule");
+    setRiskFilter("all");
+    setScheduleFilter(
+      metrics.overdue.length
+        ? "late"
+        : metrics.dueToday.length
+          ? "today"
+          : metrics.readyToReceive.length
+            ? "ready"
+            : "all"
+    );
+  }, [metrics.dueToday.length, metrics.overdue.length, metrics.readyToReceive.length, receiveMode]);
+
+  const invalidateDeliveries = () => invalidateEntity(qc, "delivery", projectId);
 
   const transitMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Delivery.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
-      toast.success("Status updated");
+    onSuccess: async (_result, variables) => {
+      await invalidateDeliveries();
+      setDetail((prev) => (prev?.id === variables.id ? null : prev));
+      toast.success("Delivery status updated");
     },
     onError: () => toast.error("Update failed"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.Delivery.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
+    onSuccess: async () => {
+      await invalidateDeliveries();
       if (detail?.id === deleteTarget?.id) setDetail(null);
       if (editing?.id === deleteTarget?.id) setEditing(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (deleteTarget?.id) next.delete(deleteTarget.id);
+        return next;
+      });
       setDeleteTarget(null);
       toast.success("Delivery removed");
     },
@@ -118,1178 +235,488 @@ export default function Deliveries() {
 
   const bulkUpdateMut = useMutation({
     mutationFn: async ({ ids, status }) => {
-      await Promise.all(
-        ids.map((id) =>
-          base44.entities.Delivery.update(id, {
-            status,
-            actual_date: status === "Delivered" ? new Date().toISOString().split("T")[0] : null,
-          })
-        )
+      const { succeeded, failed } = await batchProcess(ids, (id) =>
+        base44.entities.Delivery.update(id, {
+          status,
+          actual_date: status === "Delivered" ? todayIso() : null,
+        })
       );
+      if (failed.length > 0 && succeeded.length === 0) {
+        throw new Error(`All ${failed.length} updates failed.`);
+      }
+      return { succeeded, failed };
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["deliveries"] });
+    onSuccess: async (results) => {
+      await invalidateDeliveries();
       setSelectedIds(new Set());
-      toast.success("Deliveries updated");
+      if (results.failed.length > 0) {
+        toast.warning(`${results.succeeded.length} updated, ${results.failed.length} failed`);
+      } else {
+        toast.success("Deliveries updated");
+      }
     },
     onError: () => toast.error("Bulk update failed"),
   });
 
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["deliveries", projectId],
-    queryFn: () => base44.entities.Delivery.filter({ project_id: projectId }),
-    enabled: !!projectId,
-    refetchInterval: 30000,
-  });
-
-  const { data: projects = [] } = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => base44.entities.Project.list(),
-  });
-
-  const { data: workPackages = [] } = useQuery({
-    queryKey: ["work-packages", projectId],
-    queryFn: () => projectId ? base44.entities.WorkPackage.filter({ project_id: projectId }) : Promise.resolve([]),
-    enabled: !!projectId,
-  });
-
-  // Lookup maps: resolve project_id → name, work_package_id → name at display time
-  const projectMap = useMemo(() => {
-    const map = {};
-    for (const p of projects) map[p.id] = p.name || p.project_name || "";
-    return map;
-  }, [projects]);
-
-  const wpMap = useMemo(() => {
-    const map = {};
-    for (const wp of workPackages) map[wp.id] = wp.name || wp.wp_number || "";
-    return map;
-  }, [workPackages]);
-
-  const projectCount = useMemo(() => {
-    const ids = new Set(deliveries.map((d) => d.project_id));
-    return ids.size;
-  }, [deliveries]);
-
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-  const in7 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 7);
-    return d;
-  }, [today]);
-  const in30 = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 30);
-    return d;
-  }, [today]);
-
   const filtered = useMemo(() => {
-    return deliveries
-      .filter((d) => {
-        if (filterStatus !== "ALL" && d.status !== filterStatus) return false;
-        const q = search.trim().toLowerCase();
-        if (q.length) {
-          const hay =
-            `${d.delivery_title || ""} ${wpMap[d.work_package_id] || ""} ${d.vendor || ""} ${d.po_number || ""} ${projectMap[d.project_id] || ""} ${d.carrier || ""} ${d.tracking_number || ""}`.toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
+    const q = search.trim().toLowerCase();
+    return metrics.enriched
+      .filter((delivery) => {
+        const signals = delivery._signals;
+        if (statusFilter !== "all" && signals.status !== statusFilter) return false;
+        if (riskFilter !== "all" && signals.risk !== riskFilter) return false;
+        if (scheduleFilter === "late" && !signals.overdue) return false;
+        if (scheduleFilter === "today" && !signals.dueToday) return false;
+        if (scheduleFilter === "week" && !signals.dueNext7) return false;
+        if (scheduleFilter === "ready" && !metrics.readyToReceive.some((item) => item.id === delivery.id)) return false;
+        if (scheduleFilter === "unscheduled" && !signals.unscheduled) return false;
+        if (scheduleFilter === "longLead" && !signals.longLead) return false;
+        if (!q) return true;
+        const wp = workPackageMap[delivery.work_package_id];
+        const haystack = [
+          delivery.delivery_number,
+          delivery.delivery_title,
+          delivery.description,
+          delivery.vendor,
+          delivery.po_number,
+          delivery.carrier,
+          delivery.tracking_number,
+          delivery.truck_number,
+          delivery.load_number,
+          delivery.load_category,
+          delivery.procurement_category,
+          delivery.receiving_location,
+          projectMap[delivery.project_id],
+          wp?.wp_number,
+          wp?.name,
+        ].join(" ").toLowerCase();
+        return haystack.includes(q);
       })
-      .sort((a, b) => {
-        const aDate = a.scheduled_date ? new Date(a.scheduled_date) : null;
-        const bDate = b.scheduled_date ? new Date(b.scheduled_date) : null;
-        if (overdueFirst) {
-          const aOver = aDate && aDate < today && a.status !== "Delivered";
-          const bOver = bDate && bDate < today && b.status !== "Delivered";
-          if (aOver && !bOver) return -1;
-          if (!aOver && bOver) return 1;
-        }
-        if (sortBy === "PROJECT") {
-          return (projectMap[a.project_id] || "").localeCompare(projectMap[b.project_id] || "");
-        }
-        if (sortBy === "VENDOR") {
-          return (a.vendor || "").localeCompare(b.vendor || "");
-        }
-        if (sortBy === "TONNAGE") {
-          return (Number(b.weight_tons) || 0) - (Number(a.weight_tons) || 0);
-        }
-        return (aDate?.getTime() || 0) - (bDate?.getTime() || 0);
-      });
-  }, [deliveries, filterStatus, search, sortBy, overdueFirst, today, projectMap, wpMap]);
+      .sort(sortDeliveriesForDispatch);
+  }, [metrics, projectMap, riskFilter, scheduleFilter, search, statusFilter, workPackageMap]);
 
-  const grouped = useMemo(() => {
-    if (projectId) return null;
-    return filtered.reduce((acc, d) => {
-      const key = projectMap[d.project_id] || "Unassigned";
-      acc[key] = acc[key] || [];
-      acc[key].push(d);
-      return acc;
-    }, {});
-  }, [filtered, projectId, projectMap]);
-
-  const kpis = useMemo(() => {
-    const scheduled = deliveries.filter((d) => d.status === "Scheduled").length;
-    const inTransit = deliveries.filter((d) => d.status === "In Transit").length;
-    const delivered = deliveries.filter((d) => d.status === "Delivered").length;
-    const partial = deliveries.filter((d) => ["Partial", "Rejected"].includes(d.status)).length;
-    const overdue = deliveries.filter(
-      (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
-    ).length;
-    const dueWeek = deliveries.filter((d) => {
-      if (!d.scheduled_date) return false;
-      const dt = new Date(d.scheduled_date);
-      return dt >= today && dt <= in7 && d.status !== "Delivered";
-    }).length;
-    const dueMonth = deliveries.filter((d) => {
-      if (!d.scheduled_date) return false;
-      const dt = new Date(d.scheduled_date);
-      return dt >= today && dt <= in30 && d.status !== "Delivered";
-    }).length;
-    const tonsPending = deliveries
-      .filter((d) => d.status !== "Delivered")
-      .reduce((s, d) => s + (Number(d.weight_tons) || 0), 0)
-      .toFixed(1);
-    return { scheduled, inTransit, delivered, partial, overdue, dueWeek, dueMonth, tonsPending };
-  }, [deliveries, today, in7, in30]);
+  const laneGroups = useMemo(() => {
+    const groups = Object.fromEntries(LANE_ORDER.map((lane) => [lane, []]));
+    for (const delivery of filtered) {
+      const lane = deliveryLane(delivery);
+      if (!groups[lane]) groups.Exceptions.push(delivery);
+      else groups[lane].push(delivery);
+    }
+    return groups;
+  }, [filtered]);
 
   useEffect(() => {
-    if (!deliveries.length) return;
+    if (!projectId || !metrics.overdue.length) return undefined;
     const createDeliveryAlerts = async () => {
       try {
         const existing = await base44.entities.Alert.filter({ alert_type: "Delivery_Overdue" });
-        const existingIds = new Set(existing.map((a) => a.related_record_id));
-        const todayZero = new Date();
-        todayZero.setHours(0, 0, 0, 0);
-        for (const d of deliveries) {
-          if (d.status === "Delivered") continue;
-          if (!d.scheduled_date) continue;
-          const sched = new Date(d.scheduled_date);
-          sched.setHours(0, 0, 0, 0);
-          const daysLate = Math.floor((todayZero - sched) / 86400000);
-          if (daysLate <= 0) continue;
-          if (existingIds.has(d.id)) continue;
-          const liveProjectName = projectMap[d.project_id] || "";
-          const liveDesc = d.delivery_title || wpMap[d.work_package_id] || "Delivery";
+        const existingIds = new Set(existing.map((alert) => alert.related_record_id).filter(Boolean));
+        const existingTitles = new Set(existing.map((alert) => alert.title));
+        for (const delivery of metrics.overdue) {
+          if (existingIds.has(delivery.id)) continue;
+          const projectName = projectMap[delivery.project_id] || "";
+          const wp = workPackageMap[delivery.work_package_id];
+          const desc = getDeliveryDisplayName(delivery, wp);
+          const daysLate = delivery._signals.flags.find((flag) => flag.key === "overdue")?.label || "late";
+          const alertTitle = `Delivery from ${delivery.vendor || "Unknown"} is ${daysLate}`;
+          if (existingTitles.has(alertTitle)) continue;
           await base44.entities.Alert.create({
             alert_type: "Delivery_Overdue",
-            severity: daysLate >= 7 ? "Critical" : daysLate >= 3 ? "High" : "Medium",
-            title: `Delivery from ${d.vendor} is ${daysLate}d overdue`,
-            message: `${liveDesc} from ${d.vendor} · PO: ${d.po_number || "—"} · Scheduled: ${
-              d.scheduled_date
-            } · Status: ${d.status} · Project: ${liveProjectName || "—"}`,
-            related_entity: "Delivery",
-            related_record_id: d.id,
-            project_id: d.project_id,
-            project_name: liveProjectName,
-            is_read: false,
-            is_dismissed: false,
+            severity: delivery._signals.risk === "high" ? "High" : "Medium",
+            title: alertTitle,
+            description: `${desc} from ${delivery.vendor || "Unknown"} - PO: ${delivery.po_number || "TBD"} - Scheduled: ${delivery.scheduled_date || "TBD"} - Status: ${delivery.status || "Scheduled"} - Project: ${projectName}`,
+            related_record_id: delivery.id,
+            project_id: delivery.project_id,
+            project_name: projectName,
           });
         }
-      } catch (e) {
-        console.warn("Delivery alert error:", e);
+      } catch (error) {
+        console.warn("Delivery alert error:", error);
       }
     };
-    const t = setTimeout(createDeliveryAlerts, 4000);
-    return () => clearTimeout(t);
-  }, [deliveries.length]);
+    const timer = setTimeout(createDeliveryAlerts, 4000);
+    return () => clearTimeout(timer);
+  }, [metrics.overdue, projectId, projectMap, workPackageMap]);
 
-  const toggleSelect = (id) => {
+  const toggleSelect = (id) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
+    });
+
+  const toggleAll = (checked) =>
+    setSelectedIds(checked ? new Set(filtered.map((delivery) => delivery.id)) : new Set());
+
+  const handleProjectSelect = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set("project", value);
+    else {
+      next.delete("project");
+      next.delete("projectId");
+    }
+    setSearchParams(next);
+  };
+
+  const clearReceiveMode = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("receive");
+    setSearchParams(next, { replace: true });
+  };
+
+  const setDeliveryStatus = (delivery, status) => {
+    if (!delivery || transitMut.isPending) return;
+    if (status === "Delivered" && !isFabComplete(delivery, workPackages)) {
+      const wp = workPackages.find((item) => item.id === delivery.work_package_id);
+      toast.error(`Cannot mark delivered - WP "${wp?.name || wp?.wp_number || "linked"}" fabrication is not complete`);
+      return;
+    }
+    transitMut.mutate({
+      id: delivery.id,
+      data: {
+        status,
+        actual_date: status === "Delivered" ? todayIso() : null,
+      },
     });
   };
 
   const bulkUpdate = (status) => {
     const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    if (bulkUpdateMut.isPending) return;
+    if (!ids.length || bulkUpdateMut.isPending) return;
+    if (status === "Delivered") {
+      const blocked = ids.filter((id) => {
+        const delivery = activeDeliveries.find((item) => item.id === id);
+        return delivery && !isFabComplete(delivery, workPackages);
+      });
+      if (blocked.length > 0) {
+        toast.error(`${blocked.length} delivery(ies) blocked - linked work package fabrication is not complete`);
+        return;
+      }
+    }
     bulkUpdateMut.mutate({ ids, status });
   };
 
-  const handleAdvanceStatus = (delivery) => {
-    if (delivery.status === "Scheduled") {
-      transitMut.mutate({ id: delivery.id, data: { status: "In Transit" } });
-    } else if (delivery.status === "In Transit") {
-      quickCompleteMut.mutate({
-        id: delivery.id,
-        data: { status: "Delivered", actual_date: new Date().toISOString().split("T")[0] },
-      });
-    } else {
-      setEditing(delivery);
-    }
-  };
-
-  const dayList = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        d.setHours(0, 0, 0, 0);
-        return d;
-      }),
-    [today]
-  );
-
-  const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-
-  const renderStatusPill = (status) => {
-    const colors = STATUS_COLORS[status] || STATUS_COLORS.Scheduled;
+  if (isLoading) {
     return (
-      <span
-        style={{
-          padding: "2px 8px",
-          borderRadius: 2,
-          fontFamily: "var(--font-mono)",
-          fontSize: 8,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          background: colors.bg,
-          color: colors.text,
-          textTransform: "uppercase",
-        }}
-      >
-        {status}
-      </span>
-    );
-  };
-
-  const renderRow = (delivery) => {
-    const overdue = delivery.scheduled_date && new Date(delivery.scheduled_date) < today && delivery.status !== "Delivered";
-    const colors = STATUS_COLORS[delivery.status] || STATUS_COLORS.Scheduled;
-    return (
-      <div
-        key={delivery.id}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "28px 100px 150px 2fr 140px 100px 90px 90px 72px 90px 110px",
-          padding: "10px 12px",
-          borderBottom: "1px solid var(--divider)",
-          alignItems: "center",
-          background: overdue ? "rgba(239,68,68,0.06)" : "transparent",
-          borderLeft: `3px solid ${overdue ? "var(--status-error)" : colors.border}`,
-          cursor: "pointer",
-        }}
-        onClick={(e) => {
-          if (e.target.dataset?.action === "button" || e.target.type === "checkbox") return;
-          setDetail(delivery);
-        }}
-      >
-        <input type="checkbox" checked={selectedIds.has(delivery.id)} onChange={() => toggleSelect(delivery.id)} style={{ width: 16, height: 16 }} />
-        <div>{renderStatusPill(delivery.status)}</div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {projectMap[delivery.project_id] || "—"}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {delivery.delivery_title || "—"}
-            {delivery.priority === "Critical" && <span style={{ color: "var(--status-error)", marginLeft: 6 }}>FLAG</span>}
-            {delivery.inspection_required && <span style={{ color: "var(--status-warning)", marginLeft: 6 }}>INSPECT</span>}
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {wpMap[delivery.work_package_id] || "—"}
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {delivery.vendor}
-          {delivery.carrier && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>{delivery.carrier}</div>
-          )}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: delivery.po_number ? "var(--accent)" : "var(--text-muted)" }}>
-          {delivery.po_number || "—"}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: overdue ? "var(--status-error)" : "var(--text-secondary)", fontWeight: overdue ? 700 : 400 }}>
-          {delivery.scheduled_date ? new Date(delivery.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-          {overdue && <div style={{ fontSize: 8 }}>Late</div>}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: delivery.actual_date ? "var(--status-success)" : "var(--text-muted)" }}>
-          {delivery.actual_date ? new Date(delivery.actual_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
-          {(delivery.weight_tons || 0) + "T"}
-        </div>
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: delivery.required_date ? "var(--text-secondary)" : "var(--text-muted)" }}>
-          {delivery.required_date ? new Date(delivery.required_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-        </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button
-            data-action="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAdvanceStatus(delivery);
-            }}
-            style={{
-              height: 26,
-              padding: "0 10px",
-              borderRadius: 6,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              fontSize: 9,
-            }}
-          >
-            {delivery.status === "Scheduled" ? "→ Transit" : delivery.status === "In Transit" ? "✓ Deliver" : "Edit"}
-          </button>
-          <button
-            data-action="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditing(delivery);
-            }}
-            style={{
-              height: 26,
-              width: 32,
-              borderRadius: 6,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              cursor: "pointer",
-            }}
-            title="Edit"
-          >
-            ✎
-          </button>
-        </div>
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
       </div>
     );
-  };
+  }
 
-  const renderProjectGroup = (name, list) => {
-    const collapsed = collapsedProjects[name];
-    const overdueCount = list.filter(
-      (d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered"
-    ).length;
-    const totalTons = list.reduce((s, d) => s + (Number(d.weight_tons) || 0), 0).toFixed(1);
-    return (
-      <div key={name}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 12px",
-            background: "var(--bg-sidebar)",
-            borderBottom: "1px solid var(--divider)",
-            cursor: "pointer",
-          }}
-          onClick={() => setCollapsedProjects((p) => ({ ...p, [name]: !p[name] }))}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{collapsed ? "▸" : "▾"}</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{name}</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{list.length} deliveries</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)" }}>{totalTons}T</span>
-          {overdueCount > 0 && (
-            <span style={{ marginLeft: "auto", background: "var(--status-error)", color: "#fff", padding: "2px 6px", borderRadius: 3, fontSize: 9, fontFamily: "var(--font-mono)" }}>
-              {overdueCount} overdue
-            </span>
-          )}
-        </div>
-        {!collapsed && list.map(renderRow)}
-      </div>
-    );
-  };
-
-  const timelineDays = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        d.setHours(0, 0, 0, 0);
-        return d;
-      }),
-    [today]
-  );
-
-  const TimelineView = () => (
-    <div style={{ position: "relative", overflow: "auto", padding: 12 }}>
-      <div style={{ display: "grid", gridTemplateColumns: `150px repeat(${timelineDays.length}, 48px)`, gap: 2, alignItems: "stretch" }}>
-        <div />
-        {timelineDays.map((d, i) => (
-          <div key={i} style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textAlign: "center" }}>
-            {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </div>
-        ))}
-        {(projectId ? [{ name: projectMap[projectId] || "—", list: filtered }] : Object.entries(grouped || {}).map(([name, list]) => ({ name, list }))).map((grp) => (
-          <React.Fragment key={grp.name}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-primary)" }}>{grp.name}</div>
-            {timelineDays.map((day, idx) => {
-              const dayDeliveries = grp.list.filter((d) => d.scheduled_date && isSameDay(new Date(d.scheduled_date), day));
-              return (
-                <div key={idx} style={{ position: "relative", minHeight: 38, border: "1px solid var(--divider)", background: "var(--bg-surface)" }}>
-                  {dayDeliveries.map((d, i2) => {
-                    const colors = STATUS_COLORS[d.status] || STATUS_COLORS.Scheduled;
-                    return (
-                      <div
-                        key={d.id}
-                        title={`${d.delivery_title || wpMap[d.work_package_id] || d.vendor} · ${d.vendor}`}
-                        style={{
-                          position: "absolute",
-                          top: 2 + i2 * 14,
-                          left: 2,
-                          right: 2,
-                          height: 12,
-                          background: colors.bg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 3,
-                          fontSize: 9,
-                          overflow: "hidden",
-                          whiteSpace: "nowrap",
-                          textOverflow: "ellipsis",
-                          padding: "0 4px",
-                          color: colors.text,
-                          cursor: "pointer",
-                        }}
-                        onClick={() => setDetail(d)}
-                      >
-                        {d.vendor} · {(d.weight_tons || 0) + "T"}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </React.Fragment>
-        ))}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: `calc(150px + ${timelineDays.findIndex((d) => isSameDay(d, today)) * 50}px)`,
-          bottom: 0,
-          width: 2,
-          background: "var(--status-error)",
-          pointerEvents: "none",
-        }}
-      />
-    </div>
-  );
-
-  const DetailDrawer = () => {
-    if (!detail) return null;
-    const overdue = detail.scheduled_date && new Date(detail.scheduled_date) < today && detail.status !== "Delivered";
-    const issueFlag =
-      detail.notes &&
-      ["damage", "short", "missing", "rejected", "issue", "problem"].some((word) =>
-        detail.notes.toLowerCase().includes(word)
-      );
-    return (
-      <>
-        <div onClick={() => setDetail(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 900 }} />
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: 400,
-            background: "var(--bg-surface)",
-            borderLeft: "1px solid var(--border-default)",
-            zIndex: 901,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <div
-            style={{
-              padding: "16px 20px",
-              borderBottom: "1px solid var(--divider)",
-              background: "var(--bg-sidebar)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            {renderStatusPill(detail.status)}
-            <div style={{ fontFamily: "Space Grotesk", fontSize: 15, fontWeight: 800 }}>{detail.delivery_title || detail.vendor}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>{projectMap[detail.project_id] || "—"}</div>
-            {detail.delivery_title && <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{detail.vendor}</div>}
-            {detail.work_package_id && wpMap[detail.work_package_id] && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }}>WP: {wpMap[detail.work_package_id]}</div>
-            )}
-            {overdue && (
-              <div style={{ background: "var(--status-error)", color: "#fff", padding: "4px 8px", borderRadius: 4, fontFamily: "var(--font-mono)", fontSize: 10 }}>
-                Overdue
-              </div>
-            )}
-          </div>
-
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <Section title="Shipment Details">
-              <GridRow label="PO Number" value={detail.po_number || "—"} />
-              <GridRow label="Carrier" value={detail.carrier || "—"} />
-              <GridRow
-                label="Tracking"
-                value={detail.tracking_number || "—"}
-                action={detail.tracking_number ? () => window.open(`https://www.google.com/search?q=${detail.tracking_number}`, "_blank") : null}
-                actionLabel="Track"
-              />
-              <GridRow label="Work Package" value={wpMap[detail.work_package_id] || "—"} />
-              <GridRow label="Scheduled Date" value={detail.scheduled_date || "—"} />
-              <GridRow label="Required Date" value={detail.required_date || "—"} />
-              <GridRow label="Actual Date" value={detail.actual_date || "—"} />
-              <GridRow label="Pieces" value={detail.pieces || "—"} />
-              <GridRow label="Weight (Tons)" value={detail.weight_tons || "—"} />
-              <GridRow label="Received By" value={detail.received_by || "—"} />
-              <GridRow label="Delivery Type" value={detail.delivery_type || "—"} />
-              <GridRow label="Receiving Location" value={detail.receiving_location || "—"} />
-              <GridRow label="Priority" value={detail.priority || "Normal"} />
-              <GridRow label="Inspection Required" value={detail.inspection_required ? "Yes" : "No"} />
-            </Section>
-
-            <Section title="Work Package">
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)" }}>{wpMap[detail.work_package_id] || "—"}</div>
-            </Section>
-
-            <Section title="Notes / Issues">
-              {issueFlag && (
-                <div style={{ background: "rgba(234,179,8,0.18)", border: "1px solid rgba(234,179,8,0.4)", padding: 8, borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--status-warning)" }}>
-                  ISSUE FLAGGED IN NOTES
-                </div>
-              )}
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-secondary)" }}>{detail.notes || "—"}</div>
-              {detail.special_instructions && (
-                <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6, color: "var(--text-primary)" }}>
-                  Special Instructions: {detail.special_instructions}
-                </div>
-              )}
-            </Section>
-          </div>
-
-          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--divider)", background: "var(--bg-sidebar)", display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {statusList.map((s) => (
-              <button
-                key={s}
-                onClick={() =>
-                  transitMut.mutate({
-                    id: detail.id,
-                    data: { status: s, actual_date: s === "Delivered" ? new Date().toISOString().split("T")[0] : detail.actual_date },
-                  })
-                }
-                style={{
-                  flex: "1 1 45%",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid var(--divider)",
-                  background: detail.status === s ? "var(--accent)" : "var(--bg-surface)",
-                  color: detail.status === s ? "var(--accent-text)" : "var(--text-primary)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  cursor: "pointer",
-                }}
-              >
-                {s}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                setEditing(detail);
-                setDetail(null);
-              }}
-              style={{
-                flex: "1 1 100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid var(--divider)",
-                background: "var(--bg-surface)",
-                color: "var(--text-primary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                cursor: "pointer",
-              }}
-            >
-              Edit Full Details
-            </button>
-            <button
-              onClick={() => setDeleteTarget(detail)}
-              style={{
-                flex: "1 1 100%",
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid var(--danger-border)",
-                background: "var(--danger-muted)",
-                color: "var(--status-error)",
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                cursor: "pointer",
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  };
+  const projectName = projectMap[projectId] || activeProject?.name || "All Projects";
+  const selectedDeliveries = filtered.filter((delivery) => selectedIds.has(delivery.id));
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--bg-page)" }}>
-      {/* Command bar */}
-      <div
-        style={{
-          height: 56,
-          flexShrink: 0,
-          background: "var(--bg-sidebar)",
-          borderBottom: "1px solid var(--divider)",
-          padding: "0 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, letterSpacing: "0.06em", color: "var(--text-primary)", textTransform: "uppercase" }}>Deliveries</div>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", background: "var(--bg-surface-high)", border: "1px solid var(--border-default)", padding: "2px 8px", borderRadius: 4, letterSpacing: "0.12em" }}>
-            {deliveries.length} SHIPMENTS · {projectCount} PROJECTS
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ display: "flex", border: "1px solid var(--divider)", borderRadius: 8, overflow: "hidden" }}>
-            {["TABLE", "TIMELINE"].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                style={{
-                  padding: "8px 12px",
-                  border: "none",
-                  background: view === v ? "var(--accent)" : "transparent",
-                  color: view === v ? "var(--accent-text)" : "var(--text-primary)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 10,
-                  cursor: "pointer",
-                }}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => exportToCSV(deliveries, projectMap, wpMap)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            Export All
-          </button>
-          <button
-            onClick={() => {
-              setEditing(null);
-              setDetail(null);
-              setShowForm(true);
-            }}
-            style={{
-              padding: "8px 14px",
-              borderRadius: 8,
-              border: "1px solid var(--accent)",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            + New Delivery
-          </button>
-        </div>
-      </div>
+    <div className="delivery-page">
+      <style>{deliveryStyles}</style>
 
-      {/* KPI strip */}
-      <div style={{ background: "var(--bg-surface)", borderBottom: "1px solid var(--divider)", display: "flex", flexShrink: 0, overflowX: "auto" }}>
-        {[
-          { label: "SCHEDULED",      value: kpis.scheduled,           tone: "warning", status: "Scheduled"  },
-          { label: "IN TRANSIT",     value: kpis.inTransit,           tone: "info",    status: "In Transit" },
-          { label: "DELIVERED",      value: kpis.delivered,           tone: "success", status: "Delivered"  },
-          { label: "PARTIAL/ISSUES", value: kpis.partial,             tone: "error",   status: "Partial"    },
-          { label: "OVERDUE",        value: kpis.overdue,             tone: kpis.overdue ? "error" : "muted", status: null },
-          { label: "DUE THIS WEEK",  value: kpis.dueWeek,            tone: "warning", status: null },
-          { label: "DUE THIS MONTH", value: kpis.dueMonth,           tone: "accent",  status: null },
-          { label: "TONS PENDING",   value: `${kpis.tonsPending}T`,  tone: "accent",  status: null },
-        ].map((k, idx) => {
-          const isActive = k.status && filterStatus === k.status;
-          return (
-            <div
-              key={k.label}
-              onClick={() => k.status && setFilterStatus(isActive ? "ALL" : k.status)}
-              title={k.status ? (isActive ? "Click to clear filter" : `Filter by ${k.label}`) : undefined}
-              style={{
-                padding: "10px 20px",
-                borderRight: idx < 7 ? "1px solid var(--divider)" : "none",
-                cursor: k.status ? "pointer" : "default",
-                background: isActive ? "var(--accent-muted)" : "transparent",
-                borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
-                transition: "background 0.1s",
+      <section className="delivery-hero">
+        <div className="delivery-hero-main">
+          <div className="delivery-kicker">
+            <Truck size={14} />
+            Logistics Control - {projectName}
+          </div>
+          <h1 style={display}>Deliveries</h1>
+          <p>
+            Plan load-out, spot late trucks, confirm receiving, and keep field-ready steel visible before it
+            turns into a site constraint.
+          </p>
+          <div className="delivery-hero-actions">
+            <Button
+              variant="secondary"
+              icon="download"
+              onClick={() => exportDeliveriesCSV(filtered, projectMap, wpLabelMap)}
+            >
+              CSV
+            </Button>
+            <Button variant="outline" icon="upload" onClick={() => setShowImport(true)}>
+              Import Ticket
+            </Button>
+            <Button
+              variant="primary"
+              icon="plus"
+              onClick={() => {
+                setEditing(null);
+                setDetail(null);
+                setShowForm(true);
               }}
             >
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, letterSpacing: "0.14em", textTransform: "uppercase", color: isActive ? "var(--accent)" : "var(--text-muted)", marginBottom: 4 }}>
-                {k.label}
-              </div>
-              <div style={{
-                fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800,
-                color: k.tone === "error" ? "var(--status-error)" : k.tone === "warning" ? "var(--status-warning)" : k.tone === "info" ? "var(--status-info)" : "var(--accent)",
-              }}>
-                {k.value}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Critical alert banner */}
-      {(kpis.overdue > 0 || kpis.partial > 0) && (
-        <div
-          style={{
-            background: "var(--danger-muted)",
-            borderBottom: "1px solid var(--danger-border)",
-            padding: "8px 20px",
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--status-error)", letterSpacing: "0.12em" }}>
-            ATTENTION REQUIRED
-          </span>
-          {deliveries
-            .filter((d) => d.scheduled_date && new Date(d.scheduled_date) < today && d.status !== "Delivered")
-            .slice(0, 4)
-            .map((d) => {
-              const daysLate = Math.max(1, Math.ceil((today - new Date(d.scheduled_date)) / 86400000));
-              return (
-                <span
-                  key={d.id}
-                  onClick={() => {
-                    setSearch(projectMap[d.project_id] || "");
-                  }}
-                  style={{
-                    background: "rgba(239,68,68,0.14)",
-                    border: "1px solid rgba(239,68,68,0.3)",
-                    borderRadius: 4,
-                    padding: "4px 8px",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 10,
-                    color: "var(--text-primary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  {d.delivery_title || wpMap[d.work_package_id] || "Delivery"} · {d.vendor} · {daysLate}d overdue
-                </span>
-              );
-            })}
+              Schedule Load
+            </Button>
+          </div>
         </div>
-      )}
+        <div className="delivery-hero-grid">
+          <HeroMetric
+            label="Open Loads"
+            value={metrics.openCount}
+            sub={`${formatTons(metrics.totalOpenTons)} inbound`}
+            color="var(--phase-delivery)"
+            icon={PackageCheck}
+          />
+          <HeroMetric
+            label="Due Today"
+            value={metrics.dueToday.length}
+            sub={`${formatTons(metrics.dueToday.reduce((sum, d) => sum + num(d.weight_tons), 0))} scheduled`}
+            color="var(--status-warning)"
+            icon={Clock3}
+          />
+          <HeroMetric
+            label="Exceptions"
+            value={metrics.exceptions.length}
+            sub={`${metrics.overdue.length} late loads`}
+            color={metrics.exceptions.length ? "var(--status-error)" : "var(--status-success)"}
+            icon={AlertTriangle}
+          />
+          <HeroMetric
+            label="Ready To Receive"
+            value={metrics.readyToReceive.length}
+            sub={`${metrics.deliveredLast7.length} received in 7d`}
+            color="var(--status-success)"
+            icon={CheckCircle2}
+          />
+        </div>
+      </section>
 
-      {/* Filter toolbar */}
-      <div
-        style={{
-          minHeight: 48,
-          flexShrink: 0,
-          background: "var(--bg-surface)",
-          borderBottom: "1px solid var(--divider)",
-          padding: "6px 20px",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-        }}
-      >
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search vendor, PO, project, tracking..."
-          style={{
-            width: 240,
-            maxWidth: 260,
-            background: "var(--bg-input)",
-            border: "1px solid var(--border-default)",
-            borderRadius: 8,
-            padding: "6px 10px",
-            color: "var(--text-primary)",
-            fontFamily: "var(--font-body)",
-            fontSize: 12,
+      {receiveMode && (
+        <ReceivingQuickPanel
+          metrics={metrics}
+          projectMap={projectMap}
+          workPackageMap={workPackageMap}
+          onOpen={setDetail}
+          onExit={clearReceiveMode}
+          onFilter={(filter) => {
+            setView("schedule");
+            setScheduleFilter(filter);
+            setRiskFilter("all");
+          }}
+          onScheduleLoad={() => {
+            setEditing(null);
+            setDetail(null);
+            setShowForm(true);
           }}
         />
+      )}
+
+      <section className="delivery-flow-strip">
+        <div className="delivery-flow-header">
+          <div>
+            <div className="delivery-section-label">Load Pipeline</div>
+            <div className="delivery-muted">Status mix across active and recently completed delivery records.</div>
+          </div>
+          <div className="delivery-flow-total" style={mono}>
+            {metrics.totalOpenPieces.toLocaleString()} open pcs
+          </div>
+        </div>
+        <div className="delivery-status-flow">
+          {metrics.statusRollup.map((item) => (
+            <button
+              key={item.status}
+              className={`delivery-status-step ${statusFilter === item.status ? "is-active" : ""}`}
+              onClick={() => setStatusFilter(statusFilter === item.status ? "all" : item.status)}
+              style={{ "--step-color": STATUS_COLOR[item.status] || "var(--text-muted)" }}
+            >
+              <span>{item.status}</span>
+              <strong>{item.count}</strong>
+              <small>{formatTons(item.tons)}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="delivery-toolbar">
+        <div className="delivery-search">
+          <Search size={15} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search vendor, PO, load, carrier, truck, work package..."
+          />
+        </div>
         {!projectId && (
-          <select
-            value={projectId || ""}
-            onChange={(e) => {
-              const val = e.target.value;
-              window.location.href = val ? `?project=${val}` : window.location.pathname;
-            }}
-            style={{
-              height: 32,
-              background: "var(--bg-input)",
-              border: "1px solid var(--border-default)",
-              borderRadius: 8,
-              padding: "0 10px",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
+          <select value={projectId || ""} onChange={(event) => handleProjectSelect(event.target.value)}>
             <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name || project.project_name}
               </option>
             ))}
           </select>
         )}
-        {["ALL", "Scheduled", "In Transit", "Delivered", "Partial", "Rejected"].map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 999,
-              border: "1px solid var(--divider)",
-              background: filterStatus === s ? "var(--accent)" : "var(--bg-surface)",
-              color: filterStatus === s ? "var(--accent-text)" : "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            {s}
-          </button>
-        ))}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            style={{
-              height: 32,
-              background: "var(--bg-input)",
-              border: "1px solid var(--border-default)",
-              borderRadius: 8,
-              padding: "0 10px",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            <option value="DUE">Due Date</option>
-            <option value="PROJECT">Project</option>
-            <option value="VENDOR">Vendor</option>
-            <option value="TONNAGE">Tonnage</option>
-          </select>
-          <button
-            onClick={() => setOverdueFirst((v) => !v)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: "1px solid var(--divider)",
-              background: overdueFirst ? "var(--accent)" : "var(--bg-surface)",
-              color: overdueFirst ? "var(--accent-text)" : "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            Overdue First
-          </button>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Lookahead panel — hidden when there are no deliveries at all */}
-        <div
-          style={{
-            width: deliveries.length === 0 ? 0 : 260,
-            flexShrink: 0,
-            borderRight: deliveries.length === 0 ? "none" : "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
-            overflowY: "auto",
-            overflow: deliveries.length === 0 ? "hidden" : undefined,
-            transition: "width 0.2s ease",
-          }}
-        >
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--divider)" }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>7-DAY LOOKAHEAD</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 4 }}>
-              {today.toLocaleDateString("en-US", { month: "short", day: "numeric" })} — {in7.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </div>
-          </div>
-          {dayList.map((day, idx) => {
-            const dayDeliveries = deliveries.filter(
-              (d) => d.scheduled_date && isSameDay(new Date(d.scheduled_date), day) && d.status !== "Delivered"
-            );
-            const isToday = isSameDay(day, today);
+        <FilterSelect value={scheduleFilter} onChange={setScheduleFilter} options={SCHEDULE_FILTERS} />
+        <FilterSelect value={riskFilter} onChange={setRiskFilter} options={RISK_FILTERS} />
+        <div className="delivery-view-toggle">
+          {VIEW_OPTIONS.map((option) => {
+            const Icon = option.icon;
             return (
-              <div key={idx}>
-                <div
-                  style={{
-                    padding: "6px 16px",
-                    background: isToday ? "var(--accent-muted)" : "var(--bg-sidebar)",
-                    borderBottom: "1px solid var(--divider)",
-                    borderTop: idx === 0 ? "none" : "1px solid var(--divider)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: isToday ? "var(--accent)" : "var(--text-primary)",
-                    }}
-                  >
-                    {day.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase()} {day.getDate()}
-                  </span>
-                  {dayDeliveries.length > 0 && (
-                    <span
-                      style={{
-                        background: "var(--accent-muted)",
-                        color: "var(--accent)",
-                        padding: "1px 6px",
-                        borderRadius: 3,
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 8,
-                      }}
-                    >
-                      {dayDeliveries.length}
-                    </span>
-                  )}
-                </div>
-                {dayDeliveries.length === 0 ? (
-                  <div style={{ padding: "6px 16px", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", fontStyle: "italic" }}>— none</div>
-                ) : (
-                  dayDeliveries.map((d) => {
-                    const colors = STATUS_COLORS[d.status] || STATUS_COLORS.Scheduled;
-                    const isLate = new Date(d.scheduled_date) < today && d.status !== "Delivered";
-                    return (
-                      <div
-                        key={d.id}
-                        onClick={() => setDetail(d)}
-                        style={{
-                          padding: "8px 16px",
-                          borderBottom: "1px solid var(--divider)",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 3,
-                          borderLeft: `3px solid ${colors.border}`,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis" }}>{d.vendor}</span>
-                          {renderStatusPill(d.status)}
-                        </div>
-                        <div style={{ fontSize: 9, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {d.delivery_title || wpMap[d.work_package_id] || "—"}
-                        </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)" }}>
-                          {d.pieces || 0} pcs · {d.weight_tons || 0}T · {projectMap[d.project_id] || ""}
-                          {isLate && <span style={{ marginLeft: 6, color: "var(--status-error)" }}>{Math.ceil((today - new Date(d.scheduled_date)) / 86400000)}d late</span>}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              <button
+                key={option.id}
+                type="button"
+                className={view === option.id ? "is-active" : ""}
+                onClick={() => setView(option.id)}
+              >
+                <Icon size={14} />
+                <span>{option.label}</span>
+              </button>
             );
           })}
-
-          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--divider)", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em" }}>
-            NEXT 30 DAYS
-          </div>
-          {deliveries
-            .filter((d) => {
-              if (!d.scheduled_date) return false;
-              const dt = new Date(d.scheduled_date);
-              return dt > in7 && dt <= in30 && d.status !== "Delivered";
-            })
-            .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date))
-            .map((d) => (
-              <div key={d.id} style={{ padding: "6px 16px", borderBottom: "1px solid var(--divider)", fontSize: 10, color: "var(--text-primary)" }}>
-                {new Date(d.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {d.vendor} · {d.delivery_title || wpMap[d.work_package_id] || "—"} · {d.weight_tons || 0}T
-              </div>
-            ))}
         </div>
+      </section>
 
-        {/* Right panel */}
-        <div style={{ flex: 1, overflowY: "auto", position: "relative", background: "var(--bg-page)" }}>
-          {deliveries.length === 0 ? (
-            /* Hero empty state */
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 0, padding: 40, textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 20, opacity: 0.3 }}>🚛</div>
-              <div style={{ fontFamily: "Space Grotesk, var(--font-display), sans-serif", fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: 10 }}>
-                No Shipments Tracked
-              </div>
-              <div style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 360, lineHeight: 1.6, marginBottom: 28 }}>
-                Start tracking steel deliveries, vendor shipments, and material arrivals. Log your first delivery to enable the lookahead schedule and overdue alerts.
-              </div>
-              <button
-                onClick={() => { setEditing(null); setDetail(null); setShowForm(true); }}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 28px", background: "var(--accent)", color: "var(--accent-text)", border: "none", borderRadius: 3, fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.08em" }}
-              >
-                + Add First Delivery
-              </button>
-            </div>
-          ) : view === "TABLE" ? (
+      <section className="delivery-layout">
+        <ExceptionRail
+          metrics={metrics}
+          projectMap={projectMap}
+          workPackageMap={workPackageMap}
+          onOpen={setDetail}
+          onFilterLate={() => {
+            setScheduleFilter("late");
+            setRiskFilter("all");
+          }}
+        />
+
+        <main className="delivery-main">
+          <div className="delivery-view-header">
             <div>
-              <div
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 5,
-                  display: "grid",
-                  gridTemplateColumns: "28px 100px 150px 2fr 140px 100px 90px 90px 72px 90px 110px",
-                  background: "var(--bg-sidebar)",
-                  borderBottom: "1px solid var(--divider)",
-                  padding: "10px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 8,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "var(--text-muted)",
+              <div className="delivery-section-label">
+                {view === "dispatch" ? "Dispatch Board" : view === "schedule" ? "Schedule Lookahead" : "Delivery Register"}
+              </div>
+              <div className="delivery-muted">
+                {filtered.length} of {metrics.totalCount} deliveries shown
+              </div>
+            </div>
+            <div className="delivery-header-actions">
+              <StatusPill label={`${selectedIds.size} Selected`} color={selectedIds.size ? "var(--accent)" : "var(--text-muted)"} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setScheduleFilter("all");
+                  setRiskFilter("all");
+                  setSearch("");
                 }}
               >
-                <div> </div>
-                <div>Status</div>
-                <div>Project</div>
-                <div>Delivery Title</div>
-                <div>Vendor</div>
-                <div>PO #</div>
-                <div>Sched</div>
-                <div>Actual</div>
-                <div>Tons</div>
-                <div>Required</div>
-                <div>Actions</div>
-              </div>
-              {projectId ? filtered.map(renderRow) : Object.entries(grouped || {}).map(([name, list]) => renderProjectGroup(name, list))}
+                Clear Filters
+              </Button>
             </div>
-          ) : (
-            <TimelineView />
+          </div>
+
+          {view === "dispatch" && (
+            <DispatchBoard
+              laneGroups={laneGroups}
+              projectMap={projectMap}
+              workPackageMap={workPackageMap}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onOpen={setDetail}
+              onSetStatus={setDeliveryStatus}
+            />
           )}
-        </div>
-      </div>
 
-      {/* Bulk bar */}
-      {selectedIds.size > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "var(--bg-surface)",
-            borderTop: "1px solid var(--divider)",
-            padding: "10px 20px",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
+          {view === "schedule" && (
+            <ScheduleView
+              metrics={metrics}
+              filtered={filtered}
+              projectMap={projectMap}
+              workPackageMap={workPackageMap}
+              onOpen={setDetail}
+            />
+          )}
+
+          {view === "register" && (
+            <RegisterView
+              deliveries={filtered}
+              projectMap={projectMap}
+              workPackageMap={workPackageMap}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onToggleAll={toggleAll}
+              onOpen={setDetail}
+              onEdit={(delivery) => {
+                setEditing(delivery);
+                setDetail(null);
+              }}
+              allSelected={filtered.length > 0 && selectedIds.size === filtered.length}
+            />
+          )}
+
+          {filtered.length === 0 && (
+            <div className="delivery-empty">
+              <EmptyState
+                icon="delivery"
+                title={metrics.totalCount === 0 ? "No deliveries tracked" : "No deliveries match your filters"}
+                body={
+                  metrics.totalCount === 0
+                    ? "Schedule the first load or import a shipping ticket to start tracking field arrivals."
+                    : "Clear filters or adjust the search to bring loads back into view."
+                }
+              />
+            </div>
+          )}
+        </main>
+      </section>
+
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          { label: "In Transit", icon: "arrow", onClick: () => bulkUpdate("In Transit") },
+          { label: "Delivered", icon: "check", variant: "primary", onClick: () => bulkUpdate("Delivered") },
+          { label: "Partial", icon: "alert", onClick: () => bulkUpdate("Partial") },
+          {
+            label: "Export",
+            icon: "download",
+            onClick: () => exportDeliveriesCSV(selectedDeliveries, projectMap, wpLabelMap, "deliveries-selected.csv"),
+          },
+        ]}
+      />
+
+      <DeliveryDetailModal
+        delivery={detail}
+        projectMap={projectMap}
+        workPackageMap={workPackageMap}
+        onClose={() => setDetail(null)}
+        onEdit={(delivery) => {
+          setEditing(delivery);
+          setDetail(null);
+        }}
+        onDelete={(delivery) => {
+          setDeleteTarget(delivery);
+          setDetail(null);
+        }}
+        onSetStatus={setDeliveryStatus}
+      />
+
+      {showForm && (
+        <DeliveryFormModal
+          projectId={projectId}
+          onClose={() => {
+            setShowForm(false);
+            invalidateDeliveries();
           }}
-        >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>
-            {selectedIds.size} SELECTED
-          </span>
-          <button
-            onClick={() => bulkUpdate("In Transit")}
-            disabled={bulkUpdateMut.isPending}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--status-info)",
-              background: "rgba(0,229,255,0.06)",
-              color: "var(--status-info)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
-              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
-            }}
-          >
-            → IN TRANSIT
-          </button>
-          <button
-            onClick={() => bulkUpdate("Delivered")}
-            disabled={bulkUpdateMut.isPending}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--status-success)",
-              background: "rgba(34,197,94,0.12)",
-              color: "var(--status-success)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
-              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
-            }}
-          >
-            ✓ DELIVERED
-          </button>
-          <button
-            onClick={() => bulkUpdate("Partial")}
-            disabled={bulkUpdateMut.isPending}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--status-warning)",
-              background: "rgba(234,179,8,0.12)",
-              color: "var(--status-warning)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: bulkUpdateMut.isPending ? "not-allowed" : "pointer",
-              opacity: bulkUpdateMut.isPending ? 0.6 : 1,
-            }}
-          >
-            PARTIAL
-          </button>
-          <button
-            onClick={() => exportToCSV(deliveries.filter((d) => selectedIds.has(d.id)), projectMap, wpMap, "deliveries-selected.csv")}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            EXPORT CSV
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            style={{
-              marginLeft: "auto",
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--divider)",
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              cursor: "pointer",
-            }}
-          >
-            Deselect All
-          </button>
-        </div>
+        />
       )}
-
-      {/* Modals */}
-      {showForm && <DeliveryFormModal projectId={projectId} onClose={() => setShowForm(false)} />}
-      {editing && <DeliveryFormModal projectId={editing.project_id || projectId} delivery={editing} onClose={() => setEditing(null)} />}
-      <DetailDrawer />
+      {editing && (
+        <DeliveryFormModal
+          projectId={editing.project_id || projectId}
+          delivery={editing}
+          onClose={() => {
+            setEditing(null);
+            invalidateDeliveries();
+          }}
+        />
+      )}
+      <ShippingTicketImportModal
+        open={showImport}
+        projectId={projectId}
+        projectName={activeProject?.name}
+        projects={projects}
+        onClose={() => {
+          setShowImport(false);
+          invalidateDeliveries();
+        }}
+      />
       <DeleteDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -1301,30 +728,1368 @@ export default function Deliveries() {
   );
 }
 
-function Section({ title, children }) {
+function HeroMetric({ label, value, sub, color, icon: Icon }) {
   return (
-    <div>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", marginBottom: 6 }}>{title}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>{children}</div>
+    <div className="delivery-hero-metric" style={{ "--metric-color": color }}>
+      <div className="delivery-hero-icon">
+        <Icon size={17} />
+      </div>
+      <div className="delivery-metric-label">{label}</div>
+      <div className="delivery-metric-value" style={mono}>{value}</div>
+      <div className="delivery-metric-sub">{sub}</div>
     </div>
   );
 }
 
-function GridRow({ label, value, action, actionLabel }) {
+function mergeDeliveryLists(...lists) {
+  const seen = new Set();
+  const merged = [];
+  for (const list of lists) {
+    for (const delivery of list || []) {
+      const key = delivery.id || [
+        delivery.delivery_number,
+        delivery.load_number,
+        delivery.po_number,
+        delivery.description,
+      ].filter(Boolean).join(":");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(delivery);
+    }
+  }
+  return merged;
+}
+
+function ReceivingQuickPanel({ metrics, projectMap, workPackageMap, onOpen, onExit, onFilter, onScheduleLoad }) {
+  const focusLoads = mergeDeliveryLists(metrics.overdue, metrics.dueToday, metrics.readyToReceive).slice(0, 6);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 12, color: "var(--text-primary)" }}>{value}</span>
-        {action && (
-          <button
-            onClick={action}
-            style={{ padding: "2px 6px", borderRadius: 4, border: "1px solid var(--divider)", background: "var(--bg-surface)", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 9 }}
-          >
-            {actionLabel || "Open"}
-          </button>
+    <section className="delivery-receive-panel" aria-label="Delivery receiving quick workflow">
+      <div className="delivery-receive-copy">
+        <div className="delivery-section-label">Field Receiving</div>
+        <h2 style={display}>Confirm trucks without hunting through the register.</h2>
+        <p>
+          Review late, due-today, and ready-to-receive loads. Opening a load keeps the human approval step in the
+          detail drawer before any status change is written.
+        </p>
+      </div>
+
+      <div className="delivery-receive-actions">
+        <button type="button" onClick={() => onFilter("late")}>
+          <span>Late</span>
+          <strong>{metrics.overdue.length}</strong>
+        </button>
+        <button type="button" onClick={() => onFilter("today")}>
+          <span>Due Today</span>
+          <strong>{metrics.dueToday.length}</strong>
+        </button>
+        <button type="button" onClick={() => onFilter("ready")}>
+          <span>Ready</span>
+          <strong>{metrics.readyToReceive.length}</strong>
+        </button>
+        <button type="button" onClick={onScheduleLoad}>
+          <span>New</span>
+          <strong>+</strong>
+        </button>
+      </div>
+
+      <div className="delivery-receive-list">
+        {focusLoads.length > 0 ? (
+          focusLoads.map((delivery, index) => {
+            const wp = workPackageMap[delivery.work_package_id];
+            return (
+              <button key={delivery.id || `${delivery.po_number}-${delivery.description}-${index}`} type="button" onClick={() => onOpen(delivery)}>
+                <div>
+                  <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                  <span>{delivery.vendor || "Vendor TBD"} - {projectMap[delivery.project_id] || delivery.project_name || "Project TBD"}</span>
+                </div>
+                <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+              </button>
+            );
+          })
+        ) : (
+          <div className="delivery-receive-empty">No late, due-today, or ready loads in the current project.</div>
         )}
+      </div>
+
+      <button type="button" className="delivery-receive-exit" onClick={onExit}>
+        Exit receiving mode
+      </button>
+    </section>
+  );
+}
+
+function FilterSelect({ value, onChange, options }) {
+  return (
+    <div className="delivery-filter-select">
+      <Filter size={13} />
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ExceptionRail({ metrics, projectMap, workPackageMap, onOpen, onFilterLate }) {
+  const watchList = metrics.exceptions.slice(0, 8);
+  return (
+    <aside className="delivery-rail">
+      <div className="delivery-rail-header">
+        <div>
+          <div className="delivery-section-label">Exceptions</div>
+          <div className="delivery-muted">Late, blocked, partial, rejected, or missing logistics.</div>
+        </div>
+        <button type="button" onClick={onFilterLate}>
+          Late
+        </button>
+      </div>
+
+      <div className="delivery-rail-kpis">
+        <MiniStat label="Late" value={metrics.overdue.length} color="var(--status-error)" />
+        <MiniStat label="7 Days" value={metrics.dueNext7.length} color="var(--status-warning)" />
+        <MiniStat label="Long Lead" value={metrics.longLeadOpen.length} color="var(--accent)" />
+      </div>
+
+      <div className="delivery-watch-list">
+        {watchList.length > 0 ? (
+          watchList.map((delivery) => {
+            const wp = workPackageMap[delivery.work_package_id];
+            return (
+              <button key={delivery.id} type="button" className="delivery-watch-card" onClick={() => onOpen(delivery)}>
+                <div className="delivery-watch-top">
+                  <StatusPill label={delivery._signals.risk === "high" ? "Exception" : "Warning"} color={riskColor(delivery._signals.risk)} size="xs" />
+                  <span>{formatDate(delivery.scheduled_date)}</span>
+                </div>
+                <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                <small>
+                  {delivery.vendor || "No vendor"} - {projectMap[delivery.project_id] || "Project TBD"}
+                </small>
+                <div className="delivery-flag-row">
+                  {delivery._signals.flags.slice(0, 3).map((flag) => (
+                    <span key={flag.key}>{flag.label}</span>
+                  ))}
+                </div>
+              </button>
+            );
+          })
+        ) : (
+          <div className="delivery-rail-empty">
+            <CheckCircle2 size={18} />
+            No delivery exceptions in the current filter set.
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function MiniStat({ label, value, color }) {
+  return (
+    <div className="delivery-mini-stat">
+      <span>{label}</span>
+      <strong style={{ color }}>{value}</strong>
+    </div>
+  );
+}
+
+function DispatchBoard({ laneGroups, projectMap, workPackageMap, selectedIds, onToggle, onOpen, onSetStatus }) {
+  return (
+    <div className="delivery-lane-scroll">
+      <div className="delivery-lanes">
+        {LANE_ORDER.map((lane) => {
+          const items = laneGroups[lane] || [];
+          const tons = items.reduce((sum, delivery) => sum + num(delivery.weight_tons), 0);
+          return (
+            <section key={lane} className="delivery-lane" style={{ "--lane-color": STATUS_COLOR[lane] || "var(--accent)" }}>
+              <div className="delivery-lane-head">
+                <div>
+                  <div className="delivery-lane-title">{lane}</div>
+                  <span>{items.length} loads - {formatTons(tons)}</span>
+                </div>
+              </div>
+              <div className="delivery-lane-body">
+                {items.slice(0, 24).map((delivery) => (
+                  <DeliveryLoadCard
+                    key={delivery.id}
+                    delivery={delivery}
+                    projectMap={projectMap}
+                    workPackageMap={workPackageMap}
+                    selected={selectedIds.has(delivery.id)}
+                    onToggle={() => onToggle(delivery.id)}
+                    onOpen={() => onOpen(delivery)}
+                    onSetStatus={onSetStatus}
+                  />
+                ))}
+                {items.length === 0 && <div className="delivery-lane-empty">No loads</div>}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+function DeliveryLoadCard({ delivery, projectMap, workPackageMap, selected, onToggle, onOpen, onSetStatus }) {
+  const wp = workPackageMap[delivery.work_package_id];
+  const title = getDeliveryDisplayName(delivery, wp);
+  const flags = delivery._signals.flags;
+  return (
+    <article className={`delivery-load-card ${selected ? "is-selected" : ""}`} onClick={onOpen}>
+      <div className="delivery-card-top">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Select ${title}`}
+        />
+        <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+        <span className="delivery-card-date">{formatDate(delivery.scheduled_date)}</span>
+      </div>
+      <h3>{title}</h3>
+      <div className="delivery-card-meta">
+        <span>{delivery.vendor || "Vendor TBD"}</span>
+        <span>{delivery.po_number || delivery.load_number || "PO TBD"}</span>
+      </div>
+      <div className="delivery-card-grid">
+        <MetaMini icon={Weight} label="Tons" value={formatTons(delivery.weight_tons)} />
+        <MetaMini icon={Warehouse} label="Pieces" value={formatPieces(delivery.pieces)} />
+        <MetaMini icon={Truck} label="Carrier" value={delivery.carrier || delivery.tracking_number || "TBD"} />
+        <MetaMini icon={MapPin} label="Receive" value={delivery.receiving_location || "TBD"} />
+      </div>
+      <ProgressBar
+        value={delivery._signals.readinessScore}
+        color={riskColor(delivery._signals.risk)}
+        height={4}
+        sub={`${delivery._signals.readinessScore}% receiving readiness`}
+      />
+      {flags.length > 0 && (
+        <div className="delivery-flag-row">
+          {flags.slice(0, 3).map((flag) => (
+            <span key={flag.key}>{flag.label}</span>
+          ))}
+        </div>
+      )}
+      <div className="delivery-card-actions" onClick={(event) => event.stopPropagation()}>
+        {delivery._signals.status === "Scheduled" && (
+          <button type="button" onClick={() => onSetStatus(delivery, "In Transit")}>
+            Start Transit
+          </button>
+        )}
+        {delivery._signals.status !== "Delivered" && (
+          <button type="button" onClick={() => onSetStatus(delivery, "Delivered")}>
+            Delivered
+          </button>
+        )}
+      </div>
+      <div className="delivery-card-project">{projectMap[delivery.project_id] || delivery.project_name || "Project TBD"}</div>
+    </article>
+  );
+}
+
+function MetaMini({ icon: Icon, label, value }) {
+  return (
+    <div className="delivery-meta-mini">
+      <Icon size={12} />
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleView({ metrics, filtered, projectMap, workPackageMap, onOpen }) {
+  return (
+    <div className="delivery-schedule">
+      <div className="delivery-calendar">
+        {metrics.calendarDays.map((day) => (
+          <section key={day.iso} className="delivery-day">
+            <div className="delivery-day-head">
+              <strong>{day.label}</strong>
+              <span>{day.items.length} loads - {formatTons(day.tons)}</span>
+            </div>
+            <div className="delivery-day-list">
+              {day.items.length > 0 ? (
+                day.items.map((delivery) => {
+                  const wp = workPackageMap[delivery.work_package_id];
+                  return (
+                    <button key={delivery.id} type="button" onClick={() => onOpen(delivery)}>
+                      <span style={{ background: STATUS_COLOR[delivery._signals.status] || "var(--accent)" }} />
+                      <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                      <small>{delivery.vendor || "Vendor TBD"} - {formatTons(delivery.weight_tons)}</small>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="delivery-day-empty">No scheduled loads</div>
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <aside className="delivery-next-loads">
+        <div className="delivery-section-label">Next Up</div>
+        <div className="delivery-muted">Sorted by exception risk, then scheduled date.</div>
+        {(metrics.nextLoads.length ? metrics.nextLoads : filtered.slice(0, 8)).map((delivery) => {
+          const wp = workPackageMap[delivery.work_package_id];
+          return (
+            <button key={delivery.id} type="button" onClick={() => onOpen(delivery)}>
+              <div>
+                <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                <span>{projectMap[delivery.project_id] || delivery.project_name || "Project TBD"}</span>
+              </div>
+              <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" />
+            </button>
+          );
+        })}
+      </aside>
+    </div>
+  );
+}
+
+function RegisterView({
+  deliveries,
+  projectMap,
+  workPackageMap,
+  selectedIds,
+  onToggle,
+  onToggleAll,
+  onOpen,
+  onEdit,
+  allSelected,
+}) {
+  return (
+    <div className="delivery-register-wrap">
+      <table className="delivery-register">
+        <thead>
+          <tr>
+            <th>
+              <input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll(event.target.checked)} />
+            </th>
+            <th>Load</th>
+            <th>Vendor</th>
+            <th>Schedule</th>
+            <th>Material</th>
+            <th>Carrier</th>
+            <th>Receiving</th>
+            <th>Status</th>
+            <th>Risk</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {deliveries.map((delivery) => {
+            const wp = workPackageMap[delivery.work_package_id];
+            return (
+              <tr key={delivery.id} className={selectedIds.has(delivery.id) ? "is-selected" : ""} onClick={() => onOpen(delivery)}>
+                <td onClick={(event) => event.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.has(delivery.id)} onChange={() => onToggle(delivery.id)} />
+                </td>
+                <td>
+                  <strong>{getDeliveryDisplayName(delivery, wp)}</strong>
+                  <span>{wp?.wp_number || wp?.name || projectMap[delivery.project_id] || "No work package"}</span>
+                </td>
+                <td>
+                  <strong>{delivery.vendor || "Vendor TBD"}</strong>
+                  <span>{delivery.po_number || delivery.procurement_category || "PO TBD"}</span>
+                </td>
+                <td>
+                  <strong>{formatDate(delivery.scheduled_date)}</strong>
+                  <span>Need {formatDate(delivery.required_date)}</span>
+                </td>
+                <td>
+                  <strong>{formatTons(delivery.weight_tons)}</strong>
+                  <span>{formatPieces(delivery.pieces)} pcs</span>
+                </td>
+                <td>
+                  <strong>{delivery.carrier || "Carrier TBD"}</strong>
+                  <span>{delivery.tracking_number || delivery.truck_number || "Tracking TBD"}</span>
+                </td>
+                <td>
+                  <strong>{delivery.receiving_location || "Location TBD"}</strong>
+                  <span>{delivery.received_by || "Receiver TBD"}</span>
+                </td>
+                <td><StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} size="xs" /></td>
+                <td><StatusPill label={delivery._signals.risk} color={riskColor(delivery._signals.risk)} size="xs" /></td>
+                <td onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => onEdit(delivery)}>Edit</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DeliveryDetailModal({ delivery, projectMap, workPackageMap, onClose, onEdit, onDelete, onSetStatus }) {
+  if (!delivery) return null;
+  const wp = workPackageMap[delivery.work_package_id];
+  const title = getDeliveryDisplayName(delivery, wp);
+  return (
+    <div className="delivery-detail-backdrop" onClick={onClose}>
+      <aside className="delivery-detail" onClick={(event) => event.stopPropagation()}>
+        <div className="delivery-detail-head">
+          <div>
+            <div className="delivery-kicker">
+              <Truck size={13} />
+              {delivery.load_number || delivery.delivery_number || delivery.po_number || "Delivery"}
+            </div>
+            <h2 style={display}>{title}</h2>
+            <p>{projectMap[delivery.project_id] || delivery.project_name || "Project TBD"}</p>
+          </div>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="delivery-detail-status">
+          <StatusPill label={delivery._signals.status} color={STATUS_COLOR[delivery._signals.status]} />
+          <StatusPill label={`${delivery._signals.readinessScore}% Ready`} color={riskColor(delivery._signals.risk)} />
+          {delivery.inspection_required && <StatusPill label="Inspection" color="var(--status-warning)" />}
+          {delivery.is_long_lead && <StatusPill label="Long Lead" color="var(--accent)" />}
+        </div>
+
+        {delivery._signals.flags.length > 0 && (
+          <div className="delivery-detail-flags">
+            {delivery._signals.flags.map((flag) => (
+              <span key={flag.key}>{flag.label}</span>
+            ))}
+          </div>
+        )}
+
+        <div className="delivery-detail-grid">
+          <DetailCell label="Vendor" value={delivery.vendor} />
+          <DetailCell label="PO / Load" value={delivery.po_number || delivery.load_number} />
+          <DetailCell label="Work Package" value={wp?.wp_number || wp?.name} />
+          <DetailCell label="Scheduled" value={formatDate(delivery.scheduled_date)} />
+          <DetailCell label="Required" value={formatDate(delivery.required_date)} />
+          <DetailCell label="Actual" value={formatDate(delivery.actual_date, "Not received")} />
+          <DetailCell label="Pieces" value={formatPieces(delivery.pieces)} />
+          <DetailCell label="Weight" value={formatTons(delivery.weight_tons)} />
+          <DetailCell label="Carrier" value={delivery.carrier} />
+          <DetailCell label="Tracking" value={delivery.tracking_number || delivery.truck_number} />
+          <DetailCell label="Receiving" value={delivery.receiving_location} />
+          <DetailCell label="Received By" value={delivery.received_by} />
+        </div>
+
+        {(delivery.notes || delivery.special_instructions || delivery.shipping_ticket_name) && (
+          <div className="delivery-detail-notes">
+            {delivery.special_instructions && (
+              <div>
+                <strong>Special Instructions</strong>
+                <p>{delivery.special_instructions}</p>
+              </div>
+            )}
+            {delivery.notes && (
+              <div>
+                <strong>Notes</strong>
+                <p>{delivery.notes}</p>
+              </div>
+            )}
+            {delivery.shipping_ticket_name && (
+              <div>
+                <strong>Shipping Ticket</strong>
+                <p>{delivery.shipping_ticket_name}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="delivery-detail-actions">
+          {delivery._signals.status !== "In Transit" && delivery._signals.status !== "Delivered" && (
+            <Button variant="secondary" icon="arrow" onClick={() => onSetStatus(delivery, "In Transit")}>
+              In Transit
+            </Button>
+          )}
+          {delivery._signals.status !== "Delivered" && (
+            <Button variant="primary" icon="check" onClick={() => onSetStatus(delivery, "Delivered")}>
+              Mark Delivered
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => onSetStatus(delivery, "Partial")}>
+            Partial
+          </Button>
+          <Button variant="secondary" onClick={() => onEdit(delivery)}>
+            Edit
+          </Button>
+          <Button variant="danger" icon="x" onClick={() => onDelete(delivery)}>
+            Delete
+          </Button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DetailCell({ label, value }) {
+  return (
+    <div className="delivery-detail-cell">
+      <span>{label}</span>
+      <strong>{value || "TBD"}</strong>
+    </div>
+  );
+}
+
+const deliveryStyles = `
+.delivery-page {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.delivery-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-surface) 92%, #000 8%) 0%, color-mix(in srgb, var(--bg-surface-low) 90%, #000 10%) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 16px 38px rgba(0,0,0,0.32);
+  overflow: hidden;
+}
+.delivery-hero-main h1 {
+  margin: 8px 0 0;
+  color: var(--text-primary);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+}
+.delivery-hero-main p {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.delivery-kicker,
+.delivery-section-label,
+.delivery-metric-label,
+.delivery-lane-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.delivery-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--phase-delivery);
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--phase-delivery) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--phase-delivery) 10%, transparent);
+}
+.delivery-hero-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.delivery-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.delivery-hero-metric {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface-high) 86%, #000 14%) 0%, color-mix(in srgb, var(--bg-surface-low) 92%, #000 8%) 100%);
+  position: relative;
+  overflow: hidden;
+}
+.delivery-hero-metric:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--metric-color) 14%, transparent), transparent 50%);
+  pointer-events: none;
+}
+.delivery-hero-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--metric-color);
+  background: color-mix(in srgb, var(--metric-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--metric-color) 24%, transparent);
+  position: relative;
+}
+.delivery-metric-label,
+.delivery-metric-sub,
+.delivery-muted,
+.delivery-card-meta,
+.delivery-card-project {
+  color: var(--text-muted);
+}
+.delivery-metric-label {
+  margin-top: 12px;
+}
+.delivery-metric-value {
+  margin-top: 8px;
+  color: var(--metric-color);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.delivery-metric-sub {
+  margin-top: 6px;
+  font-size: 11px;
+}
+.delivery-receive-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--phase-delivery) 38%, var(--border-default));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--phase-delivery) 8%, var(--bg-surface));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.delivery-receive-copy h2 {
+  margin: 7px 0 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.15;
+}
+.delivery-receive-copy p {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.delivery-receive-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.delivery-receive-actions button,
+.delivery-receive-list button,
+.delivery-receive-exit {
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.delivery-receive-actions button {
+  min-height: 58px;
+  padding: 9px;
+  text-align: left;
+}
+.delivery-receive-actions span,
+.delivery-receive-exit {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.delivery-receive-actions strong {
+  display: block;
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--phase-delivery);
+}
+.delivery-receive-list {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.delivery-receive-list button {
+  min-height: 58px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  text-align: left;
+}
+.delivery-receive-list strong,
+.delivery-receive-list span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-receive-list strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.delivery-receive-list span,
+.delivery-receive-empty {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.delivery-receive-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
+  text-align: center;
+}
+.delivery-receive-exit {
+  grid-column: 1 / -1;
+  justify-self: flex-end;
+  min-height: 36px;
+  padding: 0 12px;
+}
+.delivery-flow-strip,
+.delivery-toolbar,
+.delivery-rail,
+.delivery-main,
+.delivery-lane,
+.delivery-next-loads {
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.delivery-flow-strip {
+  padding: 12px;
+}
+.delivery-flow-header,
+.delivery-rail-header,
+.delivery-view-header,
+.delivery-lane-head,
+.delivery-day-head,
+.delivery-card-top,
+.delivery-watch-top,
+.delivery-detail-head,
+.delivery-detail-actions,
+.delivery-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.delivery-status-flow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.delivery-status-step {
+  min-width: 0;
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  border-top: 2px solid var(--step-color);
+  background: var(--bg-surface-low);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.delivery-status-step.is-active {
+  border-color: var(--step-color);
+  background: color-mix(in srgb, var(--step-color) 10%, var(--bg-surface-low));
+}
+.delivery-status-step span,
+.delivery-status-step small,
+.delivery-flow-total {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.delivery-status-step strong {
+  display: block;
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--step-color);
+}
+.delivery-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto auto auto;
+  gap: 8px;
+  padding: 10px;
+  align-items: center;
+}
+.delivery-search,
+.delivery-filter-select,
+.delivery-view-toggle {
+  min-width: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+.delivery-search input,
+.delivery-toolbar select,
+.delivery-filter-select select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+.delivery-toolbar > select {
+  height: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 0 10px;
+}
+.delivery-view-toggle {
+  padding: 3px;
+  background: var(--bg-surface-low);
+}
+.delivery-view-toggle button {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0 9px;
+}
+.delivery-view-toggle button.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.delivery-layout {
+  display: grid;
+  grid-template-columns: 310px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.delivery-rail,
+.delivery-main {
+  min-width: 0;
+  padding: 12px;
+}
+.delivery-rail {
+  position: sticky;
+  top: 12px;
+}
+.delivery-rail-header button,
+.delivery-card-actions button,
+.delivery-register button,
+.delivery-detail-head button {
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-surface-low);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.delivery-rail-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.delivery-mini-stat {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface-low);
+}
+.delivery-mini-stat span,
+.delivery-meta-mini span,
+.delivery-detail-cell span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.delivery-mini-stat strong {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+}
+.delivery-watch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.delivery-watch-card,
+.delivery-next-loads button,
+.delivery-day-list button {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface-low);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.delivery-watch-card {
+  padding: 10px;
+}
+.delivery-watch-card strong,
+.delivery-next-loads strong,
+.delivery-day-list strong {
+  display: block;
+  min-width: 0;
+  margin-top: 7px;
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-watch-card small,
+.delivery-next-loads span,
+.delivery-day-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-rail-empty,
+.delivery-lane-empty,
+.delivery-day-empty {
+  padding: 16px;
+  border: 1px dashed var(--border-default);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.delivery-view-header {
+  margin-bottom: 12px;
+}
+.delivery-lane-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.delivery-lanes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(250px, 1fr));
+  gap: 10px;
+  min-width: 980px;
+}
+.delivery-lane {
+  min-width: 0;
+  border-top: 2px solid var(--lane-color);
+  padding: 10px;
+}
+.delivery-lane-head span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.delivery-lane-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.delivery-load-card {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--bg-surface-low);
+  cursor: pointer;
+}
+.delivery-load-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.delivery-card-top input {
+  width: 15px;
+  height: 15px;
+}
+.delivery-card-date {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.delivery-load-card h3 {
+  margin: 10px 0 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.delivery-card-meta {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  margin-bottom: 10px;
+}
+.delivery-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.delivery-meta-mini {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-surface-high) 70%, transparent);
+}
+.delivery-meta-mini svg {
+  color: var(--phase-delivery);
+  margin-top: 1px;
+}
+.delivery-meta-mini strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-primary);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.delivery-flag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.delivery-flag-row span {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--danger-muted);
+  color: var(--status-error);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.delivery-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.delivery-card-actions button {
+  flex: 1;
+}
+.delivery-card-project {
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.delivery-schedule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 12px;
+}
+.delivery-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.delivery-day {
+  min-width: 150px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--bg-surface-low);
+  overflow: hidden;
+}
+.delivery-day-head {
+  align-items: flex-start;
+  padding: 10px;
+  border-bottom: 1px solid var(--border-default);
+}
+.delivery-day-head strong,
+.delivery-day-head span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-primary);
+}
+.delivery-day-head span {
+  color: var(--text-muted);
+  font-size: 8px;
+  margin-top: 4px;
+}
+.delivery-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.delivery-day-list button {
+  padding: 8px;
+  position: relative;
+}
+.delivery-day-list button > span:first-child {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+}
+.delivery-next-loads {
+  padding: 12px;
+}
+.delivery-next-loads button {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.delivery-register-wrap {
+  overflow-x: auto;
+}
+.delivery-register {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+}
+.delivery-register th,
+.delivery-register td {
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--border-default);
+  text-align: left;
+  vertical-align: middle;
+}
+.delivery-register th {
+  background: var(--bg-surface-low);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.delivery-register tr {
+  cursor: pointer;
+}
+.delivery-register tr.is-selected td {
+  background: var(--accent-muted);
+}
+.delivery-register td strong,
+.delivery-register td span {
+  display: block;
+  min-width: 0;
+}
+.delivery-register td strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.delivery-register td span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.delivery-empty {
+  padding: 28px;
+}
+.delivery-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(3, 5, 10, 0.72);
+  display: flex;
+  justify-content: flex-end;
+}
+.delivery-detail {
+  width: min(520px, 100vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: -18px 0 54px rgba(0,0,0,0.5);
+}
+.delivery-detail-head {
+  align-items: flex-start;
+}
+.delivery-detail-head h2 {
+  margin: 10px 0 6px;
+  color: var(--text-primary);
+  font-size: 24px;
+  line-height: 1.1;
+}
+.delivery-detail-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.delivery-detail-status,
+.delivery-detail-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.delivery-detail-flags span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--danger-muted);
+  color: var(--status-error);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.delivery-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.delivery-detail-cell,
+.delivery-detail-notes > div {
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.delivery-detail-cell strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.delivery-detail-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.delivery-detail-notes strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.delivery-detail-notes p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.delivery-detail-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-default);
+}
+@media (max-width: 1180px) {
+  .delivery-hero,
+  .delivery-receive-panel,
+  .delivery-layout,
+  .delivery-schedule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-rail {
+    position: static;
+  }
+  .delivery-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  }
+}
+@media (max-width: 760px) {
+  .delivery-page {
+    padding: 12px;
+  }
+  .delivery-hero {
+    padding: 14px;
+  }
+  .delivery-hero-main h1 {
+    font-size: 30px;
+  }
+  .delivery-hero-grid,
+  .delivery-rail-kpis,
+  .delivery-detail-grid,
+  .delivery-card-grid,
+  .delivery-status-flow,
+  .delivery-receive-actions,
+  .delivery-receive-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-view-toggle,
+  .delivery-filter-select,
+  .delivery-toolbar > select {
+    width: 100%;
+  }
+  .delivery-view-toggle button {
+    flex: 1;
+    justify-content: center;
+  }
+  .delivery-lanes {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-calendar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .delivery-day {
+    min-width: 0;
+  }
+  .delivery-detail {
+    width: 100vw;
+  }
+  .delivery-detail-actions {
+    position: sticky;
+    bottom: -18px;
+    background: var(--bg-elevated);
+  }
+}
+`;

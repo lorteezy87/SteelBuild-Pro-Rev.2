@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useContext } from 'react';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from '@/lib/AuthContext';
 
 const STORAGE_KEY = 'sbp_audit_log';
 const MAX_ENTRIES = 200;

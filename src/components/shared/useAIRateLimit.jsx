@@ -76,10 +76,6 @@ export function useAIRateLimit() {
     saveCallLog([]);
   }, []);
 
-  if (typeof window !== 'undefined') {
-    window.__sbpResetAILimit = resetLimit;
-  }
-
   return {
     checkLimit,
     recordCall,

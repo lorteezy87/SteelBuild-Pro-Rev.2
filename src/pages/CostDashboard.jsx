@@ -3,19 +3,22 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import CostCodeFormModal from "@/components/financials/CostCodeFormModal";
 import DeleteDialog from "@/components/shared/DeleteDialog";
-import { useProjectContext } from "../components/shared/useProjectContext";
+import { useProjectContext } from "../components/shared/ProjectContext";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import { PhoenixPanel } from "../components/shared/PhoenixPanel";
 import KPIStrip from "../components/shared/KPIStrip";
 import ProgressBar from "../components/shared/ProgressBar";
 import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
-import { formatCurrency, formatCurrencyShort, formatPercent } from "../components/shared/formatters";
+import { formatCurrency, formatCurrencyShort, formatPercent, formatDateShort } from "../components/shared/formatters";
 import { COST_CODES, CATEGORY_COLORS, CATEGORY_ORDER } from "../components/shared/costCodes";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Line, ReferenceLine, Area, AreaChart
 } from "recharts";
-import { AlertTriangle, ShieldAlert, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { Button as IconButton } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Button as DSButton, CommandBar } from "@/components/design-system";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -43,7 +46,7 @@ function VarianceAlertCard({ code, description, phase, variance, pctOver, contin
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
       padding: "10px 16px",
-      borderBottom: "1px solid rgba(255,255,255,0.04)",
+      borderBottom: "1px solid var(--hover-bg)",
       borderLeft: exceedsContingency ? "3px solid var(--status-error)" : "3px solid var(--status-warning)",
       background: exceedsContingency ? "var(--danger-muted)" : "var(--warning-muted)",
     }}>
@@ -82,14 +85,17 @@ export default function CostDashboard() {
   const createCodeMut = useMutation({
     mutationFn: (d) => base44.entities.CostCode.create({ ...d, project_id: d.project_id || activeProject?.id }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
   const updateCodeMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.CostCode.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setCodeModalOpen(false); setEditingCode(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
   const deleteCodeMut = useMutation({
     mutationFn: (id) => base44.entities.CostCode.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["cost-codes-dash"] }); setDeleteCodeTarget(null); },
+    onError: (err) => toast.error(err?.message || "Operation failed"),
   });
 
   const { data: codes = [], isLoading } = useQuery({
@@ -103,6 +109,7 @@ export default function CostDashboard() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: cos = [] } = useQuery({
@@ -122,12 +129,6 @@ export default function CostDashboard() {
   const { data: sovs = [] } = useQuery({
     queryKey: ['sovs-cost', activeProject?.id],
     queryFn: () => activeProject?.id ? base44.entities.SOVItem.filter({ project_id: activeProject.id }) : [],
-    enabled: !!activeProject?.id,
-  });
-
-  const { data: cos_all = [] } = useQuery({
-    queryKey: ['cos-cost', activeProject?.id],
-    queryFn: () => activeProject?.id ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }) : [],
     enabled: !!activeProject?.id,
   });
 
@@ -210,12 +211,12 @@ export default function CostDashboard() {
 
   const coAging = useMemo(() => {
     const today = new Date();
-    return cos_all.map(co => {
+    return cos.map(co => {
       const submitted = co.submitted_date ? new Date(co.submitted_date) : null;
       const daysOpen = submitted ? Math.floor((today - submitted) / 86400000) : null;
       return { ...co, daysOpen, isStale: daysOpen !== null && daysOpen > 30 && !['Approved', 'Rejected', 'Void'].includes(co.status) };
     }).sort((a, b) => (b.daysOpen || 0) - (a.daysOpen || 0));
-  }, [cos_all]);
+  }, [cos]);
 
   const billingMetrics = useMemo(() => {
     const totalScheduled = sovs.reduce((s, sv) => s + (Number(sv.scheduled_value) || 0), 0);
@@ -224,18 +225,20 @@ export default function CostDashboard() {
       const pct = Number(sv.current_percent_complete) || 0;
       return s + scheduled * (pct / 100);
     }, 0);
+    // billedToDate = cumulative billed (current_percent_complete reflects total billed %)
+    // The period draw (currPct - prevPct) is only for the current invoice, not cumulative.
     const billedToDate = sovs.reduce((s, sv) => {
       const scheduled = Number(sv.scheduled_value) || 0;
       const currPct = Number(sv.current_percent_complete) || 0;
       return s + scheduled * (currPct / 100);
     }, 0);
-    const unbilledEV = earnedValue - totalActual;
+    const unbilledEV = earnedValue - billedToDate;
     const billingLag = earnedValue > 0 ? ((earnedValue - billedToDate) / earnedValue) * 100 : 0;
     return {
       totalScheduled, earnedValue, billedToDate, unbilledEV, billingLag,
       billingEfficiency: earnedValue > 0 ? (billedToDate / earnedValue) * 100 : 0,
     };
-  }, [sovs, totalActual]);
+  }, [sovs]);
 
   const productivity = useMemo(() => {
     const shopWPs = wps.filter(w => w.shop_hours_budget > 0);
@@ -289,13 +292,19 @@ export default function CostDashboard() {
     });
   }, [codes]);
 
+  const consumedContingency = codes.reduce((s, c) => {
+    const v = (Number(c.actual_cost) || 0) - (Number(c.budget_amount) || 0);
+    return s + Math.max(0, v);
+  }, 0);
+  const contingencyRemaining = Math.max(0, contingency - consumedContingency);
+
   const kpis = [
     { label: "Contract Value", value: formatCurrencyShort(contractVal), color: "blue" },
     { label: "Total Budget", value: formatCurrencyShort(totalBudget), color: "slate" },
     { label: "Actual Spend", value: formatCurrencyShort(totalActual), color: totalActual > totalBudget ? "rose" : "green" },
     { label: "Committed", value: formatCurrencyShort(totalCommitted), color: "amber" },
     { label: "EAC", value: formatCurrencyShort(eac), sub: eac > totalBudget ? "Over budget" : "Within budget", color: eac > totalBudget ? "rose" : "green" },
-    { label: "Contingency", value: formatCurrencyShort(contingency), sub: contingency > 0 ? `${formatPercent(contingency > 0 ? (Math.max(0, contingency - Math.max(0, totalVariance)) / contingency) * 100 : 0)} remaining` : "Not set", color: totalVariance > contingency ? "rose" : "purple" },
+    { label: "Contingency", value: formatCurrencyShort(contingency), sub: contingency > 0 ? `${formatPercent(contingency > 0 ? (contingencyRemaining / contingency) * 100 : 0)} remaining` : "Not set", color: consumedContingency > contingency ? "rose" : "purple" },
   ];
 
   const exportCSV = () => {
@@ -314,23 +323,35 @@ export default function CostDashboard() {
   if (!activeProject?.id) return (
     <div style={{ textAlign: "center", padding: "80px 24px" }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "rgba(220,225,240,0.45)", marginBottom: 6 }}>Select a project to view Cost Dashboard</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(200,210,230,0.30)" }}>Use the project selector in the top right.</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Select a project to view Cost Dashboard</div>
+      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
     </div>
   );
 
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cost Dashboard</h1>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", marginTop: 3, letterSpacing: "0.14em", textTransform: "uppercase" }}>{codes.length} cost codes • {project?.name || ""}</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button size="sm" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }} style={{ background: "var(--accent)", color: "var(--accent-text)", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>+ Add Cost Code</Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
-        </div>
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="page" />
       </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "6px 24px 24px" }}>
+      <CommandBar
+        eyebrow={project?.name || "COST"}
+        title="Cost Dashboard"
+        count={codes.length}
+        unit=" · COST CODES"
+        subtitle="Budget vs actual vs committed · variance monitoring"
+      >
+        <DSButton variant="secondary" icon="download" onClick={exportCSV}>
+          Export
+        </DSButton>
+        <DSButton variant="primary" icon="plus" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}>
+          Add Cost Code
+        </DSButton>
+      </CommandBar>
 
       <KPIStrip items={kpis} />
 
@@ -344,21 +365,21 @@ export default function CostDashboard() {
         </PhoenixPanel>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, marginBottom: 14 }}>
         <PhoenixPanel title="Budget vs Actual vs Committed" style={{ gridColumn: barChartData.length > 6 ? "span 2" : "span 1" }}>
           <div style={{ padding: 16 }}>
             {barChartData.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 32, color: "rgba(200,210,230,0.44)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No cost data to display</div>
+              <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No cost data to display</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={barChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="label" tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} />
-                  <YAxis tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} tickFormatter={v => formatCurrencyShort(v)} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
+                  <XAxis dataKey="label" tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} />
+                  <YAxis tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} tickFormatter={v => formatCurrencyShort(v)} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                  <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   <Bar dataKey="budget" name="Budget" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="actual" name="Actual" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="actual" name="Actual" fill="#3B82F6" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="committed" name="Committed" fill="#FFB300" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -370,7 +391,7 @@ export default function CostDashboard() {
           <PhoenixPanel title="Spend by Category">
             <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
               {categoryPieData.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 32, color: "rgba(200,210,230,0.44)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No spend data</div>
+                <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>No spend data</div>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
@@ -378,7 +399,7 @@ export default function CostDashboard() {
                       {categoryPieData.map((d, i) => <Cell key={i} fill={CATEGORY_COLORS[d.name] || "var(--accent)"} />)}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                    <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -402,11 +423,11 @@ export default function CostDashboard() {
                     <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="name" tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} />
-                <YAxis tick={{ fill: "rgba(200,210,230,0.55)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "rgba(255,255,255,0.10)" }} tickFormatter={v => formatCurrencyShort(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" />
+                <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} />
+                <YAxis tick={{ fill: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 9 }} axisLine={{ stroke: "var(--border-default)" }} tickFormatter={v => formatCurrencyShort(v)} />
                 <Tooltip content={<CustomTooltip />} />
-                <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "rgba(200,210,230,0.55)" }} />
+                <Legend iconSize={8} wrapperStyle={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-secondary)" }} />
                 {contingency > 0 && (
                   <ReferenceLine y={totalBudget + contingency} stroke="var(--status-error)" strokeDasharray="5 5" label={{ value: "Contingency Limit", fill: "var(--status-error)", fontSize: 9, fontFamily: "var(--font-mono)" }} />
                 )}
@@ -438,8 +459,10 @@ export default function CostDashboard() {
               const actual = Number(c.actual_cost) || 0;
               const committed = Number(c.committed_cost) || 0;
               const forecast = Number(c.forecast_to_complete) || 0;
-              const variance = actual - budget;
-              const pctUsed = budget > 0 ? (actual / budget) * 100 : 0;
+              // Exposure = committed (which already includes paid amounts)
+              const exposure = committed;
+              const variance = exposure - budget;
+              const pctUsed = budget > 0 ? (exposure / budget) * 100 : 0;
               const overContingency = contingency > 0 && variance > contingency;
               return (
                 <PTR key={c.id} warn={pctUsed > 100}>
@@ -461,8 +484,8 @@ export default function CostDashboard() {
                   </PTD>
                   <PTD>
                     <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></Button>
+                      <IconButton variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></IconButton>
+                      <IconButton variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></IconButton>
                     </div>
                   </PTD>
                 </PTR>
@@ -510,14 +533,14 @@ export default function CostDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
 
         <PhoenixPanel title="CO Aging & Recovery" count={coAging.filter(c => c.isStale).length > 0 ? `${coAging.filter(c => c.isStale).length} stale` : coAging.length}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
             {[
-              { label: 'Pending', value: cos_all.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length, color: 'var(--status-warning)' },
-              { label: 'Approved', value: cos_all.filter(c => c.status === 'Approved').length, color: 'var(--status-success)' },
+              { label: 'Pending', value: cos.filter(c => ['Submitted', 'Under Review'].includes(c.status)).length, color: 'var(--status-warning)' },
+              { label: 'Approved', value: cos.filter(c => c.status === 'Approved').length, color: 'var(--status-success)' },
               { label: 'Stale >30d', value: coAging.filter(c => c.isStale).length, color: coAging.filter(c => c.isStale).length > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
@@ -548,7 +571,7 @@ export default function CostDashboard() {
               { label: 'Billing Efficiency', value: `${billingMetrics.billingEfficiency.toFixed(1)}%`, color: billingMetrics.billingEfficiency < 80 ? 'var(--status-error)' : billingMetrics.billingEfficiency < 95 ? 'var(--status-warning)' : 'var(--status-success)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i % 2 === 0 ? '1px solid var(--divider)' : 'none', borderBottom: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
@@ -576,14 +599,14 @@ export default function CostDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
 
           <PhoenixPanel title="Shop Fabrication Productivity">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
               {[
                 { label: 'Budget Hrs', value: productivity.shopBudget.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Actual Hrs', value: productivity.shopActual.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Efficiency', value: `${productivity.shopEfficiency.toFixed(1)}%`, color: productivity.shopEfficiency > 110 ? 'var(--status-error)' : productivity.shopEfficiency > 95 ? 'var(--status-warning)' : 'var(--status-success)' },
               ].map(({ label, value, color }, i) => (
                 <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                 </div>
               ))}
@@ -615,14 +638,14 @@ export default function CostDashboard() {
           </PhoenixPanel>
 
           <PhoenixPanel title="Field Install Productivity">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
               {[
                 { label: 'Budget Hrs', value: productivity.fieldBudget.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Actual Hrs', value: productivity.fieldActual.toLocaleString(), color: 'var(--text-primary)' },
                 { label: 'Efficiency', value: `${productivity.fieldEfficiency.toFixed(1)}%`, color: productivity.fieldEfficiency > 110 ? 'var(--status-error)' : productivity.fieldEfficiency > 95 ? 'var(--status-warning)' : 'var(--status-success)' },
               ].map(({ label, value, color }, i) => (
                 <div key={label} style={{ padding: '12px 16px', borderRight: i < 2 ? '1px solid var(--divider)' : 'none' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
                 </div>
               ))}
@@ -646,7 +669,7 @@ export default function CostDashboard() {
       {/* ── Procurement Exposure ── */}
       {procurementExposure.total > 0 && (
         <PhoenixPanel title="Procurement Exposure" count={`${procurementExposure.late} late`} style={{ marginTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid var(--divider)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', borderBottom: '1px solid var(--divider)' }}>
             {[
               { label: 'Total Open', value: procurementExposure.total, color: 'var(--text-primary)' },
               { label: 'Overdue', value: procurementExposure.late, color: procurementExposure.late > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
@@ -654,7 +677,7 @@ export default function CostDashboard() {
               { label: 'Due 30-60 Days', value: procurementExposure.due60, color: 'var(--text-secondary)' },
             ].map(({ label, value, color }, i) => (
               <div key={label} style={{ padding: '12px 16px', borderRight: i < 3 ? '1px solid var(--divider)' : 'none' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
               </div>
             ))}
@@ -662,22 +685,22 @@ export default function CostDashboard() {
           {procurementExposure.lateItems.map(d => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)', borderLeft: '3px solid var(--status-error)', background: 'var(--danger-muted)' }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.delivery_title || d.vendor || d.delivery_id || 'Delivery'}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.description || d.vendor || d.delivery_id || 'Delivery'}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-error)' }}>
-                {d.scheduled_date ? `Due ${new Date(d.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Overdue'}
+                {d.scheduled_date ? `Due ${formatDateShort(d.scheduled_date)}` : 'Overdue'}
               </div>
             </div>
           ))}
           {procurementExposure.due30Items.map(d => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)', borderLeft: '3px solid var(--status-warning)' }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.delivery_title || d.vendor || d.delivery_id || 'Delivery'}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{d.description || d.vendor || d.delivery_id || 'Delivery'}</div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{d.vendor || ''}</div>
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--status-warning)' }}>
-                {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                {d.scheduled_date ? formatDateShort(d.scheduled_date) : '—'}
               </div>
             </div>
           ))}

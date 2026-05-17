@@ -530,7 +530,7 @@ export default function MarkupCanvas({
               if (e.key === "Escape") setTextInput(null);
             }}
             style={{
-              background: "rgba(var(--bg-sidebar), 0.92)",
+              background: "rgba(var(--bg-surface-low), 0.92)",
               border: `1px solid ${activeColor}`,
               color: activeColor,
               padding: "4px 8px",

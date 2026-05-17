@@ -1,6 +1,7 @@
 #env
 .env
 .env.*
+!.env.example
 
 # Logs
 logs
@@ -14,6 +15,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+**/.next
+.claude
+steelbuild-pro
+SteelBuild-Pro-Rev.2/
 *.local
 
 # Editor directories and files
@@ -29,3 +34,12 @@ dist-ssr
 
 .env
 .vercel
+
+# temp commit-message files used by automation
+.git-commit-msg.tmp
+
+# local agent/session configuration
+.codex/config.toml
+
+# extracted theme handoff (preview/reference only)
+.theme-reference/

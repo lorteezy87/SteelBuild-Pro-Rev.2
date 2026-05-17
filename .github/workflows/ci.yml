@@ -1,0 +1,91 @@
+﻿# CI â€” lint + typecheck + test + build on every push and PR.
+#
+# What runs here:
+#   1. Install (cached node_modules via actions/setup-node)
+#   2. ESLint (warnings allowed, errors fail the build)
+#   3. TypeScript checks for both .ts (tsconfig) and .js/.jsx (jsconfig)
+#   4. Vitest unit tests (currently 480 passing)
+#   5. Production Vite build (catches dead-imports / runtime-only refs
+#      that the lint + typecheck passes don't notice)
+#
+# What does NOT run here:
+#   - End-to-end tests (no E2E suite yet)
+#   - Lighthouse / a11y / bundle-size budgets (queued for later)
+#   - Deploy â€” Vercel handles that on push to codex/base44-deploy-nick
+#
+# This workflow runs against EVERY push and pull request to any branch
+# so contributors see green/red feedback before merging into deploy.
+# The deploy branch (codex/base44-deploy-nick) gets the same gates plus
+# Vercel's own build, so a regression has two chances to be caught.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - codex/base44-deploy-nick
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+      - master
+      - codex/base44-deploy-nick
+
+# Cancel any in-progress runs for the same branch when a new push comes in.
+# Avoids piling up redundant CI for rapid iteration on a feature branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint + Typecheck + Test + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # CI placeholders for Vite/Vitest. Real values live in Vercel project env
+    # for production builds; CI only needs non-empty values so src/lib/supabase.ts
+    # passes its import-time guard. No test should hit this URL — anything that
+    # touches the network is expected to mock the supabase client.
+    env:
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        # `--quiet` suppresses warnings (we have many that aren't fixed
+        # yet); errors still fail the run. Tighten this once we work
+        # the existing warnings down.
+        run: npm run lint
+
+      - name: Typecheck (TypeScript)
+        # Blocking: guards Supabase table names, hook contracts,
+        # and TS/TSX integration points before Vercel receives a deploy.
+        run: npm run typecheck
+
+      - name: Typecheck (JavaScript via jsconfig)
+        # Blocking: parses JS/JSX and verifies module resolution while the
+        # remaining business logic migrates toward TypeScript coverage.
+        run: npm run typecheck:js
+
+      - name: Run Vitest tests
+        run: npm test
+
+      - name: Production build
+        # Catches dead imports / runtime-only refs that the type checks
+        # don't see. Output is discarded â€” we just want the failure
+        # signal.
+        run: npm run build

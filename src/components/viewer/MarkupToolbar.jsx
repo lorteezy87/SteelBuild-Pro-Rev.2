@@ -40,7 +40,7 @@ const COLORS = [
   "#FFE600",
   "#00D68F",
   "#00B8D9",
-  "#8B5CF6",
+  "#0D9488",
   "#FFFFFF",
 ];
 
@@ -86,6 +86,7 @@ export default function MarkupToolbar({
 
   return (
     <div
+      className="sbd-card"
       style={{
         position: "fixed",
         left: 12,
@@ -94,12 +95,8 @@ export default function MarkupToolbar({
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        background: "color-mix(in srgb, var(--bg-surface) 82%, black)",
-        border: "1px solid var(--border-default)",
-        borderRadius: 12,
         padding: 10,
         zIndex: 60,
-        boxShadow: "0 14px 34px rgba(0,0,0,0.45)",
         userSelect: "none",
         width: 72,
       }}
@@ -141,7 +138,7 @@ export default function MarkupToolbar({
                   right: 6,
                   bottom: 3,
                   fontFamily: "var(--font-mono)",
-                  fontSize: 7,
+                  fontSize: 9,
                   lineHeight: 1,
                   color: "var(--text-muted)",
                   background: "rgba(0,0,0,0.45)",
@@ -173,7 +170,7 @@ export default function MarkupToolbar({
                 <div
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: 7,
+                    fontSize: 9,
                     color: "var(--text-muted)",
                     letterSpacing: "0.14em",
                   }}
@@ -227,7 +224,7 @@ export default function MarkupToolbar({
                 width: 14,
                 height: 14,
                 borderRadius: "50%",
-                border: width === lineWidth ? "1px solid #fff" : "1px solid rgba(255,255,255,0.12)",
+                border: width === lineWidth ? "1px solid #fff" : "1px solid var(--border-default)",
                 background: "transparent",
                 display: "flex",
                 alignItems: "center",
@@ -253,7 +250,7 @@ export default function MarkupToolbar({
           <div
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 7,
+              fontSize: 9,
               letterSpacing: "0.14em",
               color: "var(--text-muted)",
               textAlign: "center",
@@ -299,7 +296,7 @@ export default function MarkupToolbar({
                 height: 24,
                 borderRadius: 6,
                 background: color,
-                border: activeColor === color ? "2px solid #fff" : "1px solid rgba(255,255,255,0.16)",
+                border: activeColor === color ? "2px solid #fff" : "1px solid var(--border-strong)",
                 cursor: "pointer",
                 justifySelf: "center",
               }}
@@ -314,7 +311,7 @@ export default function MarkupToolbar({
               height: 24,
               borderRadius: 6,
               background: activeColor,
-              border: "2px solid rgba(255,255,255,0.28)",
+              border: "2px solid var(--border-strong)",
               boxShadow: `0 0 10px ${activeColor}44`,
             }}
           />
@@ -325,7 +322,7 @@ export default function MarkupToolbar({
               width: 30,
               height: 30,
               borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.14)",
+              border: "1px solid var(--border-strong)",
               background: "var(--bg-surface-high)",
               color: "var(--text-secondary)",
               cursor: "pointer",

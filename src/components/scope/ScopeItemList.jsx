@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, X, Info, FileText, Plus, Filter } from "lucide-react";
+import { Check, X, Info, FileText, Plus, Filter, Paperclip, Clock } from "lucide-react";
 
 const TYPE_META = {
   Scope:         { color: "var(--status-success)", Icon: Check },
@@ -26,7 +26,11 @@ export default function ScopeItemList({
   onEdit,
   onDelete,
   onToggleComplete,
+  onToggleInProgress,
+  selectedIds,
+  onToggleSelect,
 }) {
+  const selectionMode = !!onToggleSelect;
   if (items.length === 0) {
     // Two empty states: no data at all, vs filters hiding everything
     const isFilteredEmpty = totalCount > 0 && hasActiveFilters;
@@ -50,7 +54,7 @@ export default function ScopeItemList({
             width: 64,
             height: 64,
             borderRadius: "50%",
-            background: "var(--bg-surface-low, rgba(255,255,255,0.03))",
+            background: "var(--bg-surface-low)",
             border: "1px solid var(--border-default)",
             display: "flex",
             alignItems: "center",
@@ -149,13 +153,19 @@ export default function ScopeItemList({
         const TypeIcon = typeMeta.Icon;
         const categoryColor = CATEGORY_COLORS[item.category] || "var(--text-muted)";
         const isComplete = !!item.is_completed;
+        const isInProgress = !isComplete && !!item.in_progress;
+        const accentColor = isComplete
+          ? "var(--status-success)"
+          : isInProgress
+            ? "var(--status-warning)"
+            : typeMeta.color;
         return (
           <div
             key={item.id}
             style={{
-              background: isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)",
+              background: isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)",
               border: "1px solid var(--border-default)",
-              borderLeft: `3px solid ${isComplete ? "var(--status-success)" : typeMeta.color}`,
+              borderLeft: `3px solid ${accentColor}`,
               borderRadius: "12px",
               padding: "14px 16px",
               transition: "all 0.15s",
@@ -163,13 +173,13 @@ export default function ScopeItemList({
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent-border)";
-              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
+              e.currentTarget.style.borderLeftColor = accentColor;
               e.currentTarget.style.background = "var(--hover-bg)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = "var(--border-default)";
-              e.currentTarget.style.borderLeftColor = isComplete ? "var(--status-success)" : typeMeta.color;
-              e.currentTarget.style.background = isComplete ? "var(--bg-surface-low, rgba(255,255,255,0.02))" : "var(--bg-surface)";
+              e.currentTarget.style.borderLeftColor = accentColor;
+              e.currentTarget.style.background = isComplete ? "var(--bg-surface-low)" : "var(--bg-surface)";
             }}
           >
             {/* Header */}
@@ -182,7 +192,29 @@ export default function ScopeItemList({
                 marginBottom: "8px",
               }}
             >
-              {/* Checkbox */}
+              {/* Bulk-selection checkbox (square, left-most when selection mode is on) */}
+              {selectionMode && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onToggleSelect(item.id); }}
+                  aria-label={selectedIds?.has(item.id) ? "Unselect" : "Select"}
+                  title={selectedIds?.has(item.id) ? "Unselect" : "Select"}
+                  style={{
+                    flexShrink: 0,
+                    width: 18, height: 18,
+                    borderRadius: 2,
+                    border: `2px solid ${selectedIds?.has(item.id) ? "var(--accent)" : "var(--border-default)"}`,
+                    background: selectedIds?.has(item.id) ? "var(--accent)" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", marginTop: 3, padding: 0,
+                    transition: "all 0.12s",
+                  }}
+                >
+                  {selectedIds?.has(item.id) && <Check size={12} strokeWidth={3.5} color="#fff" />}
+                </button>
+              )}
+
+              {/* Complete-state checkbox */}
               {onToggleComplete && (
                 <button
                   type="button"
@@ -235,6 +267,27 @@ export default function ScopeItemList({
                     }}
                   >
                     ✓ Completed {new Date(item.completed_at).toLocaleDateString()}
+                  </div>
+                )}
+                {!isComplete && item.in_progress && (
+                  <div
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9, fontWeight: 700,
+                      color: "var(--status-warning)",
+                      letterSpacing: "0.10em",
+                      textTransform: "uppercase",
+                      marginTop: 2,
+                    }}
+                  >
+                    <Clock size={10} strokeWidth={2.5} />
+                    In Progress
+                    {item.in_progress_at && (
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                        · since {new Date(item.in_progress_at).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -292,6 +345,52 @@ export default function ScopeItemList({
                       {item.category}
                     </span>
                   </div>
+                )}
+
+                {/* PDF attachment indicator (links directly to the file) */}
+                {item.file_url && (
+                  <a
+                    href={item.file_url}
+                    target="_blank" rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={item.file_name || "Open attachment"}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "4px 6px",
+                      color: "var(--accent)",
+                      border: "1px solid var(--accent)",
+                      borderRadius: 4,
+                      textDecoration: "none",
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                    }}
+                  >
+                    <Paperclip size={10} strokeWidth={2.5} />
+                    PDF
+                  </a>
+                )}
+
+                {/* In-Progress toggle — active when the flag is set, ghost when not */}
+                {onToggleInProgress && !isComplete && (
+                  <button
+                    onClick={() => onToggleInProgress(item)}
+                    title={isInProgress ? "Clear In Progress" : "Mark In Progress"}
+                    aria-pressed={isInProgress}
+                    style={{
+                      background: isInProgress ? "var(--status-warning)" : "transparent",
+                      color: isInProgress ? "#000" : "var(--status-warning)",
+                      border: "1px solid var(--status-warning)",
+                      borderRadius: 4,
+                      padding: "3px 8px",
+                      fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                      cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    <Clock size={10} strokeWidth={2.5} />
+                    {isInProgress ? "IN PROGRESS" : "MARK WIP"}
+                  </button>
                 )}
 
                 {/* Action Buttons */}

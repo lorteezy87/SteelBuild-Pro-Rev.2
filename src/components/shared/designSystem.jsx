@@ -5,7 +5,7 @@
 
 // CSS Variable Reference:
 // ── Backgrounds ──
-// var(--bg-base), var(--bg-surface), var(--bg-surface-secondary), var(--bg-input), var(--bg-sidebar)
+// var(--bg-base), var(--bg-surface), var(--bg-surface-secondary), var(--bg-input), var(--bg-surface-low)
 
 // ── Text ──
 // var(--text-primary), var(--text-secondary), var(--text-muted), var(--text-disabled)

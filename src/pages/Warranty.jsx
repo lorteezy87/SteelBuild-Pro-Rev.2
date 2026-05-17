@@ -1,17 +1,15 @@
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import WarrantyFormModal from "@/components/warranty/WarrantyFormModal";
 import WarrantyList from "@/components/warranty/WarrantyList";
 import DeleteDialog from "@/components/shared/DeleteDialog";
+import StatCard from "@/components/shared/StatCard";
 
 export default function Warranty() {
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
+  const projectId = useProjectId();
   const [showForm, setShowForm] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -27,6 +25,7 @@ export default function Warranty() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const selectedProject = projectId
@@ -82,10 +81,12 @@ export default function Warranty() {
   };
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const filtered = warranties.filter((w) => {
     const typeMatch = filterType === "all" || w.warranty_type === filterType;
     let statusMatch = true;
     if (filterStatus !== "all") {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
       if (filterStatus === "active") statusMatch = w.is_active && daysUntilExpiry > 0;
@@ -98,15 +99,18 @@ export default function Warranty() {
   const stats = {
     total: warranties.length,
     active: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       return w.is_active && expDate > today;
     }).length,
     expiring: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       const daysUntilExpiry = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
       return w.is_active && daysUntilExpiry > 0 && daysUntilExpiry <= 90;
     }).length,
     expired: warranties.filter((w) => {
+      if (!w.expiration_date) return false;
       const expDate = new Date(w.expiration_date);
       return expDate <= today;
     }).length,
@@ -163,15 +167,6 @@ export default function Warranty() {
 
       {/* Delete Dialog */}
       <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => { if (!deleteMut.isPending && deleteTarget?.id) deleteMut.mutate(deleteTarget.id); }} title="Delete Warranty" description="Delete this record? This cannot be undone." />
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "12px", borderTop: `2px solid ${color}` }}>
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 600, color: color, marginBottom: "4px" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{label}</div>
     </div>
   );
 }

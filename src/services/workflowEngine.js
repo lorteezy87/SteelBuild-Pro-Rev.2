@@ -43,34 +43,48 @@ export const WORKFLOWS = {
     },
   },
 
-  // ── Drawing Stage (IFC pipeline) ────────────────────────────────────
+  // ── Drawing Stage (corrected 7-stage flow, migration 077) ────────────
+  // Not Started → IFA (In For Approval) → OFA (Out For Approval) →
+  // BFA (Back From Approval) → OFS (Out For Scrub) → IFC (Issued For
+  // Construction) → Released. R&R outcomes loop back to IFA.
   drawing_stage: {
     field: "stage",
-    states: ["Not Started", "OFA", "BFA", "OFS", "BFS", "FFF", "Released"],
+    states: ["Not Started", "IFA", "OFA", "BFA", "OFS", "IFC", "Released"],
     initial: "Not Started",
     transitions: {
-      "Not Started→OFA": { requiredFields: [],                    minRole: "field", label: "Start OFA" },
-      "OFA→BFA":         { requiredFields: [],                    minRole: "field", label: "Back from Approval" },
-      "BFA→OFS":         { requiredFields: [],                    minRole: "pm",    label: "Out for Signature" },
-      "OFS→BFS":         { requiredFields: [],                    minRole: "pm",    label: "Back from Signature" },
-      "BFS→FFF":         { requiredFields: [],                    minRole: "pm",    label: "Fit for Fabrication" },
-      "FFF→Released":    { requiredFields: [],                    minRole: "pm",    label: "Release" },
+      "Not Started→IFA": { requiredFields: [], minRole: "field", label: "Start (In For Approval)" },
+      "IFA→OFA":         { requiredFields: [], minRole: "field", label: "Send Out For Approval" },
+      "OFA→BFA":         { requiredFields: [], minRole: "field", label: "Receive Back From Approval" },
+      "BFA→OFS":         { requiredFields: [], minRole: "pm",    label: "Send to Scrub" },
+      "OFS→IFC":         { requiredFields: [], minRole: "pm",    label: "Issue For Construction" },
+      "IFC→Released":    { requiredFields: [], minRole: "pm",    label: "Release for Fabrication" },
+      // R&R loop-back — any post-prep stage can rewind to IFA
+      "OFA→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
+      "BFA→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
+      "OFS→IFA":         { requiredFields: ["notes"], minRole: "pm", label: "Revise & Resubmit (R&R)" },
       // Allow skip-forward for admin
-      "Not Started→Released": { requiredFields: [],               minRole: "admin", label: "Force Release" },
+      "Not Started→Released": { requiredFields: [], minRole: "admin", label: "Force Release" },
     },
   },
 
   // ── RFI Status ──────────────────────────────────────────────────────
+  // "Incomplete Response" = GC sent an answer back, but the response doesn't
+  // fully address the question and the RFI needs another round. Sits between
+  // Under Review and Answered in the lifecycle. Treated as still-open by
+  // closed-state filters elsewhere in the app.
   rfi: {
     field: "status",
-    states: ["Open", "Under Review", "Answered", "Closed"],
+    states: ["Open", "Under Review", "Incomplete Response", "Answered", "Closed"],
     initial: "Open",
     transitions: {
-      "Open→Under Review":       { requiredFields: ["assigned_to"],           minRole: "field", label: "Submit for Review" },
-      "Under Review→Answered":   { requiredFields: ["response"],             minRole: "pm",    label: "Answer" },
-      "Answered→Closed":         { requiredFields: [],                        minRole: "pm",    label: "Close" },
-      "Under Review→Open":       { requiredFields: [],                        minRole: "pm",    label: "Return to Open" },
-      "Closed→Open":             { requiredFields: [],                        minRole: "admin", label: "Reopen" },
+      "Open→Under Review":                    { requiredFields: ["assigned_to"], minRole: "field", label: "Submit for Review" },
+      "Under Review→Answered":                { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
+      "Under Review→Incomplete Response":     { requiredFields: ["response"],    minRole: "pm",    label: "Mark Response Incomplete" },
+      "Incomplete Response→Under Review":     { requiredFields: [],              minRole: "pm",    label: "Re-route for Review" },
+      "Incomplete Response→Answered":         { requiredFields: ["response"],    minRole: "pm",    label: "Answer" },
+      "Answered→Closed":                      { requiredFields: [],              minRole: "pm",    label: "Close" },
+      "Under Review→Open":                    { requiredFields: [],              minRole: "pm",    label: "Return to Open" },
+      "Closed→Open":                          { requiredFields: [],              minRole: "admin", label: "Reopen" },
     },
   },
 

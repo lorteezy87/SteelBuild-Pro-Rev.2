@@ -2,9 +2,13 @@ import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useFormValidation } from "@/hooks/useFormValidation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export default function DeliveryFormModal({ projectId, onClose, delivery = null }) {
   const qc = useQueryClient();
+  const { fieldErrors, runValidation, clearField } = useFormValidation("delivery");
+  const trapRef = useFocusTrap(true);
   const isEdit = !!delivery;
 
   const statusList = ["Scheduled", "In Transit", "Delivered", "Partial", "Rejected", "Delayed"];
@@ -12,7 +16,6 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
   const emptyForm = {
     project_id: projectId || "",
     project_name: "",
-    delivery_title: "",
     work_package_id: "",
     vendor: "",
     po_number: "",
@@ -44,13 +47,13 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
     initialData: [],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: workPackages = [] } = useQuery({
     queryKey: ["work-packages", formData.project_id],
     queryFn: () =>
       formData.project_id ? base44.entities.WorkPackage.filter({ project_id: formData.project_id }) : Promise.resolve([]),
-    initialData: [],
   });
 
   useEffect(() => {
@@ -83,21 +86,26 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
 
   const set = (k, v) => setFormData((p) => ({ ...p, [k]: v }));
 
+  // Check if linked WP has completed fabrication
+  const isFabComplete = () => {
+    if (!formData.work_package_id) return true;
+    const wp = workPackages.find(w => w.id === formData.work_package_id);
+    if (!wp) return true;
+    const PHASE_RANK = { Detailing: 0, Fabrication: 1, Delivery: 2, Erection: 3 };
+    const rank = PHASE_RANK[wp.phase] ?? 0;
+    if (rank >= 2) return true;
+    if (rank === 1 && wp.status === "Complete") return true;
+    return false;
+  };
+
   const handleSubmit = () => {
-    if (!formData.delivery_title?.trim()) {
-      toast.error("Delivery title is required");
+    if (!runValidation(formData)) {
+      toast.error("Please fix the highlighted fields.");
       return;
     }
-    if (!formData.project_id) {
-      toast.error("Select a project");
-      return;
-    }
-    if (!formData.vendor.trim()) {
-      toast.error("Vendor is required");
-      return;
-    }
-    if (!formData.scheduled_date) {
-      toast.error("Scheduled date required");
+    if (formData.status === "Delivered" && !isFabComplete()) {
+      const wp = workPackages.find(w => w.id === formData.work_package_id);
+      toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
       return;
     }
     if (
@@ -111,9 +119,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
     const wp = workPackages.find(w => w.id === formData.work_package_id);
     mutation.mutate({
       ...formData,
-      delivery_title: formData.delivery_title.trim(),
       project_name: proj?.name || proj?.project_name || formData.project_name || "",
-      description: wp ? (wp.name || wp.wp_number || formData.description || "") : formData.description || "",
+      description: formData.description?.trim() || (wp ? (wp.name || wp.wp_number || "") : ""),
       pieces: parseInt(formData.pieces) || 0,
       weight_tons: parseFloat(formData.weight_tons) || 0,
     });
@@ -164,6 +171,9 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
       }}
     >
       <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
         style={{
           background: "var(--bg-surface-secondary)",
           border: "1px solid var(--border-default)",
@@ -181,7 +191,7 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
           style={{
             padding: "18px 24px 14px",
             borderBottom: "1px solid var(--divider)",
-            background: "var(--bg-sidebar)",
+            background: "var(--bg-surface-low)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -207,13 +217,18 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
                 <button
                   key={s}
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    if (s === "Delivered" && !isFabComplete()) {
+                      const wp = workPackages.find(w => w.id === formData.work_package_id);
+                      toast.error(`Cannot mark delivered — WP "${wp?.name || "linked"}" fabrication is not complete`);
+                      return;
+                    }
                     mutation.mutate({
                       ...formData,
                       status: s,
                       actual_date: s === "Delivered" ? new Date().toISOString().split("T")[0] : formData.actual_date,
-                    })
-                  }
+                    });
+                  }}
                   style={{
                     padding: "6px 10px",
                     borderRadius: "var(--radius-btn)",
@@ -242,8 +257,8 @@ export default function DeliveryFormModal({ projectId, onClose, delivery = null 
               <label style={labelStyle}>Delivery Title *</label>
               <input
                 type="text"
-                value={formData.delivery_title}
-                onChange={(e) => set("delivery_title", e.target.value)}
+                value={formData.description || ""}
+                onChange={(e) => set("description", e.target.value)}
                 style={inputStyle}
                 placeholder="e.g. Anchor Bolts — Phase 1, HSS Columns Load 3"
                 required

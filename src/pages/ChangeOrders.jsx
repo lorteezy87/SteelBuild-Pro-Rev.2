@@ -1,216 +1,527 @@
+/**
+ * ChangeOrders — CO tracker rebuilt on Claude Design system.
+ *
+ * Shell owns: React-Query fetches + mutations, derived counts/values,
+ * potential-CO detection (RFIs with cost impact not yet turned into
+ * COs), and composition of design-system components.
+ *
+ * Lifecycle chevron: Draft → Submitted → Under Review → Approved
+ * (Rejected / Void rendered as KPI tiles but not part of the forward
+ * chevron).
+ *
+ * Negative amounts are supported and render with a minus sign +
+ * red tint (per the baseline-audit D16 fix).
+ */
+
 import React, { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useProjectContext } from "../components/shared/useProjectContext";
-import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Download } from "lucide-react";
-import StatusBadge from "../components/shared/StatusBadge";
-import PageHeader from "../components/shared/PageHeader";
-import SearchFilter from "../components/shared/SearchFilter";
-import DeleteDialog from "../components/shared/DeleteDialog";
-import KPIStrip from "../components/shared/KPIStrip";
-import COFormModal from "../components/changeorders/COFormModal";
-import { getNextNumber } from "../components/shared/numberSequencing";
-import { PhoenixPanel } from "../components/shared/PhoenixPanel";
-import PhoenixTable, { PTR, PTD } from "../components/shared/PhoenixTable";
-import { formatCurrency, formatDate, roundCurrency } from "../components/shared/formatters";
+import { useProjectContext } from "@/components/shared/ProjectContext";
+import { useProjectId } from "@/hooks/useProjectId";
+import { useRealtimeInvalidation } from "@/hooks/useRealtimeInvalidation";
+import { useAutoOpenCreate } from "@/hooks/useAutoOpenCreate";
+import DeleteDialog from "@/components/shared/DeleteDialog";
+import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
+import COFormModal from "@/components/changeorders/COFormModal";
+import ChangeOrderImportModal from "@/components/changeorders/ChangeOrderImportModal";
+import { getNextFormattedNumber } from "@/components/shared/numberSequencing";
+import { formatCurrency } from "@/components/shared/formatters";
 import { toast } from "sonner";
+import { OperationsPageShell, OpsActionButton, OpsFilterPanel } from "@/components/operations/OperationsPageShell";
+
+import {
+  KpiTile,
+  PhaseChevron,
+  BulkActionBar,
+  EmptyState,
+  Icon,
+} from "@/components/design-system";
+import CoRow, { CO_ROW_GRID } from "./changeOrders/CoRow";
+
+const LIFECYCLE = [
+  { id: "draft",  label: "DRAFT",     color: "var(--text-muted)"     },
+  { id: "sub",    label: "SUBMITTED", color: "var(--status-warning)" },
+  { id: "rev",    label: "REVIEW",    color: "var(--status-review)"  },
+  { id: "appr",   label: "APPROVED",  color: "var(--status-success)" },
+];
 
 export default function ChangeOrders() {
   const qc = useQueryClient();
+  const projectId = useProjectId();
   const { activeProject } = useProjectContext();
+
+  const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Auto-open create modal when QuickAddFAB navigated here with ?new=1.
+  useAutoOpenCreate(() => {
+    setEditing(null);
+    setModalOpen(true);
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250);
     return () => clearTimeout(t);
   }, [search]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data: cos = [], isLoading, refetch } = useQuery({
-    queryKey: ["change-orders", activeProject?.id],
-    queryFn: () => activeProject?.id
-      ? base44.entities.ChangeOrder.filter({ project_id: activeProject.id }, "-created_at")
-      : [],
-    enabled: !!activeProject?.id,
+  /* -- Data -- */
+  const { data: cos = [], isLoading } = useQuery({
+    queryKey: ["change-orders", projectId],
+    queryFn: () =>
+      projectId
+        ? base44.entities.ChangeOrder.filter({ project_id: projectId }, "-created_at")
+        : [],
+    enabled: !!projectId,
   });
-  const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: () => base44.entities.Project.list(), initialData: [] });
 
-  const projectMap = useMemo(() => {
-    const map = {};
-    for (const p of projects) map[p.id] = p.name || p.project_name || "";
-    return map;
-  }, [projects]);
+  useRealtimeInvalidation("change_orders", projectId, [["change-orders", projectId]]);
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => base44.entities.Project.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  /* -- Mutations -- */
   const createMut = useMutation({
     mutationFn: async (d) => {
-      let coNumber;
-      try {
-        coNumber = activeProject?.id
-          ? await getNextNumber(activeProject.id, "CO")
-          : null;
-      } catch (e) {
-        coNumber = null;
+      // RFI-style numbering: if the user typed a CO number in the form,
+      // honor it as-is. Only auto-generate when the field is blank.
+      // Format: "CO #NNN" with zero-padded 3-digit suffix, matching the
+      // RFI convention. Falls back to a project-scoped index if the
+      // sequence helper is unavailable.
+      const userTyped = (d.co_number || "").trim();
+      let coNumber = userTyped;
+      const targetProjectId = d.project_id || projectId || null;
+      if (!coNumber && targetProjectId) {
+        try {
+          coNumber = await getNextFormattedNumber({
+            projectId: targetProjectId,
+            recordType: "CO",
+            entityName: "ChangeOrder",
+            fieldName: "co_number",
+            prefix: "CO #",
+          });
+        } catch {
+          coNumber = null;
+        }
       }
       if (!coNumber) {
-        coNumber = `CO-${String((cos.length || 0) + 1).padStart(3, "0")}`;
+        coNumber = `CO #${String((cos.length || 0) + 1).padStart(3, "0")}`;
       }
       return base44.entities.ChangeOrder.create({
         ...d,
         co_number: coNumber,
-        project_id: d.project_id || activeProject?.id,
+        project_id: targetProjectId,
       });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Change order created"); },
-    onError: (err) => { toast.error("Failed to create change order: " + (err?.message || "Unknown error")); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["change-orders"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Change order created");
+    },
+    onError: (err) => toast.error("Failed to create change order: " + (err?.message || "Unknown error")),
   });
+
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => base44.entities.ChangeOrder.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); qc.invalidateQueries({ queryKey: ["projects"] }); setModalOpen(false); setEditing(null); toast.success("Change order updated"); },
-    onError: (err) => { toast.error("Failed to update change order: " + (err?.message || "Unknown error")); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["change-orders"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setModalOpen(false);
+      setEditing(null);
+      toast.success("Change order updated");
+    },
+    onError: (err) => toast.error("Failed to update change order: " + (err?.message || "Unknown error")),
   });
+
   const deleteMut = useMutation({
     mutationFn: (id) => base44.entities.ChangeOrder.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["change-orders"] }); setDeleteTarget(null); toast.success("Change order deleted"); },
-    onError: () => { toast.error("Failed to delete change order"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["change-orders"] });
+      setDeleteTarget(null);
+      toast.success("Change order deleted");
+    },
+    onError: () => toast.error("Failed to delete change order"),
   });
 
-  const handleSave = (d) => { if (editing) updateMut.mutate({ id: editing.id, data: d }); else createMut.mutate(d); };
-
-  const approvedVal = roundCurrency(cos.filter(c => c.status === "Approved").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
-  const pendingVal = roundCurrency(cos.filter(c => c.status === "Submitted" || c.status === "Under Review").reduce((s, c) => s + (Number(c.co_amount) || 0), 0));
-  // Scope contract to active project only
-  const activeProjectData = activeProject?.id ? projects.filter(p => p.id === activeProject.id) : [];
-  const totalContract = roundCurrency(activeProjectData.reduce((s, p) => s + (Number(p.original_contract_value) || 0), 0));
-  const revisedContract = roundCurrency(totalContract + approvedVal);
-
-  const kpis = [
-    { label: "Total COs", value: cos.length, color: "slate" },
-    { label: "Approved Value", value: formatCurrency(approvedVal), color: "green" },
-    { label: "Pending Value", value: formatCurrency(pendingVal), color: "amber" },
-    { label: "Original Contract", value: formatCurrency(totalContract), color: "blue" },
-    { label: "Revised Contract", value: formatCurrency(revisedContract), color: "purple" },
-    { label: "Net Change", value: formatCurrency(approvedVal), color: approvedVal >= 0 ? "green" : "rose" },
-  ];
-
-  const filtered = useMemo(() => cos.filter(c => {
-    const q = debouncedSearch.toLowerCase();
-    const matchSearch = !q || c.title?.toLowerCase().includes(q) || c.co_number?.toLowerCase().includes(q);
-    const matchStatus = statusFilter === "all" || c.status === statusFilter;
-    return matchSearch && matchStatus;
-  }), [cos, debouncedSearch, statusFilter]);
-
-  // Waterfall: Original → Approved COs → Revised
-  const waterfallTotal = revisedContract;
-  const showWaterfall = totalContract > 0 && waterfallTotal > 0;
-
-  const exportCSV = () => {
-    const headers = ["CO #", "Title", "Project", "Reason", "Status", "Submitted", "Amount", "Approved By"];
-    const rows = filtered.map(c => [c.co_number, c.title, c.project_name, c.reason_code, c.status, c.submitted_date, c.co_amount, c.approved_by]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${c ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "change_orders.csv"; a.click(); URL.revokeObjectURL(url);
+  const handleSave = (d) => {
+    if (editing) updateMut.mutate({ id: editing.id, data: d });
+    else createMut.mutate(d);
   };
 
-  const cols = [
-    { label: "CO #" }, { label: "Title" }, { label: "Project" }, { label: "Reason" },
-    { label: "Status" }, { label: "Submitted" }, { label: "Amount", right: true }, { label: "Approved By" }, { label: "" }
-  ];
+  /* -- Derived counts + values -- */
+  const counts = useMemo(() => ({
+    all:       cos.length,
+    draft:     cos.filter((c) => c.status === "Draft").length,
+    submitted: cos.filter((c) => c.status === "Submitted").length,
+    review:    cos.filter((c) => c.status === "Under Review").length,
+    approved:  cos.filter((c) => c.status === "Approved").length,
+    rejected:  cos.filter((c) => c.status === "Rejected").length,
+    voided:    cos.filter((c) => c.status === "Void").length,
+  }), [cos]);
 
-  if (!activeProject?.id) return (
-    <div style={{ textAlign: "center", padding: "80px 24px" }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>$</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 20, fontWeight: 700, color: "var(--text-disabled)", marginBottom: 6 }}>Select a project to view Change Orders</div>
-      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Use the project selector in the top right.</div>
-    </div>
+  const totalApproved = useMemo(
+    () =>
+      cos
+        .filter((c) => c.status === "Approved")
+        .reduce((s, c) => s + (Number(c.co_amount) || 0), 0),
+    [cos]
   );
 
-  return (
-    <div>
-      <PageHeader title="Change Orders" subtitle={`${cos.length} change orders`} onAdd={() => { setEditing(null); setModalOpen(true); }} onRefresh={refetch} addLabel="New CO" />
-      <KPIStrip items={kpis} />
+  const totalPending = useMemo(
+    () =>
+      cos
+        .filter((c) => ["Submitted", "Under Review"].includes(c.status))
+        .reduce((s, c) => s + (Number(c.co_amount) || 0), 0),
+    [cos]
+  );
 
-      {/* Contract Waterfall */}
-      {showWaterfall && (
-        <PhoenixPanel title="Contract Waterfall" style={{ marginBottom: 14, padding: "14px 16px" }}>
-          <div style={{ padding: "14px 16px" }}>
-            <div style={{ display: "flex", gap: 0, height: 36, borderRadius: "var(--radius-card)", overflow: "hidden", background: "var(--bg-void)" }}>
-              {/* Original */}
-              <div style={{ flex: totalContract / waterfallTotal, background: "var(--info-muted)", display: "flex", alignItems: "center", justifyContent: "center", minWidth: 60 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--accent-light)", letterSpacing: "0.08em", padding: "0 6px", textAlign: "center" }}>ORIGINAL<br />{formatCurrency(totalContract)}</span>
-              </div>
-              {/* Approved COs */}
-              {approvedVal !== 0 && (
-                <div style={{ flex: Math.abs(approvedVal) / waterfallTotal, background: approvedVal >= 0 ? "var(--success-muted)" : "var(--danger-muted)", borderLeft: `2px solid ${approvedVal >= 0 ? "var(--status-success)" : "var(--status-error)"}`, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 40 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: approvedVal >= 0 ? "var(--status-success)" : "var(--status-error)", letterSpacing: "0.06em", padding: "0 4px", textAlign: "center" }}>+COs<br />{formatCurrency(approvedVal)}</span>
-                </div>
-              )}
-              {/* Pending */}
-              {pendingVal > 0 && (
-                <div style={{ flex: pendingVal / waterfallTotal, background: "var(--warning-muted)", borderLeft: "2px solid var(--status-warning)", display: "flex", alignItems: "center", justifyContent: "center", minWidth: 30 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--status-warning)", padding: "0 4px", textAlign: "center" }}>PEND</span>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-              <span style={{ fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Original Contract</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent-light)", fontWeight: 700, letterSpacing: "0.06em" }}>REVISED: {formatCurrency(revisedContract)}</span>
-            </div>
-          </div>
-        </PhoenixPanel>
-      )}
+  const totalDraft = useMemo(
+    () =>
+      cos
+        .filter((c) => c.status === "Draft")
+        .reduce((s, c) => s + (Number(c.co_amount) || 0), 0),
+    [cos]
+  );
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div style={{ flex: 1 }}>
-          <SearchFilter search={search} onSearchChange={setSearch} filters={[
-            { key: "status", value: statusFilter, onChange: setStatusFilter, placeholder: "Status", options: ["Draft", "Submitted", "Under Review", "Approved", "Rejected", "Void"] },
-          ]} />
+  const atRiskValue = totalPending + totalDraft;
+
+  // Read original_contract_value from the FRESH projects query result
+  // rather than from ProjectContext. ProjectContext loads once on mount
+  // and only refreshes when the user re-picks the project, so editing
+  // the contract value via the project edit form left the REVISED
+  // CONTRACT tile here showing a stale baseContract until the next page
+  // load. The projects query has staleTime 5 min and is invalidated on
+  // every CO mutation below, so this picks up edits right away.
+  const liveProject = projects.find((p) => p.id === projectId) || activeProject;
+  const baseContract = Number(liveProject?.original_contract_value) || 0;
+  const revisedContract = baseContract + totalApproved;
+
+  /* -- Filtered list -- */
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    return cos.filter((c) => {
+      if (filter !== "all" && c.status !== filter) return false;
+      if (!q) return true;
+      return (
+        (c.co_number || "").toLowerCase().includes(q) ||
+        (c.title || "").toLowerCase().includes(q) ||
+        (c.description || "").toLowerCase().includes(q) ||
+        (c.reason_code || "").toLowerCase().includes(q)
+      );
+    });
+  }, [cos, filter, debouncedSearch]);
+
+  /* -- Pipeline chevron -- */
+  const pipelineStages = useMemo(() => [
+    { ...LIFECYCLE[0], count: counts.draft },
+    { ...LIFECYCLE[1], count: counts.submitted },
+    { ...LIFECYCLE[2], count: counts.review },
+    { ...LIFECYCLE[3], count: counts.approved },
+  ], [counts]);
+
+  const activePipelineIdx = useMemo(() => {
+    if (counts.review > 0)    return 2;
+    if (counts.submitted > 0) return 1;
+    if (counts.draft > 0)     return 0;
+    return 3;
+  }, [counts]);
+
+  /* -- Selection -- */
+  const toggleSelect = (id) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const toggleAll = (checked) =>
+    setSelectedIds(checked ? new Set(filtered.map((c) => c.id)) : new Set());
+
+  /* -- Guards -- */
+  if (!projectId) {
+    return (
+      <div style={{ padding: 32, textAlign: "center" }}>
+        <div
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+            color: "var(--text-secondary)",
+          }}
+        >
+          Select a project to view change orders.
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} style={{ marginBottom: 16 }}><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <LoadingSkeleton variant="table" rows={8} />
+      </div>
+    );
+  }
+
+  const projectName = projects.find((p) => p.id === projectId)?.name || "";
+
+  // Whole-dollar currency for the financial command bar + KPI tiles.
+  // `formatCurrency(_, 0)` handles negatives natively (deducts/credits
+  // render as `-$12,345`).
+  const formatMoney = (n) => formatCurrency(n, 0);
+
+  return (
+    <OperationsPageShell
+      eyebrow={`Financial · ${projectName || activeProject?.project_number || "Project"}`}
+      title="Change Orders"
+      subtitle="Track contract exposure from draft pricing through approval with cost, schedule impact, and review status visible at a glance."
+      meta={[
+        { label: "Total COs", value: counts.all },
+        { label: "At Risk", value: formatMoney(atRiskValue), color: "var(--status-review)" },
+        { label: "Approved", value: counts.approved, color: "var(--status-success)" },
+        { label: "Revised Contract", value: formatMoney(revisedContract), color: "var(--accent)" },
+      ]}
+      metrics={[
+        { label: "Approved Value", value: formatMoney(totalApproved), sub: `${counts.approved} CO${counts.approved === 1 ? "" : "s"}`, color: "var(--status-success)" },
+        { label: "Pending Value", value: formatMoney(totalPending), sub: `${counts.submitted + counts.review} pending`, color: "var(--status-warning)" },
+        { label: "At Risk", value: formatMoney(atRiskValue), sub: "Draft + pending", color: "var(--status-review)" },
+        { label: "Base Contract", value: formatMoney(baseContract), sub: "Original value" },
+      ]}
+      actions={(
+        <>
+          <OpsActionButton
+            onClick={() => setImportOpen(true)}
+            title="Bulk import change orders from a CSV (Sage / Vista / Procore / Excel)"
+          >
+            Import CSV
+          </OpsActionButton>
+          <OpsActionButton
+            variant="primary"
+            onClick={() => { setEditing(null); setModalOpen(true); }}
+          >
+            New CO
+          </OpsActionButton>
+        </>
+      )}
+    >
+      {/* CO status filter tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+        <KpiTile compact label="ALL"        value={counts.all}       color="var(--text-secondary)" active={filter === "all"}           onClick={() => setFilter("all")} />
+        <KpiTile compact label="DRAFT"      value={counts.draft}     color="var(--text-muted)"     active={filter === "Draft"}         onClick={() => setFilter("Draft")} />
+        <KpiTile compact label="SUBMITTED"  value={counts.submitted} color="var(--status-warning)" active={filter === "Submitted"}     onClick={() => setFilter("Submitted")} />
+        <KpiTile compact label="UNDER REVIEW" value={counts.review}  color="var(--status-review)"  active={filter === "Under Review"}  onClick={() => setFilter("Under Review")} />
+        <KpiTile compact label="APPROVED"   value={counts.approved}  color="var(--status-success)" active={filter === "Approved"}      onClick={() => setFilter("Approved")} />
+        <KpiTile compact label="REJECTED"   value={counts.rejected}  color="var(--status-error)"   active={filter === "Rejected"}      onClick={() => setFilter("Rejected")} />
+        <KpiTile compact label="VOID"       value={counts.voided}    color="var(--text-disabled)"  active={filter === "Void"}          onClick={() => setFilter("Void")} />
       </div>
 
-      <PhoenixPanel title="Change Order Log" count={filtered.length}>
-        <PhoenixTable columns={cols} loading={isLoading} empty="NO CHANGE ORDERS FOUND">
-          {filtered.map(c => (
-            <PTR key={c.id} onClick={() => { setEditing(c); setModalOpen(true); }}>
-              <PTD mono accent>{c.co_number}</PTD>
-              <PTD style={{ maxWidth: 180 }}>{c.title}</PTD>
-              <PTD muted>{projectMap[c.project_id] || "—"}</PTD>
-              <PTD muted>{c.reason_code}</PTD>
-              <PTD><StatusBadge status={c.status} /></PTD>
-              <PTD>{formatDate(c.submitted_date)}</PTD>
-              <PTD right mono bold style={{ color: (c.co_amount || 0) < 0 ? "var(--status-error)" : "var(--status-success)" }}>{formatCurrency(c.co_amount)}</PTD>
-              <PTD>{c.approved_by || "—"}</PTD>
-              <PTD>
-                <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(c); setModalOpen(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteTarget(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                </div>
-              </PTD>
-            </PTR>
-          ))}
-        </PhoenixTable>
-        {/* Totals row */}
-        {filtered.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(9,1fr)", padding: "8px 12px", borderTop: "1px solid var(--divider)", background: "var(--bg-surface-low)", gap: 8 }}>
-            <div style={{ gridColumn: "span 6", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Totals — {filtered.filter(c => c.status === "Approved").length} Approved · {filtered.filter(c => ["Submitted","Under Review"].includes(c.status)).length} Pending
-            </div>
-            <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: approvedVal >= 0 ? "var(--status-success)" : "var(--status-error)" }}>
-              {formatCurrency(filtered.reduce((s, c) => s + (Number(c.co_amount) || 0), 0))}
-            </div>
-            <div style={{ gridColumn: "span 2" }} />
+      {/* Lifecycle pipeline chevron */}
+      <div
+        className="sbd-card"
+        style={{
+          padding: "12px 14px",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.14em",
+            marginBottom: 8,
+          }}
+        >
+          CHANGE ORDER LIFECYCLE
+        </div>
+        <PhaseChevron stages={pipelineStages} activeIdx={activePipelineIdx} showIcons={false} />
+      </div>
+
+      {/* Search bar */}
+      <OpsFilterPanel>
+        <div style={{ position: "relative", flex: "1 1 300px", maxWidth: 420 }}>
+          <div
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }}
+          >
+            <Icon name="search" size={12} />
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search CO #, title, or reason…"
+            style={{
+              width: "100%",
+              height: 30,
+              padding: "0 12px 0 30px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-input)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+        </div>
+        <div style={{ flex: 1 }} />
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            color: "var(--text-muted)",
+            letterSpacing: "0.10em",
+          }}
+        >
+          {filtered.length} of {cos.length}
+        </span>
+      </OpsFilterPanel>
+
+      {/* Table */}
+      <div
+        className="sbd-card"
+        style={{
+          padding: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: CO_ROW_GRID,
+            gap: 8,
+            padding: "8px 12px",
+            background: "var(--bg-surface-low)",
+            borderBottom: "1px solid var(--border-default)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+          }}
+        >
+          <div>
+            <input
+              type="checkbox"
+              checked={filtered.length > 0 && selectedIds.size === filtered.length}
+              onChange={(e) => toggleAll(e.target.checked)}
+            />
+          </div>
+          <div>CO #</div>
+          <div>Title</div>
+          <div>Status</div>
+          <div>Submitted</div>
+          <div>Approved</div>
+          <div style={{ textAlign: "right" }}>Amount</div>
+          <div style={{ textAlign: "center" }}>Sched Impact</div>
+          <div>Approved By</div>
+          <div></div>
+        </div>
+        {filtered.length > 0 ? (
+          filtered.map((c, i) => (
+            <CoRow
+              key={c.id}
+              co={c}
+              idx={i}
+              selected={selectedIds.has(c.id)}
+              onToggle={() => toggleSelect(c.id)}
+              onOpen={() => { setEditing(c); setModalOpen(true); }}
+            />
+          ))
+        ) : (
+          <div style={{ padding: 24 }}>
+            <EmptyState
+              icon="co"
+              title={cos.length === 0 ? "No change orders yet" : "No COs match your filters"}
+              body={
+                cos.length === 0
+                  ? "Create your first CO to track scope changes and cost/schedule impacts. Negative amounts are supported for deducts."
+                  : "Clear filters or adjust the search query."
+              }
+            />
           </div>
         )}
-      </PhoenixPanel>
+      </div>
 
-      <COFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={handleSave} co={editing} projects={projects} nextNumber={`CO-${String((cos.length || 0) + 1).padStart(3, "0")}`} />
-      <DeleteDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteMut.mutate(deleteTarget.id)} title="Delete Change Order" description={`Delete ${deleteTarget?.co_number}?`} />
-    </div>
+      <BulkActionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        actions={[
+          {
+            label: "SUBMIT SELECTED",
+            icon: "arrow",
+            onClick: () => {
+              const ids = [...selectedIds];
+              ids.forEach((id) => updateMut.mutate({ id, data: { status: "Submitted", submitted_date: new Date().toISOString().split("T")[0] } }));
+              setSelectedIds(new Set());
+            },
+          },
+          {
+            label: "APPROVE",
+            icon: "check",
+            onClick: () => {
+              const ids = [...selectedIds];
+              ids.forEach((id) => updateMut.mutate({ id, data: { status: "Approved", approved_date: new Date().toISOString().split("T")[0] } }));
+              setSelectedIds(new Set());
+            },
+          },
+          {
+            label: "DELETE",
+            icon: "x",
+            variant: "danger",
+            onClick: () => {
+              const ids = [...selectedIds];
+              if (window.confirm(`Delete ${ids.length} change order(s)?`)) {
+                ids.forEach((id) => deleteMut.mutate(id));
+                setSelectedIds(new Set());
+              }
+            },
+          },
+        ]}
+      />
+
+      {/* Modals */}
+      <COFormModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSave={handleSave}
+        isSaving={createMut.isPending || updateMut.isPending}
+        co={editing}
+        projects={projects}
+        // Heuristic preview of the auto-assigned number for the modal
+        // placeholder. The real auto-assignment runs in createMut and
+        // uses getNextFormattedNumber against the live project — this
+        // is just a hint shown when the user hasn't typed anything.
+        nextNumber={`CO #${String((cos.length || 0) + 1).padStart(3, "0")}`}
+      />
+      <ChangeOrderImportModal
+        open={importOpen}
+        projectId={projectId}
+        projectName={projectName}
+        projects={projects}
+        onClose={() => setImportOpen(false)}
+      />
+      <DeleteDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+        title="Delete Change Order"
+        description={`Delete ${deleteTarget?.co_number}?`}
+      />
+    </OperationsPageShell>
   );
 }

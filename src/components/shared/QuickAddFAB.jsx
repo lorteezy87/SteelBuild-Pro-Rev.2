@@ -18,8 +18,11 @@ export default function QuickAddFAB() {
 
   const handleOptionClick = (action) => {
     setExpanded(false);
-    // These would integrate with modal systems in each page
-    // For now, navigate to relevant page
+    // Navigate to the relevant page AND append ?new=1 so the destination
+    // page auto-opens its create modal on mount. Previously this just
+    // navigated and left the user to hunt for the New button — defeating
+    // the purpose of a quick-add FAB. Each destination page handles the
+    // `new` query param below in its own useEffect.
     const pageMap = {
       rfi: "RFIs",
       changeorder: "ChangeOrders",
@@ -28,10 +31,10 @@ export default function QuickAddFAB() {
       productionnote: "ProductionNotes",
       photo: "Photos",
     };
-    navigate(createPageUrl(pageMap[action]));
+    const page = pageMap[action];
+    if (!page) return;
+    navigate(`${createPageUrl(page)}?new=1`);
   };
-
-  const angle = (360 / QUICK_ADD_OPTIONS.length) * (Math.PI / 180);
 
   return (
     <>
@@ -69,6 +72,7 @@ export default function QuickAddFAB() {
             {QUICK_ADD_OPTIONS.map((opt, i) => (
               <div
                 key={i}
+                className="sbd-card"
                 onClick={() => handleOptionClick(opt.action)}
                 style={{
                   display: "flex",

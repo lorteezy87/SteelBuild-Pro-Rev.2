@@ -1,5 +1,18 @@
 import React, { useState } from "react";
 
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 const STATUS_COLORS = {
   Open: "var(--status-error)",
   "In Progress": "var(--status-warning)",
@@ -26,12 +39,20 @@ const CATEGORY_ICONS = {
   Other: "📌",
 };
 
-export default function PunchlistList({ items }) {
+export default function PunchlistList({
+  items = [],
+  selectedIds = [],
+  onToggleSelect,
+  onEdit,
+  onDelete,
+}) {
   const [expanded, setExpanded] = useState(null);
+  const selectMode = !!onToggleSelect;
+  const selectedSet = new Set(selectedIds);
 
   if (items.length === 0) {
     return (
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No items</p>
       </div>
     );
@@ -39,15 +60,71 @@ export default function PunchlistList({ items }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      {items.map((item) => (
-        <div key={item.id} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "10px", overflow: "hidden", cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; }}>
+      {items.map((item) => {
+        const photos = asArray(item.photos);
+        const checked = selectedSet.has(item.id);
+        return (
+        <div
+          key={item.id}
+          className="sbd-card sbd-card-hover"
+          style={{
+            background: "var(--bg-surface)",
+            border: checked ? "1px solid var(--accent)" : "1px solid var(--border-default)",
+            borderRadius: "10px",
+            overflow: "hidden",
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onMouseLeave={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--border-default)"; }}
+        >
           {/* Header */}
-          <div onClick={() => setExpanded(expanded === item.id ? null : item.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "auto 1fr 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === item.id ? "1px solid var(--divider)" : "none" }}>
+          <div onClick={() => setExpanded(expanded === item.id ? null : item.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: selectMode ? "auto auto 1fr 1fr 1fr auto auto" : "auto 1fr 1fr 1fr auto", gap: "12px", alignItems: "center", borderBottom: expanded === item.id ? "1px solid var(--divider)" : "none" }}>
+            {selectMode && (
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggleSelect?.(item.id)}
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: 16, height: 16, accentColor: "var(--accent)", cursor: "pointer" }}
+                aria-label={`Select ${item.description}`}
+              />
+            )}
             <div style={{ fontSize: "20px" }}>{CATEGORY_ICONS[item.category] || "📌"}</div>
 
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{item.description}</div>
-              {item.location && <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "2px" }}>📍 {item.location}</div>}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "2px", fontSize: "10px", color: "var(--text-muted)", flexWrap: "wrap" }}>
+                {item.location && <span>📍 {item.location}</span>}
+                {photos.length > 0 && (
+                  <span style={{ color: "var(--accent)" }}>📷 {photos.length}</span>
+                )}
+                {item.drawing_id && (
+                  <span style={{ color: "var(--status-info)" }} title="Linked to a drawing">📍 PINNED</span>
+                )}
+                {(item.inspection_id || item.metadata?.inspection_id) && (
+                  <span style={{
+                    color: "var(--accent)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                  }} title="Created from an inspection">
+                    FROM INSP {item.metadata?.inspection_number ? `#${item.metadata.inspection_number}` : ""}
+                  </span>
+                )}
+                {item.closed_at && (
+                  <span style={{
+                    color: "var(--status-success)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                  }}>
+                    ✓ CLOSED · {item.closed_by || "—"}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -69,6 +146,54 @@ export default function PunchlistList({ items }) {
               </div>
             </div>
 
+            {selectMode && (
+              <div style={{ display: "flex", gap: 4 }}>
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                    title="Edit"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid var(--border-default)",
+                      color: "var(--text-secondary)",
+                      borderRadius: 4,
+                      padding: "3px 7px",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Edit
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDelete(item); }}
+                    title="Delete"
+                    style={{
+                      background: "transparent",
+                      border: "1px solid color-mix(in srgb, var(--status-error) 50%, transparent)",
+                      color: "var(--status-error)",
+                      borderRadius: 4,
+                      padding: "3px 7px",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Del
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ fontSize: "14px", color: "var(--text-muted)", transform: expanded === item.id ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▼</div>
           </div>
 
@@ -98,10 +223,49 @@ export default function PunchlistList({ items }) {
                   </div>
                 </div>
               )}
+
+              {photos.length > 0 && (
+                <div style={{ marginTop: "12px" }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: "8px", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>Photos ({photos.length})</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {photos.map((p, idx) => {
+                      const url = p.file_url || p.path || p.url || "";
+                      return (
+                        <a
+                          key={idx}
+                          href={url || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={p.name || `photo-${idx}`}
+                          style={{
+                            display: "block",
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            border: "1px solid var(--border-default)",
+                            overflow: "hidden",
+                            background: "var(--bg-input)",
+                          }}
+                        >
+                          {url ? (
+                            <img
+                              src={url}
+                              alt={p.name || `photo-${idx}`}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                          ) : null}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

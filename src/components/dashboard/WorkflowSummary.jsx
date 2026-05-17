@@ -90,7 +90,7 @@ export default function WorkflowSummary({ wps = [], deliveries = [], drawings = 
         }}>
           <span style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 7,
+            fontSize: 9,
             color: 'var(--status-error)',
             fontWeight: 700,
             letterSpacing: '0.08em',

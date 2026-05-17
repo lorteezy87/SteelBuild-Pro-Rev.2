@@ -42,6 +42,13 @@ const THRESHOLDS = [
   { key: 'co_stale_days', label: 'CO stale after', unit: 'days', default: 30 },
 ];
 
+const QUIET_HOURS_DEFAULTS = {
+  quiet_hours_enabled: false,
+  quiet_hours_start:   '18:00',
+  quiet_hours_end:     '07:00',
+  quiet_hours_urgent_override: true,
+};
+
 const buildDefaults = (preferences) => {
   const defaults = {};
   notifications.forEach(n => {
@@ -49,6 +56,9 @@ const buildDefaults = (preferences) => {
   });
   THRESHOLDS.forEach(t => {
     defaults[t.key] = preferences?.[t.key] ?? t.default;
+  });
+  Object.entries(QUIET_HOURS_DEFAULTS).forEach(([k, v]) => {
+    defaults[k] = preferences?.[k] !== undefined ? preferences[k] : v;
   });
   return defaults;
 };
@@ -77,9 +87,39 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 24px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <h2 style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px 0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Notifications
       </h2>
+
+      {/* Honest audit banner — saved-but-inert. The app currently
+          surfaces alerts via in-page toasts (sonner) that fire on
+          mutation success/failure regardless of these toggles, plus
+          the Alerts table that the dashboard reads from directly.
+          There is no server-driven push, email digest, or scheduled
+          dispatcher consuming these prefs yet. We persist your choice
+          so when the dispatcher ships your settings come along. */}
+      <div
+        style={{
+          marginBottom: 24,
+          padding: '12px 14px',
+          background: 'var(--bg-surface-low)',
+          border: '1px solid var(--border-default)',
+          borderLeft: '3px solid var(--status-warning)',
+          borderRadius: 6,
+          fontFamily: 'var(--font-body)',
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ color: 'var(--text-primary)' }}>Saved-but-inert.</strong>{' '}
+        Notification toggles, urgency thresholds, and quiet hours are persisted
+        to your profile but have no consumer in the current architecture —
+        SteelBuild Pro fires in-page toasts on mutation success and surfaces
+        the Alerts table on the dashboard regardless of these settings. When
+        the email digest / push dispatcher ships, your saved choices will
+        already be in place.
+      </div>
 
       {categories.map(category => (
         <div key={category} style={{ marginBottom: 28 }}>
@@ -89,7 +129,7 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{item.label}</span>
-                  {item.urgent && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--status-error)', background: 'var(--danger-muted)', padding: '1px 5px', borderRadius: 3, letterSpacing: '0.08em' }}>URGENT</span>}
+                  {item.urgent && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--status-error)', background: 'var(--danger-muted)', padding: '1px 5px', borderRadius: 3, letterSpacing: '0.08em' }}>URGENT</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.desc}</div>
               </div>
@@ -115,7 +155,61 @@ export default function NotificationsTab({ preferences, onSave, isSaving }) {
         </div>
       </div>
 
-      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--status-success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
+      {/* Quiet Hours */}
+      <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--divider)' }}>
+        <label style={labelStyle}>Quiet Hours</label>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Non-urgent notifications are silenced during these hours. Urgent alerts can still break through.
+        </div>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '11px 0', borderBottom: '1px solid var(--divider)',
+        }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Enable Quiet Hours</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pause non-urgent notifications during a set window.</div>
+          </div>
+          <Toggle checked={!!prefs.quiet_hours_enabled} onChange={() => handleToggle('quiet_hours_enabled')} />
+        </div>
+
+        {prefs.quiet_hours_enabled && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
+              <div>
+                <label style={labelStyle}>Start</label>
+                <input
+                  type="time"
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  value={prefs.quiet_hours_start || '18:00'}
+                  onChange={e => handleChange('quiet_hours_start', e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>End</label>
+                <input
+                  type="time"
+                  style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                  value={prefs.quiet_hours_end || '07:00'}
+                  onChange={e => handleChange('quiet_hours_end', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '14px 0 11px', marginTop: 6,
+            }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>Allow urgent alerts</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Let flagged-urgent events still notify you during quiet hours.</div>
+              </div>
+              <Toggle checked={!!prefs.quiet_hours_urgent_override} onChange={() => handleToggle('quiet_hours_urgent_override')} />
+            </div>
+          </>
+        )}
+      </div>
+
+      {isSaving && <div style={{ marginTop: 16, fontSize: 12, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>✓ Saving...</div>}
     </div>
   );
 }

@@ -3,10 +3,11 @@ import React from "react";
 export default function ProgressBar({ value = 0, max = 100, color = "blue", showLabel = true }) {
   const pct = Math.min(100, Math.max(0, max > 0 ? (value / max) * 100 : 0));
   let fill = "var(--accent)";
-  if (color === "rose" || pct > 100) { fill = "var(--status-error)"; }
+  if (color === "rose") { fill = "var(--status-error)"; }
   else if (color === "amber") { fill = "var(--status-warning)"; }
   else if (color === "green") { fill = "var(--status-success)"; }
-  else if (color === "purple") { fill = "var(--chart-4)"; }
+  // "purple" kept as a legacy alias for amber (see KPIStrip comment).
+  else if (color === "purple") { fill = "var(--status-warning)"; }
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>

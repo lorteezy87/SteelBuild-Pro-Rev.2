@@ -113,6 +113,7 @@ export default function BudgetOverviewChart({ summary }) {
   const budget = Number(summary?.budget) || 0;
   const actual = Number(summary?.actual) || 0;
   const forecast = Number(summary?.forecast) || 0;
+  // Positive variance = under budget (favorable), negative = over budget
   const variance = budget - actual;
   const burnPct = budget > 0 ? Math.round((actual / budget) * 100) : 0;
 
@@ -222,7 +223,7 @@ export default function BudgetOverviewChart({ summary }) {
             <span
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 7,
+                fontSize: 9,
                 color: "var(--text-muted)",
                 textTransform: "uppercase",
                 letterSpacing: "0.10em",
@@ -245,7 +246,7 @@ export default function BudgetOverviewChart({ summary }) {
       >
         <div
           style={{
-            background: "rgba(255,255,255,0.015)",
+            background: "var(--hover-bg)",
             border: "1px solid var(--divider)",
             borderRadius: 10,
             padding: "14px 14px 8px",
@@ -279,7 +280,7 @@ export default function BudgetOverviewChart({ summary }) {
                   fontSize: 9,
                 }}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--hover-bg)" }} />
               {SERIES.map((series) => (
                 <Bar
                   key={series.key}
@@ -295,7 +296,7 @@ export default function BudgetOverviewChart({ summary }) {
 
         <div
           style={{
-            background: "rgba(255,255,255,0.015)",
+            background: "var(--hover-bg)",
             border: "1px solid var(--divider)",
             borderRadius: 10,
             overflow: "hidden",
@@ -359,7 +360,7 @@ export default function BudgetOverviewChart({ summary }) {
                 alignItems: "center",
                 padding: "12px 14px",
                 borderBottom: index === 3 ? "none" : "1px solid var(--divider)",
-                background: index % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
+                background: index % 2 === 0 ? "transparent" : "var(--hover-bg)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

@@ -8,23 +8,33 @@ export async function calculateProjectHealthScore(projectId, base44) {
   if (!projectId) return 0;
   try {
     // Load all data in parallel
+    let fetchFailures = 0;
+    const safeFetch = (promise, label) =>
+      promise.catch((err) => {
+        fetchFailures++;
+        console.warn(`[HealthScore] Failed to fetch ${label}:`, err.message);
+        return [];
+      });
     const [rfis, changeOrders, deliveries, actionItems, costCodes, tasks, dailyLogs] =
       await Promise.all([
-        base44.entities.RFI.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ChangeOrder.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.Delivery.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ActionItem.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.CostCode.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.ScheduleTask.filter({ project_id: projectId }).catch(() => []),
-        base44.entities.DailyLog.filter({ project_id: projectId }).catch(() => []),
+        safeFetch(base44.entities.RFI.filter({ project_id: projectId }), "RFIs"),
+        safeFetch(base44.entities.ChangeOrder.filter({ project_id: projectId }), "Change Orders"),
+        safeFetch(base44.entities.Delivery.filter({ project_id: projectId }), "Deliveries"),
+        safeFetch(base44.entities.ActionItem.filter({ project_id: projectId }), "Action Items"),
+        safeFetch(base44.entities.CostCode.filter({ project_id: projectId }), "Cost Codes"),
+        safeFetch(base44.entities.ScheduleTask.filter({ project_id: projectId }), "Schedule Tasks"),
+        safeFetch(base44.entities.DailyLog.filter({ project_id: projectId }), "Daily Logs"),
       ]);
+    if (fetchFailures > 0) {
+      console.warn(`[HealthScore] ${fetchFailures}/7 data sources failed — score may be inaccurate`);
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     // ── Factor 1: RFI health (30 points) ──
     const openRFIs = rfis.filter(r => r.status !== "Closed");
-    const overdueRFIs = openRFIs.filter(r => r.due_date && new Date(r.due_date + "T00:00:00Z") < today);
+    const overdueRFIs = openRFIs.filter(r => r.due_date && new Date(r.due_date + "T00:00:00") < today);
     const criticalOverdue = overdueRFIs.filter(r => r.priority === "Critical");
     let rfiScore = 100;
     if (criticalOverdue.length > 0) rfiScore = 0;
@@ -33,7 +43,13 @@ export async function calculateProjectHealthScore(projectId, base44) {
 
     // ── Factor 2: Budget health (25 points) ──
     const totalBudget = costCodes.reduce((s, c) => s + (Number(c.budget_amount) || 0), 0);
-    const totalSpend = costCodes.reduce((s, c) => s + (Number(c.actual_cost) || 0) + (Number(c.committed_cost) || 0), 0);
+    // committed_cost already includes paid (actual) amounts — use whichever
+    // is larger to avoid double-counting while still capturing unpaid commitments.
+    const totalSpend = costCodes.reduce((s, c) => {
+      const committed = Number(c.committed_cost) || 0;
+      const actual = Number(c.actual_cost) || 0;
+      return s + Math.max(committed, actual);
+    }, 0);
     let budgetScore = 100;
     if (totalBudget > 0) {
       const variance = (totalSpend - totalBudget) / totalBudget;
@@ -46,14 +62,14 @@ export async function calculateProjectHealthScore(projectId, base44) {
 
     // ── Factor 3: Action items (20 points) ──
     const openAI = (actionItems || []).filter(a => a.status !== "Complete");
-    const overdueAI = openAI.filter(a => a.due_date && new Date(a.due_date + "T00:00:00Z") < today);
+    const overdueAI = openAI.filter(a => a.due_date && new Date(a.due_date + "T00:00:00") < today);
     let aiScore = 100;
     if (openAI.length > 0)
       aiScore = Math.max(0, 100 - (overdueAI.length / openAI.length) * 80);
 
     // ── Factor 4: Delivery performance (15 points) ──
     const scheduledDel = deliveries.filter(d => d.scheduled_date);
-    const lateDel = scheduledDel.filter(d => d.status !== "Delivered" && new Date(d.scheduled_date + "T00:00:00Z") < today);
+    const lateDel = scheduledDel.filter(d => d.status !== "Delivered" && new Date(d.scheduled_date + "T00:00:00") < today);
     let delScore = 100;
     if (scheduledDel.length > 0)
       delScore = Math.max(0, 100 - (lateDel.length / scheduledDel.length) * 100);

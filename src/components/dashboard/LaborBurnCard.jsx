@@ -1,7 +1,7 @@
 import React from "react";
 import { AreaChart, Area, XAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
-function BurnRow({ label, actual, budget, color }) {
+function BurnRow({ label, actual, budget }) {
   const safeActual = Number(actual) || 0;
   const safeBudget = Number(budget) || 0;
   const pct = safeBudget > 0 ? Math.round(safeActual / safeBudget * 100) : 0;
@@ -13,7 +13,7 @@ function BurnRow({ label, actual, budget, color }) {
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.10em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: barColor, lineHeight: 1 }}>{pct}%</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)" }}>BURNED</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}>BURNED</span>
         </div>
       </div>
       {/* Stacked bar */}
@@ -66,13 +66,13 @@ export default function LaborBurnCard({ wps }) {
         {totalBudget > 0 && (
           <div style={{ padding: "8px 0 14px", borderBottom: "1px solid var(--divider)", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 3 }}>Total Hours</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 3 }}>Total Hours</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1 }}>
                 {totalActual.toLocaleString()} <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>/ {totalBudget.toLocaleString()}</span>
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 3 }}>Trend</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 3 }}>Trend</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: totalColor }}>
                 {totalPct < 85 ? "✓ UNDER" : totalPct > 100 ? "⚠ OVER" : "→ ON TRACK"}
               </div>
@@ -100,6 +100,7 @@ export default function LaborBurnCard({ wps }) {
           }));
           return (
             <div style={{ marginTop: totalBudget > 0 ? 16 : 0 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>Weekly Breakdown <span style={{ fontStyle: "italic", opacity: 0.7 }}>(Projected)</span></div>
               <ResponsiveContainer width="100%" height={80}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                   <defs>

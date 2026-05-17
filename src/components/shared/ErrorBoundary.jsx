@@ -1,4 +1,5 @@
 import React from "react";
+import { logError } from "@/lib/telemetry";
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -11,13 +12,17 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    logError(error, {
+      boundary: "section",
+      label: this.props.label || "section",
+      componentStack: errorInfo?.componentStack,
+    });
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
+        <div className="sbd-card" style={{
           padding: 24, textAlign: "center",
           background: "rgba(239,68,68,0.06)",
           border: "1px solid rgba(239,68,68,0.2)",
@@ -34,6 +39,7 @@ export default class ErrorBoundary extends React.Component {
             {this.state.error?.message || "Something went wrong"}
           </div>
           <button
+            className="sbd-btn"
             onClick={() => this.setState({ hasError: false, error: null })}
             style={{
               padding: "6px 16px", borderRadius: 4,

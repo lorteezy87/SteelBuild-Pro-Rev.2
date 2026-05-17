@@ -17,7 +17,7 @@ const PRIORITY_COLORS = {
   Low: "var(--accent)",
 };
 
-export default function ChangeRequestList({ requests }) {
+export default function ChangeRequestList({ requests = [] }) {
   const [expanded, setExpanded] = useState(null);
 
   if (requests.length === 0) {
@@ -33,7 +33,7 @@ export default function ChangeRequestList({ requests }) {
       {requests.map((request) => (
         <div key={request.id} style={{ background: "var(--bg-surface)", borderRadius: "var(--radius-card)", overflow: "hidden", cursor: "pointer", transition: "background 0.1s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-surface-low)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-surface)"; }}>
           {/* Header */}
-          <div onClick={() => setExpanded(expanded === request.id ? null : request.id)} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === request.id ? "1px solid var(--divider)" : "none" }}>
+          <div role="button" tabIndex={0} aria-expanded={expanded === request.id} aria-label={`Change request CR-${request.cr_number || "—"}: ${request.title || "Untitled"}`} onClick={() => setExpanded(expanded === request.id ? null : request.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(expanded === request.id ? null : request.id); } }} style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "16px", alignItems: "center", borderBottom: expanded === request.id ? "1px solid var(--divider)" : "none" }}>
             <div>
               <div style={{ fontSize: "10px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "2px" }}>CR-{request.cr_number || "—"}</div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>{request.title}</div>
@@ -41,7 +41,7 @@ export default function ChangeRequestList({ requests }) {
             </div>
 
             <div>
-              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {new Date(request.request_date).toLocaleDateString()}</div>
+              <div style={{ fontSize: "10px", color: "var(--text-secondary)", marginBottom: "4px" }}>📅 {request.request_date ? new Date(request.request_date).toLocaleDateString() : "—"}</div>
               {request.estimated_cost_impact !== 0 && (
                 <div style={{ fontSize: "10px", fontWeight: 600, color: request.estimated_cost_impact > 0 ? "var(--status-warning)" : "var(--status-success)" }}>
                   {request.estimated_cost_impact > 0 ? "+" : ""} ${Math.abs(request.estimated_cost_impact || 0).toLocaleString()}

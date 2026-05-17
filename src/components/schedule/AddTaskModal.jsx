@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { PHASES } from '../../utils/phases';
+import DateOrTbdInput from './DateOrTbdInput';
 
-export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false }) {
+export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, projectName, prefilledDate, isSaving = false, existingTasks }) {
   const [formData, setFormData] = useState({
     task_name: '',
     task_type: 'Task',
@@ -11,6 +12,8 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
     end_date: prefilledDate || new Date().toISOString().split('T')[0],
     status: 'Not Started',
     priority: 'Normal',
+    resource_names: '',
+    parent_task_id: null,
   });
 
   useEffect(() => {
@@ -24,15 +27,19 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
         end_date: prefilledDate || new Date().toISOString().split('T')[0],
         status: 'Not Started',
         priority: 'Normal',
+        resource_names: '',
+        parent_task_id: null,
       });
     }
   }, [open, prefilledDate]);
 
   const handleSubmit = () => {
-    if (!isSaving && formData.task_name && formData.start_date && formData.end_date) {
-      onSubmit(formData);
-      // Form will reset naturally when modal unmounts on success.
-      // Do NOT reset here — keeps data visible while mutation is in flight.
+    if (!isSaving && formData.task_name) {
+      onSubmit({
+        ...formData,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+      });
     }
   };
 
@@ -40,17 +47,29 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 998 }} />
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(1, 5, 12, 0.86)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 998,
+        }}
+      />
       <div style={{
         position: 'fixed',
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
         width: 580,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--accent-border)',
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: 'calc(100vh - 32px)',
+        overflowY: 'auto',
+        background: 'linear-gradient(180deg, rgba(10, 16, 27, 0.99), rgba(5, 8, 14, 1))',
+        border: '1px solid rgba(86, 176, 255, 0.42)',
         borderRadius: 16,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+        boxShadow: '0 28px 90px rgba(0,0,0,0.92), inset 0 1px 0 rgba(255,255,255,0.08)',
         zIndex: 999,
         padding: 24,
       }}>
@@ -72,15 +91,26 @@ export default function AddTaskModal({ open, onClose, onSubmit, nextTaskNumber, 
 
           {/* Right */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <FormField label="Start Date *" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
-            <FormField label="End Date *" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
+            <FormField label="Start Date" type="date" value={formData.start_date} onChange={(v) => setFormData({ ...formData, start_date: v })} />
+            <FormField label="End Date" type="date" value={formData.end_date} onChange={(v) => setFormData({ ...formData, end_date: v })} />
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: -4 }}>
+              Use TBD when the task is real but the schedule window is not known yet.
+            </div>
             <FormField label="Priority" type="select" value={formData.priority} onChange={(v) => setFormData({ ...formData, priority: v })} options={['Critical', 'High', 'Normal', 'Low']} />
+            <FormField label="Resources / Assigned To" value={formData.resource_names} onChange={(v) => setFormData({ ...formData, resource_names: v })} />
+            <FormField
+              label="Parent Task"
+              type="select"
+              value={formData.parent_task_id || ""}
+              onChange={(v) => setFormData({ ...formData, parent_task_id: v || null })}
+              options={(existingTasks || []).map(t => ({ value: t.id, label: `${t.wbs_code ? t.wbs_code + " \u2014 " : ""}${t.task_name}` }))}
+            />
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
           <Button onClick={onClose} variant="outline" style={{ flex: 1 }} disabled={isSaving}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isSaving || !formData.task_name || !formData.start_date || !formData.end_date} style={{ flex: 1, background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.6 : 1 }}>
+          <Button onClick={handleSubmit} disabled={isSaving || !formData.task_name} style={{ flex: 1, background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.6 : 1 }}>
             {isSaving ? 'Creating...' : 'Create Task →'}
           </Button>
         </div>
@@ -101,7 +131,7 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',
@@ -110,10 +140,27 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
             color: '#FFFFFF',
           }}
         >
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
+          <option value="">—</option>
+          {options.map(opt => {
+            const isObj = typeof opt === 'object';
+            return <option key={isObj ? opt.value : opt} value={isObj ? opt.value : opt}>{isObj ? opt.label : opt}</option>;
+          })}
         </select>
+      ) : type === 'date' ? (
+        <DateOrTbdInput
+          value={value}
+          onChange={onChange}
+          inputStyle={{
+            width: '100%',
+            background: 'var(--bg-surface-low)',
+            border: '1px solid var(--accent-border)',
+            borderRadius: 6,
+            padding: '6px 8px',
+            fontFamily: 'var(--font-body)',
+            fontSize: 11,
+            color: '#FFFFFF',
+          }}
+        />
       ) : (
         <input
           type={type}
@@ -121,7 +168,7 @@ function FormField({ label, type = 'text', value, onChange, options = [] }) {
           onChange={(e) => onChange(e.target.value)}
           style={{
             width: '100%',
-            background: 'var(--bg-sidebar)',
+            background: 'var(--bg-surface-low)',
             border: '1px solid var(--accent-border)',
             borderRadius: 6,
             padding: '6px 8px',

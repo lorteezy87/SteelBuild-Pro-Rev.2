@@ -15,12 +15,12 @@ const SIGNOFF_COLORS = {
   Rejected: "var(--status-error)",
 };
 
-export default function InspectionList({ inspections }) {
+export default function InspectionList({ inspections, onConvertToPunchlist }) {
   const [expanded, setExpanded] = useState(null);
 
   if (inspections.length === 0) {
     return (
-      <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+      <div className="sbd-card" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>No inspections</p>
       </div>
     );
@@ -31,6 +31,7 @@ export default function InspectionList({ inspections }) {
       {inspections.map((inspection) => (
         <div
           key={inspection.id}
+          className="sbd-card sbd-card-hover"
           style={{
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
@@ -269,6 +270,45 @@ export default function InspectionList({ inspections }) {
                   >
                     {inspection.notes}
                   </p>
+                </div>
+              )}
+
+              {/* Convert deficiencies to punchlist (C3) */}
+              {onConvertToPunchlist && inspection.deficiencies_count > 0 && !inspection.metadata?.punchlist_converted && (
+                <div style={{ marginBottom: "12px" }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConvertToPunchlist(inspection);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "var(--accent)",
+                      color: "var(--bg-base)",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 12px",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Convert {inspection.deficiencies_count} → Punchlist
+                  </button>
+                </div>
+              )}
+              {inspection.metadata?.punchlist_converted && (
+                <div style={{ marginBottom: "12px",
+                  fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                  color: "var(--status-success)", letterSpacing: "0.08em", textTransform: "uppercase",
+                }}>
+                  ✓ Converted to {inspection.metadata.punchlist_converted.count || ""} punchlist item{inspection.metadata.punchlist_converted.count === 1 ? "" : "s"}
                 </div>
               )}
 

@@ -1,14 +1,13 @@
-import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, CheckCheck, RefreshCw, Loader2, ExternalLink } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useProjectContext } from "@/components/shared/useProjectContext";
+import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatDate } from "../components/shared/formatters";
 import StatusBadge from "../components/shared/StatusBadge";
-import { toast } from "sonner";
+import { useAlerts } from "@/hooks/useAlerts";
+import { CommandBar } from "@/components/design-system";
+import { setDraft } from "@/lib/draftStorage";
 
 const PAGE_MAP = { RFI: "RFIs", Drawing: "Drawings", ChangeOrder: "ChangeOrders", Delivery: "Deliveries", WorkPackage: "WorkPackages" };
 
@@ -20,91 +19,76 @@ const SEVERITY_BG = {
 };
 
 export default function AlertsCenter() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { activeProject } = useProjectContext();
-  const projectId = searchParams.get("project") || activeProject?.id || null;
-  const [generating, setGenerating] = useState(false);
+  const {
+    alerts,
+    isLoading,
+    generating,
+    unreadCount,
+    markRead,
+    markAllRead,
+    dismiss,
+    generateAlerts,
+  } = useAlerts();
+
   const [severityFilter, setSeverityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const { data: alerts = [], isLoading, refetch } = useQuery({
-    queryKey: ["alerts", projectId],
-    queryFn: () => projectId
-      ? base44.entities.Alert.filter({ project_id: projectId }, "-created_at")
-      : base44.entities.Alert.list("-created_at"),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Alert.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: id => base44.entities.Alert.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
-  });
-
-  const markRead = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_read: true } });
-  const markAllRead = async () => {
-    const unread = alerts.filter(a => !a.is_read);
-    try {
-      await Promise.all(unread.map(a => base44.entities.Alert.update(a.id, { is_read: true })));
-      qc.invalidateQueries({ queryKey: ["alerts"] });
-      toast.success(`${unread.length} alerts marked as read`);
-    } catch (err) {
-      toast.error("Some alerts failed to update");
-    }
-  };
-  const dismiss = (alert) => updateMut.mutate({ id: alert.id, data: { ...alert, is_dismissed: true } });
-
-  const generateAlerts = async () => {
-    setGenerating(true);
-    try {
-      await base44.functions.invoke("generateAlerts", {});
-      await refetch();
-      toast.success("Alerts refreshed");
-    } catch (err) {
-      toast.error("Failed to generate alerts: " + (err?.message || "Unknown error"));
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const filtered = alerts.filter(a => {
+  const filtered = useMemo(() => alerts.filter(a => {
     if (a.is_dismissed) return false;
     const matchSeverity = severityFilter === "all" || a.severity === severityFilter;
     const matchType = typeFilter === "all" || a.alert_type === typeFilter;
     return matchSeverity && matchType;
-  });
+  }), [alerts, severityFilter, typeFilter]);
 
-  const unreadCount = alerts.filter(a => !a.is_read && !a.is_dismissed).length;
-  const alertTypes = [...new Set(alerts.map(a => a.alert_type))];
+  const alertTypes = useMemo(() => [...new Set(alerts.map(a => a.alert_type).filter(Boolean))], [alerts]);
 
   const btnActive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--accent-muted)", color: "var(--accent-light)" };
   const btnInactive = { padding: "4px 12px", borderRadius: "var(--radius-badge)", fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer", border: "none", background: "var(--bg-surface-low)", color: "var(--text-muted)" };
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontFamily: "var(--font-body)", fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Alerts & Notifications</h1>
-            {unreadCount > 0 && <span style={{ background: "var(--status-error)", color: "white", borderRadius: 10, padding: "2px 8px", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700 }}>{unreadCount}</span>}
-          </div>
-          <p style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.12em", marginTop: 3 }}>{filtered.length} ACTIVE ALERTS</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button variant="outline" size="sm" onClick={markAllRead} disabled={unreadCount === 0}>
-            <CheckCheck className="w-3.5 h-3.5 mr-1" />Mark All Read
-          </Button>
-          <button onClick={generateAlerts} disabled={generating} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-btn)", color: "white", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: generating ? "not-allowed" : "pointer", opacity: generating ? 0.7 : 1 }}>
-            {generating ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Scanning...</> : <><RefreshCw className="w-3.5 h-3.5" />Scan for Alerts</>}
-          </button>
-        </div>
-      </div>
+      <CommandBar
+        eyebrow="NOTIFICATIONS"
+        title="Alerts & Notifications"
+        count={filtered.length}
+        unit=" · ACTIVE"
+        subtitle={`${unreadCount} unread · cross-entity scanner · RFI / Drawing / CO / Delivery / WP triggers`}
+      >
+        <button
+          onClick={markAllRead}
+          disabled={unreadCount === 0}
+          className="sbd-btn"
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            color: unreadCount === 0 ? "var(--text-muted)" : "var(--text-secondary)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: unreadCount === 0 ? "not-allowed" : "pointer",
+            textTransform: "uppercase", opacity: unreadCount === 0 ? 0.5 : 1,
+          }}
+        >
+          <CheckCheck className="w-3 h-3" /> Mark All Read
+        </button>
+        <button
+          onClick={generateAlerts}
+          disabled={generating}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--accent)", color: "var(--bg-base)", border: "none",
+            borderRadius: "var(--radius-btn)", padding: "8px 14px",
+            fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.08em", cursor: generating ? "not-allowed" : "pointer",
+            textTransform: "uppercase", opacity: generating ? 0.7 : 1,
+          }}
+          onMouseEnter={(e) => !generating && (e.currentTarget.style.background = "var(--accent-hover)")}
+          onMouseLeave={(e) => !generating && (e.currentTarget.style.background = "var(--accent)")}
+        >
+          {generating
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Scanning...</>
+            : <><RefreshCw className="w-3 h-3" /> Scan</>}
+        </button>
+      </CommandBar>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
@@ -113,7 +97,7 @@ export default function AlertsCenter() {
             {s === "all" ? "ALL" : s.toUpperCase()}
           </button>
         ))}
-        <div style={{ width: 1, background: "rgba(255,255,255,0.08)", margin: "0 4px" }} />
+        <div style={{ width: 1, background: "var(--bg-surface-high)", margin: "0 4px" }} />
         {["all", ...alertTypes].map(t => (
           <button key={t} onClick={() => setTypeFilter(t)} style={typeFilter === t ? btnActive : btnInactive}>
             {t === "all" ? "ALL TYPES" : t}
@@ -122,9 +106,9 @@ export default function AlertsCenter() {
       </div>
 
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>⟳ LOADING ALERTS...</div>
+        <div style={{ textAlign: "center", padding: "60px 0", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.12em" }}>LOADING ALERTS...</div>
       ) : filtered.length === 0 ? (
-        <div style={{ background: "var(--bg-surface)", border: "none", borderRadius: "var(--radius-card)", padding: "60px 24px", textAlign: "center" }}>
+        <div className="sbd-card" style={{ padding: "60px 24px", textAlign: "center" }}>
           <Bell style={{ width: 36, height: 36, color: "var(--text-muted)", margin: "0 auto 12px" }} />
           <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--text-secondary)", fontWeight: 500, marginBottom: 4 }}>No active alerts</p>
           <p style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text-muted)" }}>Click "Scan for Alerts" to check your project data</p>
@@ -159,7 +143,38 @@ export default function AlertsCenter() {
                     {!alert.is_read && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => markRead(alert)}>Mark Read</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.44)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" style={{ color: "rgba(200,210,230,0.7)" }} onClick={() => dismiss(alert)}>Dismiss</Button>
+                    <button
+                      onClick={() => {
+                        setDraft("new-mitigation", {
+                          issue_source: "Alert",
+                          source_entity_ref: alert.title,
+                          source_entity_id: alert.id,
+                          title: alert.title,
+                          identified_date: new Date().toISOString().split("T")[0],
+                          status: "Open",
+                        });
+                        navigate("/Mitigations");
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid var(--border-default)",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                        color: "var(--text-muted)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        minHeight: 28,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                    >
+                      Log Mitigation
+                    </button>
                   </div>
                 </div>
               </div>

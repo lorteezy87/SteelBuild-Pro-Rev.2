@@ -3,13 +3,15 @@ import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { differenceInDays } from 'date-fns';
 import { formatDate, formatDateShort, parseUTCDate } from '@/components/shared/formatters';
-import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign } from 'lucide-react';
+import { X, BarChart2, CheckSquare, Calendar, FileText, AlertTriangle, Package, DollarSign, ClipboardCheck } from 'lucide-react';
 import { formatCurrency } from '@/components/shared/formatters';
+import ProjectHandoffChecklist from '@/components/projects/ProjectHandoffChecklist';
 
 const mono = { fontFamily: 'JetBrains Mono, monospace' };
 
 const TABS = [
   { id: 'overview',   label: 'Overview',    icon: BarChart2 },
+  { id: 'handoff',    label: 'Handoff',     icon: ClipboardCheck },
   { id: 'workpkgs',   label: 'Work Pkgs',   icon: CheckSquare },
   { id: 'schedule',   label: 'Schedule',    icon: Calendar },
   { id: 'drawings',   label: 'Drawings',    icon: FileText },
@@ -19,7 +21,7 @@ const TABS = [
 ];
 
 const PHASE_CONFIG = {
-  Detailing:   { color: '#8B5CF6' },
+  Detailing:   { color: '#0D9488' },
   Fabrication: { color: 'var(--accent)' },
   Delivery:    { color: '#06B6D4' },
   Erection:    { color: '#22C55E' },
@@ -46,7 +48,7 @@ function KpiStrip({ items }) {
     }}>
       {items.map((k, i) => (
         <div key={i} style={{ padding: '12px 16px', background: 'var(--bg-surface)' }}>
-          <div style={{ ...mono, fontSize: 7, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 5 }}>{k.label}</div>
+          <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 5 }}>{k.label}</div>
           <div style={{ ...mono, fontSize: 22, fontWeight: 700, color: k.color || 'var(--text-primary)', lineHeight: 1 }}>{k.value}</div>
           {k.sub && <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>{k.sub}</div>}
         </div>
@@ -59,7 +61,7 @@ function SectionCard({ title, children }) {
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 2, overflow: 'hidden', marginBottom: 14 }}>
       {title && (
-        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)', background: 'var(--bg-sidebar)' }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)', background: 'var(--bg-surface-low)' }}>
           <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{title}</span>
         </div>
       )}
@@ -166,7 +168,7 @@ function WorkPackagesTab({ workPackages }) {
     'On Hold':     'var(--status-warning)',
   };
   const PHASE_COLORS = {
-    Detailing:   '#8B5CF6',
+    Detailing:   '#0D9488',
     Fabrication: 'var(--accent)',
     Delivery:    '#06B6D4',
     Erection:    '#22C55E',
@@ -186,7 +188,7 @@ function WorkPackagesTab({ workPackages }) {
         { label: 'Total Tonnage', value: `${workPackages.reduce((s,w) => s+(Number(w.tonnage)||0),0).toFixed(1)}T` },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 80px 70px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Work Package','Phase','Status','% Done','Tons','Shop Hrs'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -266,35 +268,35 @@ function ScheduleTab({ scheduleTasks }) {
 // ── DRAWINGS TAB ──
 function DrawingsTab({ drawings }) {
   const STAGE_COLOR = {
-    'Released':     'var(--status-success)',
-    'BFS':          'var(--status-success)',
-    'OFS':          'var(--accent)',
-    'BFA':          'var(--accent)',
-    'OFA':          'var(--status-warning)',
-    'Not Started':  'var(--text-muted)',
-    'FFF':          'var(--status-info)',
+    'Released':    'var(--status-success)',
+    'IFC':         'var(--status-success)',
+    'OFS':         'var(--accent)',
+    'BFA':         'var(--accent)',
+    'OFA':         'var(--status-warning)',
+    'IFA':         'var(--status-info)',
+    'Not Started': 'var(--text-muted)',
   };
 
   if (!drawings.length) return <EmptyState label="No Drawings" />;
 
-  const overdue = drawings.filter(d => d.due_date && parseUTCDate(d.due_date) < new Date() && !['Released','BFS'].includes(d.stage)).length;
+  const overdue = drawings.filter(d => d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released').length;
 
   return (
     <div>
       <KpiStrip items={[
         { label: 'Total', value: drawings.length },
-        { label: 'Released', value: drawings.filter(d => ['Released','BFS'].includes(d.stage)).length, color: 'var(--status-success)' },
-        { label: 'In Review', value: drawings.filter(d => ['OFA','BFA','OFS'].includes(d.stage)).length, color: 'var(--accent)' },
+        { label: 'Released', value: drawings.filter(d => d.stage === 'Released').length, color: 'var(--status-success)' },
+        { label: 'In Review', value: drawings.filter(d => ['IFA','OFA','BFA','OFS','IFC'].includes(d.stage)).length, color: 'var(--accent)' },
         { label: 'Overdue', value: overdue, color: overdue > 0 ? 'var(--status-error)' : 'var(--text-muted)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Sheet #', 'Title', 'Discipline', 'Stage', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
         </div>
         {drawings.map(d => {
-          const od = d.due_date && parseUTCDate(d.due_date) < new Date() && !['Released','BFS'].includes(d.stage);
+          const od = d.due_date && parseUTCDate(d.due_date) < new Date() && d.stage !== 'Released';
           return (
             <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px 80px 80px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: od ? '3px solid var(--status-error)' : '3px solid transparent' }}>
               <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>{d.sheet_number || '—'}</div>
@@ -339,7 +341,7 @@ function RFIsTab({ rfis }) {
         { label: 'Answered', value: rfis.filter(r => r.status === 'Answered').length, color: 'var(--status-success)' },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 70px 80px 80px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['RFI #', 'Title', 'Priority', 'Status', 'Due'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
@@ -385,14 +387,14 @@ function DeliveriesTab({ deliveries }) {
         { label: 'Total Weight', value: `${deliveries.reduce((s,d)=>s+(Number(d.weight_tons)||0),0).toFixed(1)}T` },
       ]} />
       <SectionCard>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '8px 16px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)' }}>
           {['Delivery Title', 'Vendor', 'Status', 'Scheduled', 'Weight'].map(c => (
             <div key={c} style={{ ...mono, fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{c}</div>
           ))}
         </div>
         {deliveries.map(d => (
           <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 90px 90px', gap: 12, padding: '9px 16px', borderBottom: '1px solid var(--divider)', alignItems: 'center', borderLeft: `3px solid ${STATUS_COLOR[d.status] || 'var(--text-muted)'}` }}>
-            <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.delivery_title || '—'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.description || '—'}</div>
             <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.vendor || '—'}</div>
             <div style={{ ...mono, fontSize: 9, fontWeight: 700, color: STATUS_COLOR[d.status] || 'var(--text-muted)', textTransform: 'uppercase' }}>{d.status}</div>
             <div style={{ ...mono, fontSize: 9, color: 'var(--text-muted)' }}>{formatDateShort(d.scheduled_date)}</div>
@@ -528,7 +530,7 @@ export default function ProjectDetailView({ project, onClose }) {
       <div style={{ width: '78vw', maxWidth: 1080, background: 'var(--bg-page)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '16px 24px', background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        <div style={{ padding: '16px 24px', background: 'var(--bg-surface-low)', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
           <div style={{ width: 38, height: 38, borderRadius: 2, background: phase.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <span style={{ fontSize: 18, fontWeight: 800, color: phase.color, fontFamily: 'Space Grotesk, sans-serif' }}>
               {project.name?.charAt(0)?.toUpperCase()}
@@ -592,6 +594,7 @@ export default function ProjectDetailView({ project, onClose }) {
         {/* Tab content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
           {activeTab === 'overview'   && <OverviewTab    project={project} workPackages={workPackages} rfis={rfis} changeOrders={changeOrders} deliveries={deliveries} />}
+          {activeTab === 'handoff'    && <ProjectHandoffChecklist projectId={project.id} />}
           {activeTab === 'workpkgs'   && <WorkPackagesTab workPackages={workPackages} />}
           {activeTab === 'schedule'   && <ScheduleTab    scheduleTasks={scheduleTasks} />}
           {activeTab === 'drawings'   && <DrawingsTab    drawings={drawings} />}

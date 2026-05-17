@@ -1,15 +1,24 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 
-export default function WorkflowBlockingModal({ 
-  open, 
-  onClose, 
-  reason, 
-  action, 
-  currentStep, 
+export default function WorkflowBlockingModal({
+  open,
+  onClose,
+  reason,
+  action,
+  currentStep,
   blockedStep,
   deliveries = null
 }) {
+  const trapRef = useFocusTrap(open);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
@@ -26,7 +35,7 @@ export default function WorkflowBlockingModal({
       }}
       onClick={onClose}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{
+      <div ref={trapRef} onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true" style={{
         width: '100%',
         maxWidth: 460,
         background: 'var(--bg-surface-secondary)',
