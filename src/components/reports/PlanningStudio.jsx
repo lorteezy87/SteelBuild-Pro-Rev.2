@@ -213,7 +213,7 @@ function buildVisualizations(project, portfolio) {
       tone: INFO,
       value: `${rows.filter((row) => row.health === "At Risk").length}`,
       label: "At-risk jobs",
-      text: "Portfolio rollup of the jobs Brena would pull into the morning planning brief.",
+      text: "Portfolio rollup of the jobs Rivet would pull into the morning planning brief.",
     },
   ];
 }
@@ -234,7 +234,7 @@ export default function PlanningStudio({ portfolio, selected, onNavigatePage }) 
         <div style={studioHeaderStyle}>
           <div>
             <div style={eyebrowStyle}>Planning Studio</div>
-            <h2 style={titleStyle}>Brena</h2>
+            <h2 style={titleStyle}>Rivet</h2>
           </div>
           <span style={badgeStyle}>No project selected</span>
         </div>
@@ -247,7 +247,7 @@ export default function PlanningStudio({ portfolio, selected, onNavigatePage }) 
       <div style={studioHeaderStyle}>
         <div>
           <div style={eyebrowStyle}>GantterAI-style Planning Studio</div>
-          <h2 style={titleStyle}>Brena Command Brief</h2>
+          <h2 style={titleStyle}>Rivet Command Brief</h2>
           <p style={subtitleStyle}>
             Read-only schedule intelligence for {selected.name || "selected project"}. Suggestions explain the source signals and require human action before anything changes.
           </p>
@@ -259,11 +259,11 @@ export default function PlanningStudio({ portfolio, selected, onNavigatePage }) 
       </div>
 
       <div style={studioGridStyle}>
-        <div style={brenaPanelStyle}>
+        <div style={rivetPanelStyle}>
           <div style={panelTitleRowStyle}>
             <div style={avatarStyle}><Bot size={18} /></div>
             <div>
-              <div style={panelTitleStyle}>Brena</div>
+              <div style={panelTitleStyle}>Rivet</div>
               <div style={panelMetaStyle}>Assistant, not autopilot</div>
             </div>
           </div>
@@ -366,7 +366,7 @@ export default function PlanningStudio({ portfolio, selected, onNavigatePage }) 
 
         <div style={actionPanelStyle}>
           <div style={panelTitleStyle}>Recommended Human Actions</div>
-          <div style={panelMetaStyle}>Brena can suggest. The user decides and records changes.</div>
+          <div style={panelMetaStyle}>Rivet can suggest. The user decides and records changes.</div>
           <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {actions.map((action) => {
               const Icon = action.icon;
@@ -483,7 +483,7 @@ const studioGridStyle = {
   gap: 16,
 };
 
-const brenaPanelStyle = {
+const rivetPanelStyle = {
   border: "1px solid var(--border-default)",
   borderRadius: 18,
   background: "rgba(7, 13, 24, 0.88)",

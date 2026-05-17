@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import ScheduleGantt from "@/components/schedule/ScheduleGantt";
-import ScheduleBrenaBrief from "@/components/schedule/ScheduleBrenaBrief";
+import ScheduleRivetBrief from "@/components/schedule/ScheduleRivetBrief";
 import LookaheadPlanner from "@/components/schedule/LookaheadPlanner";
 import ScheduleTaskList from "@/components/schedule/ScheduleTaskList";
 import TaskDetailDrawer from "@/components/schedule/TaskDetailDrawer";
@@ -878,7 +878,7 @@ export default function Schedule() {
         </div>
       </div>
 
-      <ScheduleBrenaBrief
+      <ScheduleRivetBrief
         tasks={tasksWithEffective}
         project={selectedProject}
         phaseFilter={phaseFilter}
