@@ -46,6 +46,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import { getNextNumber } from "@/components/shared/numberSequencing";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import WPFormModal from "@/components/workpackages/WPFormModal";
@@ -191,6 +192,7 @@ export default function FabRelease() {
   const { activeProject } = useProjectContext();
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const { can } = usePermissions();
 
   const [view, setView] = useState("flow");
   const [stageFilter, setStageFilter] = useState("all");
@@ -448,7 +450,7 @@ export default function FabRelease() {
         view={view}
         onViewChange={handleViewChange}
         onExport={() => exportFabReleaseCSV(filtered)}
-        onCreate={handleOpenCreate}
+        onCreate={can("create", "work_package") ? handleOpenCreate : null}
       />
 
       <SummaryStrip metrics={metrics} onStageFilter={handleStageFilter} stageFilter={stageFilter} />
@@ -539,7 +541,7 @@ export default function FabRelease() {
                     ? "Create a fabrication work package and link drawings so release readiness can be tracked."
                     : "Clear filters or adjust the search to bring packages back into view."
                 }
-                cta={metrics.totalCount === 0 ? <Button variant="primary" icon="plus" onClick={handleOpenCreate}>New Package</Button> : null}
+                cta={metrics.totalCount === 0 && can("create", "work_package") ? <Button variant="primary" icon="plus" onClick={handleOpenCreate}>New Package</Button> : null}
               />
             </div>
           )}
@@ -550,8 +552,8 @@ export default function FabRelease() {
         <DetailPanel
           wp={detailWP}
           onClose={() => setDetailWP(null)}
-          onEdit={() => handleEdit(detailWP)}
-          onDelete={() => { setDeleteTarget(detailWP); setDetailWP(null); }}
+          onEdit={can("edit", "work_package") ? () => handleEdit(detailWP) : null}
+          onDelete={can("delete", "work_package") ? () => { setDeleteTarget(detailWP); setDetailWP(null); } : null}
           onComplete={() => completeMut.mutate(detailWP.id)}
           isCompleting={completeMut.isPending}
         />
@@ -597,7 +599,7 @@ function Hero({ projectName, metrics, view, onViewChange, onExport, onCreate }) 
         </p>
         <div className="fab-hero-actions">
           <Button variant="secondary" icon="download" onClick={onExport}>CSV</Button>
-          <Button variant="primary" icon="plus" onClick={onCreate}>New Package</Button>
+          {onCreate && <Button variant="primary" icon="plus" onClick={onCreate}>New Package</Button>}
         </div>
       </div>
       <div className="fab-hero-grid">
@@ -1191,23 +1193,25 @@ function DetailPanel({ wp, onClose, onEdit, onDelete, onComplete, isCompleting }
         </section>
 
         <div className="fab-detail-actions">
-          <Button variant="secondary" icon="edit" onClick={onEdit}>Edit</Button>
+          {onEdit && <Button variant="secondary" icon="edit" onClick={onEdit}>Edit</Button>}
           {signals.stage !== "ready_to_ship" && (
             <Button variant="primary" icon="check" onClick={onComplete} disabled={isCompleting}>Mark RTS</Button>
           )}
-          <button
-            type="button"
-            onClick={onDelete}
-            style={{
-              background: "var(--danger-muted)", border: "1px solid var(--danger-border)",
-              color: "var(--status-error)", borderRadius: "var(--radius-btn)",
-              padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            <Trash2 size={13} /> Delete
-          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              style={{
+                background: "var(--danger-muted)", border: "1px solid var(--danger-border)",
+                color: "var(--status-error)", borderRadius: "var(--radius-btn)",
+                padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
         </div>
       </aside>
     </div>

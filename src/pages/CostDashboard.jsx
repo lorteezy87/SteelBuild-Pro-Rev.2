@@ -26,6 +26,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import { Button as DSButton, CommandBar } from "@/components/design-system";
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -86,6 +87,7 @@ function VarianceAlertCard({ code, description, phase, variance, pctOver, contin
 export default function CostDashboard() {
   const { activeProject } = useProjectContext();
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const [codeModalOpen, setCodeModalOpen] = useState(false);
   const [editingCode, setEditingCode] = useState(null);
   const [deleteCodeTarget, setDeleteCodeTarget] = useState(null);
@@ -377,9 +379,11 @@ export default function CostDashboard() {
         <DSButton variant="secondary" icon="download" onClick={exportCSV}>
           Export
         </DSButton>
-        <DSButton variant="primary" icon="plus" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}>
-          Add Cost Code
-        </DSButton>
+        {can("create", "cost_code") && (
+          <DSButton variant="primary" icon="plus" onClick={() => { setEditingCode(null); setCodeModalOpen(true); }}>
+            Add Cost Code
+          </DSButton>
+        )}
       </CommandBar>
 
       <KPIStrip items={kpis} />
@@ -513,8 +517,12 @@ export default function CostDashboard() {
                   </PTD>
                   <PTD>
                     <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <IconButton variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></IconButton>
-                      <IconButton variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></IconButton>
+                      {can("edit", "cost_code") && (
+                        <IconButton variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCode(c); setCodeModalOpen(true); }}><span style={{ fontSize: 11 }}>✎</span></IconButton>
+                      )}
+                      {can("delete", "cost_code") && (
+                        <IconButton variant="ghost" size="icon" className="h-7 w-7" style={{ color: "var(--status-error)" }} onClick={() => setDeleteCodeTarget(c)}><span style={{ fontSize: 11 }}>✕</span></IconButton>
+                      )}
                     </div>
                   </PTD>
                 </PTR>

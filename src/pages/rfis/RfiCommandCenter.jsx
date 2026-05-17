@@ -142,8 +142,8 @@ export default function RfiCommandCenter({
             </div>
             <div className="rfi-hero-actions">
               <Button variant="secondary" icon="download" onClick={onExport}>Export</Button>
-              <Button variant="secondary" icon="upload" onClick={onImport}>Import Log</Button>
-              <Button variant="primary" icon="plus" onClick={onCreate}>New RFI</Button>
+              {onImport && <Button variant="secondary" icon="upload" onClick={onImport}>Import Log</Button>}
+              {onCreate && <Button variant="primary" icon="plus" onClick={onCreate}>New RFI</Button>}
             </div>
           </div>
 

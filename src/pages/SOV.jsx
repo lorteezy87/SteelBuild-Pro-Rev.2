@@ -18,6 +18,7 @@ import { PTD } from "../components/shared/PhoenixTable";
 import { formatCurrency, formatPercent, roundCurrency } from "../components/shared/formatters";
 import { getNextNumber } from "../components/shared/numberSequencing";
 import { toast } from "sonner";
+import { usePermissions } from "@/services/permissions";
 
 /* ═══════════════════════════════════════════════════════════════════
    1. Progress Visualization — slim horizontal bar
@@ -114,6 +115,7 @@ function OverBilledBadge() {
 export default function SOV() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
+  const { can } = usePermissions();
 
   /* ── UI state ── */
   const [appFilter, setAppFilter] = useState("all");
@@ -642,15 +644,19 @@ export default function SOV() {
                 <Check className="w-3.5 h-3.5" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-7 w-7"
-              onClick={() => { setEditing(s); setModalOpen(true); }}>
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7"
-              style={{ color: "var(--status-error)" }}
-              onClick={() => setDeleteTarget(s)}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
+            {can("edit", "sov_item") && (
+              <Button variant="ghost" size="icon" className="h-7 w-7"
+                onClick={() => { setEditing(s); setModalOpen(true); }}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {can("delete", "sov_item") && (
+              <Button variant="ghost" size="icon" className="h-7 w-7"
+                style={{ color: "var(--status-error)" }}
+                onClick={() => setDeleteTarget(s)}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
         </PTD>
       </tr>
@@ -760,13 +766,15 @@ export default function SOV() {
             Add your first line item to start tracking progress billing
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <Button
-              size="sm"
-              onClick={() => { setEditing(null); setModalOpen(true); }}
-              style={{ background: "var(--accent)", color: "#fff", border: "none", fontWeight: 700 }}
-            >
-              + Add First Line Item
-            </Button>
+            {can("create", "sov_item") && (
+              <Button
+                size="sm"
+                onClick={() => { setEditing(null); setModalOpen(true); }}
+                style={{ background: "var(--accent)", color: "#fff", border: "none", fontWeight: 700 }}
+              >
+                + Add First Line Item
+              </Button>
+            )}
             <Button
               variant="outline" size="sm"
               onClick={downloadTemplate}
@@ -948,19 +956,21 @@ export default function SOV() {
           >
             Refresh
           </button>
-          <button
-            onClick={() => { setEditing(null); setModalOpen(true); }}
-            style={{
-              background: "var(--accent)", color: "var(--bg-base)", border: "none",
-              borderRadius: "var(--radius-btn)", padding: "8px 14px",
-              fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
-              letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
-          >
-            + New Item
-          </button>
+          {can("create", "sov_item") && (
+            <button
+              onClick={() => { setEditing(null); setModalOpen(true); }}
+              style={{
+                background: "var(--accent)", color: "var(--bg-base)", border: "none",
+                borderRadius: "var(--radius-btn)", padding: "8px 14px",
+                fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.08em", cursor: "pointer", textTransform: "uppercase",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--accent)")}
+            >
+              + New Item
+            </button>
+          )}
         </CommandBar>
 
         {/* Requirement 9 — Application View Tabs */}

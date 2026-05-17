@@ -28,6 +28,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import { batchProcess } from "@/utils/batchProcess";
 
 import {
@@ -70,6 +71,7 @@ export default function RFIs() {
   const [searchParams] = useSearchParams();
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const { can } = usePermissions();
 
   const [filter, setFilter] = useState("all");
   const [disciplineFilter, setDisciplineFilter] = useState("All");
@@ -385,11 +387,11 @@ export default function RFIs() {
         onFilterChange={setFilter}
         onOpenRfi={setSelectedRFI}
         onExport={() => exportRFIsToCSV(filtered)}
-        onImport={() => setShowLogImport(true)}
-        onCreate={() => {
+        onImport={can("create", "rfi") ? () => setShowLogImport(true) : null}
+        onCreate={can("create", "rfi") ? () => {
           setEditingRFI(null);
           setShowForm(true);
-        }}
+        } : null}
       />
 
       <RfiInsightsStrip
@@ -514,12 +516,12 @@ export default function RFIs() {
             icon: "download",
             onClick: () => exportRFIsToCSV(filtered.filter((r) => selectedIds.has(r.id))),
           },
-          {
+          ...(can("delete", "rfi") ? [{
             label: "DELETE",
             icon: "x",
             variant: "danger",
             onClick: () => setShowBulkDelete(true),
-          },
+          }] : []),
         ]}
       />
 

@@ -16,7 +16,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/api/supabaseClient";
+import { supabase } from "@/lib/supabase";
 import { validateTransition } from "./workflowEngine";
 
 // ─── Role hierarchy ─────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ import {
   invalidateCrudQueries,
   toastCrudError,
 } from "@/components/shared/crudFeedback";
+import { usePermissions } from "@/services/permissions";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import DeleteDialog from "@/components/shared/DeleteDialog";
 import WorkPackageDetailModal from "@/components/workpackages/WorkPackageDetailModal";
@@ -130,6 +131,7 @@ function phaseColor(phase) {
 export default function WorkPackages() {
   const projectId = useProjectId();
   const qc = useQueryClient();
+  const { can } = usePermissions();
 
   const [view, setView] = useState("flow");
   const [phaseFilter, setPhaseFilter] = useState("all");
@@ -383,7 +385,7 @@ export default function WorkPackages() {
         onExport={() => exportWorkPackagesCSV(filtered)}
         onBulkAdd={() => setBulkAddOpen(true)}
         onCreate={handleWPCreate}
-        canCreate={!!effectiveProjectId}
+        canCreate={!!effectiveProjectId && can("create", "work_package")}
       />
 
       <SummaryStrip metrics={metrics} onPhaseFilter={setPhaseFilter} phaseFilter={phaseFilter} />
@@ -422,8 +424,8 @@ export default function WorkPackages() {
               rows={filtered}
               phaseRollup={metrics.phaseRollup}
               onOpen={setDetailWP}
-              onEdit={handleWPEdit}
-              onDelete={setDeleteTarget}
+              onEdit={can("edit", "work_package") ? handleWPEdit : null}
+              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
               selectedWPs={selectedWPs}
               onToggleSelect={toggleSelect}
             />
@@ -433,8 +435,8 @@ export default function WorkPackages() {
             <StatusBoardView
               rows={filtered}
               onOpen={setDetailWP}
-              onEdit={handleWPEdit}
-              onDelete={setDeleteTarget}
+              onEdit={can("edit", "work_package") ? handleWPEdit : null}
+              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
             />
           )}
 
@@ -444,8 +446,8 @@ export default function WorkPackages() {
               selectedWPs={selectedWPs}
               onToggleSelect={toggleSelect}
               onOpen={setDetailWP}
-              onEdit={handleWPEdit}
-              onDelete={setDeleteTarget}
+              onEdit={can("edit", "work_package") ? handleWPEdit : null}
+              onDelete={can("delete", "work_package") ? setDeleteTarget : null}
             />
           )}
         </main>
@@ -940,12 +942,16 @@ function Flag({ flag }) {
 function RowActions({ onEdit, onDelete }) {
   return (
     <span style={{ display: "inline-flex", gap: 5 }}>
-      <button type="button" onClick={onEdit} title="Edit" aria-label="Edit work package" style={iconButtonStyle}>
-        <Pencil size={12} />
-      </button>
-      <button type="button" onClick={onDelete} title="Delete" aria-label="Delete work package" style={iconButtonStyle}>
-        <Trash2 size={12} />
-      </button>
+      {onEdit && (
+        <button type="button" onClick={onEdit} title="Edit" aria-label="Edit work package" style={iconButtonStyle}>
+          <Pencil size={12} />
+        </button>
+      )}
+      {onDelete && (
+        <button type="button" onClick={onDelete} title="Delete" aria-label="Delete work package" style={iconButtonStyle}>
+          <Trash2 size={12} />
+        </button>
+      )}
     </span>
   );
 }

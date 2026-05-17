@@ -26,6 +26,7 @@ import { submittalStatusToStage, isRRStatus } from "@/lib/submittalStageMapping"
 import { STAGE_MAP } from "@/components/drawings/drawingsConfig";
 import { compareDrawingSetPackages, formatDrawingSetNumber, sortDrawingSetPackages } from "@/lib/drawingSetOrdering";
 import SubmittalReviewStrip from "@/components/submittals/SubmittalReviewStrip";
+import { usePermissions } from "@/services/permissions";
 
 /**
  * Submittals — formal transmittal register.
@@ -97,6 +98,7 @@ export default function Submittals() {
   const qc = useQueryClient();
   const { activeProject } = useProjectContext();
   const projectId = activeProject?.id;
+  const { can } = usePermissions();
 
   const [selectedId, setSelectedId] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -444,12 +446,16 @@ export default function Submittals() {
           ? `${stats.overdue} overdue · ${stats.pending} awaiting review`
           : `${stats.pending} awaiting review · ${stats.approved} approved`}
       >
-        <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
-          BULK ADD
-        </Button>
-        <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-          NEW SUBMITTAL
-        </Button>
+        {can("create", "submittal") && (
+          <Button variant="secondary" icon="upload" onClick={() => setShowBulkAdd(true)}>
+            BULK ADD
+          </Button>
+        )}
+        {can("create", "submittal") && (
+          <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
+            NEW SUBMITTAL
+          </Button>
+        )}
       </CommandBar>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
@@ -586,17 +592,17 @@ export default function Submittals() {
         count={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         actions={[
-          {
+          ...(can("edit", "submittal") ? [{
             label: "EDIT SELECTED",
             icon: "edit",
             onClick: () => setShowBulkEdit(true),
-          },
-          {
+          }] : []),
+          ...(can("delete", "submittal") ? [{
             label: "DELETE",
             icon: "x",
             variant: "danger",
             onClick: () => setShowBulkDelete(true),
-          },
+          }] : []),
         ]}
       />
 
