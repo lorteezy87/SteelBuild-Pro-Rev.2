@@ -1,3 +1,9 @@
+// Polyfill WebSocket for Node < 22 (Supabase Realtime requires it)
+import WebSocket from "ws";
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = WebSocket;
+}
+
 // Vitest setup — provide a minimal `window` stub so modules that read
 // browser globals at import time (e.g. `window.self !== window.top` in
 // src/lib/utils.js) can be loaded under Node's default test environment
