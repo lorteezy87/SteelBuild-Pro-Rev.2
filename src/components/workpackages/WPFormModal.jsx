@@ -12,6 +12,7 @@ const empty = {
   crew: "", linked_drawing_ids: "", linked_rfi_ids: "", notes: "", percent_complete: 0,
   vif_confirmed: false, vif_confirmed_by: "", vif_confirmed_date: "",
   load_list_complete: false, sequence_confirmed: false,
+  area: "", sequence_number: "", trade_phase: "", shipping_phase: "", install_phase: "",
 };
 
 const selectStyle = {
@@ -216,7 +217,26 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="date" style={inputStyle} value={form.scheduled_end_date || ""} onChange={e => set("scheduled_end_date", e.target.value)} />
         </FormField>
 
-        {/* ── Section 3: Labor Budget ── */}
+        {/* ── Section 3: Production Structure ── */}
+        <SectionDivider label="Production Structure" />
+
+        <FormField label="Area">
+          <input style={inputStyle} value={form.area} onChange={e => set("area", e.target.value)} placeholder="e.g. East Wing" />
+        </FormField>
+        <FormField label="Sequence">
+          <input style={inputStyle} value={form.sequence_number} onChange={e => set("sequence_number", e.target.value)} placeholder="e.g. Sequence 2" />
+        </FormField>
+        <FormField label="Trade Phase">
+          <input style={inputStyle} value={form.trade_phase} onChange={e => set("trade_phase", e.target.value)} placeholder="e.g. Columns" />
+        </FormField>
+        <FormField label="Shipping Phase">
+          <input style={inputStyle} value={form.shipping_phase} onChange={e => set("shipping_phase", e.target.value)} placeholder="e.g. Truck 3" />
+        </FormField>
+        <FormField label="Install Phase">
+          <input style={inputStyle} value={form.install_phase} onChange={e => set("install_phase", e.target.value)} placeholder="e.g. Level 4" />
+        </FormField>
+
+        {/* ── Section 4: Labor Budget ── */}
         <SectionDivider label="Labor Budget" />
 
         <FormField label="Shop Hours Budget">
@@ -247,7 +267,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input style={calcStyle(totalActual, totalBudget)} value={formatBudgetPercent(totalBurn)} disabled readOnly />
         </FormField>
 
-        {/* ── Section 4: Linked Drawings ── */}
+        {/* ── Section 5: Linked Drawings ── */}
         <SectionDivider label="Linked Drawings" />
 
         <FormField label="Search & Add Drawings" span2>
@@ -329,7 +349,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           )}
         </FormField>
 
-        {/* ── Section 5: Fabrication Confirmations ── */}
+        {/* ── Section 6: Fabrication Confirmations ── */}
         <SectionDivider label="Fabrication Confirmations" />
 
         <FormField label="VIF Confirmed">
@@ -348,7 +368,7 @@ export default function WPFormModal({ open, onClose, onSave, wp, projects = [], 
           <input type="checkbox" checked={form.sequence_confirmed} onChange={e => set("sequence_confirmed", e.target.checked)} style={{ cursor: "pointer", width: 16, height: 16 }} />
         </FormField>
 
-        {/* ── Section 6: Notes ── */}
+        {/* ── Section 7: Notes ── */}
         <SectionDivider label="Notes" />
 
         <FormField label="Notes" span2>

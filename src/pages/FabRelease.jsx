@@ -246,6 +246,20 @@ export default function FabRelease() {
     staleTime: 30000,
   });
 
+  const { data: rfis = [] } = useQuery({
+    queryKey: ["rfis", projectId],
+    queryFn: () => (projectId ? base44.entities.RFI.filter({ project_id: projectId }) : []),
+    enabled: !!projectId,
+    staleTime: 30000,
+  });
+
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ["deliveries", projectId],
+    queryFn: () => (projectId ? base44.entities.Delivery.filter({ project_id: projectId }) : []),
+    enabled: !!projectId,
+    staleTime: 30000,
+  });
+
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: () => base44.entities.Project.list(),
@@ -312,9 +326,31 @@ export default function FabRelease() {
     onError: (e) => toastCrudError(e, "Failed to update package"),
   });
 
+  const rfisByWpId = useMemo(() => {
+    const map = new Map();
+    for (const rfi of rfis) {
+      const wpId = String(rfi.work_package_id || "");
+      if (!wpId) continue;
+      if (!map.has(wpId)) map.set(wpId, []);
+      map.get(wpId).push(rfi);
+    }
+    return map;
+  }, [rfis]);
+
+  const deliveriesByWpId = useMemo(() => {
+    const map = new Map();
+    for (const d of deliveries) {
+      const wpId = String(d.work_package_id || "");
+      if (!wpId) continue;
+      if (!map.has(wpId)) map.set(wpId, []);
+      map.get(wpId).push(d);
+    }
+    return map;
+  }, [deliveries]);
+
   const metrics = useMemo(
-    () => buildFabReleaseMetrics(workPackages, drawings, drawingSets),
-    [drawingSets, drawings, workPackages]
+    () => buildFabReleaseMetrics(workPackages, drawings, drawingSets, { rfisByWpId, deliveriesByWpId }),
+    [drawingSets, drawings, workPackages, rfisByWpId, deliveriesByWpId]
   );
 
   const filtered = useMemo(() => {
